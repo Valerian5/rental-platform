@@ -640,6 +640,11 @@ export default function AdminPage() {
                           <SelectTrigger>
                             <SelectValue placeholder="Sélectionner un type" />
                           </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="standard">Standard</SelectItem>
+                            <SelectItem value="minimal">Minimal</SelectItem>
+                            <SelectItem value="expanded">Étendu</SelectItem>
+                          </SelectContent>
                         </Select>
                       </div>
                     </CardContent>

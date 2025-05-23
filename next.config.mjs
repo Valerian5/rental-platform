@@ -1,9 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Ajoutez cette configuration pour résoudre les problèmes de modules
+  // Transpiler les packages externes
   transpilePackages: ['bcryptjs', 'jsonwebtoken'],
   
-  // Ajoutez cette configuration pour les API routes
+  // Configuration pour les API routes
   experimental: {
     serverComponentsExternalPackages: ['bcryptjs', 'jsonwebtoken'],
   },
