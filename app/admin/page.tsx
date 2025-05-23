@@ -1,460 +1,603 @@
+"use client"
+
+import { useState } from "react"
+import Link from "next/link"
+import { Settings, Users, Palette, FileText, Save, Eye, Menu, Home, Bell, MessageSquare, BarChart } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Separator } from "@/components/ui/separator"
+import { Switch } from "@/components/ui/switch"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
-  UsersIcon,
-  HomeIcon,
-  FileTextIcon,
-  CalendarIcon,
-  MessageSquareIcon,
-  SettingsIcon,
-  TrendingUpIcon,
-  AlertCircleIcon,
-  CheckCircleIcon,
-  XCircleIcon,
-} from "lucide-react"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
-import { Badge } from "@/components/ui/badge"
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarFooter,
+} from "@/components/ui/sidebar"
 
-export default function AdminDashboard() {
-  // Mock data - in a real app, this would come from an API
-  const stats = {
-    users: {
-      total: 1245,
-      landlords: 342,
-      tenants: 903,
-      newThisMonth: 87,
-      growth: 12.4,
-    },
-    properties: {
-      total: 528,
-      active: 412,
-      pending: 76,
-      inactive: 40,
-      occupancyRate: 78,
-    },
-    leases: {
-      total: 398,
-      active: 312,
-      pending: 45,
-      expired: 41,
-      revenue: 342500,
-    },
-    visits: {
-      total: 876,
-      scheduled: 124,
-      completed: 698,
-      cancelled: 54,
-      conversionRate: 68,
-    },
+export default function AdminPage() {
+  const [activeTab, setActiveTab] = useState("appearance")
+  const [primaryColor, setPrimaryColor] = useState("#0066FF")
+  const [secondaryColor, setSecondaryColor] = useState("#FF6B00")
+  const [accentColor, setAccentColor] = useState("#00C48C")
+  const [fontPrimary, setFontPrimary] = useState("Inter")
+  const [fontSecondary, setFontSecondary] = useState("Poppins")
+  const [headerType, setHeaderType] = useState("standard")
+  const [footerType, setFooterType] = useState("standard")
+  const [logoPosition, setLogoPosition] = useState("left")
+  const [borderRadius, setBorderRadius] = useState(8)
+  const [buttonStyle, setButtonStyle] = useState("rounded")
+  const [darkMode, setDarkMode] = useState(false)
+  const [siteTitle, setSiteTitle] = useState("Louer Ici")
+  const [siteDescription, setSiteDescription] = useState("Plateforme de gestion locative intelligente")
+
+  // Prévisualisation des types de header
+  const headerPreviews = {
+    standard: (
+      <div className="border rounded-md p-4 bg-white">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-blue-600 rounded-md"></div>
+            <span className="font-bold">Logo</span>
+          </div>
+          <div className="flex gap-4">
+            <div className="w-12 h-4 bg-gray-300 rounded"></div>
+            <div className="w-12 h-4 bg-gray-300 rounded"></div>
+            <div className="w-12 h-4 bg-gray-300 rounded"></div>
+          </div>
+          <Button size="sm">Connexion</Button>
+        </div>
+      </div>
+    ),
+    centered: (
+      <div className="border rounded-md p-4 bg-white">
+        <div className="flex flex-col items-center gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-blue-600 rounded-md"></div>
+            <span className="font-bold">Logo</span>
+          </div>
+          <div className="flex gap-6">
+            <div className="w-12 h-4 bg-gray-300 rounded"></div>
+            <div className="w-12 h-4 bg-gray-300 rounded"></div>
+            <div className="w-12 h-4 bg-gray-300 rounded"></div>
+            <div className="w-12 h-4 bg-gray-300 rounded"></div>
+          </div>
+        </div>
+      </div>
+    ),
+    minimal: (
+      <div className="border rounded-md p-4 bg-white">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-blue-600 rounded-md"></div>
+          </div>
+          <Menu className="h-5 w-5" />
+        </div>
+      </div>
+    ),
+    split: (
+      <div className="border rounded-md p-4 bg-white">
+        <div className="flex flex-col gap-2">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-blue-600 rounded-md"></div>
+              <span className="font-bold">Logo</span>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" variant="ghost">Connexion</Button>
+              <Button size="sm">Inscription</Button>
+            </div>
+          </div>
+          <Separator className="my-2" />
+          <div className="flex justify-center gap-8">
+            <div className="w-12 h-4 bg-gray-300 rounded"></div>
+            <div className="w-12 h-4 bg-gray-300 rounded"></div>
+            <div className="w-12 h-4 bg-gray-300 rounded"></div>
+            <div className="w-12 h-4 bg-gray-300 rounded"></div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
-  const recentActivities = [
-    {
-      id: 1,
-      type: "user",
-      action: "Nouvel utilisateur inscrit",
-      name: "Sophie Martin",
-      time: "Il y a 23 minutes",
-      status: "success",
-    },
-    {
-      id: 2,
-      type: "property",
-      action: "Nouvelle propriété ajoutée",
-      name: "Appartement 3P - Lyon 6ème",
-      time: "Il y a 1 heure",
-      status: "success",
-    },
-    {
-      id: 3,
-      type: "lease",
-      action: "Bail en attente de signature",
-      name: "Studio - Paris 11ème",
-      time: "Il y a 2 heures",
-      status: "pending",
-    },
-    {
-      id: 4,
-      type: "visit",
-      action: "Visite annulée",
-      name: "Maison - Bordeaux",
-      time: "Il y a 3 heures",
-      status: "error",
-    },
-    {
-      id: 5,
-      type: "message",
-      action: "Ticket support",
-      name: "Problème de paiement",
-      time: "Il y a 5 heures",
-      status: "pending",
-    },
-  ]
-
-  const alerts = [
-    { id: 1, type: "error", message: "3 paiements de loyer en retard", time: "Action requise" },
-    { id: 2, type: "warning", message: "5 baux expirent dans les 30 jours", time: "Attention requise" },
-    { id: 3, type: "info", message: "12 nouveaux utilisateurs à vérifier", time: "Information" },
-    { id: 4, type: "success", message: "Sauvegarde système réussie", time: "Aujourd'hui, 08:30" },
-  ]
-
   return (
-    <div className="container mx-auto py-10">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Tableau de bord Administrateur</h1>
-        <p className="text-muted-foreground">Gérez votre plateforme et suivez les performances</p>
-      </div>
-
-      <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="grid grid-cols-4 w-full max-w-2xl">
-          <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
-          <TabsTrigger value="users">Utilisateurs</TabsTrigger>
-          <TabsTrigger value="properties">Propriétés</TabsTrigger>
-          <TabsTrigger value="leases">Baux</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview" className="space-y-6">
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Utilisateurs</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-2xl font-bold">{stats.users.total}</p>
-                    <p className="text-xs text-muted-foreground">+{stats.users.newThisMonth} ce mois</p>
-                  </div>
-                  <div className="p-2 bg-primary/10 rounded-full">
-                    <UsersIcon className="h-6 w-6 text-primary" />
-                  </div>
-                </div>
-                <div className="mt-4 flex items-center text-xs">
-                  <TrendingUpIcon className="h-3 w-3 mr-1 text-green-500" />
-                  <span className="text-green-500 font-medium">+{stats.users.growth}%</span>
-                  <span className="text-muted-foreground ml-1">vs mois dernier</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Propriétés</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-2xl font-bold">{stats.properties.total}</p>
-                    <p className="text-xs text-muted-foreground">{stats.properties.active} actives</p>
-                  </div>
-                  <div className="p-2 bg-blue-500/10 rounded-full">
-                    <HomeIcon className="h-6 w-6 text-blue-500" />
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <div className="flex justify-between text-xs mb-1">
-                    <span>Taux d'occupation</span>
-                    <span className="font-medium">{stats.properties.occupancyRate}%</span>
-                  </div>
-                  <Progress value={stats.properties.occupancyRate} className="h-1" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Baux</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-2xl font-bold">{stats.leases.total}</p>
-                    <p className="text-xs text-muted-foreground">{stats.leases.active} actifs</p>
-                  </div>
-                  <div className="p-2 bg-green-500/10 rounded-full">
-                    <FileTextIcon className="h-6 w-6 text-green-500" />
-                  </div>
-                </div>
-                <div className="mt-4 flex items-center text-xs">
-                  <span className="font-medium">{stats.leases.revenue.toLocaleString("fr-FR")} €</span>
-                  <span className="text-muted-foreground ml-1">de revenus mensuels</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Visites</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-2xl font-bold">{stats.visits.total}</p>
-                    <p className="text-xs text-muted-foreground">{stats.visits.scheduled} à venir</p>
-                  </div>
-                  <div className="p-2 bg-purple-500/10 rounded-full">
-                    <CalendarIcon className="h-6 w-6 text-purple-500" />
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <div className="flex justify-between text-xs mb-1">
-                    <span>Taux de conversion</span>
-                    <span className="font-medium">{stats.visits.conversionRate}%</span>
-                  </div>
-                  <Progress value={stats.visits.conversionRate} className="h-1" />
-                </div>
-              </CardContent>
-            </Card>
+    <div className="flex min-h-screen bg-gray-50">
+      {/* Sidebar */}
+      <Sidebar className="border-r">
+        <SidebarHeader className="border-b px-6 py-3">
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-md bg-blue-600"></div>
+            <div>
+              <h2 className="text-lg font-bold">Louer Ici</h2>
+              <p className="text-xs text-muted-foreground">Administration</p>
+            </div>
           </div>
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={activeTab === "dashboard"} onClick={() => setActiveTab("dashboard")}>
+                <button>
+                  <BarChart className="h-4 w-4" />
+                  <span>Tableau de bord</span>
+                </button>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={activeTab === "appearance"} onClick={() => setActiveTab("appearance")}>
+                <button>
+                  <Palette className="h-4 w-4" />
+                  <span>Apparence</span>
+                </button>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={activeTab === "content"} onClick={() => setActiveTab("content")}>
+                <button>
+                  <FileText className="h-4 w-4" />
+                  <span>Contenu</span>
+                </button>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={activeTab === "users"} onClick={() => setActiveTab("users")}>
+                <button>
+                  <Users className="h-4 w-4" />
+                  <span>Utilisateurs</span>
+                </button>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={activeTab === "settings"} onClick={() => setActiveTab("settings")}>
+                <button>
+                  <Settings className="h-4 w-4" />
+                  <span>Paramètres</span>
+                </button>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarContent>
+        <SidebarFooter className="border-t p-4">
+          <div className="flex items-center gap-2">
+            <Avatar className="h-8 w-8">
+              <AvatarImage src="/placeholder.svg?height=32&width=32" alt="Admin" />
+              <AvatarFallback>AD</AvatarFallback>
+            </Avatar>
+            <div>
+              <p className="text-sm font-medium">Admin</p>
+              <p className="text-xs text-muted-foreground">admin@louerici.fr</p>
+            </div>
+          </div>
+        </SidebarFooter>
+      </Sidebar>
 
-          {/* Recent Activity and Alerts */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle>Activité récente</CardTitle>
-                <CardDescription>Les dernières actions sur la plateforme</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-5">
-                  {recentActivities.map((activity) => (
-                    <div key={activity.id} className="flex items-start space-x-4">
-                      <div className="mt-0.5">
-                        {activity.type === "user" && <UsersIcon className="h-5 w-5 text-blue-500" />}
-                        {activity.type === "property" && <HomeIcon className="h-5 w-5 text-green-500" />}
-                        {activity.type === "lease" && <FileTextIcon className="h-5 w-5 text-yellow-500" />}
-                        {activity.type === "visit" && <CalendarIcon className="h-5 w-5 text-purple-500" />}
-                        {activity.type === "message" && <MessageSquareIcon className="h-5 w-5 text-pink-500" />}
-                      </div>
-                      <div className="flex-1 space-y-1">
-                        <p className="text-sm font-medium leading-none">{activity.action}</p>
-                        <p className="text-sm text-muted-foreground">{activity.name}</p>
-                        <p className="text-xs text-muted-foreground">{activity.time}</p>
-                      </div>
-                      <div>
-                        {activity.status === "success" && (
-                          <Badge variant="outline" className="text-green-600 border-green-600">
-                            Succès
-                          </Badge>
-                        )}
-                        {activity.status === "pending" && (
-                          <Badge variant="outline" className="text-orange-600 border-orange-600">
-                            En attente
-                          </Badge>
-                        )}
-                        {activity.status === "error" && (
-                          <Badge variant="outline" className="text-red-600 border-red-600">
-                            Erreur
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+      {/* Main Content */}
+      <div className="flex-1 overflow-auto">
+        <header className="border-b bg-white p-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-bold">Administration</h1>
+            <div className="flex items-center gap-4">
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/" target="_blank">
+                  <Eye className="h-4 w-4 mr-2" />
+                  Voir le site
+                </Link>
+              </Button>
+              <Button size="sm">
+                <Save className="h-4 w-4 mr-2" />
+                Enregistrer les modifications
+              </Button>
+            </div>
+          </div>
+        </header>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Alertes système</CardTitle>
-                <CardDescription>Notifications importantes</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {alerts.map((alert) => (
-                    <div key={alert.id} className="p-3 rounded-lg border">
-                      <div className="flex items-start space-x-3">
-                        <div className="mt-0.5">
-                          {alert.type === "error" && <XCircleIcon className="h-5 w-5 text-red-500" />}
-                          {alert.type === "warning" && <AlertCircleIcon className="h-5 w-5 text-orange-500" />}
-                          {alert.type === "info" && <AlertCircleIcon className="h-5 w-5 text-blue-500" />}
-                          {alert.type === "success" && <CheckCircleIcon className="h-5 w-5 text-green-500" />}
+        <main className="p-6">
+          {activeTab === "dashboard" && (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-bold">Tableau de bord</h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Propriétaires</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">24</div>
+                    <p className="text-xs text-muted-foreground">+3 ce mois-ci</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Locataires</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">156</div>
+                    <p className="text-xs text-muted-foreground">+12 ce mois-ci</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Biens</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">87</div>
+                    <p className="text-xs text-muted-foreground">42 disponibles</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Contrats</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">45</div>
+                    <p className="text-xs text-muted-foreground">+5 ce mois-ci</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Activité récente</CardTitle>
+                    <CardDescription>Les dernières actions sur la plateforme</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="flex items-start gap-4">
+                        <div className="rounded-full bg-blue-100 p-2">
+                          <Home className="h-4 w-4 text-blue-600" />
                         </div>
-                        <div className="flex-1 space-y-1">
-                          <p className="text-sm font-medium leading-none">{alert.message}</p>
-                          <p className="text-xs text-muted-foreground">{alert.time}</p>
+                        <div>
+                          <p className="text-sm font-medium">Nouveau bien ajouté</p>
+                          <p className="text-xs text-muted-foreground">Appartement 3 pièces à Paris</p>
+                          <p className="text-xs text-muted-foreground">Il y a 2 heures</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-4">
+                        <div className="rounded-full bg-green-100 p-2">
+                          <Users className="h-4 w-4 text-green-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">Nouveau propriétaire inscrit</p>
+                          <p className="text-xs text-muted-foreground">Jean Dupont</p>
+                          <p className="text-xs text-muted-foreground">Il y a 5 heures</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-4">
+                        <div className="rounded-full bg-amber-100 p-2">
+                          <FileText className="h-4 w-4 text-amber-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">Contrat signé</p>
+                          <p className="text-xs text-muted-foreground">Studio à Lyon</p>
+                          <p className="text-xs text-muted-foreground">Il y a 1 jour</p>
                         </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                  </CardContent>
+                </Card>
 
-          {/* Quick Access */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Accès rapide</CardTitle>
-              <CardDescription>Gérez les aspects clés de votre plateforme</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Link href="/admin/users">
-                  <Button
-                    variant="outline"
-                    className="w-full h-auto py-4 flex flex-col items-center justify-center gap-2"
-                  >
-                    <UsersIcon className="h-6 w-6" />
-                    <span>Utilisateurs</span>
-                  </Button>
-                </Link>
-                <Link href="/admin/properties">
-                  <Button
-                    variant="outline"
-                    className="w-full h-auto py-4 flex flex-col items-center justify-center gap-2"
-                  >
-                    <HomeIcon className="h-6 w-6" />
-                    <span>Propriétés</span>
-                  </Button>
-                </Link>
-                <Link href="/admin/leases">
-                  <Button
-                    variant="outline"
-                    className="w-full h-auto py-4 flex flex-col items-center justify-center gap-2"
-                  >
-                    <FileTextIcon className="h-6 w-6" />
-                    <span>Baux</span>
-                  </Button>
-                </Link>
-                <Link href="/admin/settings">
-                  <Button
-                    variant="outline"
-                    className="w-full h-auto py-4 flex flex-col items-center justify-center gap-2"
-                  >
-                    <SettingsIcon className="h-6 w-6" />
-                    <span>Paramètres</span>
-                  </Button>
-                </Link>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Tâches administratives</CardTitle>
+                    <CardDescription>Actions à effectuer</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="rounded-full bg-red-100 p-2">
+                            <Bell className="h-4 w-4 text-red-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">Vérifier les documents</p>
+                            <p className="text-xs text-muted-foreground">3 dossiers en attente</p>
+                          </div>
+                        </div>
+                        <Button size="sm" variant="outline">Voir</Button>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="rounded-full bg-blue-100 p-2">
+                            <MessageSquare className="h-4 w-4 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">Messages non lus</p>
+                            <p className="text-xs text-muted-foreground">5 messages</p>
+                          </div>
+                        </div>
+                        <Button size="sm" variant="outline">Voir</Button>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="rounded-full bg-amber-100 p-2">
+                            <Settings className="h-4 w-4 text-amber-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">Mise à jour système</p>
+                            <p className="text-xs text-muted-foreground">Nouvelle version disponible</p>
+                          </div>
+                        </div>
+                        <Button size="sm" variant="outline">Installer</Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </div>
+          )}
 
-        <TabsContent value="users">
-          <Card>
-            <CardHeader>
-              <CardTitle>Gestion des utilisateurs</CardTitle>
-              <CardDescription>Consultez et gérez tous les utilisateurs de la plateforme</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex justify-between mb-6">
-                <div>
-                  <h3 className="text-lg font-medium">Statistiques utilisateurs</h3>
-                  <div className="grid grid-cols-3 gap-4 mt-2">
-                    <div className="p-3 bg-slate-100 rounded-lg">
-                      <p className="text-sm text-muted-foreground">Total</p>
-                      <p className="text-xl font-bold">{stats.users.total}</p>
-                    </div>
-                    <div className="p-3 bg-slate-100 rounded-lg">
-                      <p className="text-sm text-muted-foreground">Propriétaires</p>
-                      <p className="text-xl font-bold">{stats.users.landlords}</p>
-                    </div>
-                    <div className="p-3 bg-slate-100 rounded-lg">
-                      <p className="text-sm text-muted-foreground">Locataires</p>
-                      <p className="text-xl font-bold">{stats.users.tenants}</p>
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <Link href="/admin/users">
-                    <Button>Voir tous les utilisateurs</Button>
-                  </Link>
-                </div>
+          {activeTab === "appearance" && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold">Apparence</h2>
+                <Button>
+                  <Save className="h-4 w-4 mr-2" />
+                  Enregistrer les modifications
+                </Button>
               </div>
-              <p className="text-center text-muted-foreground">
-                Accédez à la section utilisateurs pour voir la liste complète et effectuer des actions
-              </p>
-            </CardContent>
-          </Card>
-        </TabsContent>
 
-        <TabsContent value="properties">
-          <Card>
-            <CardHeader>
-              <CardTitle>Gestion des propriétés</CardTitle>
-              <CardDescription>Consultez et gérez toutes les propriétés de la plateforme</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex justify-between mb-6">
-                <div>
-                  <h3 className="text-lg font-medium">Statistiques propriétés</h3>
-                  <div className="grid grid-cols-4 gap-4 mt-2">
-                    <div className="p-3 bg-slate-100 rounded-lg">
-                      <p className="text-sm text-muted-foreground">Total</p>
-                      <p className="text-xl font-bold">{stats.properties.total}</p>
-                    </div>
-                    <div className="p-3 bg-slate-100 rounded-lg">
-                      <p className="text-sm text-muted-foreground">Actives</p>
-                      <p className="text-xl font-bold">{stats.properties.active}</p>
-                    </div>
-                    <div className="p-3 bg-slate-100 rounded-lg">
-                      <p className="text-sm text-muted-foreground">En attente</p>
-                      <p className="text-xl font-bold">{stats.properties.pending}</p>
-                    </div>
-                    <div className="p-3 bg-slate-100 rounded-lg">
-                      <p className="text-sm text-muted-foreground">Inactives</p>
-                      <p className="text-xl font-bold">{stats.properties.inactive}</p>
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <Link href="/admin/properties">
-                    <Button>Voir toutes les propriétés</Button>
-                  </Link>
-                </div>
-              </div>
-              <p className="text-center text-muted-foreground">
-                Accédez à la section propriétés pour voir la liste complète et effectuer des actions
-              </p>
-            </CardContent>
-          </Card>
-        </TabsContent>
+              <Tabs defaultValue="colors">
+                <TabsList className="mb-4">
+                  <TabsTrigger value="colors">Couleurs</TabsTrigger>
+                  <TabsTrigger value="typography">Typographie</TabsTrigger>
+                  <TabsTrigger value="layout">Mise en page</TabsTrigger>
+                  <TabsTrigger value="components">Composants</TabsTrigger>
+                  <TabsTrigger value="logo">Logo</TabsTrigger>
+                </TabsList>
 
-        <TabsContent value="leases">
-          <Card>
-            <CardHeader>
-              <CardTitle>Gestion des baux</CardTitle>
-              <CardDescription>Consultez et gérez tous les baux de la plateforme</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex justify-between mb-6">
-                <div>
-                  <h3 className="text-lg font-medium">Statistiques baux</h3>
-                  <div className="grid grid-cols-4 gap-4 mt-2">
-                    <div className="p-3 bg-slate-100 rounded-lg">
-                      <p className="text-sm text-muted-foreground">Total</p>
-                      <p className="text-xl font-bold">{stats.leases.total}</p>
-                    </div>
-                    <div className="p-3 bg-slate-100 rounded-lg">
-                      <p className="text-sm text-muted-foreground">Actifs</p>
-                      <p className="text-xl font-bold">{stats.leases.active}</p>
-                    </div>
-                    <div className="p-3 bg-slate-100 rounded-lg">
-                      <p className="text-sm text-muted-foreground">En attente</p>
-                      <p className="text-xl font-bold">{stats.leases.pending}</p>
-                    </div>
-                    <div className="p-3 bg-slate-100 rounded-lg">
-                      <p className="text-sm text-muted-foreground">Expirés</p>
-                      <p className="text-xl font-bold">{stats.leases.expired}</p>
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <Link href="/admin/leases">
-                    <Button>Voir tous les baux</Button>
-                  </Link>
-                </div>
-              </div>
-              <p className="text-center text-muted-foreground">
-                Accédez à la section baux pour voir la liste complète et effectuer des actions
-              </p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
-  )
-}
+                <TabsContent value="colors" className="space-y-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Couleurs principales</CardTitle>
+                      <CardDescription>Définissez les couleurs principales de votre site</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="primary-color">Couleur principale</Label>
+                          <div className="flex gap-2">
+                            <div 
+                              className="h-10 w-10 rounded-md border" 
+                              style={{ backgroundColor: primaryColor }}
+                            ></div>
+                            <Input 
+                              id="primary-color" 
+                              type="text" 
+                              value={primaryColor} 
+                              onChange={(e) => setPrimaryColor(e.target.value)} 
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="secondary-color">Couleur secondaire</Label>
+                          <div className="flex gap-2">
+                            <div 
+                              className="h-10 w-10 rounded-md border" 
+                              style={{ backgroundColor: secondaryColor }}
+                            ></div>
+                            <Input 
+                              id="secondary-color" 
+                              type="text" 
+                              value={secondaryColor} 
+                              onChange={(e) => setSecondaryColor(e.target.value)} 
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="accent-color">Couleur d'accent</Label>
+                          <div className="flex gap-2">
+                            <div 
+                              className="h-10 w-10 rounded-md border" 
+                              style={{ backgroundColor: accentColor }}
+                            ></div>
+                            <Input 
+                              id="accent-color" 
+                              type="text" 
+                              value={accentColor} 
+                              onChange={(e) => setAccentColor(e.target.value)} 
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Thème sombre</CardTitle>
+                      <CardDescription>Activer le mode sombre sur votre site</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label htmlFor="dark-mode">Mode sombre</Label>
+                          <p className="text-sm text-muted-foreground">Permettre aux utilisateurs de basculer en mode sombre</p>
+                        </div>
+                        <Switch 
+                          id="dark-mode" 
+                          checked={darkMode} 
+                          onCheckedChange={setDarkMode} 
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Prévisualisation</CardTitle>
+                      <CardDescription>Aperçu des couleurs sélectionnées</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4 p-4 border rounded-md">
+                        <div className="flex gap-2">
+                          <div className="h-10 w-32 rounded-md flex items-center justify-center text-white" style={{ backgroundColor: primaryColor }}>
+                            Principale
+                          </div>
+                          <div className="h-10 w-32 rounded-md flex items-center justify-center text-white" style={{ backgroundColor: secondaryColor }}>
+                            Secondaire
+                          </div>
+                          <div className="h-10 w-32 rounded-md flex items-center justify-center text-white" style={{ backgroundColor: accentColor }}>
+                            Accent
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button style={{ backgroundColor: primaryColor, borderColor: primaryColor }}>Bouton principal</Button>
+                          <Button variant="outline" style={{ borderColor: secondaryColor, color: secondaryColor }}>Bouton secondaire</Button>
+                        </div>
+                        <div className="p-4 rounded-md" style={{ backgroundColor: `${primaryColor}10` }}>
+                          <p className="font-medium" style={{ color: primaryColor }}>Titre de section</p>
+                          <p className="text-sm">Texte de contenu avec <a href="#" style={{ color: accentColor }}>lien d'accent</a> et plus d'informations.</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="typography" className="space-y-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Polices</CardTitle>
+                      <CardDescription>Définissez les polices utilisées sur votre site</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="font-primary">Police principale</Label>
+                          <Select value={fontPrimary} onValueChange={setFontPrimary}>
+                            <SelectTrigger id="font-primary">
+                              <SelectValue placeholder="Sélectionner une police" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Inter">Inter</SelectItem>
+                              <SelectItem value="Roboto">Roboto</SelectItem>
+                              <SelectItem value="Poppins">Poppins</SelectItem>
+                              <SelectItem value="Montserrat">Montserrat</SelectItem>
+                              <SelectItem value="Open Sans">Open Sans</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-sm text-muted-foreground">Utilisée pour le texte principal</p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="font-secondary">Police secondaire</Label>
+                          <Select value={fontSecondary} onValueChange={setFontSecondary}>
+                            <SelectTrigger id="font-secondary">
+                              <SelectValue placeholder="Sélectionner une police" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Inter">Inter</SelectItem>
+                              <SelectItem value="Roboto">Roboto</SelectItem>
+                              <SelectItem value="Poppins">Poppins</SelectItem>
+                              <SelectItem value="Montserrat">Montserrat</SelectItem>
+                              <SelectItem value="Open Sans">Open Sans</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-sm text-muted-foreground">Utilisée pour les titres</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Prévisualisation</CardTitle>
+                      <CardDescription>Aperçu des polices sélectionnées</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4 p-4 border rounded-md">
+                        <h1 className="text-3xl font-bold" style={{ fontFamily: fontSecondary }}>Titre principal</h1>
+                        <h2 className="text-2xl font-semibold" style={{ fontFamily: fontSecondary }}>Sous-titre</h2>
+                        <p style={{ fontFamily: fontPrimary }}>
+                          Ceci est un exemple de texte utilisant la police principale. Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
+                          Nullam in dui mauris. Vivamus hendrerit arcu sed erat molestie vehicula.
+                        </p>
+                        <div className="flex gap-2">
+                          <Button style={{ fontFamily: fontPrimary }}>Bouton</Button>
+                          <Button variant="outline" style={{ fontFamily: fontPrimary }}>Bouton secondaire</Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="layout" className="space-y-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>En-tête</CardTitle>
+                      <CardDescription>Personnalisez l'en-tête de votre site</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Type d'en-tête</Label>
+                        <RadioGroup value={headerType} onValueChange={setHeaderType} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="standard" id="header-standard" />
+                              <Label htmlFor="header-standard">Standard</Label>
+                            </div>
+                            <div className="mt-2">{headerPreviews.standard}</div>
+                          </div>
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="centered" id="header-centered" />
+                              <Label htmlFor="header-centered">Centré</Label>
+                            </div>
+                            <div className="mt-2">{headerPreviews.centered}</div>
+                          </div>
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="minimal" id="header-minimal" />
+                              <Label htmlFor="header-minimal">Minimal</Label>
+                            </div>
+                            <div className="mt-2">{headerPreviews.minimal}</div>
+                          </div>
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="split" id="header-split" />
+                              <Label htmlFor="header-split">Double niveau</Label>
+                            </div>
+                            <div className="mt-2">{headerPreviews.split}</div>
+                          </div>
+                        </RadioGroup>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Position du logo</Label>
+                        <RadioGroup value={logoPosition} onValueChange={setLogoPosition} className="flex gap-4">
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="left" id="logo-left" />
+                            <Label htmlFor="logo-left">Gauche</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="center" id="logo-center" />
+                            <Label htmlFor="logo-center">Centre</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="right" id="logo-right" />
+                            <Label htmlFor="logo-right">Droite</Label>
+                          </div>
+                        </RadioGroup>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Pied de page</CardTitle>
+                      <CardDescription>Personnalisez le pied de page de votre site</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        <Label>Type de pied de page</Label>
+                        <Select value={footerType} onValueChange={setFooterType}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionner un type" />
+                          </SelectTrigger>\
