@@ -1,12 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Transpiler les packages externes
-  transpilePackages: ['bcryptjs', 'jsonwebtoken', '@supabase/supabase-js'],
-  
-  // Configuration pour les API routes - correction de la clé
+  // Configuration pour les API routes - gardons seulement les packages serveur ici
   experimental: {
-    serverComponentsExternalPackages: ['bcryptjs', 'jsonwebtoken', '@supabase/supabase-js'],
+    serverComponentsExternalPackages: ['bcryptjs', 'jsonwebtoken'],
   },
+  
+  // Transpiler seulement Supabase pour le client
+  transpilePackages: ['@supabase/supabase-js'],
   
   // Autres configurations
   reactStrictMode: true,
