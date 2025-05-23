@@ -92,7 +92,9 @@ export default function AdminPage() {
               <span className="font-bold">Logo</span>
             </div>
             <div className="flex gap-2">
-              <Button size="sm" variant="ghost">Connexion</Button>
+              <Button size="sm" variant="ghost">
+                Connexion
+              </Button>
               <Button size="sm">Inscription</Button>
             </div>
           </div>
@@ -105,7 +107,7 @@ export default function AdminPage() {
           </div>
         </div>
       </div>
-    )
+    ),
   }
 
   return (
@@ -132,7 +134,11 @@ export default function AdminPage() {
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={activeTab === "appearance"} onClick={() => setActiveTab("appearance")}>
+              <SidebarMenuButton
+                asChild
+                isActive={activeTab === "appearance"}
+                onClick={() => setActiveTab("appearance")}
+              >
                 <button>
                   <Palette className="h-4 w-4" />
                   <span>Apparence</span>
@@ -203,7 +209,7 @@ export default function AdminPage() {
           {activeTab === "dashboard" && (
             <div className="space-y-6">
               <h2 className="text-2xl font-bold">Tableau de bord</h2>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <Card>
                   <CardHeader className="pb-2">
@@ -302,7 +308,9 @@ export default function AdminPage() {
                             <p className="text-xs text-muted-foreground">3 dossiers en attente</p>
                           </div>
                         </div>
-                        <Button size="sm" variant="outline">Voir</Button>
+                        <Button size="sm" variant="outline">
+                          Voir
+                        </Button>
                       </div>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -314,7 +322,9 @@ export default function AdminPage() {
                             <p className="text-xs text-muted-foreground">5 messages</p>
                           </div>
                         </div>
-                        <Button size="sm" variant="outline">Voir</Button>
+                        <Button size="sm" variant="outline">
+                          Voir
+                        </Button>
                       </div>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -326,7 +336,9 @@ export default function AdminPage() {
                             <p className="text-xs text-muted-foreground">Nouvelle version disponible</p>
                           </div>
                         </div>
-                        <Button size="sm" variant="outline">Installer</Button>
+                        <Button size="sm" variant="outline">
+                          Installer
+                        </Button>
                       </div>
                     </div>
                   </CardContent>
@@ -365,45 +377,42 @@ export default function AdminPage() {
                         <div className="space-y-2">
                           <Label htmlFor="primary-color">Couleur principale</Label>
                           <div className="flex gap-2">
-                            <div 
-                              className="h-10 w-10 rounded-md border" 
+                            <div
+                              className="h-10 w-10 rounded-md border"
                               style={{ backgroundColor: primaryColor }}
                             ></div>
-                            <Input 
-                              id="primary-color" 
-                              type="text" 
-                              value={primaryColor} 
-                              onChange={(e) => setPrimaryColor(e.target.value)} 
+                            <Input
+                              id="primary-color"
+                              type="text"
+                              value={primaryColor}
+                              onChange={(e) => setPrimaryColor(e.target.value)}
                             />
                           </div>
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="secondary-color">Couleur secondaire</Label>
                           <div className="flex gap-2">
-                            <div 
-                              className="h-10 w-10 rounded-md border" 
+                            <div
+                              className="h-10 w-10 rounded-md border"
                               style={{ backgroundColor: secondaryColor }}
                             ></div>
-                            <Input 
-                              id="secondary-color" 
-                              type="text" 
-                              value={secondaryColor} 
-                              onChange={(e) => setSecondaryColor(e.target.value)} 
+                            <Input
+                              id="secondary-color"
+                              type="text"
+                              value={secondaryColor}
+                              onChange={(e) => setSecondaryColor(e.target.value)}
                             />
                           </div>
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="accent-color">Couleur d'accent</Label>
                           <div className="flex gap-2">
-                            <div 
-                              className="h-10 w-10 rounded-md border" 
-                              style={{ backgroundColor: accentColor }}
-                            ></div>
-                            <Input 
-                              id="accent-color" 
-                              type="text" 
-                              value={accentColor} 
-                              onChange={(e) => setAccentColor(e.target.value)} 
+                            <div className="h-10 w-10 rounded-md border" style={{ backgroundColor: accentColor }}></div>
+                            <Input
+                              id="accent-color"
+                              type="text"
+                              value={accentColor}
+                              onChange={(e) => setAccentColor(e.target.value)}
                             />
                           </div>
                         </div>
@@ -420,13 +429,11 @@ export default function AdminPage() {
                       <div className="flex items-center justify-between">
                         <div>
                           <Label htmlFor="dark-mode">Mode sombre</Label>
-                          <p className="text-sm text-muted-foreground">Permettre aux utilisateurs de basculer en mode sombre</p>
+                          <p className="text-sm text-muted-foreground">
+                            Permettre aux utilisateurs de basculer en mode sombre
+                          </p>
                         </div>
-                        <Switch 
-                          id="dark-mode" 
-                          checked={darkMode} 
-                          onCheckedChange={setDarkMode} 
-                        />
+                        <Switch id="dark-mode" checked={darkMode} onCheckedChange={setDarkMode} />
                       </div>
                     </CardContent>
                   </Card>
@@ -439,23 +446,44 @@ export default function AdminPage() {
                     <CardContent>
                       <div className="space-y-4 p-4 border rounded-md">
                         <div className="flex gap-2">
-                          <div className="h-10 w-32 rounded-md flex items-center justify-center text-white" style={{ backgroundColor: primaryColor }}>
+                          <div
+                            className="h-10 w-32 rounded-md flex items-center justify-center text-white"
+                            style={{ backgroundColor: primaryColor }}
+                          >
                             Principale
                           </div>
-                          <div className="h-10 w-32 rounded-md flex items-center justify-center text-white" style={{ backgroundColor: secondaryColor }}>
+                          <div
+                            className="h-10 w-32 rounded-md flex items-center justify-center text-white"
+                            style={{ backgroundColor: secondaryColor }}
+                          >
                             Secondaire
                           </div>
-                          <div className="h-10 w-32 rounded-md flex items-center justify-center text-white" style={{ backgroundColor: accentColor }}>
+                          <div
+                            className="h-10 w-32 rounded-md flex items-center justify-center text-white"
+                            style={{ backgroundColor: accentColor }}
+                          >
                             Accent
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          <Button style={{ backgroundColor: primaryColor, borderColor: primaryColor }}>Bouton principal</Button>
-                          <Button variant="outline" style={{ borderColor: secondaryColor, color: secondaryColor }}>Bouton secondaire</Button>
+                          <Button style={{ backgroundColor: primaryColor, borderColor: primaryColor }}>
+                            Bouton principal
+                          </Button>
+                          <Button variant="outline" style={{ borderColor: secondaryColor, color: secondaryColor }}>
+                            Bouton secondaire
+                          </Button>
                         </div>
                         <div className="p-4 rounded-md" style={{ backgroundColor: `${primaryColor}10` }}>
-                          <p className="font-medium" style={{ color: primaryColor }}>Titre de section</p>
-                          <p className="text-sm">Texte de contenu avec <a href="#" style={{ color: accentColor }}>lien d'accent</a> et plus d'informations.</p>
+                          <p className="font-medium" style={{ color: primaryColor }}>
+                            Titre de section
+                          </p>
+                          <p className="text-sm">
+                            Texte de contenu avec{" "}
+                            <a href="#" style={{ color: accentColor }}>
+                              lien d'accent
+                            </a>{" "}
+                            et plus d'informations.
+                          </p>
                         </div>
                       </div>
                     </CardContent>
@@ -513,15 +541,22 @@ export default function AdminPage() {
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-4 p-4 border rounded-md">
-                        <h1 className="text-3xl font-bold" style={{ fontFamily: fontSecondary }}>Titre principal</h1>
-                        <h2 className="text-2xl font-semibold" style={{ fontFamily: fontSecondary }}>Sous-titre</h2>
+                        <h1 className="text-3xl font-bold" style={{ fontFamily: fontSecondary }}>
+                          Titre principal
+                        </h1>
+                        <h2 className="text-2xl font-semibold" style={{ fontFamily: fontSecondary }}>
+                          Sous-titre
+                        </h2>
                         <p style={{ fontFamily: fontPrimary }}>
-                          Ceci est un exemple de texte utilisant la police principale. Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
-                          Nullam in dui mauris. Vivamus hendrerit arcu sed erat molestie vehicula.
+                          Ceci est un exemple de texte utilisant la police principale. Lorem ipsum dolor sit amet,
+                          consectetur adipiscing elit. Nullam in dui mauris. Vivamus hendrerit arcu sed erat molestie
+                          vehicula.
                         </p>
                         <div className="flex gap-2">
                           <Button style={{ fontFamily: fontPrimary }}>Bouton</Button>
-                          <Button variant="outline" style={{ fontFamily: fontPrimary }}>Bouton secondaire</Button>
+                          <Button variant="outline" style={{ fontFamily: fontPrimary }}>
+                            Bouton secondaire
+                          </Button>
                         </div>
                       </div>
                     </CardContent>
@@ -537,7 +572,11 @@ export default function AdminPage() {
                     <CardContent className="space-y-4">
                       <div className="space-y-2">
                         <Label>Type d'en-tête</Label>
-                        <RadioGroup value={headerType} onValueChange={setHeaderType} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <RadioGroup
+                          value={headerType}
+                          onValueChange={setHeaderType}
+                          className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                        >
                           <div>
                             <div className="flex items-center space-x-2">
                               <RadioGroupItem value="standard" id="header-standard" />
@@ -600,4 +639,117 @@ export default function AdminPage() {
                         <Select value={footerType} onValueChange={setFooterType}>
                           <SelectTrigger>
                             <SelectValue placeholder="Sélectionner un type" />
-                          </SelectTrigger>\
+                          </SelectTrigger>
+                        </Select>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="components" className="space-y-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Boutons</CardTitle>
+                      <CardDescription>Personnalisez l'apparence des boutons</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Style des boutons</Label>
+                        <RadioGroup value={buttonStyle} onValueChange={setButtonStyle} className="flex gap-4">
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="rounded" id="button-rounded" />
+                            <Label htmlFor="button-rounded">Arrondi</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="square" id="button-square" />
+                            <Label htmlFor="button-square">Carré</Label>
+                          </div>
+                        </RadioGroup>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="border-radius">Rayon de bordure</Label>
+                        <Input
+                          id="border-radius"
+                          type="number"
+                          value={borderRadius}
+                          onChange={(e) => setBorderRadius(Number.parseInt(e.target.value))}
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Prévisualisation</CardTitle>
+                      <CardDescription>Aperçu des composants sélectionnés</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4 p-4 border rounded-md">
+                        <Button className={buttonStyle === "rounded" ? "rounded-full" : ""}>Bouton principal</Button>
+                        <Button variant="outline" className={buttonStyle === "rounded" ? "rounded-full" : ""}>
+                          Bouton secondaire
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="logo" className="space-y-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Logo et Titre</CardTitle>
+                      <CardDescription>Personnalisez le logo et le titre de votre site</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="site-title">Titre du site</Label>
+                        <Input
+                          id="site-title"
+                          type="text"
+                          value={siteTitle}
+                          onChange={(e) => setSiteTitle(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="site-description">Description du site</Label>
+                        <Input
+                          id="site-description"
+                          type="text"
+                          value={siteDescription}
+                          onChange={(e) => setSiteDescription(e.target.value)}
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              </Tabs>
+            </div>
+          )}
+
+          {activeTab === "content" && (
+            <div>
+              <h2 className="text-2xl font-bold">Contenu</h2>
+              <p>Gestion du contenu du site (articles, pages, etc.)</p>
+            </div>
+          )}
+
+          {activeTab === "users" && (
+            <div>
+              <h2 className="text-2xl font-bold">Utilisateurs</h2>
+              <p>Gestion des utilisateurs (propriétaires, locataires, administrateurs)</p>
+            </div>
+          )}
+
+          {activeTab === "settings" && (
+            <div>
+              <h2 className="text-2xl font-bold">Paramètres</h2>
+              <p>Paramètres généraux du site</p>
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  )
+}
