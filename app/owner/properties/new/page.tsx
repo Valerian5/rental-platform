@@ -90,8 +90,7 @@ export default function NewPropertyPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [selectedImages, setSelectedImages] = useState<File[]>([])
-  const [selectedDate, setSelectedDate] = useState<Date>()
-  const [timeSlots, setTimeSlots] = useState<Array<{ start: string; end: string }>>([])
+  const [visitSlots, setVisitSlots] = useState<any[]>([])
 
   const [formData, setFormData] = useState<FormData>({
     title: "",
@@ -167,43 +166,6 @@ export default function NewPropertyPage() {
     setSelectedImages((prev) => prev.filter((_, i) => i !== index))
   }
 
-  const addTimeSlot = () => {
-    setTimeSlots((prev) => [...prev, { start: "", end: "" }])
-  }
-
-  const updateTimeSlot = (index: number, field: "start" | "end", value: string) => {
-    setTimeSlots((prev) => prev.map((slot, i) => (i === index ? { ...slot, [field]: value } : slot)))
-  }
-
-  const removeTimeSlot = (index: number) => {
-    setTimeSlots((prev) => prev.filter((_, i) => i !== index))
-  }
-
-  const addAvailability = () => {
-    if (selectedDate && timeSlots.length > 0) {
-      setFormData((prev) => ({
-        ...prev,
-        visit_availabilities: [
-          ...prev.visit_availabilities,
-          {
-            date: selectedDate,
-            timeSlots: [...timeSlots],
-          },
-        ],
-      }))
-      setSelectedDate(undefined)
-      setTimeSlots([])
-      toast.success("Disponibilité ajoutée")
-    }
-  }
-
-  const removeAvailability = (index: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      visit_availabilities: prev.visit_availabilities.filter((_, i) => i !== index),
-    }))
-  }
-
   const nextStep = () => {
     if (currentStep < 6) {
       setCurrentStep(currentStep + 1)
@@ -216,15 +178,64 @@ export default function NewPropertyPage() {
     }
   }
 
+  const validateForm = () => {
+    if (!formData.title.trim()) {
+      toast.error("Le titre est obligatoire")
+      return false
+    }
+    if (!formData.description.trim()) {
+      toast.error("La description est obligatoire")
+      return false
+    }
+    if (!formData.address.trim()) {
+      toast.error("L'adresse est obligatoire")
+      return false
+    }
+    if (!formData.city.trim()) {
+      toast.error("La ville est obligatoire")
+      return false
+    }
+    if (!formData.surface || Number.parseInt(formData.surface) <= 0) {
+      toast.error("La surface doit être supérieure à 0")
+      return false
+    }
+    if (!formData.rent_excluding_charges || Number.parseFloat(formData.rent_excluding_charges) <= 0) {
+      toast.error("Le loyer doit être supérieur à 0")
+      return false
+    }
+    if (!formData.charges_amount || Number.parseFloat(formData.charges_amount) < 0) {
+      toast.error("Le montant des charges doit être positif")
+      return false
+    }
+    if (!formData.security_deposit || Number.parseFloat(formData.security_deposit) < 0) {
+      toast.error("Le dépôt de garantie doit être positif")
+      return false
+    }
+    if (!formData.rooms || Number.parseInt(formData.rooms) <= 0) {
+      toast.error("Le nombre de pièces doit être supérieur à 0")
+      return false
+    }
+    return true
+  }
+
   const handleSubmit = async () => {
+    console.log("🚀 Début de la soumission")
+
     if (!currentUser) {
       toast.error("Vous devez être connecté pour ajouter un bien")
       return
     }
 
+    if (!validateForm()) {
+      return
+    }
+
     setIsLoading(true)
+    toast.info("Création de l'annonce en cours...")
 
     try {
+      console.log("📝 Données du formulaire:", formData)
+
       const propertyData = {
         title: formData.title,
         description: formData.description,
@@ -237,49 +248,54 @@ export default function NewPropertyPage() {
         charges_amount: Number.parseFloat(formData.charges_amount),
         property_type: formData.property_type as "apartment" | "house" | "studio" | "loft",
         rental_type: formData.rental_type as "unfurnished" | "furnished" | "shared",
-        construction_year: Number.parseInt(formData.construction_year),
+        construction_year: formData.construction_year ? Number.parseInt(formData.construction_year) : null,
         security_deposit: Number.parseFloat(formData.security_deposit),
         rooms: Number.parseInt(formData.rooms),
-        bedrooms: Number.parseInt(formData.bedrooms),
-        bathrooms: Number.parseInt(formData.bathrooms),
-        exterior_type: formData.exterior_type,
+        bedrooms: formData.bedrooms ? Number.parseInt(formData.bedrooms) : null,
+        bathrooms: formData.bathrooms ? Number.parseInt(formData.bathrooms) : null,
+        exterior_type: formData.exterior_type || null,
         equipment: formData.equipment,
-        energy_class: formData.energy_class,
-        ges_class: formData.ges_class,
-        heating_type: formData.heating_type,
-        required_income: Number.parseFloat(formData.required_income),
-        professional_situation: formData.professional_situation,
+        energy_class: formData.energy_class || null,
+        ges_class: formData.ges_class || null,
+        heating_type: formData.heating_type || null,
+        required_income: formData.required_income ? Number.parseFloat(formData.required_income) : null,
+        professional_situation: formData.professional_situation || null,
         guarantor_required: formData.guarantor_required,
-        lease_duration: Number.parseInt(formData.lease_duration),
-        move_in_date: formData.move_in_date,
-        rent_payment_day: Number.parseInt(formData.rent_payment_day),
+        lease_duration: formData.lease_duration ? Number.parseInt(formData.lease_duration) : null,
+        move_in_date: formData.move_in_date || null,
+        rent_payment_day: formData.rent_payment_day ? Number.parseInt(formData.rent_payment_day) : null,
         owner_id: currentUser.id,
       }
 
-      const newProperty = await propertyService.createProperty(propertyData)
+      console.log("🏠 Données de la propriété:", propertyData)
 
-      // Ajouter les disponibilités de visite personnalisées (si il y en a)
-      if (formData.visit_availabilities.length > 0) {
-        for (const availability of formData.visit_availabilities) {
-          for (const timeSlot of availability.timeSlots) {
-            await propertyService.addVisitAvailability(
-              newProperty.id,
-              availability.date.toISOString().split("T")[0],
-              timeSlot.start,
-              timeSlot.end,
-            )
-          }
+      const newProperty = await propertyService.createProperty(propertyData)
+      console.log("✅ Propriété créée:", newProperty)
+
+      // Ajouter les créneaux de visite personnalisés
+      if (visitSlots.length > 0) {
+        console.log("📅 Ajout des créneaux personnalisés:", visitSlots)
+        for (const slot of visitSlots) {
+          await propertyService.addVisitAvailability(
+            newProperty.id,
+            slot.date,
+            slot.start_time,
+            slot.end_time,
+            slot.max_capacity || 1,
+            slot.is_group_visit || false,
+          )
         }
       } else {
-        // Générer automatiquement les créneaux de visite si aucun n'a été configuré manuellement
+        console.log("🔄 Génération automatique des créneaux")
         await propertyService.generateDefaultVisitSlots(newProperty.id, 14)
       }
 
       toast.success("Annonce créée avec succès !")
+      console.log("🎉 Redirection vers la page de succès")
       router.push(`/owner/properties/${newProperty.id}/success`)
     } catch (error) {
-      console.error("Erreur lors de la création de l'annonce:", error)
-      toast.error("Erreur lors de la création de l'annonce")
+      console.error("❌ Erreur lors de la création de l'annonce:", error)
+      toast.error(`Erreur lors de la création de l'annonce: ${error.message || "Erreur inconnue"}`)
     } finally {
       setIsLoading(false)
     }
@@ -730,37 +746,7 @@ export default function NewPropertyPage() {
               </div>
             </div>
 
-            <VisitScheduler
-              visitSlots={formData.visit_availabilities.flatMap((av) =>
-                av.timeSlots.map((slot) => ({
-                  date: av.date.toISOString().split("T")[0],
-                  start_time: slot.start,
-                  end_time: slot.end,
-                  max_capacity: 1,
-                  is_group_visit: false,
-                  current_bookings: 0,
-                })),
-              )}
-              onSlotsChange={(slots) => {
-                // Convertir les slots en format FormData
-                const groupedByDate = slots.reduce(
-                  (acc, slot) => {
-                    if (!acc[slot.date]) acc[slot.date] = []
-                    acc[slot.date].push({ start: slot.start_time, end: slot.end_time })
-                    return acc
-                  },
-                  {} as Record<string, Array<{ start: string; end: string }>>,
-                )
-
-                const availabilities = Object.entries(groupedByDate).map(([date, timeSlots]) => ({
-                  date: new Date(date),
-                  timeSlots,
-                }))
-
-                setFormData((prev) => ({ ...prev, visit_availabilities: availabilities }))
-              }}
-              mode="creation"
-            />
+            <VisitScheduler visitSlots={visitSlots} onSlotsChange={setVisitSlots} mode="creation" />
           </div>
         )
 

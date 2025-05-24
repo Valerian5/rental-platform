@@ -74,7 +74,15 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
   })
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
-  const [calendarDays, setCalendarDays] = useState<Array<{ date: string; dayName: string; slots: VisitSlot[] }>>([])
+  const [calendarDays, setCalendarDays] = useState<
+    Array<{
+      date: string
+      dayName: string
+      dayNumber: number
+      monthName: string
+      slots: VisitSlot[]
+    }>
+  >([])
 
   // Générer les 30 prochains jours
   useEffect(() => {
@@ -86,12 +94,16 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
       date.setDate(today.getDate() + i)
       const dateStr = date.toISOString().split("T")[0]
       const dayName = date.toLocaleDateString("fr-FR", { weekday: "short" })
+      const dayNumber = date.getDate()
+      const monthName = date.toLocaleDateString("fr-FR", { month: "short" })
 
       const daySlots = visitSlots.filter((slot) => slot.date === dateStr)
 
       days.push({
         date: dateStr,
         dayName,
+        dayNumber,
+        monthName,
         slots: daySlots,
       })
     }
@@ -290,73 +302,88 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
 
             <TabsContent value="horaires" className="space-y-4">
               <div className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    checked={settings.enableMorning}
-                    onCheckedChange={(checked) => setSettings((prev) => ({ ...prev, enableMorning: !!checked }))}
-                  />
-                  <Label>Matin</Label>
-                  <Input
-                    type="time"
-                    value={settings.morningStart}
-                    onChange={(e) => setSettings((prev) => ({ ...prev, morningStart: e.target.value }))}
-                    disabled={!settings.enableMorning}
-                    className="w-24"
-                  />
-                  <span>à</span>
-                  <Input
-                    type="time"
-                    value={settings.morningEnd}
-                    onChange={(e) => setSettings((prev) => ({ ...prev, morningEnd: e.target.value }))}
-                    disabled={!settings.enableMorning}
-                    className="w-24"
-                  />
+                {/* Matin */}
+                <div className="flex items-center gap-4 p-3 border rounded-lg">
+                  <div className="flex items-center space-x-2 min-w-[100px]">
+                    <Checkbox
+                      checked={settings.enableMorning}
+                      onCheckedChange={(checked) => setSettings((prev) => ({ ...prev, enableMorning: !!checked }))}
+                    />
+                    <Label>Matin</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Input
+                      type="time"
+                      value={settings.morningStart}
+                      onChange={(e) => setSettings((prev) => ({ ...prev, morningStart: e.target.value }))}
+                      disabled={!settings.enableMorning}
+                      className="w-24"
+                    />
+                    <span>à</span>
+                    <Input
+                      type="time"
+                      value={settings.morningEnd}
+                      onChange={(e) => setSettings((prev) => ({ ...prev, morningEnd: e.target.value }))}
+                      disabled={!settings.enableMorning}
+                      className="w-24"
+                    />
+                  </div>
                 </div>
 
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    checked={settings.enableAfternoon}
-                    onCheckedChange={(checked) => setSettings((prev) => ({ ...prev, enableAfternoon: !!checked }))}
-                  />
-                  <Label>Après-midi</Label>
-                  <Input
-                    type="time"
-                    value={settings.afternoonStart}
-                    onChange={(e) => setSettings((prev) => ({ ...prev, afternoonStart: e.target.value }))}
-                    disabled={!settings.enableAfternoon}
-                    className="w-24"
-                  />
-                  <span>à</span>
-                  <Input
-                    type="time"
-                    value={settings.afternoonEnd}
-                    onChange={(e) => setSettings((prev) => ({ ...prev, afternoonEnd: e.target.value }))}
-                    disabled={!settings.enableAfternoon}
-                    className="w-24"
-                  />
+                {/* Après-midi */}
+                <div className="flex items-center gap-4 p-3 border rounded-lg">
+                  <div className="flex items-center space-x-2 min-w-[100px]">
+                    <Checkbox
+                      checked={settings.enableAfternoon}
+                      onCheckedChange={(checked) => setSettings((prev) => ({ ...prev, enableAfternoon: !!checked }))}
+                    />
+                    <Label>Après-midi</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Input
+                      type="time"
+                      value={settings.afternoonStart}
+                      onChange={(e) => setSettings((prev) => ({ ...prev, afternoonStart: e.target.value }))}
+                      disabled={!settings.enableAfternoon}
+                      className="w-24"
+                    />
+                    <span>à</span>
+                    <Input
+                      type="time"
+                      value={settings.afternoonEnd}
+                      onChange={(e) => setSettings((prev) => ({ ...prev, afternoonEnd: e.target.value }))}
+                      disabled={!settings.enableAfternoon}
+                      className="w-24"
+                    />
+                  </div>
                 </div>
 
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    checked={settings.enableEvening}
-                    onCheckedChange={(checked) => setSettings((prev) => ({ ...prev, enableEvening: !!checked }))}
-                  />
-                  <Label>Soirée</Label>
-                  <Input
-                    type="time"
-                    value={settings.eveningStart}
-                    onChange={(e) => setSettings((prev) => ({ ...prev, eveningStart: e.target.value }))}
-                    disabled={!settings.enableEvening}
-                    className="w-24"
-                  />
-                  <span>à</span>
-                  <Input
-                    type="time"
-                    value={settings.eveningEnd}
-                    onChange={(e) => setSettings((prev) => ({ ...prev, eveningEnd: e.target.value }))}
-                    disabled={!settings.enableEvening}
-                    className="w-24"
-                  />
+                {/* Soirée */}
+                <div className="flex items-center gap-4 p-3 border rounded-lg">
+                  <div className="flex items-center space-x-2 min-w-[100px]">
+                    <Checkbox
+                      checked={settings.enableEvening}
+                      onCheckedChange={(checked) => setSettings((prev) => ({ ...prev, enableEvening: !!checked }))}
+                    />
+                    <Label>Soirée</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Input
+                      type="time"
+                      value={settings.eveningStart}
+                      onChange={(e) => setSettings((prev) => ({ ...prev, eveningStart: e.target.value }))}
+                      disabled={!settings.enableEvening}
+                      className="w-24"
+                    />
+                    <span>à</span>
+                    <Input
+                      type="time"
+                      value={settings.eveningEnd}
+                      onChange={(e) => setSettings((prev) => ({ ...prev, eveningEnd: e.target.value }))}
+                      disabled={!settings.enableEvening}
+                      className="w-24"
+                    />
+                  </div>
                 </div>
               </div>
             </TabsContent>
@@ -407,7 +434,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-7 gap-2">
+          <div className="grid grid-cols-7 gap-3">
             {calendarDays.slice(0, 28).map((day) => {
               const status = getDateStatus(day)
               return (
@@ -415,12 +442,13 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                   <DialogTrigger asChild>
                     <Button
                       variant="outline"
-                      className={`h-16 p-2 flex flex-col items-center justify-center ${getStatusColor(status)}`}
+                      className={`h-20 p-2 flex flex-col items-center justify-center relative ${getStatusColor(status)}`}
                       onClick={() => setSelectedDate(day.date)}
                     >
-                      <div className="text-xs font-medium">{day.dayName}</div>
-                      <div className="text-sm">{new Date(day.date).getDate()}</div>
-                      <Badge variant="secondary" className="text-xs mt-1">
+                      <div className="text-xs text-gray-500 mb-1">{day.monthName}</div>
+                      <div className="text-xs font-medium mb-1">{day.dayName}</div>
+                      <div className="text-lg font-bold">{day.dayNumber}</div>
+                      <Badge variant="secondary" className="text-xs mt-1 absolute bottom-1">
                         {getStatusLabel(status)}
                       </Badge>
                     </Button>
