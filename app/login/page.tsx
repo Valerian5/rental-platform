@@ -32,8 +32,12 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
+      console.log("Tentative de connexion avec:", formData.email)
+
       // Connexion avec Supabase
       const { user, session } = await authService.login(formData.email, formData.password)
+
+      console.log("Résultat connexion:", { user, session })
 
       if (!user || !session) {
         throw new Error("Erreur lors de la connexion")
@@ -43,6 +47,7 @@ export default function LoginPage() {
 
       // Récupérer les informations de l'utilisateur pour rediriger selon son type
       const currentUser = await authService.getCurrentUser()
+      console.log("Utilisateur actuel:", currentUser)
 
       if (currentUser) {
         // Redirection selon le type d'utilisateur
@@ -64,7 +69,20 @@ export default function LoginPage() {
       }
     } catch (error: any) {
       console.error("Erreur lors de la connexion:", error)
-      toast.error(error.message || "Email ou mot de passe incorrect")
+
+      // Messages d'erreur plus spécifiques
+      let errorMessage = "Erreur de connexion"
+      if (error.message.includes("Invalid login credentials")) {
+        errorMessage = "Email ou mot de passe incorrect"
+      } else if (error.message.includes("Email not confirmed")) {
+        errorMessage = "Veuillez confirmer votre email avant de vous connecter"
+      } else if (error.message.includes("Too many requests")) {
+        errorMessage = "Trop de tentatives. Veuillez réessayer plus tard"
+      } else {
+        errorMessage = error.message
+      }
+
+      toast.error(errorMessage)
     } finally {
       setIsLoading(false)
     }
@@ -124,6 +142,9 @@ export default function LoginPage() {
             <div className="flex items-center justify-between">
               <Link href="/forgot-password" className="text-sm text-blue-600 hover:underline">
                 Mot de passe oublié ?
+              </Link>
+              <Link href="/debug" className="text-sm text-gray-500 hover:underline">
+                Debug
               </Link>
             </div>
 
