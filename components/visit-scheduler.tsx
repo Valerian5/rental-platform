@@ -8,9 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Calendar, Clock, Users, Settings, Plus, Trash2 } from "lucide-react"
+import { Calendar, Settings } from "lucide-react"
 import { toast } from "sonner"
 
 interface VisitSlot {
@@ -24,10 +22,10 @@ interface VisitSlot {
 }
 
 interface GlobalSettings {
-  slotDuration: number // en minutes
+  slotDuration: number
   defaultCapacity: number
   allowGroupVisits: boolean
-  workingDays: number[] // 0=dimanche, 1=lundi, etc.
+  workingDays: number[]
   morningStart: string
   morningEnd: string
   afternoonStart: string
@@ -61,7 +59,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
     slotDuration: 30,
     defaultCapacity: 1,
     allowGroupVisits: false,
-    workingDays: [1, 2, 3, 4, 5, 6], // Lun-Sam par défaut
+    workingDays: [1, 2, 3, 4, 5, 6],
     morningStart: "09:00",
     morningEnd: "12:00",
     afternoonStart: "14:00",
@@ -73,7 +71,6 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
     enableEvening: false,
   })
 
-  const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [calendarDays, setCalendarDays] = useState<
     Array<{
       date: string
@@ -84,7 +81,6 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
     }>
   >([])
 
-  // Générer les 30 prochains jours
   useEffect(() => {
     const days = []
     const today = new Date()
@@ -111,94 +107,54 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
     setCalendarDays(days)
   }, [visitSlots])
 
-  const generateSlotsForDay = (date: string) => {
-    const dayOfWeek = new Date(date).getDay()
-
-    if (!settings.workingDays.includes(dayOfWeek)) {
-      return []
-    }
-
-    const slots: VisitSlot[] = []
-    const periods = []
-
-    if (settings.enableMorning) {
-      periods.push({ start: settings.morningStart, end: settings.morningEnd })
-    }
-    if (settings.enableAfternoon) {
-      periods.push({ start: settings.afternoonStart, end: settings.afternoonEnd })
-    }
-    if (settings.enableEvening) {
-      periods.push({ start: settings.eveningStart, end: settings.eveningEnd })
-    }
-
-    periods.forEach((period) => {
-      const startTime = new Date(`2000-01-01T${period.start}:00`)
-      const endTime = new Date(`2000-01-01T${period.end}:00`)
-
-      let currentTime = new Date(startTime)
-
-      while (currentTime < endTime) {
-        const nextTime = new Date(currentTime.getTime() + settings.slotDuration * 60000)
-
-        if (nextTime <= endTime) {
-          slots.push({
-            date,
-            start_time: currentTime.toTimeString().slice(0, 5),
-            end_time: nextTime.toTimeString().slice(0, 5),
-            max_capacity: settings.defaultCapacity,
-            is_group_visit: settings.allowGroupVisits,
-            current_bookings: 0,
-          })
-        }
-
-        currentTime = nextTime
-      }
-    })
-
-    return slots
-  }
-
   const generateAllSlots = () => {
     const allSlots: VisitSlot[] = []
 
     calendarDays.forEach((day) => {
-      const daySlots = generateSlotsForDay(day.date)
-      allSlots.push(...daySlots)
+      const dayOfWeek = new Date(day.date).getDay()
+      if (!settings.workingDays.includes(dayOfWeek)) return
+
+      const periods = []
+      if (settings.enableMorning) {
+        periods.push({ start: settings.morningStart, end: settings.morningEnd })
+      }
+      if (settings.enableAfternoon) {
+        periods.push({ start: settings.afternoonStart, end: settings.afternoonEnd })
+      }
+      if (settings.enableEvening) {
+        periods.push({ start: settings.eveningStart, end: settings.eveningEnd })
+      }
+
+      periods.forEach((period) => {
+        const startTime = new Date(`2000-01-01T${period.start}:00`)
+        const endTime = new Date(`2000-01-01T${period.end}:00`)
+        let currentTime = new Date(startTime)
+
+        while (currentTime < endTime) {
+          const nextTime = new Date(currentTime.getTime() + settings.slotDuration * 60000)
+          if (nextTime <= endTime) {
+            allSlots.push({
+              date: day.date,
+              start_time: currentTime.toTimeString().slice(0, 5),
+              end_time: nextTime.toTimeString().slice(0, 5),
+              max_capacity: settings.defaultCapacity,
+              is_group_visit: settings.allowGroupVisits,
+              current_bookings: 0,
+            })
+          }
+          currentTime = nextTime
+        }
+      })
     })
 
     onSlotsChange(allSlots)
     toast.success(`${allSlots.length} créneaux générés`)
   }
 
-  const addSlotToDay = (date: string) => {
-    const newSlot: VisitSlot = {
-      date,
-      start_time: "14:00",
-      end_time: "14:30",
-      max_capacity: settings.defaultCapacity,
-      is_group_visit: settings.allowGroupVisits,
-      current_bookings: 0,
-    }
-
-    onSlotsChange([...visitSlots, newSlot])
-  }
-
-  const removeSlot = (slotIndex: number) => {
-    const newSlots = visitSlots.filter((_, index) => index !== slotIndex)
-    onSlotsChange(newSlots)
-  }
-
-  const updateSlot = (slotIndex: number, updates: Partial<VisitSlot>) => {
-    const newSlots = visitSlots.map((slot, index) => (index === slotIndex ? { ...slot, ...updates } : slot))
-    onSlotsChange(newSlots)
-  }
-
-  const getDateStatus = (day: { date: string; slots: VisitSlot[] }) => {
+  const getDateStatus = (day: { slots: VisitSlot[] }) => {
     if (day.slots.length === 0) return "closed"
-
     const totalCapacity = day.slots.reduce((sum, slot) => sum + slot.max_capacity, 0)
     const totalBookings = day.slots.reduce((sum, slot) => sum + slot.current_bookings, 0)
-
     if (totalBookings === 0) return "available"
     if (totalBookings >= totalCapacity) return "full"
     return "partial"
@@ -212,8 +168,6 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
         return "bg-yellow-100 text-yellow-800 border-yellow-200"
       case "full":
         return "bg-red-100 text-red-800 border-red-200"
-      case "closed":
-        return "bg-gray-100 text-gray-600 border-gray-200"
       default:
         return "bg-gray-100 text-gray-600 border-gray-200"
     }
@@ -227,8 +181,6 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
         return "Partiel"
       case "full":
         return "Complet"
-      case "closed":
-        return "Fermé"
       default:
         return "Fermé"
     }
@@ -245,174 +197,49 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="general" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="general">Général</TabsTrigger>
-              <TabsTrigger value="horaires">Horaires</TabsTrigger>
-              <TabsTrigger value="jours">Jours ouvrés</TabsTrigger>
-            </TabsList>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div className="space-y-2">
+              <Label>Durée des créneaux</Label>
+              <Select
+                value={settings.slotDuration.toString()}
+                onValueChange={(value) => setSettings((prev) => ({ ...prev, slotDuration: Number.parseInt(value) }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="15">15 minutes</SelectItem>
+                  <SelectItem value="30">30 minutes</SelectItem>
+                  <SelectItem value="45">45 minutes</SelectItem>
+                  <SelectItem value="60">1 heure</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-            <TabsContent value="general" className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Durée des créneaux</Label>
-                  <Select
-                    value={settings.slotDuration.toString()}
-                    onValueChange={(value) =>
-                      setSettings((prev) => ({ ...prev, slotDuration: Number.parseInt(value) }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="15">15 minutes</SelectItem>
-                      <SelectItem value="30">30 minutes</SelectItem>
-                      <SelectItem value="45">45 minutes</SelectItem>
-                      <SelectItem value="60">1 heure</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+            <div className="space-y-2">
+              <Label>Capacité par défaut</Label>
+              <Input
+                type="number"
+                min="1"
+                max="10"
+                value={settings.defaultCapacity}
+                onChange={(e) => setSettings((prev) => ({ ...prev, defaultCapacity: Number.parseInt(e.target.value) }))}
+              />
+            </div>
 
-                <div className="space-y-2">
-                  <Label>Capacité par défaut</Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    max="10"
-                    value={settings.defaultCapacity}
-                    onChange={(e) =>
-                      setSettings((prev) => ({ ...prev, defaultCapacity: Number.parseInt(e.target.value) }))
-                    }
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Visites groupées</Label>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      checked={settings.allowGroupVisits}
-                      onCheckedChange={(checked) => setSettings((prev) => ({ ...prev, allowGroupVisits: !!checked }))}
-                    />
-                    <span className="text-sm">Autoriser les visites groupées</span>
-                  </div>
-                </div>
+            <div className="space-y-2">
+              <Label>Visites groupées</Label>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  checked={settings.allowGroupVisits}
+                  onCheckedChange={(checked) => setSettings((prev) => ({ ...prev, allowGroupVisits: !!checked }))}
+                />
+                <span className="text-sm">Autoriser</span>
               </div>
-            </TabsContent>
+            </div>
+          </div>
 
-            <TabsContent value="horaires" className="space-y-4">
-              <div className="space-y-4">
-                {/* Matin */}
-                <div className="flex items-center gap-4 p-3 border rounded-lg">
-                  <div className="flex items-center space-x-2 min-w-[100px]">
-                    <Checkbox
-                      checked={settings.enableMorning}
-                      onCheckedChange={(checked) => setSettings((prev) => ({ ...prev, enableMorning: !!checked }))}
-                    />
-                    <Label>Matin</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Input
-                      type="time"
-                      value={settings.morningStart}
-                      onChange={(e) => setSettings((prev) => ({ ...prev, morningStart: e.target.value }))}
-                      disabled={!settings.enableMorning}
-                      className="w-24"
-                    />
-                    <span>à</span>
-                    <Input
-                      type="time"
-                      value={settings.morningEnd}
-                      onChange={(e) => setSettings((prev) => ({ ...prev, morningEnd: e.target.value }))}
-                      disabled={!settings.enableMorning}
-                      className="w-24"
-                    />
-                  </div>
-                </div>
-
-                {/* Après-midi */}
-                <div className="flex items-center gap-4 p-3 border rounded-lg">
-                  <div className="flex items-center space-x-2 min-w-[100px]">
-                    <Checkbox
-                      checked={settings.enableAfternoon}
-                      onCheckedChange={(checked) => setSettings((prev) => ({ ...prev, enableAfternoon: !!checked }))}
-                    />
-                    <Label>Après-midi</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Input
-                      type="time"
-                      value={settings.afternoonStart}
-                      onChange={(e) => setSettings((prev) => ({ ...prev, afternoonStart: e.target.value }))}
-                      disabled={!settings.enableAfternoon}
-                      className="w-24"
-                    />
-                    <span>à</span>
-                    <Input
-                      type="time"
-                      value={settings.afternoonEnd}
-                      onChange={(e) => setSettings((prev) => ({ ...prev, afternoonEnd: e.target.value }))}
-                      disabled={!settings.enableAfternoon}
-                      className="w-24"
-                    />
-                  </div>
-                </div>
-
-                {/* Soirée */}
-                <div className="flex items-center gap-4 p-3 border rounded-lg">
-                  <div className="flex items-center space-x-2 min-w-[100px]">
-                    <Checkbox
-                      checked={settings.enableEvening}
-                      onCheckedChange={(checked) => setSettings((prev) => ({ ...prev, enableEvening: !!checked }))}
-                    />
-                    <Label>Soirée</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Input
-                      type="time"
-                      value={settings.eveningStart}
-                      onChange={(e) => setSettings((prev) => ({ ...prev, eveningStart: e.target.value }))}
-                      disabled={!settings.enableEvening}
-                      className="w-24"
-                    />
-                    <span>à</span>
-                    <Input
-                      type="time"
-                      value={settings.eveningEnd}
-                      onChange={(e) => setSettings((prev) => ({ ...prev, eveningEnd: e.target.value }))}
-                      disabled={!settings.enableEvening}
-                      className="w-24"
-                    />
-                  </div>
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="jours" className="space-y-4">
-              <div className="grid grid-cols-7 gap-2">
-                {DAYS_OF_WEEK.map((day) => (
-                  <div key={day.value} className="text-center">
-                    <Checkbox
-                      checked={settings.workingDays.includes(day.value)}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setSettings((prev) => ({ ...prev, workingDays: [...prev.workingDays, day.value] }))
-                        } else {
-                          setSettings((prev) => ({
-                            ...prev,
-                            workingDays: prev.workingDays.filter((d) => d !== day.value),
-                          }))
-                        }
-                      }}
-                    />
-                    <div className="text-sm mt-1">{day.label}</div>
-                  </div>
-                ))}
-              </div>
-            </TabsContent>
-          </Tabs>
-
-          <div className="flex gap-2 mt-4">
+          <div className="flex gap-2">
             <Button onClick={generateAllSlots} className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />
               Générer tous les créneaux
@@ -424,7 +251,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
         </CardContent>
       </Card>
 
-      {/* Calendrier */}
+      {/* Calendrier simplifié */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -434,103 +261,17 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-7 gap-3">
+          <div className="grid grid-cols-7 gap-2">
             {calendarDays.slice(0, 28).map((day) => {
               const status = getDateStatus(day)
               return (
-                <Dialog key={day.date}>
-                  <DialogTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={`h-20 p-2 flex flex-col items-center justify-center relative ${getStatusColor(status)}`}
-                      onClick={() => setSelectedDate(day.date)}
-                    >
-                      <div className="text-xs text-gray-500 mb-1">{day.monthName}</div>
-                      <div className="text-xs font-medium mb-1">{day.dayName}</div>
-                      <div className="text-lg font-bold">{day.dayNumber}</div>
-                      <Badge variant="secondary" className="text-xs mt-1 absolute bottom-1">
-                        {getStatusLabel(status)}
-                      </Badge>
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                      <DialogTitle>
-                        Créneaux du{" "}
-                        {new Date(day.date).toLocaleDateString("fr-FR", {
-                          weekday: "long",
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                        })}
-                      </DialogTitle>
-                    </DialogHeader>
-
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">{day.slots.length} créneau(x) configuré(s)</span>
-                        <Button size="sm" onClick={() => addSlotToDay(day.date)}>
-                          <Plus className="h-4 w-4 mr-1" />
-                          Ajouter un créneau
-                        </Button>
-                      </div>
-
-                      {day.slots.length === 0 ? (
-                        <div className="text-center py-8 text-gray-500">
-                          <Calendar className="h-8 w-8 mx-auto mb-2" />
-                          <p>Aucun créneau configuré</p>
-                          <p className="text-sm">
-                            Cliquez sur "Ajouter un créneau" ou utilisez la génération automatique
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {day.slots.map((slot, index) => {
-                            const slotIndex = visitSlots.findIndex(
-                              (s) =>
-                                s.date === slot.date &&
-                                s.start_time === slot.start_time &&
-                                s.end_time === slot.end_time,
-                            )
-
-                            return (
-                              <div key={index} className="flex items-center gap-2 p-3 border rounded-lg">
-                                <Clock className="h-4 w-4 text-gray-500" />
-                                <Input
-                                  type="time"
-                                  value={slot.start_time}
-                                  onChange={(e) => updateSlot(slotIndex, { start_time: e.target.value })}
-                                  className="w-24"
-                                />
-                                <span>à</span>
-                                <Input
-                                  type="time"
-                                  value={slot.end_time}
-                                  onChange={(e) => updateSlot(slotIndex, { end_time: e.target.value })}
-                                  className="w-24"
-                                />
-                                <Users className="h-4 w-4 text-gray-500" />
-                                <Input
-                                  type="number"
-                                  min="1"
-                                  max="10"
-                                  value={slot.max_capacity}
-                                  onChange={(e) =>
-                                    updateSlot(slotIndex, { max_capacity: Number.parseInt(e.target.value) })
-                                  }
-                                  className="w-16"
-                                />
-                                <Button variant="destructive" size="sm" onClick={() => removeSlot(slotIndex)}>
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </DialogContent>
-                </Dialog>
+                <div key={day.date} className={`p-2 border rounded-lg text-center ${getStatusColor(status)}`}>
+                  <div className="text-xs text-gray-500">{day.monthName}</div>
+                  <div className="text-xs font-medium">{day.dayName}</div>
+                  <div className="text-lg font-bold">{day.dayNumber}</div>
+                  <div className="text-xs mt-1">{getStatusLabel(status)}</div>
+                  <div className="text-xs">{day.slots.length} créneaux</div>
+                </div>
               )
             })}
           </div>
