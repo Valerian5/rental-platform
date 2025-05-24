@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Calendar } from "@/components/ui/calendar"
@@ -712,117 +712,134 @@ export default function NewPropertyPage() {
       case 6:
         return (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold">Disponibilités pour les visites</h2>
+            <h2 className="text-2xl font-bold">Configuration des visites</h2>
 
             <div className="bg-blue-50 p-4 rounded-lg">
               <h3 className="font-semibold text-blue-800 mb-2">Génération automatique recommandée</h3>
               <p className="text-blue-700 text-sm mb-3">
                 Nous recommandons de générer automatiquement vos créneaux de visite après la création de l'annonce. Cela
-                vous fera gagner du temps avec des créneaux de 30 minutes pré-configurés.
+                vous fera gagner du temps avec des créneaux de 30 minutes pré-configurés du lundi au samedi.
               </p>
-              <div className="flex items-center space-x-2">
-                <Checkbox id="auto_generate_visits" checked={true} disabled />
-                <Label htmlFor="auto_generate_visits" className="text-sm">
-                  Générer automatiquement les créneaux après création (recommandé)
-                </Label>
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <Checkbox id="auto_generate_visits" checked={true} disabled />
+                  <Label htmlFor="auto_generate_visits" className="text-sm">
+                    Générer automatiquement les créneaux après création (recommandé)
+                  </Label>
+                </div>
+                <div className="text-sm text-blue-600">
+                  ✓ Créneaux de 30 minutes
+                  <br />✓ Lundi-Vendredi : 9h-12h et 14h-18h
+                  <br />✓ Samedi : 10h-17h
+                  <br />✓ 14 jours à l'avance
+                </div>
               </div>
             </div>
 
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Ou ajoutez manuellement vos disponibilités</h3>
+            <Card>
+              <CardHeader>
+                <CardTitle>Ou configurez manuellement vos premiers créneaux</CardTitle>
+                <CardDescription>
+                  Vous pourrez toujours modifier et ajouter des créneaux après la création de l'annonce
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <h4 className="font-medium">Ajouter une disponibilité</h4>
 
-              {/* Contenu existant pour l'ajout manuel */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Ajouter une disponibilité</h3>
+                    <div className="space-y-2">
+                      <Label>Sélectionnez une date</Label>
+                      <Calendar
+                        mode="single"
+                        selected={selectedDate}
+                        onSelect={setSelectedDate}
+                        disabled={(date) => date < new Date()}
+                        className="rounded-md border"
+                      />
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label>Sélectionnez une date</Label>
-                    <Calendar
-                      mode="single"
-                      selected={selectedDate}
-                      onSelect={setSelectedDate}
-                      disabled={(date) => date < new Date()}
-                      className="rounded-md border"
-                    />
-                  </div>
-
-                  {selectedDate && (
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <Label>Créneaux horaires</Label>
-                        <Button type="button" variant="outline" size="sm" onClick={addTimeSlot}>
-                          Ajouter un créneau
-                        </Button>
-                      </div>
-
-                      {timeSlots.map((slot, index) => (
-                        <div key={index} className="flex items-center space-x-2">
-                          <Input
-                            type="time"
-                            value={slot.start}
-                            onChange={(e) => updateTimeSlot(index, "start", e.target.value)}
-                            placeholder="Début"
-                          />
-                          <span>à</span>
-                          <Input
-                            type="time"
-                            value={slot.end}
-                            onChange={(e) => updateTimeSlot(index, "end", e.target.value)}
-                            placeholder="Fin"
-                          />
-                          <Button type="button" variant="destructive" size="sm" onClick={() => removeTimeSlot(index)}>
-                            <X className="h-4 w-4" />
+                    {selectedDate && (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <Label>Créneaux horaires</Label>
+                          <Button type="button" variant="outline" size="sm" onClick={addTimeSlot}>
+                            Ajouter un créneau
                           </Button>
                         </div>
-                      ))}
 
-                      {timeSlots.length > 0 && (
-                        <Button type="button" onClick={addAvailability} className="w-full">
-                          Ajouter cette disponibilité
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Disponibilités ajoutées</h3>
-
-                  {formData.visit_availabilities.length === 0 ? (
-                    <p className="text-gray-500">Aucune disponibilité ajoutée</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {formData.visit_availabilities.map((availability, index) => (
-                        <div key={index} className="border rounded-lg p-3">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="font-medium">{availability.date.toLocaleDateString("fr-FR")}</div>
-                              <div className="text-sm text-gray-600">
-                                {availability.timeSlots.map((slot, i) => (
-                                  <span key={i}>
-                                    {slot.start} - {slot.end}
-                                    {i < availability.timeSlots.length - 1 && ", "}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => removeAvailability(index)}
-                            >
+                        {timeSlots.map((slot, index) => (
+                          <div key={index} className="flex items-center space-x-2">
+                            <Input
+                              type="time"
+                              value={slot.start}
+                              onChange={(e) => updateTimeSlot(index, "start", e.target.value)}
+                              placeholder="Début"
+                            />
+                            <span>à</span>
+                            <Input
+                              type="time"
+                              value={slot.end}
+                              onChange={(e) => updateTimeSlot(index, "end", e.target.value)}
+                              placeholder="Fin"
+                            />
+                            <Button type="button" variant="destructive" size="sm" onClick={() => removeTimeSlot(index)}>
                               <X className="h-4 w-4" />
                             </Button>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                        ))}
+
+                        {timeSlots.length > 0 && (
+                          <Button type="button" onClick={addAvailability} className="w-full">
+                            Ajouter cette disponibilité
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="font-medium">Disponibilités ajoutées</h4>
+
+                    {formData.visit_availabilities.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500 border-2 border-dashed rounded-lg">
+                        <Calendar className="h-8 w-8 mx-auto mb-2" />
+                        <p className="text-sm">Aucune disponibilité ajoutée</p>
+                        <p className="text-xs">Les créneaux automatiques seront générés après création</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {formData.visit_availabilities.map((availability, index) => (
+                          <div key={index} className="border rounded-lg p-3">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="font-medium">{availability.date.toLocaleDateString("fr-FR")}</div>
+                                <div className="text-sm text-gray-600">
+                                  {availability.timeSlots.map((slot, i) => (
+                                    <span key={i}>
+                                      {slot.start} - {slot.end}
+                                      {i < availability.timeSlots.length - 1 && ", "}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => removeAvailability(index)}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           </div>
         )
 
