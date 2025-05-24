@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ArrowLeft, Eye, EyeOff } from "lucide-react"
 import Link from "next/link"
+import { authService } from "@/lib/auth-service"
 import { toast } from "sonner"
 
 export default function LoginPage() {
@@ -31,19 +32,39 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      // Simulation de connexion - à remplacer par votre service d'authentification
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      // Connexion avec Supabase
+      const { user, session } = await authService.login(formData.email, formData.password)
 
-      // Ici vous ajouterez votre logique de connexion avec Supabase
-      // const { data, error } = await authService.login(formData.email, formData.password)
+      if (!user || !session) {
+        throw new Error("Erreur lors de la connexion")
+      }
 
       toast.success("Connexion réussie !")
 
-      // Redirection selon le type d'utilisateur (à adapter selon vos besoins)
-      router.push("/dashboard")
-    } catch (error) {
+      // Récupérer les informations de l'utilisateur pour rediriger selon son type
+      const currentUser = await authService.getCurrentUser()
+
+      if (currentUser) {
+        // Redirection selon le type d'utilisateur
+        switch (currentUser.user_type) {
+          case "owner":
+            router.push("/owner/dashboard")
+            break
+          case "tenant":
+            router.push("/tenant/dashboard")
+            break
+          case "admin":
+            router.push("/admin")
+            break
+          default:
+            router.push("/dashboard")
+        }
+      } else {
+        router.push("/dashboard")
+      }
+    } catch (error: any) {
       console.error("Erreur lors de la connexion:", error)
-      toast.error("Email ou mot de passe incorrect")
+      toast.error(error.message || "Email ou mot de passe incorrect")
     } finally {
       setIsLoading(false)
     }

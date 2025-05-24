@@ -8,15 +8,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Eye, EyeOff } from "lucide-react"
 import Link from "next/link"
-// import { authService } from "@/lib/auth-service"
-// Temporairement commenté jusqu'à ce que le service soit créé
+import { authService } from "@/lib/auth-service"
 import { toast } from "sonner"
 
 export default function OwnerRegisterPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -35,24 +35,29 @@ export default function OwnerRegisterPage() {
     setIsLoading(true)
 
     try {
-      // Simulation d'inscription - à remplacer par votre service Supabase
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      // Validation basique
+      if (formData.password.length < 6) {
+        toast.error("Le mot de passe doit contenir au moins 6 caractères")
+        return
+      }
 
-      // Ici vous ajouterez votre logique d'inscription avec Supabase
-      // await authService.register({
-      //   email: formData.email,
-      //   password: formData.password,
-      //   firstName: formData.firstName,
-      //   lastName: formData.lastName,
-      //   phone: formData.phone,
-      //   userType: "owner",
-      // })
+      // Créer le compte avec Supabase
+      const result = await authService.register({
+        email: formData.email,
+        password: formData.password,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phone: formData.phone,
+        userType: "owner",
+      })
 
-      toast.success("Compte créé avec succès !")
+      toast.success("Compte créé avec succès ! Vérifiez votre email pour confirmer votre compte.")
+
+      // Rediriger vers le tableau de bord propriétaire
       router.push("/owner/dashboard")
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erreur lors de l'inscription:", error)
-      toast.error("Erreur lors de la création du compte")
+      toast.error(error.message || "Erreur lors de la création du compte")
     } finally {
       setIsLoading(false)
     }
@@ -74,35 +79,77 @@ export default function OwnerRegisterPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="firstName">Prénom</Label>
-                <Input id="firstName" name="firstName" value={formData.firstName} onChange={handleChange} required />
+                <Label htmlFor="firstName">Prénom *</Label>
+                <Input
+                  id="firstName"
+                  name="firstName"
+                  value={formData.firstName}
+                  onChange={handleChange}
+                  required
+                  placeholder="Votre prénom"
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="lastName">Nom</Label>
-                <Input id="lastName" name="lastName" value={formData.lastName} onChange={handleChange} required />
+                <Label htmlFor="lastName">Nom *</Label>
+                <Input
+                  id="lastName"
+                  name="lastName"
+                  value={formData.lastName}
+                  onChange={handleChange}
+                  required
+                  placeholder="Votre nom"
+                />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" name="email" type="email" value={formData.email} onChange={handleChange} required />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password">Mot de passe</Label>
+              <Label htmlFor="email">Email *</Label>
               <Input
-                id="password"
-                name="password"
-                type="password"
-                value={formData.password}
+                id="email"
+                name="email"
+                type="email"
+                value={formData.email}
                 onChange={handleChange}
                 required
+                placeholder="votre.email@exemple.com"
               />
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="password">Mot de passe *</Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  value={formData.password}
+                  onChange={handleChange}
+                  required
+                  placeholder="Au moins 6 caractères"
+                  minLength={6}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="phone">Téléphone</Label>
-              <Input id="phone" name="phone" value={formData.phone} onChange={handleChange} />
+              <Input
+                id="phone"
+                name="phone"
+                type="tel"
+                value={formData.phone}
+                onChange={handleChange}
+                placeholder="06 12 34 56 78"
+              />
             </div>
 
             <Button type="submit" className="w-full" disabled={isLoading}>
