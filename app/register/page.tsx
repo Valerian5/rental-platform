@@ -1,57 +1,15 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ArrowLeft } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ArrowLeft, User, Home } from "lucide-react"
 import Link from "next/link"
-import { authService } from "@/lib/auth-service"
-import { toast } from "sonner"
 
-export default function OwnerRegisterPage() {
-  const router = useRouter()
-  const [isLoading, setIsLoading] = useState(false)
-  const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    password: "",
-    phone: "",
-  })
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-
-    try {
-      await authService.register({
-        email: formData.email,
-        password: formData.password,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        phone: formData.phone,
-        userType: "owner",
-      })
-
-      toast.success("Compte créé avec succès !")
-      router.push("/owner/dashboard")
-    } catch (error) {
-      console.error("Erreur lors de l'inscription:", error)
-      toast.error("Erreur lors de la création du compte")
-    } finally {
-      setIsLoading(false)
-    }
-  }
+export default function RegisterPage() {
+  const [userType, setUserType] = useState<string>("")
 
   return (
     <div className="container mx-auto py-8 max-w-md">
@@ -62,55 +20,67 @@ export default function OwnerRegisterPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Créer un compte propriétaire</CardTitle>
-          <CardDescription>Rejoignez Louer Ici pour gérer vos biens immobiliers</CardDescription>
+          <CardTitle>Créer un compte</CardTitle>
+          <CardDescription>Rejoignez Louer Ici pour commencer</CardDescription>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="firstName">Prénom</Label>
-                <Input id="firstName" name="firstName" value={formData.firstName} onChange={handleChange} required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="lastName">Nom</Label>
-                <Input id="lastName" name="lastName" value={formData.lastName} onChange={handleChange} required />
-              </div>
-            </div>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <Label>Je suis :</Label>
+            <Select value={userType} onValueChange={setUserType}>
+              <SelectTrigger>
+                <SelectValue placeholder="Sélectionnez votre profil" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="tenant">
+                  <div className="flex items-center">
+                    <User className="h-4 w-4 mr-2" />
+                    Locataire - Je cherche un logement
+                  </div>
+                </SelectItem>
+                <SelectItem value="owner">
+                  <div className="flex items-center">
+                    <Home className="h-4 w-4 mr-2" />
+                    Propriétaire - Je loue mon bien
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" name="email" type="email" value={formData.email} onChange={handleChange} required />
-            </div>
+          {userType && (
+            <div className="space-y-4">
+              {userType === "tenant" && (
+                <div className="text-center">
+                  <p className="text-sm text-muted-foreground mb-4">
+                    En tant que locataire, vous pourrez rechercher des logements, postuler aux annonces et gérer vos
+                    candidatures.
+                  </p>
+                  <Button asChild className="w-full">
+                    <Link href="/tenant/register">Créer mon profil locataire</Link>
+                  </Button>
+                </div>
+              )}
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Mot de passe</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                value={formData.password}
-                onChange={handleChange}
-                required
-              />
+              {userType === "owner" && (
+                <div className="text-center">
+                  <p className="text-sm text-muted-foreground mb-4">
+                    En tant que propriétaire, vous pourrez publier vos annonces, gérer les candidatures et suivre vos
+                    locations.
+                  </p>
+                  <Button asChild className="w-full">
+                    <Link href="/owner/register">Créer mon profil propriétaire</Link>
+                  </Button>
+                </div>
+              )}
             </div>
+          )}
 
-            <div className="space-y-2">
-              <Label htmlFor="phone">Téléphone</Label>
-              <Input id="phone" name="phone" value={formData.phone} onChange={handleChange} />
-            </div>
-
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Création en cours..." : "Créer mon compte"}
-            </Button>
-
-            <div className="text-center text-sm text-muted-foreground">
-              Déjà inscrit ?{" "}
-              <Link href="/login" className="text-blue-600 hover:underline">
-                Se connecter
-              </Link>
-            </div>
-          </form>
+          <div className="text-center text-sm text-muted-foreground">
+            Déjà inscrit ?{" "}
+            <Link href="/login" className="text-blue-600 hover:underline">
+              Se connecter
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </div>
