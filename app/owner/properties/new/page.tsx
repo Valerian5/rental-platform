@@ -258,19 +258,21 @@ export default function NewPropertyPage() {
 
       const newProperty = await propertyService.createProperty(propertyData)
 
-      // Générer automatiquement les créneaux de visite
-      await propertyService.generateDefaultVisitSlots(newProperty.id, 14)
-
-      // Ajouter les disponibilités de visite
-      for (const availability of formData.visit_availabilities) {
-        for (const timeSlot of availability.timeSlots) {
-          await propertyService.addVisitAvailability(
-            newProperty.id,
-            availability.date.toISOString().split("T")[0],
-            timeSlot.start,
-            timeSlot.end,
-          )
+      // Ajouter les disponibilités de visite personnalisées (si il y en a)
+      if (formData.visit_availabilities.length > 0) {
+        for (const availability of formData.visit_availabilities) {
+          for (const timeSlot of availability.timeSlots) {
+            await propertyService.addVisitAvailability(
+              newProperty.id,
+              availability.date.toISOString().split("T")[0],
+              timeSlot.start,
+              timeSlot.end,
+            )
+          }
         }
+      } else {
+        // Générer automatiquement les créneaux de visite si aucun n'a été configuré manuellement
+        await propertyService.generateDefaultVisitSlots(newProperty.id, 14)
       }
 
       toast.success("Annonce créée avec succès !")
@@ -713,6 +715,21 @@ export default function NewPropertyPage() {
         return (
           <div className="space-y-6">
             <h2 className="text-2xl font-bold">Configuration des visites</h2>
+
+            <div className="bg-blue-50 p-4 rounded-lg mb-6">
+              <h3 className="font-semibold text-blue-800 mb-2">Configuration recommandée</h3>
+              <p className="text-blue-700 text-sm mb-3">
+                Pour commencer rapidement, nous recommandons de créer l'annonce avec la génération automatique de
+                créneaux. Vous pourrez ensuite personnaliser vos disponibilités depuis la page de gestion du bien.
+              </p>
+              <div className="text-sm text-blue-600">
+                ✓ Créneaux de 30 minutes automatiques
+                <br />✓ Lundi-Vendredi : 9h-12h et 14h-18h
+                <br />✓ Samedi : 10h-17h
+                <br />✓ Personnalisation complète après création
+              </div>
+            </div>
+
             <VisitScheduler
               visitSlots={formData.visit_availabilities.flatMap((av) =>
                 av.timeSlots.map((slot) => ({
