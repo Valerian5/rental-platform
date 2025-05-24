@@ -3,16 +3,31 @@ import { supabase } from "./supabase"
 export interface PropertyData {
   title: string
   description: string
-  price: number
-  surface: number
-  rooms: number
-  bedrooms: number
-  bathrooms: number
   address: string
   city: string
   postal_code: string
+  hide_exact_address: boolean
+  surface: number
+  rent_excluding_charges: number
+  charges_amount: number
   property_type: "apartment" | "house" | "studio" | "loft"
-  furnished: boolean
+  rental_type: "unfurnished" | "furnished" | "shared"
+  construction_year: number
+  security_deposit: number
+  rooms: number
+  bedrooms: number
+  bathrooms: number
+  exterior_type: string
+  equipment: string[]
+  energy_class: string
+  ges_class: string
+  heating_type: string
+  required_income: number
+  professional_situation: string
+  guarantor_required: boolean
+  lease_duration: number
+  move_in_date: string
+  rent_payment_day: number
   owner_id: string
 }
 
@@ -24,6 +39,7 @@ export const propertyService = {
         .from("properties")
         .insert({
           ...propertyData,
+          price: propertyData.rent_excluding_charges + propertyData.charges_amount, // Prix total pour compatibilité
           available: true,
         })
         .select()
@@ -40,16 +56,42 @@ export const propertyService = {
     }
   },
 
-  // Récupérer les propriétés d'un propriétaire
-  async getOwnerProperties(ownerId: string) {
+  // Récupérer les propriétés d'un propriétaire avec statistiques
+  async getOwnerPropertiesWithStats(ownerId: string) {
     try {
-      const { data, error } = await supabase
+      const { data: properties, error: propertiesError } = await supabase
         .from("properties")
         .select(`
           *,
-          property_images(id, url, is_primary)
+          property_images(id, url, is_primary),
+          applications(id, status),
+          visits(id, status, visit_date)
         `)
         .eq("owner_id", ownerId)
+        .order("created_at", { ascending: false })
+
+      if (propertiesError) {
+        throw new Error(propertiesError.message)
+      }
+
+      return properties || []
+    } catch (error) {
+      console.error("Erreur lors de la récupération des propriétés:", error)
+      throw error
+    }
+  },
+
+  // Récupérer les candidatures d'un propriétaire
+  async getOwnerApplications(ownerId: string) {
+    try {
+      const { data, error } = await supabase
+        .from("applications")
+        .select(`
+          *,
+          property:properties(id, title, city),
+          tenant:users(id, first_name, last_name, email, phone)
+        `)
+        .eq("properties.owner_id", ownerId)
         .order("created_at", { ascending: false })
 
       if (error) {
@@ -58,84 +100,70 @@ export const propertyService = {
 
       return data || []
     } catch (error) {
-      console.error("Erreur lors de la récupération des propriétés:", error)
+      console.error("Erreur lors de la récupération des candidatures:", error)
       throw error
     }
   },
 
-  // Récupérer une propriété par son ID
-  async getPropertyById(id: string) {
+  // Récupérer les visites d'un propriétaire
+  async getOwnerVisits(ownerId: string) {
     try {
       const { data, error } = await supabase
-        .from("properties")
+        .from("visits")
         .select(`
           *,
-          owner:users(id, first_name, last_name, email, phone),
-          property_images(id, url, is_primary)
+          property:properties(id, title, address, city),
+          tenant:users(id, first_name, last_name, phone)
         `)
-        .eq("id", id)
-        .single()
+        .eq("properties.owner_id", ownerId)
+        .order("visit_date", { ascending: true })
 
       if (error) {
         throw new Error(error.message)
       }
 
-      return data
+      return data || []
     } catch (error) {
-      console.error("Erreur lors de la récupération de la propriété:", error)
+      console.error("Erreur lors de la récupération des visites:", error)
       throw error
     }
   },
 
-  // Mettre à jour une propriété
-  async updateProperty(id: string, updates: Partial<PropertyData>) {
+  // Récupérer les messages d'un propriétaire
+  async getOwnerMessages(ownerId: string) {
     try {
       const { data, error } = await supabase
-        .from("properties")
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", id)
-        .select()
-        .single()
+        .from("messages")
+        .select(`
+          *,
+          conversation:conversations(id, subject),
+          sender:users(id, first_name, last_name)
+        `)
+        .eq("conversations.participants", ownerId)
+        .order("created_at", { ascending: false })
+        .limit(10)
 
       if (error) {
         throw new Error(error.message)
       }
 
-      return data
+      return data || []
     } catch (error) {
-      console.error("Erreur lors de la mise à jour de la propriété:", error)
+      console.error("Erreur lors de la récupération des messages:", error)
       throw error
     }
   },
 
-  // Supprimer une propriété
-  async deleteProperty(id: string) {
-    try {
-      const { error } = await supabase.from("properties").delete().eq("id", id)
-
-      if (error) {
-        throw new Error(error.message)
-      }
-
-      return true
-    } catch (error) {
-      console.error("Erreur lors de la suppression de la propriété:", error)
-      throw error
-    }
-  },
-
-  // Ajouter une image à une propriété
-  async addPropertyImage(propertyId: string, imageUrl: string, isPrimary = false) {
+  // Ajouter un document à une propriété
+  async addPropertyDocument(propertyId: string, documentType: string, fileName: string, fileUrl: string) {
     try {
       const { data, error } = await supabase
-        .from("property_images")
+        .from("property_documents")
         .insert({
           property_id: propertyId,
-          url: imageUrl,
-          is_primary: isPrimary,
+          document_type: documentType,
+          file_name: fileName,
+          file_url: fileUrl,
         })
         .select()
         .single()
@@ -146,7 +174,32 @@ export const propertyService = {
 
       return data
     } catch (error) {
-      console.error("Erreur lors de l'ajout de l'image:", error)
+      console.error("Erreur lors de l'ajout du document:", error)
+      throw error
+    }
+  },
+
+  // Ajouter des disponibilités de visite
+  async addVisitAvailability(propertyId: string, date: string, startTime: string, endTime: string) {
+    try {
+      const { data, error } = await supabase
+        .from("visit_availabilities")
+        .insert({
+          property_id: propertyId,
+          date,
+          start_time: startTime,
+          end_time: endTime,
+        })
+        .select()
+        .single()
+
+      if (error) {
+        throw new Error(error.message)
+      }
+
+      return data
+    } catch (error) {
+      console.error("Erreur lors de l'ajout de la disponibilité:", error)
       throw error
     }
   },
