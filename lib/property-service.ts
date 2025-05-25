@@ -149,25 +149,32 @@ export const propertyService = {
 
   // Récupérer une propriété par son ID
   async getPropertyById(id: string) {
+    console.log("🔍 PropertyService.getPropertyById - ID:", id)
+
     try {
       const { data, error } = await supabase
         .from("properties")
         .select(`
           *,
-          owner:users(id, first_name, last_name, email, phone),
-          property_images(id, url, is_primary),
-          visit_availabilities(id, date, start_time, end_time, max_capacity, is_group_visit, current_bookings)
+          property_images(id, url, is_primary)
         `)
         .eq("id", id)
         .single()
 
       if (error) {
+        console.error("❌ Erreur lors de la récupération:", error)
         throw new Error(error.message)
       }
 
+      if (!data) {
+        console.error("❌ Aucune propriété trouvée")
+        throw new Error("Propriété non trouvée")
+      }
+
+      console.log("✅ Propriété récupérée:", data)
       return data
     } catch (error) {
-      console.error("Erreur lors de la récupération de la propriété:", error)
+      console.error("❌ Erreur dans getPropertyById:", error)
       throw error
     }
   },
@@ -363,6 +370,31 @@ export const propertyService = {
       return []
     } catch (error) {
       console.error("Erreur lors de la récupération des messages:", error)
+      return []
+    }
+  },
+
+  // Ajouter une fonction pour récupérer les disponibilités de visite
+  async getPropertyVisitAvailabilities(propertyId: string) {
+    console.log("📅 PropertyService.getPropertyVisitAvailabilities - ID:", propertyId)
+
+    try {
+      const { data, error } = await supabase
+        .from("visit_availabilities")
+        .select("*")
+        .eq("property_id", propertyId)
+        .order("date", { ascending: true })
+        .order("start_time", { ascending: true })
+
+      if (error) {
+        console.error("❌ Erreur lors de la récupération des créneaux:", error)
+        throw new Error(error.message)
+      }
+
+      console.log("✅ Créneaux récupérés:", data?.length || 0)
+      return data || []
+    } catch (error) {
+      console.error("❌ Erreur dans getPropertyVisitAvailabilities:", error)
       return []
     }
   },
