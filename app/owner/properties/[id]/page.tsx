@@ -43,7 +43,7 @@ const PropertyIdPage = async ({ params }: PropertyIdPageProps) => {
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">{property.title}</h1>
         <div className="space-x-2">
-          <Button asChild>
+          <Button variant="outline" className="w-full" asChild>
             <Link href={`/owner/properties/${property.id}/edit`}>
               <Edit className="h-4 w-4 mr-2" />
               Modifier le bien
