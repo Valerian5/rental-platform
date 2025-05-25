@@ -5,8 +5,22 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Home, Users, Calendar, Plus, Eye, Settings, AlertCircle, CheckCircle, Clock, Euro, Bug } from "lucide-react"
+import {
+  Home,
+  Users,
+  Calendar,
+  Plus,
+  Eye,
+  Settings,
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  Euro,
+  Bug,
+  MessageSquare,
+  CreditCard,
+  MapPin,
+} from "lucide-react"
 import Link from "next/link"
 import { propertyService } from "@/lib/property-service"
 import { authService } from "@/lib/auth-service"
@@ -22,6 +36,7 @@ export default function OwnerDashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const [showDebug, setShowDebug] = useState(false)
   const [debugLogs, setDebugLogs] = useState<string[]>([])
+  const [activeTab, setActiveTab] = useState("overview")
 
   const addDebugLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString()
@@ -138,10 +153,13 @@ export default function OwnerDashboard() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto py-8">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2">Chargement du tableau de bord...</p>
+      <div className="flex h-screen">
+        <div className="w-64 bg-gray-900"></div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-2">Chargement du tableau de bord...</p>
+          </div>
         </div>
       </div>
     )
@@ -153,152 +171,337 @@ export default function OwnerDashboard() {
     totalApplications: applications.length,
     pendingApplications: applications.filter((a) => a.status === "pending").length,
     upcomingVisits: visits.filter((v) => new Date(v.visit_date) > new Date()).length,
-    totalRevenue: properties.reduce((sum, p) => sum + (p.price || 0), 0),
+    totalRevenue: properties.reduce((sum, p) => sum + (p.rent_excluding_charges || 0), 0),
   }
 
+  const sidebarItems = [
+    { id: "overview", label: "Vue d'ensemble", icon: Home },
+    { id: "properties", label: "Mes biens", icon: Home },
+    { id: "applications", label: "Candidatures", icon: Users },
+    { id: "visits", label: "Visites", icon: Calendar },
+    { id: "leases", label: "Locations en cours", icon: MapPin },
+    { id: "payments", label: "Paiements", icon: CreditCard },
+    { id: "messages", label: "Messages", icon: MessageSquare },
+    { id: "settings", label: "Paramètres", icon: Settings },
+  ]
+
   return (
-    <div className="container mx-auto py-8">
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">Tableau de bord propriétaire</h1>
-          <p className="text-gray-600">Bienvenue, {currentUser?.first_name || currentUser?.email}</p>
+    <div className="flex h-screen bg-gray-50">
+      {/* Sidebar */}
+      <div className="w-64 bg-gray-900 text-white flex flex-col">
+        <div className="p-6 border-b border-gray-700">
+          <h2 className="text-xl font-bold">Tableau de bord</h2>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setShowDebug(!showDebug)}>
+
+        <nav className="flex-1 p-4">
+          <ul className="space-y-2">
+            {sidebarItems.map((item) => {
+              const Icon = item.icon
+              return (
+                <li key={item.id}>
+                  <button
+                    onClick={() => setActiveTab(item.id)}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                      activeTab === item.id
+                        ? "bg-blue-600 text-white"
+                        : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                    }`}
+                  >
+                    <Icon className="h-5 w-5" />
+                    {item.label}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </nav>
+
+        {/* Debug button */}
+        <div className="p-4 border-t border-gray-700">
+          <Button variant="outline" size="sm" onClick={() => setShowDebug(!showDebug)} className="w-full">
             <Bug className="h-4 w-4 mr-2" />
-            {showDebug ? "Masquer" : "Debug"}
-          </Button>
-          <Button asChild>
-            <Link href="/owner/properties/new">
-              <Plus className="h-4 w-4 mr-2" />
-              Ajouter un bien
-            </Link>
+            {showDebug ? "Masquer Debug" : "Debug"}
           </Button>
         </div>
       </div>
 
-      {/* Panel de debug */}
-      {showDebug && (
-        <Card className="mb-6 border-orange-200 bg-orange-50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-orange-800">
-              <Bug className="h-5 w-5" />
-              Panel de Debug
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-2 mb-4">
-              <Button size="sm" onClick={testPropertyCreation}>
-                Test Création Propriété
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setDebugLogs([])}>
-                Effacer Logs
-              </Button>
+      {/* Main content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="bg-white border-b border-gray-200 p-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                {currentUser?.first_name} {currentUser?.last_name}
+              </h1>
+              <p className="text-gray-600">Propriétaire</p>
             </div>
-            <div className="bg-gray-900 text-green-400 p-4 rounded-lg max-h-64 overflow-y-auto font-mono text-sm">
-              {debugLogs.length === 0 ? (
-                <p>Aucun log pour le moment...</p>
-              ) : (
-                debugLogs.map((log, index) => <div key={index}>{log}</div>)
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+            <Button asChild>
+              <Link href="/owner/properties/new">
+                <Plus className="h-4 w-4 mr-2" />
+                Ajouter un bien
+              </Link>
+            </Button>
+          </div>
+        </div>
 
-      {/* Statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Biens total</p>
-                <p className="text-2xl font-bold">{stats.totalProperties}</p>
+        {/* Content */}
+        <div className="flex-1 overflow-auto p-6">
+          {/* Debug Panel */}
+          {showDebug && (
+            <Card className="mb-6 border-orange-200 bg-orange-50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-orange-800">
+                  <Bug className="h-5 w-5" />
+                  Panel de Debug
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex gap-2 mb-4">
+                  <Button size="sm" onClick={testPropertyCreation}>
+                    Test Création Propriété
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setDebugLogs([])}>
+                    Effacer Logs
+                  </Button>
+                </div>
+                <div className="bg-gray-900 text-green-400 p-4 rounded-lg max-h-64 overflow-y-auto font-mono text-sm">
+                  {debugLogs.length === 0 ? (
+                    <p>Aucun log pour le moment...</p>
+                  ) : (
+                    debugLogs.map((log, index) => <div key={index}>{log}</div>)
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {activeTab === "overview" && (
+            <div className="space-y-6">
+              {/* Statistics */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Candidatures</p>
+                        <p className="text-2xl font-bold">{stats.totalApplications}</p>
+                      </div>
+                      <Users className="h-8 w-8 text-blue-600" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Biens disponibles</p>
+                        <p className="text-2xl font-bold">{stats.availableProperties}</p>
+                      </div>
+                      <Home className="h-8 w-8 text-green-600" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Visites à venir</p>
+                        <p className="text-2xl font-bold">{stats.upcomingVisits}</p>
+                      </div>
+                      <Calendar className="h-8 w-8 text-purple-600" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Revenus mensuels</p>
+                        <p className="text-2xl font-bold">{stats.totalRevenue}€</p>
+                      </div>
+                      <Euro className="h-8 w-8 text-yellow-600" />
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
-              <Home className="h-8 w-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Candidatures</p>
-                <p className="text-2xl font-bold">{stats.totalApplications}</p>
-                {stats.pendingApplications > 0 && (
-                  <Badge variant="secondary" className="mt-1">
-                    {stats.pendingApplications} en attente
-                  </Badge>
-                )}
+              {/* Recent sections */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Candidatures récentes */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      Candidatures récentes
+                      <Badge variant="secondary">{applications.length}</Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {applications.length === 0 ? (
+                      <div className="text-center py-8">
+                        <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-500">Aucune candidature récente</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {applications.slice(0, 3).map((application) => (
+                          <div key={application.id} className="flex items-center gap-3">
+                            <div className="flex-shrink-0">
+                              {application.status === "pending" && <Clock className="h-5 w-5 text-yellow-500" />}
+                              {application.status === "approved" && <CheckCircle className="h-5 w-5 text-green-500" />}
+                              {application.status === "rejected" && <AlertCircle className="h-5 w-5 text-red-500" />}
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm font-medium">{application.property?.title}</p>
+                              <p className="text-xs text-gray-500">
+                                {new Date(application.created_at).toLocaleDateString("fr-FR")}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Prochaines visites */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      Prochaines visites
+                      <Badge variant="secondary">{stats.upcomingVisits}</Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {stats.upcomingVisits === 0 ? (
+                      <div className="text-center py-8">
+                        <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-500">Aucune visite programmée</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {visits
+                          .filter((v) => new Date(v.visit_date) > new Date())
+                          .slice(0, 3)
+                          .map((visit) => (
+                            <div key={visit.id} className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-medium">{visit.property?.title}</p>
+                                <p className="text-xs text-gray-500">
+                                  {new Date(visit.visit_date).toLocaleDateString("fr-FR")}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm font-medium">
+                                  {new Date(visit.visit_date).toLocaleTimeString("fr-FR", {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
-              <Users className="h-8 w-8 text-green-600" />
+
+              {/* Mes biens */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Mes biens</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {properties.length === 0 ? (
+                    <div className="text-center py-12">
+                      <Home className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-xl font-semibold mb-2">Aucun bien ajouté</h3>
+                      <p className="text-gray-500 mb-6">Commencez par ajouter votre premier bien immobilier</p>
+                      <Button asChild>
+                        <Link href="/owner/properties/new">
+                          <Plus className="h-4 w-4 mr-2" />
+                          Ajouter un bien
+                        </Link>
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {properties.map((property) => (
+                        <Card key={property.id} className="hover:shadow-lg transition-shadow">
+                          <CardContent className="p-0">
+                            <div className="aspect-video bg-gray-200 rounded-t-lg overflow-hidden">
+                              {property.property_images && property.property_images.length > 0 ? (
+                                <img
+                                  src={property.property_images[0].image_url || "/placeholder.svg"}
+                                  alt={property.title}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    e.currentTarget.src =
+                                      "/placeholder.svg?height=200&width=300&text=Image+non+disponible"
+                                  }}
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                                  <Home className="h-12 w-12 text-gray-400" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="p-4 space-y-3">
+                              <div className="flex justify-between items-start">
+                                <h4 className="font-medium text-sm line-clamp-2">{property.title}</h4>
+                                <Badge variant={property.available ? "default" : "secondary"} className="text-xs">
+                                  {property.available ? "Disponible" : "Loué"}
+                                </Badge>
+                              </div>
+
+                              <p className="text-xs text-gray-500">
+                                {property.address}, {property.city}
+                              </p>
+
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm font-bold text-blue-600">
+                                  {property.rent_excluding_charges}€
+                                </span>
+                                <span className="text-xs text-gray-500">par mois</span>
+                              </div>
+
+                              <Button variant="outline" size="sm" className="w-full" asChild>
+                                <Link href={`/owner/properties/${property.id}`}>Gérer</Link>
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
+          )}
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Visites à venir</p>
-                <p className="text-2xl font-bold">{stats.upcomingVisits}</p>
-              </div>
-              <Calendar className="h-8 w-8 text-purple-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Revenus potentiels</p>
-                <p className="text-2xl font-bold">{stats.totalRevenue}€</p>
-                <p className="text-xs text-gray-500">par mois</p>
-              </div>
-              <Euro className="h-8 w-8 text-yellow-600" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Contenu principal */}
-      <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
-          <TabsTrigger value="properties">Mes biens ({properties.length})</TabsTrigger>
-          <TabsTrigger value="applications">
-            Candidatures ({applications.length})
-            {stats.pendingApplications > 0 && (
-              <Badge variant="destructive" className="ml-2">
-                {stats.pendingApplications}
-              </Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="visits">Visites ({visits.length})</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Biens récents */}
+          {activeTab === "properties" && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
-                  Mes biens récents
-                  <Link href="/owner/properties">
-                    <Button variant="outline" size="sm">
-                      Voir tout
-                    </Button>
-                  </Link>
+                  Mes biens ({properties.length})
+                  <Button asChild>
+                    <Link href="/owner/properties/new">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Ajouter un bien
+                    </Link>
+                  </Button>
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {properties.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Home className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">Aucun bien ajouté</h3>
-                    <p className="text-gray-500 mb-4">Commencez par ajouter votre premier bien immobilier</p>
+                  <div className="text-center py-12">
+                    <Home className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold mb-2">Aucun bien ajouté</h3>
+                    <p className="text-gray-500 mb-6">Commencez par ajouter votre premier bien immobilier</p>
                     <Button asChild>
                       <Link href="/owner/properties/new">
                         <Plus className="h-4 w-4 mr-2" />
@@ -307,24 +510,135 @@ export default function OwnerDashboard() {
                     </Button>
                   </div>
                 ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {properties.map((property) => (
+                      <Card key={property.id} className="hover:shadow-lg transition-shadow">
+                        <CardContent className="p-4">
+                          <div className="space-y-3">
+                            <div className="flex justify-between items-start">
+                              <h4 className="font-medium line-clamp-2">{property.title}</h4>
+                              <Badge variant={property.available ? "default" : "secondary"}>
+                                {property.available ? "Disponible" : "Loué"}
+                              </Badge>
+                            </div>
+
+                            <p className="text-sm text-gray-500">
+                              {property.address}, {property.city}
+                            </p>
+
+                            <div className="flex justify-between items-center">
+                              <span className="text-lg font-bold text-blue-600">
+                                {property.rent_excluding_charges}€
+                              </span>
+                              <span className="text-sm text-gray-500">par mois</span>
+                            </div>
+
+                            <div className="flex gap-2">
+                              <Button variant="outline" size="sm" className="flex-1" asChild>
+                                <Link href={`/owner/properties/${property.id}`}>
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  Gérer
+                                </Link>
+                              </Button>
+                              <Button variant="outline" size="sm" asChild>
+                                <Link href={`/owner/properties/${property.id}/edit`}>
+                                  <Settings className="h-4 w-4" />
+                                </Link>
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {activeTab === "applications" && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Candidatures ({applications.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {applications.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold mb-2">Aucune candidature</h3>
+                    <p className="text-gray-500">Les candidatures pour vos biens apparaîtront ici</p>
+                  </div>
+                ) : (
                   <div className="space-y-4">
-                    {properties.slice(0, 3).map((property) => (
-                      <div key={property.id} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div>
-                          <h4 className="font-medium">{property.title}</h4>
-                          <p className="text-sm text-gray-500">
-                            {property.city} • {property.price}€/mois
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={property.available ? "default" : "secondary"}>
-                            {property.available ? "Disponible" : "Loué"}
+                    {applications.map((application) => (
+                      <div key={application.id} className="border rounded-lg p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <h4 className="font-medium">{application.property?.title}</h4>
+                            <p className="text-sm text-gray-500">
+                              Candidat: {application.tenant?.first_name} {application.tenant?.last_name}
+                            </p>
+                          </div>
+                          <Badge
+                            variant={
+                              application.status === "pending"
+                                ? "secondary"
+                                : application.status === "approved"
+                                  ? "default"
+                                  : "destructive"
+                            }
+                          >
+                            {application.status === "pending" && "En attente"}
+                            {application.status === "approved" && "Approuvée"}
+                            {application.status === "rejected" && "Refusée"}
                           </Badge>
-                          <Button variant="outline" size="sm" asChild>
-                            <Link href={`/owner/properties/${property.id}`}>
-                              <Eye className="h-4 w-4" />
-                            </Link>
-                          </Button>
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          Reçue le {new Date(application.created_at).toLocaleDateString("fr-FR")}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {activeTab === "visits" && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Visites programmées ({visits.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {visits.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold mb-2">Aucune visite programmée</h3>
+                    <p className="text-gray-500">Les visites de vos biens apparaîtront ici</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {visits.map((visit) => (
+                      <div key={visit.id} className="border rounded-lg p-4">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h4 className="font-medium">{visit.property?.title}</h4>
+                            <p className="text-sm text-gray-500">
+                              {visit.property?.address}, {visit.property?.city}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              Visiteur: {visit.tenant?.first_name} {visit.tenant?.last_name}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-medium">{new Date(visit.visit_date).toLocaleDateString("fr-FR")}</p>
+                            <p className="text-sm text-gray-500">
+                              {new Date(visit.visit_date).toLocaleTimeString("fr-FR", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </p>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -332,201 +646,28 @@ export default function OwnerDashboard() {
                 )}
               </CardContent>
             </Card>
+          )}
 
-            {/* Activité récente */}
+          {/* Placeholder pour les autres onglets */}
+          {["leases", "payments", "messages", "settings"].includes(activeTab) && (
             <Card>
               <CardHeader>
-                <CardTitle>Activité récente</CardTitle>
+                <CardTitle>
+                  {activeTab === "leases" && "Locations en cours"}
+                  {activeTab === "payments" && "Paiements"}
+                  {activeTab === "messages" && "Messages"}
+                  {activeTab === "settings" && "Paramètres"}
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {applications.slice(0, 3).map((application) => (
-                    <div key={application.id} className="flex items-center gap-3">
-                      <div className="flex-shrink-0">
-                        {application.status === "pending" && <Clock className="h-5 w-5 text-yellow-500" />}
-                        {application.status === "approved" && <CheckCircle className="h-5 w-5 text-green-500" />}
-                        {application.status === "rejected" && <AlertCircle className="h-5 w-5 text-red-500" />}
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">Nouvelle candidature pour {application.property?.title}</p>
-                        <p className="text-xs text-gray-500">
-                          {new Date(application.created_at).toLocaleDateString("fr-FR")}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                  {applications.length === 0 && (
-                    <p className="text-gray-500 text-center py-4">Aucune activité récente</p>
-                  )}
+                <div className="text-center py-12">
+                  <p className="text-gray-500">Cette section sera bientôt disponible</p>
                 </div>
               </CardContent>
             </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="properties">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                Mes biens ({properties.length})
-                <Button asChild>
-                  <Link href="/owner/properties/new">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Ajouter un bien
-                  </Link>
-                </Button>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {properties.length === 0 ? (
-                <div className="text-center py-12">
-                  <Home className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold mb-2">Aucun bien ajouté</h3>
-                  <p className="text-gray-500 mb-6">Commencez par ajouter votre premier bien immobilier</p>
-                  <Button asChild>
-                    <Link href="/owner/properties/new">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Ajouter un bien
-                    </Link>
-                  </Button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {properties.map((property) => (
-                    <Card key={property.id} className="hover:shadow-lg transition-shadow">
-                      <CardContent className="p-4">
-                        <div className="space-y-3">
-                          <div className="flex justify-between items-start">
-                            <h4 className="font-medium line-clamp-2">{property.title}</h4>
-                            <Badge variant={property.available ? "default" : "secondary"}>
-                              {property.available ? "Disponible" : "Loué"}
-                            </Badge>
-                          </div>
-
-                          <p className="text-sm text-gray-500">
-                            {property.address}, {property.city}
-                          </p>
-
-                          <div className="flex justify-between items-center">
-                            <span className="text-lg font-bold text-blue-600">{property.price}€</span>
-                            <span className="text-sm text-gray-500">par mois</span>
-                          </div>
-
-                          <div className="flex gap-2">
-                            <Button variant="outline" size="sm" className="flex-1" asChild>
-                              <Link href={`/owner/properties/${property.id}`}>
-                                <Eye className="h-4 w-4 mr-1" />
-                                Voir
-                              </Link>
-                            </Button>
-                            <Button variant="outline" size="sm" asChild>
-                              <Link href={`/owner/properties/${property.id}/edit`}>
-                                <Settings className="h-4 w-4" />
-                              </Link>
-                            </Button>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="applications">
-          <Card>
-            <CardHeader>
-              <CardTitle>Candidatures ({applications.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {applications.length === 0 ? (
-                <div className="text-center py-12">
-                  <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold mb-2">Aucune candidature</h3>
-                  <p className="text-gray-500">Les candidatures pour vos biens apparaîtront ici</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {applications.map((application) => (
-                    <div key={application.id} className="border rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <h4 className="font-medium">{application.property?.title}</h4>
-                          <p className="text-sm text-gray-500">
-                            Candidat: {application.tenant?.first_name} {application.tenant?.last_name}
-                          </p>
-                        </div>
-                        <Badge
-                          variant={
-                            application.status === "pending"
-                              ? "secondary"
-                              : application.status === "approved"
-                                ? "default"
-                                : "destructive"
-                          }
-                        >
-                          {application.status === "pending" && "En attente"}
-                          {application.status === "approved" && "Approuvée"}
-                          {application.status === "rejected" && "Refusée"}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-gray-500">
-                        Reçue le {new Date(application.created_at).toLocaleDateString("fr-FR")}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="visits">
-          <Card>
-            <CardHeader>
-              <CardTitle>Visites programmées ({visits.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {visits.length === 0 ? (
-                <div className="text-center py-12">
-                  <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold mb-2">Aucune visite programmée</h3>
-                  <p className="text-gray-500">Les visites de vos biens apparaîtront ici</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {visits.map((visit) => (
-                    <div key={visit.id} className="border rounded-lg p-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="font-medium">{visit.property?.title}</h4>
-                          <p className="text-sm text-gray-500">
-                            {visit.property?.address}, {visit.property?.city}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            Visiteur: {visit.tenant?.first_name} {visit.tenant?.last_name}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-medium">{new Date(visit.visit_date).toLocaleDateString("fr-FR")}</p>
-                          <p className="text-sm text-gray-500">
-                            {new Date(visit.visit_date).toLocaleTimeString("fr-FR", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
