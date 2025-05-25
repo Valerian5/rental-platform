@@ -416,7 +416,7 @@ export default function OwnerDashboard() {
                             <Button variant="outline" size="sm" className="flex-1" asChild>
                               <Link href={`/owner/properties/${property.id}`}>
                                 <Eye className="h-4 w-4 mr-1" />
-                                Gérer
+                                Voir
                               </Link>
                             </Button>
                             <Button variant="outline" size="sm" asChild>
