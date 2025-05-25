@@ -1,673 +1,549 @@
-"use client"
+import { supabase } from "./supabase"
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import {
-  Home,
-  Users,
-  Calendar,
-  Plus,
-  Eye,
-  Settings,
-  AlertCircle,
-  CheckCircle,
-  Clock,
-  Euro,
-  Bug,
-  MessageSquare,
-  CreditCard,
-  MapPin,
-} from "lucide-react"
-import Link from "next/link"
-import { propertyService } from "@/lib/property-service"
-import { authService } from "@/lib/auth-service"
-import { toast } from "sonner"
+export interface PropertyData {
+  title: string
+  description: string
+  address: string
+  city: string
+  postal_code: string
+  hide_exact_address: boolean
+  surface: number
+  rent_excluding_charges: number
+  charges_amount: number
+  property_type: "apartment" | "house" | "studio" | "loft"
+  rental_type: "unfurnished" | "furnished" | "shared"
+  construction_year: number
+  security_deposit: number
+  rooms: number
+  bedrooms: number
+  bathrooms: number
+  exterior_type: string
+  equipment: string[]
+  energy_class: string
+  ges_class: string
+  heating_type: string
+  required_income: number
+  professional_situation: string
+  guarantor_required: boolean
+  lease_duration: number
+  move_in_date: string
+  rent_payment_day: number
+  owner_id: string
+}
 
-export default function OwnerDashboard() {
-  const router = useRouter()
-  const [currentUser, setCurrentUser] = useState<any>(null)
-  const [properties, setProperties] = useState<any[]>([])
-  const [applications, setApplications] = useState<any[]>([])
-  const [visits, setVisits] = useState<any[]>([])
-  const [messages, setMessages] = useState<any[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [showDebug, setShowDebug] = useState(false)
-  const [debugLogs, setDebugLogs] = useState<string[]>([])
-  const [activeTab, setActiveTab] = useState("overview")
+export interface VisitSlot {
+  id?: string
+  date: string
+  start_time: string
+  end_time: string
+  max_capacity: number
+  is_group_visit: boolean
+  current_bookings: number
+}
 
-  const addDebugLog = (message: string) => {
-    const timestamp = new Date().toLocaleTimeString()
-    const logMessage = `${timestamp}: ${message}`
-    console.log(logMessage)
-    setDebugLogs((prev) => [...prev, logMessage])
-  }
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        addDebugLog("🔍 Début du chargement du dashboard")
-
-        const user = await authService.getCurrentUser()
-        if (!user || user.user_type !== "owner") {
-          addDebugLog("❌ Utilisateur non autorisé ou non connecté")
-          toast.error("Vous devez être connecté en tant que propriétaire")
-          router.push("/login")
-          return
-        }
-
-        addDebugLog(`✅ Utilisateur connecté: ${user.email} (ID: ${user.id})`)
-        setCurrentUser(user)
-
-        // Charger les propriétés
-        addDebugLog("📋 Chargement des propriétés...")
-        const userProperties = await propertyService.getOwnerProperties(user.id)
-        addDebugLog(`✅ ${userProperties.length} propriétés chargées`)
-        setProperties(userProperties)
-
-        // Charger les candidatures
-        addDebugLog("📝 Chargement des candidatures...")
-        const userApplications = await propertyService.getOwnerApplications(user.id)
-        addDebugLog(`✅ ${userApplications.length} candidatures chargées`)
-        setApplications(userApplications)
-
-        // Charger les visites
-        addDebugLog("📅 Chargement des visites...")
-        const userVisits = await propertyService.getOwnerVisits(user.id)
-        addDebugLog(`✅ ${userVisits.length} visites chargées`)
-        setVisits(userVisits)
-
-        // Charger les messages
-        addDebugLog("💬 Chargement des messages...")
-        const userMessages = await propertyService.getOwnerMessages(user.id)
-        addDebugLog(`✅ ${userMessages.length} messages chargés`)
-        setMessages(userMessages)
-
-        addDebugLog("🎉 Chargement du dashboard terminé avec succès")
-      } catch (error) {
-        addDebugLog(`❌ Erreur lors du chargement: ${error.message}`)
-        console.error("Erreur lors du chargement du dashboard:", error)
-        toast.error("Erreur lors du chargement du dashboard")
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [router])
-
-  const testPropertyCreation = async () => {
-    if (!currentUser) {
-      addDebugLog("❌ Pas d'utilisateur pour le test")
-      return
-    }
+export const propertyService = {
+  // Créer une nouvelle propriété
+  async createProperty(propertyData: PropertyData) {
+    console.log("🏠 PropertyService.createProperty - Début", propertyData)
 
     try {
-      addDebugLog("🧪 Test de création de propriété...")
+      // Test de connexion d'abord
+      console.log("🔗 Test de connexion Supabase...")
+      const { data: testData, error: testError } = await supabase.from("properties").select("count").limit(1)
 
-      const testData = {
-        title: "Test Property " + Date.now(),
-        description: "Test description",
-        address: "123 Test Street",
-        city: "Test City",
-        postal_code: "12345",
-        hide_exact_address: false,
-        surface: 50,
-        rent_excluding_charges: 1000,
-        charges_amount: 100,
-        property_type: "apartment" as const,
-        rental_type: "unfurnished" as const,
-        construction_year: 2020,
-        security_deposit: 1000,
-        rooms: 3,
-        bedrooms: 2,
-        bathrooms: 1,
-        exterior_type: "balcon",
-        equipment: ["Cuisine équipée"],
-        energy_class: "C",
-        ges_class: "C",
-        heating_type: "individual_electric",
-        required_income: 3000,
-        professional_situation: "CDI",
-        guarantor_required: false,
-        lease_duration: 12,
-        move_in_date: "2024-02-01",
-        rent_payment_day: 5,
-        owner_id: currentUser.id,
+      if (testError) {
+        console.error("❌ Erreur de connexion Supabase:", testError)
+        throw new Error(`Connexion DB échouée: ${testError.message}`)
+      }
+      console.log("✅ Connexion Supabase OK")
+
+      // Préparer les données SANS les colonnes qui n'existent pas
+      const insertData = {
+        title: propertyData.title,
+        description: propertyData.description,
+        address: propertyData.address,
+        city: propertyData.city,
+        postal_code: propertyData.postal_code,
+        surface: propertyData.surface,
+        price: propertyData.rent_excluding_charges + propertyData.charges_amount, // Prix total
+        rooms: propertyData.rooms,
+        bedrooms: propertyData.bedrooms,
+        bathrooms: propertyData.bathrooms,
+        property_type: propertyData.property_type,
+        furnished: propertyData.rental_type === "furnished",
+        available: true, // Utiliser 'available' au lieu de 'status'
+        owner_id: propertyData.owner_id,
+        // Supprimer toutes les colonnes qui n'existent pas dans Supabase
       }
 
-      const result = await propertyService.createProperty(testData)
-      addDebugLog(`✅ Test réussi! Propriété créée: ${result.id}`)
-      toast.success("Test de création réussi!")
+      console.log("📝 Données préparées pour insertion:", insertData)
 
-      // Recharger les propriétés
-      const updatedProperties = await propertyService.getOwnerProperties(currentUser.id)
-      setProperties(updatedProperties)
+      const { data, error } = await supabase.from("properties").insert(insertData).select().single()
+
+      if (error) {
+        console.error("❌ Erreur lors de l'insertion:", error)
+        throw new Error(`Erreur création: ${error.message}`)
+      }
+
+      if (!data) {
+        console.error("❌ Aucune donnée retournée")
+        throw new Error("Aucune propriété retournée après création")
+      }
+
+      console.log("✅ Propriété créée avec succès:", data)
+      return data
     } catch (error) {
-      addDebugLog(`❌ Test échoué: ${error.message}`)
-      toast.error(`Test échoué: ${error.message}`)
+      console.error("❌ Erreur dans createProperty:", error)
+      throw error
     }
-  }
+  },
 
-  if (isLoading) {
-    return (
-      <div className="flex h-screen">
-        <div className="w-64 bg-gray-900"></div>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-2">Chargement du tableau de bord...</p>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  // Récupérer les propriétés d'un propriétaire
+  async getOwnerProperties(ownerId: string) {
+    console.log("📋 PropertyService.getOwnerProperties - ownerId:", ownerId)
 
-  const stats = {
-    totalProperties: properties.length,
-    availableProperties: properties.filter((p) => p.available).length,
-    totalApplications: applications.length,
-    pendingApplications: applications.filter((a) => a.status === "pending").length,
-    upcomingVisits: visits.filter((v) => new Date(v.visit_date) > new Date()).length,
-    totalRevenue: properties.reduce((sum, p) => sum + (p.rent_excluding_charges || 0), 0),
-  }
+    try {
+      const { data, error } = await supabase
+        .from("properties")
+        .select(`
+          *,
+          property_images(id, url, is_primary)
+        `)
+        .eq("owner_id", ownerId)
+        .order("created_at", { ascending: false })
 
-  const sidebarItems = [
-    { id: "overview", label: "Vue d'ensemble", icon: Home },
-    { id: "properties", label: "Mes biens", icon: Home },
-    { id: "applications", label: "Candidatures", icon: Users },
-    { id: "visits", label: "Visites", icon: Calendar },
-    { id: "leases", label: "Locations en cours", icon: MapPin },
-    { id: "payments", label: "Paiements", icon: CreditCard },
-    { id: "messages", label: "Messages", icon: MessageSquare },
-    { id: "settings", label: "Paramètres", icon: Settings },
-  ]
+      if (error) {
+        console.error("❌ Erreur lors de la récupération:", error)
+        throw new Error(error.message)
+      }
 
-  return (
-    <div className="flex h-screen bg-gray-50">
-      {/* Sidebar */}
-      <div className="w-64 bg-gray-900 text-white flex flex-col">
-        <div className="p-6 border-b border-gray-700">
-          <h2 className="text-xl font-bold">Tableau de bord</h2>
-        </div>
+      console.log("✅ Propriétés récupérées:", data?.length || 0, "propriétés")
+      console.log(
+        "📸 Images par propriété:",
+        data?.map((p) => ({ id: p.id, images: p.property_images?.length || 0 })),
+      )
+      return data || []
+    } catch (error) {
+      console.error("❌ Erreur dans getOwnerProperties:", error)
+      throw error
+    }
+  },
 
-        <nav className="flex-1 p-4">
-          <ul className="space-y-2">
-            {sidebarItems.map((item) => {
-              const Icon = item.icon
-              return (
-                <li key={item.id}>
-                  <button
-                    onClick={() => setActiveTab(item.id)}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
-                      activeTab === item.id
-                        ? "bg-blue-600 text-white"
-                        : "text-gray-300 hover:bg-gray-800 hover:text-white"
-                    }`}
-                  >
-                    <Icon className="h-5 w-5" />
-                    {item.label}
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-        </nav>
+  // Récupérer les propriétés d'un propriétaire avec statistiques
+  async getOwnerPropertiesWithStats(ownerId: string) {
+    try {
+      const { data: properties, error: propertiesError } = await supabase
+        .from("properties")
+        .select(`
+          *,
+          property_images(id, url, is_primary),
+          applications(id, status),
+          visits(id, status, visit_date)
+        `)
+        .eq("owner_id", ownerId)
+        .order("created_at", { ascending: false })
 
-        {/* Debug button */}
-        <div className="p-4 border-t border-gray-700">
-          <Button variant="outline" size="sm" onClick={() => setShowDebug(!showDebug)} className="w-full">
-            <Bug className="h-4 w-4 mr-2" />
-            {showDebug ? "Masquer Debug" : "Debug"}
-          </Button>
-        </div>
-      </div>
+      if (propertiesError) {
+        throw new Error(propertiesError.message)
+      }
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="bg-white border-b border-gray-200 p-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                {currentUser?.first_name} {currentUser?.last_name}
-              </h1>
-              <p className="text-gray-600">Propriétaire</p>
-            </div>
-            <Button asChild>
-              <Link href="/owner/properties/new">
-                <Plus className="h-4 w-4 mr-2" />
-                Ajouter un bien
-              </Link>
-            </Button>
-          </div>
-        </div>
+      return properties || []
+    } catch (error) {
+      console.error("Erreur lors de la récupération des propriétés:", error)
+      throw error
+    }
+  },
 
-        {/* Content */}
-        <div className="flex-1 overflow-auto p-6">
-          {/* Debug Panel */}
-          {showDebug && (
-            <Card className="mb-6 border-orange-200 bg-orange-50">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-orange-800">
-                  <Bug className="h-5 w-5" />
-                  Panel de Debug
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex gap-2 mb-4">
-                  <Button size="sm" onClick={testPropertyCreation}>
-                    Test Création Propriété
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => setDebugLogs([])}>
-                    Effacer Logs
-                  </Button>
-                </div>
-                <div className="bg-gray-900 text-green-400 p-4 rounded-lg max-h-64 overflow-y-auto font-mono text-sm">
-                  {debugLogs.length === 0 ? (
-                    <p>Aucun log pour le moment...</p>
-                  ) : (
-                    debugLogs.map((log, index) => <div key={index}>{log}</div>)
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+  // Récupérer une propriété par son ID
+  async getPropertyById(id: string) {
+    console.log("🔍 PropertyService.getPropertyById - ID:", id)
 
-          {activeTab === "overview" && (
-            <div className="space-y-6">
-              {/* Statistics */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">Candidatures</p>
-                        <p className="text-2xl font-bold">{stats.totalApplications}</p>
-                      </div>
-                      <Users className="h-8 w-8 text-blue-600" />
-                    </div>
-                  </CardContent>
-                </Card>
+    try {
+      const { data, error } = await supabase
+        .from("properties")
+        .select(`
+          *,
+          property_images(id, url, is_primary)
+        `)
+        .eq("id", id)
+        .single()
 
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">Biens disponibles</p>
-                        <p className="text-2xl font-bold">{stats.availableProperties}</p>
-                      </div>
-                      <Home className="h-8 w-8 text-green-600" />
-                    </div>
-                  </CardContent>
-                </Card>
+      if (error) {
+        console.error("❌ Erreur lors de la récupération:", error)
+        throw new Error(error.message)
+      }
 
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">Visites à venir</p>
-                        <p className="text-2xl font-bold">{stats.upcomingVisits}</p>
-                      </div>
-                      <Calendar className="h-8 w-8 text-purple-600" />
-                    </div>
-                  </CardContent>
-                </Card>
+      if (!data) {
+        console.error("❌ Aucune propriété trouvée")
+        throw new Error("Propriété non trouvée")
+      }
 
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">Revenus mensuels</p>
-                        <p className="text-2xl font-bold">{stats.totalRevenue}€</p>
-                      </div>
-                      <Euro className="h-8 w-8 text-yellow-600" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
+      console.log("✅ Propriété récupérée:", data)
+      console.log("📸 Images de la propriété:", data.property_images)
+      return data
+    } catch (error) {
+      console.error("❌ Erreur dans getPropertyById:", error)
+      throw error
+    }
+  },
 
-              {/* Recent sections */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Candidatures récentes */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center justify-between">
-                      Candidatures récentes
-                      <Badge variant="secondary">{applications.length}</Badge>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {applications.length === 0 ? (
-                      <div className="text-center py-8">
-                        <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                        <p className="text-gray-500">Aucune candidature récente</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {applications.slice(0, 3).map((application) => (
-                          <div key={application.id} className="flex items-center gap-3">
-                            <div className="flex-shrink-0">
-                              {application.status === "pending" && <Clock className="h-5 w-5 text-yellow-500" />}
-                              {application.status === "approved" && <CheckCircle className="h-5 w-5 text-green-500" />}
-                              {application.status === "rejected" && <AlertCircle className="h-5 w-5 text-red-500" />}
-                            </div>
-                            <div className="flex-1">
-                              <p className="text-sm font-medium">{application.property?.title}</p>
-                              <p className="text-xs text-gray-500">
-                                {new Date(application.created_at).toLocaleDateString("fr-FR")}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+  // Récupérer une propriété publique par son ID (pour l'affichage public)
+  async getPublicPropertyById(id: string) {
+    console.log("🌐 PropertyService.getPublicPropertyById - ID:", id)
 
-                {/* Prochaines visites */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center justify-between">
-                      Prochaines visites
-                      <Badge variant="secondary">{stats.upcomingVisits}</Badge>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {stats.upcomingVisits === 0 ? (
-                      <div className="text-center py-8">
-                        <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                        <p className="text-gray-500">Aucune visite programmée</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {visits
-                          .filter((v) => new Date(v.visit_date) > new Date())
-                          .slice(0, 3)
-                          .map((visit) => (
-                            <div key={visit.id} className="flex items-center justify-between">
-                              <div>
-                                <p className="text-sm font-medium">{visit.property?.title}</p>
-                                <p className="text-xs text-gray-500">
-                                  {new Date(visit.visit_date).toLocaleDateString("fr-FR")}
-                                </p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-sm font-medium">
-                                  {new Date(visit.visit_date).toLocaleTimeString("fr-FR", {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
-                                </p>
-                              </div>
-                            </div>
-                          ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
+    try {
+      const { data, error } = await supabase
+        .from("properties")
+        .select(`
+          *,
+          property_images(id, url, is_primary),
+          owner:users(first_name, last_name, phone, email)
+        `)
+        .eq("id", id)
+        .eq("available", true)
+        .single()
 
-              {/* Mes biens */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Mes biens</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {properties.length === 0 ? (
-                    <div className="text-center py-12">
-                      <Home className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                      <h3 className="text-xl font-semibold mb-2">Aucun bien ajouté</h3>
-                      <p className="text-gray-500 mb-6">Commencez par ajouter votre premier bien immobilier</p>
-                      <Button asChild>
-                        <Link href="/owner/properties/new">
-                          <Plus className="h-4 w-4 mr-2" />
-                          Ajouter un bien
-                        </Link>
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                      {properties.map((property) => (
-                        <Card key={property.id} className="hover:shadow-lg transition-shadow">
-                          <CardContent className="p-0">
-                            <div className="aspect-video bg-gray-200 rounded-t-lg overflow-hidden">
-                              {property.property_images && property.property_images.length > 0 ? (
-                                <img
-                                  src={property.property_images[0].image_url || "/placeholder.svg"}
-                                  alt={property.title}
-                                  className="w-full h-full object-cover"
-                                  onError={(e) => {
-                                    e.currentTarget.src =
-                                      "/placeholder.svg?height=200&width=300&text=Image+non+disponible"
-                                  }}
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-gray-100">
-                                  <Home className="h-12 w-12 text-gray-400" />
-                                </div>
-                              )}
-                            </div>
-                            <div className="p-4 space-y-3">
-                              <div className="flex justify-between items-start">
-                                <h4 className="font-medium text-sm line-clamp-2">{property.title}</h4>
-                                <Badge variant={property.available ? "default" : "secondary"} className="text-xs">
-                                  {property.available ? "Disponible" : "Loué"}
-                                </Badge>
-                              </div>
+      if (error) {
+        console.error("❌ Erreur lors de la récupération publique:", error)
+        throw new Error(error.message)
+      }
 
-                              <p className="text-xs text-gray-500">
-                                {property.address}, {property.city}
-                              </p>
+      if (!data) {
+        console.error("❌ Aucune propriété publique trouvée")
+        throw new Error("Propriété non trouvée ou non disponible")
+      }
 
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm font-bold text-blue-600">
-                                  {property.rent_excluding_charges}€
-                                </span>
-                                <span className="text-xs text-gray-500">par mois</span>
-                              </div>
+      console.log("✅ Propriété publique récupérée:", data)
+      console.log("📸 Images de la propriété publique:", data.property_images)
+      return data
+    } catch (error) {
+      console.error("❌ Erreur dans getPublicPropertyById:", error)
+      throw error
+    }
+  },
 
-                              <Button variant="outline" size="sm" className="w-full" asChild>
-                                <Link href={`/owner/properties/${property.id}`}>Gérer</Link>
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          )}
+  // Générer des créneaux de visite automatiques
+  async generateDefaultVisitSlots(propertyId: string, daysAhead = 14) {
+    console.log("📅 Génération de créneaux pour propriété:", propertyId)
 
-          {activeTab === "properties" && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  Mes biens ({properties.length})
-                  <Button asChild>
-                    <Link href="/owner/properties/new">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Ajouter un bien
-                    </Link>
-                  </Button>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {properties.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Home className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold mb-2">Aucun bien ajouté</h3>
-                    <p className="text-gray-500 mb-6">Commencez par ajouter votre premier bien immobilier</p>
-                    <Button asChild>
-                      <Link href="/owner/properties/new">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Ajouter un bien
-                      </Link>
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {properties.map((property) => (
-                      <Card key={property.id} className="hover:shadow-lg transition-shadow">
-                        <CardContent className="p-4">
-                          <div className="space-y-3">
-                            <div className="flex justify-between items-start">
-                              <h4 className="font-medium line-clamp-2">{property.title}</h4>
-                              <Badge variant={property.available ? "default" : "secondary"}>
-                                {property.available ? "Disponible" : "Loué"}
-                              </Badge>
-                            </div>
+    try {
+      const slots: VisitSlot[] = []
+      const today = new Date()
 
-                            <p className="text-sm text-gray-500">
-                              {property.address}, {property.city}
-                            </p>
+      for (let i = 1; i <= daysAhead; i++) {
+        const date = new Date(today)
+        date.setDate(today.getDate() + i)
 
-                            <div className="flex justify-between items-center">
-                              <span className="text-lg font-bold text-blue-600">
-                                {property.rent_excluding_charges}€
-                              </span>
-                              <span className="text-sm text-gray-500">par mois</span>
-                            </div>
+        // Éviter les dimanches
+        if (date.getDay() === 0) continue
 
-                            <div className="flex gap-2">
-                              <Button variant="outline" size="sm" className="flex-1" asChild>
-                                <Link href={`/owner/properties/${property.id}`}>
-                                  <Eye className="h-4 w-4 mr-1" />
-                                  Gérer
-                                </Link>
-                              </Button>
-                              <Button variant="outline" size="sm" asChild>
-                                <Link href={`/owner/properties/${property.id}/edit`}>
-                                  <Settings className="h-4 w-4" />
-                                </Link>
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+        const dateStr = date.toISOString().split("T")[0]
 
-          {activeTab === "applications" && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Candidatures ({applications.length})</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {applications.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold mb-2">Aucune candidature</h3>
-                    <p className="text-gray-500">Les candidatures pour vos biens apparaîtront ici</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {applications.map((application) => (
-                      <div key={application.id} className="border rounded-lg p-4">
-                        <div className="flex justify-between items-start mb-2">
-                          <div>
-                            <h4 className="font-medium">{application.property?.title}</h4>
-                            <p className="text-sm text-gray-500">
-                              Candidat: {application.tenant?.first_name} {application.tenant?.last_name}
-                            </p>
-                          </div>
-                          <Badge
-                            variant={
-                              application.status === "pending"
-                                ? "secondary"
-                                : application.status === "approved"
-                                  ? "default"
-                                  : "destructive"
-                            }
-                          >
-                            {application.status === "pending" && "En attente"}
-                            {application.status === "approved" && "Approuvée"}
-                            {application.status === "rejected" && "Refusée"}
-                          </Badge>
-                        </div>
-                        <p className="text-xs text-gray-500">
-                          Reçue le {new Date(application.created_at).toLocaleDateString("fr-FR")}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+        // Créneaux de semaine (lundi-vendredi)
+        if (date.getDay() >= 1 && date.getDay() <= 5) {
+          // Matin : 9h-12h (créneaux de 30min)
+          for (let hour = 9; hour < 12; hour++) {
+            for (let minute = 0; minute < 60; minute += 30) {
+              const startTime = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`
+              const endHour = minute === 30 ? hour + 1 : hour
+              const endMinute = minute === 30 ? 0 : 30
+              const endTime = `${endHour.toString().padStart(2, "0")}:${endMinute.toString().padStart(2, "0")}`
 
-          {activeTab === "visits" && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Visites programmées ({visits.length})</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {visits.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold mb-2">Aucune visite programmée</h3>
-                    <p className="text-gray-500">Les visites de vos biens apparaîtront ici</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {visits.map((visit) => (
-                      <div key={visit.id} className="border rounded-lg p-4">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h4 className="font-medium">{visit.property?.title}</h4>
-                            <p className="text-sm text-gray-500">
-                              {visit.property?.address}, {visit.property?.city}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              Visiteur: {visit.tenant?.first_name} {visit.tenant?.last_name}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-medium">{new Date(visit.visit_date).toLocaleDateString("fr-FR")}</p>
-                            <p className="text-sm text-gray-500">
-                              {new Date(visit.visit_date).toLocaleTimeString("fr-FR", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+              slots.push({
+                date: dateStr,
+                start_time: startTime,
+                end_time: endTime,
+                max_capacity: 1,
+                is_group_visit: false,
+                current_bookings: 0,
+              })
+            }
+          }
 
-          {/* Placeholder pour les autres onglets */}
-          {["leases", "payments", "messages", "settings"].includes(activeTab) && (
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  {activeTab === "leases" && "Locations en cours"}
-                  {activeTab === "payments" && "Paiements"}
-                  {activeTab === "messages" && "Messages"}
-                  {activeTab === "settings" && "Paramètres"}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-12">
-                  <p className="text-gray-500">Cette section sera bientôt disponible</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </div>
-    </div>
-  )
+          // Après-midi : 14h-18h (créneaux de 30min)
+          for (let hour = 14; hour < 18; hour++) {
+            for (let minute = 0; minute < 60; minute += 30) {
+              const startTime = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`
+              const endHour = minute === 30 ? hour + 1 : hour
+              const endMinute = minute === 30 ? 0 : 30
+              const endTime = `${endHour.toString().padStart(2, "0")}:${endMinute.toString().padStart(2, "0")}`
+
+              slots.push({
+                date: dateStr,
+                start_time: startTime,
+                end_time: endTime,
+                max_capacity: 1,
+                is_group_visit: false,
+                current_bookings: 0,
+              })
+            }
+          }
+        }
+
+        // Créneaux de samedi (10h-17h)
+        if (date.getDay() === 6) {
+          for (let hour = 10; hour < 17; hour++) {
+            for (let minute = 0; minute < 60; minute += 30) {
+              const startTime = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`
+              const endHour = minute === 30 ? hour + 1 : hour
+              const endMinute = minute === 30 ? 0 : 30
+              const endTime = `${endHour.toString().padStart(2, "0")}:${endMinute.toString().padStart(2, "0")}`
+
+              slots.push({
+                date: dateStr,
+                start_time: startTime,
+                end_time: endTime,
+                max_capacity: 1,
+                is_group_visit: false,
+                current_bookings: 0,
+              })
+            }
+          }
+        }
+      }
+
+      // Insérer tous les créneaux en une fois
+      const slotsToInsert = slots.map((slot) => ({
+        property_id: propertyId,
+        ...slot,
+      }))
+
+      const { data, error } = await supabase.from("visit_availabilities").insert(slotsToInsert).select()
+
+      if (error) {
+        console.error("❌ Erreur lors de la génération des créneaux:", error)
+        throw new Error(error.message)
+      }
+
+      console.log("✅ Créneaux générés:", data?.length || 0)
+      return data
+    } catch (error) {
+      console.error("Erreur lors de la génération des créneaux:", error)
+      throw error
+    }
+  },
+
+  // Ajouter une disponibilité de visite personnalisée
+  async addVisitAvailability(
+    propertyId: string,
+    date: string,
+    startTime: string,
+    endTime: string,
+    maxCapacity = 1,
+    isGroupVisit = false,
+  ) {
+    try {
+      const { data, error } = await supabase
+        .from("visit_availabilities")
+        .insert({
+          property_id: propertyId,
+          date,
+          start_time: startTime,
+          end_time: endTime,
+          max_capacity: maxCapacity,
+          is_group_visit: isGroupVisit,
+          current_bookings: 0,
+        })
+        .select()
+        .single()
+
+      if (error) {
+        throw new Error(error.message)
+      }
+
+      return data
+    } catch (error) {
+      console.error("Erreur lors de l'ajout de la disponibilité:", error)
+      throw error
+    }
+  },
+
+  // Récupérer les candidatures d'un propriétaire
+  async getOwnerApplications(ownerId: string) {
+    try {
+      const { data, error } = await supabase
+        .from("applications")
+        .select(`
+          *,
+          property:properties!inner(id, title, city, owner_id),
+          tenant:users(id, first_name, last_name, email, phone)
+        `)
+        .eq("property.owner_id", ownerId)
+        .order("created_at", { ascending: false })
+
+      if (error) {
+        throw new Error(error.message)
+      }
+
+      return data || []
+    } catch (error) {
+      console.error("Erreur lors de la récupération des candidatures:", error)
+      return []
+    }
+  },
+
+  // Récupérer les visites d'un propriétaire
+  async getOwnerVisits(ownerId: string) {
+    try {
+      const { data, error } = await supabase
+        .from("visits")
+        .select(`
+          *,
+          property:properties!inner(id, title, address, city, owner_id),
+          tenant:users(id, first_name, last_name, phone)
+        `)
+        .eq("property.owner_id", ownerId)
+        .order("visit_date", { ascending: true })
+
+      if (error) {
+        throw new Error(error.message)
+      }
+
+      return data || []
+    } catch (error) {
+      console.error("Erreur lors de la récupération des visites:", error)
+      return []
+    }
+  },
+
+  // Récupérer les messages d'un propriétaire
+  async getOwnerMessages(ownerId: string) {
+    try {
+      // Pour l'instant, retourner un tableau vide car la table messages n'est pas encore implémentée
+      return []
+    } catch (error) {
+      console.error("Erreur lors de la récupération des messages:", error)
+      return []
+    }
+  },
+
+  // Ajouter une fonction pour récupérer les disponibilités de visite
+  async getPropertyVisitAvailabilities(propertyId: string) {
+    console.log("📅 PropertyService.getPropertyVisitAvailabilities - ID:", propertyId)
+
+    try {
+      const { data, error } = await supabase
+        .from("visit_availabilities")
+        .select("*")
+        .eq("property_id", propertyId)
+        .order("date", { ascending: true })
+        .order("start_time", { ascending: true })
+
+      if (error) {
+        console.error("❌ Erreur lors de la récupération des créneaux:", error)
+        throw new Error(error.message)
+      }
+
+      console.log("✅ Créneaux récupérés:", data?.length || 0)
+      return data || []
+    } catch (error) {
+      console.error("❌ Erreur dans getPropertyVisitAvailabilities:", error)
+      return []
+    }
+  },
+
+  // Mettre à jour une propriété
+  async updateProperty(propertyId: string, updateData: any) {
+    console.log("🔄 PropertyService.updateProperty - ID:", propertyId, "Data:", updateData)
+
+    try {
+      const { data, error } = await supabase
+        .from("properties")
+        .update(updateData)
+        .eq("id", propertyId)
+        .select()
+        .single()
+
+      if (error) {
+        console.error("❌ Erreur lors de la mise à jour:", error)
+        throw new Error(error.message)
+      }
+
+      console.log("✅ Propriété mise à jour:", data)
+      return data
+    } catch (error) {
+      console.error("❌ Erreur dans updateProperty:", error)
+      throw error
+    }
+  },
+
+  // Supprimer une propriété
+  async deleteProperty(propertyId: string) {
+    console.log("🗑️ PropertyService.deleteProperty - ID:", propertyId)
+
+    try {
+      // Supprimer d'abord les créneaux de visite
+      await supabase.from("visit_availabilities").delete().eq("property_id", propertyId)
+
+      // Supprimer les images
+      await supabase.from("property_images").delete().eq("property_id", propertyId)
+
+      // Supprimer la propriété
+      const { error } = await supabase.from("properties").delete().eq("id", propertyId)
+
+      if (error) {
+        console.error("❌ Erreur lors de la suppression:", error)
+        throw new Error(error.message)
+      }
+
+      console.log("✅ Propriété supprimée")
+      return true
+    } catch (error) {
+      console.error("❌ Erreur dans deleteProperty:", error)
+      throw error
+    }
+  },
+
+  // Ajouter une image à une propriété
+  async addPropertyImage(propertyId: string, imageUrl: string, isPrimary = false) {
+    console.log("📸 PropertyService.addPropertyImage - ID:", propertyId, "URL:", imageUrl)
+
+    try {
+      // Si c'est l'image principale, désactiver les autres images principales
+      if (isPrimary) {
+        await supabase.from("property_images").update({ is_primary: false }).eq("property_id", propertyId)
+      }
+
+      const { data, error } = await supabase
+        .from("property_images")
+        .insert({
+          property_id: propertyId,
+          url: imageUrl,
+          is_primary: isPrimary,
+        })
+        .select()
+        .single()
+
+      if (error) {
+        console.error("❌ Erreur lors de l'ajout de l'image:", error)
+        throw new Error(error.message)
+      }
+
+      console.log("✅ Image ajoutée:", data)
+      return data
+    } catch (error) {
+      console.error("❌ Erreur dans addPropertyImage:", error)
+      throw error
+    }
+  },
+
+  // Supprimer une image d'une propriété
+  async deletePropertyImage(imageId: string) {
+    console.log("🗑️ PropertyService.deletePropertyImage - ID:", imageId)
+
+    try {
+      const { error } = await supabase.from("property_images").delete().eq("id", imageId)
+
+      if (error) {
+        console.error("❌ Erreur lors de la suppression de l'image:", error)
+        throw new Error(error.message)
+      }
+
+      console.log("✅ Image supprimée")
+      return true
+    } catch (error) {
+      console.error("❌ Erreur dans deletePropertyImage:", error)
+      throw error
+    }
+  },
 }
