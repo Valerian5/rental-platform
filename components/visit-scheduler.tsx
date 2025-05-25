@@ -96,6 +96,8 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
 
   const [selectedSlots, setSelectedSlots] = useState<Set<string>>(new Set())
   const [calendarStartDate, setCalendarStartDate] = useState(new Date())
+  const [selectedDays, setSelectedDays] = useState<Set<string>>(new Set())
+  const [showDaySelector, setShowDaySelector] = useState(false)
 
   // Générer les jours du calendrier
   useEffect(() => {
@@ -276,6 +278,57 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
     updateDayConfig(dayOfWeek, { periods: newPeriods })
   }
 
+  // Ajouter un créneau individuel
+  const addIndividualSlot = (date: string, dayOfWeek: number) => {
+    const dayConfig = settings.daysConfig[dayOfWeek]
+    if (!dayConfig?.enabled) {
+      toast.error("Ce jour n'est pas configuré pour les visites")
+      return
+    }
+
+    // Trouver le prochain créneau disponible
+    const existingSlots = visitSlots.filter((slot) => slot.date === date)
+    let startTime = "09:00"
+
+    if (dayConfig.periods.length > 0) {
+      startTime = dayConfig.periods[0].start
+    }
+
+    // Si il y a déjà des créneaux, prendre le suivant
+    if (existingSlots.length > 0) {
+      const lastSlot = existingSlots.sort((a, b) => a.start_time.localeCompare(b.start_time)).pop()
+      if (lastSlot) {
+        const lastEndTime = new Date(`2000-01-01T${lastSlot.end_time}:00`)
+        const nextStartTime = new Date(lastEndTime.getTime() + settings.slotDuration * 60000)
+        startTime = nextStartTime.toTimeString().slice(0, 5)
+      }
+    }
+
+    const endTime = new Date(`2000-01-01T${startTime}:00`)
+    endTime.setMinutes(endTime.getMinutes() + settings.slotDuration)
+
+    const newSlot: VisitSlot = {
+      id: `${date}-${startTime}`,
+      date,
+      start_time: startTime,
+      end_time: endTime.toTimeString().slice(0, 5),
+      max_capacity: settings.defaultCapacity,
+      is_group_visit: settings.allowGroupVisits,
+      current_bookings: 0,
+      is_available: true,
+    }
+
+    onSlotsChange([...visitSlots, newSlot])
+    toast.success("Créneau ajouté")
+  }
+
+  // Supprimer un créneau individuel
+  const removeIndividualSlot = (slotId: string) => {
+    const newSlots = visitSlots.filter((slot) => `${slot.date}-${slot.start_time}` !== slotId)
+    onSlotsChange(newSlots)
+    toast.success("Créneau supprimé")
+  }
+
   const totalSlots = visitSlots.length
   const selectedCount = selectedSlots.size
   const availableSlots = visitSlots.filter((slot) => slot.is_available).length
@@ -317,9 +370,13 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                   <Badge variant="secondary">{totalSlots} créneaux</Badge>
                   <Badge variant="outline">{availableSlots} disponibles</Badge>
                   {selectedCount > 0 && <Badge variant="destructive">{selectedCount} sélectionnés</Badge>}
+                  {selectedDays.size > 0 && <Badge variant="default">{selectedDays.size} jours sélectionnés</Badge>}
                 </div>
 
                 <div className="flex gap-2 ml-auto">
+                  <Button variant="outline" size="sm" onClick={() => setShowDaySelector(!showDaySelector)}>
+                    📅 Sélectionner des jours
+                  </Button>
                   {selectedCount > 0 && (
                     <Button variant="destructive" size="sm" onClick={removeSelectedSlots}>
                       <Trash2 className="h-4 w-4 mr-1" />
@@ -332,6 +389,92 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                   </Button>
                 </div>
               </div>
+
+              {/* Sélecteur de jours */}
+              {showDaySelector && (
+                <div className="mt-4 p-4 border rounded-lg bg-muted/50 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="font-medium">Sélectionner des jours spécifiques</Label>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const allDates = new Set(calendarDays.filter((d) => !d.isPast).map((d) => d.date))
+                          setSelectedDays(allDates)
+                        }}
+                      >
+                        Tout sélectionner
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => setSelectedDays(new Set())}>
+                        Tout désélectionner
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-7 gap-2">
+                    {calendarDays.map((day) => {
+                      const isSelected = selectedDays.has(day.date)
+                      const dayConfig = settings.daysConfig[day.dayOfWeek]
+                      const isConfigured = dayConfig?.enabled
+
+                      return (
+                        <Button
+                          key={day.date}
+                          variant={isSelected ? "default" : "outline"}
+                          size="sm"
+                          className={`h-16 flex flex-col items-center justify-center ${
+                            day.isPast ? "opacity-50 cursor-not-allowed" : ""
+                          } ${!isConfigured ? "border-dashed" : ""}`}
+                          onClick={() => {
+                            if (day.isPast) return
+                            const newSelected = new Set(selectedDays)
+                            if (newSelected.has(day.date)) {
+                              newSelected.delete(day.date)
+                            } else {
+                              newSelected.add(day.date)
+                            }
+                            setSelectedDays(newSelected)
+                          }}
+                          disabled={day.isPast}
+                        >
+                          <div className="text-xs text-muted-foreground">{day.monthName}</div>
+                          <div className="text-xs font-medium">{day.dayName}</div>
+                          <div className="text-sm font-bold">{day.dayNumber}</div>
+                          {!isConfigured && <div className="text-xs">Non config.</div>}
+                        </Button>
+                      )
+                    })}
+                  </div>
+
+                  {selectedDays.size > 0 && (
+                    <div className="flex items-center gap-2 pt-2">
+                      <Button
+                        onClick={() => {
+                          const allSlots: VisitSlot[] = []
+                          selectedDays.forEach((date) => {
+                            const day = calendarDays.find((d) => d.date === date)
+                            if (day && !day.isPast) {
+                              const daySlots = generateSlotsForDay(day.date, day.dayOfWeek)
+                              allSlots.push(...daySlots)
+                            }
+                          })
+                          onSlotsChange([...visitSlots, ...allSlots])
+                          setSelectedDays(new Set())
+                          setShowDaySelector(false)
+                          toast.success(`${allSlots.length} créneaux ajoutés pour ${selectedDays.size} jours`)
+                        }}
+                        size="sm"
+                      >
+                        ✅ Générer créneaux pour les jours sélectionnés ({selectedDays.size})
+                      </Button>
+                      <Button variant="outline" onClick={() => setShowDaySelector(false)} size="sm">
+                        Annuler
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
             </CardHeader>
           </Card>
 
@@ -346,7 +489,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                   return (
                     <div key={day.date} className={`space-y-2 ${day.isPast ? "opacity-50" : ""}`}>
                       {/* En-tête du jour */}
-                      <div className="text-center p-2 border rounded-lg bg-muted/50">
+                      <div className="text-center p-2 border rounded-lg bg-muted/50 relative">
                         <div className="text-xs text-muted-foreground">{day.monthName}</div>
                         <div className="font-medium">
                           {day.dayName} {day.dayNumber}
@@ -355,6 +498,18 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                           <Badge variant="default" className="text-xs mt-1">
                             Aujourd'hui
                           </Badge>
+                        )}
+
+                        {/* Bouton d'ajout de créneau individuel */}
+                        {isEnabled && !day.isPast && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="absolute -top-1 -right-1 h-6 w-6 rounded-full p-0 bg-blue-600 text-white hover:bg-blue-700"
+                            onClick={() => addIndividualSlot(day.date, day.dayOfWeek)}
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
                         )}
                       </div>
 
@@ -368,28 +523,50 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                               const isBooked = slot.current_bookings > 0
 
                               return (
-                                <Button
-                                  key={slotId}
-                                  variant={isSelected ? "default" : "outline"}
-                                  size="sm"
-                                  className={`w-full h-8 text-xs justify-between ${
-                                    isBooked ? "bg-orange-100 border-orange-300 text-orange-800" : ""
-                                  } ${isSelected ? "bg-blue-600 text-white" : ""}`}
-                                  onClick={() => toggleSlotSelection(slotId)}
-                                  disabled={day.isPast}
-                                >
-                                  <span>{slot.start_time}</span>
-                                  {isBooked && (
-                                    <Badge variant="secondary" className="text-xs">
-                                      {slot.current_bookings}/{slot.max_capacity}
-                                    </Badge>
-                                  )}
-                                  {isSelected && <Check className="h-3 w-3" />}
-                                </Button>
+                                <div key={slotId} className="flex items-center gap-1">
+                                  <Button
+                                    variant={isSelected ? "default" : "outline"}
+                                    size="sm"
+                                    className={`flex-1 h-8 text-xs justify-between ${
+                                      isBooked ? "bg-orange-100 border-orange-300 text-orange-800" : ""
+                                    } ${isSelected ? "bg-blue-600 text-white" : ""}`}
+                                    onClick={() => toggleSlotSelection(slotId)}
+                                    disabled={day.isPast}
+                                  >
+                                    <span>{slot.start_time}</span>
+                                    {isBooked && (
+                                      <Badge variant="secondary" className="text-xs">
+                                        {slot.current_bookings}/{slot.max_capacity}
+                                      </Badge>
+                                    )}
+                                    {isSelected && <Check className="h-3 w-3" />}
+                                  </Button>
+
+                                  {/* Bouton de suppression individuelle */}
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                    onClick={() => removeIndividualSlot(slotId)}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </div>
                               )
                             })
                           ) : (
-                            <div className="text-center py-4 text-muted-foreground text-xs">Aucun créneau</div>
+                            <div className="text-center py-4 text-muted-foreground text-xs">
+                              Aucun créneau
+                              <br />
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-xs mt-1 h-6"
+                                onClick={() => addIndividualSlot(day.date, day.dayOfWeek)}
+                              >
+                                + Ajouter
+                              </Button>
+                            </div>
                           )
                         ) : (
                           <div className="text-center py-4 text-muted-foreground text-xs">Jour désactivé</div>
