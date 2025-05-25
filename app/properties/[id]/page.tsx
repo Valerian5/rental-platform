@@ -1,484 +1,354 @@
 "use client"
 
-import { useState } from "react"
-import {
-  ArrowLeft,
-  MapPin,
-  BedDouble,
-  Bath,
-  SquareIcon as SquareFeet,
-  Calendar,
-  Heart,
-  Share2,
-  CheckCircle,
-  AlertTriangle,
-  X,
-} from "lucide-react"
+import { useState, useEffect } from "react"
+import { useRouter, useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { ArrowLeft, MapPin, Home, Bed, Bath, Square, Calendar, Phone, Mail, Heart } from "lucide-react"
 import Link from "next/link"
+import { propertyService } from "@/lib/property-service"
+import { toast } from "sonner"
 
-// Exemple de données d'une propriété
-const property = {
-  id: 1,
-  title: "Appartement moderne au centre-ville",
-  description:
-    "Magnifique appartement entièrement rénové situé en plein cœur de Paris. Cet espace lumineux offre une vue imprenable sur la ville et se trouve à proximité de tous les commerces, restaurants et transports en commun. L'appartement dispose d'une cuisine équipée moderne, d'un salon spacieux, de deux chambres confortables et d'une salle de bain avec douche à l'italienne.",
-  address: "123 Rue Principale, 75001 Paris",
-  surface: 65,
-  rentAmount: 1200,
-  charges: 150,
-  propertyType: "Appartement",
-  rentalType: "Non meublé",
-  constructionYear: 2018,
-  deposit: 2400,
-  rooms: 3,
-  bedrooms: 2,
-  bathrooms: 1,
-  exterior: ["Balcon"],
-  equipment: ["Cuisine équipée", "Lave-vaisselle", "Fibre optique"],
-  energyClass: "B",
-  ges: "C",
-  heating: "Individuel électrique",
-  parking: true,
-  status: "Disponible",
-  availableFrom: "2023-06-01",
-  minIncome: 3600,
-  images: [
-    "/placeholder.svg?height=400&width=600&text=Photo+principale",
-    "/placeholder.svg?height=400&width=600&text=Salon",
-    "/placeholder.svg?height=400&width=600&text=Cuisine",
-    "/placeholder.svg?height=400&width=600&text=Chambre+1",
-    "/placeholder.svg?height=400&width=600&text=Chambre+2",
-    "/placeholder.svg?height=400&width=600&text=Salle+de+bain",
-  ],
-  owner: {
-    name: "Jean Dupont",
-    phone: "06 12 34 56 78",
-    email: "jean.dupont@example.com",
-  },
-}
+export default function PropertyPublicPage() {
+  const router = useRouter()
+  const params = useParams()
+  const [property, setProperty] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [currentImageIndex, setCurrentImageIndex] = useState(0)
 
-// Simulation des données utilisateur
-const userProfile = {
-  hasRentalFile: true,
-  isComplete: true,
-  monthlyIncome: 2800, // Revenus inférieurs au minimum requis
-}
+  useEffect(() => {
+    const fetchProperty = async () => {
+      console.log("🌐 Chargement de l'annonce publique...")
+      setIsLoading(true)
+      setError(null)
 
-export default function PropertyDetailPage({ params }: { params: { id: string } }) {
-  const [showApplicationDialog, setShowApplicationDialog] = useState(false)
+      try {
+        if (!params.id) {
+          throw new Error("ID de propriété manquant")
+        }
 
-  const canApplyDirectly =
-    userProfile.hasRentalFile && userProfile.isComplete && userProfile.monthlyIncome >= property.minIncome
-  const hasInsufficientIncome = userProfile.monthlyIncome < property.minIncome
-  const isIncompleteFile = userProfile.hasRentalFile && !userProfile.isComplete
+        console.log("📋 Récupération de la propriété publique:", params.id)
+        const propertyData = await propertyService.getPublicPropertyById(params.id as string)
 
-  const handleApply = () => {
-    if (!userProfile.hasRentalFile) {
-      // Rediriger vers la création du dossier
-      window.location.href = "/tenant/profile/rental-file?return=/properties/1"
-    } else {
-      setShowApplicationDialog(true)
+        setProperty(propertyData)
+        console.log("✅ Propriété publique chargée:", propertyData)
+      } catch (error: any) {
+        console.error("❌ Erreur lors du chargement:", error)
+        setError(error.message || "Erreur lors du chargement de l'annonce")
+        toast.error("Erreur lors du chargement de l'annonce")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchProperty()
+  }, [params.id])
+
+  const nextImage = () => {
+    if (property?.property_images?.length > 0) {
+      setCurrentImageIndex((prev) => (prev + 1) % property.property_images.length)
     }
   }
 
+  const prevImage = () => {
+    if (property?.property_images?.length > 0) {
+      setCurrentImageIndex((prev) => (prev - 1 + property.property_images.length) % property.property_images.length)
+    }
+  }
+
+  const handleContact = () => {
+    toast.info("Fonctionnalité de contact en cours de développement")
+  }
+
+  const handleFavorite = () => {
+    toast.info("Fonctionnalité favoris en cours de développement")
+  }
+
+  // États de chargement et d'erreur
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="container mx-auto py-8">
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="text-center space-y-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="text-gray-600">Chargement de l'annonce...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !property) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="container mx-auto py-8">
+          <div className="text-center space-y-4">
+            <div className="text-red-600 text-lg font-medium">{error || "Annonce non trouvée"}</div>
+            <Button onClick={() => router.push("/")} variant="outline">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Retour à l'accueil
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const currentImage = property.property_images?.[currentImageIndex]
+  const hasImages = property.property_images && property.property_images.length > 0
+
   return (
-    <div className="container mx-auto py-6">
-      <div className="mb-6">
-        <Button asChild variant="ghost" className="mb-4">
-          <Link href="/properties">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Retour aux résultats
-          </Link>
-        </Button>
-
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold">{property.title}</h1>
-            <div className="flex items-center mt-1 text-muted-foreground">
-              <MapPin className="h-4 w-4 mr-1" />
-              {property.address}
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white shadow-sm">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <Link href="/" className="text-blue-600 hover:underline flex items-center">
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              Retour aux annonces
+            </Link>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleFavorite}>
+                <Heart className="h-4 w-4 mr-2" />
+                Favoris
+              </Button>
+              <Button size="sm" onClick={handleContact}>
+                Contacter
+              </Button>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant={property.status === "Disponible" ? "default" : "secondary"} className="text-sm">
-              {property.status}
-            </Badge>
-            <Button variant="outline" size="icon">
-              <Heart className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="icon">
-              <Share2 className="h-4 w-4" />
-            </Button>
           </div>
         </div>
       </div>
 
-      {/* Galerie d'images */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <div className="md:col-span-2 aspect-video overflow-hidden rounded-lg">
-          <img
-            src={property.images[0] || "/placeholder.svg"}
-            alt={property.title}
-            className="w-full h-full object-cover"
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          {property.images.slice(1, 5).map((image, index) => (
-            <div key={index} className="aspect-square overflow-hidden rounded-lg">
-              <img src={image || "/placeholder.svg"} alt={`Vue ${index + 1}`} className="w-full h-full object-cover" />
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Informations principales */}
-        <div className="lg:col-span-2">
-          <Tabs defaultValue="details">
-            <TabsList className="mb-4">
-              <TabsTrigger value="details">Détails</TabsTrigger>
-              <TabsTrigger value="features">Caractéristiques</TabsTrigger>
-              <TabsTrigger value="location">Emplacement</TabsTrigger>
-              <TabsTrigger value="documents">Documents</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="details" className="space-y-6">
-              <div>
-                <h2 className="text-2xl font-semibold mb-2">Description</h2>
-                <p className="text-muted-foreground">{property.description}</p>
-              </div>
-
-              <div>
-                <h3 className="text-xl font-semibold mb-4">Informations générales</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <Card>
-                    <CardHeader className="p-4 pb-2">
-                      <CardTitle className="text-sm text-muted-foreground">Type</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-0">{property.propertyType}</CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="p-4 pb-2">
-                      <CardTitle className="text-sm text-muted-foreground">Location</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-0">{property.rentalType}</CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="p-4 pb-2">
-                      <CardTitle className="text-sm text-muted-foreground">Pièces</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-0 flex items-center">
-                      <BedDouble className="h-4 w-4 mr-2" />
-                      {property.rooms}
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="p-4 pb-2">
-                      <CardTitle className="text-sm text-muted-foreground">Chambres</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-0 flex items-center">
-                      <BedDouble className="h-4 w-4 mr-2" />
-                      {property.bedrooms}
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="p-4 pb-2">
-                      <CardTitle className="text-sm text-muted-foreground">Salles de bain</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-0 flex items-center">
-                      <Bath className="h-4 w-4 mr-2" />
-                      {property.bathrooms}
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="p-4 pb-2">
-                      <CardTitle className="text-sm text-muted-foreground">Surface</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-0 flex items-center">
-                      <SquareFeet className="h-4 w-4 mr-2" />
-                      {property.surface} m²
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="p-4 pb-2">
-                      <CardTitle className="text-sm text-muted-foreground">Année</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-0">{property.constructionYear}</CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="p-4 pb-2">
-                      <CardTitle className="text-sm text-muted-foreground">Chauffage</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-0">{property.heating}</CardContent>
-                  </Card>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-xl font-semibold mb-2">Disponibilité</h3>
-                <div className="flex items-center">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  <span>Disponible à partir du {new Date(property.availableFrom).toLocaleDateString("fr-FR")}</span>
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="features">
-              <h2 className="text-2xl font-semibold mb-4">Caractéristiques</h2>
-
-              <div className="space-y-6">
-                <div>
-                  <h3 className="font-semibold mb-2">Équipements</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2">
-                    {property.equipment.map((item, index) => (
-                      <div key={index} className="flex items-center">
-                        <CheckCircle className="h-4 w-4 text-green-600 mr-2" />
-                        {item}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="font-semibold mb-2">Extérieur</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2">
-                    {property.exterior.map((item, index) => (
-                      <div key={index} className="flex items-center">
-                        <CheckCircle className="h-4 w-4 text-green-600 mr-2" />
-                        {item}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="font-semibold mb-2">Parking</h3>
-                  <div className="flex items-center">
-                    {property.parking ? (
+      <div className="container mx-auto px-4 py-8 max-w-6xl">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Contenu principal */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Images */}
+            <Card className="overflow-hidden">
+              <div className="relative aspect-video bg-gray-200">
+                {hasImages ? (
+                  <>
+                    <img
+                      src={currentImage?.url || "/placeholder.svg"}
+                      alt={`Photo ${currentImageIndex + 1} de ${property.title}`}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement
+                        target.src = `/placeholder.svg?height=400&width=600&text=Image non disponible`
+                      }}
+                    />
+                    {property.property_images.length > 1 && (
                       <>
-                        <CheckCircle className="h-4 w-4 text-green-600 mr-2" />
-                        <span>Parking disponible</span>
-                      </>
-                    ) : (
-                      <>
-                        <X className="h-4 w-4 text-red-600 mr-2" />
-                        <span>Pas de parking</span>
+                        <button
+                          onClick={prevImage}
+                          className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black/50 text-white p-2 rounded-full hover:bg-black/70 transition-colors"
+                        >
+                          ←
+                        </button>
+                        <button
+                          onClick={nextImage}
+                          className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black/50 text-white p-2 rounded-full hover:bg-black/70 transition-colors"
+                        >
+                          →
+                        </button>
+                        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/50 text-white px-3 py-1 rounded-full text-sm">
+                          {currentImageIndex + 1} / {property.property_images.length}
+                        </div>
                       </>
                     )}
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="font-semibold mb-2">Performance énergétique</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Classe énergétique</p>
-                      <Badge variant="outline" className="text-lg font-bold">
-                        {property.energyClass}
-                      </Badge>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">GES</p>
-                      <Badge variant="outline" className="text-lg font-bold">
-                        {property.ges}
-                      </Badge>
+                  </>
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <div className="text-center text-gray-500">
+                      <Home className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+                      <p>Aucune photo disponible</p>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
-            </TabsContent>
 
-            <TabsContent value="location">
-              <h2 className="text-2xl font-semibold mb-4">Emplacement</h2>
-              <div className="aspect-video bg-gray-100 rounded-lg flex items-center justify-center">
-                <div className="text-center p-8">
-                  <MapPin className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-muted-foreground">Carte de l'emplacement</p>
-                  <p className="font-medium mt-2">{property.address}</p>
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="documents">
-              <h2 className="text-2xl font-semibold mb-4">Documents obligatoires</h2>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <span>Diagnostic de Performance Énergétique (DPE)</span>
-                  <Button variant="outline" size="sm">
-                    Télécharger
-                  </Button>
-                </div>
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <span>Constat de Risque d'Exposition au Plomb (CREP)</span>
-                  <Button variant="outline" size="sm">
-                    Télécharger
-                  </Button>
-                </div>
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <span>État des Risques et Pollutions (ERP)</span>
-                  <Button variant="outline" size="sm">
-                    Télécharger
-                  </Button>
-                </div>
-              </div>
-            </TabsContent>
-          </Tabs>
-        </div>
-
-        {/* Sidebar */}
-        <div className="lg:col-span-1">
-          <Card className="sticky top-4">
-            <CardHeader>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Loyer hors charges</span>
-                  <span className="text-2xl font-bold">{property.rentAmount} €</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Charges</span>
-                  <span className="text-lg">+ {property.charges} €</span>
-                </div>
-                <div className="border-t pt-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">Total mensuel</span>
-                    <span className="text-2xl font-bold">{property.rentAmount + property.charges} €</span>
+              {/* Miniatures */}
+              {hasImages && property.property_images.length > 1 && (
+                <div className="p-4">
+                  <div className="flex gap-2 overflow-x-auto">
+                    {property.property_images.map((image: any, index: number) => (
+                      <button
+                        key={image.id}
+                        onClick={() => setCurrentImageIndex(index)}
+                        className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-colors ${
+                          index === currentImageIndex ? "border-blue-500" : "border-gray-200"
+                        }`}
+                      >
+                        <img
+                          src={image.url || "/placeholder.svg"}
+                          alt={`Miniature ${index + 1}`}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement
+                            target.src = `/placeholder.svg?height=80&width=80&text=${index + 1}`
+                          }}
+                        />
+                      </button>
+                    ))}
                   </div>
                 </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Dépôt de garantie</span>
-                  <span>{property.deposit} €</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Revenus minimum exigés</span>
-                  <span>{property.minIncome} €/mois</span>
-                </div>
-              </div>
+              )}
+            </Card>
 
-              <div className="border-t pt-4">
-                <h3 className="font-semibold mb-2">Contacter le propriétaire</h3>
-                <div className="space-y-2">
-                  <p className="font-medium">{property.owner.name}</p>
-                  <p className="text-sm">{property.owner.phone}</p>
-                  <p className="text-sm">{property.owner.email}</p>
+            {/* Titre et localisation */}
+            <div className="space-y-4">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">{property.title}</h1>
+                <div className="flex items-center text-gray-600 mb-4">
+                  <MapPin className="h-5 w-5 mr-2" />
+                  <span>
+                    {property.address}, {property.city} {property.postal_code}
+                  </span>
+                </div>
+                <div className="text-3xl font-bold text-blue-600">
+                  {property.price} € <span className="text-lg font-normal text-gray-500">/ mois</span>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Dialog open={showApplicationDialog} onOpenChange={setShowApplicationDialog}>
-                  <DialogTrigger asChild>
-                    <Button className="w-full" onClick={handleApply}>
-                      Postuler pour ce logement
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Postuler pour ce logement</DialogTitle>
-                      <DialogDescription>{property.title}</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      {canApplyDirectly && (
-                        <div className="bg-green-50 p-4 rounded-lg">
-                          <div className="flex items-center">
-                            <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
-                            <span className="font-medium text-green-800">Votre dossier est complet !</span>
-                          </div>
-                          <p className="text-sm text-green-700 mt-1">
-                            Votre dossier sera directement transmis au propriétaire.
-                          </p>
-                        </div>
-                      )}
+              <div className="flex items-center gap-2">
+                <Badge variant={property.available ? "default" : "secondary"}>
+                  {property.available ? "Disponible" : "Loué"}
+                </Badge>
+                <Badge variant="outline">
+                  {property.property_type === "apartment" && "Appartement"}
+                  {property.property_type === "house" && "Maison"}
+                  {property.property_type === "studio" && "Studio"}
+                  {property.property_type === "loft" && "Loft"}
+                </Badge>
+                {property.furnished && <Badge variant="outline">Meublé</Badge>}
+              </div>
+            </div>
 
-                      {hasInsufficientIncome && (
-                        <div className="bg-orange-50 p-4 rounded-lg">
-                          <div className="flex items-center">
-                            <AlertTriangle className="h-5 w-5 text-orange-600 mr-2" />
-                            <span className="font-medium text-orange-800">Revenus insuffisants</span>
-                          </div>
-                          <p className="text-sm text-orange-700 mt-1">
-                            Vos revenus ({userProfile.monthlyIncome}€) sont inférieurs au minimum exigé (
-                            {property.minIncome}€). Vous pouvez tout de même postuler.
-                          </p>
-                        </div>
-                      )}
+            {/* Caractéristiques */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Home className="h-5 w-5 mr-2" />
+                  Caractéristiques
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                  <div className="flex items-center space-x-3">
+                    <Square className="h-5 w-5 text-gray-500" />
+                    <div>
+                      <p className="text-sm text-gray-500">Surface</p>
+                      <p className="font-semibold">{property.surface} m²</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <Home className="h-5 w-5 text-gray-500" />
+                    <div>
+                      <p className="text-sm text-gray-500">Pièces</p>
+                      <p className="font-semibold">{property.rooms}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <Bed className="h-5 w-5 text-gray-500" />
+                    <div>
+                      <p className="text-sm text-gray-500">Chambres</p>
+                      <p className="font-semibold">{property.bedrooms || "Non spécifié"}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <Bath className="h-5 w-5 text-gray-500" />
+                    <div>
+                      <p className="text-sm text-gray-500">Salles de bain</p>
+                      <p className="font-semibold">{property.bathrooms || "Non spécifié"}</p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-                      {isIncompleteFile && (
-                        <div className="bg-blue-50 p-4 rounded-lg">
-                          <div className="flex items-center">
-                            <AlertTriangle className="h-5 w-5 text-blue-600 mr-2" />
-                            <span className="font-medium text-blue-800">Dossier incomplet</span>
-                          </div>
-                          <p className="text-sm text-blue-700 mt-1">
-                            Votre dossier n'est pas complet. Vous pouvez compléter les informations manquantes ou
-                            postuler en l'état.
-                          </p>
-                        </div>
-                      )}
+            {/* Description */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Description</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-gray-700 leading-relaxed whitespace-pre-line">{property.description}</p>
+              </CardContent>
+            </Card>
+          </div>
 
-                      <div className="flex flex-col gap-2">
-                        <Button className="w-full">Confirmer ma candidature</Button>
-                        {(hasInsufficientIncome || isIncompleteFile) && (
-                          <Button variant="outline" className="w-full" asChild>
-                            <Link href="/tenant/profile/rental-file">Compléter mon dossier</Link>
-                          </Button>
-                        )}
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Contact propriétaire */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Contact</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {property.owner && (
+                  <div className="space-y-3">
+                    <div>
+                      <p className="font-semibold text-gray-900">
+                        {property.owner.first_name} {property.owner.last_name}
+                      </p>
+                      <p className="text-sm text-gray-500">Propriétaire</p>
+                    </div>
+
+                    {property.owner.phone && (
+                      <div className="flex items-center space-x-2">
+                        <Phone className="h-4 w-4 text-gray-500" />
+                        <span className="text-sm">{property.owner.phone}</span>
                       </div>
-                    </div>
-                  </DialogContent>
-                </Dialog>
+                    )}
 
-                <Button variant="outline" className="w-full">
-                  Contacter le propriétaire
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="mt-4">
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold">Biens similaires</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {[1, 2].map((i) => (
-                <div key={i} className="flex gap-3">
-                  <div className="w-20 h-20 rounded overflow-hidden flex-shrink-0">
-                    <img
-                      src={`/placeholder.svg?height=80&width=80&text=Bien+${i}`}
-                      alt={`Bien similaire ${i}`}
-                      className="w-full h-full object-cover"
-                    />
+                    {property.owner.email && (
+                      <div className="flex items-center space-x-2">
+                        <Mail className="h-4 w-4 text-gray-500" />
+                        <span className="text-sm">{property.owner.email}</span>
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <h4 className="font-medium text-sm">Appartement {i + 1} pièces</h4>
-                    <p className="text-xs text-muted-foreground">Paris</p>
-                    <p className="text-sm font-bold mt-1">{900 + i * 200} €/mois</p>
+                )}
+
+                <div className="space-y-2">
+                  <Button className="w-full" onClick={handleContact}>
+                    <Phone className="h-4 w-4 mr-2" />
+                    Contacter le propriétaire
+                  </Button>
+                  <Button variant="outline" className="w-full" onClick={handleContact}>
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Demander une visite
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Informations complémentaires */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Informations</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-500">Publié le</span>
+                    <span className="text-sm font-medium">
+                      {new Date(property.created_at).toLocaleDateString("fr-FR")}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-500">Référence</span>
+                    <span className="text-sm font-mono text-gray-500">{property.id.slice(0, 8).toUpperCase()}</span>
                   </div>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </div>
