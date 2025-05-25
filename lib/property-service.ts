@@ -398,4 +398,56 @@ export const propertyService = {
       return []
     }
   },
+
+  // Mettre à jour une propriété
+  async updateProperty(propertyId: string, updateData: any) {
+    console.log("🔄 PropertyService.updateProperty - ID:", propertyId, "Data:", updateData)
+
+    try {
+      const { data, error } = await supabase
+        .from("properties")
+        .update(updateData)
+        .eq("id", propertyId)
+        .select()
+        .single()
+
+      if (error) {
+        console.error("❌ Erreur lors de la mise à jour:", error)
+        throw new Error(error.message)
+      }
+
+      console.log("✅ Propriété mise à jour:", data)
+      return data
+    } catch (error) {
+      console.error("❌ Erreur dans updateProperty:", error)
+      throw error
+    }
+  },
+
+  // Supprimer une propriété
+  async deleteProperty(propertyId: string) {
+    console.log("🗑️ PropertyService.deleteProperty - ID:", propertyId)
+
+    try {
+      // Supprimer d'abord les créneaux de visite
+      await supabase.from("visit_availabilities").delete().eq("property_id", propertyId)
+
+      // Supprimer les images
+      await supabase.from("property_images").delete().eq("property_id", propertyId)
+
+      // Supprimer la propriété
+      const { error } = await supabase.from("properties").delete().eq("id", propertyId)
+
+      if (error) {
+        console.error("❌ Erreur lors de la suppression:", error)
+        throw new Error(error.message)
+      }
+
+      console.log("✅ Propriété supprimée")
+      return true
+    } catch (error) {
+      console.error("❌ Erreur dans deleteProperty:", error)
+      throw error
+    }
+  },
 }
