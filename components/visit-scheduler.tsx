@@ -303,7 +303,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
           {/* Horaires */}
           <div className="space-y-3 mb-4">
             <Label className="text-sm font-medium">Horaires de visite</Label>
-            
+
             <div className="flex items-center gap-4 p-3 border rounded-lg">
               <div className="flex items-center space-x-2 min-w-[100px]">
                 <Checkbox
@@ -407,7 +407,8 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
             <Badge variant="secondary">{visitSlots.length} créneaux</Badge>
           </CardTitle>
           <p className="text-sm text-gray-600">
-            Cliquez sur les jours pour les activer/désactiver. Les créneaux seront générés automatiquement selon vos paramètres.
+            Cliquez sur les jours pour les activer/désactiver. Les créneaux seront générés automatiquement selon vos
+            paramètres.
           </p>
         </CardHeader>
         <CardContent>
@@ -415,7 +416,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
             {calendarDays.slice(0, 28).map((day) => {
               const status = getDateStatus(day)
               const isSelected = day.slots.length > 0
-              
+
               return (
                 <div key={day.date} className="relative">
                   <Button
@@ -428,7 +429,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                     <div className="text-lg font-bold">{day.dayNumber}</div>
                     <div className="text-xs mt-1">{getStatusLabel(status, isSelected)}</div>
                   </Button>
-                  
+
                   {isSelected && (
                     <Dialog>
                       <DialogTrigger asChild>
@@ -554,11 +555,9 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                 <div className="text-sm text-gray-600">Réservations</div>
               </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
-      )
-}
-</div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   )
 }
