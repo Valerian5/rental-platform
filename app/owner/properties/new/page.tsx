@@ -1,810 +1,526 @@
 "use client"
 
-import type React from "react"
-
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Progress } from "@/components/ui/progress"
-import { ArrowLeft, ArrowRight, Upload, X } from "lucide-react"
-import Link from "next/link"
-import { propertyService } from "@/lib/property-service"
-import { authService } from "@/lib/auth-service"
-import { toast } from "sonner"
-import { VisitScheduler } from "@/components/visit-scheduler"
-
-interface FormData {
-  // Informations de base
-  title: string
-  description: string
-  address: string
-  city: string
-  postal_code: string
-  hide_exact_address: boolean
-
-  // Caractéristiques du bien
-  surface: string
-  rent_excluding_charges: string
-  charges_amount: string
-  property_type: string
-  rental_type: string
-  construction_year: string
-  security_deposit: string
-  rooms: string
-  bedrooms: string
-  bathrooms: string
-  exterior_type: string
-  equipment: string[]
-
-  // Performance énergétique
-  energy_class: string
-  ges_class: string
-  heating_type: string
-
-  // Critères locataire
-  required_income: string
-  professional_situation: string
-  guarantor_required: boolean
-  lease_duration: string
-  move_in_date: string
-  rent_payment_day: string
-
-  // Documents et disponibilités
-  documents: File[]
-  visit_availabilities: Array<{
-    date: Date
-    timeSlots: Array<{ start: string; end: string }>
-  }>
-}
-
-const EQUIPMENT_OPTIONS = [
-  "Cuisine équipée",
-  "Baignoire",
-  "Douche",
-  "Lave-vaisselle",
-  "Lave-linge",
-  "Sèche-linge",
-  "Réfrigérateur",
-  "Four",
-  "Micro-ondes",
-  "Climatisation",
-  "Cheminée",
-  "Parking",
-  "Cave",
-  "Ascenseur",
-  "Interphone",
-  "Digicode",
-]
-
-const ENERGY_CLASSES = ["A", "B", "C", "D", "E", "F", "G"]
+import { useSession } from "next-auth/react"
 
 export default function NewPropertyPage() {
   const router = useRouter()
-  const [currentStep, setCurrentStep] = useState(1)
-  const [isLoading, setIsLoading] = useState(false)
-  const [currentUser, setCurrentUser] = useState<any>(null)
-  const [selectedImages, setSelectedImages] = useState<File[]>([])
-  const [visitSlots, setVisitSlots] = useState<any[]>([])
-
-  const [formData, setFormData] = useState<FormData>({
+  const { data: session } = useSession()
+  const [formData, setFormData] = useState({
     title: "",
     description: "",
     address: "",
     city: "",
-    postal_code: "",
-    hide_exact_address: false,
+    postalCode: "",
     surface: "",
-    rent_excluding_charges: "",
-    charges_amount: "",
-    property_type: "apartment",
-    rental_type: "unfurnished",
-    construction_year: "",
-    security_deposit: "",
+    rentExcludingCharges: "",
+    chargesAmount: "",
+    propertyType: "",
+    rentalType: "",
+    constructionYear: "",
+    securityDeposit: "",
     rooms: "",
     bedrooms: "",
     bathrooms: "",
-    exterior_type: "",
-    equipment: [],
-    energy_class: "",
-    ges_class: "",
-    heating_type: "",
-    required_income: "",
-    professional_situation: "",
-    guarantor_required: false,
-    lease_duration: "",
-    move_in_date: "",
-    rent_payment_day: "",
-    documents: [],
-    visit_availabilities: [],
+    exteriorType: "",
+    equipment: "",
+    energyClass: "",
+    gesClass: "",
+    heatingType: "",
+    requiredIncome: "",
+    professionalSituation: "",
+    guarantorRequired: false,
+    leaseDuration: "",
+    moveInDate: "",
+    rentPaymentDay: "",
+    hideExactAddress: false,
   })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
 
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const user = await authService.getCurrentUser()
-        if (!user || user.user_type !== "owner") {
-          toast.error("Vous devez être connecté en tant que propriétaire")
-          router.push("/login")
-          return
-        }
-        setCurrentUser(user)
-      } catch (error) {
-        console.error("Erreur lors de la récupération de l'utilisateur:", error)
-        router.push("/login")
-      }
-    }
-
-    fetchUser()
-  }, [router])
-
-  const handleChange = (field: string, value: any) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
-  }
-
-  const handleEquipmentToggle = (equipment: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      equipment: prev.equipment.includes(equipment)
-        ? prev.equipment.filter((e) => e !== equipment)
-        : [...prev.equipment, equipment],
+  const handleChange = (e: any) => {
+    const { name, value, type, checked } = e.target
+    setFormData((prevData: any) => ({
+      ...prevData,
+      [name]: type === "checkbox" ? checked : value,
     }))
   }
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setSelectedImages(Array.from(e.target.files))
-    }
-  }
+  const handleSubmit = async (e: any) => {
+    e.preventDefault()
+    setLoading(true)
+    setError("")
 
-  const removeImage = (index: number) => {
-    setSelectedImages((prev) => prev.filter((_, i) => i !== index))
-  }
-
-  const nextStep = () => {
-    if (currentStep < 6) {
-      setCurrentStep(currentStep + 1)
-    }
-  }
-
-  const prevStep = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1)
-    }
-  }
-
-  const validateForm = () => {
-    if (!formData.title.trim()) {
-      toast.error("Le titre est obligatoire")
-      return false
-    }
-    if (!formData.description.trim()) {
-      toast.error("La description est obligatoire")
-      return false
-    }
-    if (!formData.address.trim()) {
-      toast.error("L'adresse est obligatoire")
-      return false
-    }
-    if (!formData.city.trim()) {
-      toast.error("La ville est obligatoire")
-      return false
-    }
-    if (!formData.surface || Number.parseInt(formData.surface) <= 0) {
-      toast.error("La surface doit être supérieure à 0")
-      return false
-    }
-    if (!formData.rent_excluding_charges || Number.parseFloat(formData.rent_excluding_charges) <= 0) {
-      toast.error("Le loyer doit être supérieur à 0")
-      return false
-    }
-    if (!formData.charges_amount || Number.parseFloat(formData.charges_amount) < 0) {
-      toast.error("Le montant des charges doit être positif")
-      return false
-    }
-    if (!formData.security_deposit || Number.parseFloat(formData.security_deposit) < 0) {
-      toast.error("Le dépôt de garantie doit être positif")
-      return false
-    }
-    if (!formData.rooms || Number.parseInt(formData.rooms) <= 0) {
-      toast.error("Le nombre de pièces doit être supérieur à 0")
-      return false
-    }
-    return true
-  }
-
-  const handleSubmit = async () => {
-    console.log("🚀 Début de la soumission")
-
-    if (!currentUser) {
-      toast.error("Vous devez être connecté pour ajouter un bien")
+    if (!session?.user) {
+      setError("You must be logged in to create a property.")
+      setLoading(false)
       return
     }
 
-    if (!validateForm()) {
-      return
-    }
-
-    setIsLoading(true)
-    toast.info("Création de l'annonce en cours...")
+    const currentUser = session.user as { id: string; email: string }
 
     try {
-      console.log("📝 Données du formulaire:", formData)
-
+      // Préparer les données pour l'API (seulement les colonnes qui existent)
       const propertyData = {
         title: formData.title,
         description: formData.description,
         address: formData.address,
         city: formData.city,
-        postal_code: formData.postal_code,
-        hide_exact_address: formData.hide_exact_address,
+        postal_code: formData.postalCode,
         surface: Number.parseInt(formData.surface),
-        rent_excluding_charges: Number.parseFloat(formData.rent_excluding_charges),
-        charges_amount: Number.parseFloat(formData.charges_amount),
-        property_type: formData.property_type as "apartment" | "house" | "studio" | "loft",
-        rental_type: formData.rental_type as "unfurnished" | "furnished" | "shared",
-        construction_year: formData.construction_year ? Number.parseInt(formData.construction_year) : null,
-        security_deposit: Number.parseFloat(formData.security_deposit),
+        rent_excluding_charges: Number.parseInt(formData.rentExcludingCharges),
+        charges_amount: Number.parseInt(formData.chargesAmount),
+        property_type: formData.propertyType,
+        rental_type: formData.rentalType,
+        construction_year: Number.parseInt(formData.constructionYear),
+        security_deposit: Number.parseInt(formData.securityDeposit),
         rooms: Number.parseInt(formData.rooms),
-        bedrooms: formData.bedrooms ? Number.parseInt(formData.bedrooms) : null,
-        bathrooms: formData.bathrooms ? Number.parseInt(formData.bathrooms) : null,
-        exterior_type: formData.exterior_type || null,
+        bedrooms: Number.parseInt(formData.bedrooms),
+        bathrooms: Number.parseInt(formData.bathrooms),
+        exterior_type: formData.exteriorType,
         equipment: formData.equipment,
-        energy_class: formData.energy_class || null,
-        ges_class: formData.ges_class || null,
-        heating_type: formData.heating_type || null,
-        required_income: formData.required_income ? Number.parseFloat(formData.required_income) : null,
-        professional_situation: formData.professional_situation || null,
-        guarantor_required: formData.guarantor_required,
-        lease_duration: formData.lease_duration ? Number.parseInt(formData.lease_duration) : null,
-        move_in_date: formData.move_in_date || null,
-        rent_payment_day: formData.rent_payment_day ? Number.parseInt(formData.rent_payment_day) : null,
+        energy_class: formData.energyClass,
+        ges_class: formData.gesClass,
+        heating_type: formData.heatingType,
+        required_income: Number.parseInt(formData.requiredIncome),
+        professional_situation: formData.professionalSituation,
+        guarantor_required: formData.guarantorRequired,
+        lease_duration: Number.parseInt(formData.leaseDuration),
+        move_in_date: formData.moveInDate,
+        rent_payment_day: Number.parseInt(formData.rentPaymentDay),
+        hide_exact_address: formData.hideExactAddress,
         owner_id: currentUser.id,
       }
 
-      console.log("🏠 Données de la propriété:", propertyData)
+      const response = await fetch("/api/properties", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(propertyData),
+      })
 
-      const newProperty = await propertyService.createProperty(propertyData)
-      console.log("✅ Propriété créée:", newProperty)
-
-      // Ajouter les créneaux de visite personnalisés
-      if (visitSlots.length > 0) {
-        console.log("📅 Ajout des créneaux personnalisés:", visitSlots)
-        for (const slot of visitSlots) {
-          await propertyService.addVisitAvailability(
-            newProperty.id,
-            slot.date,
-            slot.start_time,
-            slot.end_time,
-            slot.max_capacity || 1,
-            slot.is_group_visit || false,
-          )
-        }
-      } else {
-        console.log("🔄 Génération automatique des créneaux")
-        await propertyService.generateDefaultVisitSlots(newProperty.id, 14)
+      if (!response.ok) {
+        const errorData = await response.json()
+        setError(errorData.message || "Failed to create property. Please check your inputs.")
+        setLoading(false)
+        return
       }
 
-      toast.success("Annonce créée avec succès !")
-      console.log("🎉 Redirection vers la page de succès")
-      router.push(`/owner/properties/${newProperty.id}/success`)
-    } catch (error) {
-      console.error("❌ Erreur lors de la création de l'annonce:", error)
-      toast.error(`Erreur lors de la création de l'annonce: ${error.message || "Erreur inconnue"}`)
+      router.push("/owner/properties")
+      router.refresh()
+    } catch (error: any) {
+      setError(error.message || "An unexpected error occurred.")
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
-
-  const renderStep = () => {
-    switch (currentStep) {
-      case 1:
-        return (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold">Informations de base</h2>
-
-            <div className="space-y-2">
-              <Label htmlFor="title">Titre de l'annonce *</Label>
-              <Input
-                id="title"
-                value={formData.title}
-                onChange={(e) => handleChange("title", e.target.value)}
-                placeholder="Ex: Appartement moderne au centre-ville"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="description">Description *</Label>
-              <Textarea
-                id="description"
-                value={formData.description}
-                onChange={(e) => handleChange("description", e.target.value)}
-                placeholder="Décrivez votre bien en détail..."
-                rows={4}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="address">Adresse complète *</Label>
-              <Input
-                id="address"
-                value={formData.address}
-                onChange={(e) => handleChange("address", e.target.value)}
-                placeholder="123 Rue de la Paix"
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="city">Ville *</Label>
-                <Input
-                  id="city"
-                  value={formData.city}
-                  onChange={(e) => handleChange("city", e.target.value)}
-                  placeholder="Paris"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="postal_code">Code postal</Label>
-                <Input
-                  id="postal_code"
-                  value={formData.postal_code}
-                  onChange={(e) => handleChange("postal_code", e.target.value)}
-                  placeholder="75001"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="hide_address"
-                checked={formData.hide_exact_address}
-                onCheckedChange={(checked) => handleChange("hide_exact_address", checked)}
-              />
-              <Label htmlFor="hide_address">Masquer l'adresse exacte sur l'annonce publique</Label>
-            </div>
-          </div>
-        )
-
-      case 2:
-        return (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold">Photos du bien</h2>
-
-            <div className="space-y-4">
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                <div className="mt-4">
-                  <Label htmlFor="images" className="cursor-pointer">
-                    <span className="mt-2 block text-sm font-medium text-gray-900">
-                      Cliquez pour ajouter des photos
-                    </span>
-                    <Input
-                      id="images"
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      className="hidden"
-                    />
-                  </Label>
-                </div>
-              </div>
-
-              {selectedImages.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {selectedImages.map((image, index) => (
-                    <div key={index} className="relative">
-                      <img
-                        src={URL.createObjectURL(image) || "/placeholder.svg"}
-                        alt={`Photo ${index + 1}`}
-                        className="w-full h-32 object-cover rounded-lg"
-                      />
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="sm"
-                        className="absolute top-2 right-2"
-                        onClick={() => removeImage(index)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )
-
-      case 3:
-        return (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold">Caractéristiques du bien</h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="surface">Surface (m²) *</Label>
-                <Input
-                  id="surface"
-                  type="number"
-                  value={formData.surface}
-                  onChange={(e) => handleChange("surface", e.target.value)}
-                  placeholder="65"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="construction_year">Année de construction</Label>
-                <Input
-                  id="construction_year"
-                  type="number"
-                  value={formData.construction_year}
-                  onChange={(e) => handleChange("construction_year", e.target.value)}
-                  placeholder="2020"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="rent_excluding_charges">Loyer hors charges (€) *</Label>
-                <Input
-                  id="rent_excluding_charges"
-                  type="number"
-                  value={formData.rent_excluding_charges}
-                  onChange={(e) => handleChange("rent_excluding_charges", e.target.value)}
-                  placeholder="1000"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="charges_amount">Montant des charges (€) *</Label>
-                <Input
-                  id="charges_amount"
-                  type="number"
-                  value={formData.charges_amount}
-                  onChange={(e) => handleChange("charges_amount", e.target.value)}
-                  placeholder="200"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="security_deposit">Dépôt de garantie (€) *</Label>
-                <Input
-                  id="security_deposit"
-                  type="number"
-                  value={formData.security_deposit}
-                  onChange={(e) => handleChange("security_deposit", e.target.value)}
-                  placeholder="1000"
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="property_type">Type de bien *</Label>
-                <Select value={formData.property_type} onValueChange={(value) => handleChange("property_type", value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionnez" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="apartment">Appartement</SelectItem>
-                    <SelectItem value="house">Maison</SelectItem>
-                    <SelectItem value="studio">Studio</SelectItem>
-                    <SelectItem value="loft">Loft</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="rental_type">Type de location *</Label>
-                <Select value={formData.rental_type} onValueChange={(value) => handleChange("rental_type", value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionnez" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unfurnished">Non meublé</SelectItem>
-                    <SelectItem value="furnished">Meublé</SelectItem>
-                    <SelectItem value="shared">Colocation</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="rooms">Nombre de pièces *</Label>
-                <Input
-                  id="rooms"
-                  type="number"
-                  value={formData.rooms}
-                  onChange={(e) => handleChange("rooms", e.target.value)}
-                  placeholder="3"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="bedrooms">Nombre de chambres</Label>
-                <Input
-                  id="bedrooms"
-                  type="number"
-                  value={formData.bedrooms}
-                  onChange={(e) => handleChange("bedrooms", e.target.value)}
-                  placeholder="2"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="bathrooms">Nombre de salles de bain</Label>
-                <Input
-                  id="bathrooms"
-                  type="number"
-                  value={formData.bathrooms}
-                  onChange={(e) => handleChange("bathrooms", e.target.value)}
-                  placeholder="1"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="exterior_type">Extérieur</Label>
-              <Select value={formData.exterior_type} onValueChange={(value) => handleChange("exterior_type", value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionnez" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="aucun">Aucun</SelectItem>
-                  <SelectItem value="balcon">Balcon</SelectItem>
-                  <SelectItem value="terrasse">Terrasse</SelectItem>
-                  <SelectItem value="jardin">Jardin</SelectItem>
-                  <SelectItem value="loggia">Loggia</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-4">
-              <Label>Équipements</Label>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                {EQUIPMENT_OPTIONS.map((equipment) => (
-                  <div key={equipment} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={equipment}
-                      checked={formData.equipment.includes(equipment)}
-                      onCheckedChange={() => handleEquipmentToggle(equipment)}
-                    />
-                    <Label htmlFor={equipment} className="text-sm">
-                      {equipment}
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )
-
-      case 4:
-        return (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold">Performance énergétique</h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="energy_class">Classe énergétique</Label>
-                <Select value={formData.energy_class} onValueChange={(value) => handleChange("energy_class", value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionnez" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ENERGY_CLASSES.map((classe) => (
-                      <SelectItem key={classe} value={classe}>
-                        Classe {classe}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="ges_class">Classe GES</Label>
-                <Select value={formData.ges_class} onValueChange={(value) => handleChange("ges_class", value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionnez" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ENERGY_CLASSES.map((classe) => (
-                      <SelectItem key={classe} value={classe}>
-                        Classe {classe}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="heating_type">Type de chauffage</Label>
-              <Select value={formData.heating_type} onValueChange={(value) => handleChange("heating_type", value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionnez" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="individual_electric">Individuel électrique</SelectItem>
-                  <SelectItem value="individual_gas">Individuel gaz</SelectItem>
-                  <SelectItem value="collective">Collectif</SelectItem>
-                  <SelectItem value="heat_pump">Pompe à chaleur</SelectItem>
-                  <SelectItem value="wood">Bois</SelectItem>
-                  <SelectItem value="fuel">Fioul</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Documents obligatoires</h3>
-              <p className="text-sm text-gray-600">
-                Vous pourrez ajouter les documents (DPE, CREP, etc.) après la création de l'annonce.
-              </p>
-            </div>
-          </div>
-        )
-
-      case 5:
-        return (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold">Critères vis-à-vis du locataire</h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="required_income">Revenus minimum requis (€)</Label>
-                <Input
-                  id="required_income"
-                  type="number"
-                  value={formData.required_income}
-                  onChange={(e) => handleChange("required_income", e.target.value)}
-                  placeholder="3000"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="professional_situation">Situation professionnelle souhaitée</Label>
-                <Input
-                  id="professional_situation"
-                  value={formData.professional_situation}
-                  onChange={(e) => handleChange("professional_situation", e.target.value)}
-                  placeholder="CDI, Fonctionnaire, etc."
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="guarantor_required"
-                checked={formData.guarantor_required}
-                onCheckedChange={(checked) => handleChange("guarantor_required", checked)}
-              />
-              <Label htmlFor="guarantor_required">Garant requis</Label>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="lease_duration">Durée de location (mois)</Label>
-                <Input
-                  id="lease_duration"
-                  type="number"
-                  value={formData.lease_duration}
-                  onChange={(e) => handleChange("lease_duration", e.target.value)}
-                  placeholder="12"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="move_in_date">Date d'emménagement</Label>
-                <Input
-                  id="move_in_date"
-                  type="date"
-                  value={formData.move_in_date}
-                  onChange={(e) => handleChange("move_in_date", e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="rent_payment_day">Jour de paiement du loyer</Label>
-                <Input
-                  id="rent_payment_day"
-                  type="number"
-                  min="1"
-                  max="31"
-                  value={formData.rent_payment_day}
-                  onChange={(e) => handleChange("rent_payment_day", e.target.value)}
-                  placeholder="5"
-                />
-              </div>
-            </div>
-          </div>
-        )
-
-      case 6:
-        return (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold">Configuration des visites</h2>
-
-            <div className="bg-blue-50 p-4 rounded-lg mb-6">
-              <h3 className="font-semibold text-blue-800 mb-2">Configuration recommandée</h3>
-              <p className="text-blue-700 text-sm mb-3">
-                Pour commencer rapidement, nous recommandons de créer l'annonce avec la génération automatique de
-                créneaux. Vous pourrez ensuite personnaliser vos disponibilités depuis la page de gestion du bien.
-              </p>
-              <div className="text-sm text-blue-600">
-                ✓ Créneaux de 30 minutes automatiques
-                <br />✓ Lundi-Vendredi : 9h-12h et 14h-18h
-                <br />✓ Samedi : 10h-17h
-                <br />✓ Personnalisation complète après création
-              </div>
-            </div>
-
-            <VisitScheduler visitSlots={visitSlots} onSlotsChange={setVisitSlots} mode="creation" />
-          </div>
-        )
-
-      default:
-        return null
-    }
-  }
-
-  if (!currentUser) {
-    return (
-      <div className="container mx-auto py-8">
-        <div className="text-center">Chargement...</div>
-      </div>
-    )
-  }
-
-  const progress = (currentStep / 6) * 100
 
   return (
-    <div className="container mx-auto py-8 max-w-4xl">
-      <Link href="/owner/dashboard" className="text-blue-600 hover:underline flex items-center mb-4">
-        <ArrowLeft className="h-4 w-4 mr-1" />
-        Retour au tableau de bord
-      </Link>
+    <div className="container mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-4">Create a New Property</h1>
+      {error && <div className="bg-red-200 text-red-800 p-2 mb-4">{error}</div>}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label htmlFor="title" className="block text-sm font-medium text-gray-700">
+            Title
+          </label>
+          <input
+            type="text"
+            id="title"
+            name="title"
+            value={formData.title}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+            Description
+          </label>
+          <textarea
+            id="description"
+            name="description"
+            value={formData.description}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            rows={3}
+          />
+        </div>
+        <div>
+          <label htmlFor="address" className="block text-sm font-medium text-gray-700">
+            Address
+          </label>
+          <input
+            type="text"
+            id="address"
+            name="address"
+            value={formData.address}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="city" className="block text-sm font-medium text-gray-700">
+            City
+          </label>
+          <input
+            type="text"
+            id="city"
+            name="city"
+            value={formData.city}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="postalCode" className="block text-sm font-medium text-gray-700">
+            Postal Code
+          </label>
+          <input
+            type="text"
+            id="postalCode"
+            name="postalCode"
+            value={formData.postalCode}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="surface" className="block text-sm font-medium text-gray-700">
+            Surface (m²)
+          </label>
+          <input
+            type="number"
+            id="surface"
+            name="surface"
+            value={formData.surface}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="rentExcludingCharges" className="block text-sm font-medium text-gray-700">
+            Rent Excluding Charges (€)
+          </label>
+          <input
+            type="number"
+            id="rentExcludingCharges"
+            name="rentExcludingCharges"
+            value={formData.rentExcludingCharges}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="chargesAmount" className="block text-sm font-medium text-gray-700">
+            Charges Amount (€)
+          </label>
+          <input
+            type="number"
+            id="chargesAmount"
+            name="chargesAmount"
+            value={formData.chargesAmount}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="propertyType" className="block text-sm font-medium text-gray-700">
+            Property Type
+          </label>
+          <select
+            id="propertyType"
+            name="propertyType"
+            value={formData.propertyType}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            required
+          >
+            <option value="">Select Property Type</option>
+            <option value="apartment">Apartment</option>
+            <option value="house">House</option>
+            <option value="studio">Studio</option>
+          </select>
+        </div>
+        <div>
+          <label htmlFor="rentalType" className="block text-sm font-medium text-gray-700">
+            Rental Type
+          </label>
+          <select
+            id="rentalType"
+            name="rentalType"
+            value={formData.rentalType}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            required
+          >
+            <option value="">Select Rental Type</option>
+            <option value="furnished">Furnished</option>
+            <option value="unfurnished">Unfurnished</option>
+          </select>
+        </div>
+        <div>
+          <label htmlFor="constructionYear" className="block text-sm font-medium text-gray-700">
+            Construction Year
+          </label>
+          <input
+            type="number"
+            id="constructionYear"
+            name="constructionYear"
+            value={formData.constructionYear}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="securityDeposit" className="block text-sm font-medium text-gray-700">
+            Security Deposit (€)
+          </label>
+          <input
+            type="number"
+            id="securityDeposit"
+            name="securityDeposit"
+            value={formData.securityDeposit}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="rooms" className="block text-sm font-medium text-gray-700">
+            Rooms
+          </label>
+          <input
+            type="number"
+            id="rooms"
+            name="rooms"
+            value={formData.rooms}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="bedrooms" className="block text-sm font-medium text-gray-700">
+            Bedrooms
+          </label>
+          <input
+            type="number"
+            id="bedrooms"
+            name="bedrooms"
+            value={formData.bedrooms}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="bathrooms" className="block text-sm font-medium text-gray-700">
+            Bathrooms
+          </label>
+          <input
+            type="number"
+            id="bathrooms"
+            name="bathrooms"
+            value={formData.bathrooms}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="exteriorType" className="block text-sm font-medium text-gray-700">
+            Exterior Type
+          </label>
+          <input
+            type="text"
+            id="exteriorType"
+            name="exteriorType"
+            value={formData.exteriorType}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+          />
+        </div>
+        <div>
+          <label htmlFor="equipment" className="block text-sm font-medium text-gray-700">
+            Equipment
+          </label>
+          <input
+            type="text"
+            id="equipment"
+            name="equipment"
+            value={formData.equipment}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+          />
+        </div>
+        <div>
+          <label htmlFor="energyClass" className="block text-sm font-medium text-gray-700">
+            Energy Class
+          </label>
+          <select
+            id="energyClass"
+            name="energyClass"
+            value={formData.energyClass}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+          >
+            <option value="">Select Energy Class</option>
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="C">C</option>
+            <option value="D">D</option>
+            <option value="E">E</option>
+            <option value="F">F</option>
+            <option value="G">G</option>
+          </select>
+        </div>
+        <div>
+          <label htmlFor="gesClass" className="block text-sm font-medium text-gray-700">
+            GES Class
+          </label>
+          <select
+            id="gesClass"
+            name="gesClass"
+            value={formData.gesClass}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+          >
+            <option value="">Select GES Class</option>
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="C">C</option>
+            <option value="D">D</option>
+            <option value="E">E</option>
+            <option value="F">F</option>
+            <option value="G">G</option>
+          </select>
+        </div>
+        <div>
+          <label htmlFor="heatingType" className="block text-sm font-medium text-gray-700">
+            Heating Type
+          </label>
+          <input
+            type="text"
+            id="heatingType"
+            name="heatingType"
+            value={formData.heatingType}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+          />
+        </div>
+        <div>
+          <label htmlFor="requiredIncome" className="block text-sm font-medium text-gray-700">
+            Required Income (€)
+          </label>
+          <input
+            type="number"
+            id="requiredIncome"
+            name="requiredIncome"
+            value={formData.requiredIncome}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+          />
+        </div>
+        <div>
+          <label htmlFor="professionalSituation" className="block text-sm font-medium text-gray-700">
+            Professional Situation
+          </label>
+          <input
+            type="text"
+            id="professionalSituation"
+            name="professionalSituation"
+            value={formData.professionalSituation}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+          />
+        </div>
+        <div className="flex items-center">
+          <input
+            type="checkbox"
+            id="guarantorRequired"
+            name="guarantorRequired"
+            checked={formData.guarantorRequired}
+            onChange={handleChange}
+            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+          />
+          <label htmlFor="guarantorRequired" className="ml-2 block text-sm text-gray-900">
+            Guarantor Required
+          </label>
+        </div>
+        <div>
+          <label htmlFor="leaseDuration" className="block text-sm font-medium text-gray-700">
+            Lease Duration (months)
+          </label>
+          <input
+            type="number"
+            id="leaseDuration"
+            name="leaseDuration"
+            value={formData.leaseDuration}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+          />
+        </div>
+        <div>
+          <label htmlFor="moveInDate" className="block text-sm font-medium text-gray-700">
+            Move-in Date
+          </label>
+          <input
+            type="date"
+            id="moveInDate"
+            name="moveInDate"
+            value={formData.moveInDate}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+          />
+        </div>
+        <div>
+          <label htmlFor="rentPaymentDay" className="block text-sm font-medium text-gray-700">
+            Rent Payment Day
+          </label>
+          <input
+            type="number"
+            id="rentPaymentDay"
+            name="rentPaymentDay"
+            value={formData.rentPaymentDay}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+          />
+        </div>
+        <div className="flex items-center">
+          <input
+            type="checkbox"
+            id="hideExactAddress"
+            name="hideExactAddress"
+            checked={formData.hideExactAddress}
+            onChange={handleChange}
+            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+          />
+          <label htmlFor="hideExactAddress" className="ml-2 block text-sm text-gray-900">
+            Hide Exact Address
+          </label>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Créer une nouvelle annonce</CardTitle>
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm text-gray-600">
-              <span>Étape {currentStep} sur 6</span>
-              <span>{Math.round(progress)}% complété</span>
-            </div>
-            <Progress value={progress} className="w-full" />
-          </div>
-        </CardHeader>
-        <CardContent>
-          {renderStep()}
-
-          <div className="flex justify-between mt-8">
-            <Button type="button" variant="outline" onClick={prevStep} disabled={currentStep === 1}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Précédent
-            </Button>
-
-            {currentStep < 6 ? (
-              <Button type="button" onClick={nextStep}>
-                Suivant
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
-            ) : (
-              <Button type="button" onClick={handleSubmit} disabled={isLoading}>
-                {isLoading ? "Création en cours..." : "Créer l'annonce"}
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+        <div>
+          <button
+            type="submit"
+            className="inline-flex items-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            disabled={loading}
+          >
+            {loading ? "Creating..." : "Create Property"}
+          </button>
+        </div>
+      </form>
     </div>
   )
 }
