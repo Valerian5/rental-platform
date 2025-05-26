@@ -5,8 +5,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Calendar, Clock, Users, Plus, X } from "lucide-react"
-import { propertyService } from "@/lib/property-service"
-import { toast } from "sonner"
 
 interface VisitSlot {
   id?: string
@@ -32,29 +30,60 @@ export function VisitSlotSelector({ propertyId, applicationId, onSlotsSelected, 
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    loadAvailableSlots()
+    // Données simulées pour les créneaux de visite
+    const mockSlots: VisitSlot[] = [
+      {
+        id: "1",
+        date: "2024-01-15",
+        start_time: "10:00",
+        end_time: "10:30",
+        max_capacity: 1,
+        is_group_visit: false,
+        current_bookings: 0,
+        is_available: true,
+      },
+      {
+        id: "2",
+        date: "2024-01-15",
+        start_time: "14:00",
+        end_time: "14:30",
+        max_capacity: 1,
+        is_group_visit: false,
+        current_bookings: 0,
+        is_available: true,
+      },
+      {
+        id: "3",
+        date: "2024-01-16",
+        start_time: "09:00",
+        end_time: "09:30",
+        max_capacity: 3,
+        is_group_visit: true,
+        current_bookings: 1,
+        is_available: true,
+      },
+      {
+        id: "4",
+        date: "2024-01-16",
+        start_time: "16:00",
+        end_time: "16:30",
+        max_capacity: 1,
+        is_group_visit: false,
+        current_bookings: 0,
+        is_available: true,
+      },
+    ]
+
+    // Filtrer les créneaux futurs et disponibles
+    const now = new Date()
+    const futureSlots = mockSlots.filter((slot) => {
+      const slotDateTime = new Date(`${slot.date}T${slot.start_time}`)
+      return slotDateTime > now && slot.current_bookings < slot.max_capacity
+    })
+
+    setAvailableSlots(futureSlots)
+    setIsLoading(false)
   }, [propertyId])
-
-  const loadAvailableSlots = async () => {
-    try {
-      setIsLoading(true)
-      const slots = await propertyService.getPropertyVisitAvailabilities(propertyId)
-
-      // Filtrer les créneaux futurs et disponibles
-      const now = new Date()
-      const futureSlots = slots.filter((slot) => {
-        const slotDateTime = new Date(`${slot.date}T${slot.start_time}`)
-        return slotDateTime > now && slot.current_bookings < slot.max_capacity
-      })
-
-      setAvailableSlots(futureSlots)
-    } catch (error) {
-      console.error("Erreur lors du chargement des créneaux:", error)
-      toast.error("Erreur lors du chargement des créneaux")
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   const toggleSlotSelection = (slotId: string) => {
     const newSelected = new Set(selectedSlots)
@@ -117,6 +146,19 @@ export function VisitSlotSelector({ propertyId, applicationId, onSlotsSelected, 
         </CardTitle>
       </CardHeader>
       <CardContent>
+        <div className="bg-blue-50 p-4 rounded-lg mb-6">
+          <div className="flex items-start gap-3">
+            <Calendar className="h-5 w-5 text-blue-600 mt-0.5" />
+            <div>
+              <h4 className="font-medium text-blue-800">Créneaux de visite</h4>
+              <p className="text-sm text-blue-700">
+                Sélectionnez les créneaux que vous souhaitez proposer au candidat. Il pourra ensuite choisir celui qui
+                lui convient le mieux parmi vos propositions.
+              </p>
+            </div>
+          </div>
+        </div>
+
         {Object.keys(slotsByDate).length === 0 ? (
           <div className="text-center py-8">
             <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />

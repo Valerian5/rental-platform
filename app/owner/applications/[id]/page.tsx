@@ -23,7 +23,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
 import {
   Dialog,
   DialogContent,
@@ -34,6 +33,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { VisitSlotSelector } from "@/components/visit-slot-selector"
 
 // Données simulées pour une candidature
 const application = {
@@ -100,6 +100,7 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
   const [refusalDialogOpen, setRefusalDialogOpen] = useState(false)
   const [refusalReason, setRefusalReason] = useState("")
   const [refusalMessage, setRefusalMessage] = useState("")
+  const [showVisitSelector, setShowVisitSelector] = useState(false)
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
@@ -137,9 +138,25 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
   }
 
   const handleScheduleVisit = () => {
-    // Logique pour programmer une visite
-    setVisitDialogOpen(false)
-    alert("Visite programmée")
+    setShowVisitSelector(true)
+  }
+
+  const handleSlotsSelected = async (selectedSlots) => {
+    try {
+      // Ici on pourrait envoyer les créneaux proposés au candidat
+      // Pour l'instant, on met juste à jour le statut
+      // await propertyService.updateApplicationStatus(application.id, "visit_scheduled")
+      setShowVisitSelector(false)
+      alert(`${selectedSlots.length} créneau(x) proposé(s) au candidat`)
+      // Recharger la page ou mettre à jour les données
+      // window.location.reload()
+    } catch (error) {
+      alert("Erreur lors de la proposition de visite")
+    }
+  }
+
+  const handleCancelVisitSelection = () => {
+    setShowVisitSelector(false)
   }
 
   const handleRefuseApplication = () => {
@@ -173,6 +190,16 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
           {application.status}
         </Badge>
       </div>
+      {showVisitSelector && (
+        <div className="mb-6">
+          <VisitSlotSelector
+            propertyId={application.property.id.toString()}
+            applicationId={application.id.toString()}
+            onSlotsSelected={handleSlotsSelected}
+            onCancel={handleCancelVisitSelection}
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Sidebar */}
@@ -246,58 +273,9 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
             <CardContent className="space-y-3">
               {application.status === "En cours d'analyse" && (
                 <>
-                  <Dialog open={visitDialogOpen} onOpenChange={setVisitDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="w-full">Proposer une visite</Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Programmer une visite</DialogTitle>
-                        <DialogDescription>
-                          Proposez une date et une heure pour visiter le bien avec {application.tenant.name}
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="grid gap-4 py-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="visit-date">Date</Label>
-                            <Input
-                              id="visit-date"
-                              type="date"
-                              value={visitDate}
-                              onChange={(e) => setVisitDate(e.target.value)}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="visit-time">Heure</Label>
-                            <Input
-                              id="visit-time"
-                              type="time"
-                              value={visitTime}
-                              onChange={(e) => setVisitTime(e.target.value)}
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="visit-notes">Instructions (optionnel)</Label>
-                          <Textarea
-                            id="visit-notes"
-                            placeholder="Informations complémentaires pour la visite..."
-                            value={visitNotes}
-                            onChange={(e) => setVisitNotes(e.target.value)}
-                          />
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setVisitDialogOpen(false)}>
-                          Annuler
-                        </Button>
-                        <Button onClick={handleScheduleVisit} disabled={!visitDate || !visitTime}>
-                          Programmer la visite
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
+                  <Button className="w-full" onClick={handleScheduleVisit}>
+                    Proposer une visite
+                  </Button>
 
                   <Dialog open={refusalDialogOpen} onOpenChange={setRefusalDialogOpen}>
                     <DialogTrigger asChild>
