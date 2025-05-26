@@ -24,7 +24,7 @@ interface CalendarSchedulerProps {
   onDateClick?: (date: Date) => void
 }
 
-export function CalendarScheduler({ events = [], onEventClick, onDateClick }: CalendarSchedulerProps) {
+export default function CalendarScheduler({ events = [], onEventClick, onDateClick }: CalendarSchedulerProps) {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [view, setView] = useState<"week" | "month">("week")
 
