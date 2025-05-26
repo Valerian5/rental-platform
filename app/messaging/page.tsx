@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,77 +9,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Search, Send, Paperclip, ImageIcon, Home, MoreHorizontal, MessageSquare } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { messageService } from "@/lib/message-service"
 
 // Données simulées
-const conversations = [
-  {
-    id: 1,
-    contact: {
-      id: 101,
-      name: "Jean Dupont",
-      avatar: "/placeholder.svg?height=40&width=40&text=JD",
-      status: "online",
-      lastSeen: new Date(),
-      role: "Propriétaire",
-    },
-    property: {
-      id: 1,
-      title: "Appartement moderne au centre-ville",
-    },
-    lastMessage: {
-      content: "Bonjour, je voulais savoir si la visite de demain est toujours d'actualité ?",
-      timestamp: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
-      isRead: false,
-      sender: "them",
-    },
-    unreadCount: 1,
-  },
-  {
-    id: 2,
-    contact: {
-      id: 102,
-      name: "Marie Leroy",
-      avatar: "/placeholder.svg?height=40&width=40&text=ML",
-      status: "offline",
-      lastSeen: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
-      role: "Propriétaire",
-    },
-    property: {
-      id: 2,
-      title: "Studio étudiant rénové",
-    },
-    lastMessage: {
-      content: "Merci pour les informations. Je vous confirme que votre dossier a été accepté.",
-      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
-      isRead: true,
-      sender: "them",
-    },
-    unreadCount: 0,
-  },
-  {
-    id: 3,
-    contact: {
-      id: 103,
-      name: "Sophie Martin",
-      avatar: "/placeholder.svg?height=40&width=40&text=SM",
-      status: "offline",
-      lastSeen: new Date(Date.now() - 1000 * 60 * 60 * 5), // 5 hours ago
-      role: "Locataire",
-    },
-    property: {
-      id: 3,
-      title: "Maison familiale avec jardin",
-    },
-    lastMessage: {
-      content: "J'ai bien reçu votre quittance de loyer, merci beaucoup.",
-      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48), // 2 days ago
-      isRead: true,
-      sender: "them",
-    },
-    unreadCount: 0,
-  },
-]
-
 const messages = [
   {
     id: 1,
@@ -120,8 +52,32 @@ const messages = [
 ]
 
 export default function MessagingPage() {
+  const [conversations, setConversations] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [currentUser, setCurrentUser] = useState(null)
   const [activeConversation, setActiveConversation] = useState(conversations[0])
   const [messageInput, setMessageInput] = useState("")
+
+  useEffect(() => {
+    const loadConversations = async () => {
+      try {
+        // Récupérer l'utilisateur actuel depuis le localStorage ou context
+        const user = JSON.parse(localStorage.getItem("user") || "{}")
+        setCurrentUser(user)
+
+        if (user.id) {
+          const userConversations = await messageService.getUserConversations(user.id)
+          setConversations(userConversations)
+        }
+      } catch (error) {
+        console.error("Erreur chargement conversations:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadConversations()
+  }, [])
 
   const formatTime = (date: Date) => {
     const now = new Date()
@@ -137,10 +93,23 @@ export default function MessagingPage() {
     }
   }
 
-  const handleSendMessage = () => {
-    if (messageInput.trim() === "") return
-    // Logique pour envoyer le message
-    setMessageInput("")
+  const handleSendMessage = async () => {
+    if (messageInput.trim() === "" || !currentUser || !activeConversation) return
+
+    try {
+      await messageService.sendMessage({
+        conversation_id: activeConversation.id,
+        sender_id: currentUser.id,
+        content: messageInput.trim(),
+      })
+
+      setMessageInput("")
+      // Recharger les conversations pour voir le nouveau message
+      const userConversations = await messageService.getUserConversations(currentUser.id)
+      setConversations(userConversations)
+    } catch (error) {
+      console.error("Erreur envoi message:", error)
+    }
   }
 
   return (

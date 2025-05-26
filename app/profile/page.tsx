@@ -1,205 +1,149 @@
-import { User, Mail, Phone, Home, FileText, CreditCard, Settings, Bell, LogOut } from "lucide-react"
+"use client"
+
+import { useState } from "react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { Switch } from "@/components/ui/switch"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-
-// Exemple de données utilisateur
-const user = {
-  name: "Jean Dupont",
-  email: "jean.dupont@example.com",
-  phone: "06 12 34 56 78",
-  address: "123 Rue Principale, 75001 Paris",
-  role: "Propriétaire",
-  avatar: "/placeholder.svg?height=100&width=100&text=JD",
-  joinDate: "2022-01-15",
-}
-
-// Exemple de données de propriétés
-const properties = [
-  {
-    id: 1,
-    title: "Appartement moderne au centre-ville",
-    address: "123 Rue Principale, Paris",
-    status: "Loué",
-    tenant: "Sophie Martin",
-    rentAmount: 1200,
-  },
-  {
-    id: 2,
-    title: "Studio étudiant rénové",
-    address: "78 Rue des Étudiants, Bordeaux",
-    status: "Disponible",
-    tenant: null,
-    rentAmount: 550,
-  },
-]
-
-// Exemple de données de contrats
-const contracts = [
-  {
-    id: 1,
-    property: "Appartement moderne au centre-ville",
-    tenant: "Sophie Martin",
-    startDate: "2023-01-15",
-    endDate: "2024-01-14",
-    status: "Actif",
-  },
-]
-
-// Exemple de données de paiements
-const payments = [
-  {
-    id: 1,
-    property: "Appartement moderne au centre-ville",
-    date: "2023-05-03",
-    amount: 1200,
-    status: "Payé",
-  },
-  {
-    id: 2,
-    property: "Appartement moderne au centre-ville",
-    date: "2023-04-05",
-    amount: 1200,
-    status: "Payé",
-  },
-]
+import { Separator } from "@/components/ui/separator"
+import { MapPin, Calendar, Shield, CreditCard, Upload, Eye, EyeOff, Save, Trash2 } from "lucide-react"
 
 export default function ProfilePage() {
+  const [showPassword, setShowPassword] = useState(false)
+  const [notifications, setNotifications] = useState({
+    email: true,
+    sms: false,
+    push: true,
+    marketing: false,
+  })
+
+  // Données utilisateur simulées
+  const user = {
+    id: 1,
+    firstName: "Jean",
+    lastName: "Dupont",
+    email: "jean.dupont@example.com",
+    phone: "06 12 34 56 78",
+    address: "45 Avenue des Lilas, 75011 Paris",
+    birthDate: "1991-05-15",
+    userType: "tenant",
+    avatar: "/placeholder.svg?height=100&width=100&text=JD",
+    joinDate: "2023-06-15",
+    verified: true,
+  }
+
   return (
     <div className="container mx-auto py-6">
-      <div className="flex flex-col md:flex-row gap-8">
-        {/* Sidebar */}
-        <div className="w-full md:w-1/4">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Mon profil</h1>
+        <Button>
+          <Save className="h-4 w-4 mr-2" />
+          Sauvegarder
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Sidebar avec informations de base */}
+        <div className="lg:col-span-1">
           <Card>
-            <CardHeader className="text-center">
-              <Avatar className="h-24 w-24 mx-auto mb-4">
-                <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.name} />
-                <AvatarFallback>
-                  {user.name
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")}
-                </AvatarFallback>
-              </Avatar>
-              <CardTitle>{user.name}</CardTitle>
-              <CardDescription>
-                <Badge>{user.role}</Badge>
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex items-center">
-                  <Mail className="h-4 w-4 mr-2 text-muted-foreground" />
-                  <span className="text-sm">{user.email}</span>
+            <CardContent className="p-6">
+              <div className="flex flex-col items-center text-center">
+                <Avatar className="h-24 w-24 mb-4">
+                  <AvatarImage src={user.avatar || "/placeholder.svg"} alt={`${user.firstName} ${user.lastName}`} />
+                  <AvatarFallback className="text-lg">
+                    {user.firstName[0]}
+                    {user.lastName[0]}
+                  </AvatarFallback>
+                </Avatar>
+
+                <h2 className="text-xl font-bold">
+                  {user.firstName} {user.lastName}
+                </h2>
+                <p className="text-muted-foreground mb-2">{user.email}</p>
+
+                <div className="flex items-center gap-2 mb-4">
+                  <Badge variant={user.userType === "owner" ? "default" : "secondary"}>
+                    {user.userType === "owner" ? "Propriétaire" : "Locataire"}
+                  </Badge>
+                  {user.verified && (
+                    <Badge variant="outline" className="text-green-600 border-green-200">
+                      <Shield className="h-3 w-3 mr-1" />
+                      Vérifié
+                    </Badge>
+                  )}
                 </div>
-                <div className="flex items-center">
-                  <Phone className="h-4 w-4 mr-2 text-muted-foreground" />
-                  <span className="text-sm">{user.phone}</span>
-                </div>
-                <div className="flex items-center">
-                  <Home className="h-4 w-4 mr-2 text-muted-foreground" />
-                  <span className="text-sm">{user.address}</span>
+
+                <Button variant="outline" className="w-full mb-4">
+                  <Upload className="h-4 w-4 mr-2" />
+                  Changer la photo
+                </Button>
+
+                <div className="w-full text-left space-y-2">
+                  <div className="flex items-center text-sm text-muted-foreground">
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Membre depuis {new Date(user.joinDate).toLocaleDateString("fr-FR")}
+                  </div>
+                  <div className="flex items-center text-sm text-muted-foreground">
+                    <MapPin className="h-4 w-4 mr-2" />
+                    Paris, France
+                  </div>
                 </div>
               </div>
             </CardContent>
-            <CardFooter>
-              <Button variant="outline" className="w-full">
-                Modifier le profil
-              </Button>
-            </CardFooter>
           </Card>
-
-          <div className="mt-6 space-y-2">
-            <Button variant="ghost" className="w-full justify-start">
-              <User className="h-4 w-4 mr-2" />
-              Mon profil
-            </Button>
-            <Button variant="ghost" className="w-full justify-start">
-              <Home className="h-4 w-4 mr-2" />
-              Mes biens
-            </Button>
-            <Button variant="ghost" className="w-full justify-start">
-              <FileText className="h-4 w-4 mr-2" />
-              Mes contrats
-            </Button>
-            <Button variant="ghost" className="w-full justify-start">
-              <CreditCard className="h-4 w-4 mr-2" />
-              Mes paiements
-            </Button>
-            <Button variant="ghost" className="w-full justify-start">
-              <Bell className="h-4 w-4 mr-2" />
-              Notifications
-            </Button>
-            <Button variant="ghost" className="w-full justify-start">
-              <Settings className="h-4 w-4 mr-2" />
-              Paramètres
-            </Button>
-            <Button variant="ghost" className="w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-50">
-              <LogOut className="h-4 w-4 mr-2" />
-              Déconnexion
-            </Button>
-          </div>
         </div>
 
-        {/* Main Content */}
-        <div className="flex-1">
-          <Tabs defaultValue="profile">
-            <TabsList className="mb-6">
-              <TabsTrigger value="profile">Profil</TabsTrigger>
-              <TabsTrigger value="properties">Mes biens</TabsTrigger>
-              <TabsTrigger value="contracts">Contrats</TabsTrigger>
-              <TabsTrigger value="payments">Paiements</TabsTrigger>
-              <TabsTrigger value="settings">Paramètres</TabsTrigger>
+        {/* Contenu principal */}
+        <div className="lg:col-span-2">
+          <Tabs defaultValue="personal" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="personal">Personnel</TabsTrigger>
+              <TabsTrigger value="security">Sécurité</TabsTrigger>
+              <TabsTrigger value="notifications">Notifications</TabsTrigger>
+              <TabsTrigger value="billing">Facturation</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="profile">
+            <TabsContent value="personal">
               <Card>
                 <CardHeader>
                   <CardTitle>Informations personnelles</CardTitle>
-                  <CardDescription>Mettez à jour vos informations personnelles</CardDescription>
+                  <CardDescription>Gérez vos informations personnelles et de contact</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="name">Nom complet</Label>
-                      <Input id="name" defaultValue={user.name} />
+                      <Label htmlFor="firstName">Prénom</Label>
+                      <Input id="firstName" defaultValue={user.firstName} />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="email">Email</Label>
-                      <Input id="email" type="email" defaultValue={user.email} />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="phone">Téléphone</Label>
-                      <Input id="phone" defaultValue={user.phone} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="role">Rôle</Label>
-                      <Select defaultValue={user.role.toLowerCase()}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionnez un rôle" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="proprietaire">Propriétaire</SelectItem>
-                          <SelectItem value="locataire">Locataire</SelectItem>
-                          <SelectItem value="les-deux">Les deux</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Label htmlFor="lastName">Nom</Label>
+                      <Input id="lastName" defaultValue={user.lastName} />
                     </div>
                   </div>
 
                   <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input id="email" type="email" defaultValue={user.email} />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Téléphone</Label>
+                    <Input id="phone" type="tel" defaultValue={user.phone} />
+                  </div>
+
+                  <div className="space-y-2">
                     <Label htmlFor="address">Adresse</Label>
-                    <Input id="address" defaultValue={user.address} />
+                    <Textarea id="address" defaultValue={user.address} />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="birthDate">Date de naissance</Label>
+                    <Input id="birthDate" type="date" defaultValue={user.birthDate} />
                   </div>
 
                   <div className="space-y-2">
@@ -207,229 +151,222 @@ export default function ProfilePage() {
                     <Textarea id="bio" placeholder="Parlez-nous de vous..." rows={4} />
                   </div>
                 </CardContent>
-                <CardFooter className="flex justify-end">
-                  <Button>Enregistrer les modifications</Button>
-                </CardFooter>
               </Card>
             </TabsContent>
 
-            <TabsContent value="properties">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold">Mes biens immobiliers</h2>
-                <Button>Ajouter un bien</Button>
-              </div>
-
-              {properties.length > 0 ? (
-                <div className="space-y-4">
-                  {properties.map((property) => (
-                    <Card key={property.id}>
-                      <CardContent className="p-6">
-                        <div className="flex flex-col md:flex-row justify-between">
-                          <div>
-                            <h3 className="font-semibold text-lg">{property.title}</h3>
-                            <p className="text-sm text-muted-foreground">{property.address}</p>
-                            <div className="flex items-center mt-2">
-                              <Badge variant={property.status === "Disponible" ? "default" : "secondary"}>
-                                {property.status}
-                              </Badge>
-                            </div>
-                          </div>
-                          <div className="mt-4 md:mt-0 md:text-right">
-                            <p className="text-sm text-muted-foreground">Loyer mensuel</p>
-                            <p className="font-bold">{property.rentAmount} €</p>
-                            {property.tenant && (
-                              <p className="text-sm mt-2">
-                                <span className="text-muted-foreground">Locataire :</span> {property.tenant}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex justify-end mt-4">
-                          <Button variant="outline" size="sm">
-                            Gérer
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
+            <TabsContent value="security">
+              <div className="space-y-6">
                 <Card>
-                  <CardContent className="p-6 text-center">
-                    <Home className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                    <h3 className="font-semibold text-lg mb-2">Aucun bien immobilier</h3>
-                    <p className="text-muted-foreground mb-4">Vous n'avez pas encore ajouté de bien immobilier.</p>
-                    <Button>Ajouter un bien</Button>
+                  <CardHeader>
+                    <CardTitle>Mot de passe</CardTitle>
+                    <CardDescription>Modifiez votre mot de passe pour sécuriser votre compte</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="currentPassword">Mot de passe actuel</Label>
+                      <div className="relative">
+                        <Input
+                          id="currentPassword"
+                          type={showPassword ? "text" : "password"}
+                          placeholder="Entrez votre mot de passe actuel"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-2 top-1/2 -translate-y-1/2"
+                          onClick={() => setShowPassword(!showPassword)}
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="newPassword">Nouveau mot de passe</Label>
+                      <Input id="newPassword" type="password" placeholder="Entrez votre nouveau mot de passe" />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="confirmPassword">Confirmer le mot de passe</Label>
+                      <Input id="confirmPassword" type="password" placeholder="Confirmez votre nouveau mot de passe" />
+                    </div>
+
+                    <Button>Mettre à jour le mot de passe</Button>
                   </CardContent>
                 </Card>
-              )}
-            </TabsContent>
 
-            <TabsContent value="contracts">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold">Mes contrats</h2>
-                <Button>Nouveau contrat</Button>
-              </div>
-
-              {contracts.length > 0 ? (
-                <div className="space-y-4">
-                  {contracts.map((contract) => (
-                    <Card key={contract.id}>
-                      <CardContent className="p-6">
-                        <div className="flex flex-col md:flex-row justify-between">
-                          <div>
-                            <h3 className="font-semibold text-lg">{contract.property}</h3>
-                            <p className="text-sm">
-                              <span className="text-muted-foreground">Locataire :</span> {contract.tenant}
-                            </p>
-                          </div>
-                          <div className="mt-4 md:mt-0 md:text-right">
-                            <Badge variant={contract.status === "Actif" ? "default" : "secondary"}>
-                              {contract.status}
-                            </Badge>
-                            <p className="text-sm mt-2">
-                              <span className="text-muted-foreground">Période :</span>{" "}
-                              {new Date(contract.startDate).toLocaleDateString("fr-FR")} -{" "}
-                              {new Date(contract.endDate).toLocaleDateString("fr-FR")}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex justify-end mt-4">
-                          <Button variant="outline" size="sm" className="mr-2">
-                            Voir
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            Télécharger
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
                 <Card>
-                  <CardContent className="p-6 text-center">
-                    <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                    <h3 className="font-semibold text-lg mb-2">Aucun contrat</h3>
-                    <p className="text-muted-foreground mb-4">Vous n'avez pas encore de contrats actifs.</p>
-                    <Button>Créer un contrat</Button>
+                  <CardHeader>
+                    <CardTitle>Authentification à deux facteurs</CardTitle>
+                    <CardDescription>Ajoutez une couche de sécurité supplémentaire à votre compte</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">Authentification par SMS</p>
+                        <p className="text-sm text-muted-foreground">Recevez un code par SMS lors de la connexion</p>
+                      </div>
+                      <Switch />
+                    </div>
                   </CardContent>
                 </Card>
-              )}
-            </TabsContent>
 
-            <TabsContent value="payments">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold">Mes paiements</h2>
-                <Select defaultValue="current">
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Période" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="current">Mois en cours</SelectItem>
-                    <SelectItem value="last">Mois précédent</SelectItem>
-                    <SelectItem value="all">Tous</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {payments.length > 0 ? (
-                <div className="space-y-4">
-                  {payments.map((payment) => (
-                    <Card key={payment.id}>
-                      <CardContent className="p-6">
-                        <div className="flex flex-col md:flex-row justify-between">
-                          <div>
-                            <h3 className="font-semibold text-lg">{payment.property}</h3>
-                            <p className="text-sm text-muted-foreground">
-                              Payé le {new Date(payment.date).toLocaleDateString("fr-FR")}
-                            </p>
-                          </div>
-                          <div className="mt-4 md:mt-0 md:text-right">
-                            <p className="font-bold">{payment.amount} €</p>
-                            <Badge variant={payment.status === "Payé" ? "success" : "destructive"} className="mt-2">
-                              {payment.status}
-                            </Badge>
-                          </div>
-                        </div>
-                        <div className="flex justify-end mt-4">
-                          <Button variant="outline" size="sm">
-                            Reçu
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
                 <Card>
-                  <CardContent className="p-6 text-center">
-                    <CreditCard className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                    <h3 className="font-semibold text-lg mb-2">Aucun paiement</h3>
-                    <p className="text-muted-foreground">Vous n'avez pas encore de paiements enregistrés.</p>
+                  <CardHeader>
+                    <CardTitle>Sessions actives</CardTitle>
+                    <CardDescription>Gérez vos sessions de connexion actives</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between p-3 border rounded-lg">
+                        <div>
+                          <p className="font-medium">Session actuelle</p>
+                          <p className="text-sm text-muted-foreground">Chrome sur Windows • Paris, France</p>
+                        </div>
+                        <Badge variant="outline">Actuelle</Badge>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 border rounded-lg">
+                        <div>
+                          <p className="font-medium">iPhone</p>
+                          <p className="text-sm text-muted-foreground">Safari sur iOS • Il y a 2 jours</p>
+                        </div>
+                        <Button variant="outline" size="sm">
+                          Déconnecter
+                        </Button>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
-              )}
+              </div>
             </TabsContent>
 
-            <TabsContent value="settings">
+            <TabsContent value="notifications">
               <Card>
                 <CardHeader>
-                  <CardTitle>Paramètres du compte</CardTitle>
-                  <CardDescription>Gérez les paramètres de votre compte</CardDescription>
+                  <CardTitle>Préférences de notification</CardTitle>
+                  <CardDescription>Choisissez comment vous souhaitez être notifié</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="space-y-4">
-                    <h3 className="font-medium">Notifications</h3>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor="email-notif">Notifications par email</Label>
-                        <Switch id="email-notif" defaultChecked />
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">Notifications par email</p>
+                        <p className="text-sm text-muted-foreground">Recevez des notifications importantes par email</p>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor="payment-notif">Alertes de paiement</Label>
-                        <Switch id="payment-notif" defaultChecked />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor="contract-notif">Alertes de contrat</Label>
-                        <Switch id="contract-notif" defaultChecked />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor="marketing-notif">Communications marketing</Label>
-                        <Switch id="marketing-notif" />
-                      </div>
+                      <Switch
+                        checked={notifications.email}
+                        onCheckedChange={(checked) => setNotifications((prev) => ({ ...prev, email: checked }))}
+                      />
                     </div>
-                  </div>
 
-                  <div className="space-y-4">
-                    <h3 className="font-medium">Sécurité</h3>
-                    <div className="space-y-2">
-                      <Button variant="outline" className="w-full justify-start">
-                        Changer le mot de passe
-                      </Button>
-                      <Button variant="outline" className="w-full justify-start">
-                        Activer l'authentification à deux facteurs
-                      </Button>
+                    <Separator />
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">Notifications SMS</p>
+                        <p className="text-sm text-muted-foreground">Recevez des alertes urgentes par SMS</p>
+                      </div>
+                      <Switch
+                        checked={notifications.sms}
+                        onCheckedChange={(checked) => setNotifications((prev) => ({ ...prev, sms: checked }))}
+                      />
                     </div>
-                  </div>
 
-                  <div className="space-y-4">
-                    <h3 className="font-medium">Préférences de paiement</h3>
-                    <div className="space-y-2">
-                      <Button variant="outline" className="w-full justify-start">
-                        Gérer les méthodes de paiement
-                      </Button>
-                      <Button variant="outline" className="w-full justify-start">
-                        Historique des factures
-                      </Button>
+                    <Separator />
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">Notifications push</p>
+                        <p className="text-sm text-muted-foreground">Recevez des notifications dans votre navigateur</p>
+                      </div>
+                      <Switch
+                        checked={notifications.push}
+                        onCheckedChange={(checked) => setNotifications((prev) => ({ ...prev, push: checked }))}
+                      />
                     </div>
-                  </div>
 
-                  <div className="pt-4 border-t">
-                    <Button variant="destructive">Supprimer mon compte</Button>
+                    <Separator />
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">Emails marketing</p>
+                        <p className="text-sm text-muted-foreground">Recevez nos offres et actualités</p>
+                      </div>
+                      <Switch
+                        checked={notifications.marketing}
+                        onCheckedChange={(checked) => setNotifications((prev) => ({ ...prev, marketing: checked }))}
+                      />
+                    </div>
                   </div>
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            <TabsContent value="billing">
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Informations de facturation</CardTitle>
+                    <CardDescription>Gérez vos moyens de paiement et factures</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex items-center">
+                        <CreditCard className="h-8 w-8 text-blue-500 mr-3" />
+                        <div>
+                          <p className="font-medium">•••• •••• •••• 1234</p>
+                          <p className="text-sm text-muted-foreground">Expire 12/26</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm">
+                          Modifier
+                        </Button>
+                        <Button variant="outline" size="sm">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    <Button variant="outline" className="w-full">
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      Ajouter un moyen de paiement
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Historique des factures</CardTitle>
+                    <CardDescription>Consultez et téléchargez vos factures</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between p-3 border rounded-lg">
+                        <div>
+                          <p className="font-medium">Facture #2024-001</p>
+                          <p className="text-sm text-muted-foreground">Janvier 2024 • 29,99 €</p>
+                        </div>
+                        <Button variant="outline" size="sm">
+                          Télécharger
+                        </Button>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 border rounded-lg">
+                        <div>
+                          <p className="font-medium">Facture #2023-012</p>
+                          <p className="text-sm text-muted-foreground">Décembre 2023 • 29,99 €</p>
+                        </div>
+                        <Button variant="outline" size="sm">
+                          Télécharger
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
           </Tabs>
         </div>
