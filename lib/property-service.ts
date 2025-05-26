@@ -180,6 +180,26 @@ export const propertyService = {
 
       console.log("✅ Propriété récupérée:", data)
       console.log("📸 Images de la propriété:", data.property_images)
+
+      // Vérifier et nettoyer les URLs d'images
+      if (data.property_images) {
+        console.log("🔍 Vérification des images...")
+        data.property_images = data.property_images.map((image: any) => {
+          console.log("📸 Image URL:", image.url)
+
+          // Vérifier si l'URL est valide
+          if (!image.url || !image.url.startsWith("http")) {
+            console.warn("⚠️ URL d'image invalide:", image.url)
+            return {
+              ...image,
+              url: `/placeholder.svg?height=400&width=600&text=Image+non+disponible`,
+            }
+          }
+
+          return image
+        })
+      }
+
       return data
     } catch (error) {
       console.error("❌ Erreur dans getPropertyById:", error)

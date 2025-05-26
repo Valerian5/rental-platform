@@ -25,11 +25,27 @@ export const imageService = {
 
       console.log("✅ Fichier uploadé:", data)
 
-      // Obtenir l'URL publique
-      const { data: urlData } = supabase.storage.from("property-images").getPublicUrl(fileName)
+      // Obtenir l'URL publique avec la bonne configuration
+      const { data: urlData } = supabase.storage.from("property-images").getPublicUrl(fileName, {
+        transform: {
+          width: 800,
+          height: 600,
+          resize: "contain",
+        },
+      })
 
       const publicUrl = urlData.publicUrl
       console.log("🔗 URL publique générée:", publicUrl)
+
+      // Vérifier que l'URL est accessible
+      try {
+        const response = await fetch(publicUrl, { method: "HEAD" })
+        if (!response.ok) {
+          console.warn("⚠️ URL non accessible immédiatement:", response.status)
+        }
+      } catch (error) {
+        console.warn("⚠️ Erreur lors de la vérification de l'URL:", error)
+      }
 
       return publicUrl
     } catch (error) {
