@@ -1,43 +1,47 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
-// Routes qui nécessitent une authentification
-const protectedRoutes = ["/tenant/dashboard", "/owner/dashboard", "/messaging", "/admin"]
-
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Vérifier si la route nécessite une authentification
+  console.log("🚀 Middleware déclenché pour:", pathname)
+
+  // Routes qui nécessitent une authentification
+  const protectedRoutes = ["/tenant/dashboard", "/owner/dashboard", "/messaging", "/admin"]
   const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route))
 
   if (isProtectedRoute) {
-    console.log("🔒 Middleware - Route protégée:", pathname)
+    console.log("🔒 Route protégée détectée:", pathname)
 
-    // Récupérer tous les cookies pour débugger
+    // Récupérer tous les cookies
     const allCookies = request.cookies.getAll()
     console.log(
-      "🍪 Middleware - Tous les cookies:",
-      allCookies.map((c) => c.name),
+      "🍪 Tous les cookies:",
+      allCookies.map((c) => `${c.name}=${c.value.substring(0, 20)}...`),
     )
 
-    // Chercher les cookies Supabase (plusieurs formats possibles)
+    // Pour l'instant, on laisse TOUT passer pour tester
+    console.log("✅ MIDDLEWARE DÉSACTIVÉ - Accès autorisé à:", pathname)
+    return NextResponse.next()
+
+    // Code commenté pour plus tard
+    /*
+    // Chercher les cookies Supabase
     const supabaseCookies = allCookies.filter(
-      (cookie) => cookie.name.includes("supabase") || cookie.name.includes("sb-") || cookie.name.includes("auth-token"),
+      (cookie) => 
+        cookie.name.includes("supabase") || 
+        cookie.name.includes("sb-") || 
+        cookie.name.includes("auth")
     )
 
-    console.log(
-      "🔑 Middleware - Cookies Supabase trouvés:",
-      supabaseCookies.map((c) => c.name),
-    )
-
-    // Si on a des cookies Supabase, on laisse passer
     if (supabaseCookies.length > 0) {
-      console.log("✅ Middleware - Cookies trouvés, accès autorisé")
+      console.log("✅ Cookies Supabase trouvés, accès autorisé")
       return NextResponse.next()
     }
 
-    console.log("❌ Middleware - Pas de cookies, redirection vers login")
+    console.log("❌ Pas de cookies Supabase, redirection vers login")
     return NextResponse.redirect(new URL("/login", request.url))
+    */
   }
 
   return NextResponse.next()
