@@ -16,7 +16,7 @@ import Link from "next/link"
 import { propertyService } from "@/lib/property-service"
 import { authService } from "@/lib/auth-service"
 import { imageService } from "@/lib/image-service"
-import { toast } from "sonner"
+import { useToast } from "@/hooks/use-toast"
 
 export default function EditPropertyPage() {
   const router = useRouter()
@@ -41,12 +41,18 @@ export default function EditPropertyPage() {
     available: true,
   })
 
+  const { toast } = useToast()
+
   useEffect(() => {
     const fetchProperty = async () => {
       try {
         const user = await authService.getCurrentUser()
         if (!user || user.user_type !== "owner") {
-          toast.error("Vous devez être connecté en tant que propriétaire")
+          toast({
+            title: "Erreur",
+            description: "Vous devez être connecté en tant que propriétaire",
+            variant: "destructive",
+          })
           router.push("/login")
           return
         }
@@ -58,7 +64,7 @@ export default function EditPropertyPage() {
         const propertyData = await propertyService.getPropertyById(params.id as string)
 
         if (propertyData.owner_id !== user.id) {
-          toast.error("Vous n'avez pas accès à ce bien")
+          toast({ title: "Erreur", description: "Vous n'avez pas accès à ce bien", variant: "destructive" })
           router.push("/owner/dashboard")
           return
         }
@@ -81,7 +87,7 @@ export default function EditPropertyPage() {
         })
       } catch (error: any) {
         console.error("Erreur lors du chargement:", error)
-        toast.error("Erreur lors du chargement du bien")
+        toast({ title: "Erreur", description: "Erreur lors du chargement du bien", variant: "destructive" })
         router.push("/owner/dashboard")
       } finally {
         setIsLoading(false)
@@ -115,11 +121,11 @@ export default function EditPropertyPage() {
       }
 
       await propertyService.updateProperty(property.id, updateData)
-      toast.success("Bien modifié avec succès")
+      toast({ title: "Succès", description: "Bien modifié avec succès" })
       router.push(`/owner/properties/${property.id}`)
     } catch (error: any) {
       console.error("Erreur lors de la sauvegarde:", error)
-      toast.error("Erreur lors de la sauvegarde")
+      toast({ title: "Erreur", description: "Erreur lors de la sauvegarde", variant: "destructive" })
     } finally {
       setIsSaving(false)
     }
@@ -130,7 +136,7 @@ export default function EditPropertyPage() {
     if (!files || files.length === 0 || !property) return
 
     setIsUploadingImages(true)
-    toast.info("Upload des images en cours...")
+    toast({ title: "Info", description: "Upload des images en cours..." })
 
     try {
       const uploadPromises = Array.from(files).map(async (file, index) => {
@@ -150,11 +156,11 @@ export default function EditPropertyPage() {
       }
       setProperty(updatedProperty)
 
-      toast.success(`${files.length} image(s) ajoutée(s) avec succès`)
+      toast({ title: "Succès", description: `${files.length} image(s) ajoutée(s) avec succès` })
       e.target.value = ""
     } catch (error: any) {
       console.error("Erreur lors de l'upload:", error)
-      toast.error("Erreur lors de l'upload des images")
+      toast({ title: "Erreur", description: "Erreur lors de l'upload des images", variant: "destructive" })
     } finally {
       setIsUploadingImages(false)
     }
@@ -172,10 +178,10 @@ export default function EditPropertyPage() {
       }
       setProperty(updatedProperty)
 
-      toast.success("Image supprimée avec succès")
+      toast({ title: "Succès", description: "Image supprimée avec succès" })
     } catch (error: any) {
       console.error("Erreur lors de la suppression:", error)
-      toast.error("Erreur lors de la suppression de l'image")
+      toast({ title: "Erreur", description: "Erreur lors de la suppression de l'image", variant: "destructive" })
     }
   }
 

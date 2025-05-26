@@ -12,11 +12,11 @@ import Link from "next/link"
 import { propertyService } from "@/lib/property-service"
 import { authService } from "@/lib/auth-service"
 import { imageService } from "@/lib/image-service"
-import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { VisitScheduler } from "@/components/visit-scheduler"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useToast } from "@/hooks/use-toast"
 
 export default function PropertyDetailPage() {
   const router = useRouter()
@@ -28,6 +28,8 @@ export default function PropertyDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [isUploadingImages, setIsUploadingImages] = useState(false)
 
+  const { toast } = useToast()
+
   useEffect(() => {
     const fetchData = async () => {
       console.log("🔄 Chargement des données de la propriété...")
@@ -38,7 +40,11 @@ export default function PropertyDetailPage() {
         // Vérifier l'authentification
         const user = await authService.getCurrentUser()
         if (!user || user.user_type !== "owner") {
-          toast.error("Vous devez être connecté en tant que propriétaire")
+          toast({
+            title: "Erreur",
+            description: "Vous devez être connecté en tant que propriétaire",
+            variant: "destructive",
+          })
           router.push("/login")
           return
         }
@@ -55,7 +61,7 @@ export default function PropertyDetailPage() {
 
         // Vérifier que le bien appartient au propriétaire connecté
         if (propertyData.owner_id !== user.id) {
-          toast.error("Vous n'avez pas accès à ce bien")
+          toast({ title: "Erreur", description: "Vous n'avez pas accès à ce bien", variant: "destructive" })
           router.push("/owner/dashboard")
           return
         }
@@ -71,7 +77,7 @@ export default function PropertyDetailPage() {
       } catch (error: any) {
         console.error("❌ Erreur lors du chargement:", error)
         setError(error.message || "Erreur lors du chargement du bien")
-        toast.error("Erreur lors du chargement du bien")
+        toast({ title: "Erreur", description: "Erreur lors du chargement du bien", variant: "destructive" })
       } finally {
         setIsLoading(false)
       }
@@ -85,7 +91,7 @@ export default function PropertyDetailPage() {
     if (!files || files.length === 0 || !property) return
 
     setIsUploadingImages(true)
-    toast.info("Upload des images en cours...")
+    toast({ title: "Info", description: "Upload des images en cours..." })
 
     try {
       const uploadPromises = Array.from(files).map(async (file, index) => {
@@ -106,13 +112,13 @@ export default function PropertyDetailPage() {
       }
       setProperty(updatedProperty)
 
-      toast.success(`${files.length} image(s) ajoutée(s) avec succès`)
+      toast({ title: "Succès", description: `${files.length} image(s) ajoutée(s) avec succès` })
 
       // Reset l'input
       e.target.value = ""
     } catch (error: any) {
       console.error("Erreur lors de l'upload:", error)
-      toast.error("Erreur lors de l'upload des images")
+      toast({ title: "Erreur", description: "Erreur lors de l'upload des images", variant: "destructive" })
     } finally {
       setIsUploadingImages(false)
     }
@@ -131,10 +137,10 @@ export default function PropertyDetailPage() {
       }
       setProperty(updatedProperty)
 
-      toast.success("Image supprimée avec succès")
+      toast({ title: "Succès", description: "Image supprimée avec succès" })
     } catch (error: any) {
       console.error("Erreur lors de la suppression:", error)
-      toast.error("Erreur lors de la suppression de l'image")
+      toast({ title: "Erreur", description: "Erreur lors de la suppression de l'image", variant: "destructive" })
     }
   }
 
@@ -145,11 +151,11 @@ export default function PropertyDetailPage() {
 
     try {
       await propertyService.deleteProperty(property.id)
-      toast.success("Bien supprimé avec succès")
+      toast({ title: "Succès", description: "Bien supprimé avec succès" })
       router.push("/owner/dashboard")
     } catch (error) {
       console.error("Erreur lors de la suppression:", error)
-      toast.error("Erreur lors de la suppression du bien")
+      toast({ title: "Erreur", description: "Erreur lors de la suppression du bien", variant: "destructive" })
     }
   }
 
