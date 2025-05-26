@@ -17,7 +17,7 @@ const Slider = React.forwardRef<HTMLInputElement, SliderProps>(
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const newValue = Number(e.target.value)
-      onValueChange?([newValue])\
+      onValueChange?([newValue])
     }
 
     return (
