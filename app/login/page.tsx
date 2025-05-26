@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,6 +22,37 @@ export default function LoginPage() {
     password: "",
   })
 
+  // Vérifier si l'utilisateur est déjà connecté
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const currentUser = await authService.getCurrentUser()
+        console.log("🔍 Login page - Vérification auth:", currentUser)
+
+        if (currentUser) {
+          console.log("✅ Login page - Utilisateur déjà connecté, redirection...")
+          switch (currentUser.user_type) {
+            case "owner":
+              router.push("/owner/dashboard")
+              break
+            case "tenant":
+              router.push("/tenant/dashboard")
+              break
+            case "admin":
+              router.push("/admin")
+              break
+            default:
+              router.push("/")
+          }
+        }
+      } catch (error) {
+        console.log("❌ Login page - Pas d'utilisateur connecté")
+      }
+    }
+
+    checkAuth()
+  }, [router])
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
@@ -32,12 +63,12 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      console.log("Tentative de connexion avec:", formData.email)
+      console.log("🔐 Tentative de connexion avec:", formData.email)
 
       // Connexion avec Supabase
       const { user, session } = await authService.login(formData.email, formData.password)
 
-      console.log("Résultat connexion:", { user, session })
+      console.log("✅ Résultat connexion:", { user: !!user, session: !!session })
 
       if (!user || !session) {
         throw new Error("Erreur lors de la connexion")
@@ -45,11 +76,15 @@ export default function LoginPage() {
 
       toast.success("Connexion réussie !")
 
+      // Attendre un peu pour que les cookies se mettent en place
+      await new Promise((resolve) => setTimeout(resolve, 500))
+
       // Récupérer les informations de l'utilisateur pour rediriger selon son type
       const currentUser = await authService.getCurrentUser()
-      console.log("Utilisateur actuel:", currentUser)
+      console.log("👤 Utilisateur actuel:", currentUser)
 
       if (currentUser) {
+        console.log("🎯 Redirection vers:", currentUser.user_type)
         // Redirection selon le type d'utilisateur
         switch (currentUser.user_type) {
           case "owner":
@@ -62,13 +97,13 @@ export default function LoginPage() {
             router.push("/admin")
             break
           default:
-            router.push("/dashboard")
+            router.push("/")
         }
       } else {
-        router.push("/dashboard")
+        router.push("/")
       }
     } catch (error: any) {
-      console.error("Erreur lors de la connexion:", error)
+      console.error("❌ Erreur lors de la connexion:", error)
 
       // Messages d'erreur plus spécifiques
       let errorMessage = "Erreur de connexion"
