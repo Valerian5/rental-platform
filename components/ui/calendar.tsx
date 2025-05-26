@@ -2,65 +2,185 @@
 
 import * as React from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import { DayPicker } from "react-day-picker"
-
 import { cn } from "@/lib/utils"
-import { buttonVariants } from "@/components/ui/button"
+import { Button } from "@/components/ui/button"
 
-export type CalendarProps = React.ComponentProps<typeof DayPicker>
+export interface CalendarProps {
+  className?: string
+  classNames?: Record<string, string>
+  showOutsideDays?: boolean
+  selected?: Date
+  onSelect?: (date: Date | undefined) => void
+  disabled?: (date: Date) => boolean
+  mode?: "single" | "multiple" | "range"
+}
 
 function Calendar({
   className,
   classNames,
   showOutsideDays = true,
+  selected,
+  onSelect,
+  disabled,
+  mode = "single",
   ...props
 }: CalendarProps) {
+  const [currentMonth, setCurrentMonth] = React.useState(new Date())
+
+  const today = new Date()
+  const year = currentMonth.getFullYear()
+  const month = currentMonth.getMonth()
+
+  // Get first day of month and number of days
+  const firstDayOfMonth = new Date(year, month, 1)
+  const lastDayOfMonth = new Date(year, month + 1, 0)
+  const firstDayWeekday = firstDayOfMonth.getDay()
+  const daysInMonth = lastDayOfMonth.getDate()
+
+  // Get previous month days to show
+  const prevMonth = new Date(year, month - 1, 0)
+  const daysInPrevMonth = prevMonth.getDate()
+
+  const monthNames = [
+    "Janvier",
+    "Février",
+    "Mars",
+    "Avril",
+    "Mai",
+    "Juin",
+    "Juillet",
+    "Août",
+    "Septembre",
+    "Octobre",
+    "Novembre",
+    "Décembre",
+  ]
+
+  const dayNames = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"]
+
+  const goToPreviousMonth = () => {
+    setCurrentMonth(new Date(year, month - 1, 1))
+  }
+
+  const goToNextMonth = () => {
+    setCurrentMonth(new Date(year, month + 1, 1))
+  }
+
+  const handleDateClick = (date: Date) => {
+    if (disabled && disabled(date)) return
+    onSelect?.(date)
+  }
+
+  const isSelected = (date: Date) => {
+    if (!selected) return false
+    return (
+      date.getDate() === selected.getDate() &&
+      date.getMonth() === selected.getMonth() &&
+      date.getFullYear() === selected.getFullYear()
+    )
+  }
+
+  const isToday = (date: Date) => {
+    return (
+      date.getDate() === today.getDate() &&
+      date.getMonth() === today.getMonth() &&
+      date.getFullYear() === today.getFullYear()
+    )
+  }
+
+  const isDisabled = (date: Date) => {
+    return disabled ? disabled(date) : false
+  }
+
+  // Generate calendar days
+  const calendarDays = []
+
+  // Previous month days
+  for (let i = firstDayWeekday - 1; i >= 0; i--) {
+    const date = new Date(year, month - 1, daysInPrevMonth - i)
+    calendarDays.push({
+      date,
+      isCurrentMonth: false,
+      isToday: isToday(date),
+      isSelected: isSelected(date),
+      isDisabled: isDisabled(date),
+    })
+  }
+
+  // Current month days
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(year, month, day)
+    calendarDays.push({
+      date,
+      isCurrentMonth: true,
+      isToday: isToday(date),
+      isSelected: isSelected(date),
+      isDisabled: isDisabled(date),
+    })
+  }
+
+  // Next month days
+  const remainingDays = 42 - calendarDays.length // 6 weeks * 7 days
+  for (let day = 1; day <= remainingDays; day++) {
+    const date = new Date(year, month + 1, day)
+    calendarDays.push({
+      date,
+      isCurrentMonth: false,
+      isToday: isToday(date),
+      isSelected: isSelected(date),
+      isDisabled: isDisabled(date),
+    })
+  }
+
   return (
-    <DayPicker
-      showOutsideDays={showOutsideDays}
-      className={cn("p-3", className)}
-      classNames={{
-        months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
-        month: "space-y-4",
-        caption: "flex justify-center pt-1 relative items-center",
-        caption_label: "text-sm font-medium",
-        nav: "space-x-1 flex items-center",
-        nav_button: cn(
-          buttonVariants({ variant: "outline" }),
-          "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
-        ),
-        nav_button_previous: "absolute left-1",
-        nav_button_next: "absolute right-1",
-        table: "w-full border-collapse space-y-1",
-        head_row: "flex",
-        head_cell:
-          "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]",
-        row: "flex w-full mt-2",
-        cell: "h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
-        day: cn(
-          buttonVariants({ variant: "ghost" }),
-          "h-9 w-9 p-0 font-normal aria-selected:opacity-100"
-        ),
-        day_range_end: "day-range-end",
-        day_selected:
-          "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
-        day_today: "bg-accent text-accent-foreground",
-        day_outside:
-          "day-outside text-muted-foreground aria-selected:bg-accent/50 aria-selected:text-muted-foreground",
-        day_disabled: "text-muted-foreground opacity-50",
-        day_range_middle:
-          "aria-selected:bg-accent aria-selected:text-accent-foreground",
-        day_hidden: "invisible",
-        ...classNames,
-      }}
-      components={{
-        IconLeft: ({ ...props }) => <ChevronLeft className="h-4 w-4" />,
-        IconRight: ({ ...props }) => <ChevronRight className="h-4 w-4" />,
-      }}
-      {...props}
-    />
+    <div className={cn("p-3", className)} {...props}>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <Button variant="outline" size="sm" onClick={goToPreviousMonth} className="h-7 w-7 p-0">
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <div className="text-sm font-medium">
+          {monthNames[month]} {year}
+        </div>
+        <Button variant="outline" size="sm" onClick={goToNextMonth} className="h-7 w-7 p-0">
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {/* Day names */}
+      <div className="grid grid-cols-7 gap-1 mb-2">
+        {dayNames.map((day) => (
+          <div key={day} className="h-8 w-8 text-xs font-medium text-muted-foreground flex items-center justify-center">
+            {day}
+          </div>
+        ))}
+      </div>
+
+      {/* Calendar grid */}
+      <div className="grid grid-cols-7 gap-1">
+        {calendarDays.map((day, index) => (
+          <button
+            key={index}
+            onClick={() => handleDateClick(day.date)}
+            disabled={day.isDisabled}
+            className={cn(
+              "h-8 w-8 text-sm rounded-md hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground disabled:opacity-50 disabled:cursor-not-allowed",
+              {
+                "text-muted-foreground": !day.isCurrentMonth && showOutsideDays,
+                "bg-primary text-primary-foreground": day.isSelected,
+                "bg-accent text-accent-foreground": day.isToday && !day.isSelected,
+                hidden: !day.isCurrentMonth && !showOutsideDays,
+              },
+            )}
+          >
+            {day.date.getDate()}
+          </button>
+        ))}
+      </div>
+    </div>
   )
 }
+
 Calendar.displayName = "Calendar"
 
 export { Calendar }
