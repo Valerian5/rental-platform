@@ -5,12 +5,11 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { propertyService } from "@/lib/property-service"
 import { authService } from "@/lib/auth-service"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 
 export default function DebugPropertyPage() {
   const [logs, setLogs] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const { toast } = useToast()
 
   const addLog = (message: string) => {
     console.log(message)
@@ -74,11 +73,11 @@ export default function DebugPropertyPage() {
       const result = await propertyService.createProperty(testData)
       addLog(`✅ Propriété créée: ${JSON.stringify(result)}`)
 
-      toast({ title: "Succès", description: "Test réussi !" })
+      toast.success("Test réussi !")
     } catch (error) {
       addLog(`❌ Erreur création: ${error.message}`)
       addLog(`❌ Stack: ${error.stack}`)
-      toast({ title: "Erreur", description: error.message, variant: "destructive" })
+      toast.error(error.message)
     } finally {
       setIsLoading(false)
     }

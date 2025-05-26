@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ArrowLeft, Eye, EyeOff } from "lucide-react"
 import Link from "next/link"
 import { authService } from "@/lib/auth-service"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 
 export default function OwnerRegisterPage() {
   const router = useRouter()
@@ -25,8 +25,6 @@ export default function OwnerRegisterPage() {
     phone: "",
   })
 
-  const { toast } = useToast()
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
@@ -39,11 +37,7 @@ export default function OwnerRegisterPage() {
     try {
       // Validation basique
       if (formData.password.length < 6) {
-        toast({
-          title: "Erreur",
-          description: "Le mot de passe doit contenir au moins 6 caractères",
-          variant: "destructive",
-        })
+        toast.error("Le mot de passe doit contenir au moins 6 caractères")
         return
       }
 
@@ -57,20 +51,13 @@ export default function OwnerRegisterPage() {
         userType: "owner",
       })
 
-      toast({
-        title: "Succès",
-        description: "Compte créé avec succès ! Vérifiez votre email pour confirmer votre compte.",
-      })
+      toast.success("Compte créé avec succès ! Vérifiez votre email pour confirmer votre compte.")
 
       // Rediriger vers le tableau de bord propriétaire
       router.push("/owner/dashboard")
     } catch (error: any) {
       console.error("Erreur lors de l'inscription:", error)
-      toast({
-        title: "Erreur",
-        description: error.message || "Erreur lors de la création du compte",
-        variant: "destructive",
-      })
+      toast.error(error.message || "Erreur lors de la création du compte")
     } finally {
       setIsLoading(false)
     }

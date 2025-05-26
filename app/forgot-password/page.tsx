@@ -9,13 +9,12 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ArrowLeft, Mail } from "lucide-react"
 import Link from "next/link"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 
 export default function ForgotPasswordPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [email, setEmail] = useState("")
   const [emailSent, setEmailSent] = useState(false)
-  const { toast } = useToast()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -29,10 +28,10 @@ export default function ForgotPasswordPage() {
       // await authService.resetPassword(email)
 
       setEmailSent(true)
-      toast({ title: "Succès", description: "Email de réinitialisation envoyé !" })
+      toast.success("Email de réinitialisation envoyé !")
     } catch (error) {
       console.error("Erreur lors de l'envoi:", error)
-      toast({ title: "Erreur", description: "Erreur lors de l'envoi de l'email", variant: "destructive" })
+      toast.error("Erreur lors de l'envoi de l'email")
     } finally {
       setIsLoading(false)
     }

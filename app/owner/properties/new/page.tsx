@@ -16,7 +16,7 @@ import { ArrowLeft, ArrowRight, Upload, X } from "lucide-react"
 import Link from "next/link"
 import { propertyService } from "@/lib/property-service"
 import { authService } from "@/lib/auth-service"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 import { VisitScheduler } from "@/components/visit-scheduler"
 
 interface FormData {
@@ -92,8 +92,6 @@ export default function NewPropertyPage() {
   const [selectedImages, setSelectedImages] = useState<File[]>([])
   const [visitSlots, setVisitSlots] = useState<any[]>([])
 
-  const { toast } = useToast()
-
   const [formData, setFormData] = useState<FormData>({
     title: "",
     description: "",
@@ -131,10 +129,8 @@ export default function NewPropertyPage() {
       try {
         const user = await authService.getCurrentUser()
         if (!user || user.user_type !== "owner") {
-          toast({
+          toast.error("Vous devez être connecté en tant que propriétaire", {
             title: "Erreur",
-            description: "Vous devez être connecté en tant que propriétaire",
-            variant: "destructive",
           })
           router.push("/login")
           return
@@ -186,39 +182,39 @@ export default function NewPropertyPage() {
 
   const validateForm = () => {
     if (!formData.title.trim()) {
-      toast({ title: "Erreur", description: "Le titre est obligatoire", variant: "destructive" })
+      toast.error("Le titre est obligatoire", { title: "Erreur" })
       return false
     }
     if (!formData.description.trim()) {
-      toast({ title: "Erreur", description: "La description est obligatoire", variant: "destructive" })
+      toast.error("La description est obligatoire", { title: "Erreur" })
       return false
     }
     if (!formData.address.trim()) {
-      toast({ title: "Erreur", description: "L'adresse est obligatoire", variant: "destructive" })
+      toast.error("L'adresse est obligatoire", { title: "Erreur" })
       return false
     }
     if (!formData.city.trim()) {
-      toast({ title: "Erreur", description: "La ville est obligatoire", variant: "destructive" })
+      toast.error("La ville est obligatoire", { title: "Erreur" })
       return false
     }
     if (!formData.surface || Number.parseInt(formData.surface) <= 0) {
-      toast({ title: "Erreur", description: "La surface doit être supérieure à 0", variant: "destructive" })
+      toast.error("La surface doit être supérieure à 0", { title: "Erreur" })
       return false
     }
     if (!formData.rent_excluding_charges || Number.parseFloat(formData.rent_excluding_charges) <= 0) {
-      toast({ title: "Erreur", description: "Le loyer doit être supérieur à 0", variant: "destructive" })
+      toast.error("Le loyer doit être supérieur à 0", { title: "Erreur" })
       return false
     }
     if (!formData.charges_amount || Number.parseFloat(formData.charges_amount) < 0) {
-      toast({ title: "Erreur", description: "Le montant des charges doit être positif", variant: "destructive" })
+      toast.error("Le montant des charges doit être positif", { title: "Erreur" })
       return false
     }
     if (!formData.security_deposit || Number.parseFloat(formData.security_deposit) < 0) {
-      toast({ title: "Erreur", description: "Le dépôt de garantie doit être positif", variant: "destructive" })
+      toast.error("Le dépôt de garantie doit être positif", { title: "Erreur" })
       return false
     }
     if (!formData.rooms || Number.parseInt(formData.rooms) <= 0) {
-      toast({ title: "Erreur", description: "Le nombre de pièces doit être supérieur à 0", variant: "destructive" })
+      toast.error("Le nombre de pièces doit être supérieur à 0", { title: "Erreur" })
       return false
     }
     return true
@@ -228,7 +224,7 @@ export default function NewPropertyPage() {
     console.log("🚀 Début de la soumission")
 
     if (!currentUser) {
-      toast({ title: "Erreur", description: "Vous devez être connecté pour ajouter un bien", variant: "destructive" })
+      toast.error("Vous devez être connecté pour ajouter un bien", { title: "Erreur" })
       return
     }
 
@@ -237,7 +233,7 @@ export default function NewPropertyPage() {
     }
 
     setIsLoading(true)
-    toast({ title: "Info", description: "Création de l'annonce en cours..." })
+    toast.info("Création de l'annonce en cours...")
 
     try {
       console.log("📝 Données du formulaire:", formData)
@@ -296,15 +292,13 @@ export default function NewPropertyPage() {
         await propertyService.generateDefaultVisitSlots(newProperty.id, 14)
       }
 
-      toast({ title: "Succès", description: "Annonce créée avec succès !" })
+      toast.success("Annonce créée avec succès !", { duration: 2000 })
       console.log("🎉 Redirection vers la page de succès")
       router.push(`/owner/properties/${newProperty.id}/success`)
     } catch (error) {
       console.error("❌ Erreur lors de la création de l'annonce:", error)
-      toast({
+      toast.error(`Erreur lors de la création de l'annonce: ${error.message || "Erreur inconnue"}`, {
         title: "Erreur",
-        description: `Erreur lors de la création de l'annonce: ${error.message || "Erreur inconnue"}`,
-        variant: "destructive",
       })
     } finally {
       setIsLoading(false)

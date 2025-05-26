@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ArrowLeft, Eye, EyeOff } from "lucide-react"
 import Link from "next/link"
 import { authService } from "@/lib/auth-service"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -21,8 +21,6 @@ export default function LoginPage() {
     email: "",
     password: "",
   })
-
-  const { toast } = useToast()
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -45,7 +43,7 @@ export default function LoginPage() {
         throw new Error("Erreur lors de la connexion")
       }
 
-      toast({ title: "Succès", description: "Connexion réussie !" })
+      toast.success("Connexion réussie !")
 
       // Récupérer les informations de l'utilisateur pour rediriger selon son type
       const currentUser = await authService.getCurrentUser()
@@ -84,7 +82,7 @@ export default function LoginPage() {
         errorMessage = error.message
       }
 
-      toast({ title: "Erreur", description: errorMessage, variant: "destructive" })
+      toast.error(errorMessage)
     } finally {
       setIsLoading(false)
     }
