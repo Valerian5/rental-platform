@@ -21,9 +21,10 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarFooter,
+  SidebarProvider,
 } from "@/components/ui/sidebar"
 
-export default function AdminPage() {
+function AdminContent() {
   const [activeTab, setActiveTab] = useState("appearance")
   const [primaryColor, setPrimaryColor] = useState("#0066FF")
   const [secondaryColor, setSecondaryColor] = useState("#FF6B00")
@@ -756,5 +757,13 @@ export default function AdminPage() {
         </main>
       </div>
     </div>
+  )
+}
+
+export default function AdminPage() {
+  return (
+    <SidebarProvider>
+      <AdminContent />
+    </SidebarProvider>
   )
 }
