@@ -5,22 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Users, Home, FileText, TrendingUp, TrendingDown, Activity } from "lucide-react"
-import {
-  Line,
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts"
+import { SimpleBarChart, SimplePieChart, SimpleLineChart } from "@/components/charts/simple-chart"
 
 // Données simulées pour les graphiques
 const userGrowthData = [
@@ -186,31 +171,15 @@ export default function AnalyticsPage() {
                 <CardDescription>Évolution du nombre d'utilisateurs au fil du temps</CardDescription>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={userGrowthData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Area
-                      type="monotone"
-                      dataKey="users"
-                      stackId="1"
-                      stroke="#2563eb"
-                      fill="#2563eb"
-                      fillOpacity={0.6}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="active"
-                      stackId="2"
-                      stroke="#10b981"
-                      fill="#10b981"
-                      fillOpacity={0.6}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+                <SimpleLineChart
+                  data={userGrowthData}
+                  lines={[
+                    { key: "users", color: "#2563eb", name: "Utilisateurs totaux" },
+                    { key: "active", color: "#10b981", name: "Utilisateurs actifs" },
+                  ]}
+                  title="Croissance des utilisateurs"
+                  height={300}
+                />
               </CardContent>
             </Card>
 
@@ -248,18 +217,15 @@ export default function AnalyticsPage() {
               <CardDescription>Répartition géographique et loyers moyens</CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={400}>
-                <BarChart data={propertyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="area" />
-                  <YAxis yAxisId="left" />
-                  <YAxis yAxisId="right" orientation="right" />
-                  <Tooltip />
-                  <Legend />
-                  <Bar yAxisId="left" dataKey="properties" fill="#2563eb" name="Nombre de propriétés" />
-                  <Line yAxisId="right" type="monotone" dataKey="avgRent" stroke="#ef4444" name="Loyer moyen (€)" />
-                </BarChart>
-              </ResponsiveContainer>
+              <SimpleBarChart
+                data={propertyData.map((item) => ({
+                  name: item.area,
+                  value: item.properties,
+                  color: "#2563eb",
+                }))}
+                title="Propriétés par zone"
+                height={400}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -272,25 +238,7 @@ export default function AnalyticsPage() {
                 <CardDescription>Répartition par statut</CardDescription>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={applicationStatusData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {applicationStatusData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
+                <SimplePieChart data={applicationStatusData} title="Statut des candidatures" />
               </CardContent>
             </Card>
 
