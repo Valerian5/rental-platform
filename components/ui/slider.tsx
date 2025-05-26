@@ -15,11 +15,10 @@ const Slider = React.forwardRef<HTMLInputElement, SliderProps>(
   ({ className, value, onValueChange, max = 100, min = 0, step = 1, ...props }, ref) => {
     const currentValue = value?.[0] ?? min
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const newValue = Number(e.target.value)
-      onValueChange?([newValue])
-    }
-
+	const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+	  const newValue = Number(e.target.value);
+	  onValueChange?.([newValue]);
+	};
     return (
       <div className={cn("relative flex w-full touch-none select-none items-center", className)}>
         <input
