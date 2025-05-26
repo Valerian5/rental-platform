@@ -1,263 +1,218 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { Calendar } from "@fullcalendar/core"
-import dayGridPlugin from "@fullcalendar/daygrid"
-import timeGridPlugin from "@fullcalendar/timegrid"
-import interactionPlugin from "@fullcalendar/interaction"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { ChevronLeft, ChevronRight, Clock, MapPin } from "lucide-react"
+import { format, addDays, startOfWeek, isSameDay, isToday } from "date-fns"
+import { fr } from "date-fns/locale"
 
-export function CalendarScheduler() {
-  const calendarRef = useRef(null)
-  const [calendar, setCalendar] = useState(null)
-  const [isEventDialogOpen, setIsEventDialogOpen] = useState(false)
-  const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false)
-  const [selectedDate, setSelectedDate] = useState(null)
-  const [selectedEvent, setSelectedEvent] = useState(null)
-  const [visitDuration, setVisitDuration] = useState(30)
-  const [allowGroupVisits, setAllowGroupVisits] = useState(false)
-  const [maxVisitorsPerSlot, setMaxVisitorsPerSlot] = useState(1)
-  const [timeSlots, setTimeSlots] = useState([
-    { start: "09:00", end: "12:00" },
-    { start: "14:00", end: "18:00" },
-  ])
+interface CalendarEvent {
+  id: string
+  title: string
+  date: Date
+  time: string
+  type: "visit" | "maintenance" | "meeting"
+  location?: string
+  status: "confirmed" | "pending" | "cancelled"
+}
 
-  // Initialize FullCalendar
-  useEffect(() => {
-    if (calendarRef.current && !calendar) {
-      const calendarInstance = new Calendar(calendarRef.current, {
-        plugins: [dayGridPlugin, timeGridPlugin, interactionPlugin],
-        initialView: "dayGridMonth",
-        headerToolbar: {
-          left: "prev,next today",
-          center: "title",
-          right: "dayGridMonth,timeGridWeek",
-        },
-        editable: true,
-        selectable: true,
-        selectMirror: true,
-        dayMaxEvents: true,
-        weekends: true,
-        events: [
-          // Sample events
-          {
-            id: "1",
-            title: "Disponible (3 créneaux)",
-            start: "2025-05-25",
-            backgroundColor: "#10b981",
-            borderColor: "#10b981",
-          },
-          {
-            id: "2",
-            title: "Disponible (2 créneaux)",
-            start: "2025-05-26",
-            backgroundColor: "#10b981",
-            borderColor: "#10b981",
-          },
-        ],
-        dateClick: (info) => {
-          setSelectedDate(info.dateStr)
-          setIsEventDialogOpen(true)
-        },
-        eventClick: (info) => {
-          setSelectedEvent({
-            id: info.event.id,
-            title: info.event.title,
-            start: info.event.startStr,
-          })
-          setIsEventDialogOpen(true)
-        },
-      })
+interface CalendarSchedulerProps {
+  events?: CalendarEvent[]
+  onEventClick?: (event: CalendarEvent) => void
+  onDateClick?: (date: Date) => void
+}
 
-      calendarInstance.render()
-      setCalendar(calendarInstance)
+export default function CalendarScheduler({ events = [], onEventClick, onDateClick }: CalendarSchedulerProps) {
+  const [currentDate, setCurrentDate] = useState(new Date())
+  const [view, setView] = useState<"week" | "month">("week")
 
-      return () => {
-        calendarInstance.destroy()
-      }
-    }
-  }, [calendarRef, calendar])
+  // Générer les jours de la semaine
+  const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 })
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
 
-  const handleAddTimeSlots = () => {
-    // Logic to add time slots for the selected date
-    setIsEventDialogOpen(false)
+  // Événements par défaut pour la démo
+  const defaultEvents: CalendarEvent[] = [
+    {
+      id: "1",
+      title: "Visite appartement 3 pièces",
+      date: new Date(),
+      time: "14:00",
+      type: "visit",
+      location: "123 Rue de la Paix",
+      status: "confirmed",
+    },
+    {
+      id: "2",
+      title: "Maintenance chauffage",
+      date: addDays(new Date(), 1),
+      time: "10:30",
+      type: "maintenance",
+      location: "456 Avenue des Fleurs",
+      status: "pending",
+    },
+    {
+      id: "3",
+      title: "Rendez-vous propriétaire",
+      date: addDays(new Date(), 2),
+      time: "16:00",
+      type: "meeting",
+      status: "confirmed",
+    },
+  ]
 
-    // Example: Add event to calendar
-    if (calendar) {
-      calendar.addEvent({
-        title: `Disponible (${timeSlots.length} créneaux)`,
-        start: selectedDate,
-        backgroundColor: "#10b981",
-        borderColor: "#10b981",
-      })
+  const allEvents = events.length > 0 ? events : defaultEvents
+
+  const getEventsForDate = (date: Date) => {
+    return allEvents.filter((event) => isSameDay(event.date, date))
+  }
+
+  const getEventColor = (type: string, status: string) => {
+    if (status === "cancelled") return "bg-gray-100 text-gray-600"
+
+    switch (type) {
+      case "visit":
+        return "bg-blue-100 text-blue-800"
+      case "maintenance":
+        return "bg-orange-100 text-orange-800"
+      case "meeting":
+        return "bg-green-100 text-green-800"
+      default:
+        return "bg-gray-100 text-gray-600"
     }
   }
 
-  const handleAddTimeSlot = () => {
-    setTimeSlots([...timeSlots, { start: "09:00", end: "10:00" }])
-  }
-
-  const handleRemoveTimeSlot = (index) => {
-    const newTimeSlots = [...timeSlots]
-    newTimeSlots.splice(index, 1)
-    setTimeSlots(newTimeSlots)
-  }
-
-  const handleTimeSlotChange = (index, field, value) => {
-    const newTimeSlots = [...timeSlots]
-    newTimeSlots[index][field] = value
-    setTimeSlots(newTimeSlots)
+  const navigateWeek = (direction: "prev" | "next") => {
+    const days = direction === "next" ? 7 : -7
+    setCurrentDate((prev) => addDays(prev, days))
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold">Calendrier des disponibilités</h2>
-        <Button onClick={() => setIsSettingsDialogOpen(true)}>Paramètres des visites</Button>
-      </div>
-
-      <Card>
-        <CardContent className="p-0">
-          <div ref={calendarRef} className="min-h-[600px] p-4"></div>
-        </CardContent>
-      </Card>
-
-      {/* Dialog for adding/editing time slots */}
-      <Dialog open={isEventDialogOpen} onOpenChange={setIsEventDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>{selectedEvent ? "Modifier les créneaux" : "Ajouter des créneaux de visite"}</DialogTitle>
-            <DialogDescription>
-              {selectedDate &&
-                `Date: ${new Date(selectedDate).toLocaleDateString("fr-FR", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}`}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-medium">Créneaux horaires</h3>
-              <Button variant="outline" size="sm" onClick={handleAddTimeSlot}>
-                Ajouter un créneau
+    <Card className="w-full">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle>Calendrier des événements</CardTitle>
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-lg border">
+              <Button variant={view === "week" ? "default" : "ghost"} size="sm" onClick={() => setView("week")}>
+                Semaine
+              </Button>
+              <Button variant={view === "month" ? "default" : "ghost"} size="sm" onClick={() => setView("month")}>
+                Mois
               </Button>
             </div>
+          </div>
+        </div>
 
-            {timeSlots.map((slot, index) => (
-              <div key={index} className="flex items-center gap-4">
-                <div className="grid grid-cols-2 gap-4 flex-1">
-                  <div className="space-y-2">
-                    <Label htmlFor={`start-time-${index}`}>Heure de début</Label>
-                    <Input
-                      id={`start-time-${index}`}
-                      type="time"
-                      value={slot.start}
-                      onChange={(e) => handleTimeSlotChange(index, "start", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor={`end-time-${index}`}>Heure de fin</Label>
-                    <Input
-                      id={`end-time-${index}`}
-                      type="time"
-                      value={slot.end}
-                      onChange={(e) => handleTimeSlotChange(index, "end", e.target.value)}
-                    />
-                  </div>
-                </div>
-                <Button variant="ghost" size="icon" className="mt-6" onClick={() => handleRemoveTimeSlot(index)}>
-                  ✕
-                </Button>
-              </div>
-            ))}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => navigateWeek("prev")}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <h3 className="text-lg font-semibold">
+              {format(weekStart, "dd MMM", { locale: fr })} -{" "}
+              {format(addDays(weekStart, 6), "dd MMM yyyy", { locale: fr })}
+            </h3>
+            <Button variant="outline" size="sm" onClick={() => navigateWeek("next")}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEventDialogOpen(false)}>
-              Annuler
-            </Button>
-            <Button onClick={handleAddTimeSlots}>Enregistrer</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <Button variant="outline" size="sm" onClick={() => setCurrentDate(new Date())}>
+            Aujourd'hui
+          </Button>
+        </div>
+      </CardHeader>
 
-      {/* Dialog for visit settings */}
-      <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Paramètres des visites</DialogTitle>
-            <DialogDescription>Configurez vos préférences pour les visites de vos biens</DialogDescription>
-          </DialogHeader>
+      <CardContent>
+        <div className="grid grid-cols-7 gap-1 mb-4">
+          {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((day) => (
+            <div key={day} className="p-2 text-center text-sm font-medium text-gray-500">
+              {day}
+            </div>
+          ))}
+        </div>
 
-          <div className="space-y-6 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="visit-duration">Durée des visites (minutes)</Label>
-              <Select
-                value={visitDuration.toString()}
-                onValueChange={(value) => setVisitDuration(Number.parseInt(value))}
+        <div className="grid grid-cols-7 gap-1">
+          {weekDays.map((day) => {
+            const dayEvents = getEventsForDate(day)
+            const isCurrentDay = isToday(day)
+
+            return (
+              <div
+                key={day.toISOString()}
+                className={`min-h-[120px] p-2 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors ${
+                  isCurrentDay ? "bg-blue-50 border-blue-200" : "border-gray-200"
+                }`}
+                onClick={() => onDateClick?.(day)}
               >
-                <SelectTrigger id="visit-duration">
-                  <SelectValue placeholder="Sélectionnez la durée" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="15">15 minutes</SelectItem>
-                  <SelectItem value="30">30 minutes</SelectItem>
-                  <SelectItem value="45">45 minutes</SelectItem>
-                  <SelectItem value="60">1 heure</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+                <div className={`text-sm font-medium mb-2 ${isCurrentDay ? "text-blue-600" : "text-gray-900"}`}>
+                  {format(day, "d")}
+                </div>
 
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="group-visits">Autoriser les visites groupées</Label>
-                <p className="text-sm text-muted-foreground">
-                  Permettre à plusieurs personnes de visiter en même temps
-                </p>
+                <div className="space-y-1">
+                  {dayEvents.map((event) => (
+                    <div
+                      key={event.id}
+                      className={`p-1 rounded text-xs cursor-pointer hover:opacity-80 ${getEventColor(
+                        event.type,
+                        event.status,
+                      )}`}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onEventClick?.(event)
+                      }}
+                    >
+                      <div className="flex items-center gap-1 mb-1">
+                        <Clock className="h-3 w-3" />
+                        <span className="font-medium">{event.time}</span>
+                      </div>
+                      <div className="truncate">{event.title}</div>
+                      {event.location && (
+                        <div className="flex items-center gap-1 mt-1 opacity-75">
+                          <MapPin className="h-3 w-3" />
+                          <span className="truncate">{event.location}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
-              <Switch id="group-visits" checked={allowGroupVisits} onCheckedChange={setAllowGroupVisits} />
-            </div>
+            )
+          })}
+        </div>
 
-            {allowGroupVisits && (
-              <div className="space-y-2">
-                <Label htmlFor="max-visitors">Nombre maximum de visiteurs par créneau</Label>
-                <Select
-                  value={maxVisitorsPerSlot.toString()}
-                  onValueChange={(value) => setMaxVisitorsPerSlot(Number.parseInt(value))}
-                >
-                  <SelectTrigger id="max-visitors">
-                    <SelectValue placeholder="Sélectionnez le nombre maximum" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="2">2 visiteurs</SelectItem>
-                    <SelectItem value="3">3 visiteurs</SelectItem>
-                    <SelectItem value="4">4 visiteurs</SelectItem>
-                    <SelectItem value="5">5 visiteurs</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+        {/* Légende */}
+        <div className="mt-6 flex flex-wrap gap-4">
+          <div className="flex items-center gap-2">
+            <Badge className="bg-blue-100 text-blue-800">Visite</Badge>
+            <Badge className="bg-orange-100 text-orange-800">Maintenance</Badge>
+            <Badge className="bg-green-100 text-green-800">Rendez-vous</Badge>
+            <Badge className="bg-gray-100 text-gray-600">Annulé</Badge>
           </div>
+        </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsSettingsDialogOpen(false)}>
-              Annuler
-            </Button>
-            <Button onClick={() => setIsSettingsDialogOpen(false)}>Enregistrer</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+        {/* Statistiques rapides */}
+        <div className="mt-4 grid grid-cols-3 gap-4">
+          <div className="text-center p-3 bg-blue-50 rounded-lg">
+            <div className="text-2xl font-bold text-blue-600">{allEvents.filter((e) => e.type === "visit").length}</div>
+            <div className="text-sm text-blue-600">Visites</div>
+          </div>
+          <div className="text-center p-3 bg-orange-50 rounded-lg">
+            <div className="text-2xl font-bold text-orange-600">
+              {allEvents.filter((e) => e.type === "maintenance").length}
+            </div>
+            <div className="text-sm text-orange-600">Maintenances</div>
+          </div>
+          <div className="text-center p-3 bg-green-50 rounded-lg">
+            <div className="text-2xl font-bold text-green-600">
+              {allEvents.filter((e) => e.type === "meeting").length}
+            </div>
+            <div className="text-sm text-green-600">Rendez-vous</div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
