@@ -10,7 +10,7 @@ import { Plus, Search, Eye } from "lucide-react"
 import Link from "next/link"
 import { propertyService } from "@/lib/property-service"
 import { authService } from "@/lib/auth-service"
-import { toast } from "sonner"
+import { useToast } from "@/hooks/use-toast"
 
 export default function PropertiesListPage() {
   const router = useRouter()
@@ -20,12 +20,18 @@ export default function PropertiesListPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
 
+  const { toast } = useToast()
+
   useEffect(() => {
     const fetchData = async () => {
       try {
         const user = await authService.getCurrentUser()
         if (!user || user.user_type !== "owner") {
-          toast.error("Vous devez être connecté en tant que propriétaire")
+          toast({
+            title: "Erreur",
+            description: "Vous devez être connecté en tant que propriétaire",
+            variant: "destructive",
+          })
           router.push("/login")
           return
         }
@@ -36,7 +42,7 @@ export default function PropertiesListPage() {
         setFilteredProperties(userProperties)
       } catch (error) {
         console.error("Erreur lors du chargement des biens:", error)
-        toast.error("Erreur lors du chargement des biens")
+        toast({ title: "Erreur", description: "Erreur lors du chargement des biens", variant: "destructive" })
       } finally {
         setIsLoading(false)
       }

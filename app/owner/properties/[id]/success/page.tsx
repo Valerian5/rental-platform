@@ -9,13 +9,14 @@ import { CheckCircle, ArrowRight, Upload, Edit } from "lucide-react"
 import Link from "next/link"
 import { propertyService } from "@/lib/property-service"
 import { authService } from "@/lib/auth-service"
-import { toast } from "sonner"
+import { useToast } from "@/hooks/use-toast"
 
 export default function PropertySuccessPage() {
   const router = useRouter()
   const params = useParams()
   const [property, setProperty] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const { toast } = useToast()
 
   useEffect(() => {
     const fetchProperty = async () => {
@@ -32,7 +33,7 @@ export default function PropertySuccessPage() {
         }
       } catch (error) {
         console.error("Erreur lors du chargement du bien:", error)
-        toast.error("Erreur lors du chargement du bien")
+        toast({ title: "Erreur", description: "Erreur lors du chargement du bien", variant: "destructive" })
         router.push("/owner/dashboard")
       } finally {
         setIsLoading(false)
