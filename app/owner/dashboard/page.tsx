@@ -41,10 +41,18 @@ export default function OwnerDashboard() {
   const [activeTab, setActiveTab] = useState("overview")
 
   const [sortBy, setSortBy] = useState("date_desc")
+  const [propertyFilter, setPropertyFilter] = useState("all")
 
   // Fonction de tri des candidatures
   const getSortedApplications = () => {
-    const applicationsWithScore = applications.map((app) => {
+    let filteredApplications = applications
+
+    // Filtrer par propriété si sélectionnée
+    if (propertyFilter !== "all") {
+      filteredApplications = applications.filter((app) => app.property?.id === propertyFilter)
+    }
+
+    const applicationsWithScore = filteredApplications.map((app) => {
       const propertyRent = app.property?.rent_excluding_charges || 0
       const propertyCharges = app.property?.charges_amount || 0
       const totalRent = propertyRent + propertyCharges
@@ -662,6 +670,20 @@ export default function OwnerDashboard() {
                   Candidatures ({applications.length})
                   <div className="flex items-center gap-2">
                     <select
+                      value={propertyFilter}
+                      onChange={(e) => setPropertyFilter(e.target.value)}
+                      className="px-3 py-1 border rounded-md text-sm"
+                    >
+                      <option value="all">Tous les biens</option>
+                      {properties
+                        .filter((p) => p.available)
+                        .map((property) => (
+                          <option key={property.id} value={property.id}>
+                            {property.title}
+                          </option>
+                        ))}
+                    </select>
+                    <select
                       value={sortBy}
                       onChange={(e) => setSortBy(e.target.value)}
                       className="px-3 py-1 border rounded-md text-sm"
@@ -869,7 +891,7 @@ export default function OwnerDashboard() {
                                     <Button variant="outline" size="sm" asChild>
                                       <Link href={`/owner/applications/${application.id}`}>
                                         <Eye className="h-4 w-4 mr-1" />
-                                        Analyser
+                                        Voir détails
                                       </Link>
                                     </Button>
 
