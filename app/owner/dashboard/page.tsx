@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { toast } from "react-hot-toast"
 import PropertyCard from "@/components/PropertyCard"
 import ApplicationCard from "@/components/ApplicationCard"
 import VisitCard from "@/components/VisitCard"
 import ConversationCard from "@/components/ConversationCard"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useToast } from "@/hooks/use-toast"
 
 const OwnerDashboard = () => {
   const router = useRouter()
@@ -16,6 +16,7 @@ const OwnerDashboard = () => {
   const [visits, setVisits] = useState([])
   const [conversations, setConversations] = useState([])
   const [loading, setLoading] = useState(true)
+  const { toast } = useToast()
 
   useEffect(() => {
     const token = localStorage.getItem("token")
@@ -61,7 +62,11 @@ const OwnerDashboard = () => {
       }
     } catch (error) {
       console.error("Erreur chargement dashboard:", error)
-      toast.error("Erreur lors du chargement des données")
+      toast({
+        title: "Erreur",
+        description: "Erreur lors du chargement des données",
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
