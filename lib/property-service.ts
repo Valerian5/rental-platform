@@ -566,4 +566,71 @@ export const propertyService = {
       throw error
     }
   },
+
+  // Mettre à jour le statut d'une candidature
+  async updateApplicationStatus(applicationId: string, newStatus: string) {
+    console.log("🔄 PropertyService.updateApplicationStatus - ID:", applicationId, "Status:", newStatus)
+
+    try {
+      const { data, error } = await supabase
+        .from("applications")
+        .update({
+          status: newStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", applicationId)
+        .select()
+        .single()
+
+      if (error) {
+        console.error("❌ Erreur lors de la mise à jour du statut:", error)
+        throw new Error(error.message)
+      }
+
+      console.log("✅ Statut de candidature mis à jour:", data)
+      return data
+    } catch (error) {
+      console.error("❌ Erreur dans updateApplicationStatus:", error)
+      throw error
+    }
+  },
+
+  // Créer une visite pour une candidature
+  async createVisitForApplication(
+    applicationId: string,
+    propertyId: string,
+    tenantId: string,
+    visitDate: string,
+    startTime: string,
+    endTime: string,
+  ) {
+    console.log("📅 PropertyService.createVisitForApplication - Application:", applicationId)
+
+    try {
+      const { data, error } = await supabase
+        .from("visits")
+        .insert({
+          application_id: applicationId,
+          property_id: propertyId,
+          tenant_id: tenantId,
+          visit_date: visitDate,
+          start_time: startTime,
+          end_time: endTime,
+          status: "scheduled",
+        })
+        .select()
+        .single()
+
+      if (error) {
+        console.error("❌ Erreur lors de la création de la visite:", error)
+        throw new Error(error.message)
+      }
+
+      console.log("✅ Visite créée:", data)
+      return data
+    } catch (error) {
+      console.error("❌ Erreur dans createVisitForApplication:", error)
+      throw error
+    }
+  },
 }

@@ -40,6 +40,103 @@ export default function OwnerDashboard() {
   const [debugLogs, setDebugLogs] = useState<string[]>([])
   const [activeTab, setActiveTab] = useState("overview")
 
+  const [sortBy, setSortBy] = useState("date_desc")
+
+  // Fonction de tri des candidatures
+  const getSortedApplications = () => {
+    const applicationsWithScore = applications.map((app) => {
+      const propertyRent = app.property?.rent_excluding_charges || 0
+      const propertyCharges = app.property?.charges_amount || 0
+      const totalRent = propertyRent + propertyCharges
+      const incomeRatio = app.income ? app.income / totalRent : 0
+
+      let score = 0
+      if (incomeRatio >= 3) score += 40
+      else if (incomeRatio >= 2.5) score += 30
+      else if (incomeRatio >= 2) score += 20
+      else score += 10
+
+      if (app.has_guarantor) score += 20
+
+      const stableProfessions = ["Enseignante", "Ingénieur logiciel", "Infirmière"]
+      if (stableProfessions.includes(app.profession)) score += 20
+      else score += 10
+
+      if (app.status === "accepted") score += 20
+      else if (app.status === "visit_scheduled") score += 15
+      else if (app.status === "under_review") score += 10
+      else score += 5
+
+      return { ...app, calculatedScore: Math.min(score, 100) }
+    })
+
+    return applicationsWithScore.sort((a, b) => {
+      switch (sortBy) {
+        case "date_desc":
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        case "date_asc":
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        case "score_desc":
+          return b.calculatedScore - a.calculatedScore
+        case "score_asc":
+          return a.calculatedScore - b.calculatedScore
+        default:
+          return 0
+      }
+    })
+  }
+
+  // Fonctions de gestion du workflow
+  const handleUpdateApplicationStatus = async (applicationId: string, newStatus: string) => {
+    try {
+      await propertyService.updateApplicationStatus(applicationId, newStatus)
+      toast.success(`Candidature ${newStatus === "rejected" ? "refusée" : "mise à jour"}`)
+
+      // Recharger les candidatures
+      const userApplications = await propertyService.getOwnerApplications(currentUser.id)
+      setApplications(userApplications)
+    } catch (error) {
+      toast.error("Erreur lors de la mise à jour")
+    }
+  }
+
+  const handleScheduleVisit = async (applicationId: string) => {
+    try {
+      // Mettre à jour le statut
+      await propertyService.updateApplicationStatus(applicationId, "visit_scheduled")
+      toast.success("Visite programmée ! Vous pouvez maintenant définir les créneaux.")
+
+      // Recharger les candidatures
+      const userApplications = await propertyService.getOwnerApplications(currentUser.id)
+      setApplications(userApplications)
+    } catch (error) {
+      toast.error("Erreur lors de la programmation")
+    }
+  }
+
+  const handleSelectTenant = async (applicationId: string) => {
+    try {
+      // Mettre à jour le statut à "accepted"
+      await propertyService.updateApplicationStatus(applicationId, "accepted")
+      toast.success("Candidat sélectionné ! Vous pouvez maintenant créer le bail.")
+
+      // Recharger les candidatures
+      const userApplications = await propertyService.getOwnerApplications(currentUser.id)
+      setApplications(userApplications)
+    } catch (error) {
+      toast.error("Erreur lors de la sélection")
+    }
+  }
+
+  const handleCreateLease = async (applicationId: string) => {
+    try {
+      // Rediriger vers la création de bail
+      router.push(`/owner/leases/new?application=${applicationId}`)
+    } catch (error) {
+      toast.error("Erreur lors de la redirection")
+    }
+  }
+
   const addDebugLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString()
     const logMessage = `${timestamp}: ${message}`
@@ -561,7 +658,21 @@ export default function OwnerDashboard() {
           {activeTab === "applications" && (
             <Card>
               <CardHeader>
-                <CardTitle>Candidatures ({applications.length})</CardTitle>
+                <CardTitle className="flex items-center justify-between">
+                  Candidatures ({applications.length})
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value)}
+                      className="px-3 py-1 border rounded-md text-sm"
+                    >
+                      <option value="date_desc">Plus récent</option>
+                      <option value="date_asc">Plus ancien</option>
+                      <option value="score_desc">Score élevé</option>
+                      <option value="score_asc">Score faible</option>
+                    </select>
+                  </div>
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 {applications.length === 0 ? (
@@ -572,7 +683,7 @@ export default function OwnerDashboard() {
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    {applications.map((application) => {
+                    {getSortedApplications().map((application) => {
                       // Calcul du score de compatibilité
                       const propertyRent = application.property?.rent_excluding_charges || 0
                       const propertyCharges = application.property?.charges_amount || 0
@@ -753,32 +864,86 @@ export default function OwnerDashboard() {
                                     </span>
                                   </div>
 
-                                  {/* Actions */}
+                                  {/* Actions selon le workflow */}
                                   <div className="flex gap-2">
                                     <Button variant="outline" size="sm" asChild>
                                       <Link href={`/owner/applications/${application.id}`}>
                                         <Eye className="h-4 w-4 mr-1" />
-                                        Voir détails
+                                        Analyser
                                       </Link>
                                     </Button>
 
+                                    {/* Actions pour candidature en attente */}
                                     {application.status === "pending" && (
                                       <>
-                                        <Button size="sm" className="bg-green-600 hover:bg-green-700">
-                                          <CheckCircle className="h-4 w-4 mr-1" />
-                                          Accepter
+                                        <Button
+                                          size="sm"
+                                          onClick={() => handleUpdateApplicationStatus(application.id, "under_review")}
+                                          className="bg-blue-600 hover:bg-blue-700"
+                                        >
+                                          <Clock className="h-4 w-4 mr-1" />
+                                          Analyser
                                         </Button>
-                                        <Button variant="outline" size="sm">
-                                          <Calendar className="h-4 w-4 mr-1" />
-                                          Visite
+                                        <Button
+                                          variant="destructive"
+                                          size="sm"
+                                          onClick={() => handleUpdateApplicationStatus(application.id, "rejected")}
+                                        >
+                                          <X className="h-4 w-4 mr-1" />
+                                          Refuser
                                         </Button>
                                       </>
                                     )}
 
+                                    {/* Actions pour candidature en cours d'analyse */}
+                                    {application.status === "under_review" && (
+                                      <>
+                                        <Button
+                                          size="sm"
+                                          onClick={() => handleScheduleVisit(application.id)}
+                                          className="bg-purple-600 hover:bg-purple-700"
+                                        >
+                                          <Calendar className="h-4 w-4 mr-1" />
+                                          Programmer visite
+                                        </Button>
+                                        <Button
+                                          variant="destructive"
+                                          size="sm"
+                                          onClick={() => handleUpdateApplicationStatus(application.id, "rejected")}
+                                        >
+                                          <X className="h-4 w-4 mr-1" />
+                                          Refuser
+                                        </Button>
+                                      </>
+                                    )}
+
+                                    {/* Actions pour visite programmée */}
                                     {application.status === "visit_scheduled" && (
-                                      <Button size="sm" className="bg-green-600 hover:bg-green-700">
-                                        <CheckCircle className="h-4 w-4 mr-1" />
-                                        Accepter
+                                      <>
+                                        <Button
+                                          size="sm"
+                                          onClick={() => handleSelectTenant(application.id)}
+                                          className="bg-green-600 hover:bg-green-700"
+                                        >
+                                          <CheckCircle className="h-4 w-4 mr-1" />
+                                          Sélectionner
+                                        </Button>
+                                        <Button variant="outline" size="sm">
+                                          <Calendar className="h-4 w-4 mr-1" />
+                                          Modifier visite
+                                        </Button>
+                                      </>
+                                    )}
+
+                                    {/* Actions pour candidature acceptée */}
+                                    {application.status === "accepted" && (
+                                      <Button
+                                        size="sm"
+                                        onClick={() => handleCreateLease(application.id)}
+                                        className="bg-indigo-600 hover:bg-indigo-700"
+                                      >
+                                        <Briefcase className="h-4 w-4 mr-1" />
+                                        Créer bail
                                       </Button>
                                     )}
 
