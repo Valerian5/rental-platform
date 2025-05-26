@@ -20,6 +20,8 @@ import {
   MessageSquare,
   CreditCard,
   MapPin,
+  Briefcase,
+  X,
 } from "lucide-react"
 import Link from "next/link"
 import { propertyService } from "@/lib/property-service"
@@ -569,35 +571,229 @@ export default function OwnerDashboard() {
                     <p className="text-gray-500">Les candidatures pour vos biens apparaîtront ici</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {applications.map((application) => (
-                      <div key={application.id} className="border rounded-lg p-4">
-                        <div className="flex justify-between items-start mb-2">
-                          <div>
-                            <h4 className="font-medium">{application.property?.title}</h4>
-                            <p className="text-sm text-gray-500">
-                              Candidat: {application.tenant?.first_name} {application.tenant?.last_name}
-                            </p>
-                          </div>
-                          <Badge
-                            variant={
-                              application.status === "pending"
-                                ? "secondary"
-                                : application.status === "approved"
-                                  ? "default"
-                                  : "destructive"
-                            }
-                          >
-                            {application.status === "pending" && "En attente"}
-                            {application.status === "approved" && "Approuvée"}
-                            {application.status === "rejected" && "Refusée"}
-                          </Badge>
-                        </div>
-                        <p className="text-xs text-gray-500">
-                          Reçue le {new Date(application.created_at).toLocaleDateString("fr-FR")}
-                        </p>
-                      </div>
-                    ))}
+                  <div className="space-y-6">
+                    {applications.map((application) => {
+                      // Calcul du score de compatibilité
+                      const propertyRent = application.property?.rent_excluding_charges || 0
+                      const propertyCharges = application.property?.charges_amount || 0
+                      const totalRent = propertyRent + propertyCharges
+                      const incomeRatio = application.income ? application.income / totalRent : 0
+
+                      let score = 0
+                      // Score basé sur le ratio revenus/loyer (40 points max)
+                      if (incomeRatio >= 3) score += 40
+                      else if (incomeRatio >= 2.5) score += 30
+                      else if (incomeRatio >= 2) score += 20
+                      else score += 10
+
+                      // Score pour le garant (20 points)
+                      if (application.has_guarantor) score += 20
+
+                      // Score pour la profession (20 points)
+                      const stableProfessions = ["Enseignante", "Ingénieur logiciel", "Infirmière"]
+                      if (stableProfessions.includes(application.profession)) score += 20
+                      else score += 10
+
+                      // Score pour le statut (20 points)
+                      if (application.status === "accepted") score += 20
+                      else if (application.status === "visit_scheduled") score += 15
+                      else if (application.status === "under_review") score += 10
+                      else score += 5
+
+                      const finalScore = Math.min(score, 100)
+
+                      return (
+                        <Card key={application.id} className="hover:shadow-lg transition-shadow">
+                          <CardContent className="p-6">
+                            <div className="flex flex-col lg:flex-row gap-6">
+                              {/* Image de la propriété */}
+                              <div className="flex-shrink-0">
+                                <div className="w-32 h-24 bg-gray-200 rounded-lg overflow-hidden">
+                                  {application.property?.property_images &&
+                                  application.property.property_images.length > 0 ? (
+                                    <img
+                                      src={application.property.property_images[0].image_url || "/placeholder.svg"}
+                                      alt={application.property.title}
+                                      className="w-full h-full object-cover"
+                                      onError={(e) => {
+                                        e.currentTarget.src =
+                                          "/placeholder.svg?height=96&width=128&text=Image+non+disponible"
+                                      }}
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                                      <Home className="h-8 w-8 text-gray-400" />
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Informations principales */}
+                              <div className="flex-1 space-y-4">
+                                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                                  <div>
+                                    <h3 className="text-lg font-semibold">{application.property?.title}</h3>
+                                    <p className="text-sm text-gray-600">
+                                      {application.property?.address}, {application.property?.city}
+                                    </p>
+                                    <div className="flex items-center gap-4 mt-2">
+                                      <div className="flex items-center gap-1">
+                                        <Users className="h-4 w-4 text-gray-500" />
+                                        <span className="text-sm font-medium">
+                                          {application.tenant?.first_name} {application.tenant?.last_name}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-1">
+                                        <Briefcase className="h-4 w-4 text-gray-500" />
+                                        <span className="text-sm text-gray-600">{application.profession}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Score de compatibilité - Cercle de progression */}
+                                  <div className="flex flex-col items-center">
+                                    <div className="relative w-16 h-16">
+                                      <svg className="w-16 h-16 transform -rotate-90" viewBox="0 0 36 36">
+                                        <path
+                                          className="text-gray-200"
+                                          stroke="currentColor"
+                                          strokeWidth="3"
+                                          fill="transparent"
+                                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                        />
+                                        <path
+                                          className={`${
+                                            finalScore >= 80
+                                              ? "text-green-500"
+                                              : finalScore >= 60
+                                                ? "text-yellow-500"
+                                                : "text-red-500"
+                                          }`}
+                                          stroke="currentColor"
+                                          strokeWidth="3"
+                                          strokeLinecap="round"
+                                          fill="transparent"
+                                          strokeDasharray={`${finalScore}, 100`}
+                                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                        />
+                                      </svg>
+                                      <div className="absolute inset-0 flex items-center justify-center">
+                                        <span className="text-sm font-bold">{finalScore}%</span>
+                                      </div>
+                                    </div>
+                                    <span className="text-xs text-gray-500 mt-1">Compatibilité</span>
+                                  </div>
+                                </div>
+
+                                {/* Détails financiers */}
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-3 bg-gray-50 rounded-lg px-4">
+                                  <div>
+                                    <p className="text-xs text-gray-500">Revenus</p>
+                                    <p className="font-semibold">{application.income}€/mois</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-gray-500">Loyer demandé</p>
+                                    <p className="font-semibold">{totalRent}€/mois</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-gray-500">Ratio</p>
+                                    <p className="font-semibold">{incomeRatio.toFixed(1)}x</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-gray-500">Garant</p>
+                                    <p className="font-semibold">
+                                      {application.has_guarantor ? (
+                                        <span className="text-green-600">Oui</span>
+                                      ) : (
+                                        <span className="text-red-600">Non</span>
+                                      )}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {/* Message de candidature */}
+                                {application.message && (
+                                  <div className="bg-blue-50 p-3 rounded-lg">
+                                    <p className="text-sm text-gray-700 line-clamp-2">{application.message}</p>
+                                  </div>
+                                )}
+
+                                {/* Statut et actions */}
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                                  <div className="flex items-center gap-4">
+                                    <Badge
+                                      variant={
+                                        application.status === "pending"
+                                          ? "secondary"
+                                          : application.status === "under_review"
+                                            ? "default"
+                                            : application.status === "visit_scheduled"
+                                              ? "default"
+                                              : application.status === "accepted"
+                                                ? "default"
+                                                : "destructive"
+                                      }
+                                      className="flex items-center gap-1"
+                                    >
+                                      {application.status === "pending" && <Clock className="h-3 w-3" />}
+                                      {application.status === "under_review" && <Clock className="h-3 w-3" />}
+                                      {application.status === "visit_scheduled" && <Calendar className="h-3 w-3" />}
+                                      {application.status === "accepted" && <CheckCircle className="h-3 w-3" />}
+                                      {application.status === "rejected" && <X className="h-3 w-3" />}
+
+                                      {application.status === "pending" && "En attente"}
+                                      {application.status === "under_review" && "En cours d'analyse"}
+                                      {application.status === "visit_scheduled" && "Visite programmée"}
+                                      {application.status === "accepted" && "Acceptée"}
+                                      {application.status === "rejected" && "Refusée"}
+                                    </Badge>
+
+                                    <span className="text-xs text-gray-500">
+                                      Reçue le {new Date(application.created_at).toLocaleDateString("fr-FR")}
+                                    </span>
+                                  </div>
+
+                                  {/* Actions */}
+                                  <div className="flex gap-2">
+                                    <Button variant="outline" size="sm" asChild>
+                                      <Link href={`/owner/applications/${application.id}`}>
+                                        <Eye className="h-4 w-4 mr-1" />
+                                        Voir détails
+                                      </Link>
+                                    </Button>
+
+                                    {application.status === "pending" && (
+                                      <>
+                                        <Button size="sm" className="bg-green-600 hover:bg-green-700">
+                                          <CheckCircle className="h-4 w-4 mr-1" />
+                                          Accepter
+                                        </Button>
+                                        <Button variant="outline" size="sm">
+                                          <Calendar className="h-4 w-4 mr-1" />
+                                          Visite
+                                        </Button>
+                                      </>
+                                    )}
+
+                                    {application.status === "visit_scheduled" && (
+                                      <Button size="sm" className="bg-green-600 hover:bg-green-700">
+                                        <CheckCircle className="h-4 w-4 mr-1" />
+                                        Accepter
+                                      </Button>
+                                    )}
+
+                                    <Button variant="outline" size="sm">
+                                      <MessageSquare className="h-4 w-4 mr-1" />
+                                      Contact
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )
+                    })}
                   </div>
                 )}
               </CardContent>
