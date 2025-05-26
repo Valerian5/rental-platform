@@ -1,4 +1,4 @@
-import { CalendarScheduler } from "@/components/calendar-scheduler"
+import CalendarScheduler from "@/components/calendar-scheduler"
 import { VisitSettings } from "@/components/visit-settings"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
