@@ -1,4 +1,3 @@
-import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs"
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
@@ -22,65 +21,25 @@ export async function middleware(request: NextRequest) {
 
   if (isProtectedRoute) {
     try {
-      // Créer le client Supabase pour le middleware
-      const res = NextResponse.next()
-      const supabase = createMiddlewareClient({ req: request, res })
+      // Récupérer les cookies Supabase
+      const accessToken = request.cookies.get("sb-access-token")?.value
+      const refreshToken = request.cookies.get("sb-refresh-token")?.value
 
-      // Récupérer la session
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
+      console.log("Middleware - Tokens:", {
+        access: accessToken ? "✅ Présent" : "❌ Absent",
+        refresh: refreshToken ? "✅ Présent" : "❌ Absent",
+      })
 
-      console.log("Middleware - Session:", session ? "✅ Connecté" : "❌ Non connecté")
-
-      if (!session) {
-        console.log("Middleware - Redirection vers login")
+      // Si pas de tokens, rediriger vers login
+      if (!accessToken && !refreshToken) {
+        console.log("Middleware - Pas de tokens, redirection vers login")
         return NextResponse.redirect(new URL("/login", request.url))
       }
 
-      // Récupérer les informations utilisateur
-      const { data: userData, error } = await supabase
-        .from("users")
-        .select("user_type")
-        .eq("id", session.user.id)
-        .single()
-
-      console.log("Middleware - Données utilisateur:", userData)
-
-      if (error || !userData) {
-        // Utiliser les métadonnées de l'utilisateur comme fallback
-        const userType = session.user.user_metadata?.user_type || "tenant"
-        console.log("Middleware - Type utilisateur (fallback):", userType)
-
-        // Vérifier les permissions avec le fallback
-        if (ownerRoutes.some((route) => pathname.startsWith(route)) && userType !== "owner") {
-          return NextResponse.redirect(new URL("/unauthorized", request.url))
-        }
-
-        if (tenantRoutes.some((route) => pathname.startsWith(route)) && userType !== "tenant") {
-          return NextResponse.redirect(new URL("/unauthorized", request.url))
-        }
-
-        if (adminRoutes.some((route) => pathname.startsWith(route)) && userType !== "admin") {
-          return NextResponse.redirect(new URL("/unauthorized", request.url))
-        }
-      } else {
-        // Vérifier les permissions avec les données de la base
-        if (ownerRoutes.some((route) => pathname.startsWith(route)) && userData.user_type !== "owner") {
-          return NextResponse.redirect(new URL("/unauthorized", request.url))
-        }
-
-        if (tenantRoutes.some((route) => pathname.startsWith(route)) && userData.user_type !== "tenant") {
-          return NextResponse.redirect(new URL("/unauthorized", request.url))
-        }
-
-        if (adminRoutes.some((route) => pathname.startsWith(route)) && userData.user_type !== "admin") {
-          return NextResponse.redirect(new URL("/unauthorized", request.url))
-        }
-      }
-
-      console.log("Middleware - Accès autorisé à:", pathname)
-      return res
+      // Pour l'instant, on laisse passer si on a des tokens
+      // La vérification des permissions se fera côté client
+      console.log("Middleware - Tokens présents, accès autorisé à:", pathname)
+      return NextResponse.next()
     } catch (error) {
       console.error("Middleware - Erreur:", error)
       return NextResponse.redirect(new URL("/login", request.url))

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createServerClient, isSupabaseConfigured } from "@/lib/supabase"
+import { createServerClient } from "@/lib/supabase"
 
 // Force dynamic rendering
 export const dynamic = "force-dynamic"
@@ -7,16 +7,6 @@ export const dynamic = "force-dynamic"
 export async function GET() {
   try {
     console.log("🔍 Test de la configuration Supabase Storage...")
-
-    if (!isSupabaseConfigured()) {
-      console.log("⚠️ Supabase non configuré - mode développement")
-      return NextResponse.json({
-        success: false,
-        message: "Supabase non configuré",
-        buckets: [],
-        files: [],
-      })
-    }
 
     const supabase = createServerClient()
 
