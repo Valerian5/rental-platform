@@ -14,25 +14,19 @@ import { toast } from "sonner"
 import {
   Users,
   Search,
-  Eye,
   Check,
   X,
   Clock,
   Euro,
-  Calendar,
   SortAsc,
   SortDesc,
   Grid,
   List,
-  ChevronDown,
-  ChevronUp,
-  Download,
-  MessageSquare,
   CheckCircle2,
   XCircle,
-  MoreHorizontal,
 } from "lucide-react"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { MatchingScore } from "@/components/matching-score"
+import { ApplicationActions } from "@/components/application-actions"
 
 export default function ApplicationsPage() {
   const router = useRouter()
@@ -329,58 +323,13 @@ export default function ApplicationsPage() {
             </div>
 
             <div className="flex items-center space-x-2">
-              {application.status === "pending" && (
-                <>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleStatusChange(application.id, "approved")}
-                    className="text-green-600 border-green-600 hover:bg-green-50"
-                  >
-                    <Check className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleStatusChange(application.id, "rejected")}
-                    className="text-red-600 border-red-600 hover:bg-red-50"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </>
-              )}
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="sm" variant="outline">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem asChild>
-                    <a href={`/owner/applications/${application.id}`}>
-                      <Eye className="h-4 w-4 mr-2" />
-                      Examiner en détail
-                    </a>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <MessageSquare className="h-4 w-4 mr-2" />
-                    Contacter
-                  </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Programmer visite
-                  </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <Download className="h-4 w-4 mr-2" />
-                    Télécharger dossier
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <Button size="sm" variant="ghost" onClick={() => setExpandedCard(isExpanded ? null : application.id)}>
-                {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </Button>
+              <MatchingScore application={application} size="sm" />
+              <ApplicationActions
+                application={application}
+                onStatusChange={handleStatusChange}
+                onProposeVisit={handleProposeVisit}
+                onSelectCandidate={handleSelectCandidate}
+              />
             </div>
           </div>
 
@@ -441,6 +390,58 @@ export default function ApplicationsPage() {
     applications.length > 0
       ? Math.round(applications.reduce((sum, app) => sum + (app.match_score || 50), 0) / applications.length)
       : 0
+
+  const handleProposeVisit = async (applicationId: string, slots: any[]) => {
+    try {
+      // Ici vous appellerez votre API pour proposer les créneaux
+      console.log("Proposer visite:", applicationId, slots)
+      toast.success("Proposition de visite envoyée")
+
+      // Mettre à jour le statut
+      await applicationService.updateApplicationStatus(applicationId, "visit_proposed")
+
+      // Recharger les données
+      const user = await authService.getCurrentUser()
+      if (user) {
+        await loadApplications(user.id)
+      }
+    } catch (error) {
+      console.error("Erreur proposition visite:", error)
+      toast.error("Erreur lors de l'envoi de la proposition")
+    }
+  }
+
+  const handleSelectCandidate = async (applicationId: string) => {
+    try {
+      // Sélectionner le candidat
+      await applicationService.updateApplicationStatus(applicationId, "selected")
+
+      // Rejeter tous les autres candidats pour cette propriété
+      const application = applications.find((app) => app.id === applicationId)
+      if (application) {
+        const otherApplications = applications.filter(
+          (app) => app.property_id === application.property_id && app.id !== applicationId && app.status !== "rejected",
+        )
+
+        await Promise.all(
+          otherApplications.map((app) =>
+            applicationService.updateApplicationStatus(app.id, "rejected", "Un autre candidat a été sélectionné"),
+          ),
+        )
+      }
+
+      toast.success("Candidat sélectionné avec succès")
+
+      // Recharger les données
+      const user = await authService.getCurrentUser()
+      if (user) {
+        await loadApplications(user.id)
+      }
+    } catch (error) {
+      console.error("Erreur sélection candidat:", error)
+      toast.error("Erreur lors de la sélection")
+    }
+  }
 
   return (
     <div className="space-y-6 p-6">
