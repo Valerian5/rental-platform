@@ -70,8 +70,7 @@ export const applicationService = {
         .select(`
           *,
           property:properties(
-            id, title, address, city, price, surface, rooms, bedrooms,
-            property_images(id, url, is_primary)
+            id, title, address, city, price, surface, rooms, bedrooms
           ),
           owner:users!applications_owner_id_fkey(
             id, first_name, last_name, email, phone
@@ -103,13 +102,11 @@ export const applicationService = {
         .select(`
           *,
           property:properties(
-            id, title, address, city, price, surface, rooms, bedrooms,
-            property_images(id, url, is_primary)
+            id, title, address, city, price, surface, rooms, bedrooms
           ),
           tenant:users!applications_tenant_id_fkey(
             id, first_name, last_name, email, phone
-          ),
-          documents:documents(id, document_type, status, created_at)
+          )
         `)
         .eq("owner_id", ownerId)
         .order("created_at", { ascending: false })
@@ -137,17 +134,14 @@ export const applicationService = {
         .select(`
           *,
           property:properties(
-            id, title, address, city, price, surface, rooms, bedrooms,
-            property_images(id, url, is_primary)
+            id, title, address, city, price, surface, rooms, bedrooms
           ),
           tenant:users!applications_tenant_id_fkey(
             id, first_name, last_name, email, phone
           ),
           owner:users!applications_owner_id_fkey(
             id, first_name, last_name, email, phone
-          ),
-          documents(id, document_type, file_name, file_url, status, created_at),
-          visits(id, visit_date, start_time, end_time, status, notes)
+          )
         `)
         .eq("id", applicationId)
         .single()
@@ -199,35 +193,6 @@ export const applicationService = {
     }
   },
 
-  // Ajouter un document à une candidature
-  async addDocument(applicationId: string, userId: string, document: ApplicationDocument) {
-    console.log("📎 ApplicationService.addDocument", applicationId, document)
-
-    try {
-      const { data, error } = await supabase
-        .from("documents")
-        .insert({
-          application_id: applicationId,
-          user_id: userId,
-          ...document,
-          status: "pending",
-        })
-        .select()
-        .single()
-
-      if (error) {
-        console.error("❌ Erreur ajout document:", error)
-        throw new Error(error.message)
-      }
-
-      console.log("✅ Document ajouté:", data)
-      return data
-    } catch (error) {
-      console.error("❌ Erreur dans addDocument:", error)
-      throw error
-    }
-  },
-
   // Calculer le score de compatibilité
   calculateMatchScore(application: any, property: any): number {
     let score = 0
@@ -255,7 +220,6 @@ export const applicationService = {
     }
 
     // Documents fournis (15 points max)
-    // Cette partie sera calculée en fonction des documents réellement fournis
     score += 10 // Score de base pour les documents
 
     // Présentation personnalisée (5 points max)

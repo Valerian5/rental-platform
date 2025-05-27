@@ -49,13 +49,11 @@ export const visitService = {
         .select(`
           *,
           property:properties(
-            id, title, address, city, price,
-            property_images(id, url, is_primary)
+            id, title, address, city, price
           ),
           owner:users!visits_owner_id_fkey(
             id, first_name, last_name, phone
-          ),
-          application:applications(id, status)
+          )
         `)
         .eq("tenant_id", tenantId)
         .order("visit_date", { ascending: true })
@@ -83,13 +81,11 @@ export const visitService = {
         .select(`
           *,
           property:properties(
-            id, title, address, city,
-            property_images(id, url, is_primary)
+            id, title, address, city
           ),
           tenant:users!visits_tenant_id_fkey(
             id, first_name, last_name, phone
-          ),
-          application:applications(id, status)
+          )
         `)
         .eq("owner_id", ownerId)
         .order("visit_date", { ascending: true })
