@@ -7,7 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { toast } from "sonner"
+import { toast } from "@/components/ui/use-toast" // Correction de l'import
+import { useToast } from "@/components/ui/use-toast" // Ajout de l'import manquant
 import { authService } from "@/lib/auth-service"
 import {
   Building2,
