@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { authService } from "@/lib/auth-service"
-import { supabase } from "@/lib/supabase"
+import { applicationService } from "@/lib/application-service"
 import { toast } from "sonner"
 import { Users, Search, Filter, Eye, Check, X, Clock, Star, MapPin, Euro, Calendar, Phone, Mail } from "lucide-react"
 
