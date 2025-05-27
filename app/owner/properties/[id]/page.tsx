@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -27,6 +27,10 @@ export default function PropertyDetailPage() {
   const [visitSlots, setVisitSlots] = useState<any[]>([])
   const [error, setError] = useState<string | null>(null)
   const [isUploadingImages, setIsUploadingImages] = useState(false)
+
+  const handleSlotsChange = useCallback((newSlots: any[]) => {
+    setVisitSlots(newSlots)
+  }, [])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -69,7 +73,7 @@ export default function PropertyDetailPage() {
         setProperty(propertyData)
         console.log("✅ Propriété chargée:", propertyData)
 
-        // Récupérer les créneaux de visite
+        // Récupérer les créneaux de visite - une seule fois
         console.log("📅 Récupération des créneaux de visite...")
         const slotsData = await propertyService.getPropertyVisitAvailabilities(params.id as string)
         setVisitSlots(slotsData)
@@ -191,7 +195,7 @@ export default function PropertyDetailPage() {
         <VisitScheduler
           propertyId={property.id}
           visitSlots={visitSlots}
-          onSlotsChange={setVisitSlots}
+          onSlotsChange={handleSlotsChange}
           mode="management"
         />
       </div>
