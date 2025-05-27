@@ -22,6 +22,26 @@ import {
   Bell,
 } from "lucide-react"
 
+const [isLoading, setIsLoading] = useState(true)
+
+useEffect(() => {
+  const verifySession = async () => {
+    try {
+      const res = await fetch('/api/auth/check')
+      if (!res.ok) throw new Error()
+      setIsLoading(false)
+    } catch (error) {
+      router.replace('/login')
+    }
+  }
+  
+  verifySession()
+}, [router])
+
+if (isLoading) {
+  return <div>Chargement...</div>
+}
+
 const navigation = [
   { name: "Vue d'ensemble", href: "/owner/dashboard", icon: Home },
   { name: "Mes annonces", href: "/owner/properties", icon: Building2 },
