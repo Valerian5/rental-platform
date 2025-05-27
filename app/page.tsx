@@ -28,10 +28,10 @@ export default function HomePage() {
             </nav>
             <div className="flex space-x-4">
               <Button variant="outline" asChild>
-                <Link href="/auth/login">Connexion</Link>
+                <Link href="/login">Connexion</Link>
               </Button>
               <Button asChild>
-                <Link href="/auth/register">Inscription</Link>
+                <Link href="/register">Inscription</Link>
               </Button>
             </div>
           </div>
