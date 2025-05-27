@@ -60,14 +60,33 @@ export default function OwnerDashboard() {
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([])
   const [recentProperties, setRecentProperties] = useState([])
 
-  useEffect(() => {
-    const token = localStorage.getItem("token")
-    if (!token) {
-      router.push("/login")
-    } else {
-      loadDashboardData()
+useEffect(() => {
+  const checkAuth = async () => {
+    try {
+      // 1. Vérification côté serveur
+      const res = await fetch('/api/auth/check')
+      
+      if (!res.ok) {
+        router.replace('/login')
+        return
+      }
+
+      // 2. Chargement des données uniquement si authentifié
+      const user = JSON.parse(localStorage.getItem('user') || '{}')
+      if (user?.id) {
+        await loadDashboardData()
+      } else {
+        router.replace('/login')
+      }
+
+    } catch (error) {
+      console.error('Erreur vérification auth:', error)
+      router.replace('/login')
     }
-  }, [router])
+  }
+
+  checkAuth()
+}, [router])
 
   const loadDashboardData = async () => {
     try {
