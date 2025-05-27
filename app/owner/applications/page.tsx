@@ -2,15 +2,37 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { authService } from "@/lib/auth-service"
 import { applicationService } from "@/lib/application-service"
 import { toast } from "sonner"
-import { Users, Search, Filter, Eye, Check, X, Clock, Star, MapPin, Euro, Calendar, Phone, Mail } from "lucide-react"
+import {
+  Users,
+  Search,
+  Eye,
+  Check,
+  X,
+  Clock,
+  Euro,
+  Calendar,
+  SortAsc,
+  SortDesc,
+  Grid,
+  List,
+  ChevronDown,
+  ChevronUp,
+  Download,
+  MessageSquare,
+  CheckCircle2,
+  XCircle,
+  MoreHorizontal,
+} from "lucide-react"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 export default function ApplicationsPage() {
   const router = useRouter()
@@ -18,11 +40,18 @@ export default function ApplicationsPage() {
   const [applications, setApplications] = useState<any[]>([])
   const [filteredApplications, setFilteredApplications] = useState<any[]>([])
   const [properties, setProperties] = useState<any[]>([])
+  const [selectedApplications, setSelectedApplications] = useState<string[]>([])
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list")
+  const [sortBy, setSortBy] = useState<"date" | "score" | "name">("score")
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
+  const [expandedCard, setExpandedCard] = useState<string | null>(null)
   const [filters, setFilters] = useState({
     status: "all",
     property: "all",
     search: "",
     dateRange: "all",
+    scoreRange: "all",
+    hasGuarantor: "all",
   })
 
   useEffect(() => {
@@ -30,8 +59,8 @@ export default function ApplicationsPage() {
   }, [])
 
   useEffect(() => {
-    applyFilters()
-  }, [applications, filters])
+    applyFiltersAndSort()
+  }, [applications, filters, sortBy, sortOrder])
 
   const checkAuthAndLoadData = async () => {
     try {
@@ -54,13 +83,10 @@ export default function ApplicationsPage() {
   const loadApplications = async (ownerId: string) => {
     try {
       const data = await applicationService.getOwnerApplications(ownerId)
-
-      // Calculer le score pour chaque candidature
       const applicationsWithScore = data.map((app) => ({
         ...app,
         match_score: applicationService.calculateMatchScore(app, app.property),
       }))
-
       setApplications(applicationsWithScore)
     } catch (error) {
       console.error("Erreur chargement candidatures:", error)
@@ -80,9 +106,10 @@ export default function ApplicationsPage() {
     }
   }
 
-  const applyFilters = () => {
+  const applyFiltersAndSort = () => {
     let filtered = [...applications]
 
+    // Filtres
     if (filters.status !== "all") {
       filtered = filtered.filter((app) => app.status === filters.status)
     }
@@ -98,8 +125,22 @@ export default function ApplicationsPage() {
           app.tenant?.first_name?.toLowerCase().includes(search) ||
           app.tenant?.last_name?.toLowerCase().includes(search) ||
           app.property?.title?.toLowerCase().includes(search) ||
-          app.property?.address?.toLowerCase().includes(search),
+          app.tenant?.email?.toLowerCase().includes(search) ||
+          app.profession?.toLowerCase().includes(search),
       )
+    }
+
+    if (filters.scoreRange !== "all") {
+      const [min, max] = filters.scoreRange.split("-").map(Number)
+      filtered = filtered.filter((app) => {
+        const score = app.match_score || 50
+        return score >= min && (max ? score <= max : true)
+      })
+    }
+
+    if (filters.hasGuarantor !== "all") {
+      const hasGuarantor = filters.hasGuarantor === "yes"
+      filtered = filtered.filter((app) => app.has_guarantor === hasGuarantor)
     }
 
     if (filters.dateRange !== "all") {
@@ -108,6 +149,34 @@ export default function ApplicationsPage() {
       const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
       filtered = filtered.filter((app) => new Date(app.created_at) >= cutoff)
     }
+
+    // Tri
+    filtered.sort((a, b) => {
+      let aValue, bValue
+
+      switch (sortBy) {
+        case "score":
+          aValue = a.match_score || 50
+          bValue = b.match_score || 50
+          break
+        case "date":
+          aValue = new Date(a.created_at).getTime()
+          bValue = new Date(b.created_at).getTime()
+          break
+        case "name":
+          aValue = `${a.tenant?.first_name || ""} ${a.tenant?.last_name || ""}`.toLowerCase()
+          bValue = `${b.tenant?.first_name || ""} ${b.tenant?.last_name || ""}`.toLowerCase()
+          break
+        default:
+          return 0
+      }
+
+      if (sortOrder === "asc") {
+        return aValue > bValue ? 1 : -1
+      } else {
+        return aValue < bValue ? 1 : -1
+      }
+    })
 
     setFilteredApplications(filtered)
   }
@@ -127,6 +196,33 @@ export default function ApplicationsPage() {
     }
   }
 
+  const handleBulkAction = async (action: "approve" | "reject") => {
+    if (selectedApplications.length === 0) {
+      toast.error("Aucune candidature sélectionnée")
+      return
+    }
+
+    try {
+      const promises = selectedApplications.map((id) =>
+        applicationService.updateApplicationStatus(id, action === "approve" ? "approved" : "rejected"),
+      )
+
+      await Promise.all(promises)
+      toast.success(
+        `${selectedApplications.length} candidature(s) ${action === "approve" ? "approuvée(s)" : "rejetée(s)"}`,
+      )
+
+      setSelectedApplications([])
+      const user = await authService.getCurrentUser()
+      if (user) {
+        await loadApplications(user.id)
+      }
+    } catch (error) {
+      console.error("Erreur action groupée:", error)
+      toast.error("Erreur lors de l'action groupée")
+    }
+  }
+
   const getScoreColor = (score: number) => {
     if (score >= 80) return "text-green-600"
     if (score >= 60) return "text-yellow-600"
@@ -142,14 +238,178 @@ export default function ApplicationsPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "pending":
-        return <Badge variant="secondary">En attente</Badge>
+        return (
+          <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
+            <Clock className="h-3 w-3 mr-1" />
+            En attente
+          </Badge>
+        )
       case "approved":
-        return <Badge className="bg-green-100 text-green-800">Approuvée</Badge>
+        return (
+          <Badge className="bg-green-100 text-green-800">
+            <CheckCircle2 className="h-3 w-3 mr-1" />
+            Approuvée
+          </Badge>
+        )
       case "rejected":
-        return <Badge variant="destructive">Rejetée</Badge>
+        return (
+          <Badge variant="destructive">
+            <XCircle className="h-3 w-3 mr-1" />
+            Rejetée
+          </Badge>
+        )
       default:
         return <Badge variant="outline">{status}</Badge>
     }
+  }
+
+  const CompactApplicationCard = ({ application }: { application: any }) => {
+    const score = application.match_score || 50
+    const isExpanded = expandedCard === application.id
+    const isSelected = selectedApplications.includes(application.id)
+
+    return (
+      <Card
+        className={`transition-all duration-200 ${isSelected ? "ring-2 ring-blue-500" : ""} ${isExpanded ? "shadow-lg" : "hover:shadow-md"}`}
+      >
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3 flex-1">
+              <Checkbox
+                checked={isSelected}
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    setSelectedApplications([...selectedApplications, application.id])
+                  } else {
+                    setSelectedApplications(selectedApplications.filter((id) => id !== application.id))
+                  }
+                }}
+              />
+
+              <div className="relative">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">
+                    {application.tenant?.first_name?.[0] || "?"}
+                    {application.tenant?.last_name?.[0] || "?"}
+                  </span>
+                </div>
+                <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-white border-2 border-white flex items-center justify-center">
+                  <div
+                    className="w-4 h-4 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                    style={{
+                      background: `conic-gradient(${getScoreProgressColor(score)} ${score * 3.6}deg, #e5e7eb 0deg)`,
+                    }}
+                  >
+                    {score}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center space-x-2">
+                  <h3 className="font-semibold truncate">
+                    {application.tenant?.first_name || "Prénom"} {application.tenant?.last_name || "Nom"}
+                  </h3>
+                  {getStatusBadge(application.status)}
+                </div>
+                <p className="text-sm text-muted-foreground truncate">
+                  {application.property?.title || "Propriété"} • {application.profession || "Profession non renseignée"}
+                </p>
+                <div className="flex items-center space-x-4 mt-1 text-xs text-muted-foreground">
+                  {application.income && (
+                    <span className="flex items-center">
+                      <Euro className="h-3 w-3 mr-1" />
+                      {application.income}€/mois
+                    </span>
+                  )}
+                  {application.has_guarantor && <span className="text-green-600">Avec garant</span>}
+                  <span>{new Date(application.created_at).toLocaleDateString()}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              {application.status === "pending" && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleStatusChange(application.id, "approved")}
+                    className="text-green-600 border-green-600 hover:bg-green-50"
+                  >
+                    <Check className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleStatusChange(application.id, "rejected")}
+                    className="text-red-600 border-red-600 hover:bg-red-50"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem asChild>
+                    <a href={`/owner/applications/${application.id}`}>
+                      <Eye className="h-4 w-4 mr-2" />
+                      Examiner en détail
+                    </a>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem>
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    Contacter
+                  </DropdownMenuItem>
+                  <DropdownMenuItem>
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Programmer visite
+                  </DropdownMenuItem>
+                  <DropdownMenuItem>
+                    <Download className="h-4 w-4 mr-2" />
+                    Télécharger dossier
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <Button size="sm" variant="ghost" onClick={() => setExpandedCard(isExpanded ? null : application.id)}>
+                {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
+
+          {isExpanded && (
+            <div className="mt-4 pt-4 border-t space-y-3">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <h4 className="font-medium mb-1">Contact</h4>
+                  <p className="text-muted-foreground">{application.tenant?.email}</p>
+                  {application.tenant?.phone && <p className="text-muted-foreground">{application.tenant.phone}</p>}
+                </div>
+                <div>
+                  <h4 className="font-medium mb-1">Propriété</h4>
+                  <p className="text-muted-foreground">{application.property?.address}</p>
+                  <p className="text-muted-foreground">{application.property?.price}€/mois</p>
+                </div>
+              </div>
+
+              {application.message && (
+                <div>
+                  <h4 className="font-medium mb-1">Message</h4>
+                  <p className="text-sm text-muted-foreground bg-gray-50 p-2 rounded">{application.message}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    )
   }
 
   if (loading) {
@@ -158,15 +418,14 @@ export default function ApplicationsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Candidatures</h1>
-            <p className="text-muted-foreground">Gérez les demandes de location</p>
+            <p className="text-muted-foreground">Chargement...</p>
           </div>
         </div>
-        <div className="grid gap-4">
-          {[...Array(3)].map((_, i) => (
+        <div className="grid gap-2">
+          {[...Array(5)].map((_, i) => (
             <Card key={i} className="animate-pulse">
-              <CardContent className="p-6">
-                <div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div>
-                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+              <CardContent className="p-4">
+                <div className="h-16 bg-gray-200 rounded"></div>
               </CardContent>
             </Card>
           ))}
@@ -175,9 +434,17 @@ export default function ApplicationsPage() {
     )
   }
 
+  const pendingCount = applications.filter((a) => a.status === "pending").length
+  const approvedCount = applications.filter((a) => a.status === "approved").length
+  const rejectedCount = applications.filter((a) => a.status === "rejected").length
+  const avgScore =
+    applications.length > 0
+      ? Math.round(applications.reduce((sum, app) => sum + (app.match_score || 50), 0) / applications.length)
+      : 0
+
   return (
     <div className="space-y-6 p-6">
-      {/* Header */}
+      {/* Header avec statistiques */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Candidatures</h1>
@@ -185,276 +452,190 @@ export default function ApplicationsPage() {
             {applications.length} candidature{applications.length > 1 ? "s" : ""} au total
           </p>
         </div>
+
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 text-sm">
+            <div className="flex items-center space-x-1">
+              <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+              <span>{pendingCount} en attente</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+              <span>{approvedCount} approuvées</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+              <span>{rejectedCount} rejetées</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Filtres */}
+      {/* Barre d'outils */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <Filter className="h-5 w-5 mr-2" />
-            Filtres
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Rechercher..."
-                value={filters.search}
-                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                className="pl-10"
-              />
+        <CardContent className="p-4">
+          <div className="flex flex-col lg:flex-row gap-4">
+            {/* Filtres */}
+            <div className="flex-1 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Rechercher..."
+                  value={filters.search}
+                  onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                  className="pl-10"
+                />
+              </div>
+
+              <Select value={filters.status} onValueChange={(value) => setFilters({ ...filters, status: value })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Statut" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous</SelectItem>
+                  <SelectItem value="pending">En attente</SelectItem>
+                  <SelectItem value="approved">Approuvées</SelectItem>
+                  <SelectItem value="rejected">Rejetées</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={filters.scoreRange}
+                onValueChange={(value) => setFilters({ ...filters, scoreRange: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Score" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous scores</SelectItem>
+                  <SelectItem value="80-100">Excellent (80-100)</SelectItem>
+                  <SelectItem value="60-79">Bon (60-79)</SelectItem>
+                  <SelectItem value="40-59">Moyen (40-59)</SelectItem>
+                  <SelectItem value="0-39">Faible (0-39)</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={filters.property} onValueChange={(value) => setFilters({ ...filters, property: value })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Propriété" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes</SelectItem>
+                  {properties.map((property) => (
+                    <SelectItem key={property.id} value={property.id}>
+                      {property.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={filters.hasGuarantor}
+                onValueChange={(value) => setFilters({ ...filters, hasGuarantor: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Garant" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous</SelectItem>
+                  <SelectItem value="yes">Avec garant</SelectItem>
+                  <SelectItem value="no">Sans garant</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={filters.dateRange} onValueChange={(value) => setFilters({ ...filters, dateRange: value })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Période" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes</SelectItem>
+                  <SelectItem value="week">Cette semaine</SelectItem>
+                  <SelectItem value="month">Ce mois</SelectItem>
+                  <SelectItem value="quarter">Ce trimestre</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            <Select value={filters.status} onValueChange={(value) => setFilters({ ...filters, status: value })}>
-              <SelectTrigger>
-                <SelectValue placeholder="Statut" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les statuts</SelectItem>
-                <SelectItem value="pending">En attente</SelectItem>
-                <SelectItem value="approved">Approuvées</SelectItem>
-                <SelectItem value="rejected">Rejetées</SelectItem>
-              </SelectContent>
-            </Select>
+            {/* Tri et actions */}
+            <div className="flex items-center space-x-2">
+              <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="score">Score</SelectItem>
+                  <SelectItem value="date">Date</SelectItem>
+                  <SelectItem value="name">Nom</SelectItem>
+                </SelectContent>
+              </Select>
 
-            <Select value={filters.property} onValueChange={(value) => setFilters({ ...filters, property: value })}>
-              <SelectTrigger>
-                <SelectValue placeholder="Propriété" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Toutes les propriétés</SelectItem>
-                {properties.map((property) => (
-                  <SelectItem key={property.id} value={property.id}>
-                    {property.title}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              <Button variant="outline" size="sm" onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}>
+                {sortOrder === "asc" ? <SortAsc className="h-4 w-4" /> : <SortDesc className="h-4 w-4" />}
+              </Button>
 
-            <Select value={filters.dateRange} onValueChange={(value) => setFilters({ ...filters, dateRange: value })}>
-              <SelectTrigger>
-                <SelectValue placeholder="Période" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Toutes les dates</SelectItem>
-                <SelectItem value="week">Cette semaine</SelectItem>
-                <SelectItem value="month">Ce mois</SelectItem>
-                <SelectItem value="quarter">Ce trimestre</SelectItem>
-              </SelectContent>
-            </Select>
+              <Button variant="outline" size="sm" onClick={() => setViewMode(viewMode === "list" ? "grid" : "list")}>
+                {viewMode === "list" ? <Grid className="h-4 w-4" /> : <List className="h-4 w-4" />}
+              </Button>
+            </div>
           </div>
+
+          {/* Actions groupées */}
+          {selectedApplications.length > 0 && (
+            <div className="flex items-center justify-between mt-4 p-3 bg-blue-50 rounded-lg">
+              <span className="text-sm font-medium">{selectedApplications.length} candidature(s) sélectionnée(s)</span>
+              <div className="flex space-x-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleBulkAction("approve")}
+                  className="text-green-600 border-green-600"
+                >
+                  <Check className="h-4 w-4 mr-1" />
+                  Approuver
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleBulkAction("reject")}
+                  className="text-red-600 border-red-600"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Rejeter
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setSelectedApplications([])}>
+                  Annuler
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Statistiques rapides */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center">
-              <Clock className="h-8 w-8 text-yellow-600" />
-              <div className="ml-4">
-                <p className="text-sm font-medium text-muted-foreground">En attente</p>
-                <p className="text-2xl font-bold">{applications.filter((a) => a.status === "pending").length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center">
-              <Check className="h-8 w-8 text-green-600" />
-              <div className="ml-4">
-                <p className="text-sm font-medium text-muted-foreground">Approuvées</p>
-                <p className="text-2xl font-bold">{applications.filter((a) => a.status === "approved").length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center">
-              <X className="h-8 w-8 text-red-600" />
-              <div className="ml-4">
-                <p className="text-sm font-medium text-muted-foreground">Rejetées</p>
-                <p className="text-2xl font-bold">{applications.filter((a) => a.status === "rejected").length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center">
-              <Star className="h-8 w-8 text-blue-600" />
-              <div className="ml-4">
-                <p className="text-sm font-medium text-muted-foreground">Score moyen</p>
-                <p className="text-2xl font-bold">
-                  {applications.length > 0
-                    ? Math.round(
-                        applications.reduce((sum, app) => sum + (app.match_score || 50), 0) / applications.length,
-                      )
-                    : 0}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Liste des candidatures */}
-      <div className="space-y-4">
+      <div className="space-y-2">
         {filteredApplications.length === 0 ? (
           <Card>
             <CardContent className="p-12 text-center">
               <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">Aucune candidature</h3>
               <p className="text-muted-foreground">
-                {filters.status !== "all" || filters.property !== "all" || filters.search
+                {Object.values(filters).some((f) => f !== "all") || filters.search
                   ? "Aucune candidature ne correspond à vos filtres"
                   : "Vous n'avez pas encore reçu de candidatures"}
               </p>
             </CardContent>
           </Card>
         ) : (
-          filteredApplications.map((application) => {
-            const score = application.match_score || 50
-            return (
-              <Card key={application.id} className="overflow-hidden">
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-4 mb-4">
-                        <div className="relative">
-                          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                            <span className="text-white font-bold text-lg">
-                              {application.tenant?.first_name?.[0] || "?"}
-                              {application.tenant?.last_name?.[0] || "?"}
-                            </span>
-                          </div>
-                          <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-white border-2 border-white flex items-center justify-center">
-                            <div
-                              className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white"
-                              style={{
-                                background: `conic-gradient(${getScoreProgressColor(score)} ${score * 3.6}deg, #e5e7eb 0deg)`,
-                              }}
-                            >
-                              {score}
-                            </div>
-                          </div>
-                        </div>
+          <>
+            <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
+              <span>{filteredApplications.length} résultat(s)</span>
+              <span>Score moyen: {avgScore}/100</span>
+            </div>
 
-                        <div className="flex-1">
-                          <h3 className="text-lg font-semibold">
-                            {application.tenant?.first_name || "Prénom"} {application.tenant?.last_name || "Nom"}
-                          </h3>
-                          <p className="text-sm text-muted-foreground">
-                            {application.profession || "Profession non renseignée"}
-                          </p>
-                          <div className="flex items-center space-x-4 mt-2 text-sm text-muted-foreground">
-                            <div className="flex items-center">
-                              <Mail className="h-4 w-4 mr-1" />
-                              {application.tenant?.email || "Email non renseigné"}
-                            </div>
-                            {application.tenant?.phone && (
-                              <div className="flex items-center">
-                                <Phone className="h-4 w-4 mr-1" />
-                                {application.tenant.phone}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div>
-                          <h4 className="font-medium mb-2">Propriété demandée</h4>
-                          <div className="space-y-1 text-sm">
-                            <p className="font-medium">{application.property?.title || "Titre non disponible"}</p>
-                            <div className="flex items-center text-muted-foreground">
-                              <MapPin className="h-4 w-4 mr-1" />
-                              {application.property?.address || "Adresse non disponible"}
-                            </div>
-                            <div className="flex items-center text-muted-foreground">
-                              <Euro className="h-4 w-4 mr-1" />
-                              {application.property?.price || 0}€/mois
-                            </div>
-                          </div>
-                        </div>
-
-                        <div>
-                          <h4 className="font-medium mb-2">Informations financières</h4>
-                          <div className="space-y-1 text-sm">
-                            {application.income ? (
-                              <>
-                                <p>Revenus: {application.income}€/mois</p>
-                                <p>Ratio: {((application.property?.price / application.income) * 100).toFixed(1)}%</p>
-                              </>
-                            ) : (
-                              <p className="text-muted-foreground">Informations non renseignées</p>
-                            )}
-                            <p>Garant: {application.has_guarantor ? "Oui" : "Non"}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {application.message && (
-                        <div className="mb-4">
-                          <h4 className="font-medium mb-2">Message du candidat</h4>
-                          <p className="text-sm text-muted-foreground bg-gray-50 p-3 rounded-lg">
-                            {application.message}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex flex-col items-end space-y-3">
-                      {getStatusBadge(application.status)}
-
-                      <div className="text-xs text-muted-foreground">
-                        <Calendar className="h-3 w-3 inline mr-1" />
-                        {new Date(application.created_at).toLocaleDateString()}
-                      </div>
-
-                      <div className="flex flex-col space-y-2">
-                        <Button size="sm" variant="outline" asChild>
-                          <a href={`/owner/applications/${application.id}`}>
-                            <Eye className="h-4 w-4 mr-1" />
-                            Examiner
-                          </a>
-                        </Button>
-
-                        {application.status === "pending" && (
-                          <div className="flex space-x-2">
-                            <Button
-                              size="sm"
-                              variant="default"
-                              onClick={() => handleStatusChange(application.id, "approved")}
-                              className="bg-green-600 hover:bg-green-700"
-                            >
-                              <Check className="h-4 w-4 mr-1" />
-                              Accepter
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => handleStatusChange(application.id, "rejected")}
-                            >
-                              <X className="h-4 w-4 mr-1" />
-                              Refuser
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })
+            {filteredApplications.map((application) => (
+              <CompactApplicationCard key={application.id} application={application} />
+            ))}
+          </>
         )}
       </div>
     </div>
