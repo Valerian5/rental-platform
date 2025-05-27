@@ -33,7 +33,6 @@ interface Application {
     price: number
     type: string
   }
-  documents: any[]
   message: string
 }
 
