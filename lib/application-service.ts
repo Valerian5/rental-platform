@@ -109,7 +109,7 @@ export const applicationService = {
           tenant:users!applications_tenant_id_fkey(
             id, first_name, last_name, email, phone
           ),
-          documents(id, document_type, status, created_at)
+          documents:documents(id, document_type, status, created_at)
         `)
         .eq("owner_id", ownerId)
         .order("created_at", { ascending: false })

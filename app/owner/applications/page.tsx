@@ -33,6 +33,12 @@ interface Application {
     price: number
     type: string
   }
+  documents: Array<{
+    id: string
+    document_type: string
+    file_url: string
+    created_at: string
+  }>
   message: string
 }
 
