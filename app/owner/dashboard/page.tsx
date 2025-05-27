@@ -7,8 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { toast } from "sonner"
-import { authService } from "@/lib/auth-service"
+import { useToast } from "@/hooks/use-toast"
 import {
   Building2,
   Users,
@@ -60,25 +59,12 @@ export default function OwnerDashboard() {
   const [recentProperties, setRecentProperties] = useState([])
 
   useEffect(() => {
-    const checkAuthAndLoadData = async () => {
-      try {
-        const currentUser = await authService.getCurrentUser()
-        if (!currentUser) {
-          router.push("/login")
-          return
-        }
-        if (currentUser.user_type !== "owner") {
-          router.push("/unauthorized")
-          return
-        }
-        setUser(currentUser)
-        await loadDashboardData(currentUser.id)
-      } catch (error) {
-        console.error("❌ Dashboard - Erreur auth:", error)
-        router.push("/login")
-      }
+    const token = localStorage.getItem("token")
+    if (!token) {
+      router.push("/login")
+    } else {
+      loadDashboardData()
     }
-    checkAuthAndLoadData()
   }, [router])
 
   const loadDashboardData = async () => {
