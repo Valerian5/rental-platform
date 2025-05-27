@@ -442,20 +442,15 @@ export const propertyService = {
     console.log("📅 PropertyService.getPropertyVisitAvailabilities - ID:", propertyId)
 
     try {
-      const { data, error } = await supabase
-        .from("visit_availabilities")
-        .select("*")
-        .eq("property_id", propertyId)
-        .order("date", { ascending: true })
-        .order("start_time", { ascending: true })
+      const response = await fetch(`/api/properties/${propertyId}/visit-slots`)
 
-      if (error) {
-        console.error("❌ Erreur lors de la récupération des créneaux:", error)
-        throw new Error(error.message)
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status}`)
       }
 
-      console.log("✅ Créneaux récupérés:", data?.length || 0)
-      return data || []
+      const data = await response.json()
+      console.log("✅ Créneaux récupérés via API:", data.slots?.length || 0)
+      return data.slots || []
     } catch (error) {
       console.error("❌ Erreur dans getPropertyVisitAvailabilities:", error)
       return []

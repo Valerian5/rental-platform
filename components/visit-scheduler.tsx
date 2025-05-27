@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Calendar, Settings, Copy, Trash2, Plus, ChevronLeft, ChevronRight, Check } from "lucide-react"
+import { Calendar, Settings, Copy, Trash2, Plus, ChevronLeft, ChevronRight, Check, Save, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 
 interface VisitSlot {
@@ -98,6 +98,78 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
   const [calendarStartDate, setCalendarStartDate] = useState(new Date())
   const [selectedDays, setSelectedDays] = useState<Set<string>>(new Set())
   const [showDaySelector, setShowDaySelector] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+
+  // Charger les créneaux depuis la base de données
+  useEffect(() => {
+    if (mode === "management" && propertyId) {
+      loadSlotsFromDatabase()
+    }
+  }, [mode, propertyId])
+
+  const loadSlotsFromDatabase = async () => {
+    if (!propertyId) return
+
+    setIsLoading(true)
+    try {
+      console.log("🔄 Chargement des créneaux depuis la DB...")
+      const response = await fetch(`/api/properties/${propertyId}/visit-slots`)
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log("✅ Créneaux chargés:", data.slots?.length || 0)
+        onSlotsChange(data.slots || [])
+      } else {
+        console.error("❌ Erreur chargement créneaux:", response.status)
+        toast.error("Erreur lors du chargement des créneaux")
+      }
+    } catch (error) {
+      console.error("❌ Erreur chargement créneaux:", error)
+      toast.error("Erreur lors du chargement des créneaux")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Sauvegarder les créneaux en base de données
+  const saveSlotsToDatabase = async (slots: VisitSlot[]) => {
+    if (!propertyId || mode !== "management") {
+      console.log("⚠️ Pas de sauvegarde - mode création ou pas de propertyId")
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      console.log("💾 Sauvegarde des créneaux en DB...", slots.length)
+
+      const response = await fetch(`/api/properties/${propertyId}/visit-slots`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ slots }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log("✅ Créneaux sauvegardés:", data.message)
+        toast.success(data.message || "Créneaux sauvegardés avec succès")
+
+        // Recharger les créneaux pour avoir les IDs
+        await loadSlotsFromDatabase()
+      } else {
+        const errorData = await response.json()
+        console.error("❌ Erreur sauvegarde:", errorData)
+        toast.error(errorData.error || "Erreur lors de la sauvegarde")
+      }
+    } catch (error) {
+      console.error("❌ Erreur sauvegarde créneaux:", error)
+      toast.error("Erreur lors de la sauvegarde des créneaux")
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   // Générer les jours du calendrier
   useEffect(() => {
@@ -152,10 +224,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
         const nextTime = new Date(currentTime.getTime() + settings.slotDuration * 60000)
 
         if (nextTime <= endTime) {
-          const slotId = `${date}-${currentTime.toTimeString().slice(0, 5)}`
-
           slots.push({
-            id: slotId,
             date,
             start_time: currentTime.toTimeString().slice(0, 5),
             end_time: nextTime.toTimeString().slice(0, 5),
@@ -174,7 +243,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
   }
 
   // Générer tous les créneaux selon la configuration
-  const generateAllSlots = () => {
+  const generateAllSlots = async () => {
     const allSlots: VisitSlot[] = []
 
     calendarDays.forEach((day) => {
@@ -186,7 +255,13 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
 
     onSlotsChange(allSlots)
     setSelectedSlots(new Set())
-    toast.success(`${allSlots.length} créneaux générés selon votre configuration`)
+
+    // Sauvegarder automatiquement en mode gestion
+    if (mode === "management") {
+      await saveSlotsToDatabase(allSlots)
+    } else {
+      toast.success(`${allSlots.length} créneaux générés selon votre configuration`)
+    }
   }
 
   // Basculer la sélection d'un créneau
@@ -201,14 +276,21 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
   }
 
   // Supprimer les créneaux sélectionnés
-  const removeSelectedSlots = () => {
+  const removeSelectedSlots = async () => {
     const newSlots = visitSlots.filter((slot) => {
-      const slotId = `${slot.date}-${slot.start_time}`
+      const slotId = slot.id || `${slot.date}-${slot.start_time}`
       return !selectedSlots.has(slotId)
     })
+
     onSlotsChange(newSlots)
     setSelectedSlots(new Set())
-    toast.success(`${selectedSlots.size} créneaux supprimés`)
+
+    // Sauvegarder automatiquement en mode gestion
+    if (mode === "management") {
+      await saveSlotsToDatabase(newSlots)
+    } else {
+      toast.success(`${selectedSlots.size} créneaux supprimés`)
+    }
   }
 
   // Dupliquer la configuration d'un jour
@@ -279,7 +361,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
   }
 
   // Ajouter un créneau individuel
-  const addIndividualSlot = (date: string, dayOfWeek: number) => {
+  const addIndividualSlot = async (date: string, dayOfWeek: number) => {
     const dayConfig = settings.daysConfig[dayOfWeek]
     if (!dayConfig?.enabled) {
       toast.error("Ce jour n'est pas configuré pour les visites")
@@ -308,7 +390,6 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
     endTime.setMinutes(endTime.getMinutes() + settings.slotDuration)
 
     const newSlot: VisitSlot = {
-      id: `${date}-${startTime}`,
       date,
       start_time: startTime,
       end_time: endTime.toTimeString().slice(0, 5),
@@ -318,20 +399,48 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
       is_available: true,
     }
 
-    onSlotsChange([...visitSlots, newSlot])
-    toast.success("Créneau ajouté")
+    const newSlots = [...visitSlots, newSlot]
+    onSlotsChange(newSlots)
+
+    // Sauvegarder automatiquement en mode gestion
+    if (mode === "management") {
+      await saveSlotsToDatabase(newSlots)
+    } else {
+      toast.success("Créneau ajouté")
+    }
   }
 
   // Supprimer un créneau individuel
-  const removeIndividualSlot = (slotId: string) => {
-    const newSlots = visitSlots.filter((slot) => `${slot.date}-${slot.start_time}` !== slotId)
+  const removeIndividualSlot = async (slotId: string) => {
+    const newSlots = visitSlots.filter((slot) => {
+      const id = slot.id || `${slot.date}-${slot.start_time}`
+      return id !== slotId
+    })
+
     onSlotsChange(newSlots)
-    toast.success("Créneau supprimé")
+
+    // Sauvegarder automatiquement en mode gestion
+    if (mode === "management") {
+      await saveSlotsToDatabase(newSlots)
+    } else {
+      toast.success("Créneau supprimé")
+    }
   }
 
   const totalSlots = visitSlots.length
   const selectedCount = selectedSlots.size
   const availableSlots = visitSlots.filter((slot) => slot.is_available).length
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center space-y-4">
+          <RefreshCw className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
+          <p className="text-muted-foreground">Chargement des créneaux...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -362,6 +471,11 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                   <Button variant="outline" size="sm" onClick={() => navigateCalendar("next")}>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
+                  {mode === "management" && (
+                    <Button variant="outline" size="sm" onClick={loadSlotsFromDatabase} disabled={isLoading}>
+                      <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -378,15 +492,25 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                     📅 Sélectionner des jours
                   </Button>
                   {selectedCount > 0 && (
-                    <Button variant="destructive" size="sm" onClick={removeSelectedSlots}>
+                    <Button variant="destructive" size="sm" onClick={removeSelectedSlots} disabled={isSaving}>
                       <Trash2 className="h-4 w-4 mr-1" />
                       Supprimer ({selectedCount})
                     </Button>
                   )}
-                  <Button onClick={generateAllSlots} size="sm">
+                  <Button onClick={generateAllSlots} size="sm" disabled={isSaving}>
                     <Plus className="h-4 w-4 mr-1" />
                     Générer créneaux
                   </Button>
+                  {mode === "management" && totalSlots > 0 && (
+                    <Button onClick={() => saveSlotsToDatabase(visitSlots)} size="sm" disabled={isSaving}>
+                      {isSaving ? (
+                        <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4 mr-1" />
+                      )}
+                      Sauvegarder
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -450,7 +574,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                   {selectedDays.size > 0 && (
                     <div className="flex items-center gap-2 pt-2">
                       <Button
-                        onClick={() => {
+                        onClick={async () => {
                           const allSlots: VisitSlot[] = []
                           selectedDays.forEach((date) => {
                             const day = calendarDays.find((d) => d.date === date)
@@ -459,12 +583,19 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                               allSlots.push(...daySlots)
                             }
                           })
-                          onSlotsChange([...visitSlots, ...allSlots])
+                          const newSlots = [...visitSlots, ...allSlots]
+                          onSlotsChange(newSlots)
                           setSelectedDays(new Set())
                           setShowDaySelector(false)
-                          toast.success(`${allSlots.length} créneaux ajoutés pour ${selectedDays.size} jours`)
+
+                          if (mode === "management") {
+                            await saveSlotsToDatabase(newSlots)
+                          } else {
+                            toast.success(`${allSlots.length} créneaux ajoutés pour ${selectedDays.size} jours`)
+                          }
                         }}
                         size="sm"
+                        disabled={isSaving}
                       >
                         ✅ Générer créneaux pour les jours sélectionnés ({selectedDays.size})
                       </Button>
@@ -507,6 +638,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                             size="sm"
                             className="absolute -top-1 -right-1 h-6 w-6 rounded-full p-0 bg-blue-600 text-white hover:bg-blue-700"
                             onClick={() => addIndividualSlot(day.date, day.dayOfWeek)}
+                            disabled={isSaving}
                           >
                             <Plus className="h-3 w-3" />
                           </Button>
@@ -518,7 +650,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                         {isEnabled ? (
                           day.slots.length > 0 ? (
                             day.slots.map((slot) => {
-                              const slotId = `${slot.date}-${slot.start_time}`
+                              const slotId = slot.id || `${slot.date}-${slot.start_time}`
                               const isSelected = selectedSlots.has(slotId)
                               const isBooked = slot.current_bookings > 0
 
@@ -548,6 +680,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                                     size="sm"
                                     className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
                                     onClick={() => removeIndividualSlot(slotId)}
+                                    disabled={isSaving}
                                   >
                                     <Trash2 className="h-3 w-3" />
                                   </Button>
@@ -563,6 +696,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                                 size="sm"
                                 className="text-xs mt-1 h-6"
                                 onClick={() => addIndividualSlot(day.date, day.dayOfWeek)}
+                                disabled={isSaving}
                               >
                                 + Ajouter
                               </Button>
