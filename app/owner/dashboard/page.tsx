@@ -7,8 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { toast } from "@/components/ui/use-toast" // Correction de l'import
-import { useToast } from "@/components/ui/use-toast" // Ajout de l'import manquant
+import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import {
   Building2,
@@ -60,33 +59,27 @@ export default function OwnerDashboard() {
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([])
   const [recentProperties, setRecentProperties] = useState([])
 
-useEffect(() => {
-  const checkAuth = async () => {
-    try {
-      // 1. Vérification côté serveur
-      const res = await fetch('/api/auth/check')
-      
-      if (!res.ok) {
-        router.replace('/login')
-        return
+  useEffect(() => {
+    const checkAuthAndLoadData = async () => {
+      try {
+        const currentUser = await authService.getCurrentUser()
+        if (!currentUser) {
+          router.push("/login")
+          return
+        }
+        if (currentUser.user_type !== "owner") {
+          router.push("/unauthorized")
+          return
+        }
+        setUser(currentUser)
+        await loadDashboardData(currentUser.id)
+      } catch (error) {
+        console.error("❌ Dashboard - Erreur auth:", error)
+        router.push("/login")
       }
-
-      // 2. Chargement des données uniquement si authentifié
-      const user = JSON.parse(localStorage.getItem('user') || '{}')
-      if (user?.id) {
-        await loadDashboardData()
-      } else {
-        router.replace('/login')
-      }
-
-    } catch (error) {
-      console.error('Erreur vérification auth:', error)
-      router.replace('/login')
     }
-  }
-
-  checkAuth()
-}, [router])
+    checkAuthAndLoadData()
+  }, [router])
 
   const loadDashboardData = async () => {
     try {
