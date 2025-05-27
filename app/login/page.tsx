@@ -76,31 +76,31 @@ export default function LoginPage() {
 
       toast.success("Connexion réussie !")
 
-      // Attendre un peu pour que les cookies se mettent en place
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      // Attendre un peu pour que l'authentification se stabilise
+      await new Promise((resolve) => setTimeout(resolve, 1000))
 
       // Récupérer les informations de l'utilisateur pour rediriger selon son type
       const currentUser = await authService.getCurrentUser()
-      console.log("👤 Utilisateur actuel:", currentUser)
+      console.log("👤 Utilisateur connecté:", currentUser)
 
       if (currentUser) {
         console.log("🎯 Redirection vers:", currentUser.user_type)
-        // Redirection selon le type d'utilisateur
+        // Redirection selon le type d'utilisateur avec replace pour éviter les retours
         switch (currentUser.user_type) {
           case "owner":
-            router.push("/owner/dashboard")
+            window.location.href = "/owner/dashboard"
             break
           case "tenant":
-            router.push("/tenant/dashboard")
+            window.location.href = "/tenant/dashboard"
             break
           case "admin":
-            router.push("/admin")
+            window.location.href = "/admin"
             break
           default:
-            router.push("/")
+            window.location.href = "/"
         }
       } else {
-        router.push("/")
+        window.location.href = "/"
       }
     } catch (error: any) {
       console.error("❌ Erreur lors de la connexion:", error)

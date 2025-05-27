@@ -7,7 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
+import { authService } from "@/lib/auth-service"
 import {
   Building2,
   Users,
@@ -43,8 +44,8 @@ interface RecentActivity {
 
 export default function OwnerDashboard() {
   const router = useRouter()
-  const { toast } = useToast()
   const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState<any>(null)
   const [stats, setStats] = useState<DashboardStats>({
     totalProperties: 0,
     activeProperties: 0,
@@ -59,36 +60,50 @@ export default function OwnerDashboard() {
   const [recentProperties, setRecentProperties] = useState([])
 
   useEffect(() => {
-    const token = localStorage.getItem("token")
-    if (!token) {
-      router.push("/login")
-    } else {
-      loadDashboardData()
-    }
-  }, [router])
+    checkAuthAndLoadData()
+  }, [])
 
-  const loadDashboardData = async () => {
+  const checkAuthAndLoadData = async () => {
     try {
-      setLoading(true)
-      const user = JSON.parse(localStorage.getItem("user") || "{}")
-      if (!user.id) return
+      console.log("🔍 Dashboard - Vérification auth...")
 
-      // Charger les statistiques
-      await Promise.all([
-        loadProperties(user.id),
-        loadApplications(user.id),
-        loadVisits(user.id),
-        loadMessages(user.id),
-      ])
+      const currentUser = await authService.getCurrentUser()
+      console.log("👤 Dashboard - Utilisateur:", currentUser)
+
+      if (!currentUser) {
+        console.log("❌ Dashboard - Pas d'utilisateur, redirection login")
+        router.push("/login")
+        return
+      }
+
+      if (currentUser.user_type !== "owner") {
+        console.log("❌ Dashboard - Pas propriétaire, redirection")
+        router.push("/")
+        return
+      }
+
+      console.log("✅ Dashboard - Utilisateur propriétaire authentifié")
+      setUser(currentUser)
+      await loadDashboardData(currentUser.id)
     } catch (error) {
-      console.error("Erreur chargement dashboard:", error)
-      toast({
-        title: "Erreur",
-        description: "Erreur lors du chargement des données",
-        variant: "destructive",
-      })
+      console.error("❌ Dashboard - Erreur auth:", error)
+      router.push("/login")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadDashboardData = async (userId: string) => {
+    try {
+      console.log("📊 Dashboard - Chargement données pour:", userId)
+
+      // Charger les données en parallèle
+      await Promise.all([loadProperties(userId), loadApplications(userId), loadVisits(userId), loadMessages(userId)])
+
+      console.log("✅ Dashboard - Données chargées")
+    } catch (error) {
+      console.error("❌ Dashboard - Erreur chargement:", error)
+      toast.error("Erreur lors du chargement des données")
     }
   }
 
@@ -220,9 +235,10 @@ export default function OwnerDashboard() {
     }
   }
 
+  // Affichage de chargement
   if (loading) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 p-6">
         <div>
           <Skeleton className="h-8 w-64 mb-2" />
           <Skeleton className="h-4 w-96" />
@@ -246,13 +262,16 @@ export default function OwnerDashboard() {
     )
   }
 
+  // Contenu principal du dashboard
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Tableau de bord</h1>
-          <p className="text-muted-foreground">Vue d'ensemble de votre activité immobilière</p>
+          <p className="text-muted-foreground">
+            Bonjour {user?.first_name} ! Vue d'ensemble de votre activité immobilière
+          </p>
         </div>
         <div className="flex items-center space-x-2">
           <Button asChild>
