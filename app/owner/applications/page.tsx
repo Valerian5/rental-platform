@@ -12,35 +12,11 @@ import { applicationService } from "@/lib/application-service"
 import { toast } from "sonner"
 import { Users, Search, Filter, Eye, Check, X, Clock, Star, MapPin, Euro, Calendar, Phone, Mail } from "lucide-react"
 
-interface Application {
-  id: string
-  tenant_id: string
-  property_id: string
-  status: "pending" | "approved" | "rejected"
-  match_score?: number
-  created_at: string
-  income?: number
-  profession?: string
-  message?: string
-  tenant: {
-    first_name: string
-    last_name: string
-    email: string
-    phone?: string
-  }
-  property: {
-    title: string
-    address: string
-    price: number
-    type?: string
-  }
-}
-
 export default function ApplicationsPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
-  const [applications, setApplications] = useState<Application[]>([])
-  const [filteredApplications, setFilteredApplications] = useState<Application[]>([])
+  const [applications, setApplications] = useState<any[]>([])
+  const [filteredApplications, setFilteredApplications] = useState<any[]>([])
   const [properties, setProperties] = useState<any[]>([])
   const [filters, setFilters] = useState({
     status: "all",
@@ -78,7 +54,14 @@ export default function ApplicationsPage() {
   const loadApplications = async (ownerId: string) => {
     try {
       const data = await applicationService.getOwnerApplications(ownerId)
-      setApplications(data)
+
+      // Calculer le score pour chaque candidature
+      const applicationsWithScore = data.map((app) => ({
+        ...app,
+        match_score: applicationService.calculateMatchScore(app, app.property),
+      }))
+
+      setApplications(applicationsWithScore)
     } catch (error) {
       console.error("Erreur chargement candidatures:", error)
       toast.error("Erreur lors du chargement des candidatures")
@@ -100,29 +83,25 @@ export default function ApplicationsPage() {
   const applyFilters = () => {
     let filtered = [...applications]
 
-    // Filtre par statut
     if (filters.status !== "all") {
       filtered = filtered.filter((app) => app.status === filters.status)
     }
 
-    // Filtre par propriété
     if (filters.property !== "all") {
       filtered = filtered.filter((app) => app.property_id === filters.property)
     }
 
-    // Filtre par recherche
     if (filters.search) {
       const search = filters.search.toLowerCase()
       filtered = filtered.filter(
         (app) =>
-          app.tenant.first_name.toLowerCase().includes(search) ||
-          app.tenant.last_name.toLowerCase().includes(search) ||
-          app.property.title.toLowerCase().includes(search) ||
-          app.property.address.toLowerCase().includes(search),
+          app.tenant?.first_name?.toLowerCase().includes(search) ||
+          app.tenant?.last_name?.toLowerCase().includes(search) ||
+          app.property?.title?.toLowerCase().includes(search) ||
+          app.property?.address?.toLowerCase().includes(search),
       )
     }
 
-    // Filtre par date
     if (filters.dateRange !== "all") {
       const now = new Date()
       const days = filters.dateRange === "week" ? 7 : filters.dateRange === "month" ? 30 : 90
@@ -138,7 +117,6 @@ export default function ApplicationsPage() {
       await applicationService.updateApplicationStatus(applicationId, newStatus)
       toast.success(`Candidature ${newStatus === "approved" ? "approuvée" : "rejetée"}`)
 
-      // Recharger les données
       const user = await authService.getCurrentUser()
       if (user) {
         await loadApplications(user.id)
@@ -147,21 +125,6 @@ export default function ApplicationsPage() {
       console.error("Erreur mise à jour statut:", error)
       toast.error("Erreur lors de la mise à jour")
     }
-  }
-
-  const getScore = (application: Application) => {
-    if (application.match_score) return application.match_score
-
-    // Calculer un score basique si pas de score enregistré
-    if (application.income && application.property.price) {
-      const ratio = application.income / application.property.price
-      if (ratio >= 3) return 85
-      if (ratio >= 2.5) return 70
-      if (ratio >= 2) return 55
-      return 40
-    }
-
-    return 50 // Score par défaut
   }
 
   const getScoreColor = (score: number) => {
@@ -181,11 +144,7 @@ export default function ApplicationsPage() {
       case "pending":
         return <Badge variant="secondary">En attente</Badge>
       case "approved":
-        return (
-          <Badge variant="default" className="bg-green-100 text-green-800">
-            Approuvée
-          </Badge>
-        )
+        return <Badge className="bg-green-100 text-green-800">Approuvée</Badge>
       case "rejected":
         return <Badge variant="destructive">Rejetée</Badge>
       default:
@@ -335,7 +294,9 @@ export default function ApplicationsPage() {
                 <p className="text-sm font-medium text-muted-foreground">Score moyen</p>
                 <p className="text-2xl font-bold">
                   {applications.length > 0
-                    ? Math.round(applications.reduce((sum, app) => sum + getScore(app), 0) / applications.length)
+                    ? Math.round(
+                        applications.reduce((sum, app) => sum + (app.match_score || 50), 0) / applications.length,
+                      )
                     : 0}
                 </p>
               </div>
@@ -360,7 +321,7 @@ export default function ApplicationsPage() {
           </Card>
         ) : (
           filteredApplications.map((application) => {
-            const score = getScore(application)
+            const score = application.match_score || 50
             return (
               <Card key={application.id} className="overflow-hidden">
                 <CardContent className="p-6">
@@ -370,8 +331,8 @@ export default function ApplicationsPage() {
                         <div className="relative">
                           <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
                             <span className="text-white font-bold text-lg">
-                              {application.tenant.first_name[0]}
-                              {application.tenant.last_name[0]}
+                              {application.tenant?.first_name?.[0] || "?"}
+                              {application.tenant?.last_name?.[0] || "?"}
                             </span>
                           </div>
                           <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-white border-2 border-white flex items-center justify-center">
@@ -388,7 +349,7 @@ export default function ApplicationsPage() {
 
                         <div className="flex-1">
                           <h3 className="text-lg font-semibold">
-                            {application.tenant.first_name} {application.tenant.last_name}
+                            {application.tenant?.first_name || "Prénom"} {application.tenant?.last_name || "Nom"}
                           </h3>
                           <p className="text-sm text-muted-foreground">
                             {application.profession || "Profession non renseignée"}
@@ -396,9 +357,9 @@ export default function ApplicationsPage() {
                           <div className="flex items-center space-x-4 mt-2 text-sm text-muted-foreground">
                             <div className="flex items-center">
                               <Mail className="h-4 w-4 mr-1" />
-                              {application.tenant.email}
+                              {application.tenant?.email || "Email non renseigné"}
                             </div>
-                            {application.tenant.phone && (
+                            {application.tenant?.phone && (
                               <div className="flex items-center">
                                 <Phone className="h-4 w-4 mr-1" />
                                 {application.tenant.phone}
@@ -412,14 +373,14 @@ export default function ApplicationsPage() {
                         <div>
                           <h4 className="font-medium mb-2">Propriété demandée</h4>
                           <div className="space-y-1 text-sm">
-                            <p className="font-medium">{application.property.title}</p>
+                            <p className="font-medium">{application.property?.title || "Titre non disponible"}</p>
                             <div className="flex items-center text-muted-foreground">
                               <MapPin className="h-4 w-4 mr-1" />
-                              {application.property.address}
+                              {application.property?.address || "Adresse non disponible"}
                             </div>
                             <div className="flex items-center text-muted-foreground">
                               <Euro className="h-4 w-4 mr-1" />
-                              {application.property.price}€/mois
+                              {application.property?.price || 0}€/mois
                             </div>
                           </div>
                         </div>
@@ -430,11 +391,12 @@ export default function ApplicationsPage() {
                             {application.income ? (
                               <>
                                 <p>Revenus: {application.income}€/mois</p>
-                                <p>Ratio: {((application.property.price / application.income) * 100).toFixed(1)}%</p>
+                                <p>Ratio: {((application.property?.price / application.income) * 100).toFixed(1)}%</p>
                               </>
                             ) : (
                               <p className="text-muted-foreground">Informations non renseignées</p>
                             )}
+                            <p>Garant: {application.has_guarantor ? "Oui" : "Non"}</p>
                           </div>
                         </div>
                       </div>
@@ -461,7 +423,7 @@ export default function ApplicationsPage() {
                         <Button size="sm" variant="outline" asChild>
                           <a href={`/owner/applications/${application.id}`}>
                             <Eye className="h-4 w-4 mr-1" />
-                            Détails
+                            Examiner
                           </a>
                         </Button>
 
@@ -474,7 +436,7 @@ export default function ApplicationsPage() {
                               className="bg-green-600 hover:bg-green-700"
                             >
                               <Check className="h-4 w-4 mr-1" />
-                              Approuver
+                              Accepter
                             </Button>
                             <Button
                               size="sm"
@@ -482,7 +444,7 @@ export default function ApplicationsPage() {
                               onClick={() => handleStatusChange(application.id, "rejected")}
                             >
                               <X className="h-4 w-4 mr-1" />
-                              Rejeter
+                              Refuser
                             </Button>
                           </div>
                         )}

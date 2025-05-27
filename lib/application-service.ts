@@ -3,28 +3,19 @@ import { supabase } from "./supabase"
 export interface ApplicationData {
   property_id: string
   tenant_id: string
-  owner_id: string
   message?: string
-  income: number
-  profession: string
+  income?: number
+  profession?: string
   company?: string
-  contract_type: string
-  has_guarantor: boolean
+  contract_type?: string
+  has_guarantor?: boolean
   guarantor_name?: string
   guarantor_relationship?: string
   guarantor_profession?: string
   guarantor_income?: number
-  move_in_date: string
+  move_in_date?: string
   duration_preference?: string
   presentation?: string
-}
-
-export interface ApplicationDocument {
-  document_type: string
-  file_name: string
-  file_url: string
-  file_size?: number
-  mime_type?: string
 }
 
 export const applicationService = {
@@ -69,12 +60,7 @@ export const applicationService = {
         .from("applications")
         .select(`
           *,
-          property:properties(
-            id, title, address, city, price, surface, rooms, bedrooms
-          ),
-          owner:users!applications_owner_id_fkey(
-            id, first_name, last_name, email, phone
-          )
+          property:properties(*)
         `)
         .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false })
@@ -92,23 +78,38 @@ export const applicationService = {
     }
   },
 
-  // Récupérer les candidatures d'un propriétaire
+  // Récupérer les candidatures d'un propriétaire via les propriétés
   async getOwnerApplications(ownerId: string) {
     console.log("📋 ApplicationService.getOwnerApplications", ownerId)
 
     try {
+      // D'abord récupérer les propriétés du propriétaire
+      const { data: properties, error: propError } = await supabase
+        .from("properties")
+        .select("id")
+        .eq("owner_id", ownerId)
+
+      if (propError) {
+        console.error("❌ Erreur récupération propriétés:", propError)
+        throw new Error(propError.message)
+      }
+
+      if (!properties || properties.length === 0) {
+        console.log("✅ Aucune propriété trouvée pour ce propriétaire")
+        return []
+      }
+
+      const propertyIds = properties.map((p) => p.id)
+
+      // Ensuite récupérer les candidatures pour ces propriétés
       const { data, error } = await supabase
         .from("applications")
         .select(`
           *,
-          property:properties(
-            id, title, address, city, price, surface, rooms, bedrooms
-          ),
-          tenant:users!applications_tenant_id_fkey(
-            id, first_name, last_name, email, phone
-          )
+          property:properties(*),
+          tenant:users!applications_tenant_id_fkey(*)
         `)
-        .eq("owner_id", ownerId)
+        .in("property_id", propertyIds)
         .order("created_at", { ascending: false })
 
       if (error) {
@@ -133,15 +134,8 @@ export const applicationService = {
         .from("applications")
         .select(`
           *,
-          property:properties(
-            id, title, address, city, price, surface, rooms, bedrooms
-          ),
-          tenant:users!applications_tenant_id_fkey(
-            id, first_name, last_name, email, phone
-          ),
-          owner:users!applications_owner_id_fkey(
-            id, first_name, last_name, email, phone
-          )
+          property:properties(*),
+          tenant:users!applications_tenant_id_fkey(*)
         `)
         .eq("id", applicationId)
         .single()
@@ -199,11 +193,15 @@ export const applicationService = {
     const maxScore = 100
 
     // Ratio revenus/loyer (40 points max)
-    const rentRatio = application.income / property.price
-    if (rentRatio >= 3) score += 40
-    else if (rentRatio >= 2.5) score += 30
-    else if (rentRatio >= 2) score += 20
-    else score += 10
+    if (application.income && property.price) {
+      const rentRatio = application.income / property.price
+      if (rentRatio >= 3) score += 40
+      else if (rentRatio >= 2.5) score += 30
+      else if (rentRatio >= 2) score += 20
+      else score += 10
+    } else {
+      score += 10 // Score de base si pas d'info
+    }
 
     // Stabilité professionnelle (20 points max)
     if (application.contract_type === "CDI") score += 20
@@ -214,16 +212,20 @@ export const applicationService = {
     if (application.has_guarantor) {
       score += 20
       // Bonus si le garant a des revenus suffisants
-      if (application.guarantor_income && application.guarantor_income >= property.price * 3) {
+      if (application.guarantor_income && property.price && application.guarantor_income >= property.price * 3) {
         score += 5
       }
     }
 
-    // Documents fournis (15 points max)
-    score += 10 // Score de base pour les documents
-
-    // Présentation personnalisée (5 points max)
+    // Présentation personnalisée (15 points max)
     if (application.presentation && application.presentation.length > 50) {
+      score += 15
+    } else if (application.message && application.message.length > 20) {
+      score += 10
+    }
+
+    // Bonus pour les informations complètes (5 points max)
+    if (application.profession && application.company) {
       score += 5
     }
 
