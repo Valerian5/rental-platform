@@ -1,234 +1,194 @@
 "use client"
 
-import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { Shield, FileText, MessageSquare, Euro, Briefcase, CheckCircle2, AlertTriangle, XCircle } from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Euro, Briefcase, Shield, FileText, AlertTriangle, CheckCircle2, Info } from "lucide-react"
 
 interface MatchingScoreProps {
   application: any
   size?: "sm" | "md" | "lg"
-  showDetails?: boolean
+  detailed?: boolean
 }
 
-export function MatchingScore({ application, size = "md", showDetails = false }: MatchingScoreProps) {
-  const calculateScoreBreakdown = () => {
+export function MatchingScore({ application, size = "md", detailed = false }: MatchingScoreProps) {
+  const calculateDetailedScore = () => {
     const property = application.property
     const breakdown = {
-      financial: 0,
-      stability: 0,
-      guarantor: 0,
-      documents: 0,
-      presentation: 0,
-      total: 0,
+      income: { score: 0, max: 35, label: "Revenus", icon: Euro },
+      stability: { score: 0, max: 25, label: "Stabilité", icon: Briefcase },
+      guarantor: { score: 0, max: 20, label: "Garant", icon: Shield },
+      documents: { score: 0, max: 20, label: "Dossier", icon: FileText },
     }
 
-    // Ratio revenus/loyer (40 points max)
+    // Score revenus (35 points max)
     if (application.income && property?.price) {
       const ratio = application.income / property.price
-      if (ratio >= 3) breakdown.financial = 40
-      else if (ratio >= 2.5) breakdown.financial = 30
-      else if (ratio >= 2) breakdown.financial = 20
-      else breakdown.financial = 10
+      if (ratio >= 3.5) breakdown.income.score = 35
+      else if (ratio >= 3) breakdown.income.score = 30
+      else if (ratio >= 2.5) breakdown.income.score = 25
+      else if (ratio >= 2) breakdown.income.score = 15
+      else breakdown.income.score = 5
     } else {
-      breakdown.financial = 10
+      breakdown.income.score = 10 // Score de base
     }
 
-    // Stabilité professionnelle (20 points max)
-    if (application.contract_type === "CDI") breakdown.stability = 20
-    else if (application.contract_type === "CDD") breakdown.stability = 15
-    else breakdown.stability = 10
+    // Score stabilité (25 points max)
+    switch (application.contract_type) {
+      case "CDI":
+        breakdown.stability.score = 25
+        break
+      case "CDD":
+        breakdown.stability.score = 18
+        break
+      case "freelance":
+        breakdown.stability.score = 12
+        break
+      case "student":
+        breakdown.stability.score = 8
+        break
+      default:
+        breakdown.stability.score = 10
+    }
 
-    // Présence d'un garant (20 points max)
+    // Score garant (20 points max)
     if (application.has_guarantor) {
-      breakdown.guarantor = 20
-      if (application.guarantor_income && property?.price && application.guarantor_income >= property.price * 3) {
-        breakdown.guarantor += 5
+      breakdown.guarantor.score = 15
+      if (application.guarantor_income && property?.price) {
+        const guarantorRatio = application.guarantor_income / property.price
+        if (guarantorRatio >= 3) breakdown.guarantor.score = 20
       }
+    } else {
+      breakdown.guarantor.score = 0
     }
 
-    // Documents (10 points max)
-    breakdown.documents = 8 // Score de base
+    // Score dossier (20 points max)
+    let docScore = 0
+    if (application.presentation && application.presentation.length > 100) docScore += 8
+    else if (application.message && application.message.length > 50) docScore += 5
 
-    // Présentation (10 points max)
-    if (application.presentation && application.presentation.length > 50) {
-      breakdown.presentation = 10
-    } else if (application.message && application.message.length > 20) {
-      breakdown.presentation = 6
-    }
+    if (application.profession && application.company) docScore += 6
+    if (application.move_in_date) docScore += 3
+    if (application.duration_preference) docScore += 3
 
-    breakdown.total = Math.min(
-      breakdown.financial + breakdown.stability + breakdown.guarantor + breakdown.documents + breakdown.presentation,
-      100,
-    )
+    breakdown.documents.score = Math.min(docScore, 20)
 
-    return breakdown
+    const totalScore = Object.values(breakdown).reduce((sum, item) => sum + item.score, 0)
+
+    return { breakdown, totalScore }
   }
 
-  const breakdown = calculateScoreBreakdown()
-  const score = breakdown.total
+  const { breakdown, totalScore } = calculateDetailedScore()
 
   const getScoreColor = (score: number) => {
-    if (score >= 80) return "text-green-600"
-    if (score >= 60) return "text-yellow-600"
-    return "text-red-600"
-  }
-
-  const getScoreBgColor = (score: number) => {
-    if (score >= 80) return "bg-green-500"
-    if (score >= 60) return "bg-yellow-500"
-    return "bg-red-500"
+    if (score >= 80) return { color: "text-green-600", bg: "bg-green-100", border: "border-green-200" }
+    if (score >= 60) return { color: "text-yellow-600", bg: "bg-yellow-100", border: "border-yellow-200" }
+    return { color: "text-red-600", bg: "bg-red-100", border: "border-red-200" }
   }
 
   const getScoreLabel = (score: number) => {
-    if (score >= 80) return "Excellent"
-    if (score >= 60) return "Bon"
+    if (score >= 85) return "Excellent"
+    if (score >= 70) return "Très bon"
+    if (score >= 55) return "Bon"
     if (score >= 40) return "Moyen"
     return "Faible"
   }
 
-  const getScoreIcon = (score: number) => {
-    if (score >= 80) return <CheckCircle2 className="h-4 w-4 text-green-600" />
-    if (score >= 60) return <AlertTriangle className="h-4 w-4 text-yellow-600" />
-    return <XCircle className="h-4 w-4 text-red-600" />
-  }
+  const scoreStyle = getScoreColor(totalScore)
 
   if (size === "sm") {
     return (
-      <div className="flex items-center space-x-2">
-        <div className="relative">
-          <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ${getScoreBgColor(score)}`}
-          >
-            {score}
-          </div>
-        </div>
-        <div className="text-xs">
-          <div className={`font-medium ${getScoreColor(score)}`}>{getScoreLabel(score)}</div>
-        </div>
-      </div>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger>
+            <Badge className={`${scoreStyle.bg} ${scoreStyle.color} ${scoreStyle.border} border`}>{totalScore}%</Badge>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="w-64">
+            <div className="space-y-2">
+              <div className="font-medium">Score de compatibilité</div>
+              {Object.entries(breakdown).map(([key, item]) => (
+                <div key={key} className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1">
+                    <item.icon className="h-3 w-3" />
+                    {item.label}
+                  </div>
+                  <span>
+                    {item.score}/{item.max}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     )
   }
 
   if (size === "md") {
     return (
-      <div className="flex items-center space-x-3">
-        <div className="relative">
-          <div
-            className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold ${getScoreBgColor(score)}`}
-          >
-            {score}
-          </div>
-          <div className="absolute -top-1 -right-1">{getScoreIcon(score)}</div>
+      <div className="flex items-center space-x-2">
+        <div
+          className={`w-12 h-12 rounded-full ${scoreStyle.bg} ${scoreStyle.border} border-2 flex items-center justify-center`}
+        >
+          <span className={`font-bold text-sm ${scoreStyle.color}`}>{totalScore}</span>
         </div>
         <div>
-          <div className={`font-semibold ${getScoreColor(score)}`}>{getScoreLabel(score)}</div>
-          <div className="text-sm text-muted-foreground">Score de compatibilité</div>
+          <div className={`font-medium text-sm ${scoreStyle.color}`}>{getScoreLabel(totalScore)}</div>
+          <div className="text-xs text-muted-foreground">Score de compatibilité</div>
         </div>
       </div>
     )
   }
 
-  // size === "lg" avec détails
+  // Size lg - detailed view
   return (
-    <Card>
+    <Card className="w-full">
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-3">
-            <div
-              className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-bold ${getScoreBgColor(score)}`}
-            >
-              {score}
-            </div>
-            <div>
-              <div className={`text-lg font-semibold ${getScoreColor(score)}`}>{getScoreLabel(score)}</div>
-              <div className="text-sm text-muted-foreground">Score de compatibilité</div>
-            </div>
+          <div>
+            <h3 className="font-semibold">Score de compatibilité</h3>
+            <p className="text-sm text-muted-foreground">Analyse automatique du profil</p>
           </div>
-          <Badge variant={score >= 80 ? "default" : score >= 60 ? "secondary" : "destructive"}>{score}/100</Badge>
+          <div className={`text-3xl font-bold ${scoreStyle.color}`}>{totalScore}%</div>
         </div>
 
-        {showDetails && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Euro className="h-4 w-4 text-blue-600" />
-                <span className="text-sm font-medium">Capacité financière</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Progress value={(breakdown.financial / 40) * 100} className="w-16 h-2" />
-                <span className="text-sm font-medium">{breakdown.financial}/40</span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Briefcase className="h-4 w-4 text-purple-600" />
-                <span className="text-sm font-medium">Stabilité professionnelle</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Progress value={(breakdown.stability / 20) * 100} className="w-16 h-2" />
-                <span className="text-sm font-medium">{breakdown.stability}/20</span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Shield className="h-4 w-4 text-green-600" />
-                <span className="text-sm font-medium">Garant</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Progress value={(breakdown.guarantor / 25) * 100} className="w-16 h-2" />
-                <span className="text-sm font-medium">{breakdown.guarantor}/25</span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <FileText className="h-4 w-4 text-orange-600" />
-                <span className="text-sm font-medium">Documents</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Progress value={(breakdown.documents / 10) * 100} className="w-16 h-2" />
-                <span className="text-sm font-medium">{breakdown.documents}/10</span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <MessageSquare className="h-4 w-4 text-indigo-600" />
-                <span className="text-sm font-medium">Présentation</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Progress value={(breakdown.presentation / 10) * 100} className="w-16 h-2" />
-                <span className="text-sm font-medium">{breakdown.presentation}/10</span>
-              </div>
-            </div>
-
-            {application.income && application.property?.price && (
-              <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                <div className="text-sm">
-                  <div className="flex justify-between">
-                    <span>Revenus mensuels:</span>
-                    <span className="font-medium">{application.income}€</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Loyer demandé:</span>
-                    <span className="font-medium">{application.property.price}€</span>
-                  </div>
-                  <div className="flex justify-between border-t pt-1 mt-1">
-                    <span>Ratio revenus/loyer:</span>
-                    <span
-                      className={`font-medium ${(application.income / application.property.price) >= 3 ? "text-green-600" : "text-red-600"}`}
-                    >
-                      {(application.income / application.property.price).toFixed(1)}x
-                    </span>
-                  </div>
+        <div className="space-y-3">
+          {Object.entries(breakdown).map(([key, item]) => (
+            <div key={key} className="space-y-1">
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <item.icon className="h-4 w-4" />
+                  <span className="font-medium">{item.label}</span>
                 </div>
+                <span className="text-muted-foreground">
+                  {item.score}/{item.max}
+                </span>
               </div>
+              <Progress value={(item.score / item.max) * 100} className="h-2" />
+            </div>
+          ))}
+        </div>
+
+        <div className={`mt-4 p-3 rounded-lg ${scoreStyle.bg}`}>
+          <div className="flex items-start gap-2">
+            {totalScore >= 70 ? (
+              <CheckCircle2 className={`h-4 w-4 mt-0.5 ${scoreStyle.color}`} />
+            ) : totalScore >= 50 ? (
+              <Info className={`h-4 w-4 mt-0.5 ${scoreStyle.color}`} />
+            ) : (
+              <AlertTriangle className={`h-4 w-4 mt-0.5 ${scoreStyle.color}`} />
             )}
+            <div className="text-sm">
+              <div className={`font-medium ${scoreStyle.color}`}>{getScoreLabel(totalScore)} candidat</div>
+              <div className={`text-xs ${scoreStyle.color} opacity-80 mt-1`}>
+                {totalScore >= 70 && "Profil très intéressant, candidature recommandée"}
+                {totalScore >= 50 && totalScore < 70 && "Profil correct, à examiner en détail"}
+                {totalScore < 50 && "Profil à risque, vérification approfondie nécessaire"}
+              </div>
+            </div>
           </div>
-        )}
+        </div>
       </CardContent>
     </Card>
   )

@@ -322,8 +322,8 @@ export default function ApplicationsPage() {
               </div>
             </div>
 
-            <div className="flex items-center space-x-2">
-              <MatchingScore application={application} size="sm" />
+            <div className="flex items-center space-x-3">
+              <MatchingScore application={application} size="md" />
               <ApplicationActions
                 application={application}
                 onStatusChange={handleStatusChange}
@@ -393,17 +393,26 @@ export default function ApplicationsPage() {
 
   const handleProposeVisit = async (applicationId: string, slots: any[]) => {
     try {
-      // Ici vous appellerez votre API pour proposer les créneaux
-      console.log("Proposer visite:", applicationId, slots)
-      toast.success("Proposition de visite envoyée")
+      const response = await fetch("/api/visits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "propose_slots",
+          application_id: applicationId,
+          slots: slots,
+        }),
+      })
 
-      // Mettre à jour le statut
-      await applicationService.updateApplicationStatus(applicationId, "visit_proposed")
+      if (response.ok) {
+        await applicationService.updateApplicationStatus(applicationId, "visit_proposed")
+        toast.success("Proposition de visite envoyée")
 
-      // Recharger les données
-      const user = await authService.getCurrentUser()
-      if (user) {
-        await loadApplications(user.id)
+        const user = await authService.getCurrentUser()
+        if (user) {
+          await loadApplications(user.id)
+        }
+      } else {
+        throw new Error("Erreur lors de l'envoi")
       }
     } catch (error) {
       console.error("Erreur proposition visite:", error)
@@ -430,9 +439,6 @@ export default function ApplicationsPage() {
         )
       }
 
-      toast.success("Candidat sélectionné avec succès")
-
-      // Recharger les données
       const user = await authService.getCurrentUser()
       if (user) {
         await loadApplications(user.id)
