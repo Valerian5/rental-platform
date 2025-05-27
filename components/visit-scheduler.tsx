@@ -148,30 +148,59 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
     setIsSaving(true)
     try {
       console.log("💾 Sauvegarde des créneaux en DB...", slots.length)
+      console.log("📋 Exemple de créneau à sauvegarder:", slots[0])
+
+      // Valider les créneaux avant envoi
+      const validatedSlots = slots.map((slot, index) => {
+        if (!slot.date || !slot.start_time || !slot.end_time) {
+          throw new Error(`Créneau ${index + 1}: données manquantes`)
+        }
+
+        return {
+          date: slot.date,
+          start_time: slot.start_time,
+          end_time: slot.end_time,
+          max_capacity: slot.max_capacity || 1,
+          is_group_visit: slot.is_group_visit || false,
+          current_bookings: slot.current_bookings || 0,
+          is_available: slot.is_available !== false,
+        }
+      })
 
       const response = await fetch(`/api/properties/${propertyId}/visit-slots`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ slots }),
+        body: JSON.stringify({ slots: validatedSlots }),
       })
 
+      const responseText = await response.text()
+      console.log("📋 Réponse brute du serveur:", responseText)
+
       if (response.ok) {
-        const data = await response.json()
+        const data = JSON.parse(responseText)
         console.log("✅ Créneaux sauvegardés:", data.message)
         toast.success(data.message || "Créneaux sauvegardés avec succès")
 
         // Recharger les créneaux pour avoir les IDs
-        await loadSlotsFromDatabase()
+        setTimeout(() => {
+          loadSlotsFromDatabase()
+        }, 500)
       } else {
-        const errorData = await response.json()
+        let errorData
+        try {
+          errorData = JSON.parse(responseText)
+        } catch {
+          errorData = { error: `Erreur HTTP ${response.status}: ${responseText}` }
+        }
+
         console.error("❌ Erreur sauvegarde:", errorData)
-        toast.error(errorData.error || "Erreur lors de la sauvegarde")
+        toast.error(errorData.error || `Erreur ${response.status}`)
       }
     } catch (error) {
       console.error("❌ Erreur sauvegarde créneaux:", error)
-      toast.error("Erreur lors de la sauvegarde des créneaux")
+      toast.error(error instanceof Error ? error.message : "Erreur lors de la sauvegarde des créneaux")
     } finally {
       setIsSaving(false)
     }

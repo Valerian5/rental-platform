@@ -33,12 +33,27 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const { slots } = body
 
     if (!slots || !Array.isArray(slots)) {
+      console.error("❌ Créneaux manquants ou invalides:", slots)
       return NextResponse.json({ error: "Créneaux manquants ou invalides" }, { status: 400 })
     }
 
     console.log("📝 Créneaux à sauvegarder:", slots.length)
+    console.log("📋 Premier créneau exemple:", slots[0])
+
+    // Vérifier que la propriété existe
+    const { data: property, error: propertyError } = await supabase
+      .from("properties")
+      .select("id")
+      .eq("id", params.id)
+      .single()
+
+    if (propertyError || !property) {
+      console.error("❌ Propriété non trouvée:", propertyError)
+      return NextResponse.json({ error: "Propriété non trouvée" }, { status: 404 })
+    }
 
     // Supprimer les anciens créneaux pour cette propriété
+    console.log("🗑️ Suppression des anciens créneaux...")
     const { error: deleteError } = await supabase.from("visit_availabilities").delete().eq("property_id", params.id)
 
     if (deleteError) {
@@ -48,21 +63,51 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     // Insérer les nouveaux créneaux
     if (slots.length > 0) {
-      const slotsToInsert = slots.map((slot: any) => ({
-        property_id: params.id,
-        date: slot.date,
-        start_time: slot.start_time,
-        end_time: slot.end_time,
-        max_capacity: slot.max_capacity || 1,
-        is_group_visit: slot.is_group_visit || false,
-        current_bookings: slot.current_bookings || 0,
-        is_available: slot.is_available !== false,
-      }))
+      // Valider et nettoyer les données
+      const slotsToInsert = slots.map((slot: any, index: number) => {
+        console.log(`📝 Traitement créneau ${index + 1}:`, slot)
+
+        // Validation des champs requis
+        if (!slot.date || !slot.start_time || !slot.end_time) {
+          throw new Error(`Créneau ${index + 1}: date, start_time et end_time sont requis`)
+        }
+
+        // Validation du format de date
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+        if (!dateRegex.test(slot.date)) {
+          throw new Error(`Créneau ${index + 1}: format de date invalide (attendu: YYYY-MM-DD)`)
+        }
+
+        // Validation du format d'heure
+        const timeRegex = /^\d{2}:\d{2}$/
+        if (!timeRegex.test(slot.start_time) || !timeRegex.test(slot.end_time)) {
+          throw new Error(`Créneau ${index + 1}: format d'heure invalide (attendu: HH:MM)`)
+        }
+
+        return {
+          property_id: params.id,
+          date: slot.date,
+          start_time: slot.start_time,
+          end_time: slot.end_time,
+          max_capacity: Number(slot.max_capacity) || 1,
+          is_group_visit: Boolean(slot.is_group_visit),
+          current_bookings: Number(slot.current_bookings) || 0,
+          is_available: slot.is_available !== false,
+        }
+      })
+
+      console.log("📋 Données préparées pour insertion:", slotsToInsert.slice(0, 2)) // Log des 2 premiers
 
       const { data, error: insertError } = await supabase.from("visit_availabilities").insert(slotsToInsert).select()
 
       if (insertError) {
         console.error("❌ Erreur insertion créneaux:", insertError)
+        console.error("📋 Détails de l'erreur:", {
+          message: insertError.message,
+          details: insertError.details,
+          hint: insertError.hint,
+          code: insertError.code,
+        })
         throw insertError
       }
 
@@ -82,7 +127,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
   } catch (error) {
     console.error("❌ Erreur API sauvegarde créneaux:", error)
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur interne" }, { status: 500 })
+    const errorMessage = error instanceof Error ? error.message : "Erreur interne"
+    return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
 }
 
