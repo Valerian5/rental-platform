@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase"
+export const dynamic = "force-dynamic"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -15,47 +15,63 @@ import {
   Receipt,
 } from "lucide-react"
 
+import { createServerClient } from "@/lib/supabase-server"
+
 async function getFiscalData() {
-  const supabase = createClient()
+  try {
+    const supabase = createServerClient()
 
-  // Récupérer les régularisations de charges
-  const { data: regularizations } = await supabase
-    .from("charge_regularizations")
-    .select(`
-      *,
-      lease:leases(
-        property:properties(title, address),
-        tenant:users!leases_tenant_id_fkey(first_name, last_name)
-      )
-    `)
-    .order("year", { ascending: false })
+    // Récupérer les régularisations de charges
+    const { data: regularizations } = await supabase
+      .from("charge_regularizations")
+      .select(`
+        *,
+        lease:leases(
+          property:properties(title, address),
+          tenant:users!leases_tenant_id_fkey(first_name, last_name)
+        )
+      `)
+      .order("year", { ascending: false })
 
-  // Récupérer les revenus locatifs par année
-  const { data: receipts } = await supabase
-    .from("rent_receipts")
-    .select(`
-      year,
-      total_amount,
-      lease:leases(property:properties(title))
-    `)
-    .eq("status", "paid")
+    // Récupérer les revenus locatifs par année
+    const { data: receipts } = await supabase
+      .from("rent_receipts")
+      .select(`
+        year,
+        total_amount,
+        lease:leases(property:properties(title))
+      `)
+      .eq("status", "paid")
 
-  // Calculer les statistiques fiscales
-  const currentYear = new Date().getFullYear()
-  const currentYearReceipts = receipts?.filter((r) => r.year === currentYear) || []
-  const previousYearReceipts = receipts?.filter((r) => r.year === currentYear - 1) || []
+    // Calculer les statistiques fiscales
+    const currentYear = new Date().getFullYear()
+    const currentYearReceipts = receipts?.filter((r) => r.year === currentYear) || []
+    const previousYearReceipts = receipts?.filter((r) => r.year === currentYear - 1) || []
 
-  const stats = {
-    currentYearRevenue: currentYearReceipts.reduce((sum, r) => sum + r.total_amount, 0),
-    previousYearRevenue: previousYearReceipts.reduce((sum, r) => sum + r.total_amount, 0),
-    totalRegularizations: regularizations?.length || 0,
-    pendingRegularizations: regularizations?.filter((r) => r.status === "calculated").length || 0,
-  }
+    const stats = {
+      currentYearRevenue: currentYearReceipts.reduce((sum, r) => sum + r.total_amount, 0),
+      previousYearRevenue: previousYearReceipts.reduce((sum, r) => sum + r.total_amount, 0),
+      totalRegularizations: regularizations?.length || 0,
+      pendingRegularizations: regularizations?.filter((r) => r.status === "calculated").length || 0,
+    }
 
-  return {
-    regularizations: regularizations || [],
-    receipts: receipts || [],
-    stats,
+    return {
+      regularizations: regularizations || [],
+      receipts: receipts || [],
+      stats,
+    }
+  } catch (error) {
+    console.error("Error fetching fiscal data:", error)
+    return {
+      regularizations: [],
+      receipts: [],
+      stats: {
+        currentYearRevenue: 0,
+        previousYearRevenue: 0,
+        totalRegularizations: 0,
+        pendingRegularizations: 0,
+      },
+    }
   }
 }
 

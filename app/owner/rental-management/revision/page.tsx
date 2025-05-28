@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic"
 import { createClient } from "@/lib/supabase"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -6,29 +7,42 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TrendingUp, Calculator, FileText, AlertCircle, Euro, Calendar, BarChart3 } from "lucide-react"
 
 async function getRevisionData() {
-  const supabase = createClient()
+  try {
+    const supabase = createClient()
 
-  // Récupérer les révisions de loyer
-  const { data: revisions } = await supabase
-    .from("rent_revisions")
-    .select(`
-      *,
-      lease:leases(
-        property:properties(title, address),
-        tenant:users!leases_tenant_id_fkey(first_name, last_name)
-      )
-    `)
-    .order("revision_date", { ascending: false })
+    // Récupérer les révisions de loyer
+    const { data: revisions } = await supabase
+      .from("rent_revisions")
+      .select(`
+        *,
+        lease:leases(
+          property:properties(title, address),
+          tenant:users!leases_tenant_id_fkey(first_name, last_name)
+        )
+      `)
+      .order("revision_date", { ascending: false })
 
-  // Statistiques des révisions
-  const stats = {
-    total: revisions?.length || 0,
-    applied: revisions?.filter((r) => r.status === "applied").length || 0,
-    pending: revisions?.filter((r) => r.status === "pending").length || 0,
-    totalIncrease: revisions?.reduce((sum, r) => sum + (r.new_rent - r.current_rent), 0) || 0,
+    // Statistiques des révisions
+    const stats = {
+      total: revisions?.length || 0,
+      applied: revisions?.filter((r) => r.status === "applied").length || 0,
+      pending: revisions?.filter((r) => r.status === "pending").length || 0,
+      totalIncrease: revisions?.reduce((sum, r) => sum + (r.new_rent - r.current_rent), 0) || 0,
+    }
+
+    return { revisions: revisions || [], stats }
+  } catch (error) {
+    console.error("Error fetching revision data:", error)
+    return {
+      revisions: [],
+      stats: {
+        total: 0,
+        applied: 0,
+        pending: 0,
+        totalIncrease: 0,
+      },
+    }
   }
-
-  return { revisions: revisions || [], stats }
 }
 
 function RevisionCard({ revision }: { revision: any }) {
