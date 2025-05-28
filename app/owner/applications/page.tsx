@@ -160,8 +160,8 @@ export default function ApplicationsPage() {
           router.push(`/owner/applications/${applicationId}?tab=analysis`)
           break
         case "accept":
-          await applicationService.updateApplicationStatus(applicationId, "accepted")
-          toast.success("Candidature acceptée")
+          await applicationService.updateApplicationStatus(applicationId, "waiting_tenant_confirmation")
+          toast.success("Candidature acceptée, en attente de confirmation du locataire")
           break
         case "refuse":
           await applicationService.updateApplicationStatus(applicationId, "rejected")
@@ -170,6 +170,9 @@ export default function ApplicationsPage() {
         case "contact":
           // Ouvrir modal de contact ou rediriger vers messagerie
           toast.info("Fonctionnalité de contact à venir")
+          break
+        case "generate_lease":
+          router.push(`/owner/leases/create?application_id=${applicationId}`)
           break
       }
 
@@ -192,7 +195,10 @@ export default function ApplicationsPage() {
 
     try {
       const promises = selectedApplications.map((id) =>
-        applicationService.updateApplicationStatus(id, action === "approve" ? "approved" : "rejected"),
+        applicationService.updateApplicationStatus(
+          id,
+          action === "approve" ? "waiting_tenant_confirmation" : "rejected",
+        ),
       )
 
       await Promise.all(promises)
@@ -231,6 +237,7 @@ export default function ApplicationsPage() {
 
   const pendingCount = applications.filter((a) => a.status === "pending").length
   const acceptedCount = applications.filter((a) => a.status === "accepted").length
+  const waitingCount = applications.filter((a) => a.status === "waiting_tenant_confirmation").length
   const rejectedCount = applications.filter((a) => a.status === "rejected").length
 
   return (
@@ -249,6 +256,10 @@ export default function ApplicationsPage() {
             <div className="flex items-center space-x-1">
               <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
               <span>{pendingCount} nouvelles</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+              <span>{waitingCount} en attente</span>
             </div>
             <div className="flex items-center space-x-1">
               <div className="w-3 h-3 bg-green-500 rounded-full"></div>
@@ -287,6 +298,7 @@ export default function ApplicationsPage() {
                   <SelectItem value="pending">Nouveau</SelectItem>
                   <SelectItem value="analyzing">En cours d'analyse</SelectItem>
                   <SelectItem value="visit_scheduled">Visite programmée</SelectItem>
+                  <SelectItem value="waiting_tenant_confirmation">En attente d'acceptation</SelectItem>
                   <SelectItem value="accepted">Acceptée</SelectItem>
                   <SelectItem value="rejected">Refusée</SelectItem>
                 </SelectContent>
@@ -409,4 +421,3 @@ export default function ApplicationsPage() {
     </div>
   )
 }
-
