@@ -47,10 +47,10 @@ export default function HorizontalPropertyCard({ property }: HorizontalPropertyC
               <Link href={`/properties/${property.id}`}>Voir l'annonce</Link>
             </Button>
             <Button variant="outline" asChild>
-              <Link href={`/owner/properties/${property.id}/applications`}>Voir les candidatures</Link>
+              <Link href={`/owner/applications?property=${property.id}`}>Voir les candidatures</Link>
             </Button>
             <Button variant="outline" asChild>
-              <Link href={`/owner/properties/${property.id}/edit`}>Modifier</Link>
+              <Link href={`/owner/properties/${property.id}/manage`}>Gérer</Link>
             </Button>
           </div>
         )
