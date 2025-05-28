@@ -23,6 +23,7 @@ import {
 import { authService } from "@/lib/auth-service"
 import { rentalManagementService } from "@/lib/rental-management-service"
 import { toast } from "sonner"
+import { PageHeader } from "@/components/page-header"
 
 export default function ReceiptsPage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
@@ -169,16 +170,12 @@ export default function ReceiptsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Gestion des Quittances</h1>
-          <p className="text-gray-600">Générez et suivez les quittances de loyer</p>
-        </div>
+      <PageHeader title="Gestion des Quittances" description="Générez et suivez les quittances de loyer">
         <Button onClick={handleGenerateReceipts}>
           <Plus className="h-4 w-4 mr-2" />
           Générer quittances du mois
         </Button>
-      </div>
+      </PageHeader>
 
       {/* Sélecteur de bail */}
       <Card>
