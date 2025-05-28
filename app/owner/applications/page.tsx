@@ -24,6 +24,8 @@ import {
   List,
   CheckCircle2,
   XCircle,
+  Mail,
+  Phone,
 } from "lucide-react"
 import { MatchingScore } from "@/components/matching-score"
 import { ApplicationActions } from "@/components/application-actions"
@@ -262,13 +264,39 @@ export default function ApplicationsPage() {
     const isExpanded = expandedCard === application.id
     const isSelected = selectedApplications.includes(application.id)
 
+    const getScoreColor = (score: number) => {
+      if (score >= 80) return "#10b981" // green
+      if (score >= 60) return "#f59e0b" // yellow
+      return "#ef4444" // red
+    }
+
+    const getStatusConfig = (status: string) => {
+      switch (status) {
+        case "pending":
+          return { color: "bg-yellow-500", label: "En attente", textColor: "text-yellow-700" }
+        case "visit_proposed":
+          return { color: "bg-blue-500", label: "Visite proposée", textColor: "text-blue-700" }
+        case "visit_scheduled":
+          return { color: "bg-purple-500", label: "Visite programmée", textColor: "text-purple-700" }
+        case "approved":
+          return { color: "bg-green-500", label: "Approuvée", textColor: "text-green-700" }
+        case "rejected":
+          return { color: "bg-red-500", label: "Rejetée", textColor: "text-red-700" }
+        default:
+          return { color: "bg-gray-500", label: status, textColor: "text-gray-700" }
+      }
+    }
+
+    const statusConfig = getStatusConfig(application.status)
+
     return (
       <Card
         className={`transition-all duration-200 ${isSelected ? "ring-2 ring-blue-500" : ""} ${isExpanded ? "shadow-lg" : "hover:shadow-md"}`}
       >
         <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3 flex-1">
+          <div className="flex items-center gap-4">
+            {/* Checkbox et Avatar */}
+            <div className="flex items-center gap-3">
               <Checkbox
                 checked={isSelected}
                 onCheckedChange={(checked) => {
@@ -280,80 +308,136 @@ export default function ApplicationsPage() {
                 }}
               />
 
-              <div className="relative">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">
-                    {application.tenant?.first_name?.[0] || "?"}
-                    {application.tenant?.last_name?.[0] || "?"}
-                  </span>
-                </div>
-                <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-white border-2 border-white flex items-center justify-center">
-                  <div
-                    className="w-4 h-4 rounded-full flex items-center justify-center text-xs font-bold text-white"
-                    style={{
-                      background: `conic-gradient(${getScoreProgressColor(score)} ${score * 3.6}deg, #e5e7eb 0deg)`,
-                    }}
-                  >
-                    {score}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center space-x-2">
-                  <h3 className="font-semibold truncate">
-                    {application.tenant?.first_name || "Prénom"} {application.tenant?.last_name || "Nom"}
-                  </h3>
-                  {getStatusBadge(application.status)}
-                </div>
-                <p className="text-sm text-muted-foreground truncate">
-                  {application.property?.title || "Propriété"} • {application.profession || "Profession non renseignée"}
-                </p>
-                <div className="flex items-center space-x-4 mt-1 text-xs text-muted-foreground">
-                  {application.income && (
-                    <span className="flex items-center">
-                      <Euro className="h-3 w-3 mr-1" />
-                      {application.income}€/mois
-                    </span>
-                  )}
-                  {application.has_guarantor && <span className="text-green-600">Avec garant</span>}
-                  <span>{new Date(application.created_at).toLocaleDateString()}</span>
-                </div>
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                <span className="text-white font-bold">
+                  {application.tenant?.first_name?.[0] || "?"}
+                  {application.tenant?.last_name?.[0] || "?"}
+                </span>
               </div>
             </div>
 
-            <div className="flex items-center space-x-3">
-              <MatchingScore application={application} size="md" />
-              <ApplicationActions
-                application={application}
-                onStatusChange={handleStatusChange}
-                onProposeVisit={handleProposeVisit}
-                onSelectCandidate={handleSelectCandidate}
-              />
+            {/* Informations principales */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-3 mb-1">
+                <h3 className="font-semibold text-lg truncate">
+                  {application.tenant?.first_name || "Prénom"} {application.tenant?.last_name || "Nom"}
+                </h3>
+                <div className={`w-2 h-2 rounded-full ${statusConfig.color}`}></div>
+                <span className={`text-sm font-medium ${statusConfig.textColor}`}>{statusConfig.label}</span>
+              </div>
+
+              <p className="text-sm text-muted-foreground truncate mb-2">
+                {application.property?.title || "Propriété"} • {application.profession || "Profession non renseignée"}
+              </p>
+
+              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                {application.income && (
+                  <span className="flex items-center">
+                    <Euro className="h-3 w-3 mr-1" />
+                    {application.income.toLocaleString()}€/mois
+                  </span>
+                )}
+                {application.has_guarantor && <span className="text-green-600 font-medium">Avec garant</span>}
+                <span>{new Date(application.created_at).toLocaleDateString()}</span>
+              </div>
+            </div>
+
+            {/* Score circulaire */}
+            <div className="flex items-center gap-4">
+              <div className="relative w-16 h-16">
+                <svg className="w-16 h-16 transform -rotate-90" viewBox="0 0 36 36">
+                  <path
+                    d="M18 2.0845
+                    a 15.9155 15.9155 0 0 1 0 31.831
+                    a 15.9155 15.9155 0 0 1 0 -31.831"
+                    fill="none"
+                    stroke="#e5e7eb"
+                    strokeWidth="2"
+                  />
+                  <path
+                    d="M18 2.0845
+                    a 15.9155 15.9155 0 0 1 0 31.831
+                    a 15.9155 15.9155 0 0 1 0 -31.831"
+                    fill="none"
+                    stroke={getScoreColor(score)}
+                    strokeWidth="2"
+                    strokeDasharray={`${score}, 100`}
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-sm font-bold" style={{ color: getScoreColor(score) }}>
+                    {score}
+                  </span>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-col gap-2">
+                <ApplicationActions
+                  application={application}
+                  onStatusUpdate={(newStatus) => {
+                    setApplications((prev) =>
+                      prev.map((app) => (app.id === application.id ? { ...app, status: newStatus } : app)),
+                    )
+                  }}
+                />
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setExpandedCard(isExpanded ? null : application.id)}
+                  className="text-xs"
+                >
+                  {isExpanded ? "Réduire" : "Détails"}
+                </Button>
+              </div>
             </div>
           </div>
 
+          {/* Section détails expandable */}
           {isExpanded && (
             <div className="mt-4 pt-4 border-t space-y-3">
-              <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div>
-                  <h4 className="font-medium mb-1">Contact</h4>
-                  <p className="text-muted-foreground">{application.tenant?.email}</p>
-                  {application.tenant?.phone && <p className="text-muted-foreground">{application.tenant.phone}</p>}
+                  <h4 className="font-medium mb-2 text-gray-900">Contact</h4>
+                  <div className="space-y-1">
+                    <p className="text-muted-foreground flex items-center">
+                      <Mail className="h-3 w-3 mr-2" />
+                      {application.tenant?.email}
+                    </p>
+                    {application.tenant?.phone && (
+                      <p className="text-muted-foreground flex items-center">
+                        <Phone className="h-3 w-3 mr-2" />
+                        {application.tenant.phone}
+                      </p>
+                    )}
+                  </div>
                 </div>
+
                 <div>
-                  <h4 className="font-medium mb-1">Propriété</h4>
-                  <p className="text-muted-foreground">{application.property?.address}</p>
-                  <p className="text-muted-foreground">{application.property?.price}€/mois</p>
+                  <h4 className="font-medium mb-2 text-gray-900">Propriété</h4>
+                  <div className="space-y-1">
+                    <p className="text-muted-foreground">{application.property?.address}</p>
+                    <p className="text-muted-foreground font-medium">
+                      {application.property?.price?.toLocaleString()}€/mois
+                    </p>
+                  </div>
                 </div>
               </div>
 
               {application.message && (
                 <div>
-                  <h4 className="font-medium mb-1">Message</h4>
-                  <p className="text-sm text-muted-foreground bg-gray-50 p-2 rounded">{application.message}</p>
+                  <h4 className="font-medium mb-2 text-gray-900">Message du candidat</h4>
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <p className="text-sm text-gray-700">{application.message}</p>
+                  </div>
                 </div>
               )}
+
+              <div className="pt-2">
+                <MatchingScore application={application} size="lg" detailed={true} />
+              </div>
             </div>
           )}
         </CardContent>

@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import {
@@ -13,8 +12,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar, X, CheckCircle, Clock, UserCheck, MessageSquare, AlertTriangle, RefreshCw } from "lucide-react"
+import {
+  Calendar,
+  X,
+  CheckCircle,
+  Clock,
+  UserCheck,
+  MessageSquare,
+  AlertTriangle,
+  RefreshCw,
+  MoreVertical,
+  Eye,
+} from "lucide-react"
 import { toast } from "sonner"
 import { VisitProposalManager } from "./visit-proposal-manager"
 
@@ -28,37 +39,37 @@ const STATUS_CONFIG = {
     label: "En cours d'analyse",
     color: "bg-yellow-100 text-yellow-800",
     icon: Clock,
-    actions: ["propose_visit", "reject"],
+    actions: ["propose_visit", "reject", "view"],
   },
   visit_proposed: {
     label: "Visite proposée",
     color: "bg-blue-100 text-blue-800",
     icon: Calendar,
-    actions: ["accept", "reject"],
+    actions: ["accept", "reject", "view"],
   },
   visit_scheduled: {
     label: "Visite programmée",
     color: "bg-purple-100 text-purple-800",
     icon: Calendar,
-    actions: ["accept", "reject"],
+    actions: ["accept", "reject", "view"],
   },
   visit_completed: {
     label: "Visite effectuée",
     color: "bg-indigo-100 text-indigo-800",
     icon: CheckCircle,
-    actions: ["accept", "reject"],
+    actions: ["accept", "reject", "view"],
   },
   accepted: {
     label: "Candidature acceptée",
     color: "bg-green-100 text-green-800",
     icon: UserCheck,
-    actions: ["contact"],
+    actions: ["contact", "view"],
   },
   rejected: {
     label: "Candidature refusée",
     color: "bg-red-100 text-red-800",
     icon: X,
-    actions: [],
+    actions: ["view"],
   },
 }
 
@@ -97,19 +108,10 @@ export function ApplicationActions({ application, onStatusUpdate }: ApplicationA
 
     setIsProcessing(true)
     try {
-      // Simuler l'appel API
       await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      // Mettre à jour le statut
       onStatusUpdate("rejected")
-
-      // Notification de succès
       toast.success("Candidature refusée et notification envoyée au candidat")
-
-      // Fermer le dialog
       setShowRejectDialog(false)
-
-      // Reset des champs
       setRejectionReason("")
       setRejectionMessage("")
     } catch (error) {
@@ -122,19 +124,10 @@ export function ApplicationActions({ application, onStatusUpdate }: ApplicationA
   const handleAccept = async () => {
     setIsProcessing(true)
     try {
-      // Simuler l'appel API
       await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      // Mettre à jour le statut
       onStatusUpdate("accepted")
-
-      // Notification de succès
       toast.success("Candidature acceptée ! Le candidat va être notifié.")
-
-      // Fermer le dialog
       setShowAcceptDialog(false)
-
-      // Reset du message
       setAcceptanceMessage("")
     } catch (error) {
       toast.error("Erreur lors de l'acceptation de la candidature")
@@ -151,84 +144,90 @@ export function ApplicationActions({ application, onStatusUpdate }: ApplicationA
     onStatusUpdate("visit_proposed")
   }
 
-  const getActionButtons = () => {
+  const handleViewDetails = () => {
+    // Navigation vers la page de détails
+    window.open(`/owner/applications/${application.id}`, "_blank")
+  }
+
+  const getPrimaryAction = () => {
     const actions = statusConfig?.actions || []
 
-    return (
-      <div className="flex flex-wrap gap-2">
-        {actions.includes("propose_visit") && (
-          <Button onClick={handleProposeVisit} className="flex-1 min-w-[140px]">
-            <Calendar className="h-4 w-4 mr-1" />
-            Proposer une visite
-          </Button>
-        )}
-
-        {actions.includes("accept") && (
-          <Button onClick={() => setShowAcceptDialog(true)} className="flex-1 min-w-[140px]">
-            <UserCheck className="h-4 w-4 mr-1" />
-            Accepter le dossier
-          </Button>
-        )}
-
-        {actions.includes("reject") && (
-          <Button variant="destructive" onClick={() => setShowRejectDialog(true)} className="flex-1 min-w-[140px]">
-            <X className="h-4 w-4 mr-1" />
-            Refuser
-          </Button>
-        )}
-
-        {actions.includes("contact") && (
-          <Button variant="outline" className="flex-1 min-w-[140px]">
-            <MessageSquare className="h-4 w-4 mr-1" />
-            Contacter
-          </Button>
-        )}
-      </div>
-    )
-  }
-
-  const getStatusBadge = () => {
-    if (!statusConfig) return null
-
-    const Icon = statusConfig.icon
-
-    return (
-      <Badge className={`${statusConfig.color} flex items-center gap-1`}>
-        <Icon className="h-3 w-3" />
-        {statusConfig.label}
-      </Badge>
-    )
-  }
-
-  const getStatusMessage = () => {
-    switch (currentStatus) {
-      case "pending":
-        return "Analysez le dossier et proposez une visite ou refusez la candidature."
-      case "visit_proposed":
-        return "En attente de la réponse du candidat pour la visite."
-      case "visit_scheduled":
-        return "Visite programmée. Vous pourrez accepter ou refuser après la visite."
-      case "visit_completed":
-        return "Visite effectuée. Prenez votre décision finale."
-      case "accepted":
-        return "Candidature acceptée. Vous pouvez maintenant créer le bail."
-      case "rejected":
-        return "Candidature refusée."
-      default:
-        return ""
+    if (actions.includes("propose_visit")) {
+      return (
+        <Button size="sm" onClick={handleProposeVisit} className="min-w-[100px]">
+          <Calendar className="h-3 w-3 mr-1" />
+          Proposer visite
+        </Button>
+      )
     }
+
+    if (actions.includes("accept")) {
+      return (
+        <Button size="sm" onClick={() => setShowAcceptDialog(true)} className="min-w-[100px]">
+          <UserCheck className="h-3 w-3 mr-1" />
+          Accepter
+        </Button>
+      )
+    }
+
+    if (actions.includes("contact")) {
+      return (
+        <Button size="sm" variant="outline" className="min-w-[100px]">
+          <MessageSquare className="h-3 w-3 mr-1" />
+          Contacter
+        </Button>
+      )
+    }
+
+    return (
+      <Button size="sm" variant="outline" onClick={handleViewDetails} className="min-w-[100px]">
+        <Eye className="h-3 w-3 mr-1" />
+        Voir détails
+      </Button>
+    )
+  }
+
+  const getSecondaryActions = () => {
+    const actions = statusConfig?.actions || []
+    const secondaryActions = []
+
+    if (actions.includes("reject")) {
+      secondaryActions.push(
+        <DropdownMenuItem key="reject" onClick={() => setShowRejectDialog(true)} className="text-red-600">
+          <X className="h-4 w-4 mr-2" />
+          Refuser
+        </DropdownMenuItem>,
+      )
+    }
+
+    if (actions.includes("view")) {
+      secondaryActions.push(
+        <DropdownMenuItem key="view" onClick={handleViewDetails}>
+          <Eye className="h-4 w-4 mr-2" />
+          Voir détails
+        </DropdownMenuItem>,
+      )
+    }
+
+    return secondaryActions
   }
 
   return (
-    <div className="space-y-4">
-      {/* Statut actuel */}
-      <div className="flex items-center justify-between">
-        {getStatusBadge()}
-        <div className="text-sm text-muted-foreground">{getStatusMessage()}</div>
-      </div>
+    <div className="flex items-center gap-1">
+      {/* Action principale */}
+      {getPrimaryAction()}
 
-      {/* Actions disponibles */}
-      {getActionButtons()}
+      {/* Menu des actions secondaires */}
+      {getSecondaryActions().length > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">{getSecondaryActions()}</DropdownMenuContent>
+        </DropdownMenu>
+      )}
 
       {/* Dialog de rejet */}
       <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
@@ -361,7 +360,7 @@ export function ApplicationActions({ application, onStatusUpdate }: ApplicationA
         propertyId={application.property?.id?.toString() || ""}
         propertyTitle={application.property?.title || ""}
         applicationId={application.id?.toString() || ""}
-        tenantName={application.tenant?.name || ""}
+        tenantName={`${application.tenant?.first_name || ""} ${application.tenant?.last_name || ""}`.trim()}
         onSlotsProposed={handleSlotsProposed}
       />
     </div>
