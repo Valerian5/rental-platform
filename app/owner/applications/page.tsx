@@ -2,1032 +2,732 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
+import { authService } from "@/lib/auth-service"
+import { applicationService } from "@/lib/application-service"
+import { toast } from "sonner"
 import {
-  Home,
   Users,
-  Calendar,
-  Plus,
-  Eye,
-  Settings,
-  AlertCircle,
-  CheckCircle,
+  Search,
+  Check,
+  X,
   Clock,
   Euro,
-  Bug,
-  MessageSquare,
-  CreditCard,
-  MapPin,
-  Briefcase,
-  X,
+  SortAsc,
+  SortDesc,
+  Grid,
+  List,
+  CheckCircle2,
+  XCircle,
+  Mail,
+  Phone,
 } from "lucide-react"
-import Link from "next/link"
-import { propertyService } from "@/lib/property-service"
-import { authService } from "@/lib/auth-service"
-import { toast } from "sonner"
+import { MatchingScore } from "@/components/matching-score"
+import { ApplicationActions } from "@/components/application-actions"
 
-export default function OwnerDashboard() {
+export default function ApplicationsPage() {
   const router = useRouter()
-  const [currentUser, setCurrentUser] = useState<any>(null)
-  const [properties, setProperties] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
   const [applications, setApplications] = useState<any[]>([])
-  const [visits, setVisits] = useState<any[]>([])
-  const [messages, setMessages] = useState<any[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [showDebug, setShowDebug] = useState(false)
-  const [debugLogs, setDebugLogs] = useState<string[]>([])
-  const [activeTab, setActiveTab] = useState("overview")
+  const [filteredApplications, setFilteredApplications] = useState<any[]>([])
+  const [properties, setProperties] = useState<any[]>([])
+  const [selectedApplications, setSelectedApplications] = useState<string[]>([])
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list")
+  const [sortBy, setSortBy] = useState<"date" | "score" | "name">("score")
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
+  const [expandedCard, setExpandedCard] = useState<string | null>(null)
+  const [filters, setFilters] = useState({
+    status: "all",
+    property: "all",
+    search: "",
+    dateRange: "all",
+    scoreRange: "all",
+    hasGuarantor: "all",
+  })
 
-  const [sortBy, setSortBy] = useState("date_desc")
+  useEffect(() => {
+    checkAuthAndLoadData()
+  }, [])
 
-  // Fonction de tri des candidatures
-  const getSortedApplications = () => {
-    const applicationsWithScore = applications.map((app) => {
-      const propertyRent = app.property?.rent_excluding_charges || 0
-      const propertyCharges = app.property?.charges_amount || 0
-      const totalRent = propertyRent + propertyCharges
-      const incomeRatio = app.income ? app.income / totalRent : 0
+  useEffect(() => {
+    applyFiltersAndSort()
+  }, [applications, filters, sortBy, sortOrder])
 
-      let score = 0
-      if (incomeRatio >= 3) score += 40
-      else if (incomeRatio >= 2.5) score += 30
-      else if (incomeRatio >= 2) score += 20
-      else score += 10
+  const checkAuthAndLoadData = async () => {
+    try {
+      const user = await authService.getCurrentUser()
+      if (!user || user.user_type !== "owner") {
+        router.push("/login")
+        return
+      }
 
-      if (app.has_guarantor) score += 20
+      await loadApplications(user.id)
+      await loadProperties(user.id)
+    } catch (error) {
+      console.error("Erreur auth:", error)
+      router.push("/login")
+    } finally {
+      setLoading(false)
+    }
+  }
 
-      const stableProfessions = ["Enseignante", "Ingénieur logiciel", "Infirmière"]
-      if (stableProfessions.includes(app.profession)) score += 20
-      else score += 10
+  const loadApplications = async (ownerId: string) => {
+    try {
+      const data = await applicationService.getOwnerApplications(ownerId)
+      const applicationsWithScore = data.map((app) => ({
+        ...app,
+        match_score: applicationService.calculateMatchScore(app, app.property),
+      }))
+      setApplications(applicationsWithScore)
+    } catch (error) {
+      console.error("Erreur chargement candidatures:", error)
+      toast.error("Erreur lors du chargement des candidatures")
+    }
+  }
 
-      if (app.status === "accepted") score += 20
-      else if (app.status === "visit_scheduled") score += 15
-      else if (app.status === "under_review") score += 10
-      else score += 5
+  const loadProperties = async (ownerId: string) => {
+    try {
+      const response = await fetch(`/api/properties?owner_id=${ownerId}`)
+      if (response.ok) {
+        const data = await response.json()
+        setProperties(data.properties || [])
+      }
+    } catch (error) {
+      console.error("Erreur chargement propriétés:", error)
+    }
+  }
 
-      return { ...app, calculatedScore: Math.min(score, 100) }
-    })
+  const applyFiltersAndSort = () => {
+    let filtered = [...applications]
 
-    return applicationsWithScore.sort((a, b) => {
+    // Filtres
+    if (filters.status !== "all") {
+      filtered = filtered.filter((app) => app.status === filters.status)
+    }
+
+    if (filters.property !== "all") {
+      filtered = filtered.filter((app) => app.property_id === filters.property)
+    }
+
+    if (filters.search) {
+      const search = filters.search.toLowerCase()
+      filtered = filtered.filter(
+        (app) =>
+          app.tenant?.first_name?.toLowerCase().includes(search) ||
+          app.tenant?.last_name?.toLowerCase().includes(search) ||
+          app.property?.title?.toLowerCase().includes(search) ||
+          app.tenant?.email?.toLowerCase().includes(search) ||
+          app.profession?.toLowerCase().includes(search),
+      )
+    }
+
+    if (filters.scoreRange !== "all") {
+      const [min, max] = filters.scoreRange.split("-").map(Number)
+      filtered = filtered.filter((app) => {
+        const score = app.match_score || 50
+        return score >= min && (max ? score <= max : true)
+      })
+    }
+
+    if (filters.hasGuarantor !== "all") {
+      const hasGuarantor = filters.hasGuarantor === "yes"
+      filtered = filtered.filter((app) => app.has_guarantor === hasGuarantor)
+    }
+
+    if (filters.dateRange !== "all") {
+      const now = new Date()
+      const days = filters.dateRange === "week" ? 7 : filters.dateRange === "month" ? 30 : 90
+      const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
+      filtered = filtered.filter((app) => new Date(app.created_at) >= cutoff)
+    }
+
+    // Tri
+    filtered.sort((a, b) => {
+      let aValue, bValue
+
       switch (sortBy) {
-        case "date_desc":
-          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        case "date_asc":
-          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        case "score_desc":
-          return b.calculatedScore - a.calculatedScore
-        case "score_asc":
-          return a.calculatedScore - b.calculatedScore
+        case "score":
+          aValue = a.match_score || 50
+          bValue = b.match_score || 50
+          break
+        case "date":
+          aValue = new Date(a.created_at).getTime()
+          bValue = new Date(b.created_at).getTime()
+          break
+        case "name":
+          aValue = `${a.tenant?.first_name || ""} ${a.tenant?.last_name || ""}`.toLowerCase()
+          bValue = `${b.tenant?.first_name || ""} ${b.tenant?.last_name || ""}`.toLowerCase()
+          break
         default:
           return 0
       }
+
+      if (sortOrder === "asc") {
+        return aValue > bValue ? 1 : -1
+      } else {
+        return aValue < bValue ? 1 : -1
+      }
     })
+
+    setFilteredApplications(filtered)
   }
 
-  // Fonctions de gestion du workflow
-  const handleUpdateApplicationStatus = async (applicationId: string, newStatus: string) => {
+  const handleStatusChange = async (applicationId: string, newStatus: "approved" | "rejected") => {
     try {
-      await propertyService.updateApplicationStatus(applicationId, newStatus)
-      toast.success(`Candidature ${newStatus === "rejected" ? "refusée" : "mise à jour"}`)
+      await applicationService.updateApplicationStatus(applicationId, newStatus)
+      toast.success(`Candidature ${newStatus === "approved" ? "approuvée" : "rejetée"}`)
 
-      // Recharger les candidatures
-      const userApplications = await propertyService.getOwnerApplications(currentUser.id)
-      setApplications(userApplications)
+      const user = await authService.getCurrentUser()
+      if (user) {
+        await loadApplications(user.id)
+      }
     } catch (error) {
+      console.error("Erreur mise à jour statut:", error)
       toast.error("Erreur lors de la mise à jour")
     }
   }
 
-  const handleScheduleVisit = async (applicationId: string) => {
-    try {
-      // Mettre à jour le statut
-      await propertyService.updateApplicationStatus(applicationId, "visit_scheduled")
-      toast.success("Visite programmée ! Vous pouvez maintenant définir les créneaux.")
-
-      // Recharger les candidatures
-      const userApplications = await propertyService.getOwnerApplications(currentUser.id)
-      setApplications(userApplications)
-    } catch (error) {
-      toast.error("Erreur lors de la programmation")
-    }
-  }
-
-  const handleSelectTenant = async (applicationId: string) => {
-    try {
-      // Mettre à jour le statut à "accepted"
-      await propertyService.updateApplicationStatus(applicationId, "accepted")
-      toast.success("Candidat sélectionné ! Vous pouvez maintenant créer le bail.")
-
-      // Recharger les candidatures
-      const userApplications = await propertyService.getOwnerApplications(currentUser.id)
-      setApplications(userApplications)
-    } catch (error) {
-      toast.error("Erreur lors de la sélection")
-    }
-  }
-
-  const handleCreateLease = async (applicationId: string) => {
-    try {
-      // Rediriger vers la création de bail
-      router.push(`/owner/leases/new?application=${applicationId}`)
-    } catch (error) {
-      toast.error("Erreur lors de la redirection")
-    }
-  }
-
-  const addDebugLog = (message: string) => {
-    const timestamp = new Date().toLocaleTimeString()
-    const logMessage = `${timestamp}: ${message}`
-    console.log(logMessage)
-    setDebugLogs((prev) => [...prev, logMessage])
-  }
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        addDebugLog("🔍 Début du chargement du dashboard")
-
-        const user = await authService.getCurrentUser()
-        if (!user || user.user_type !== "owner") {
-          addDebugLog("❌ Utilisateur non autorisé ou non connecté")
-          toast.error("Vous devez être connecté en tant que propriétaire")
-          router.push("/login")
-          return
-        }
-
-        addDebugLog(`✅ Utilisateur connecté: ${user.email} (ID: ${user.id})`)
-        setCurrentUser(user)
-
-        // Charger les propriétés
-        addDebugLog("📋 Chargement des propriétés...")
-        const userProperties = await propertyService.getOwnerProperties(user.id)
-        addDebugLog(`✅ ${userProperties.length} propriétés chargées`)
-        setProperties(userProperties)
-
-        // Charger les candidatures
-        addDebugLog("📝 Chargement des candidatures...")
-        const userApplications = await propertyService.getOwnerApplications(user.id)
-        addDebugLog(`✅ ${userApplications.length} candidatures chargées`)
-        setApplications(userApplications)
-
-        // Charger les visites
-        addDebugLog("📅 Chargement des visites...")
-        const userVisits = await propertyService.getOwnerVisits(user.id)
-        addDebugLog(`✅ ${userVisits.length} visites chargées`)
-        setVisits(userVisits)
-
-        // Charger les messages
-        addDebugLog("💬 Chargement des messages...")
-        const userMessages = await propertyService.getOwnerMessages(user.id)
-        addDebugLog(`✅ ${userMessages.length} messages chargés`)
-        setMessages(userMessages)
-
-        addDebugLog("🎉 Chargement du dashboard terminé avec succès")
-      } catch (error) {
-        addDebugLog(`❌ Erreur lors du chargement: ${error.message}`)
-        console.error("Erreur lors du chargement du dashboard:", error)
-        toast.error("Erreur lors du chargement du dashboard")
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [router])
-
-  const testPropertyCreation = async () => {
-    if (!currentUser) {
-      addDebugLog("❌ Pas d'utilisateur pour le test")
+  const handleBulkAction = async (action: "approve" | "reject") => {
+    if (selectedApplications.length === 0) {
+      toast.error("Aucune candidature sélectionnée")
       return
     }
 
     try {
-      addDebugLog("🧪 Test de création de propriété...")
+      const promises = selectedApplications.map((id) =>
+        applicationService.updateApplicationStatus(id, action === "approve" ? "approved" : "rejected"),
+      )
 
-      const testData = {
-        title: "Test Property " + Date.now(),
-        description: "Test description",
-        address: "123 Test Street",
-        city: "Test City",
-        postal_code: "12345",
-        hide_exact_address: false,
-        surface: 50,
-        rent_excluding_charges: 1000,
-        charges_amount: 100,
-        property_type: "apartment" as const,
-        rental_type: "unfurnished" as const,
-        construction_year: 2020,
-        security_deposit: 1000,
-        rooms: 3,
-        bedrooms: 2,
-        bathrooms: 1,
-        exterior_type: "balcon",
-        equipment: ["Cuisine équipée"],
-        energy_class: "C",
-        ges_class: "C",
-        heating_type: "individual_electric",
-        required_income: 3000,
-        professional_situation: "CDI",
-        guarantor_required: false,
-        lease_duration: 12,
-        move_in_date: "2024-02-01",
-        rent_payment_day: 5,
-        owner_id: currentUser.id,
+      await Promise.all(promises)
+      toast.success(
+        `${selectedApplications.length} candidature(s) ${action === "approve" ? "approuvée(s)" : "rejetée(s)"}`,
+      )
+
+      setSelectedApplications([])
+      const user = await authService.getCurrentUser()
+      if (user) {
+        await loadApplications(user.id)
       }
-
-      const result = await propertyService.createProperty(testData)
-      addDebugLog(`✅ Test réussi! Propriété créée: ${result.id}`)
-      toast.success("Test de création réussi!")
-
-      // Recharger les propriétés
-      const updatedProperties = await propertyService.getOwnerProperties(currentUser.id)
-      setProperties(updatedProperties)
     } catch (error) {
-      addDebugLog(`❌ Test échoué: ${error.message}`)
-      toast.error(`Test échoué: ${error.message}`)
+      console.error("Erreur action groupée:", error)
+      toast.error("Erreur lors de l'action groupée")
     }
   }
 
-  if (isLoading) {
+  const getScoreColor = (score: number) => {
+    if (score >= 80) return "text-green-600"
+    if (score >= 60) return "text-yellow-600"
+    return "text-red-600"
+  }
+
+  const getScoreProgressColor = (score: number) => {
+    if (score >= 80) return "#10b981"
+    if (score >= 60) return "#f59e0b"
+    return "#ef4444"
+  }
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "pending":
+        return (
+          <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
+            <Clock className="h-3 w-3 mr-1" />
+            En attente
+          </Badge>
+        )
+      case "approved":
+        return (
+          <Badge className="bg-green-100 text-green-800">
+            <CheckCircle2 className="h-3 w-3 mr-1" />
+            Approuvée
+          </Badge>
+        )
+      case "rejected":
+        return (
+          <Badge variant="destructive">
+            <XCircle className="h-3 w-3 mr-1" />
+            Rejetée
+          </Badge>
+        )
+      default:
+        return <Badge variant="outline">{status}</Badge>
+    }
+  }
+
+  const CompactApplicationCard = ({ application }: { application: any }) => {
+    const score = application.match_score || 50
+    const isExpanded = expandedCard === application.id
+    const isSelected = selectedApplications.includes(application.id)
+
+    const getScoreColor = (score: number) => {
+      if (score >= 80) return "#10b981" // green
+      if (score >= 60) return "#f59e0b" // yellow
+      return "#ef4444" // red
+    }
+
+    const getStatusConfig = (status: string) => {
+      switch (status) {
+        case "pending":
+          return { color: "bg-yellow-500", label: "En attente", textColor: "text-yellow-700" }
+        case "visit_proposed":
+          return { color: "bg-blue-500", label: "Visite proposée", textColor: "text-blue-700" }
+        case "visit_scheduled":
+          return { color: "bg-purple-500", label: "Visite programmée", textColor: "text-purple-700" }
+        case "approved":
+          return { color: "bg-green-500", label: "Approuvée", textColor: "text-green-700" }
+        case "rejected":
+          return { color: "bg-red-500", label: "Rejetée", textColor: "text-red-700" }
+        default:
+          return { color: "bg-gray-500", label: status, textColor: "text-gray-700" }
+      }
+    }
+
+    const statusConfig = getStatusConfig(application.status)
+
     return (
-      <div className="flex h-screen">
-        <div className="w-64 bg-gray-900"></div>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-2">Chargement du tableau de bord...</p>
+      <Card
+        className={`transition-all duration-200 ${isSelected ? "ring-2 ring-blue-500" : ""} ${isExpanded ? "shadow-lg" : "hover:shadow-md"}`}
+      >
+        <CardContent className="p-4">
+          <div className="flex items-center gap-4">
+            {/* Checkbox et Avatar */}
+            <div className="flex items-center gap-3">
+              <Checkbox
+                checked={isSelected}
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    setSelectedApplications([...selectedApplications, application.id])
+                  } else {
+                    setSelectedApplications(selectedApplications.filter((id) => id !== application.id))
+                  }
+                }}
+              />
+
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                <span className="text-white font-bold">
+                  {application.tenant?.first_name?.[0] || "?"}
+                  {application.tenant?.last_name?.[0] || "?"}
+                </span>
+              </div>
+            </div>
+
+            {/* Informations principales */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-3 mb-1">
+                <h3 className="font-semibold text-lg truncate">
+                  {application.tenant?.first_name || "Prénom"} {application.tenant?.last_name || "Nom"}
+                </h3>
+                <div className={`w-2 h-2 rounded-full ${statusConfig.color}`}></div>
+                <span className={`text-sm font-medium ${statusConfig.textColor}`}>{statusConfig.label}</span>
+              </div>
+
+              <p className="text-sm text-muted-foreground truncate mb-2">
+                {application.property?.title || "Propriété"} • {application.profession || "Profession non renseignée"}
+              </p>
+
+              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                {application.income && (
+                  <span className="flex items-center">
+                    <Euro className="h-3 w-3 mr-1" />
+                    {application.income.toLocaleString()}€/mois
+                  </span>
+                )}
+                {application.has_guarantor && <span className="text-green-600 font-medium">Avec garant</span>}
+                <span>{new Date(application.created_at).toLocaleDateString()}</span>
+              </div>
+            </div>
+
+            {/* Score circulaire */}
+            <div className="flex items-center gap-4">
+              <div className="relative w-16 h-16">
+                <svg className="w-16 h-16 transform -rotate-90" viewBox="0 0 36 36">
+                  <path
+                    d="M18 2.0845
+                    a 15.9155 15.9155 0 0 1 0 31.831
+                    a 15.9155 15.9155 0 0 1 0 -31.831"
+                    fill="none"
+                    stroke="#e5e7eb"
+                    strokeWidth="2"
+                  />
+                  <path
+                    d="M18 2.0845
+                    a 15.9155 15.9155 0 0 1 0 31.831
+                    a 15.9155 15.9155 0 0 1 0 -31.831"
+                    fill="none"
+                    stroke={getScoreColor(score)}
+                    strokeWidth="2"
+                    strokeDasharray={`${score}, 100`}
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-sm font-bold" style={{ color: getScoreColor(score) }}>
+                    {score}
+                  </span>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-col gap-2">
+                <ApplicationActions
+                  application={application}
+                  onStatusUpdate={(newStatus) => {
+                    setApplications((prev) =>
+                      prev.map((app) => (app.id === application.id ? { ...app, status: newStatus } : app)),
+                    )
+                  }}
+                />
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setExpandedCard(isExpanded ? null : application.id)}
+                  className="text-xs"
+                >
+                  {isExpanded ? "Réduire" : "Détails"}
+                </Button>
+              </div>
+            </div>
           </div>
+
+          {/* Section détails expandable */}
+          {isExpanded && (
+            <div className="mt-4 pt-4 border-t space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <h4 className="font-medium mb-2 text-gray-900">Contact</h4>
+                  <div className="space-y-1">
+                    <p className="text-muted-foreground flex items-center">
+                      <Mail className="h-3 w-3 mr-2" />
+                      {application.tenant?.email}
+                    </p>
+                    {application.tenant?.phone && (
+                      <p className="text-muted-foreground flex items-center">
+                        <Phone className="h-3 w-3 mr-2" />
+                        {application.tenant.phone}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-medium mb-2 text-gray-900">Propriété</h4>
+                  <div className="space-y-1">
+                    <p className="text-muted-foreground">{application.property?.address}</p>
+                    <p className="text-muted-foreground font-medium">
+                      {application.property?.price?.toLocaleString()}€/mois
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {application.message && (
+                <div>
+                  <h4 className="font-medium mb-2 text-gray-900">Message du candidat</h4>
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <p className="text-sm text-gray-700">{application.message}</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-2">
+                <MatchingScore application={application} size="lg" detailed={true} />
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6 p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Candidatures</h1>
+            <p className="text-muted-foreground">Chargement...</p>
+          </div>
+        </div>
+        <div className="grid gap-2">
+          {[...Array(5)].map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardContent className="p-4">
+                <div className="h-16 bg-gray-200 rounded"></div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
     )
   }
 
-  const stats = {
-    totalProperties: properties.length,
-    availableProperties: properties.filter((p) => p.available).length,
-    totalApplications: applications.length,
-    pendingApplications: applications.filter((a) => a.status === "pending").length,
-    upcomingVisits: visits.filter((v) => new Date(v.visit_date) > new Date()).length,
-    totalRevenue: properties.reduce((sum, p) => sum + (p.rent_excluding_charges || 0), 0),
+  const pendingCount = applications.filter((a) => a.status === "pending").length
+  const approvedCount = applications.filter((a) => a.status === "approved").length
+  const rejectedCount = applications.filter((a) => a.status === "rejected").length
+  const avgScore =
+    applications.length > 0
+      ? Math.round(applications.reduce((sum, app) => sum + (app.match_score || 50), 0) / applications.length)
+      : 0
+
+  const handleProposeVisit = async (applicationId: string, slots: any[]) => {
+    try {
+      const response = await fetch("/api/visits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "propose_slots",
+          application_id: applicationId,
+          slots: slots,
+        }),
+      })
+
+      if (response.ok) {
+        await applicationService.updateApplicationStatus(applicationId, "visit_proposed")
+        toast.success("Proposition de visite envoyée")
+
+        const user = await authService.getCurrentUser()
+        if (user) {
+          await loadApplications(user.id)
+        }
+      } else {
+        throw new Error("Erreur lors de l'envoi")
+      }
+    } catch (error) {
+      console.error("Erreur proposition visite:", error)
+      toast.error("Erreur lors de l'envoi de la proposition")
+    }
   }
 
-  const sidebarItems = [
-    { id: "overview", label: "Vue d'ensemble", icon: Home },
-    { id: "properties", label: "Mes biens", icon: Home },
-    { id: "applications", label: "Candidatures", icon: Users },
-    { id: "visits", label: "Visites", icon: Calendar },
-    { id: "leases", label: "Locations en cours", icon: MapPin },
-    { id: "payments", label: "Paiements", icon: CreditCard },
-    { id: "messages", label: "Messages", icon: MessageSquare },
-    { id: "settings", label: "Paramètres", icon: Settings },
-  ]
+  const handleSelectCandidate = async (applicationId: string) => {
+    try {
+      // Sélectionner le candidat
+      await applicationService.updateApplicationStatus(applicationId, "selected")
+
+      // Rejeter tous les autres candidats pour cette propriété
+      const application = applications.find((app) => app.id === applicationId)
+      if (application) {
+        const otherApplications = applications.filter(
+          (app) => app.property_id === application.property_id && app.id !== applicationId && app.status !== "rejected",
+        )
+
+        await Promise.all(
+          otherApplications.map((app) =>
+            applicationService.updateApplicationStatus(app.id, "rejected", "Un autre candidat a été sélectionné"),
+          ),
+        )
+      }
+
+      const user = await authService.getCurrentUser()
+      if (user) {
+        await loadApplications(user.id)
+      }
+    } catch (error) {
+      console.error("Erreur sélection candidat:", error)
+      toast.error("Erreur lors de la sélection")
+    }
+  }
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* Sidebar */}
-      <div className="w-64 bg-gray-900 text-white flex flex-col">
-        <div className="p-6 border-b border-gray-700">
-          <h2 className="text-xl font-bold">Tableau de bord</h2>
+    <div className="space-y-6 p-6">
+      {/* Header avec statistiques */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Candidatures</h1>
+          <p className="text-muted-foreground">
+            {applications.length} candidature{applications.length > 1 ? "s" : ""} au total
+          </p>
         </div>
 
-        <nav className="flex-1 p-4">
-          <ul className="space-y-2">
-            {sidebarItems.map((item) => {
-              const Icon = item.icon
-              return (
-                <li key={item.id}>
-                  <button
-                    onClick={() => setActiveTab(item.id)}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
-                      activeTab === item.id
-                        ? "bg-blue-600 text-white"
-                        : "text-gray-300 hover:bg-gray-800 hover:text-white"
-                    }`}
-                  >
-                    <Icon className="h-5 w-5" />
-                    {item.label}
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-        </nav>
-
-        {/* Debug button */}
-        <div className="p-4 border-t border-gray-700">
-          <Button variant="outline" size="sm" onClick={() => setShowDebug(!showDebug)} className="w-full">
-            <Bug className="h-4 w-4 mr-2" />
-            {showDebug ? "Masquer Debug" : "Debug"}
-          </Button>
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 text-sm">
+            <div className="flex items-center space-x-1">
+              <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+              <span>{pendingCount} en attente</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+              <span>{approvedCount} approuvées</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+              <span>{rejectedCount} rejetées</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="bg-white border-b border-gray-200 p-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                {currentUser?.first_name} {currentUser?.last_name}
-              </h1>
-              <p className="text-gray-600">Propriétaire</p>
+      {/* Barre d'outils */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-col lg:flex-row gap-4">
+            {/* Filtres */}
+            <div className="flex-1 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Rechercher..."
+                  value={filters.search}
+                  onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                  className="pl-10"
+                />
+              </div>
+
+              <Select value={filters.status} onValueChange={(value) => setFilters({ ...filters, status: value })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Statut" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous</SelectItem>
+                  <SelectItem value="pending">En attente</SelectItem>
+                  <SelectItem value="approved">Approuvées</SelectItem>
+                  <SelectItem value="rejected">Rejetées</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={filters.scoreRange}
+                onValueChange={(value) => setFilters({ ...filters, scoreRange: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Score" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous scores</SelectItem>
+                  <SelectItem value="80-100">Excellent (80-100)</SelectItem>
+                  <SelectItem value="60-79">Bon (60-79)</SelectItem>
+                  <SelectItem value="40-59">Moyen (40-59)</SelectItem>
+                  <SelectItem value="0-39">Faible (0-39)</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={filters.property} onValueChange={(value) => setFilters({ ...filters, property: value })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Propriété" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes</SelectItem>
+                  {properties.map((property) => (
+                    <SelectItem key={property.id} value={property.id}>
+                      {property.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={filters.hasGuarantor}
+                onValueChange={(value) => setFilters({ ...filters, hasGuarantor: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Garant" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous</SelectItem>
+                  <SelectItem value="yes">Avec garant</SelectItem>
+                  <SelectItem value="no">Sans garant</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={filters.dateRange} onValueChange={(value) => setFilters({ ...filters, dateRange: value })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Période" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes</SelectItem>
+                  <SelectItem value="week">Cette semaine</SelectItem>
+                  <SelectItem value="month">Ce mois</SelectItem>
+                  <SelectItem value="quarter">Ce trimestre</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <Button asChild>
-              <Link href="/owner/properties/new">
-                <Plus className="h-4 w-4 mr-2" />
-                Ajouter un bien
-              </Link>
-            </Button>
+
+            {/* Tri et actions */}
+            <div className="flex items-center space-x-2">
+              <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="score">Score</SelectItem>
+                  <SelectItem value="date">Date</SelectItem>
+                  <SelectItem value="name">Nom</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Button variant="outline" size="sm" onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}>
+                {sortOrder === "asc" ? <SortAsc className="h-4 w-4" /> : <SortDesc className="h-4 w-4" />}
+              </Button>
+
+              <Button variant="outline" size="sm" onClick={() => setViewMode(viewMode === "list" ? "grid" : "list")}>
+                {viewMode === "list" ? <Grid className="h-4 w-4" /> : <List className="h-4 w-4" />}
+              </Button>
+            </div>
           </div>
-        </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-auto p-6">
-          {/* Debug Panel */}
-          {showDebug && (
-            <Card className="mb-6 border-orange-200 bg-orange-50">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-orange-800">
-                  <Bug className="h-5 w-5" />
-                  Panel de Debug
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex gap-2 mb-4">
-                  <Button size="sm" onClick={testPropertyCreation}>
-                    Test Création Propriété
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => setDebugLogs([])}>
-                    Effacer Logs
-                  </Button>
-                </div>
-                <div className="bg-gray-900 text-green-400 p-4 rounded-lg max-h-64 overflow-y-auto font-mono text-sm">
-                  {debugLogs.length === 0 ? (
-                    <p>Aucun log pour le moment...</p>
-                  ) : (
-                    debugLogs.map((log, index) => <div key={index}>{log}</div>)
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {activeTab === "overview" && (
-            <div className="space-y-6">
-              {/* Statistics */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">Candidatures</p>
-                        <p className="text-2xl font-bold">{stats.totalApplications}</p>
-                      </div>
-                      <Users className="h-8 w-8 text-blue-600" />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">Biens disponibles</p>
-                        <p className="text-2xl font-bold">{stats.availableProperties}</p>
-                      </div>
-                      <Home className="h-8 w-8 text-green-600" />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">Visites à venir</p>
-                        <p className="text-2xl font-bold">{stats.upcomingVisits}</p>
-                      </div>
-                      <Calendar className="h-8 w-8 text-purple-600" />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">Revenus mensuels</p>
-                        <p className="text-2xl font-bold">{stats.totalRevenue}€</p>
-                      </div>
-                      <Euro className="h-8 w-8 text-yellow-600" />
-                    </div>
-                  </CardContent>
-                </Card>
+          {/* Actions groupées */}
+          {selectedApplications.length > 0 && (
+            <div className="flex items-center justify-between mt-4 p-3 bg-blue-50 rounded-lg">
+              <span className="text-sm font-medium">{selectedApplications.length} candidature(s) sélectionnée(s)</span>
+              <div className="flex space-x-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleBulkAction("approve")}
+                  className="text-green-600 border-green-600"
+                >
+                  <Check className="h-4 w-4 mr-1" />
+                  Approuver
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleBulkAction("reject")}
+                  className="text-red-600 border-red-600"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Rejeter
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setSelectedApplications([])}>
+                  Annuler
+                </Button>
               </div>
-
-              {/* Recent sections */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Candidatures récentes */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center justify-between">
-                      Candidatures récentes
-                      <Badge variant="secondary">{applications.length}</Badge>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {applications.length === 0 ? (
-                      <div className="text-center py-8">
-                        <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                        <p className="text-gray-500">Aucune candidature récente</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {applications.slice(0, 3).map((application) => (
-                          <div key={application.id} className="flex items-center gap-3">
-                            <div className="flex-shrink-0">
-                              {application.status === "pending" && <Clock className="h-5 w-5 text-yellow-500" />}
-                              {application.status === "approved" && <CheckCircle className="h-5 w-5 text-green-500" />}
-                              {application.status === "rejected" && <AlertCircle className="h-5 w-5 text-red-500" />}
-                            </div>
-                            <div className="flex-1">
-                              <p className="text-sm font-medium">{application.property?.title}</p>
-                              <p className="text-xs text-gray-500">
-                                {new Date(application.created_at).toLocaleDateString("fr-FR")}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Prochaines visites */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center justify-between">
-                      Prochaines visites
-                      <Badge variant="secondary">{stats.upcomingVisits}</Badge>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {stats.upcomingVisits === 0 ? (
-                      <div className="text-center py-8">
-                        <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                        <p className="text-gray-500">Aucune visite programmée</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {visits
-                          .filter((v) => new Date(v.visit_date) > new Date())
-                          .slice(0, 3)
-                          .map((visit) => (
-                            <div key={visit.id} className="flex items-center justify-between">
-                              <div>
-                                <p className="text-sm font-medium">{visit.property?.title}</p>
-                                <p className="text-xs text-gray-500">
-                                  {new Date(visit.visit_date).toLocaleDateString("fr-FR")}
-                                </p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-sm font-medium">
-                                  {new Date(visit.visit_date).toLocaleTimeString("fr-FR", {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
-                                </p>
-                              </div>
-                            </div>
-                          ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Mes biens */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Mes biens</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {properties.length === 0 ? (
-                    <div className="text-center py-12">
-                      <Home className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                      <h3 className="text-xl font-semibold mb-2">Aucun bien ajouté</h3>
-                      <p className="text-gray-500 mb-6">Commencez par ajouter votre premier bien immobilier</p>
-                      <Button asChild>
-                        <Link href="/owner/properties/new">
-                          <Plus className="h-4 w-4 mr-2" />
-                          Ajouter un bien
-                        </Link>
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                      {properties.map((property) => (
-                        <Card key={property.id} className="hover:shadow-lg transition-shadow">
-                          <CardContent className="p-0">
-                            <div className="aspect-video bg-gray-200 rounded-t-lg overflow-hidden">
-                              {property.property_images && property.property_images.length > 0 ? (
-                                <img
-                                  src={property.property_images[0].image_url || "/placeholder.svg"}
-                                  alt={property.title}
-                                  className="w-full h-full object-cover"
-                                  onError={(e) => {
-                                    e.currentTarget.src =
-                                      "/placeholder.svg?height=200&width=300&text=Image+non+disponible"
-                                  }}
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-gray-100">
-                                  <Home className="h-12 w-12 text-gray-400" />
-                                </div>
-                              )}
-                            </div>
-                            <div className="p-4 space-y-3">
-                              <div className="flex justify-between items-start">
-                                <h4 className="font-medium text-sm line-clamp-2">{property.title}</h4>
-                                <Badge variant={property.available ? "default" : "secondary"} className="text-xs">
-                                  {property.available ? "Disponible" : "Loué"}
-                                </Badge>
-                              </div>
-
-                              <p className="text-xs text-gray-500">
-                                {property.address}, {property.city}
-                              </p>
-
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm font-bold text-blue-600">
-                                  {property.rent_excluding_charges}€
-                                </span>
-                                <span className="text-xs text-gray-500">par mois</span>
-                              </div>
-
-                              <Button variant="outline" size="sm" className="w-full" asChild>
-                                <Link href={`/owner/properties/${property.id}`}>Gérer</Link>
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
             </div>
           )}
+        </CardContent>
+      </Card>
 
-          {activeTab === "properties" && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  Mes biens ({properties.length})
-                  <Button asChild>
-                    <Link href="/owner/properties/new">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Ajouter un bien
-                    </Link>
-                  </Button>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {properties.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Home className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold mb-2">Aucun bien ajouté</h3>
-                    <p className="text-gray-500 mb-6">Commencez par ajouter votre premier bien immobilier</p>
-                    <Button asChild>
-                      <Link href="/owner/properties/new">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Ajouter un bien
-                      </Link>
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {properties.map((property) => (
-                      <Card key={property.id} className="hover:shadow-lg transition-shadow">
-                        <CardContent className="p-4">
-                          <div className="space-y-3">
-                            <div className="flex justify-between items-start">
-                              <h4 className="font-medium line-clamp-2">{property.title}</h4>
-                              <Badge variant={property.available ? "default" : "secondary"}>
-                                {property.available ? "Disponible" : "Loué"}
-                              </Badge>
-                            </div>
+      {/* Liste des candidatures */}
+      <div className="space-y-2">
+        {filteredApplications.length === 0 ? (
+          <Card>
+            <CardContent className="p-12 text-center">
+              <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Aucune candidature</h3>
+              <p className="text-muted-foreground">
+                {Object.values(filters).some((f) => f !== "all") || filters.search
+                  ? "Aucune candidature ne correspond à vos filtres"
+                  : "Vous n'avez pas encore reçu de candidatures"}
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
+              <span>{filteredApplications.length} résultat(s)</span>
+              <span>Score moyen: {avgScore}/100</span>
+            </div>
 
-                            <p className="text-sm text-gray-500">
-                              {property.address}, {property.city}
-                            </p>
-
-                            <div className="flex justify-between items-center">
-                              <span className="text-lg font-bold text-blue-600">
-                                {property.rent_excluding_charges}€
-                              </span>
-                              <span className="text-sm text-gray-500">par mois</span>
-                            </div>
-
-                            <div className="flex gap-2">
-                              <Button variant="outline" size="sm" className="flex-1" asChild>
-                                <Link href={`/owner/properties/${property.id}`}>
-                                  <Eye className="h-4 w-4 mr-1" />
-                                  Gérer
-                                </Link>
-                              </Button>
-                              <Button variant="outline" size="sm" asChild>
-                                <Link href={`/owner/properties/${property.id}/edit`}>
-                                  <Settings className="h-4 w-4" />
-                                </Link>
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {activeTab === "applications" && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  Candidatures ({applications.length})
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={sortBy}
-                      onChange={(e) => setSortBy(e.target.value)}
-                      className="px-3 py-1 border rounded-md text-sm"
-                    >
-                      <option value="date_desc">Plus récent</option>
-                      <option value="date_asc">Plus ancien</option>
-                      <option value="score_desc">Score élevé</option>
-                      <option value="score_asc">Score faible</option>
-                    </select>
-                  </div>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {applications.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold mb-2">Aucune candidature</h3>
-                    <p className="text-gray-500">Les candidatures pour vos biens apparaîtront ici</p>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {getSortedApplications().map((application) => {
-                      // Calcul du score de compatibilité
-                      const propertyRent = application.property?.rent_excluding_charges || 0
-                      const propertyCharges = application.property?.charges_amount || 0
-                      const totalRent = propertyRent + propertyCharges
-                      const incomeRatio = application.income ? application.income / totalRent : 0
-
-                      let score = 0
-                      // Score basé sur le ratio revenus/loyer (40 points max)
-                      if (incomeRatio >= 3) score += 40
-                      else if (incomeRatio >= 2.5) score += 30
-                      else if (incomeRatio >= 2) score += 20
-                      else score += 10
-
-                      // Score pour le garant (20 points)
-                      if (application.has_guarantor) score += 20
-
-                      // Score pour la profession (20 points)
-                      const stableProfessions = ["Enseignante", "Ingénieur logiciel", "Infirmière"]
-                      if (stableProfessions.includes(application.profession)) score += 20
-                      else score += 10
-
-                      // Score pour le statut (20 points)
-                      if (application.status === "accepted") score += 20
-                      else if (application.status === "visit_scheduled") score += 15
-                      else if (application.status === "under_review") score += 10
-                      else score += 5
-
-                      const finalScore = Math.min(score, 100)
-
-                      return (
-                        <Card key={application.id} className="hover:shadow-lg transition-shadow">
-                          <CardContent className="p-6">
-                            <div className="flex flex-col lg:flex-row gap-6">
-                              {/* Image de la propriété */}
-                              <div className="flex-shrink-0">
-                                <div className="w-32 h-24 bg-gray-200 rounded-lg overflow-hidden">
-                                  {application.property?.property_images &&
-                                  application.property.property_images.length > 0 ? (
-                                    <img
-                                      src={application.property.property_images[0].image_url || "/placeholder.svg"}
-                                      alt={application.property.title}
-                                      className="w-full h-full object-cover"
-                                      onError={(e) => {
-                                        e.currentTarget.src =
-                                          "/placeholder.svg?height=96&width=128&text=Image+non+disponible"
-                                      }}
-                                    />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center bg-gray-100">
-                                      <Home className="h-8 w-8 text-gray-400" />
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Informations principales */}
-                              <div className="flex-1 space-y-4">
-                                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                                  <div>
-                                    <h3 className="text-lg font-semibold">{application.property?.title}</h3>
-                                    <p className="text-sm text-gray-600">
-                                      {application.property?.address}, {application.property?.city}
-                                    </p>
-                                    <div className="flex items-center gap-4 mt-2">
-                                      <div className="flex items-center gap-1">
-                                        <Users className="h-4 w-4 text-gray-500" />
-                                        <span className="text-sm font-medium">
-                                          {application.tenant?.first_name} {application.tenant?.last_name}
-                                        </span>
-                                      </div>
-                                      <div className="flex items-center gap-1">
-                                        <Briefcase className="h-4 w-4 text-gray-500" />
-                                        <span className="text-sm text-gray-600">{application.profession}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {/* Score de compatibilité - Cercle de progression */}
-                                  <div className="flex flex-col items-center">
-                                    <div className="relative w-16 h-16">
-                                      <svg className="w-16 h-16 transform -rotate-90" viewBox="0 0 36 36">
-                                        <path
-                                          className="text-gray-200"
-                                          stroke="currentColor"
-                                          strokeWidth="3"
-                                          fill="transparent"
-                                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                                        />
-                                        <path
-                                          className={`${
-                                            finalScore >= 80
-                                              ? "text-green-500"
-                                              : finalScore >= 60
-                                                ? "text-yellow-500"
-                                                : "text-red-500"
-                                          }`}
-                                          stroke="currentColor"
-                                          strokeWidth="3"
-                                          strokeLinecap="round"
-                                          fill="transparent"
-                                          strokeDasharray={`${finalScore}, 100`}
-                                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                                        />
-                                      </svg>
-                                      <div className="absolute inset-0 flex items-center justify-center">
-                                        <span className="text-sm font-bold">{finalScore}%</span>
-                                      </div>
-                                    </div>
-                                    <span className="text-xs text-gray-500 mt-1">Compatibilité</span>
-                                  </div>
-                                </div>
-
-                                {/* Détails financiers */}
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-3 bg-gray-50 rounded-lg px-4">
-                                  <div>
-                                    <p className="text-xs text-gray-500">Revenus</p>
-                                    <p className="font-semibold">{application.income}€/mois</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-xs text-gray-500">Loyer demandé</p>
-                                    <p className="font-semibold">{totalRent}€/mois</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-xs text-gray-500">Ratio</p>
-                                    <p className="font-semibold">{incomeRatio.toFixed(1)}x</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-xs text-gray-500">Garant</p>
-                                    <p className="font-semibold">
-                                      {application.has_guarantor ? (
-                                        <span className="text-green-600">Oui</span>
-                                      ) : (
-                                        <span className="text-red-600">Non</span>
-                                      )}
-                                    </p>
-                                  </div>
-                                </div>
-
-                                {/* Message de candidature */}
-                                {application.message && (
-                                  <div className="bg-blue-50 p-3 rounded-lg">
-                                    <p className="text-sm text-gray-700 line-clamp-2">{application.message}</p>
-                                  </div>
-                                )}
-
-                                {/* Statut et actions */}
-                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                                  <div className="flex items-center gap-4">
-                                    <Badge
-                                      variant={
-                                        application.status === "pending"
-                                          ? "secondary"
-                                          : application.status === "under_review"
-                                            ? "default"
-                                            : application.status === "visit_scheduled"
-                                              ? "default"
-                                              : application.status === "accepted"
-                                                ? "default"
-                                                : "destructive"
-                                      }
-                                      className="flex items-center gap-1"
-                                    >
-                                      {application.status === "pending" && <Clock className="h-3 w-3" />}
-                                      {application.status === "under_review" && <Clock className="h-3 w-3" />}
-                                      {application.status === "visit_scheduled" && <Calendar className="h-3 w-3" />}
-                                      {application.status === "accepted" && <CheckCircle className="h-3 w-3" />}
-                                      {application.status === "rejected" && <X className="h-3 w-3" />}
-
-                                      {application.status === "pending" && "En attente"}
-                                      {application.status === "under_review" && "En cours d'analyse"}
-                                      {application.status === "visit_scheduled" && "Visite programmée"}
-                                      {application.status === "accepted" && "Acceptée"}
-                                      {application.status === "rejected" && "Refusée"}
-                                    </Badge>
-
-                                    <span className="text-xs text-gray-500">
-                                      Reçue le {new Date(application.created_at).toLocaleDateString("fr-FR")}
-                                    </span>
-                                  </div>
-
-                                  {/* Actions selon le workflow */}
-                                  <div className="flex gap-2">
-                                    <Button variant="outline" size="sm" asChild>
-                                      <Link href={`/owner/applications/${application.id}`}>
-                                        <Eye className="h-4 w-4 mr-1" />
-                                        Analyser
-                                      </Link>
-                                    </Button>
-
-                                    {/* Actions pour candidature en attente */}
-                                    {application.status === "pending" && (
-                                      <>
-                                        <Button
-                                          size="sm"
-                                          onClick={() => handleUpdateApplicationStatus(application.id, "under_review")}
-                                          className="bg-blue-600 hover:bg-blue-700"
-                                        >
-                                          <Clock className="h-4 w-4 mr-1" />
-                                          Analyser
-                                        </Button>
-                                        <Button
-                                          variant="destructive"
-                                          size="sm"
-                                          onClick={() => handleUpdateApplicationStatus(application.id, "rejected")}
-                                        >
-                                          <X className="h-4 w-4 mr-1" />
-                                          Refuser
-                                        </Button>
-                                      </>
-                                    )}
-
-                                    {/* Actions pour candidature en cours d'analyse */}
-                                    {application.status === "under_review" && (
-                                      <>
-                                        <Button
-                                          size="sm"
-                                          onClick={() => handleScheduleVisit(application.id)}
-                                          className="bg-purple-600 hover:bg-purple-700"
-                                        >
-                                          <Calendar className="h-4 w-4 mr-1" />
-                                          Programmer visite
-                                        </Button>
-                                        <Button
-                                          variant="destructive"
-                                          size="sm"
-                                          onClick={() => handleUpdateApplicationStatus(application.id, "rejected")}
-                                        >
-                                          <X className="h-4 w-4 mr-1" />
-                                          Refuser
-                                        </Button>
-                                      </>
-                                    )}
-
-                                    {/* Actions pour visite programmée */}
-                                    {application.status === "visit_scheduled" && (
-                                      <>
-                                        <Button
-                                          size="sm"
-                                          onClick={() => handleSelectTenant(application.id)}
-                                          className="bg-green-600 hover:bg-green-700"
-                                        >
-                                          <CheckCircle className="h-4 w-4 mr-1" />
-                                          Sélectionner
-                                        </Button>
-                                        <Button variant="outline" size="sm">
-                                          <Calendar className="h-4 w-4 mr-1" />
-                                          Modifier visite
-                                        </Button>
-                                      </>
-                                    )}
-
-                                    {/* Actions pour candidature acceptée */}
-                                    {application.status === "accepted" && (
-                                      <Button
-                                        size="sm"
-                                        onClick={() => handleCreateLease(application.id)}
-                                        className="bg-indigo-600 hover:bg-indigo-700"
-                                      >
-                                        <Briefcase className="h-4 w-4 mr-1" />
-                                        Créer bail
-                                      </Button>
-                                    )}
-
-                                    <Button variant="outline" size="sm">
-                                      <MessageSquare className="h-4 w-4 mr-1" />
-                                      Contact
-                                    </Button>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      )
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {activeTab === "visits" && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Visites programmées ({visits.length})</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {visits.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold mb-2">Aucune visite programmée</h3>
-                    <p className="text-gray-500">Les visites de vos biens apparaîtront ici</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {visits.map((visit) => (
-                      <div key={visit.id} className="border rounded-lg p-4">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h4 className="font-medium">{visit.property?.title}</h4>
-                            <p className="text-sm text-gray-500">
-                              {visit.property?.address}, {visit.property?.city}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              Visiteur: {visit.tenant?.first_name} {visit.tenant?.last_name}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-medium">{new Date(visit.visit_date).toLocaleDateString("fr-FR")}</p>
-                            <p className="text-sm text-gray-500">
-                              {new Date(visit.visit_date).toLocaleTimeString("fr-FR", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Placeholder pour les autres onglets */}
-          {["leases", "payments", "messages", "settings"].includes(activeTab) && (
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  {activeTab === "leases" && "Locations en cours"}
-                  {activeTab === "payments" && "Paiements"}
-                  {activeTab === "messages" && "Messages"}
-                  {activeTab === "settings" && "Paramètres"}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-12">
-                  <p className="text-gray-500">Cette section sera bientôt disponible</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+            {filteredApplications.map((application) => (
+              <CompactApplicationCard key={application.id} application={application} />
+            ))}
+          </>
+        )}
       </div>
     </div>
   )
