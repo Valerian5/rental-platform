@@ -57,15 +57,15 @@ export default function PropertyManagementPage() {
   }, [propertyId])
 
   if (isLoading) {
-    return <div className="text-center py-8">Chargement...</div>
+    return <div className="text-center">Chargement...</div>
   }
 
   if (!property) {
-    return <div className="text-center py-8">Bien non trouvé</div>
+    return <div className="text-center">Bien non trouvé</div>
   }
 
   return (
-    <div className="container mx-auto py-8">
+    <>
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold">{property.title}</h1>
@@ -310,6 +310,6 @@ export default function PropertyManagementPage() {
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+    </>
   )
 }

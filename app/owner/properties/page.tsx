@@ -79,15 +79,11 @@ export default function PropertiesListPage() {
   }, [searchTerm, properties, activeTab])
 
   if (isLoading) {
-    return (
-      <div className="container mx-auto py-8">
-        <div className="text-center">Chargement...</div>
-      </div>
-    )
+    return <div className="text-center">Chargement...</div>
   }
 
   return (
-    <div className="container mx-auto py-8">
+    <>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Mes biens</h1>
         <Button asChild>
@@ -155,6 +151,6 @@ export default function PropertiesListPage() {
           {filteredProperties.length} bien(s) affiché(s) sur {properties.length} total
         </div>
       )}
-    </div>
+    </>
   )
 }
