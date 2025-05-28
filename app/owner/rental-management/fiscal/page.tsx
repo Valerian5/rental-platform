@@ -15,7 +15,7 @@ import {
   Receipt,
 } from "lucide-react"
 
-import { createServerClient } from "@/lib/supabase-server"
+import { createServerClient } from "@/lib/supabase"
 
 async function getFiscalData() {
   try {
