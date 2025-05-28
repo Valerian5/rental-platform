@@ -11,13 +11,17 @@ if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
 // Client pour le côté client (navigateur)
 export const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
 
-// Client pour le côté serveur
+// Client pour le côté serveur avec fallback
 export const createServerClient = () => {
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error("Missing server-side Supabase environment variables")
+  // En production, utiliser les variables publiques si les variables serveur ne sont pas disponibles
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error("Missing Supabase environment variables")
   }
 
-  return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+  return createClient(supabaseUrl, supabaseKey)
 }
 
 // Fonction pour vérifier si Supabase est configuré
