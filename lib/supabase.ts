@@ -28,3 +28,6 @@ export const isSupabaseConfigured = () => {
     process.env.SUPABASE_SERVICE_ROLE_KEY
   )
 }
+
+// Réexporter createClient pour les cas où on en a besoin directement
+export { createClient }
