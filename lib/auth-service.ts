@@ -127,19 +127,65 @@ export const authService = {
   // Récupérer l'utilisateur actuel
   async getCurrentUser(): Promise<UserProfile | null> {
     try {
-      const { data: authData } = await supabase.auth.getUser()
+      console.log("🔍 AuthService.getCurrentUser - Début")
 
-      if (!authData.user) {
+      // 1. Vérifier la session Supabase
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+      console.log("📋 Session:", { sessionData, sessionError })
+
+      if (sessionError) {
+        console.error("❌ Erreur session:", sessionError)
         return null
       }
 
-      const { data: profile, error } = await supabase.from("users").select("*").eq("id", authData.user.id).single()
-
-      if (error) {
-        console.error("❌ Erreur récupération utilisateur:", error)
+      if (!sessionData.session || !sessionData.session.user) {
+        console.log("❌ Pas de session active")
         return null
       }
 
+      const userId = sessionData.session.user.id
+      console.log("👤 User ID:", userId)
+
+      // 2. Récupérer le profil utilisateur
+      const { data: profile, error: profileError } = await supabase.from("users").select("*").eq("id", userId).single()
+
+      console.log("📊 Profil:", { profile, profileError })
+
+      if (profileError) {
+        console.error("❌ Erreur profil:", profileError)
+
+        // Si le profil n'existe pas, créer un profil basique
+        if (profileError.code === "PGRST116") {
+          console.log("🔧 Création profil manquant...")
+          const basicProfile = {
+            id: userId,
+            email: sessionData.session.user.email || "",
+            first_name: sessionData.session.user.user_metadata?.first_name || "",
+            last_name: sessionData.session.user.user_metadata?.last_name || "",
+            user_type: sessionData.session.user.user_metadata?.user_type || "tenant",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }
+
+          const { data: newProfile, error: createError } = await supabase
+            .from("users")
+            .insert(basicProfile)
+            .select()
+            .single()
+
+          if (createError) {
+            console.error("❌ Erreur création profil:", createError)
+            return null
+          }
+
+          console.log("✅ Profil créé:", newProfile)
+          return newProfile
+        }
+
+        return null
+      }
+
+      console.log("✅ Profil récupéré:", profile)
       return profile
     } catch (error) {
       console.error("❌ Erreur dans getCurrentUser:", error)

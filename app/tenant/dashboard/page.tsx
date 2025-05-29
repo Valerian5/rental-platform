@@ -38,37 +38,51 @@ export default function TenantDashboardPage() {
     const fetchDashboardData = async () => {
       try {
         console.log("📊 Chargement dashboard locataire...")
+        setIsLoading(true)
 
-        // Récupérer l'utilisateur connecté
+        // Récupérer l'utilisateur connecté avec debug
         const user = await authService.getCurrentUser()
-        if (!user || user.user_type !== "tenant") {
-          toast.error("Accès non autorisé")
+        console.log("👤 Utilisateur récupéré:", user)
+
+        if (!user) {
+          console.log("❌ Pas d'utilisateur connecté")
+          toast.error("Vous devez être connecté pour accéder à cette page")
+          window.location.href = "/login"
           return
         }
 
+        if (user.user_type !== "tenant") {
+          console.log("❌ Type utilisateur incorrect:", user.user_type)
+          toast.error("Accès réservé aux locataires")
+          window.location.href = "/"
+          return
+        }
+
+        console.log("✅ Utilisateur locataire authentifié:", user)
         setCurrentUser(user)
 
         // Récupérer le dossier de location
-        const fileData = await rentalFileService.getRentalFile(user.id)
-        setRentalFile(fileData)
+        try {
+          const fileData = await rentalFileService.getRentalFile(user.id)
+          setRentalFile(fileData)
+          console.log("📁 Dossier location:", fileData)
+        } catch (fileError) {
+          console.warn("⚠️ Erreur dossier location:", fileError)
+          // Créer un dossier vide si il n'existe pas
+          setRentalFile({ completion_percentage: 0, missing_documents: [] })
+        }
 
         // Récupérer les candidatures
-        const applicationsData = await applicationService.getTenantApplications(user.id)
-        setApplications(applicationsData)
+        try {
+          const applicationsData = await applicationService.getTenantApplications(user.id)
+          setApplications(applicationsData)
+          console.log("📝 Candidatures:", applicationsData)
+        } catch (appError) {
+          console.warn("⚠️ Erreur candidatures:", appError)
+          setApplications([])
+        }
 
-        // Récupérer les recherches sauvegardées (simulé pour l'instant)
-        // const searchesData = await searchService.getTenantSearches(user.id)
-        // setSavedSearches(searchesData)
-
-        // Récupérer les favoris (simulé pour l'instant)
-        // const favoritesData = await favoriteService.getTenantFavorites(user.id)
-        // setFavoriteProperties(favoritesData)
-
-        // Récupérer les visites (simulé pour l'instant)
-        // const visitsData = await visitService.getTenantVisits(user.id)
-        // setVisits(visitsData)
-
-        console.log("✅ Dashboard chargé")
+        console.log("✅ Dashboard chargé avec succès")
       } catch (error) {
         console.error("❌ Erreur chargement dashboard:", error)
         toast.error("Erreur lors du chargement du tableau de bord")

@@ -21,6 +21,7 @@ import {
   MessageSquare,
   Clock,
 } from "lucide-react"
+import { PageHeader } from "@/components/page-header"
 
 interface DashboardStats {
   totalProperties: number
@@ -65,28 +66,32 @@ export default function OwnerDashboard() {
 
   const checkAuthAndLoadData = async () => {
     try {
-      console.log("🔍 Dashboard - Vérification auth...")
+      console.log("🔍 Dashboard Owner - Vérification auth...")
+      setLoading(true)
 
       const currentUser = await authService.getCurrentUser()
-      console.log("👤 Dashboard - Utilisateur:", currentUser)
+      console.log("👤 Dashboard Owner - Utilisateur:", currentUser)
 
       if (!currentUser) {
-        console.log("❌ Dashboard - Pas d'utilisateur, redirection login")
+        console.log("❌ Dashboard Owner - Pas d'utilisateur, redirection login")
+        toast.error("Vous devez être connecté pour accéder à cette page")
         router.push("/login")
         return
       }
 
       if (currentUser.user_type !== "owner") {
-        console.log("❌ Dashboard - Pas propriétaire, redirection")
+        console.log("❌ Dashboard Owner - Pas propriétaire, type:", currentUser.user_type)
+        toast.error("Accès réservé aux propriétaires")
         router.push("/")
         return
       }
 
-      console.log("✅ Dashboard - Utilisateur propriétaire authentifié")
+      console.log("✅ Dashboard Owner - Utilisateur propriétaire authentifié")
       setUser(currentUser)
       await loadDashboardData(currentUser.id)
     } catch (error) {
-      console.error("❌ Dashboard - Erreur auth:", error)
+      console.error("❌ Dashboard Owner - Erreur auth:", error)
+      toast.error("Erreur d'authentification")
       router.push("/login")
     } finally {
       setLoading(false)
@@ -266,22 +271,17 @@ export default function OwnerDashboard() {
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Tableau de bord</h1>
-          <p className="text-muted-foreground">
-            Bonjour {user?.first_name} ! Vue d'ensemble de votre activité immobilière
-          </p>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Button asChild>
-            <Link href="/owner/properties/new">
-              <Plus className="h-4 w-4 mr-2" />
-              Nouvelle annonce
-            </Link>
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Tableau de bord"
+        description={`Bonjour ${user?.first_name} ! Vue d'ensemble de votre activité immobilière`}
+      >
+        <Button asChild>
+          <Link href="/owner/properties/new">
+            <Plus className="h-4 w-4 mr-2" />
+            Nouvelle annonce
+          </Link>
+        </Button>
+      </PageHeader>
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
