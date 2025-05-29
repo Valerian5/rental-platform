@@ -1,348 +1,284 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { ArrowLeft, ArrowRight, User, Briefcase, Home, Upload, CheckCircle } from "lucide-react"
-import Link from "next/link"
+import { Badge } from "@/components/ui/badge"
+import { Upload, File, Check, AlertCircle, Download, Eye } from "lucide-react"
+import { rentalFileService, RENTAL_FILE_ITEMS } from "@/lib/rental-file-service"
+import { authService } from "@/lib/auth-service"
+import { toast } from "sonner"
 
 export default function RentalFilePage() {
-  const [step, setStep] = useState(1)
-  const totalSteps = 5
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [rentalFile, setRentalFile] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [uploadingItem, setUploadingItem] = useState<string | null>(null)
 
-  const nextStep = () => setStep(Math.min(step + 1, totalSteps))
-  const prevStep = () => setStep(Math.max(step - 1, 1))
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const user = await authService.getCurrentUser()
+        if (user && user.user_type === "tenant") {
+          setCurrentUser(user)
+          const fileData = await rentalFileService.getRentalFile(user.id)
+          setRentalFile(fileData)
+        }
+      } catch (error) {
+        console.error("Erreur chargement dossier:", error)
+        toast.error("Erreur lors du chargement du dossier")
+      } finally {
+        setIsLoading(false)
+      }
+    }
 
-  return (
-    <div className="container mx-auto py-8 max-w-2xl">
-      <div className="mb-8">
-        <Link href="/tenant/dashboard" className="text-blue-600 hover:underline flex items-center mb-4">
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          Retour au tableau de bord
-        </Link>
-        <h1 className="text-3xl font-bold mb-2">Création de votre dossier de location</h1>
-        <p className="text-muted-foreground">Constituez votre dossier une seule fois pour postuler rapidement</p>
-      </div>
+    fetchData()
+  }, [])
 
-      <div className="mb-8">
-        <Progress value={(step / totalSteps) * 100} className="mb-4" />
-        <div className="flex justify-between text-xs">
-          <span className={step >= 1 ? "text-blue-600 font-medium" : "text-muted-foreground"}>Profil</span>
-          <span className={step >= 2 ? "text-blue-600 font-medium" : "text-muted-foreground"}>Situation</span>
-          <span className={step >= 3 ? "text-blue-600 font-medium" : "text-muted-foreground"}>Projet</span>
-          <span className={step >= 4 ? "text-blue-600 font-medium" : "text-muted-foreground"}>Justificatifs</span>
-          <span className={step >= 5 ? "text-blue-600 font-medium" : "text-muted-foreground"}>Finalisation</span>
+  const handleFileUpload = async (itemKey: string, files: FileList | null) => {
+    if (!files || !currentUser) return
+
+    setUploadingItem(itemKey)
+
+    try {
+      // Simuler l'upload - à remplacer par un vrai service d'upload
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+
+      const fileUrls = Array.from(files).map((file) => URL.createObjectURL(file))
+
+      const item = RENTAL_FILE_ITEMS.find((i) => i.key === itemKey)
+      const updateData = {
+        ...rentalFile,
+        [itemKey]: item?.type === "multiple" ? fileUrls : fileUrls[0],
+      }
+
+      const updatedFile = await rentalFileService.updateRentalFile(currentUser.id, updateData)
+      setRentalFile(updatedFile)
+
+      toast.success(`${item?.name} mis à jour avec succès`)
+    } catch (error) {
+      console.error("Erreur upload:", error)
+      toast.error("Erreur lors de l'upload du fichier")
+    } finally {
+      setUploadingItem(null)
+    }
+  }
+
+  const getItemStatus = (itemKey: string) => {
+    if (!rentalFile) return "missing"
+
+    const value = rentalFile[itemKey]
+    if (!value) return "missing"
+
+    const item = RENTAL_FILE_ITEMS.find((i) => i.key === itemKey)
+    if (item?.type === "multiple") {
+      return Array.isArray(value) && value.length > 0 ? "uploaded" : "missing"
+    }
+    return typeof value === "string" && value.trim() !== "" ? "uploaded" : "missing"
+  }
+
+  const completionPercentage = rentalFile?.completion_percentage || 0
+  const missingDocuments = rentalFileService.getMissingDocuments(rentalFile)
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto py-8">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center space-y-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="text-gray-600">Chargement de votre dossier...</p>
+          </div>
         </div>
       </div>
+    )
+  }
 
-      {step === 1 && (
+  if (!currentUser || currentUser.user_type !== "tenant") {
+    return (
+      <div className="container mx-auto py-8">
+        <div className="text-center">
+          <p className="text-red-600">Accès non autorisé</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="container mx-auto py-8 max-w-4xl">
+      <div className="space-y-6">
+        {/* En-tête */}
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Mon dossier de location</h1>
+          <p className="text-gray-600">Complétez votre dossier pour optimiser vos chances d'obtenir un logement</p>
+        </div>
+
+        {/* Progression */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <User className="h-5 w-5 mr-2" />
-              Ton profil
-            </CardTitle>
-            <CardDescription>Vos informations personnelles</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="firstName">Prénom *</Label>
-                <Input id="firstName" placeholder="Votre prénom" />
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold">Progression du dossier</h3>
+              <Badge variant={completionPercentage >= 80 ? "default" : "secondary"}>
+                {completionPercentage}% complété
+              </Badge>
+            </div>
+            <Progress value={completionPercentage} className="h-3 mb-4" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-gray-600">Documents requis</p>
+                <p className="font-medium">
+                  {RENTAL_FILE_ITEMS.filter((item) => item.required).length - missingDocuments.length} /{" "}
+                  {RENTAL_FILE_ITEMS.filter((item) => item.required).length}
+                </p>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="lastName">Nom *</Label>
-                <Input id="lastName" placeholder="Votre nom" />
+              <div>
+                <p className="text-gray-600">Dernière mise à jour</p>
+                <p className="font-medium">
+                  {rentalFile?.updated_at ? new Date(rentalFile.updated_at).toLocaleDateString("fr-FR") : "Jamais"}
+                </p>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="email">Email *</Label>
-              <Input id="email" type="email" placeholder="votre.email@exemple.com" />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="phone">Numéro de téléphone *</Label>
-              <Input id="phone" placeholder="06 12 34 56 78" />
-            </div>
-
-            <div className="flex justify-end">
-              <Button onClick={nextStep}>
-                Suivant
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {step === 2 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Briefcase className="h-5 w-5 mr-2" />
-              Ta situation
-            </CardTitle>
-            <CardDescription>Informations sur votre situation professionnelle et financière</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label>Nombre de locataires *</Label>
-              <Select>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionnez" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">1 personne</SelectItem>
-                  <SelectItem value="2">2 personnes</SelectItem>
-                  <SelectItem value="3">3 personnes</SelectItem>
-                  <SelectItem value="4">4+ personnes</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Ton statut *</Label>
-              <Select>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionnez votre statut" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cdi">CDI</SelectItem>
-                  <SelectItem value="cdd">CDD</SelectItem>
-                  <SelectItem value="student">Étudiant</SelectItem>
-                  <SelectItem value="freelance">Freelance</SelectItem>
-                  <SelectItem value="unemployed">Sans emploi</SelectItem>
-                  <SelectItem value="retired">Retraité</SelectItem>
-                  <SelectItem value="other">Autre</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="income">Tes revenus nets mensuels (avant impôts) *</Label>
-              <Input id="income" type="number" placeholder="2500" />
-              <p className="text-xs text-muted-foreground">En euros par mois</p>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center space-x-2">
-                <Checkbox id="additionalIncome" />
-                <Label htmlFor="additionalIncome">J'ai des revenus complémentaires</Label>
-              </div>
-              <Input placeholder="Montant des revenus complémentaires (€/mois)" />
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center space-x-2">
-                <Checkbox id="hasGuarantor" />
-                <Label htmlFor="hasGuarantor">J'ai un ou des garants</Label>
-              </div>
-              <div className="ml-6 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input placeholder="Nom du garant" />
-                  <Input placeholder="Prénom du garant" />
+            {missingDocuments.length > 0 && (
+              <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                <div className="flex items-start">
+                  <AlertCircle className="h-4 w-4 text-orange-600 mr-2 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium text-orange-800 mb-1">Documents manquants :</p>
+                    <ul className="text-orange-700 space-y-1">
+                      {missingDocuments.map((doc, index) => (
+                        <li key={index}>• {doc}</li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
-                <Input placeholder="Revenus du garant (€/mois)" type="number" />
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Statut du garant" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cdi">CDI</SelectItem>
-                    <SelectItem value="cdd">CDD</SelectItem>
-                    <SelectItem value="retired">Retraité</SelectItem>
-                    <SelectItem value="other">Autre</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
-            </div>
-
-            <div className="flex justify-between">
-              <Button variant="outline" onClick={prevStep}>
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Précédent
-              </Button>
-              <Button onClick={nextStep}>
-                Suivant
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
-            </div>
+            )}
           </CardContent>
         </Card>
-      )}
 
-      {step === 3 && (
+        {/* Documents */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {RENTAL_FILE_ITEMS.map((item) => {
+            const status = getItemStatus(item.key)
+            const isUploading = uploadingItem === item.key
+            const files = rentalFile?.[item.key]
+
+            return (
+              <Card key={item.key} className={`${!item.required ? "border-dashed" : ""}`}>
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <CardTitle className="text-base flex items-center">
+                        {item.name}
+                        {item.required && <span className="text-red-500 ml-1">*</span>}
+                        {status === "uploaded" && <Check className="h-4 w-4 text-green-600 ml-2" />}
+                      </CardTitle>
+                      <p className="text-sm text-gray-600 mt-1">{item.description}</p>
+                    </div>
+                    <Badge variant={item.required ? "default" : "secondary"} className="ml-2">
+                      {item.required ? "Requis" : "Optionnel"}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="space-y-3">
+                    {/* Affichage des fichiers uploadés */}
+                    {files && (
+                      <div className="space-y-2">
+                        {item.type === "multiple" && Array.isArray(files) ? (
+                          files.map((file, index) => (
+                            <div
+                              key={index}
+                              className="flex items-center justify-between p-2 bg-green-50 border border-green-200 rounded"
+                            >
+                              <div className="flex items-center">
+                                <File className="h-4 w-4 text-green-600 mr-2" />
+                                <span className="text-sm text-green-800">Document {index + 1}</span>
+                              </div>
+                              <div className="flex gap-1">
+                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0">
+                                  <Eye className="h-3 w-3" />
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0">
+                                  <Download className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))
+                        ) : typeof files === "string" && files ? (
+                          <div className="flex items-center justify-between p-2 bg-green-50 border border-green-200 rounded">
+                            <div className="flex items-center">
+                              <File className="h-4 w-4 text-green-600 mr-2" />
+                              <span className="text-sm text-green-800">Document uploadé</span>
+                            </div>
+                            <div className="flex gap-1">
+                              <Button size="sm" variant="ghost" className="h-6 w-6 p-0">
+                                <Eye className="h-3 w-3" />
+                              </Button>
+                              <Button size="sm" variant="ghost" className="h-6 w-6 p-0">
+                                <Download className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+
+                    {/* Zone d'upload */}
+                    <div className="relative">
+                      <input
+                        type="file"
+                        multiple={item.type === "multiple"}
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(e) => handleFileUpload(item.key, e.target.files)}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        disabled={isUploading}
+                      />
+                      <div
+                        className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors ${
+                          isUploading ? "border-blue-300 bg-blue-50" : "border-gray-300 hover:border-gray-400"
+                        }`}
+                      >
+                        {isUploading ? (
+                          <div className="space-y-2">
+                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+                            <p className="text-sm text-blue-600">Upload en cours...</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <Upload className="h-6 w-6 text-gray-400 mx-auto" />
+                            <p className="text-sm text-gray-600">
+                              {status === "uploaded" ? "Remplacer le document" : "Cliquer pour ajouter"}
+                            </p>
+                            <p className="text-xs text-gray-500">PDF, JPG, PNG (max 10MB)</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+
+        {/* Actions */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Home className="h-5 w-5 mr-2" />
-              Ton projet
-            </CardTitle>
-            <CardDescription>Parlez-nous de votre projet de location</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="presentation">Formulaire de présentation *</Label>
-              <Textarea
-                id="presentation"
-                placeholder="Présentez-vous en quelques lignes : qui êtes-vous, pourquoi cherchez-vous un logement, etc."
-                rows={4}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="moveInDate">Quand souhaites-tu emménager ? *</Label>
-              <Input id="moveInDate" type="date" />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Pour quelle durée ? *</Label>
-              <Select>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionnez la durée" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="6months">6 mois</SelectItem>
-                  <SelectItem value="1year">1 an</SelectItem>
-                  <SelectItem value="2years">2 ans</SelectItem>
-                  <SelectItem value="3years">3 ans</SelectItem>
-                  <SelectItem value="longterm">Long terme (3+ ans)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex justify-between">
-              <Button variant="outline" onClick={prevStep}>
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Précédent
-              </Button>
-              <Button onClick={nextStep}>
-                Suivant
-                <ArrowRight className="h-4 w-4 ml-2" />
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold mb-1">Télécharger mon dossier</h3>
+                <p className="text-sm text-gray-600">Générez un PDF avec tous vos documents pour les propriétaires</p>
+              </div>
+              <Button variant="outline" disabled={completionPercentage < 50}>
+                <Download className="h-4 w-4 mr-2" />
+                Télécharger PDF
               </Button>
             </div>
           </CardContent>
         </Card>
-      )}
-
-      {step === 4 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Upload className="h-5 w-5 mr-2" />
-              Tes justificatifs
-            </CardTitle>
-            <CardDescription>Ajoutez vos documents pour compléter votre dossier</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-4">
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                <Upload className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                <h4 className="font-medium mb-1">3 dernières fiches de paie *</h4>
-                <p className="text-sm text-muted-foreground mb-3">Formats acceptés : PDF, JPG, PNG</p>
-                <Button variant="outline" size="sm">
-                  Choisir les fichiers
-                </Button>
-              </div>
-
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                <Upload className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                <h4 className="font-medium mb-1">3 dernières quittances de loyer</h4>
-                <p className="text-sm text-muted-foreground mb-3">Si vous êtes déjà locataire</p>
-                <Button variant="outline" size="sm">
-                  Choisir les fichiers
-                </Button>
-              </div>
-
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                <Upload className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                <h4 className="font-medium mb-1">Dernier avis d'imposition *</h4>
-                <p className="text-sm text-muted-foreground mb-3">Ou avis de non-imposition</p>
-                <Button variant="outline" size="sm">
-                  Choisir le fichier
-                </Button>
-              </div>
-
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                <Upload className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                <h4 className="font-medium mb-1">Carte d'identité *</h4>
-                <p className="text-sm text-muted-foreground mb-3">Recto et verso</p>
-                <Button variant="outline" size="sm">
-                  Choisir les fichiers
-                </Button>
-              </div>
-            </div>
-
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <p className="text-sm">
-                <strong>💡 Conseil :</strong> Assurez-vous que tous vos documents sont lisibles et à jour. Un dossier
-                complet augmente vos chances d'être sélectionné par les propriétaires.
-              </p>
-            </div>
-
-            <div className="flex justify-between">
-              <Button variant="outline" onClick={prevStep}>
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Précédent
-              </Button>
-              <Button onClick={nextStep}>
-                Suivant
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {step === 5 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <CheckCircle className="h-5 w-5 mr-2 text-green-600" />
-              Ton dossier est créé !
-            </CardTitle>
-            <CardDescription>Félicitations, votre dossier de location est maintenant complet</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="text-center py-8">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CheckCircle className="h-8 w-8 text-green-600" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">Votre dossier est prêt !</h3>
-              <p className="text-muted-foreground mb-6">
-                Vous pouvez maintenant postuler aux annonces en un seul clic. Votre dossier sera automatiquement
-                transmis aux propriétaires.
-              </p>
-            </div>
-
-            <div className="bg-green-50 p-4 rounded-lg">
-              <h4 className="font-semibold mb-2 text-green-800">Votre dossier contient :</h4>
-              <ul className="space-y-1 text-sm text-green-700">
-                <li>✓ Informations personnelles complètes</li>
-                <li>✓ Situation professionnelle et financière</li>
-                <li>✓ Présentation de votre projet</li>
-                <li>✓ Justificatifs requis</li>
-              </ul>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Button asChild className="flex-1">
-                <Link href="/properties">Rechercher des logements</Link>
-              </Button>
-              <Button variant="outline" asChild className="flex-1">
-                <Link href="/tenant/dashboard">Aller au tableau de bord</Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      </div>
     </div>
   )
 }

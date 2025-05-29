@@ -5,21 +5,65 @@ import { useRouter, useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, MapPin, Home, Bed, Bath, Square, Calendar, Phone, Mail, Heart } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  ArrowLeft,
+  MapPin,
+  Home,
+  Bed,
+  Bath,
+  Square,
+  Phone,
+  Mail,
+  Heart,
+  Send,
+  AlertTriangle,
+  CheckCircle,
+  Wifi,
+  Car,
+  BuildingIcon as Balcony,
+  CableCarIcon as Elevator,
+  LockIcon as Security,
+  DogIcon as Pet,
+} from "lucide-react"
 import Link from "next/link"
 import { propertyService } from "@/lib/property-service"
+import { rentalFileService } from "@/lib/rental-file-service"
+import { applicationService } from "@/lib/application-service"
+import { authService } from "@/lib/auth-service"
 import { toast } from "sonner"
 
 export default function PropertyPublicPage() {
   const router = useRouter()
   const params = useParams()
   const [property, setProperty] = useState<any>(null)
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [rentalFile, setRentalFile] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [showApplicationDialog, setShowApplicationDialog] = useState(false)
+  const [isSubmittingApplication, setIsSubmittingApplication] = useState(false)
+  const [applicationData, setApplicationData] = useState({
+    message: "",
+    income: "",
+    profession: "",
+    company: "",
+    move_in_date: "",
+  })
 
   useEffect(() => {
-    const fetchProperty = async () => {
+    const fetchData = async () => {
       console.log("🌐 Chargement de l'annonce publique...")
       setIsLoading(true)
       setError(null)
@@ -29,11 +73,22 @@ export default function PropertyPublicPage() {
           throw new Error("ID de propriété manquant")
         }
 
+        // Récupérer la propriété
         console.log("📋 Récupération de la propriété publique:", params.id)
         const propertyData = await propertyService.getPublicPropertyById(params.id as string)
-
         setProperty(propertyData)
-        console.log("✅ Propriété publique chargée:", propertyData)
+
+        // Récupérer l'utilisateur connecté
+        const user = await authService.getCurrentUser()
+        setCurrentUser(user)
+
+        // Si l'utilisateur est un locataire, récupérer son dossier
+        if (user && user.user_type === "tenant") {
+          const fileData = await rentalFileService.getRentalFile(user.id)
+          setRentalFile(fileData)
+        }
+
+        console.log("✅ Données chargées")
       } catch (error: any) {
         console.error("❌ Erreur lors du chargement:", error)
         setError(error.message || "Erreur lors du chargement de l'annonce")
@@ -43,7 +98,7 @@ export default function PropertyPublicPage() {
       }
     }
 
-    fetchProperty()
+    fetchData()
   }, [params.id])
 
   const nextImage = () => {
@@ -58,13 +113,64 @@ export default function PropertyPublicPage() {
     }
   }
 
-  const handleContact = () => {
-    toast.info("Fonctionnalité de contact en cours de développement")
+  const handleSendApplication = async () => {
+    if (!currentUser) {
+      toast.error("Vous devez être connecté pour postuler")
+      router.push(`/login?redirect=/properties/${params.id}`)
+      return
+    }
+
+    if (currentUser.user_type !== "tenant") {
+      toast.error("Seuls les locataires peuvent postuler à une annonce")
+      return
+    }
+
+    setShowApplicationDialog(true)
+  }
+
+  const handleSubmitApplication = async () => {
+    if (!currentUser || !property) return
+
+    setIsSubmittingApplication(true)
+
+    try {
+      const applicationPayload = {
+        property_id: property.id,
+        tenant_id: currentUser.id,
+        message: applicationData.message,
+        income: applicationData.income ? Number.parseFloat(applicationData.income) : undefined,
+        profession: applicationData.profession,
+        company: applicationData.company,
+        move_in_date: applicationData.move_in_date,
+      }
+
+      await applicationService.createApplication(applicationPayload)
+
+      toast.success("Votre candidature a été envoyée avec succès!")
+      setShowApplicationDialog(false)
+
+      // Rediriger vers le tableau de bord
+      router.push("/tenant/dashboard?tab=applications")
+    } catch (error: any) {
+      console.error("❌ Erreur candidature:", error)
+      toast.error(error.message || "Erreur lors de l'envoi de la candidature")
+    } finally {
+      setIsSubmittingApplication(false)
+    }
   }
 
   const handleFavorite = () => {
     toast.info("Fonctionnalité favoris en cours de développement")
   }
+
+  const getCompatibilityCheck = () => {
+    if (!rentalFile || !property) return null
+
+    const income = applicationData.income ? Number.parseFloat(applicationData.income) : undefined
+    return rentalFileService.checkCompatibility(rentalFile, property, income)
+  }
+
+  const compatibilityCheck = getCompatibilityCheck()
 
   // États de chargement et d'erreur
   if (isLoading) {
@@ -116,8 +222,9 @@ export default function PropertyPublicPage() {
                 <Heart className="h-4 w-4 mr-2" />
                 Favoris
               </Button>
-              <Button size="sm" onClick={handleContact}>
-                Contacter
+              <Button size="sm" onClick={handleSendApplication}>
+                <Send className="h-4 w-4 mr-2" />
+                Envoyer mon dossier
               </Button>
             </div>
           </div>
@@ -212,10 +319,11 @@ export default function PropertyPublicPage() {
                 </div>
                 <div className="text-3xl font-bold text-blue-600">
                   {property.price} € <span className="text-lg font-normal text-gray-500">/ mois</span>
+                  {property.charges && <div className="text-lg text-gray-500">+ {property.charges} € de charges</div>}
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <Badge variant={property.available ? "default" : "secondary"}>
                   {property.available ? "Disponible" : "Loué"}
                 </Badge>
@@ -226,6 +334,7 @@ export default function PropertyPublicPage() {
                   {property.property_type === "loft" && "Loft"}
                 </Badge>
                 {property.furnished && <Badge variant="outline">Meublé</Badge>}
+                {property.floor && <Badge variant="outline">{property.floor}e étage</Badge>}
               </div>
             </div>
 
@@ -268,8 +377,94 @@ export default function PropertyPublicPage() {
                     </div>
                   </div>
                 </div>
+
+                {(property.energy_class || property.ges_class) && (
+                  <div className="mt-6 pt-6 border-t">
+                    <h4 className="font-medium mb-3">Performance énergétique</h4>
+                    <div className="flex gap-4">
+                      {property.energy_class && (
+                        <div>
+                          <p className="text-sm text-gray-500">Classe énergétique</p>
+                          <Badge variant="outline" className="text-lg font-bold">
+                            {property.energy_class}
+                          </Badge>
+                        </div>
+                      )}
+                      {property.ges_class && (
+                        <div>
+                          <p className="text-sm text-gray-500">Émissions CO₂</p>
+                          <Badge variant="outline" className="text-lg font-bold">
+                            {property.ges_class}
+                          </Badge>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
+
+            {/* Équipements et services */}
+            {(property.equipment || property.has_parking || property.has_balcony || property.has_elevator) && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Équipements et services</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {property.has_parking && (
+                      <div className="flex items-center space-x-2">
+                        <Car className="h-4 w-4 text-green-600" />
+                        <span className="text-sm">Parking</span>
+                      </div>
+                    )}
+                    {property.has_balcony && (
+                      <div className="flex items-center space-x-2">
+                        <Balcony className="h-4 w-4 text-green-600" />
+                        <span className="text-sm">Balcon/Terrasse</span>
+                      </div>
+                    )}
+                    {property.has_elevator && (
+                      <div className="flex items-center space-x-2">
+                        <Elevator className="h-4 w-4 text-green-600" />
+                        <span className="text-sm">Ascenseur</span>
+                      </div>
+                    )}
+                    {property.has_security && (
+                      <div className="flex items-center space-x-2">
+                        <Security className="h-4 w-4 text-green-600" />
+                        <span className="text-sm">Sécurisé</span>
+                      </div>
+                    )}
+                    {property.internet && (
+                      <div className="flex items-center space-x-2">
+                        <Wifi className="h-4 w-4 text-green-600" />
+                        <span className="text-sm">Internet inclus</span>
+                      </div>
+                    )}
+                    {property.pets_allowed && (
+                      <div className="flex items-center space-x-2">
+                        <Pet className="h-4 w-4 text-green-600" />
+                        <span className="text-sm">Animaux acceptés</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {property.equipment && Array.isArray(property.equipment) && property.equipment.length > 0 && (
+                    <div className="mt-4">
+                      <h4 className="font-medium mb-2">Équipements supplémentaires</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {property.equipment.map((item: string, index: number) => (
+                          <Badge key={index} variant="secondary">
+                            {item}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Description */}
             <Card>
@@ -316,17 +511,63 @@ export default function PropertyPublicPage() {
                 )}
 
                 <div className="space-y-2">
-                  <Button className="w-full" onClick={handleContact}>
+                  <Button className="w-full" onClick={handleSendApplication}>
+                    <Send className="h-4 w-4 mr-2" />
+                    Envoyer mon dossier
+                  </Button>
+                  <Button variant="outline" className="w-full">
                     <Phone className="h-4 w-4 mr-2" />
                     Contacter le propriétaire
-                  </Button>
-                  <Button variant="outline" className="w-full" onClick={handleContact}>
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Demander une visite
                   </Button>
                 </div>
               </CardContent>
             </Card>
+
+            {/* Vérification du dossier pour les locataires connectés */}
+            {currentUser && currentUser.user_type === "tenant" && compatibilityCheck && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    {compatibilityCheck.compatible ? (
+                      <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
+                    ) : (
+                      <AlertTriangle className="h-5 w-5 text-orange-600 mr-2" />
+                    )}
+                    Compatibilité de votre dossier
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Score de compatibilité</span>
+                      <Badge variant={compatibilityCheck.score >= 70 ? "default" : "secondary"}>
+                        {compatibilityCheck.score}%
+                      </Badge>
+                    </div>
+
+                    {compatibilityCheck.warnings.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-gray-700">Points d'attention :</p>
+                        <ul className="text-sm text-gray-600 space-y-1">
+                          {compatibilityCheck.warnings.map((warning, index) => (
+                            <li key={index} className="flex items-start">
+                              <span className="text-orange-500 mr-2">•</span>
+                              {warning}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {!compatibilityCheck.compatible && (
+                      <p className="text-sm text-orange-600">
+                        Votre dossier présente quelques points à améliorer, mais vous pouvez tout de même postuler.
+                      </p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Informations complémentaires */}
             <Card>
@@ -345,12 +586,112 @@ export default function PropertyPublicPage() {
                     <span className="text-sm text-gray-500">Référence</span>
                     <span className="text-sm font-mono text-gray-500">{property.id.slice(0, 8).toUpperCase()}</span>
                   </div>
+                  {property.available_from && (
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-500">Disponible à partir du</span>
+                      <span className="text-sm font-medium">
+                        {new Date(property.available_from).toLocaleDateString("fr-FR")}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
           </div>
         </div>
       </div>
+
+      {/* Dialog de candidature */}
+      <Dialog open={showApplicationDialog} onOpenChange={setShowApplicationDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Envoyer votre candidature</DialogTitle>
+            <DialogDescription>
+              Complétez les informations suivantes pour envoyer votre dossier de location.
+            </DialogDescription>
+          </DialogHeader>
+
+          {compatibilityCheck && compatibilityCheck.warnings.length > 0 && (
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+              <div className="flex items-start">
+                <AlertTriangle className="h-4 w-4 text-orange-600 mr-2 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-medium text-orange-800 mb-1">Points d'attention :</p>
+                  <ul className="text-orange-700 space-y-1">
+                    {compatibilityCheck.warnings.map((warning, index) => (
+                      <li key={index}>• {warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="message">Message de motivation</Label>
+              <Textarea
+                id="message"
+                placeholder="Présentez-vous et expliquez pourquoi ce logement vous intéresse..."
+                value={applicationData.message}
+                onChange={(e) => setApplicationData({ ...applicationData, message: e.target.value })}
+                rows={3}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="income">Revenus mensuels (€)</Label>
+                <Input
+                  id="income"
+                  type="number"
+                  placeholder="3000"
+                  value={applicationData.income}
+                  onChange={(e) => setApplicationData({ ...applicationData, income: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="profession">Profession</Label>
+                <Input
+                  id="profession"
+                  placeholder="Ingénieur"
+                  value={applicationData.profession}
+                  onChange={(e) => setApplicationData({ ...applicationData, profession: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="company">Entreprise</Label>
+              <Input
+                id="company"
+                placeholder="Nom de l'entreprise"
+                value={applicationData.company}
+                onChange={(e) => setApplicationData({ ...applicationData, company: e.target.value })}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="move_in_date">Date d'emménagement souhaitée</Label>
+              <Input
+                id="move_in_date"
+                type="date"
+                value={applicationData.move_in_date}
+                onChange={(e) => setApplicationData({ ...applicationData, move_in_date: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowApplicationDialog(false)}>
+              Annuler
+            </Button>
+            <Button onClick={handleSubmitApplication} disabled={isSubmittingApplication}>
+              {isSubmittingApplication ? "Envoi..." : "Envoyer ma candidature"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

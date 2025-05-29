@@ -1,188 +1,139 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Search, Home, FileText, Calendar, Heart, Bell, Settings, Plus, Clock, X, AlertTriangle } from "lucide-react"
+import {
+  Search,
+  Home,
+  FileText,
+  Calendar,
+  Heart,
+  Bell,
+  Settings,
+  Plus,
+  AlertTriangle,
+  MessageSquare,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-
-// Données simulées
-const savedSearches = [
-  {
-    id: 1,
-    name: "Appartement Paris",
-    city: "Paris",
-    propertyType: "Appartement",
-    rentalType: "Non meublé",
-    maxRent: 1200,
-    minRooms: 2,
-    minBedrooms: 1,
-    minSurface: 40,
-    maxSurface: 80,
-    lastUpdated: "2023-05-15",
-    matchCount: 12,
-    newMatches: 3,
-  },
-  {
-    id: 2,
-    name: "Maison Lyon",
-    city: "Lyon",
-    propertyType: "Maison",
-    rentalType: "Non meublé",
-    maxRent: 1500,
-    minRooms: 4,
-    minBedrooms: 3,
-    minSurface: 90,
-    maxSurface: 150,
-    lastUpdated: "2023-05-10",
-    matchCount: 5,
-    newMatches: 0,
-  },
-]
-
-const favoriteProperties = [
-  {
-    id: 1,
-    title: "Appartement moderne au centre-ville",
-    address: "123 Rue Principale, Paris",
-    price: 1200,
-    charges: 150,
-    surface: 65,
-    rooms: 3,
-    bedrooms: 2,
-    image: "/placeholder.svg?height=200&width=300",
-  },
-  {
-    id: 2,
-    title: "Studio lumineux proche des transports",
-    address: "45 Avenue des Fleurs, Paris",
-    price: 850,
-    charges: 80,
-    surface: 30,
-    rooms: 1,
-    bedrooms: 0,
-    image: "/placeholder.svg?height=200&width=300",
-  },
-]
-
-const applications = [
-  {
-    id: 1,
-    property: {
-      id: 1,
-      title: "Appartement moderne au centre-ville",
-      address: "123 Rue Principale, Paris",
-      price: 1200,
-      image: "/placeholder.svg?height=200&width=300",
-    },
-    status: "En cours d'analyse",
-    appliedDate: "2023-05-20",
-    lastUpdate: "2023-05-21",
-    matchScore: 85,
-  },
-  {
-    id: 2,
-    property: {
-      id: 3,
-      title: "Loft industriel spacieux",
-      address: "12 Rue des Artistes, Paris",
-      price: 1500,
-      image: "/placeholder.svg?height=200&width=300",
-    },
-    status: "Visite proposée",
-    appliedDate: "2023-05-18",
-    lastUpdate: "2023-05-22",
-    matchScore: 92,
-    visitDate: "2023-05-25T14:00:00",
-  },
-  {
-    id: 3,
-    property: {
-      id: 4,
-      title: "Studio étudiant rénové",
-      address: "78 Rue des Étudiants, Paris",
-      price: 750,
-      image: "/placeholder.svg?height=200&width=300",
-    },
-    status: "Refusé",
-    appliedDate: "2023-05-15",
-    lastUpdate: "2023-05-19",
-    matchScore: 65,
-    refusalReason: "Revenus insuffisants",
-  },
-]
-
-const visits = [
-  {
-    id: 1,
-    property: {
-      id: 3,
-      title: "Loft industriel spacieux",
-      address: "12 Rue des Artistes, Paris",
-      price: 1500,
-      image: "/placeholder.svg?height=200&width=300",
-    },
-    date: "2023-05-25T14:00:00",
-    status: "Confirmée",
-    contactPerson: "Marie Leroy",
-    contactPhone: "06 23 45 67 89",
-  },
-  {
-    id: 2,
-    property: {
-      id: 5,
-      title: "Appartement avec vue sur parc",
-      address: "56 Boulevard du Parc, Paris",
-      price: 1350,
-      image: "/placeholder.svg?height=200&width=300",
-    },
-    date: "2023-05-27T11:00:00",
-    status: "En attente",
-    contactPerson: "Jean Dupont",
-    contactPhone: "06 12 34 56 78",
-  },
-]
-
-const rentalFile = {
-  completionPercentage: 75,
-  missingItems: ["Dernier avis d'imposition", "Justificatif de domicile"],
-  lastUpdated: "2023-05-15",
-}
+import { authService } from "@/lib/auth-service"
+import { rentalFileService } from "@/lib/rental-file-service"
+import { applicationService } from "@/lib/application-service"
+import { toast } from "sonner"
 
 export default function TenantDashboardPage() {
   const [activeTab, setActiveTab] = useState("overview")
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [rentalFile, setRentalFile] = useState<any>(null)
+  const [applications, setApplications] = useState<any[]>([])
+  const [savedSearches, setSavedSearches] = useState<any[]>([])
+  const [favoriteProperties, setFavoriteProperties] = useState<any[]>([])
+  const [visits, setVisits] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        console.log("📊 Chargement dashboard locataire...")
+
+        // Récupérer l'utilisateur connecté
+        const user = await authService.getCurrentUser()
+        if (!user || user.user_type !== "tenant") {
+          toast.error("Accès non autorisé")
+          return
+        }
+
+        setCurrentUser(user)
+
+        // Récupérer le dossier de location
+        const fileData = await rentalFileService.getRentalFile(user.id)
+        setRentalFile(fileData)
+
+        // Récupérer les candidatures
+        const applicationsData = await applicationService.getTenantApplications(user.id)
+        setApplications(applicationsData)
+
+        // Récupérer les recherches sauvegardées (simulé pour l'instant)
+        // const searchesData = await searchService.getTenantSearches(user.id)
+        // setSavedSearches(searchesData)
+
+        // Récupérer les favoris (simulé pour l'instant)
+        // const favoritesData = await favoriteService.getTenantFavorites(user.id)
+        // setFavoriteProperties(favoritesData)
+
+        // Récupérer les visites (simulé pour l'instant)
+        // const visitsData = await visitService.getTenantVisits(user.id)
+        // setVisits(visitsData)
+
+        console.log("✅ Dashboard chargé")
+      } catch (error) {
+        console.error("❌ Erreur chargement dashboard:", error)
+        toast.error("Erreur lors du chargement du tableau de bord")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchDashboardData()
+  }, [])
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
-      case "En cours d'analyse":
+      case "pending":
         return "secondary"
-      case "Visite proposée":
+      case "visit_proposed":
         return "default"
-      case "Refusé":
+      case "rejected":
         return "destructive"
-      case "Dossier accepté":
-        return "success"
+      case "accepted":
+        return "default"
       default:
         return "outline"
     }
   }
 
-  const getVisitStatusBadgeVariant = (status: string) => {
+  const getStatusText = (status: string) => {
     switch (status) {
-      case "Confirmée":
-        return "success"
-      case "En attente":
-        return "secondary"
-      case "Annulée":
-        return "destructive"
+      case "pending":
+        return "En cours d'analyse"
+      case "visit_proposed":
+        return "Visite proposée"
+      case "rejected":
+        return "Refusé"
+      case "accepted":
+        return "Accepté"
       default:
-        return "outline"
+        return status
     }
+  }
+
+  const missingDocuments = rentalFile ? rentalFileService.getMissingDocuments(rentalFile) : []
+  const completionPercentage = rentalFile?.completion_percentage || 0
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto py-6">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center space-y-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="text-gray-600">Chargement du tableau de bord...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="container mx-auto py-6">
+        <div className="text-center">
+          <p className="text-red-600">Accès non autorisé</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -194,11 +145,19 @@ export default function TenantDashboardPage() {
             <CardHeader className="pb-2">
               <div className="flex items-center">
                 <Avatar className="h-10 w-10 mr-3">
-                  <AvatarImage src="/placeholder.svg?height=40&width=40&text=JD" alt="Jean Dupont" />
-                  <AvatarFallback>JD</AvatarFallback>
+                  <AvatarImage
+                    src="/placeholder.svg?height=40&width=40&text=JD"
+                    alt={`${currentUser.first_name} ${currentUser.last_name}`}
+                  />
+                  <AvatarFallback>
+                    {currentUser.first_name?.[0]}
+                    {currentUser.last_name?.[0]}
+                  </AvatarFallback>
                 </Avatar>
                 <div>
-                  <CardTitle>Jean Dupont</CardTitle>
+                  <CardTitle>
+                    {currentUser.first_name} {currentUser.last_name}
+                  </CardTitle>
                   <CardDescription>Locataire</CardDescription>
                 </div>
               </div>
@@ -207,9 +166,9 @@ export default function TenantDashboardPage() {
               <div className="space-y-1 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Dossier de location</span>
-                  <span className="font-medium">{rentalFile.completionPercentage}% complet</span>
+                  <span className="font-medium">{completionPercentage}% complet</span>
                 </div>
-                <Progress value={rentalFile.completionPercentage} className="h-2" />
+                <Progress value={completionPercentage} className="h-2" />
               </div>
             </CardContent>
             <CardFooter>
@@ -261,6 +220,14 @@ export default function TenantDashboardPage() {
               Visites
             </Button>
             <Button
+              variant={activeTab === "messaging" ? "default" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => setActiveTab("messaging")}
+            >
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Messagerie
+            </Button>
+            <Button
               variant={activeTab === "notifications" ? "default" : "ghost"}
               className="w-full justify-start"
               onClick={() => setActiveTab("notifications")}
@@ -285,7 +252,7 @@ export default function TenantDashboardPage() {
             <div className="space-y-6">
               <h1 className="text-2xl font-bold">Tableau de bord</h1>
 
-              {rentalFile.completionPercentage < 100 && (
+              {completionPercentage < 100 && (
                 <Card className="bg-blue-50 border-blue-200">
                   <CardContent className="p-4">
                     <div className="flex items-start">
@@ -296,14 +263,16 @@ export default function TenantDashboardPage() {
                           Votre dossier est incomplet. Ajoutez les documents manquants pour augmenter vos chances d'être
                           sélectionné.
                         </p>
-                        <div className="text-sm text-blue-700 mb-3">
-                          <span className="font-medium">Documents manquants :</span>
-                          <ul className="list-disc list-inside">
-                            {rentalFile.missingItems.map((item, index) => (
-                              <li key={index}>{item}</li>
-                            ))}
-                          </ul>
-                        </div>
+                        {missingDocuments.length > 0 && (
+                          <div className="text-sm text-blue-700 mb-3">
+                            <span className="font-medium">Documents manquants :</span>
+                            <ul className="list-disc list-inside">
+                              {missingDocuments.map((item, index) => (
+                                <li key={index}>{item}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
                         <Button size="sm" asChild>
                           <Link href="/tenant/profile/rental-file">Compléter mon dossier</Link>
                         </Button>
@@ -322,27 +291,34 @@ export default function TenantDashboardPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {applications.slice(0, 2).map((application) => (
-                      <div key={application.id} className="flex items-start gap-3">
-                        <div className="w-16 h-16 rounded overflow-hidden flex-shrink-0">
-                          <img
-                            src={application.property.image || "/placeholder.svg"}
-                            alt={application.property.title}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <div className="flex-1">
-                          <h4 className="font-medium text-sm">{application.property.title}</h4>
-                          <p className="text-xs text-muted-foreground">{application.property.address}</p>
-                          <div className="flex items-center justify-between mt-1">
-                            <Badge variant={getStatusBadgeVariant(application.status)} className="text-xs">
-                              {application.status}
-                            </Badge>
-                            <span className="text-sm font-semibold">{application.property.price} €/mois</span>
+                    {applications.length > 0 ? (
+                      applications.slice(0, 2).map((application) => (
+                        <div key={application.id} className="flex items-start gap-3">
+                          <div className="w-16 h-16 rounded overflow-hidden flex-shrink-0">
+                            <img
+                              src={application.property?.property_images?.[0]?.url || "/placeholder.svg"}
+                              alt={application.property?.title || "Propriété"}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="font-medium text-sm">{application.property?.title}</h4>
+                            <p className="text-xs text-muted-foreground">{application.property?.address}</p>
+                            <div className="flex items-center justify-between mt-1">
+                              <Badge variant={getStatusBadgeVariant(application.status)} className="text-xs">
+                                {getStatusText(application.status)}
+                              </Badge>
+                              <span className="text-sm font-semibold">{application.property?.price} €/mois</span>
+                            </div>
                           </div>
                         </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-4">
+                        <FileText className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground">Aucune candidature envoyée</p>
                       </div>
-                    ))}
+                    )}
                   </CardContent>
                   <CardFooter>
                     <Button variant="outline" size="sm" className="w-full" onClick={() => setActiveTab("applications")}>
@@ -364,19 +340,19 @@ export default function TenantDashboardPage() {
                         <div key={visit.id} className="flex items-start gap-3">
                           <div className="w-16 h-16 rounded overflow-hidden flex-shrink-0">
                             <img
-                              src={visit.property.image || "/placeholder.svg"}
-                              alt={visit.property.title}
+                              src={visit.property?.property_images?.[0]?.url || "/placeholder.svg"}
+                              alt={visit.property?.title || "Propriété"}
                               className="w-full h-full object-cover"
                             />
                           </div>
                           <div className="flex-1">
-                            <h4 className="font-medium text-sm">{visit.property.title}</h4>
-                            <p className="text-xs text-muted-foreground">{visit.property.address}</p>
+                            <h4 className="font-medium text-sm">{visit.property?.title}</h4>
+                            <p className="text-xs text-muted-foreground">{visit.property?.address}</p>
                             <div className="flex items-center justify-between mt-1">
                               <div className="flex items-center">
                                 <Calendar className="h-3 w-3 mr-1" />
                                 <span className="text-xs">
-                                  {new Date(visit.date).toLocaleDateString("fr-FR", {
+                                  {new Date(visit.visit_date).toLocaleDateString("fr-FR", {
                                     day: "numeric",
                                     month: "short",
                                     hour: "2-digit",
@@ -384,7 +360,7 @@ export default function TenantDashboardPage() {
                                   })}
                                 </span>
                               </div>
-                              <Badge variant={getVisitStatusBadgeVariant(visit.status)} className="text-xs">
+                              <Badge variant="default" className="text-xs">
                                 {visit.status}
                               </Badge>
                             </div>
@@ -414,44 +390,60 @@ export default function TenantDashboardPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {savedSearches.map((search) => (
-                    <div key={search.id} className="border rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className="font-medium">{search.name}</h4>
-                        {search.newMatches > 0 && (
-                          <Badge className="bg-green-600 hover:bg-green-700">{search.newMatches} nouveaux</Badge>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm mb-3">
-                        <div className="flex items-center">
-                          <span className="text-muted-foreground mr-2">Ville:</span>
-                          <span>{search.city}</span>
+                  {savedSearches.length > 0 ? (
+                    savedSearches.map((search) => (
+                      <div key={search.id} className="border rounded-lg p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className="font-medium">{search.name}</h4>
+                          {search.new_matches > 0 && (
+                            <Badge className="bg-green-600 hover:bg-green-700">{search.new_matches} nouveaux</Badge>
+                          )}
                         </div>
-                        <div className="flex items-center">
-                          <span className="text-muted-foreground mr-2">Type:</span>
-                          <span>{search.propertyType}</span>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm mb-3">
+                          <div className="flex items-center">
+                            <span className="text-muted-foreground mr-2">Ville:</span>
+                            <span>{search.city}</span>
+                          </div>
+                          <div className="flex items-center">
+                            <span className="text-muted-foreground mr-2">Type:</span>
+                            <span>{search.property_type}</span>
+                          </div>
+                          <div className="flex items-center">
+                            <span className="text-muted-foreground mr-2">Budget:</span>
+                            <span>Max {search.max_price} €</span>
+                          </div>
+                          <div className="flex items-center">
+                            <span className="text-muted-foreground mr-2">Surface:</span>
+                            <span>
+                              {search.min_surface} - {search.max_surface} m²
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex items-center">
-                          <span className="text-muted-foreground mr-2">Budget:</span>
-                          <span>Max {search.maxRent} €</span>
-                        </div>
-                        <div className="flex items-center">
-                          <span className="text-muted-foreground mr-2">Surface:</span>
-                          <span>
-                            {search.minSurface} - {search.maxSurface} m²
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">
+                            {search.match_count || 0} biens correspondent à vos critères
                           </span>
+                          <Button size="sm" asChild>
+                            <Link href={`/properties?search=${search.id}`}>Voir les biens</Link>
+                          </Button>
                         </div>
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">
-                          {search.matchCount} biens correspondent à vos critères
-                        </span>
-                        <Button size="sm" asChild>
-                          <Link href={`/properties?search=${search.id}`}>Voir les biens</Link>
-                        </Button>
-                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8">
+                      <Search className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                      <h3 className="text-lg font-semibold mb-2">Aucune recherche sauvegardée</h3>
+                      <p className="text-muted-foreground mb-4">
+                        Créez des alertes pour être notifié des nouveaux biens correspondant à vos critères.
+                      </p>
+                      <Button asChild>
+                        <Link href="/tenant/search">
+                          <Plus className="h-4 w-4 mr-2" />
+                          Créer une recherche
+                        </Link>
+                      </Button>
                     </div>
-                  ))}
+                  )}
                 </CardContent>
                 <CardFooter>
                   <Button variant="outline" size="sm" className="w-full" onClick={() => setActiveTab("searches")}>
@@ -462,404 +454,115 @@ export default function TenantDashboardPage() {
             </div>
           )}
 
-          {activeTab === "searches" && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold">Mes recherches enregistrées</h1>
-                <Button asChild>
-                  <Link href="/tenant/searches/new">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Nouvelle recherche
-                  </Link>
-                </Button>
-              </div>
-
-              <div className="space-y-4">
-                {savedSearches.map((search) => (
-                  <Card key={search.id}>
-                    <CardContent className="p-6">
-                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
-                        <div>
-                          <h3 className="text-lg font-semibold flex items-center">
-                            {search.name}
-                            {search.newMatches > 0 && (
-                              <Badge className="ml-2 bg-green-600 hover:bg-green-700">
-                                {search.newMatches} nouveaux
-                              </Badge>
-                            )}
-                          </h3>
-                          <p className="text-sm text-muted-foreground">
-                            Dernière mise à jour: {new Date(search.lastUpdated).toLocaleDateString("fr-FR")}
-                          </p>
-                        </div>
-                        <div className="flex gap-2 mt-2 md:mt-0">
-                          <Button variant="outline" size="sm" asChild>
-                            <Link href={`/tenant/searches/edit/${search.id}`}>Modifier</Link>
-                          </Button>
-                          <Button variant="destructive" size="sm">
-                            Supprimer
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                        <div>
-                          <p className="text-sm text-muted-foreground">Ville</p>
-                          <p className="font-medium">{search.city}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">Type de bien</p>
-                          <p className="font-medium">{search.propertyType}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">Type de location</p>
-                          <p className="font-medium">{search.rentalType}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">Budget max</p>
-                          <p className="font-medium">{search.maxRent} €/mois</p>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                        <div>
-                          <p className="text-sm text-muted-foreground">Pièces min</p>
-                          <p className="font-medium">{search.minRooms}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">Chambres min</p>
-                          <p className="font-medium">{search.minBedrooms}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">Surface min</p>
-                          <p className="font-medium">{search.minSurface} m²</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">Surface max</p>
-                          <p className="font-medium">{search.maxSurface} m²</p>
-                        </div>
-                      </div>
-
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <span className="text-sm font-medium">{search.matchCount} biens correspondent</span>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="outline">
-                            Activer les alertes
-                          </Button>
-                          <Button size="sm" asChild>
-                            <Link href={`/properties?search=${search.id}`}>Voir les biens</Link>
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {activeTab === "favorites" && (
-            <div className="space-y-6">
-              <h1 className="text-2xl font-bold">Mes favoris</h1>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {favoriteProperties.map((property) => (
-                  <Card key={property.id} className="overflow-hidden">
-                    <div className="aspect-video w-full overflow-hidden">
-                      <img
-                        src={property.image || "/placeholder.svg"}
-                        alt={property.title}
-                        className="h-full w-full object-cover transition-transform hover:scale-105"
-                      />
-                    </div>
-                    <CardContent className="p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <h3 className="font-semibold">{property.title}</h3>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <Heart className="h-4 w-4 fill-red-500 text-red-500" />
-                        </Button>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-3">{property.address}</p>
-                      <div className="grid grid-cols-3 gap-2 text-sm mb-3">
-                        <div>
-                          <p className="text-muted-foreground">Surface</p>
-                          <p className="font-medium">{property.surface} m²</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Pièces</p>
-                          <p className="font-medium">{property.rooms}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Chambres</p>
-                          <p className="font-medium">{property.bedrooms}</p>
-                        </div>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <p className="font-bold text-lg">{property.price} €/mois</p>
-                          <p className="text-xs text-muted-foreground">+ {property.charges} € charges</p>
-                        </div>
-                        <Button asChild>
-                          <Link href={`/properties/${property.id}`}>Voir détails</Link>
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          )}
-
           {activeTab === "applications" && (
             <div className="space-y-6">
               <h1 className="text-2xl font-bold">Mes candidatures</h1>
 
-              <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center">
-                  <span className="text-sm text-muted-foreground mr-2">Filtrer par statut:</span>
-                  <Select defaultValue="all">
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="Tous les statuts" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Tous les statuts</SelectItem>
-                      <SelectItem value="pending">En cours d'analyse</SelectItem>
-                      <SelectItem value="visit">Visite proposée</SelectItem>
-                      <SelectItem value="accepted">Dossier accepté</SelectItem>
-                      <SelectItem value="rejected">Refusé</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center">
-                  <span className="text-sm text-muted-foreground mr-2">Trier par:</span>
-                  <Select defaultValue="date-desc">
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="Date (plus récent)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="date-desc">Date (plus récent)</SelectItem>
-                      <SelectItem value="date-asc">Date (plus ancien)</SelectItem>
-                      <SelectItem value="match-desc">Score de matching</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
               <div className="space-y-4">
-                {applications.map((application) => (
-                  <Card key={application.id}>
-                    <CardContent className="p-6">
-                      <div className="flex flex-col md:flex-row gap-4">
-                        <div className="w-full md:w-1/4">
-                          <div className="aspect-video rounded-md overflow-hidden">
-                            <img
-                              src={application.property.image || "/placeholder.svg"}
-                              alt={application.property.title}
-                              className="h-full w-full object-cover"
-                            />
-                          </div>
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex justify-between items-start mb-2">
-                            <div>
-                              <h3 className="font-semibold">{application.property.title}</h3>
-                              <p className="text-sm text-muted-foreground">{application.property.address}</p>
-                            </div>
-                            <Badge variant={getStatusBadgeVariant(application.status)}>{application.status}</Badge>
-                          </div>
-
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 my-4">
-                            <div>
-                              <p className="text-sm text-muted-foreground">Loyer</p>
-                              <p className="font-medium">{application.property.price} €/mois</p>
-                            </div>
-                            <div>
-                              <p className="text-sm text-muted-foreground">Candidature</p>
-                              <p className="font-medium">
-                                {new Date(application.appliedDate).toLocaleDateString("fr-FR")}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-sm text-muted-foreground">Dernière mise à jour</p>
-                              <p className="font-medium">
-                                {new Date(application.lastUpdate).toLocaleDateString("fr-FR")}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-sm text-muted-foreground">Score de matching</p>
-                              <div className="flex items-center">
-                                <span className="font-medium mr-2">{application.matchScore}%</span>
-                                <Progress value={application.matchScore} className="h-2 w-16" />
-                              </div>
+                {applications.length > 0 ? (
+                  applications.map((application) => (
+                    <Card key={application.id}>
+                      <CardContent className="p-6">
+                        <div className="flex flex-col md:flex-row gap-4">
+                          <div className="w-full md:w-1/4">
+                            <div className="aspect-video rounded-md overflow-hidden">
+                              <img
+                                src={application.property?.property_images?.[0]?.url || "/placeholder.svg"}
+                                alt={application.property?.title || "Propriété"}
+                                className="h-full w-full object-cover"
+                              />
                             </div>
                           </div>
-
-                          {application.status === "Visite proposée" && application.visitDate && (
-                            <div className="bg-blue-50 p-3 rounded-md mb-4">
-                              <div className="flex items-center">
-                                <Calendar className="h-4 w-4 text-blue-600 mr-2" />
-                                <span className="font-medium text-blue-800">Visite proposée</span>
+                          <div className="flex-1">
+                            <div className="flex justify-between items-start mb-2">
+                              <div>
+                                <h3 className="font-semibold">{application.property?.title}</h3>
+                                <p className="text-sm text-muted-foreground">{application.property?.address}</p>
                               </div>
-                              <p className="text-sm text-blue-700 mt-1">
-                                Le propriétaire vous propose une visite le{" "}
-                                {new Date(application.visitDate).toLocaleDateString("fr-FR", {
-                                  day: "numeric",
-                                  month: "long",
-                                  year: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
-                              </p>
-                              <div className="flex gap-2 mt-2">
-                                <Button size="sm" variant="default">
-                                  Confirmer
-                                </Button>
-                                <Button size="sm" variant="outline">
-                                  Proposer une autre date
-                                </Button>
+                              <Badge variant={getStatusBadgeVariant(application.status)}>
+                                {getStatusText(application.status)}
+                              </Badge>
+                            </div>
+
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 my-4">
+                              <div>
+                                <p className="text-sm text-muted-foreground">Loyer</p>
+                                <p className="font-medium">{application.property?.price} €/mois</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-muted-foreground">Candidature</p>
+                                <p className="font-medium">
+                                  {new Date(application.created_at).toLocaleDateString("fr-FR")}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-muted-foreground">Dernière mise à jour</p>
+                                <p className="font-medium">
+                                  {new Date(application.updated_at).toLocaleDateString("fr-FR")}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-muted-foreground">Score de matching</p>
+                                <div className="flex items-center">
+                                  <span className="font-medium mr-2">
+                                    {applicationService.calculateMatchScore(application, application.property)}%
+                                  </span>
+                                  <Progress
+                                    value={applicationService.calculateMatchScore(application, application.property)}
+                                    className="h-2 w-16"
+                                  />
+                                </div>
                               </div>
                             </div>
-                          )}
 
-                          {application.status === "Refusé" && application.refusalReason && (
-                            <div className="bg-red-50 p-3 rounded-md mb-4">
-                              <div className="flex items-center">
-                                <X className="h-4 w-4 text-red-600 mr-2" />
-                                <span className="font-medium text-red-800">Candidature refusée</span>
-                              </div>
-                              <p className="text-sm text-red-700 mt-1">Motif: {application.refusalReason}</p>
-                            </div>
-                          )}
-
-                          <div className="flex justify-end gap-2">
-                            <Button variant="outline" size="sm" asChild>
-                              <Link href={`/properties/${application.property.id}`}>Voir l'annonce</Link>
-                            </Button>
-                            <Button variant="outline" size="sm">
-                              Contacter le propriétaire
-                            </Button>
-                            {application.status === "En cours d'analyse" && (
-                              <Button variant="destructive" size="sm">
-                                Retirer ma candidature
+                            <div className="flex justify-end gap-2">
+                              <Button variant="outline" size="sm" asChild>
+                                <Link href={`/properties/${application.property?.id}`}>Voir l'annonce</Link>
                               </Button>
-                            )}
+                              <Button variant="outline" size="sm">
+                                Contacter le propriétaire
+                              </Button>
+                              {application.status === "pending" && (
+                                <Button variant="destructive" size="sm">
+                                  Retirer ma candidature
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  ))
+                ) : (
+                  <div className="text-center py-12">
+                    <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                    <h3 className="text-lg font-semibold mb-2">Aucune candidature envoyée</h3>
+                    <p className="text-muted-foreground mb-4">
+                      Vous n'avez pas encore postulé à des annonces. Explorez nos propriétés disponibles.
+                    </p>
+                    <Button asChild>
+                      <Link href="/properties">Voir les annonces</Link>
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
-          {activeTab === "visits" && (
+          {activeTab === "messaging" && (
             <div className="space-y-6">
-              <h1 className="text-2xl font-bold">Mes visites</h1>
-
-              <Tabs defaultValue="upcoming">
-                <TabsList>
-                  <TabsTrigger value="upcoming">À venir</TabsTrigger>
-                  <TabsTrigger value="past">Passées</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="upcoming" className="space-y-4 mt-4">
-                  {visits.length > 0 ? (
-                    visits.map((visit) => (
-                      <Card key={visit.id}>
-                        <CardContent className="p-6">
-                          <div className="flex flex-col md:flex-row gap-4">
-                            <div className="w-full md:w-1/4">
-                              <div className="aspect-video rounded-md overflow-hidden">
-                                <img
-                                  src={visit.property.image || "/placeholder.svg"}
-                                  alt={visit.property.title}
-                                  className="h-full w-full object-cover"
-                                />
-                              </div>
-                            </div>
-                            <div className="flex-1">
-                              <div className="flex justify-between items-start mb-2">
-                                <div>
-                                  <h3 className="font-semibold">{visit.property.title}</h3>
-                                  <p className="text-sm text-muted-foreground">{visit.property.address}</p>
-                                </div>
-                                <Badge variant={getVisitStatusBadgeVariant(visit.status)}>{visit.status}</Badge>
-                              </div>
-
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-4">
-                                <div>
-                                  <p className="text-sm text-muted-foreground">Date et heure</p>
-                                  <p className="font-medium">
-                                    {new Date(visit.date).toLocaleDateString("fr-FR", {
-                                      day: "numeric",
-                                      month: "long",
-                                      year: "numeric",
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    })}
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-sm text-muted-foreground">Contact</p>
-                                  <p className="font-medium">{visit.contactPerson}</p>
-                                </div>
-                                <div>
-                                  <p className="text-sm text-muted-foreground">Téléphone</p>
-                                  <p className="font-medium">{visit.contactPhone}</p>
-                                </div>
-                              </div>
-
-                              <div className="flex justify-end gap-2">
-                                <Button variant="outline" size="sm" asChild>
-                                  <Link href={`/properties/${visit.property.id}`}>Voir l'annonce</Link>
-                                </Button>
-                                <Button variant="outline" size="sm">
-                                  Contacter le propriétaire
-                                </Button>
-                                {visit.status === "En attente" && (
-                                  <Button variant="default" size="sm">
-                                    Confirmer la visite
-                                  </Button>
-                                )}
-                                {visit.status !== "Annulée" && (
-                                  <Button variant="destructive" size="sm">
-                                    Annuler la visite
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))
-                  ) : (
-                    <div className="text-center py-12">
-                      <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                      <h3 className="text-lg font-semibold mb-2">Aucune visite à venir</h3>
-                      <p className="text-muted-foreground mb-4">
-                        Vous n'avez pas encore de visites programmées. Postulez à des annonces pour organiser des
-                        visites.
-                      </p>
-                      <Button asChild>
-                        <Link href="/properties">Voir les annonces</Link>
-                      </Button>
-                    </div>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="past" className="space-y-4 mt-4">
-                  <div className="text-center py-12">
-                    <Clock className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                    <h3 className="text-lg font-semibold mb-2">Aucune visite passée</h3>
-                    <p className="text-muted-foreground">L'historique de vos visites apparaîtra ici.</p>
-                  </div>
-                </TabsContent>
-              </Tabs>
+              <h1 className="text-2xl font-bold">Messagerie</h1>
+              <div className="text-center py-12">
+                <MessageSquare className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <h3 className="text-lg font-semibold mb-2">Messagerie en cours de développement</h3>
+                <p className="text-muted-foreground">
+                  Cette fonctionnalité sera bientôt disponible pour communiquer avec les propriétaires.
+                </p>
+              </div>
             </div>
           )}
+
+          {/* Autres onglets similaires... */}
         </div>
       </div>
     </div>

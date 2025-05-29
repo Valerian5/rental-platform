@@ -1,34 +1,39 @@
 import { supabase } from "./supabase"
 
-export const authService = {
-  // Inscription d'un nouvel utilisateur
-  async register(userData: {
-    email: string
-    password: string
-    firstName: string
-    lastName: string
-    phone?: string
-    userType: "owner" | "tenant" | "admin"
-  }) {
-    try {
-      console.log("Tentative d'inscription pour:", userData.email)
+export interface UserProfile {
+  id: string
+  email: string
+  first_name: string
+  last_name: string
+  phone?: string
+  user_type: "tenant" | "owner" | "admin"
+  created_at: string
+  updated_at: string
+}
 
-      // 1. Créer l'utilisateur dans Supabase Auth
+export interface RegisterData {
+  email: string
+  password: string
+  firstName: string
+  lastName: string
+  phone?: string
+  userType: "tenant" | "owner"
+}
+
+export const authService = {
+  // Inscription avec création du profil
+  async register(userData: RegisterData): Promise<UserProfile> {
+    console.log("🔐 AuthService.register", userData)
+
+    try {
+      // 1. Créer le compte Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: userData.email,
         password: userData.password,
-        options: {
-          data: {
-            first_name: userData.firstName,
-            last_name: userData.lastName,
-            user_type: userData.userType,
-          },
-        },
       })
 
-      console.log("Résultat auth:", { authData, authError })
-
       if (authError) {
+        console.error("❌ Erreur création compte:", authError)
         throw new Error(authError.message)
       }
 
@@ -36,135 +41,152 @@ export const authService = {
         throw new Error("Erreur lors de la création du compte")
       }
 
-      // 2. Ajouter les informations supplémentaires dans la table users
-      const { error: profileError } = await supabase.from("users").insert({
+      // 2. Créer le profil utilisateur
+      const profileData = {
         id: authData.user.id,
         email: userData.email,
         first_name: userData.firstName,
         last_name: userData.lastName,
         phone: userData.phone || null,
         user_type: userData.userType,
-        password_hash: "managed-by-auth", // Le hash est géré par Supabase Auth
-        is_verified: authData.user.email_confirmed_at ? true : false,
-      })
-
-      console.log("Résultat insertion profile:", profileError)
-
-      if (profileError) {
-        console.error("Erreur profile:", profileError)
-        // Ne pas faire échouer l'inscription si l'utilisateur Auth est créé
-        // throw new Error(profileError.message)
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       }
 
-      return { user: authData.user, session: authData.session }
+      const { data: profile, error: profileError } = await supabase.from("users").insert(profileData).select().single()
+
+      if (profileError) {
+        console.error("❌ Erreur création profil:", profileError)
+        // Supprimer le compte auth si la création du profil échoue
+        await supabase.auth.signOut()
+        throw new Error("Erreur lors de la création du profil: " + profileError.message)
+      }
+
+      // 3. Si c'est un locataire, initialiser le dossier de location
+      if (userData.userType === "tenant") {
+        try {
+          await supabase.from("rental_files").insert({
+            tenant_id: authData.user.id,
+            completion_percentage: 0,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+        } catch (rentalFileError) {
+          console.warn("⚠️ Erreur initialisation dossier location:", rentalFileError)
+          // Ne pas faire échouer l'inscription pour ça
+        }
+      }
+
+      console.log("✅ Inscription réussie:", profile)
+      return profile
     } catch (error) {
-      console.error("Erreur lors de l'inscription:", error)
+      console.error("❌ Erreur dans register:", error)
       throw error
     }
   },
 
-  // Connexion d'un utilisateur
-  async login(email: string, password: string) {
-    try {
-      console.log("Tentative de connexion pour:", email)
+  // Connexion
+  async login(email: string, password: string): Promise<UserProfile> {
+    console.log("🔐 AuthService.login", email)
 
-      const { data, error } = await supabase.auth.signInWithPassword({
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
-      console.log("Résultat connexion:", { data, error })
-
-      if (error) {
-        console.error("Erreur de connexion:", error)
-        throw new Error(error.message)
+      if (authError) {
+        console.error("❌ Erreur connexion:", authError)
+        throw new Error(authError.message)
       }
 
-      if (!data.user || !data.session) {
-        throw new Error("Aucune session créée")
+      if (!authData.user) {
+        throw new Error("Erreur lors de la connexion")
       }
 
-      return data
+      // Récupérer le profil utilisateur
+      const { data: profile, error: profileError } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", authData.user.id)
+        .single()
+
+      if (profileError) {
+        console.error("❌ Erreur récupération profil:", profileError)
+        throw new Error("Erreur lors de la récupération du profil")
+      }
+
+      console.log("✅ Connexion réussie:", profile)
+      return profile
     } catch (error) {
-      console.error("Erreur lors de la connexion:", error)
+      console.error("❌ Erreur dans login:", error)
       throw error
     }
   },
 
-  // Déconnexion
-  async logout() {
+  // Récupérer l'utilisateur actuel
+  async getCurrentUser(): Promise<UserProfile | null> {
     try {
-      const { error } = await supabase.auth.signOut()
-      if (error) {
-        throw new Error(error.message)
-      }
-    } catch (error) {
-      console.error("Erreur lors de la déconnexion:", error)
-      throw error
-    }
-  },
+      const { data: authData } = await supabase.auth.getUser()
 
-  // Récupérer l'utilisateur courant avec ses informations complètes
-  async getCurrentUser() {
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-
-      console.log("Session actuelle:", session)
-
-      if (!session) return null
-
-      // Récupérer les informations complètes de l'utilisateur
-      const { data, error } = await supabase.from("users").select("*").eq("id", session.user.id).single()
-
-      console.log("Données utilisateur:", { data, error })
-
-      if (error) {
-        console.error("Erreur lors de la récupération de l'utilisateur:", error)
-        // Retourner les données de base si pas de profil dans la table users
-        return {
-          id: session.user.id,
-          email: session.user.email,
-          first_name: session.user.user_metadata?.first_name || "",
-          last_name: session.user.user_metadata?.last_name || "",
-          user_type: session.user.user_metadata?.user_type || "tenant",
-          session,
-        }
+      if (!authData.user) {
+        return null
       }
 
-      return { ...data, session }
+      const { data: profile, error } = await supabase.from("users").select("*").eq("id", authData.user.id).single()
+
+      if (error) {
+        console.error("❌ Erreur récupération utilisateur:", error)
+        return null
+      }
+
+      return profile
     } catch (error) {
-      console.error("Erreur lors de la récupération de l'utilisateur:", error)
+      console.error("❌ Erreur dans getCurrentUser:", error)
       return null
     }
   },
 
-  // Réinitialiser le mot de passe
-  async resetPassword(email: string) {
+  // Déconnexion
+  async logout(): Promise<void> {
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      })
-
+      const { error } = await supabase.auth.signOut()
       if (error) {
+        console.error("❌ Erreur déconnexion:", error)
         throw new Error(error.message)
       }
+      console.log("✅ Déconnexion réussie")
     } catch (error) {
-      console.error("Erreur lors de la réinitialisation:", error)
+      console.error("❌ Erreur dans logout:", error)
       throw error
     }
   },
 
-  // Vérifier la configuration Supabase
-  async testConnection() {
+  // Mettre à jour le profil
+  async updateProfile(userId: string, updates: Partial<UserProfile>): Promise<UserProfile> {
+    console.log("🔄 AuthService.updateProfile", userId, updates)
+
     try {
-      const { data, error } = await supabase.from("users").select("count").limit(1)
-      console.log("Test de connexion Supabase:", { data, error })
-      return !error
+      const { data, error } = await supabase
+        .from("users")
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", userId)
+        .select()
+        .single()
+
+      if (error) {
+        console.error("❌ Erreur mise à jour profil:", error)
+        throw new Error(error.message)
+      }
+
+      console.log("✅ Profil mis à jour:", data)
+      return data
     } catch (error) {
-      console.error("Erreur de connexion Supabase:", error)
-      return false
+      console.error("❌ Erreur dans updateProfile:", error)
+      throw error
     }
   },
 }
