@@ -1,59 +1,95 @@
 import { supabase } from "./supabase"
 
-export interface TenantInfo {
+export interface PersonProfile {
   id?: string
-  type: "main" | "cotenant" | "spouse"
+  type: "main_tenant" | "cotenant" | "guarantor"
+
+  // Informations personnelles
   first_name: string
   last_name: string
   birth_date: string
   birth_place: string
   nationality: string
-  situation: "student" | "employee" | "self_employed" | "unemployed" | "retired" | "other"
-  monthly_income: number
-  documents: {
-    identity: string[]
-    income_proof: string[]
-    tax_notice: string
-    domicile_proof?: string
-    other?: string[]
+
+  // Activité principale
+  main_activity: "cdi" | "cdd" | "fonction_publique" | "independant" | "retraite" | "chomage" | "etudes" | "alternance"
+
+  // Revenus détaillés
+  income_sources: {
+    work_income?: {
+      type: "salarie" | "independant" | "intermittent" | "artiste_auteur"
+      amount: number
+      documents: string[]
+    }
+    social_aid?: Array<{
+      type: "caf_msa" | "france_travail" | "apl_aah" | "autre"
+      duration: "moins_3_mois" | "plus_3_mois" | "pas_encore"
+      amount: number
+      documents: string[]
+    }>
+    retirement_pension?: Array<{
+      type: "retraite" | "pension_invalidite" | "pension_alimentaire"
+      has_bulletin?: boolean
+      duration?: "moins_3_mois" | "plus_3_mois" | "pas_encore"
+      amount: number
+      documents: string[]
+    }>
+    rent_income?: Array<{
+      type: "revenus_locatifs" | "rente_viagere" | "autre_rente"
+      has_receipt?: boolean
+      amount: number
+      documents: string[]
+    }>
+    scholarship?: {
+      amount: number
+      documents: string[]
+    }
+    no_income?: {
+      explanation: string
+      documents: string[]
+    }
   }
+
+  // Avis d'imposition
+  tax_situation: {
+    type: "own_notice" | "attached_to_parents" | "less_than_year" | "other"
+    explanation?: string
+    documents: string[]
+  }
+
+  // Documents d'identité
+  identity_documents: string[]
+
+  // Documents de domicile (pour locataire principal uniquement)
+  domicile_documents?: string[]
 }
 
-export interface GuarantorInfo {
-  id?: string
-  type: "physical" | "moral" | "visale"
-  first_name?: string
-  last_name?: string
-  birth_date?: string
-  company_name?: string
-  monthly_income?: number
-  documents: {
-    identity?: string[]
-    income_proof?: string[]
-    tax_notice?: string
-    other?: string[]
-  }
+export interface GuarantorProfile extends PersonProfile {
+  guarantor_type: "person" | "organism" | "moral_person"
+  organism_name?: string
+  moral_person_name?: string
+  kbis_documents?: string[]
 }
 
 export interface RentalFileData {
   id?: string
   tenant_id: string
 
-  // Étape 1: Qui êtes-vous ?
-  main_tenant: TenantInfo
-  cotenants: TenantInfo[]
+  // Profils
+  main_tenant: PersonProfile
+  cotenants: PersonProfile[]
+  guarantors: GuarantorProfile[]
+
+  // Situation de location
   rental_situation: "alone" | "couple" | "colocation" | "family"
 
-  // Étape 2: Votre logement actuel
+  // Logement actuel
   current_housing: {
     type: "owner" | "tenant" | "hosted" | "student_housing" | "other"
     address?: string
     monthly_rent?: number
     departure_date?: string
   }
-
-  // Étape 3: Vos garants
-  guarantors: GuarantorInfo[]
 
   // Métadonnées
   status: "draft" | "in_progress" | "completed" | "validated"
@@ -63,66 +99,60 @@ export interface RentalFileData {
   updated_at?: string
 }
 
-// Documents requis selon la situation
-export const DOCUMENT_REQUIREMENTS = {
-  student: {
-    identity: { required: true, description: "Carte d'identité ou passeport" },
-    student_card: { required: true, description: "Carte d'étudiant ou certificat de scolarité" },
-    income_proof: { required: false, description: "Justificatifs de revenus (job étudiant, bourse...)" },
-    tax_notice: { required: true, description: "Avis d'imposition des parents ou du foyer fiscal" },
-    domicile_proof: { required: false, description: "Justificatif de domicile actuel" },
-  },
-  employee: {
-    identity: { required: true, description: "Carte d'identité ou passeport" },
-    income_proof: { required: true, description: "3 derniers bulletins de salaire" },
-    employment_contract: { required: true, description: "Contrat de travail ou attestation employeur" },
-    tax_notice: { required: true, description: "Dernier avis d'imposition" },
-    domicile_proof: { required: true, description: "Justificatif de domicile de moins de 3 mois" },
-  },
-  self_employed: {
-    identity: { required: true, description: "Carte d'identité ou passeport" },
-    income_proof: { required: true, description: "Justificatifs de revenus (bilans, attestations...)" },
-    business_registration: { required: true, description: "Extrait Kbis ou inscription auto-entrepreneur" },
-    tax_notice: { required: true, description: "Dernier avis d'imposition" },
-    domicile_proof: { required: true, description: "Justificatif de domicile de moins de 3 mois" },
-  },
-  unemployed: {
-    identity: { required: true, description: "Carte d'identité ou passeport" },
-    unemployment_proof: { required: true, description: "Attestation Pôle emploi" },
-    income_proof: { required: false, description: "Justificatifs d'allocations" },
-    tax_notice: { required: true, description: "Dernier avis d'imposition" },
-    domicile_proof: { required: true, description: "Justificatif de domicile de moins de 3 mois" },
-  },
-  retired: {
-    identity: { required: true, description: "Carte d'identité ou passeport" },
-    pension_proof: { required: true, description: "Justificatif de pension de retraite" },
-    tax_notice: { required: true, description: "Dernier avis d'imposition" },
-    domicile_proof: { required: true, description: "Justificatif de domicile de moins de 3 mois" },
-  },
-}
-
-export const SITUATION_OPTIONS = [
-  { value: "student", label: "Étudiant", description: "Vous suivez des études" },
-  { value: "employee", label: "Salarié", description: "Vous êtes employé (CDI, CDD, intérim...)" },
-  { value: "self_employed", label: "Indépendant", description: "Vous travaillez à votre compte" },
-  { value: "unemployed", label: "Sans emploi", description: "Vous recherchez un emploi" },
-  { value: "retired", label: "Retraité", description: "Vous êtes à la retraite" },
-  { value: "other", label: "Autre", description: "Autre situation" },
+export const MAIN_ACTIVITIES = [
+  { value: "cdi", label: "CDI", description: "Contrat à durée indéterminée" },
+  { value: "cdd", label: "CDD", description: "Contrat à durée déterminée" },
+  { value: "fonction_publique", label: "Fonction publique", description: "Agent de la fonction publique" },
+  { value: "independant", label: "Indépendant", description: "Travailleur indépendant" },
+  { value: "retraite", label: "Retraite", description: "Retraité" },
+  { value: "chomage", label: "Chômage", description: "Demandeur d'emploi" },
+  { value: "etudes", label: "Études", description: "Étudiant" },
+  { value: "alternance", label: "Alternance", description: "Contrat d'apprentissage ou de professionnalisation" },
 ]
 
-export const RENTAL_SITUATIONS = [
-  { value: "alone", label: "Je loue seul(e)", description: "Vous serez le seul locataire" },
-  { value: "couple", label: "En couple", description: "Vous et votre conjoint(e)" },
-  { value: "colocation", label: "En colocation", description: "Plusieurs colocataires" },
-  { value: "family", label: "En famille", description: "Avec des enfants" },
+export const WORK_INCOME_TYPES = [
+  { value: "salarie", label: "Salarié", description: "Employé avec contrat de travail" },
+  { value: "independant", label: "Indépendant", description: "Travailleur indépendant" },
+  { value: "intermittent", label: "Intermittent", description: "Intermittent du spectacle" },
+  { value: "artiste_auteur", label: "Artiste-auteur", description: "Artiste ou auteur" },
 ]
 
-export const CURRENT_HOUSING_TYPES = [
-  { value: "tenant", label: "Locataire", description: "Vous louez actuellement un logement" },
-  { value: "owner", label: "Propriétaire", description: "Vous êtes propriétaire de votre logement actuel" },
-  { value: "hosted", label: "Hébergé", description: "Vous êtes hébergé chez quelqu'un" },
-  { value: "student_housing", label: "Logement étudiant", description: "Résidence universitaire, CROUS..." },
-  { value: "other", label: "Autre", description: "Autre situation" },
+export const SOCIAL_AID_TYPES = [
+  { value: "caf_msa", label: "Aide de la CAF ou MSA", description: "RSA, prime d'activité..." },
+  { value: "france_travail", label: "Aide de France Travail", description: "Chômage, ARE..." },
+  { value: "apl_aah", label: "APL / AAH", description: "Aide au logement ou allocation handicapés" },
+  { value: "autre", label: "Autre aide", description: "Autre type d'aide sociale" },
+]
+
+export const DURATION_OPTIONS = [
+  { value: "moins_3_mois", label: "Depuis moins de 3 mois" },
+  { value: "plus_3_mois", label: "Depuis plus de 3 mois" },
+  { value: "pas_encore", label: "Vous ne touchez pas encore l'aide" },
+]
+
+export const RETIREMENT_PENSION_TYPES = [
+  { value: "retraite", label: "Une retraite", description: "Pension de retraite" },
+  { value: "pension_invalidite", label: "Une pension d'invalidité", description: "Pension d'invalidité" },
+  { value: "pension_alimentaire", label: "Une pension alimentaire", description: "Pension alimentaire" },
+]
+
+export const RENT_INCOME_TYPES = [
+  { value: "revenus_locatifs", label: "Des revenus locatifs", description: "Revenus de location immobilière" },
+  { value: "rente_viagere", label: "Une rente viagère", description: "Rente viagère" },
+  { value: "autre_rente", label: "Autre type de rente", description: "Autre rente" },
+]
+
+export const TAX_SITUATIONS = [
+  { value: "own_notice", label: "Vous avez un avis d'imposition à votre nom" },
+  { value: "attached_to_parents", label: "Vous êtes rattaché fiscalement à vos parents" },
+  { value: "less_than_year", label: "Vous êtes en France depuis moins d'un an" },
+  { value: "other", label: "Autre situation" },
+]
+
+export const GUARANTOR_TYPES = [
+  { value: "person", label: "Une personne", description: "Un parent, un proche" },
+  { value: "organism", label: "Un organisme", description: "Visale, autre organisme" },
+  { value: "moral_person", label: "Une personne morale", description: "Une entreprise" },
 ]
 
 export const rentalFileService = {
@@ -191,13 +221,17 @@ export const rentalFileService = {
     let totalPoints = 0
     let earnedPoints = 0
 
-    // Informations du locataire principal (30 points)
+    // Locataire principal (40 points)
     if (fileData.main_tenant) {
-      totalPoints += 30
-      if (fileData.main_tenant.first_name && fileData.main_tenant.last_name) earnedPoints += 5
-      if (fileData.main_tenant.birth_date) earnedPoints += 5
-      if (fileData.main_tenant.situation) earnedPoints += 10
-      if (fileData.main_tenant.monthly_income) earnedPoints += 10
+      totalPoints += 40
+      const tenant = fileData.main_tenant
+
+      if (tenant.first_name && tenant.last_name) earnedPoints += 5
+      if (tenant.birth_date && tenant.birth_place) earnedPoints += 5
+      if (tenant.main_activity) earnedPoints += 10
+      if (tenant.income_sources && Object.keys(tenant.income_sources).length > 0) earnedPoints += 10
+      if (tenant.tax_situation?.type) earnedPoints += 5
+      if (tenant.identity_documents?.length > 0) earnedPoints += 5
     }
 
     // Situation de location (10 points)
@@ -206,31 +240,24 @@ export const rentalFileService = {
       earnedPoints += 10
     }
 
-    // Logement actuel (10 points)
-    if (fileData.current_housing?.type) {
-      totalPoints += 10
-      earnedPoints += 10
+    // Colocataires (20 points si applicable)
+    if (fileData.rental_situation === "colocation" || fileData.rental_situation === "couple") {
+      totalPoints += 20
+      if (fileData.cotenants && fileData.cotenants.length > 0) {
+        earnedPoints += 20
+      }
     }
 
-    // Documents du locataire principal (40 points)
-    if (fileData.main_tenant?.documents) {
-      totalPoints += 40
-      const docs = fileData.main_tenant.documents
-      if (docs.identity?.length > 0) earnedPoints += 10
-      if (docs.income_proof?.length > 0) earnedPoints += 15
-      if (docs.tax_notice) earnedPoints += 15
-    }
-
-    // Garants (10 points bonus)
-    if (fileData.guarantors?.length > 0) {
-      totalPoints += 10
-      earnedPoints += 10
+    // Garants (30 points)
+    totalPoints += 30
+    if (fileData.guarantors && fileData.guarantors.length > 0) {
+      earnedPoints += 30
     }
 
     return Math.min(Math.round((earnedPoints / totalPoints) * 100), 100)
   },
 
-  // Calculer le score de validation (qualité du dossier)
+  // Calculer le score de validation
   calculateValidationScore(fileData: Partial<RentalFileData>): number {
     let score = 0
 
@@ -238,122 +265,127 @@ export const rentalFileService = {
 
     const tenant = fileData.main_tenant
 
-    // Score basé sur la situation professionnelle
-    switch (tenant.situation) {
-      case "employee":
+    // Score basé sur l'activité principale
+    switch (tenant.main_activity) {
+      case "cdi":
+      case "fonction_publique":
         score += 40
         break
-      case "retired":
+      case "cdd":
+      case "alternance":
+        score += 30
+        break
+      case "retraite":
         score += 35
         break
-      case "self_employed":
+      case "independant":
         score += 25
         break
-      case "student":
+      case "etudes":
         score += 20
         break
-      case "unemployed":
-        score += 10
+      case "chomage":
+        score += 15
         break
       default:
-        score += 15
+        score += 10
     }
 
     // Score basé sur les revenus
-    if (tenant.monthly_income) {
-      if (tenant.monthly_income >= 3000) score += 25
-      else if (tenant.monthly_income >= 2000) score += 20
-      else if (tenant.monthly_income >= 1500) score += 15
-      else score += 10
-    }
+    const totalIncome = this.calculateTotalIncome(tenant.income_sources)
+    if (totalIncome >= 3000) score += 25
+    else if (totalIncome >= 2000) score += 20
+    else if (totalIncome >= 1500) score += 15
+    else if (totalIncome > 0) score += 10
 
     // Score basé sur les documents
-    if (tenant.documents) {
-      if (tenant.documents.identity?.length > 0) score += 10
-      if (tenant.documents.income_proof?.length >= 3) score += 15
-      if (tenant.documents.tax_notice) score += 10
-    }
+    if (tenant.identity_documents?.length > 0) score += 10
+    if (tenant.tax_situation?.documents?.length > 0) score += 10
 
-    // Bonus pour garant
-    if (fileData.guarantors?.length > 0) {
+    // Bonus pour garants
+    if (fileData.guarantors && fileData.guarantors.length > 0) {
       score += 15
     }
 
     return Math.min(score, 100)
   },
 
-  // Obtenir les documents requis selon la situation
-  getRequiredDocuments(situation: string): any {
-    return DOCUMENT_REQUIREMENTS[situation as keyof typeof DOCUMENT_REQUIREMENTS] || DOCUMENT_REQUIREMENTS.employee
+  // Calculer le total des revenus
+  calculateTotalIncome(incomeSources: any): number {
+    let total = 0
+
+    if (incomeSources?.work_income?.amount) {
+      total += incomeSources.work_income.amount
+    }
+
+    if (incomeSources?.social_aid) {
+      incomeSources.social_aid.forEach((aid: any) => {
+        total += aid.amount || 0
+      })
+    }
+
+    if (incomeSources?.retirement_pension) {
+      incomeSources.retirement_pension.forEach((pension: any) => {
+        total += pension.amount || 0
+      })
+    }
+
+    if (incomeSources?.rent_income) {
+      incomeSources.rent_income.forEach((rent: any) => {
+        total += rent.amount || 0
+      })
+    }
+
+    if (incomeSources?.scholarship?.amount) {
+      total += incomeSources.scholarship.amount
+    }
+
+    return total
   },
 
-  // Vérifier si le dossier est éligible pour candidature
-  isEligibleForApplication(fileData: RentalFileData | null): {
-    eligible: boolean
-    reasons: string[]
-    recommendations: string[]
-  } {
-    const reasons: string[] = []
-    const recommendations: string[] = []
+  // Créer un profil vide
+  createEmptyProfile(type: "main_tenant" | "cotenant" | "guarantor"): PersonProfile | GuarantorProfile {
+    const baseProfile: PersonProfile = {
+      type,
+      first_name: "",
+      last_name: "",
+      birth_date: "",
+      birth_place: "",
+      nationality: "française",
+      main_activity: "cdi",
+      income_sources: {},
+      tax_situation: {
+        type: "own_notice",
+        documents: [],
+      },
+      identity_documents: [],
+    }
 
-    if (!fileData) {
+    if (type === "guarantor") {
       return {
-        eligible: false,
-        reasons: ["Aucun dossier de location"],
-        recommendations: ["Créez votre dossier de location"],
-      }
+        ...baseProfile,
+        guarantor_type: "person",
+      } as GuarantorProfile
     }
 
-    // Vérifications obligatoires
-    if (!fileData.main_tenant?.documents?.identity?.length) {
-      reasons.push("Pièce d'identité manquante")
-    }
-
-    if (!fileData.main_tenant?.documents?.tax_notice) {
-      reasons.push("Avis d'imposition manquant")
-    }
-
-    if (fileData.completion_percentage < 70) {
-      reasons.push("Dossier incomplet")
-      recommendations.push("Complétez votre dossier à au moins 70%")
-    }
-
-    if (fileData.validation_score < 40) {
-      recommendations.push("Ajoutez un garant pour renforcer votre dossier")
-    }
-
-    return {
-      eligible: reasons.length === 0,
-      reasons,
-      recommendations,
-    }
+    return baseProfile
   },
 
   // Initialiser un dossier avec les données utilisateur
   async initializeFromUserData(tenantId: string, userData: any): Promise<RentalFileData> {
+    const mainTenant = this.createEmptyProfile("main_tenant") as PersonProfile
+    mainTenant.first_name = userData.first_name || ""
+    mainTenant.last_name = userData.last_name || ""
+
     const initialData: Partial<RentalFileData> = {
       tenant_id: tenantId,
-      main_tenant: {
-        type: "main",
-        first_name: userData.first_name || "",
-        last_name: userData.last_name || "",
-        birth_date: "",
-        birth_place: "",
-        nationality: "française",
-        situation: userData.employment_status || "employee",
-        monthly_income: userData.monthly_income || 0,
-        documents: {
-          identity: [],
-          income_proof: [],
-          tax_notice: "",
-        },
-      },
+      main_tenant: mainTenant,
       cotenants: [],
-      rental_situation: userData.rental_type || "alone",
+      guarantors: [],
+      rental_situation: "alone",
       current_housing: {
         type: "tenant",
       },
-      guarantors: [],
       status: "draft",
       completion_percentage: 0,
       validation_score: 0,
