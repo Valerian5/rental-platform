@@ -125,6 +125,17 @@ export default function PropertyPublicPage() {
       return
     }
 
+    // Pré-remplir avec les données du dossier
+    if (rentalFile) {
+      setApplicationData({
+        message: rentalFile.presentation_message || "",
+        income: rentalFile.monthly_income?.toString() || "",
+        profession: rentalFile.profession || "",
+        company: rentalFile.company || "",
+        move_in_date: rentalFile.desired_move_date || "",
+      })
+    }
+
     setShowApplicationDialog(true)
   }
 
@@ -611,17 +622,48 @@ export default function PropertyPublicPage() {
             </DialogDescription>
           </DialogHeader>
 
-          {compatibilityCheck && compatibilityCheck.warnings.length > 0 && (
-            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+          {compatibilityCheck && (
+            <div
+              className={`p-3 rounded-lg border ${
+                compatibilityCheck.compatible ? "bg-green-50 border-green-200" : "bg-orange-50 border-orange-200"
+              }`}
+            >
               <div className="flex items-start">
-                <AlertTriangle className="h-4 w-4 text-orange-600 mr-2 mt-0.5" />
+                {compatibilityCheck.compatible ? (
+                  <CheckCircle className="h-4 w-4 text-green-600 mr-2 mt-0.5" />
+                ) : (
+                  <AlertTriangle className="h-4 w-4 text-orange-600 mr-2 mt-0.5" />
+                )}
                 <div className="text-sm">
-                  <p className="font-medium text-orange-800 mb-1">Points d'attention :</p>
-                  <ul className="text-orange-700 space-y-1">
-                    {compatibilityCheck.warnings.map((warning, index) => (
-                      <li key={index}>• {warning}</li>
-                    ))}
-                  </ul>
+                  <p
+                    className={`font-medium mb-1 ${
+                      compatibilityCheck.compatible ? "text-green-800" : "text-orange-800"
+                    }`}
+                  >
+                    Score de compatibilité : {compatibilityCheck.score}%
+                  </p>
+
+                  {compatibilityCheck.warnings.length > 0 && (
+                    <div className="mb-2">
+                      <p className="font-medium text-orange-800">Points d'attention :</p>
+                      <ul className="text-orange-700 space-y-1">
+                        {compatibilityCheck.warnings.map((warning, index) => (
+                          <li key={index}>• {warning}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {compatibilityCheck.recommendations.length > 0 && (
+                    <div>
+                      <p className="font-medium text-blue-800">Recommandations :</p>
+                      <ul className="text-blue-700 space-y-1">
+                        {compatibilityCheck.recommendations.map((rec, index) => (
+                          <li key={index}>• {rec}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
