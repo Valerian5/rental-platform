@@ -62,7 +62,7 @@ export default function OwnerLayout({
       <div className="flex h-16 items-center border-b px-6">
         <Link href="/owner/dashboard" className="flex items-center space-x-2">
           <Building2 className="h-6 w-6 text-blue-600" />
-          <span className="text-xl font-bold">PropManager</span>
+          <span className="text-xl font-bold">Louer Ici</span>
         </Link>
       </div>
       <nav className="flex-1 space-y-1 px-4 py-4">
