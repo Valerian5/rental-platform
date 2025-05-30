@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator"
 import { Download, FileText, User, Shield, CheckCircle, AlertTriangle } from "lucide-react"
 import { rentalFileService, MAIN_ACTIVITIES, CURRENT_HOUSING_SITUATIONS } from "@/lib/rental-file-service"
 import { toast } from "sonner"
+import { generateRentalFilePDF } from "@/lib/pdf-generator"
 
 interface RentalFileViewerProps {
   rentalFile: any
@@ -22,41 +23,7 @@ export function RentalFileViewer({ rentalFile, onValidate }: RentalFileViewerPro
   const generatePDF = async () => {
     setIsGeneratingPDF(true)
     try {
-      // Simulation de génération PDF
-      await new Promise((resolve) => setTimeout(resolve, 3000))
-
-      // Créer un blob PDF factice pour la démo
-      const pdfContent = `
-        DOSSIER DE LOCATION NUMÉRIQUE
-        =============================
-        
-        LOCATAIRE PRINCIPAL
-        -------------------
-        Nom: ${rentalFile.main_tenant?.last_name || ""}
-        Prénom: ${rentalFile.main_tenant?.first_name || ""}
-        Activité: ${MAIN_ACTIVITIES.find((a) => a.value === rentalFile.main_tenant?.main_activity)?.label || ""}
-        
-        SITUATION DE LOCATION
-        --------------------
-        Type: ${rentalFile.rental_situation || ""}
-        
-        SCORE DE VALIDATION: ${rentalFile.validation_score || 0}/100
-        COMPLÉTION: ${rentalFile.completion_percentage || 0}%
-        
-        Document généré le ${new Date().toLocaleDateString("fr-FR")}
-      `
-
-      const blob = new Blob([pdfContent], { type: "application/pdf" })
-      const url = URL.createObjectURL(blob)
-
-      const link = document.createElement("a")
-      link.href = url
-      link.download = `dossier-location-${rentalFile.main_tenant?.first_name || "locataire"}-${rentalFile.main_tenant?.last_name || ""}.pdf`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
-
+      await generateRentalFilePDF(rentalFile)
       toast.success("Dossier téléchargé avec succès")
     } catch (error) {
       console.error("Erreur génération PDF:", error)
@@ -88,6 +55,7 @@ export function RentalFileViewer({ rentalFile, onValidate }: RentalFileViewerPro
   }
 
   const isEligible = rentalFileService.isEligibleForApplication(rentalFile)
+  const completionPercentage = rentalFile.completion_percentage || 0
 
   return (
     <div className="space-y-6">
@@ -105,12 +73,6 @@ export function RentalFileViewer({ rentalFile, onValidate }: RentalFileViewerPro
                 className="text-lg px-3 py-1"
               >
                 {rentalFile.completion_percentage}% complété
-              </Badge>
-              <Badge
-                variant={rentalFile.validation_score >= 70 ? "default" : "secondary"}
-                className="text-lg px-3 py-1"
-              >
-                Score: {rentalFile.validation_score}/100
               </Badge>
             </div>
           </CardTitle>
@@ -257,6 +219,21 @@ export function RentalFileViewer({ rentalFile, onValidate }: RentalFileViewerPro
                 </div>
               </div>
             )}
+          </div>
+
+          <Separator />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">{completionPercentage}%</div>
+              <div className="text-sm text-gray-600">Complété</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-purple-600">
+                {1 + (rentalFile?.cotenants?.length || 0) + (rentalFile?.guarantors?.length || 0)}
+              </div>
+              <div className="text-sm text-gray-600">Personnes dans le dossier</div>
+            </div>
           </div>
 
           {/* Actions */}

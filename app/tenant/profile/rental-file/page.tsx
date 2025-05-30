@@ -16,6 +16,7 @@ import { ImprovedPersonProfile } from "@/components/rental-file/improved-person-
 import { RentalFileViewer } from "@/components/rental-file/rental-file-viewer"
 import { toast } from "sonner"
 import Link from "next/link"
+import { CompletionDiagnostic } from "@/components/rental-file/completion-diagnostic"
 
 export default function RentalFilePage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
@@ -153,7 +154,6 @@ export default function RentalFilePage() {
   }
 
   const completionPercentage = rentalFile?.completion_percentage || 0
-  const validationScore = rentalFile?.validation_score || 0
 
   if (showViewer) {
     return (
@@ -199,9 +199,6 @@ export default function RentalFilePage() {
                 Aperçu
               </Button>
             </div>
-            <div className="text-sm text-gray-600">
-              Score: <span className="font-medium">{validationScore}/100</span>
-            </div>
           </div>
         </div>
 
@@ -220,6 +217,8 @@ export default function RentalFilePage() {
             </div>
           </CardContent>
         </Card>
+
+        <CompletionDiagnostic rentalFile={rentalFile} />
 
         {/* Étape 1: Locataire principal */}
         {currentStep === 1 && (
@@ -271,6 +270,8 @@ export default function RentalFilePage() {
                 </div>
               </CardContent>
             </Card>
+
+            <CompletionDiagnostic rentalFile={rentalFile} />
 
             {(rentalFile?.rental_situation === "colocation" || rentalFile?.rental_situation === "couple") && (
               <div className="space-y-6">
@@ -362,6 +363,8 @@ export default function RentalFilePage() {
                 )}
               </CardContent>
             </Card>
+
+            <CompletionDiagnostic rentalFile={rentalFile} />
 
             {rentalFile?.guarantors?.map((guarantor: any, index: number) => (
               <Card key={index}>
@@ -496,14 +499,10 @@ export default function RentalFilePage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="text-center">
                     <div className="text-2xl font-bold text-blue-600">{completionPercentage}%</div>
                     <div className="text-sm text-gray-600">Complété</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-green-600">{validationScore}/100</div>
-                    <div className="text-sm text-gray-600">Score de validation</div>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold text-purple-600">

@@ -30,6 +30,8 @@ import {
   DURATION_OPTIONS,
   TAX_SITUATIONS,
   CURRENT_HOUSING_SITUATIONS,
+  RETIREMENT_PENSION_TYPES,
+  RENT_INCOME_TYPES,
 } from "@/lib/rental-file-service"
 import { toast } from "sonner"
 
@@ -245,12 +247,73 @@ export function ImprovedPersonProfile({
     category,
     label,
     multiple = false,
-  }: { category: string; label: string; multiple?: boolean }) => {
+    existingFiles = [],
+  }: {
+    category: string
+    label: string
+    multiple?: boolean
+    existingFiles?: string[]
+  }) => {
     const isUploading = uploadingItem === category
+
+    const removeFile = (fileIndex: number) => {
+      const updatedProfile = { ...profile }
+
+      if (category === "identity") {
+        updatedProfile.identity_documents =
+          updatedProfile.identity_documents?.filter((_: any, i: number) => i !== fileIndex) || []
+      } else if (category === "activity") {
+        updatedProfile.activity_documents =
+          updatedProfile.activity_documents?.filter((_: any, i: number) => i !== fileIndex) || []
+      } else if (category === "tax") {
+        if (updatedProfile.tax_situation?.documents) {
+          updatedProfile.tax_situation.documents = updatedProfile.tax_situation.documents.filter(
+            (_: any, i: number) => i !== fileIndex,
+          )
+        }
+      } else if (category.startsWith("housing_")) {
+        const docType = category.replace("housing_", "")
+        if (updatedProfile.current_housing_documents?.[docType]) {
+          updatedProfile.current_housing_documents[docType] = updatedProfile.current_housing_documents[docType].filter(
+            (_: any, i: number) => i !== fileIndex,
+          )
+        }
+      }
+
+      onUpdate(updatedProfile)
+    }
 
     return (
       <div className="space-y-2">
         <Label className="text-sm font-medium">{label}</Label>
+
+        {/* Fichiers existants */}
+        {existingFiles.length > 0 && (
+          <div className="space-y-2">
+            {existingFiles.map((file, index) => (
+              <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded border">
+                <div className="flex items-center space-x-2">
+                  <FileText className="h-4 w-4 text-gray-500" />
+                  <span className="text-sm text-gray-700">
+                    {file.includes("blob:")
+                      ? `Document ${index + 1}`
+                      : file.split("/").pop() || `Document ${index + 1}`}
+                  </span>
+                </div>
+                <Button
+                  onClick={() => removeFile(index)}
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Zone d'upload */}
         <div className="relative">
           <input
             type="file"
@@ -273,7 +336,7 @@ export function ImprovedPersonProfile({
             ) : (
               <div className="space-y-2">
                 <Upload className="h-6 w-6 text-gray-400 mx-auto" />
-                <p className="text-sm text-gray-600">Ajouter {multiple ? "les documents" : "le document"}</p>
+                <p className="text-sm text-gray-600">Ajouter {multiple ? "des documents" : "un document"}</p>
                 <p className="text-xs text-gray-500">PDF, JPG, PNG (max 10MB)</p>
               </div>
             )}
@@ -394,7 +457,12 @@ export function ImprovedPersonProfile({
               />
             </div>
 
-            <FileUploadZone category="identity" label="Carte Nationale d'Identité *" multiple />
+            <FileUploadZone
+              category="identity"
+              label="Carte Nationale d'Identité *"
+              multiple
+              existingFiles={profile.identity_documents || []}
+            />
           </div>
         )}
 
@@ -528,10 +596,9 @@ export function ImprovedPersonProfile({
 
                 <FileUploadZone
                   category="activity"
-                  label={`Documents justificatifs - ${
-                    MAIN_ACTIVITIES.find((a) => a.value === profile.main_activity)?.label
-                  } *`}
+                  label={`Documents justificatifs - ${MAIN_ACTIVITIES.find((a) => a.value === profile.main_activity)?.label} *`}
                   multiple
+                  existingFiles={profile.activity_documents || []}
                 />
               </div>
             )}
@@ -688,6 +755,134 @@ export function ImprovedPersonProfile({
                   </div>
 
                   <FileUploadZone category={`social_aid_${index}`} label="Justificatifs" multiple />
+                </div>
+              ))}
+            </div>
+
+            {/* Retraite et pensions */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="font-medium">Retraite ou pension</Label>
+                <Button onClick={() => addIncomeSource("retirement_pension")} size="sm" variant="outline">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Ajouter
+                </Button>
+              </div>
+
+              {profile.income_sources?.retirement_pension?.map((pension: any, index: number) => (
+                <div key={index} className="border rounded-lg p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium">Retraite/Pension {index + 1}</h4>
+                    <Button onClick={() => removeIncomeSource("retirement_pension", index)} size="sm" variant="outline">
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  <div>
+                    <Label>Type de pension</Label>
+                    <Select
+                      value={pension.type || "retraite"}
+                      onValueChange={(value) => updateIncomeSource("retirement_pension", index, "type", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {RETIREMENT_PENSION_TYPES.map((type) => (
+                          <SelectItem key={type.value} value={type.value}>
+                            <div>
+                              <div className="font-medium">{type.label}</div>
+                              <div className="text-sm text-gray-600">{type.description}</div>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label htmlFor={`pension_amount_${index}`}>Montant mensuel (€)</Label>
+                    <Input
+                      id={`pension_amount_${index}`}
+                      type="number"
+                      placeholder="1200"
+                      value={pension.amount || ""}
+                      onChange={(e) =>
+                        updateIncomeSource("retirement_pension", index, "amount", Number.parseFloat(e.target.value))
+                      }
+                    />
+                  </div>
+
+                  <FileUploadZone
+                    category={`retirement_pension_${index}`}
+                    label="Justificatifs"
+                    multiple
+                    existingFiles={pension.documents || []}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Rentes */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="font-medium">Rentes</Label>
+                <Button onClick={() => addIncomeSource("rent_income")} size="sm" variant="outline">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Ajouter
+                </Button>
+              </div>
+
+              {profile.income_sources?.rent_income?.map((rent: any, index: number) => (
+                <div key={index} className="border rounded-lg p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium">Rente {index + 1}</h4>
+                    <Button onClick={() => removeIncomeSource("rent_income", index)} size="sm" variant="outline">
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  <div>
+                    <Label>Type de rente</Label>
+                    <Select
+                      value={rent.type || "revenus_locatifs"}
+                      onValueChange={(value) => updateIncomeSource("rent_income", index, "type", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {RENT_INCOME_TYPES.map((type) => (
+                          <SelectItem key={type.value} value={type.value}>
+                            <div>
+                              <div className="font-medium">{type.label}</div>
+                              <div className="text-sm text-gray-600">{type.description}</div>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label htmlFor={`rent_amount_${index}`}>Montant mensuel (€)</Label>
+                    <Input
+                      id={`rent_amount_${index}`}
+                      type="number"
+                      placeholder="800"
+                      value={rent.amount || ""}
+                      onChange={(e) =>
+                        updateIncomeSource("rent_income", index, "amount", Number.parseFloat(e.target.value))
+                      }
+                    />
+                  </div>
+
+                  <FileUploadZone
+                    category={`rent_income_${index}`}
+                    label="Justificatifs"
+                    multiple
+                    existingFiles={rent.documents || []}
+                  />
                 </div>
               ))}
             </div>

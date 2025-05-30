@@ -200,18 +200,6 @@ export const DURATION_OPTIONS = [
   { value: "pas_encore", label: "Vous ne touchez pas encore l'aide" },
 ]
 
-export const RETIREMENT_PENSION_TYPES = [
-  { value: "retraite", label: "Une retraite", description: "Pension de retraite" },
-  { value: "pension_invalidite", label: "Une pension d'invalidité", description: "Pension d'invalidité" },
-  { value: "pension_alimentaire", label: "Une pension alimentaire", description: "Pension alimentaire" },
-]
-
-export const RENT_INCOME_TYPES = [
-  { value: "revenus_locatifs", label: "Des revenus locatifs", description: "Revenus de location immobilière" },
-  { value: "rente_viagere", label: "Une rente viagère", description: "Rente viagère" },
-  { value: "autre_rente", label: "Autre type de rente", description: "Autre rente" },
-]
-
 export const TAX_SITUATIONS = [
   { value: "own_notice", label: "Vous avez un avis d'imposition à votre nom" },
   { value: "attached_to_parents", label: "Vous êtes rattaché fiscalement à vos parents" },
@@ -259,6 +247,18 @@ export const RENTAL_SITUATIONS = [
   { value: "colocation", label: "en colocation", description: "Plusieurs colocataires" },
 ]
 
+export const RETIREMENT_PENSION_TYPES = [
+  { value: "retraite", label: "Une retraite", description: "Pension de retraite" },
+  { value: "pension_invalidite", label: "Une pension d'invalidité", description: "Pension d'invalidité" },
+  { value: "pension_alimentaire", label: "Une pension alimentaire", description: "Pension alimentaire" },
+]
+
+export const RENT_INCOME_TYPES = [
+  { value: "revenus_locatifs", label: "Des revenus locatifs", description: "Revenus de location immobilière" },
+  { value: "rente_viagere", label: "Une rente viagère", description: "Rente viagère" },
+  { value: "autre_rente", label: "Autre type de rente", description: "Autre rente" },
+]
+
 export const rentalFileService = {
   // Récupérer le dossier de location
   async getRentalFile(tenantId: string): Promise<RentalFileData | null> {
@@ -290,13 +290,11 @@ export const rentalFileService = {
 
     try {
       const completionPercentage = this.calculateCompletionPercentage(fileData)
-      const validationScore = this.calculateValidationScore(fileData)
 
       const dataToUpdate = {
         ...fileData,
         tenant_id: tenantId,
         completion_percentage: completionPercentage,
-        validation_score: validationScore,
         status: completionPercentage >= 100 ? "completed" : "in_progress",
         updated_at: new Date().toISOString(),
       }
@@ -322,100 +320,300 @@ export const rentalFileService = {
 
   // Calculer le pourcentage de complétion
   calculateCompletionPercentage(fileData: Partial<RentalFileData>): number {
-    let totalPoints = 0
-    let earnedPoints = 0
+    const diagnostic = this.getDiagnostic(fileData)
+    const totalRequired = diagnostic.required.length
+    const completed = diagnostic.required.filter((item) => item.completed).length
 
-    // Locataire principal (40 points)
-    if (fileData.main_tenant) {
-      totalPoints += 40
-      const tenant = fileData.main_tenant
-
-      if (tenant.first_name && tenant.last_name) earnedPoints += 5
-      if (tenant.birth_date && tenant.birth_place) earnedPoints += 5
-      if (tenant.main_activity) earnedPoints += 5
-      if (tenant.current_housing_situation) earnedPoints += 5
-      if (tenant.identity_documents?.length > 0) earnedPoints += 5
-      if (tenant.activity_documents?.length > 0) earnedPoints += 5
-      if (tenant.income_sources && Object.keys(tenant.income_sources).length > 0) earnedPoints += 5
-      if (tenant.tax_situation?.type) earnedPoints += 5
-    }
-
-    // Situation de location (10 points)
-    if (fileData.rental_situation) {
-      totalPoints += 10
-      earnedPoints += 10
-    }
-
-    // Colocataires (20 points si applicable)
-    if (fileData.rental_situation === "colocation" || fileData.rental_situation === "couple") {
-      totalPoints += 20
-      if (fileData.cotenants && fileData.cotenants.length > 0) {
-        earnedPoints += 20
-      }
-    }
-
-    // Garants (30 points)
-    totalPoints += 30
-    if (fileData.guarantors && fileData.guarantors.length > 0) {
-      earnedPoints += 30
-    }
-
-    return Math.min(Math.round((earnedPoints / totalPoints) * 100), 100)
+    return totalRequired > 0 ? Math.round((completed / totalRequired) * 100) : 0
   },
 
-  // Calculer le score de validation
-  calculateValidationScore(fileData: Partial<RentalFileData>): number {
-    let score = 0
+  getDiagnostic(fileData: Partial<RentalFileData>): {
+    required: Array<{
+      category: string
+      item: string
+      completed: boolean
+      description: string
+    }>
+    optional: Array<{
+      category: string
+      item: string
+      completed: boolean
+      description: string
+    }>
+  } {
+    const required: any[] = []
+    const optional: any[] = []
 
-    if (!fileData.main_tenant) return 0
+    if (!fileData.main_tenant) {
+      required.push({
+        category: "Locataire principal",
+        item: "Profil complet",
+        completed: false,
+        description: "Créer le profil du locataire principal",
+      })
+      return { required, optional }
+    }
 
     const tenant = fileData.main_tenant
 
-    // Score basé sur l'activité principale
-    switch (tenant.main_activity) {
-      case "cdi":
-      case "fonction_publique":
-        score += 40
-        break
-      case "cdd":
-      case "alternance":
-        score += 30
-        break
-      case "retraite":
-        score += 35
-        break
-      case "independant":
-        score += 25
-        break
-      case "etudes":
-        score += 20
-        break
-      case "chomage":
-        score += 15
-        break
-      default:
-        score += 10
+    // Identité (obligatoire)
+    required.push({
+      category: "Identité",
+      item: "Prénom",
+      completed: !!tenant.first_name?.trim(),
+      description: "Prénom du locataire",
+    })
+
+    required.push({
+      category: "Identité",
+      item: "Nom",
+      completed: !!tenant.last_name?.trim(),
+      description: "Nom du locataire",
+    })
+
+    required.push({
+      category: "Identité",
+      item: "Pièce d'identité",
+      completed: !!(tenant.identity_documents?.length > 0),
+      description: "Carte d'identité, passeport ou titre de séjour",
+    })
+
+    // Informations personnelles (optionnelles mais recommandées)
+    optional.push({
+      category: "Identité",
+      item: "Date de naissance",
+      completed: !!tenant.birth_date,
+      description: "Date de naissance",
+    })
+
+    optional.push({
+      category: "Identité",
+      item: "Lieu de naissance",
+      completed: !!tenant.birth_place,
+      description: "Lieu de naissance",
+    })
+
+    // Logement actuel (obligatoire)
+    required.push({
+      category: "Logement actuel",
+      item: "Situation d'hébergement",
+      completed: !!tenant.current_housing_situation,
+      description: "Votre situation d'hébergement actuelle",
+    })
+
+    // Documents logement selon situation
+    if (tenant.current_housing_situation === "locataire") {
+      required.push({
+        category: "Logement actuel",
+        item: "Quittances de loyer",
+        completed: !!(tenant.current_housing_documents?.quittances_loyer?.length > 0),
+        description: "3 dernières quittances de loyer",
+      })
+    } else if (tenant.current_housing_situation === "heberge") {
+      required.push({
+        category: "Logement actuel",
+        item: "Attestation d'hébergement",
+        completed: !!(tenant.current_housing_documents?.attestation_hebergement?.length > 0),
+        description: "Attestation d'hébergement de moins de 3 mois",
+      })
+    } else if (tenant.current_housing_situation === "proprietaire") {
+      required.push({
+        category: "Logement actuel",
+        item: "Taxe foncière",
+        completed: !!(tenant.current_housing_documents?.avis_taxe_fonciere?.length > 0),
+        description: "Avis de taxe foncière",
+      })
     }
 
-    // Score basé sur les revenus
-    const totalIncome = this.calculateTotalIncome(tenant.income_sources)
-    if (totalIncome >= 3000) score += 25
-    else if (totalIncome >= 2000) score += 20
-    else if (totalIncome >= 1500) score += 15
-    else if (totalIncome > 0) score += 10
+    // Activité professionnelle (obligatoire)
+    required.push({
+      category: "Activité professionnelle",
+      item: "Activité principale",
+      completed: !!tenant.main_activity,
+      description: "Votre activité professionnelle principale",
+    })
 
-    // Score basé sur les documents
-    if (tenant.identity_documents?.length > 0) score += 5
-    if (tenant.activity_documents?.length > 0) score += 5
-    if (tenant.tax_situation?.documents?.length > 0) score += 5
+    required.push({
+      category: "Activité professionnelle",
+      item: "Justificatifs d'activité",
+      completed: !!(tenant.activity_documents?.length > 0),
+      description: "Documents justifiant votre activité",
+    })
 
-    // Bonus pour garants
-    if (fileData.guarantors && fileData.guarantors.length > 0) {
-      score += 15
+    // Revenus (au moins une source obligatoire)
+    const hasIncomeSource = tenant.income_sources && Object.keys(tenant.income_sources).length > 0
+    required.push({
+      category: "Revenus",
+      item: "Source de revenus",
+      completed: hasIncomeSource,
+      description: "Au moins une source de revenus déclarée",
+    })
+
+    // Vérifier les justificatifs pour chaque source de revenus déclarée
+    if (tenant.income_sources?.work_income) {
+      required.push({
+        category: "Revenus",
+        item: "Justificatifs revenus travail",
+        completed: !!(tenant.income_sources.work_income.documents?.length > 0),
+        description: "Justificatifs des revenus du travail",
+      })
     }
 
-    return Math.min(score, 100)
+    if (tenant.income_sources?.social_aid?.length > 0) {
+      tenant.income_sources.social_aid.forEach((aid: any, index: number) => {
+        required.push({
+          category: "Revenus",
+          item: `Justificatifs aide sociale ${index + 1}`,
+          completed: !!(aid.documents?.length > 0),
+          description: `Justificatifs de l'aide sociale ${index + 1}`,
+        })
+      })
+    }
+
+    if (tenant.income_sources?.retirement_pension?.length > 0) {
+      tenant.income_sources.retirement_pension.forEach((pension: any, index: number) => {
+        required.push({
+          category: "Revenus",
+          item: `Justificatifs retraite/pension ${index + 1}`,
+          completed: !!(pension.documents?.length > 0),
+          description: `Justificatifs de la retraite/pension ${index + 1}`,
+        })
+      })
+    }
+
+    if (tenant.income_sources?.rent_income?.length > 0) {
+      tenant.income_sources.rent_income.forEach((rent: any, index: number) => {
+        required.push({
+          category: "Revenus",
+          item: `Justificatifs rente ${index + 1}`,
+          completed: !!(rent.documents?.length > 0),
+          description: `Justificatifs de la rente ${index + 1}`,
+        })
+      })
+    }
+
+    if (tenant.income_sources?.scholarship) {
+      optional.push({
+        category: "Revenus",
+        item: "Justificatifs bourse",
+        completed: !!(tenant.income_sources.scholarship.documents?.length > 0),
+        description: "Justificatifs de bourse",
+      })
+    }
+
+    // Fiscalité (obligatoire)
+    required.push({
+      category: "Fiscalité",
+      item: "Situation fiscale",
+      completed: !!tenant.tax_situation?.type,
+      description: "Votre situation fiscale",
+    })
+
+    required.push({
+      category: "Fiscalité",
+      item: "Avis d'imposition",
+      completed: !!(tenant.tax_situation?.documents?.length > 0),
+      description: "Avis d'imposition ou justificatif fiscal",
+    })
+
+    // Situation de location (obligatoire)
+    required.push({
+      category: "Situation de location",
+      item: "Type de location",
+      completed: !!fileData.rental_situation,
+      description: "Seul, en couple ou en colocation",
+    })
+
+    // Colocataires (si applicable)
+    if (fileData.rental_situation === "colocation" || fileData.rental_situation === "couple") {
+      const expectedCotenants = fileData.rental_situation === "couple" ? 1 : 1 // Au moins 1
+      const hasCotenants = fileData.cotenants && fileData.cotenants.length >= expectedCotenants
+
+      required.push({
+        category: "Colocataires",
+        item: fileData.rental_situation === "couple" ? "Profil conjoint(e)" : "Profils colocataires",
+        completed: hasCotenants,
+        description: `Profil(s) des ${fileData.rental_situation === "couple" ? "conjoint(e)" : "colocataires"}`,
+      })
+
+      // Vérifier la complétude de chaque colocataire
+      fileData.cotenants?.forEach((cotenant: any, index: number) => {
+        const cotenantDiagnostic = this.getDiagnostic({ main_tenant: cotenant })
+        cotenantDiagnostic.required.forEach((item) => {
+          required.push({
+            category: `${fileData.rental_situation === "couple" ? "Conjoint(e)" : `Colocataire ${index + 1}`}`,
+            item: item.item,
+            completed: item.completed,
+            description: item.description,
+          })
+        })
+      })
+    }
+
+    // Garants (optionnel mais recommandé)
+    optional.push({
+      category: "Garants",
+      item: "Au moins un garant",
+      completed: !!(fileData.guarantors && fileData.guarantors.length > 0),
+      description: "Garant pour renforcer le dossier",
+    })
+
+    return { required, optional }
   },
+
+  // Calculer le score de validation
+  // calculateValidationScore(fileData: Partial<RentalFileData>): number {
+  //   let score = 0
+
+  //   if (!fileData.main_tenant) return 0
+
+  //   const tenant = fileData.main_tenant
+
+  //   // Score basé sur l'activité principale
+  //   switch (tenant.main_activity) {
+  //     case "cdi":
+  //     case "fonction_publique":
+  //       score += 40
+  //       break
+  //     case "cdd":
+  //     case "alternance":
+  //       score += 30
+  //       break
+  //     case "retraite":
+  //       score += 35
+  //       break
+  //     case "independant":
+  //       score += 25
+  //       break
+  //     case "etudes":
+  //       score += 20
+  //       break
+  //     case "chomage":
+  //       score += 15
+  //       break
+  //     default:
+  //       score += 10
+  //   }
+
+  //   // Score basé sur les revenus
+  //   const totalIncome = this.calculateTotalIncome(tenant.income_sources)
+  //   if (totalIncome >= 3000) score += 25
+  //   else if (totalIncome >= 2000) score += 20
+  //   else if (totalIncome >= 1500) score += 15
+  //   else if (totalIncome > 0) score += 10
+
+  //   // Score basé sur les documents
+  //   if (tenant.identity_documents?.length > 0) score += 5
+  //   if (tenant.activity_documents?.length > 0) score += 5
+  //   if (tenant.tax_situation?.documents?.length > 0) score += 5
+
+  //   // Bonus pour garants
+  //   if (fileData.guarantors && fileData.guarantors.length > 0) {
+  //     score += 15
+  //   }
+
+  //   return Math.min(score, 100)
+  // },
 
   // Calculer le total des revenus
   calculateTotalIncome(incomeSources: any): number {
@@ -535,9 +733,9 @@ export const rentalFileService = {
       recommendations.push("Complétez votre dossier à au moins 70%")
     }
 
-    if (fileData.validation_score < 40) {
-      recommendations.push("Ajoutez un garant pour renforcer votre dossier")
-    }
+    // if (fileData.validation_score < 40) {
+    //   recommendations.push("Ajoutez un garant pour renforcer votre dossier")
+    // }
 
     return {
       eligible: reasons.length === 0,
