@@ -436,39 +436,43 @@ export const rentalFileService = {
     }
   },
 
-  // Obtenir la liste des documents manquants
-  getMissingDocuments(fileData: RentalFileData | null): string[] {
-    const missingDocs = []
-
-    if (!fileData || !fileData.main_tenant) {
-      return ["Dossier de location incomplet"]
-    }
-
-    // Vérification des documents d'identité
-    if (!fileData.main_tenant.identity_documents?.length) {
-      missingDocs.push("Pièce d'identité")
-    }
-
-    // Vérification des documents fiscaux
-    if (!fileData.main_tenant.tax_situation?.documents?.length) {
-      missingDocs.push("Avis d'imposition")
-    }
-
-    // Vérification des justificatifs de revenus
-    const incomeSources = fileData.main_tenant.income_sources || {}
-
-    if (incomeSources.work_income && !incomeSources.work_income.documents?.length) {
-      missingDocs.push("Justificatifs de revenus du travail")
-    }
-
-    if (incomeSources.social_aid?.some((aid) => !aid.documents?.length)) {
-      missingDocs.push("Justificatifs d'aides sociales")
-    }
-
-    if (incomeSources.retirement_pension?.some((pension) => !pension.documents?.length)) {
-      missingDocs.push("Justificatifs de pension")
-    }
-
-    return missingDocs
+  // Obtenir les documents requis selon la situation
+  getRequiredDocuments(situation: string): any {
+    return DOCUMENT_REQUIREMENTS[situation as keyof typeof DOCUMENT_REQUIREMENTS] || DOCUMENT_REQUIREMENTS.employee
   },
+
+  // Vérifier si le dossier est éligible pour candidature
+  isEligibleForApplication(fileData: RentalFileData | null): {
+    eligible: boolean
+    reasons: string[]
+    recommendations: string[]
+  } {
+    const reasons: string[] = []
+    const recommendations: string[] = []
+
+    if (!fileData) {
+      return {
+        eligible: false,
+        reasons: ["Aucun dossier de location"],
+        recommendations: ["Créez votre dossier de location"],
+      }
+    }
+
+    // Vérifications obligatoires
+    if (!fileData.main_tenant?.documents?.identity?.length) {
+      reasons.push("Pièce d'identité manquante")
+    }
+
+    if (!fileData.main_tenant?.documents?.tax_notice) {
+      reasons.push("Avis d'imposition manquant")
+    }
+
+    if (fileData.completion_percentage < 70) {
+      reasons.push("Dossier incomplet")
+      recommendations.push("Complétez votre dossier à au moins 70%")
+    }
+
+    if (fileData.validation_score < 40) {
+      recommendations.push("Ajoutez un garant pour renforcer votre dossier")
+    }
 }
