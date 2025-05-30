@@ -15,11 +15,18 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     doc.setFont(options.font || "helvetica", options.style || "normal")
 
     if (options.color) {
-      doc.setTextColor(
-        Array.isArray(options.color)
-          ? `rgb(${options.color[0]}, ${options.color[1]}, ${options.color[2]})`
-          : options.color,
-      )
+      if (Array.isArray(options.color)) {
+        // Si c'est un array, on attend [r, g, b] en valeurs numériques
+        if (options.color.length === 3) {
+          doc.setTextColor(options.color[0], options.color[1], options.color[2])
+        } else {
+          // Si c'est un array avec une seule couleur hex, on l'utilise directement
+          doc.setTextColor(options.color[0])
+        }
+      } else {
+        // Si c'est une string (hex), on l'utilise directement
+        doc.setTextColor(options.color)
+      }
     } else {
       doc.setTextColor("#000000")
     }
@@ -44,12 +51,12 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
   yPosition = addText("DOSSIER DE LOCATION NUMÉRIQUE", margin, 20, {
     fontSize: 20,
     style: "bold",
-    color: ["#FFFFFF"],
+    color: "#FFFFFF",
   })
 
   yPosition = addText(`Généré le ${new Date().toLocaleDateString("fr-FR")}`, margin, yPosition + 5, {
     fontSize: 10,
-    color: ["#FFFFFF"],
+    color: "#FFFFFF",
   })
 
   yPosition += 15
@@ -59,7 +66,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
   yPosition = addText("INFORMATIONS GÉNÉRALES", margin, yPosition, {
     fontSize: 16,
     style: "bold",
-    color: ["#3B82F6"],
+    color: "#3B82F6",
   })
 
   yPosition += 5
@@ -86,7 +93,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
   yPosition = addText("LOCATAIRE PRINCIPAL", margin, yPosition, {
     fontSize: 16,
     style: "bold",
-    color: ["#3B82F6"],
+    color: "#3B82F6",
   })
 
   yPosition += 5
@@ -215,7 +222,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     yPosition = addText(rentalFile.rental_situation === "couple" ? "CONJOINT(E)" : "COLOCATAIRES", margin, yPosition, {
       fontSize: 16,
       style: "bold",
-      color: ["#3B82F6"],
+      color: "#3B82F6",
     })
 
     yPosition += 5
@@ -248,7 +255,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     yPosition = addText("GARANTS", margin, yPosition, {
       fontSize: 16,
       style: "bold",
-      color: ["#3B82F6"],
+      color: "#3B82F6",
     })
 
     yPosition += 5
