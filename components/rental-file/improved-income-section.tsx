@@ -38,30 +38,73 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
       const fileUrls = Array.from(files).map((file) => URL.createObjectURL(file))
 
       const updatedProfile = { ...profile }
+      if (!updatedProfile.income_sources) updatedProfile.income_sources = {}
 
-      // Gestion des différents types de documents
-      if (category.startsWith("income_")) {
-        // Documents de revenus
-        const [_, source, type] = category.split("_")
-        if (!updatedProfile.income_sources) updatedProfile.income_sources = {}
-
-        if (Array.isArray(updatedProfile.income_sources[source])) {
-          const index = Number.parseInt(type)
-          if (updatedProfile.income_sources[source][index]) {
-            updatedProfile.income_sources[source][index].documents = [
-              ...(updatedProfile.income_sources[source][index].documents || []),
-              ...fileUrls,
-            ]
-          }
-        } else {
-          if (!updatedProfile.income_sources[source]) {
-            updatedProfile.income_sources[source] = { documents: [] }
-          }
-          updatedProfile.income_sources[source].documents = [
-            ...(updatedProfile.income_sources[source].documents || []),
-            ...fileUrls,
-          ]
+      // Gestion spécifique pour les revenus du travail
+      if (category === "income_work_income") {
+        if (!updatedProfile.income_sources.work_income) {
+          updatedProfile.income_sources.work_income = { documents: [] }
         }
+        updatedProfile.income_sources.work_income.documents = [
+          ...(updatedProfile.income_sources.work_income.documents || []),
+          ...fileUrls,
+        ]
+      }
+      // Gestion pour les aides sociales
+      else if (category.startsWith("income_social_aid_")) {
+        const index = Number.parseInt(category.split("_")[3])
+        if (!updatedProfile.income_sources.social_aid) updatedProfile.income_sources.social_aid = []
+        if (!updatedProfile.income_sources.social_aid[index]) {
+          updatedProfile.income_sources.social_aid[index] = { documents: [] }
+        }
+        updatedProfile.income_sources.social_aid[index].documents = [
+          ...(updatedProfile.income_sources.social_aid[index].documents || []),
+          ...fileUrls,
+        ]
+      }
+      // Gestion pour les retraites/pensions
+      else if (category.startsWith("income_retirement_pension_")) {
+        const index = Number.parseInt(category.split("_")[3])
+        if (!updatedProfile.income_sources.retirement_pension) updatedProfile.income_sources.retirement_pension = []
+        if (!updatedProfile.income_sources.retirement_pension[index]) {
+          updatedProfile.income_sources.retirement_pension[index] = { documents: [] }
+        }
+        updatedProfile.income_sources.retirement_pension[index].documents = [
+          ...(updatedProfile.income_sources.retirement_pension[index].documents || []),
+          ...fileUrls,
+        ]
+      }
+      // Gestion pour les rentes
+      else if (category.startsWith("income_rent_income_")) {
+        const index = Number.parseInt(category.split("_")[3])
+        if (!updatedProfile.income_sources.rent_income) updatedProfile.income_sources.rent_income = []
+        if (!updatedProfile.income_sources.rent_income[index]) {
+          updatedProfile.income_sources.rent_income[index] = { documents: [] }
+        }
+        updatedProfile.income_sources.rent_income[index].documents = [
+          ...(updatedProfile.income_sources.rent_income[index].documents || []),
+          ...fileUrls,
+        ]
+      }
+      // Gestion pour les bourses
+      else if (category === "income_scholarship") {
+        if (!updatedProfile.income_sources.scholarship) {
+          updatedProfile.income_sources.scholarship = { documents: [] }
+        }
+        updatedProfile.income_sources.scholarship.documents = [
+          ...(updatedProfile.income_sources.scholarship.documents || []),
+          ...fileUrls,
+        ]
+      }
+      // Gestion pour pas de revenus
+      else if (category === "income_no_income") {
+        if (!updatedProfile.income_sources.no_income) {
+          updatedProfile.income_sources.no_income = { documents: [] }
+        }
+        updatedProfile.income_sources.no_income.documents = [
+          ...(updatedProfile.income_sources.no_income.documents || []),
+          ...fileUrls,
+        ]
       }
 
       onUpdate(updatedProfile)
@@ -152,19 +195,45 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
 
     const removeFile = (fileIndex: number) => {
       const updatedProfile = { ...profile }
-      const [_, source, typeStr] = category.split("_")
 
-      if (Array.isArray(updatedProfile.income_sources[source])) {
-        const index = Number.parseInt(typeStr)
-        if (updatedProfile.income_sources[source][index]?.documents) {
-          updatedProfile.income_sources[source][index].documents = updatedProfile.income_sources[source][
+      if (category === "income_work_income") {
+        if (updatedProfile.income_sources?.work_income?.documents) {
+          updatedProfile.income_sources.work_income.documents =
+            updatedProfile.income_sources.work_income.documents.filter((_: any, i: number) => i !== fileIndex)
+        }
+      } else if (category.startsWith("income_social_aid_")) {
+        const index = Number.parseInt(category.split("_")[3])
+        if (updatedProfile.income_sources?.social_aid?.[index]?.documents) {
+          updatedProfile.income_sources.social_aid[index].documents = updatedProfile.income_sources.social_aid[
             index
           ].documents.filter((_: any, i: number) => i !== fileIndex)
         }
-      } else if (updatedProfile.income_sources[source]?.documents) {
-        updatedProfile.income_sources[source].documents = updatedProfile.income_sources[source].documents.filter(
-          (_: any, i: number) => i !== fileIndex,
-        )
+      } else if (category.startsWith("income_retirement_pension_")) {
+        const index = Number.parseInt(category.split("_")[3])
+        if (updatedProfile.income_sources?.retirement_pension?.[index]?.documents) {
+          updatedProfile.income_sources.retirement_pension[index].documents =
+            updatedProfile.income_sources.retirement_pension[index].documents.filter(
+              (_: any, i: number) => i !== fileIndex,
+            )
+        }
+      } else if (category.startsWith("income_rent_income_")) {
+        const index = Number.parseInt(category.split("_")[3])
+        if (updatedProfile.income_sources?.rent_income?.[index]?.documents) {
+          updatedProfile.income_sources.rent_income[index].documents = updatedProfile.income_sources.rent_income[
+            index
+          ].documents.filter((_: any, i: number) => i !== fileIndex)
+        }
+      } else if (category === "income_scholarship") {
+        if (updatedProfile.income_sources?.scholarship?.documents) {
+          updatedProfile.income_sources.scholarship.documents =
+            updatedProfile.income_sources.scholarship.documents.filter((_: any, i: number) => i !== fileIndex)
+        }
+      } else if (category === "income_no_income") {
+        if (updatedProfile.income_sources?.no_income?.documents) {
+          updatedProfile.income_sources.no_income.documents = updatedProfile.income_sources.no_income.documents.filter(
+            (_: any, i: number) => i !== fileIndex,
+          )
+        }
       }
 
       onUpdate(updatedProfile)
