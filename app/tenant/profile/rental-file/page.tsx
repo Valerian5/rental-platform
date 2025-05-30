@@ -7,9 +7,20 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Label } from "@/components/ui/label"
-import { ArrowLeft, ArrowRight, Users, Shield, CheckCircle, Plus, AlertCircle, X, Eye } from "lucide-react"
+import {
+  ArrowLeft,
+  ArrowRight,
+  Users,
+  Shield,
+  CheckCircle,
+  Plus,
+  AlertCircle,
+  X,
+  Eye,
+  User,
+  Home,
+  Heart,
+} from "lucide-react"
 import { rentalFileService, RENTAL_SITUATIONS, GUARANTOR_TYPES } from "@/lib/rental-file-service"
 import { authService } from "@/lib/auth-service"
 import { ImprovedPersonProfile } from "@/components/rental-file/improved-person-profile"
@@ -25,7 +36,7 @@ export default function RentalFilePage() {
   const [currentStep, setCurrentStep] = useState(1)
   const [showViewer, setShowViewer] = useState(false)
 
-  const totalSteps = 3 // Suppression de l'étape logement
+  const totalSteps = 3
 
   useEffect(() => {
     const fetchData = async () => {
@@ -130,6 +141,50 @@ export default function RentalFilePage() {
     }
   }
 
+  // Fonction pour obtenir l'icône de chaque étape principale
+  const getStepIcon = (step: number) => {
+    switch (step) {
+      case 1:
+        return <User className="h-4 w-4" />
+      case 2:
+        return <Users className="h-4 w-4" />
+      case 3:
+        return <Shield className="h-4 w-4" />
+      default:
+        return <CheckCircle className="h-4 w-4" />
+    }
+  }
+
+  // Fonction pour obtenir l'icône de situation de location
+  const getSituationIcon = (situation: string) => {
+    switch (situation) {
+      case "alone":
+        return <User className="h-6 w-6" />
+      case "couple":
+        return <Heart className="h-6 w-6" />
+      case "colocation":
+        return <Users className="h-6 w-6" />
+      default:
+        return <Home className="h-6 w-6" />
+    }
+  }
+
+  // Fonction pour obtenir l'icône de type de garant
+  const getGuarantorIcon = (type: string) => {
+    switch (type) {
+      case "physical":
+        return <User className="h-6 w-6" />
+      case "organism":
+        return <Shield className="h-6 w-6" />
+      case "moral_person":
+        return <Users className="h-6 w-6" />
+      case "none":
+        return <X className="h-6 w-6" />
+      default:
+        return <Shield className="h-6 w-6" />
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="container mx-auto py-8">
@@ -202,18 +257,43 @@ export default function RentalFilePage() {
           </div>
         </div>
 
-        {/* Progression */}
+        {/* Progression principale avec icônes */}
         <Card>
           <CardContent className="p-6">
             <div className="mb-4">
               <Progress value={(currentStep / totalSteps) * 100} className="h-3" />
             </div>
-            <div className="flex justify-between text-sm">
-              <span className={currentStep >= 1 ? "text-blue-600 font-medium" : "text-gray-500"}>
-                1. Locataire principal
-              </span>
-              <span className={currentStep >= 2 ? "text-blue-600 font-medium" : "text-gray-500"}>2. Colocataires</span>
-              <span className={currentStep >= 3 ? "text-blue-600 font-medium" : "text-gray-500"}>3. Garants</span>
+            <div className="flex justify-between">
+              <div className="flex flex-col items-center space-y-2">
+                <div
+                  className={`p-2 rounded-full ${currentStep >= 1 ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-400"}`}
+                >
+                  {getStepIcon(1)}
+                </div>
+                <span className={`text-sm font-medium ${currentStep >= 1 ? "text-blue-600" : "text-gray-500"}`}>
+                  Locataire principal
+                </span>
+              </div>
+              <div className="flex flex-col items-center space-y-2">
+                <div
+                  className={`p-2 rounded-full ${currentStep >= 2 ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-400"}`}
+                >
+                  {getStepIcon(2)}
+                </div>
+                <span className={`text-sm font-medium ${currentStep >= 2 ? "text-blue-600" : "text-gray-500"}`}>
+                  Colocataires
+                </span>
+              </div>
+              <div className="flex flex-col items-center space-y-2">
+                <div
+                  className={`p-2 rounded-full ${currentStep >= 3 ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-400"}`}
+                >
+                  {getStepIcon(3)}
+                </div>
+                <span className={`text-sm font-medium ${currentStep >= 3 ? "text-blue-600" : "text-gray-500"}`}>
+                  Garants
+                </span>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -249,24 +329,39 @@ export default function RentalFilePage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div>
-                  <RadioGroup
-                    value={rentalFile?.rental_situation || "alone"}
-                    onValueChange={(value) => handleUpdateData({ rental_situation: value })}
-                    className="mt-2"
-                  >
-                    {RENTAL_SITUATIONS.map((option) => (
-                      <div key={option.value} className="space-y-2">
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value={option.value} id={option.value} />
-                          <Label htmlFor={option.value} className="font-medium">
-                            {option.label}
-                          </Label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {RENTAL_SITUATIONS.map((option) => (
+                    <div
+                      key={option.value}
+                      onClick={() => handleUpdateData({ rental_situation: option.value })}
+                      className={`p-4 rounded-lg border-2 cursor-pointer transition-all hover:shadow-md ${
+                        rentalFile?.rental_situation === option.value
+                          ? "border-blue-500 bg-blue-50"
+                          : "border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      <div className="flex flex-col items-center text-center space-y-3">
+                        <div
+                          className={`p-3 rounded-full ${
+                            rentalFile?.rental_situation === option.value
+                              ? "bg-blue-100 text-blue-600"
+                              : "bg-gray-100 text-gray-500"
+                          }`}
+                        >
+                          {getSituationIcon(option.value)}
                         </div>
-                        <p className="text-sm text-gray-600 ml-6">{option.description}</p>
+                        <div>
+                          <h3 className="font-medium text-gray-900 mb-1">{option.label}</h3>
+                          <p className="text-sm text-gray-600">{option.description}</p>
+                        </div>
+                        {rentalFile?.rental_situation === option.value && (
+                          <Badge variant="default" className="text-xs">
+                            Sélectionné
+                          </Badge>
+                        )}
                       </div>
-                    ))}
-                  </RadioGroup>
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
@@ -378,30 +473,47 @@ export default function RentalFilePage() {
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div>
-                    <Label>Type de garant</Label>
-                    <RadioGroup
-                      value={guarantor.type || "physical"}
-                      onValueChange={(value) => {
-                        const updatedGuarantor = { ...guarantor, type: value }
-                        if (value === "physical" && !updatedGuarantor.personal_info) {
-                          updatedGuarantor.personal_info = rentalFileService.createEmptyTenantProfile("main")
-                        }
-                        updateGuarantor(index, updatedGuarantor)
-                      }}
-                      className="mt-2"
-                    >
+                    <h3 className="font-medium text-gray-900 mb-4">Type de garant</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                       {GUARANTOR_TYPES.map((type) => (
-                        <div key={type.value} className="space-y-2">
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value={type.value} id={`${type.value}_${index}`} />
-                            <Label htmlFor={`${type.value}_${index}`} className="font-medium">
-                              {type.label}
-                            </Label>
+                        <div
+                          key={type.value}
+                          onClick={() => {
+                            const updatedGuarantor = { ...guarantor, type: type.value }
+                            if (type.value === "physical" && !updatedGuarantor.personal_info) {
+                              updatedGuarantor.personal_info = rentalFileService.createEmptyTenantProfile("main")
+                            }
+                            updateGuarantor(index, updatedGuarantor)
+                          }}
+                          className={`p-4 rounded-lg border-2 cursor-pointer transition-all hover:shadow-md ${
+                            guarantor.type === type.value
+                              ? "border-blue-500 bg-blue-50"
+                              : "border-gray-200 hover:border-gray-300"
+                          }`}
+                        >
+                          <div className="flex flex-col items-center text-center space-y-3">
+                            <div
+                              className={`p-3 rounded-full ${
+                                guarantor.type === type.value
+                                  ? "bg-blue-100 text-blue-600"
+                                  : "bg-gray-100 text-gray-500"
+                              }`}
+                            >
+                              {getGuarantorIcon(type.value)}
+                            </div>
+                            <div>
+                              <h4 className="font-medium text-gray-900 mb-1">{type.label}</h4>
+                              <p className="text-xs text-gray-600">{type.description}</p>
+                            </div>
+                            {guarantor.type === type.value && (
+                              <Badge variant="default" className="text-xs">
+                                Sélectionné
+                              </Badge>
+                            )}
                           </div>
-                          <p className="text-sm text-gray-600 ml-6">{type.description}</p>
                         </div>
                       ))}
-                    </RadioGroup>
+                    </div>
                   </div>
 
                   {guarantor.type === "physical" && guarantor.personal_info && (
@@ -418,24 +530,47 @@ export default function RentalFilePage() {
                   {guarantor.type === "organism" && (
                     <div className="space-y-4">
                       <div>
-                        <Label>Type d'organisme</Label>
-                        <RadioGroup
-                          value={guarantor.organism_type || "visale"}
-                          onValueChange={(value) => {
-                            const updatedGuarantor = { ...guarantor, organism_type: value }
-                            updateGuarantor(index, updatedGuarantor)
-                          }}
-                          className="mt-2"
-                        >
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="visale" id={`visale_${index}`} />
-                            <Label htmlFor={`visale_${index}`}>Garantie Visale</Label>
+                        <h4 className="font-medium text-gray-900 mb-3">Type d'organisme</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div
+                            onClick={() => {
+                              const updatedGuarantor = { ...guarantor, organism_type: "visale" }
+                              updateGuarantor(index, updatedGuarantor)
+                            }}
+                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                              guarantor.organism_type === "visale"
+                                ? "border-green-500 bg-green-50"
+                                : "border-gray-200 hover:border-gray-300"
+                            }`}
+                          >
+                            <div className="flex items-center space-x-3">
+                              <Shield className="h-5 w-5 text-green-600" />
+                              <div>
+                                <h5 className="font-medium">Garantie Visale</h5>
+                                <p className="text-sm text-gray-600">Gratuite et sécurisée</p>
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="autre" id={`autre_organism_${index}`} />
-                            <Label htmlFor={`autre_organism_${index}`}>Autre organisme</Label>
+                          <div
+                            onClick={() => {
+                              const updatedGuarantor = { ...guarantor, organism_type: "autre" }
+                              updateGuarantor(index, updatedGuarantor)
+                            }}
+                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                              guarantor.organism_type === "autre"
+                                ? "border-blue-500 bg-blue-50"
+                                : "border-gray-200 hover:border-gray-300"
+                            }`}
+                          >
+                            <div className="flex items-center space-x-3">
+                              <Users className="h-5 w-5 text-blue-600" />
+                              <div>
+                                <h5 className="font-medium">Autre organisme</h5>
+                                <p className="text-sm text-gray-600">Organisme privé</p>
+                              </div>
+                            </div>
                           </div>
-                        </RadioGroup>
+                        </div>
                       </div>
 
                       {guarantor.organism_type === "visale" && (
@@ -458,7 +593,12 @@ export default function RentalFilePage() {
                   {guarantor.type === "moral_person" && (
                     <div className="space-y-4">
                       <div>
-                        <Label htmlFor={`company_name_${index}`}>Nom de la personne morale</Label>
+                        <label
+                          htmlFor={`company_name_${index}`}
+                          className="block text-sm font-medium text-gray-700 mb-2"
+                        >
+                          Nom de la personne morale
+                        </label>
                         <Input
                           id={`company_name_${index}`}
                           placeholder="Nom de l'entreprise"

@@ -9,7 +9,19 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { Upload, X, User, Briefcase, FileText, ChevronRight, Home, CheckCircle, AlertTriangle } from "lucide-react"
+import {
+  Upload,
+  X,
+  User,
+  Briefcase,
+  FileText,
+  ChevronRight,
+  Home,
+  CheckCircle,
+  AlertTriangle,
+  Euro,
+  CreditCard,
+} from "lucide-react"
 import { MAIN_ACTIVITIES, TAX_SITUATIONS, CURRENT_HOUSING_SITUATIONS } from "@/lib/rental-file-service"
 import { toast } from "sonner"
 import { ImprovedIncomeSection } from "./improved-income-section"
@@ -159,69 +171,6 @@ export function ImprovedPersonProfile({
     }
   }
 
-  const addIncomeSource = (sourceType: string) => {
-    const updatedProfile = { ...profile }
-    if (!updatedProfile.income_sources) updatedProfile.income_sources = {}
-
-    switch (sourceType) {
-      case "social_aid":
-        if (!updatedProfile.income_sources.social_aid) updatedProfile.income_sources.social_aid = []
-        updatedProfile.income_sources.social_aid.push({
-          type: "caf_msa",
-          duration: "plus_3_mois",
-          amount: 0,
-          documents: [],
-        })
-        break
-      case "retirement_pension":
-        if (!updatedProfile.income_sources.retirement_pension) updatedProfile.income_sources.retirement_pension = []
-        updatedProfile.income_sources.retirement_pension.push({
-          type: "retraite",
-          amount: 0,
-          documents: [],
-        })
-        break
-      case "rent_income":
-        if (!updatedProfile.income_sources.rent_income) updatedProfile.income_sources.rent_income = []
-        updatedProfile.income_sources.rent_income.push({
-          type: "revenus_locatifs",
-          amount: 0,
-          documents: [],
-        })
-        break
-    }
-
-    onUpdate(updatedProfile)
-  }
-
-  const removeIncomeSource = (sourceType: string, index: number) => {
-    const updatedProfile = { ...profile }
-    if (updatedProfile.income_sources?.[sourceType]) {
-      updatedProfile.income_sources[sourceType].splice(index, 1)
-      onUpdate(updatedProfile)
-    }
-  }
-
-  const updateIncomeSource = (sourceType: string, index: number | null, field: string, value: any) => {
-    const updatedProfile = { ...profile }
-    if (!updatedProfile.income_sources) updatedProfile.income_sources = {}
-
-    if (index !== null) {
-      if (!updatedProfile.income_sources[sourceType]) updatedProfile.income_sources[sourceType] = []
-      if (!updatedProfile.income_sources[sourceType][index]) {
-        updatedProfile.income_sources[sourceType][index] = { documents: [] }
-      }
-      updatedProfile.income_sources[sourceType][index][field] = value
-    } else {
-      if (!updatedProfile.income_sources[sourceType]) {
-        updatedProfile.income_sources[sourceType] = { documents: [] }
-      }
-      updatedProfile.income_sources[sourceType][field] = value
-    }
-
-    onUpdate(updatedProfile)
-  }
-
   const FileUploadZone = ({
     category,
     label,
@@ -325,6 +274,24 @@ export function ImprovedPersonProfile({
     )
   }
 
+  // Fonction pour obtenir l'icône de chaque sous-étape
+  const getSubStepIcon = (step: number) => {
+    switch (step) {
+      case 1:
+        return <User className="h-4 w-4" />
+      case 2:
+        return <Home className="h-4 w-4" />
+      case 3:
+        return <Briefcase className="h-4 w-4" />
+      case 4:
+        return <Euro className="h-4 w-4" />
+      case 5:
+        return <CreditCard className="h-4 w-4" />
+      default:
+        return <CheckCircle className="h-4 w-4" />
+    }
+  }
+
   const completion = calculateStepCompletion()
 
   return (
@@ -344,15 +311,60 @@ export function ImprovedPersonProfile({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Progression des sous-étapes */}
+        {/* Progression des sous-étapes avec icônes */}
         <div className="space-y-4">
           <Progress value={(currentSubStep / totalSubSteps) * 100} className="h-2" />
-          <div className="flex justify-between text-xs text-gray-600">
-            <span className={currentSubStep >= 1 ? "text-blue-600 font-medium" : ""}>Identité</span>
-            <span className={currentSubStep >= 2 ? "text-blue-600 font-medium" : ""}>Logement</span>
-            <span className={currentSubStep >= 3 ? "text-blue-600 font-medium" : ""}>Activité</span>
-            <span className={currentSubStep >= 4 ? "text-blue-600 font-medium" : ""}>Revenus</span>
-            <span className={currentSubStep >= 5 ? "text-blue-600 font-medium" : ""}>Fiscalité</span>
+          <div className="flex justify-between">
+            <div className="flex flex-col items-center space-y-1">
+              <div
+                className={`p-1 rounded-full ${currentSubStep >= 1 ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-400"}`}
+              >
+                {getSubStepIcon(1)}
+              </div>
+              <span className={`text-xs ${currentSubStep >= 1 ? "text-blue-600 font-medium" : "text-gray-500"}`}>
+                Identité
+              </span>
+            </div>
+            <div className="flex flex-col items-center space-y-1">
+              <div
+                className={`p-1 rounded-full ${currentSubStep >= 2 ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-400"}`}
+              >
+                {getSubStepIcon(2)}
+              </div>
+              <span className={`text-xs ${currentSubStep >= 2 ? "text-blue-600 font-medium" : "text-gray-500"}`}>
+                Logement
+              </span>
+            </div>
+            <div className="flex flex-col items-center space-y-1">
+              <div
+                className={`p-1 rounded-full ${currentSubStep >= 3 ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-400"}`}
+              >
+                {getSubStepIcon(3)}
+              </div>
+              <span className={`text-xs ${currentSubStep >= 3 ? "text-blue-600 font-medium" : "text-gray-500"}`}>
+                Activité
+              </span>
+            </div>
+            <div className="flex flex-col items-center space-y-1">
+              <div
+                className={`p-1 rounded-full ${currentSubStep >= 4 ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-400"}`}
+              >
+                {getSubStepIcon(4)}
+              </div>
+              <span className={`text-xs ${currentSubStep >= 4 ? "text-blue-600 font-medium" : "text-gray-500"}`}>
+                Revenus
+              </span>
+            </div>
+            <div className="flex flex-col items-center space-y-1">
+              <div
+                className={`p-1 rounded-full ${currentSubStep >= 5 ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-400"}`}
+              >
+                {getSubStepIcon(5)}
+              </div>
+              <span className={`text-xs ${currentSubStep >= 5 ? "text-blue-600 font-medium" : "text-gray-500"}`}>
+                Fiscalité
+              </span>
+            </div>
           </div>
         </div>
 
@@ -591,7 +603,7 @@ export function ImprovedPersonProfile({
         {currentSubStep === 5 && (
           <div className="space-y-6">
             <div className="flex items-center space-x-2 mb-4">
-              <FileText className="h-5 w-5 text-blue-600" />
+              <CreditCard className="h-5 w-5 text-blue-600" />
               <h3 className="text-lg font-medium">Avis d'imposition</h3>
             </div>
 
