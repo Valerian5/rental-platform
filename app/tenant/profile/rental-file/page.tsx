@@ -1,16 +1,15 @@
 "use client"
 
-import { Input } from "@/components/ui/input"
-
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { ArrowLeft, ArrowRight, Users, Home, Shield, CheckCircle, Plus, AlertCircle, X } from "lucide-react"
-import { rentalFileService, GUARANTOR_TYPES } from "@/lib/rental-file-service"
+import { rentalFileService, RENTAL_SITUATIONS, CURRENT_HOUSING_TYPES } from "@/lib/rental-file-service"
 import { authService } from "@/lib/auth-service"
 import { PersonProfileForm } from "@/components/rental-file/person-profile-form"
 import { toast } from "sonner"
@@ -64,7 +63,23 @@ export default function RentalFilePage() {
   }
 
   const addCotenant = () => {
-    const newCotenant = rentalFileService.createEmptyProfile("cotenant")
+    const newCotenant = {
+      type: "cotenant",
+      first_name: "",
+      last_name: "",
+      birth_date: "",
+      birth_place: "",
+      nationality: "française",
+      situation: "employee",
+      monthly_income: 0,
+      documents: {
+        identity: [],
+        income_proof: [],
+        tax_notice: "",
+        other: [],
+      },
+    }
+
     const updatedCotenants = [...(rentalFile.cotenants || []), newCotenant]
     handleUpdateData({ cotenants: updatedCotenants })
   }
@@ -75,13 +90,26 @@ export default function RentalFilePage() {
   }
 
   const updateCotenant = (index: number, updatedCotenant: any) => {
-    const updatedCotenants = [...rentalFile.cotenants]
+    const updatedCotenants = [...(rentalFile.cotenants || [])]
     updatedCotenants[index] = updatedCotenant
     handleUpdateData({ cotenants: updatedCotenants })
   }
 
   const addGuarantor = () => {
-    const newGuarantor = rentalFileService.createEmptyProfile("guarantor")
+    const newGuarantor = {
+      type: "physical",
+      first_name: "",
+      last_name: "",
+      birth_date: "",
+      monthly_income: 0,
+      documents: {
+        identity: [],
+        income_proof: [],
+        tax_notice: "",
+        other: [],
+      },
+    }
+
     const updatedGuarantors = [...(rentalFile.guarantors || []), newGuarantor]
     handleUpdateData({ guarantors: updatedGuarantors })
   }
@@ -92,7 +120,7 @@ export default function RentalFilePage() {
   }
 
   const updateGuarantor = (index: number, updatedGuarantor: any) => {
-    const updatedGuarantors = [...rentalFile.guarantors]
+    const updatedGuarantors = [...(rentalFile.guarantors || [])]
     updatedGuarantors[index] = updatedGuarantor
     handleUpdateData({ guarantors: updatedGuarantors })
   }
@@ -213,22 +241,17 @@ export default function RentalFilePage() {
                     onValueChange={(value) => handleUpdateData({ rental_situation: value })}
                     className="mt-2"
                   >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="alone" id="alone" />
-                      <Label htmlFor="alone">Je loue seul(e)</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="couple" id="couple" />
-                      <Label htmlFor="couple">En couple</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="colocation" id="colocation" />
-                      <Label htmlFor="colocation">En colocation</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="family" id="family" />
-                      <Label htmlFor="family">En famille</Label>
-                    </div>
+                    {RENTAL_SITUATIONS.map((option) => (
+                      <div key={option.value} className="space-y-2">
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value={option.value} id={option.value} />
+                          <Label htmlFor={option.value} className="font-medium">
+                            {option.label}
+                          </Label>
+                        </div>
+                        <p className="text-sm text-gray-600 ml-6">{option.description}</p>
+                      </div>
+                    ))}
                   </RadioGroup>
                 </div>
               </CardContent>
@@ -249,7 +272,7 @@ export default function RentalFilePage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {rentalFile?.cotenants?.length === 0 && (
+                    {(!rentalFile?.cotenants || rentalFile.cotenants.length === 0) && (
                       <div className="text-center py-8 text-gray-500">
                         <Users className="h-12 w-12 mx-auto mb-4 text-gray-300" />
                         <p>Aucun {rentalFile?.rental_situation === "couple" ? "conjoint(e)" : "colocataire"} ajouté</p>
@@ -306,28 +329,67 @@ export default function RentalFilePage() {
                   }
                   className="mt-2"
                 >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="tenant" id="tenant" />
-                    <Label htmlFor="tenant">Locataire</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="owner" id="owner" />
-                    <Label htmlFor="owner">Propriétaire</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="hosted" id="hosted" />
-                    <Label htmlFor="hosted">Hébergé</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="student_housing" id="student_housing" />
-                    <Label htmlFor="student_housing">Logement étudiant</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="other" id="other" />
-                    <Label htmlFor="other">Autre</Label>
-                  </div>
+                  {CURRENT_HOUSING_TYPES.map((option) => (
+                    <div key={option.value} className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value={option.value} id={option.value} />
+                        <Label htmlFor={option.value} className="font-medium">
+                          {option.label}
+                        </Label>
+                      </div>
+                      <p className="text-sm text-gray-600 ml-6">{option.description}</p>
+                    </div>
+                  ))}
                 </RadioGroup>
               </div>
+
+              {rentalFile?.current_housing?.type === "tenant" && (
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="current_address">Adresse actuelle</Label>
+                    <Input
+                      id="current_address"
+                      placeholder="Adresse complète"
+                      value={rentalFile?.current_housing?.address || ""}
+                      onChange={(e) =>
+                        handleUpdateData({
+                          current_housing: { ...rentalFile.current_housing, address: e.target.value },
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="current_rent">Loyer actuel (€)</Label>
+                    <Input
+                      id="current_rent"
+                      type="number"
+                      placeholder="800"
+                      value={rentalFile?.current_housing?.monthly_rent || ""}
+                      onChange={(e) =>
+                        handleUpdateData({
+                          current_housing: {
+                            ...rentalFile.current_housing,
+                            monthly_rent: Number.parseFloat(e.target.value) || 0,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="departure_date">Date de départ prévue</Label>
+                    <Input
+                      id="departure_date"
+                      type="date"
+                      value={rentalFile?.current_housing?.departure_date || ""}
+                      onChange={(e) =>
+                        handleUpdateData({
+                          current_housing: { ...rentalFile.current_housing, departure_date: e.target.value },
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="flex justify-between">
                 <Button variant="outline" onClick={prevStep}>
@@ -373,7 +435,7 @@ export default function RentalFilePage() {
                   </div>
                 </div>
 
-                {rentalFile?.guarantors?.length === 0 && (
+                {(!rentalFile?.guarantors || rentalFile.guarantors.length === 0) && (
                   <div className="text-center py-8 text-gray-500">
                     <Shield className="h-12 w-12 mx-auto mb-4 text-gray-300" />
                     <p>Aucun garant ajouté</p>
@@ -397,96 +459,99 @@ export default function RentalFilePage() {
                   <div>
                     <Label>Type de garant</Label>
                     <RadioGroup
-                      value={guarantor.guarantor_type || "person"}
+                      value={guarantor.type || "physical"}
                       onValueChange={(value) => {
-                        const updatedGuarantor = { ...guarantor, guarantor_type: value }
+                        const updatedGuarantor = { ...guarantor, type: value }
                         updateGuarantor(index, updatedGuarantor)
                       }}
                       className="mt-2"
                     >
-                      {GUARANTOR_TYPES.map((type) => (
-                        <div key={type.value} className="space-y-2">
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value={type.value} id={`${type.value}_${index}`} />
-                            <Label htmlFor={`${type.value}_${index}`} className="font-medium">
-                              {type.label}
-                            </Label>
-                          </div>
-                          <p className="text-sm text-gray-600 ml-6">{type.description}</p>
-                        </div>
-                      ))}
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="physical" id={`physical_${index}`} />
+                        <Label htmlFor={`physical_${index}`}>Personne physique</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="moral" id={`moral_${index}`} />
+                        <Label htmlFor={`moral_${index}`}>Personne morale</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="visale" id={`visale_${index}`} />
+                        <Label htmlFor={`visale_${index}`}>Garantie Visale</Label>
+                      </div>
                     </RadioGroup>
                   </div>
 
-                  {guarantor.guarantor_type === "person" && (
-                    <PersonProfileForm
-                      profile={guarantor}
-                      onUpdate={(updatedProfile) => updateGuarantor(index, updatedProfile)}
-                      title=""
-                    />
-                  )}
-
-                  {guarantor.guarantor_type === "organism" && (
+                  {guarantor.type === "physical" && (
                     <div className="space-y-4">
-                      <div>
-                        <Label>Type d'organisme</Label>
-                        <RadioGroup
-                          value={guarantor.organism_name || "visale"}
-                          onValueChange={(value) => {
-                            const updatedGuarantor = { ...guarantor, organism_name: value }
-                            updateGuarantor(index, updatedGuarantor)
-                          }}
-                          className="mt-2"
-                        >
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="visale" id={`visale_${index}`} />
-                            <Label htmlFor={`visale_${index}`}>Garantie Visale</Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="other" id={`other_organism_${index}`} />
-                            <Label htmlFor={`other_organism_${index}`}>Autre organisme</Label>
-                          </div>
-                        </RadioGroup>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor={`guarantor_first_name_${index}`}>Prénom</Label>
+                          <Input
+                            id={`guarantor_first_name_${index}`}
+                            value={guarantor.first_name || ""}
+                            onChange={(e) => {
+                              const updatedGuarantor = { ...guarantor, first_name: e.target.value }
+                              updateGuarantor(index, updatedGuarantor)
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor={`guarantor_last_name_${index}`}>Nom</Label>
+                          <Input
+                            id={`guarantor_last_name_${index}`}
+                            value={guarantor.last_name || ""}
+                            onChange={(e) => {
+                              const updatedGuarantor = { ...guarantor, last_name: e.target.value }
+                              updateGuarantor(index, updatedGuarantor)
+                            }}
+                          />
+                        </div>
                       </div>
 
-                      {guarantor.organism_name === "visale" && (
-                        <div className="bg-green-50 p-4 rounded-lg">
-                          <h4 className="font-medium text-green-800 mb-2">Garantie Visale</h4>
-                          <p className="text-sm text-green-700 mb-3">
-                            La garantie Visale est gratuite et couvre les loyers impayés. Vous devez faire votre demande
-                            sur le site d'Action Logement.
-                          </p>
-                          <Button variant="outline" size="sm" asChild>
-                            <a href="https://www.visale.fr" target="_blank" rel="noopener noreferrer">
-                              Faire ma demande Visale
-                            </a>
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {guarantor.guarantor_type === "moral_person" && (
-                    <div className="space-y-4">
                       <div>
-                        <Label htmlFor={`moral_person_name_${index}`}>Nom de la personne morale</Label>
+                        <Label htmlFor={`guarantor_income_${index}`}>Revenus mensuels (€)</Label>
                         <Input
-                          id={`moral_person_name_${index}`}
-                          placeholder="Nom de l'entreprise"
-                          value={guarantor.moral_person_name || ""}
+                          id={`guarantor_income_${index}`}
+                          type="number"
+                          value={guarantor.monthly_income || ""}
                           onChange={(e) => {
-                            const updatedGuarantor = { ...guarantor, moral_person_name: e.target.value }
+                            const updatedGuarantor = {
+                              ...guarantor,
+                              monthly_income: Number.parseFloat(e.target.value) || 0,
+                            }
                             updateGuarantor(index, updatedGuarantor)
                           }}
                         />
                       </div>
+                    </div>
+                  )}
 
-                      <div className="bg-yellow-50 p-4 rounded-lg">
-                        <p className="text-sm text-yellow-800">
-                          J'ajoute un extrait K bis de la société, ou toute autre pièce justifiant de l'existence légale
-                          de la personne.
-                        </p>
-                      </div>
+                  {guarantor.type === "moral" && (
+                    <div>
+                      <Label htmlFor={`company_name_${index}`}>Nom de l'entreprise</Label>
+                      <Input
+                        id={`company_name_${index}`}
+                        value={guarantor.company_name || ""}
+                        onChange={(e) => {
+                          const updatedGuarantor = { ...guarantor, company_name: e.target.value }
+                          updateGuarantor(index, updatedGuarantor)
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {guarantor.type === "visale" && (
+                    <div className="bg-green-50 p-4 rounded-lg">
+                      <h4 className="font-medium text-green-800 mb-2">Garantie Visale</h4>
+                      <p className="text-sm text-green-700 mb-3">
+                        La garantie Visale est gratuite et couvre les loyers impayés. Vous devez faire votre demande sur
+                        le site d'Action Logement.
+                      </p>
+                      <Button variant="outline" size="sm" asChild>
+                        <a href="https://www.visale.fr" target="_blank" rel="noopener noreferrer">
+                          Faire ma demande Visale
+                        </a>
+                      </Button>
                     </div>
                   )}
                 </CardContent>
