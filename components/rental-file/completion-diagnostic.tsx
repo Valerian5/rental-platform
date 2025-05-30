@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { CheckCircle, AlertTriangle, Info } from "lucide-react"
+import { CheckCircle, AlertTriangle, Info, User, FileText, Euro, Home, Shield } from "lucide-react"
 import { rentalFileService } from "@/lib/rental-file-service"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
@@ -13,7 +13,6 @@ interface CompletionDiagnosticProps {
   rentalFile: any
 }
 
-// Ajouter un état dans le composant
 export function CompletionDiagnostic({ rentalFile }: CompletionDiagnosticProps) {
   const [showCompleted, setShowCompleted] = useState(false)
   const diagnostic = rentalFileService.getDiagnostic(rentalFile)
@@ -27,6 +26,31 @@ export function CompletionDiagnostic({ rentalFile }: CompletionDiagnosticProps) 
   // Filtrer les éléments manquants
   const missingRequired = diagnostic.required.filter((item) => !item.completed)
 
+  // Icônes pour les étapes de progression
+  const getProgressIcon = (percentage: number, threshold: number) => {
+    if (percentage >= threshold) {
+      return <CheckCircle className="h-3 w-3 text-blue-600" />
+    }
+    return <div className="h-3 w-3 rounded-full border border-gray-300" />
+  }
+
+  const getStepIcon = (step: number) => {
+    switch (step) {
+      case 1:
+        return <User className="h-3 w-3" />
+      case 2:
+        return <FileText className="h-3 w-3" />
+      case 3:
+        return <Euro className="h-3 w-3" />
+      case 4:
+        return <Home className="h-3 w-3" />
+      case 5:
+        return <Shield className="h-3 w-3" />
+      default:
+        return <CheckCircle className="h-3 w-3" />
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -38,7 +62,7 @@ export function CompletionDiagnostic({ rentalFile }: CompletionDiagnosticProps) 
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Progression globale avec icônes */}
-        <div className="space-y-2">
+        <div className="space-y-3">
           <div className="flex justify-between text-sm">
             <span className="flex items-center">
               <CheckCircle className="h-4 w-4 mr-2 text-blue-600" />
@@ -46,13 +70,59 @@ export function CompletionDiagnostic({ rentalFile }: CompletionDiagnosticProps) 
             </span>
             <span>{completionPercentage}%</span>
           </div>
-          <Progress value={completionPercentage} className="h-2" />
-          <div className="flex justify-between text-xs text-gray-600 mt-1">
-            <span className={completionPercentage >= 20 ? "text-blue-600 font-medium" : ""}>20%</span>
-            <span className={completionPercentage >= 40 ? "text-blue-600 font-medium" : ""}>40%</span>
-            <span className={completionPercentage >= 60 ? "text-blue-600 font-medium" : ""}>60%</span>
-            <span className={completionPercentage >= 80 ? "text-blue-600 font-medium" : ""}>80%</span>
-            <span className={completionPercentage >= 100 ? "text-blue-600 font-medium" : ""}>100%</span>
+          <Progress value={completionPercentage} className="h-3" />
+
+          {/* Étapes avec icônes */}
+          <div className="flex justify-between items-center mt-2">
+            <div className="flex flex-col items-center space-y-1">
+              <div className={`p-1 rounded-full ${completionPercentage >= 20 ? "bg-blue-100" : "bg-gray-100"}`}>
+                {getProgressIcon(completionPercentage, 20)}
+              </div>
+              <div className="flex items-center space-x-1">
+                <User className="h-3 w-3 text-gray-500" />
+                <span className="text-xs text-gray-600">Identité</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-center space-y-1">
+              <div className={`p-1 rounded-full ${completionPercentage >= 40 ? "bg-blue-100" : "bg-gray-100"}`}>
+                {getProgressIcon(completionPercentage, 40)}
+              </div>
+              <div className="flex items-center space-x-1">
+                <FileText className="h-3 w-3 text-gray-500" />
+                <span className="text-xs text-gray-600">Documents</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-center space-y-1">
+              <div className={`p-1 rounded-full ${completionPercentage >= 60 ? "bg-blue-100" : "bg-gray-100"}`}>
+                {getProgressIcon(completionPercentage, 60)}
+              </div>
+              <div className="flex items-center space-x-1">
+                <Euro className="h-3 w-3 text-gray-500" />
+                <span className="text-xs text-gray-600">Revenus</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-center space-y-1">
+              <div className={`p-1 rounded-full ${completionPercentage >= 80 ? "bg-blue-100" : "bg-gray-100"}`}>
+                {getProgressIcon(completionPercentage, 80)}
+              </div>
+              <div className="flex items-center space-x-1">
+                <Home className="h-3 w-3 text-gray-500" />
+                <span className="text-xs text-gray-600">Logement</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-center space-y-1">
+              <div className={`p-1 rounded-full ${completionPercentage >= 100 ? "bg-blue-100" : "bg-gray-100"}`}>
+                {getProgressIcon(completionPercentage, 100)}
+              </div>
+              <div className="flex items-center space-x-1">
+                <Shield className="h-3 w-3 text-gray-500" />
+                <span className="text-xs text-gray-600">Garanties</span>
+              </div>
+            </div>
           </div>
         </div>
 

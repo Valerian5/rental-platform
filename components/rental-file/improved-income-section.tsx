@@ -6,10 +6,22 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Upload, Plus, X, Euro, FileText, CheckCircle } from "lucide-react"
+import {
+  Upload,
+  Plus,
+  X,
+  Euro,
+  FileText,
+  CheckCircle,
+  Briefcase,
+  Heart,
+  PiggyBank,
+  GraduationCap,
+  AlertCircle,
+  Building2,
+} from "lucide-react"
 import {
   WORK_INCOME_TYPES,
   SOCIAL_AID_TYPES,
@@ -180,6 +192,39 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
     onUpdate(updatedProfile)
   }
 
+  const toggleIncomeType = (incomeType: string) => {
+    const updatedProfile = { ...profile }
+    if (!updatedProfile.income_sources) updatedProfile.income_sources = {}
+
+    if (updatedProfile.income_sources[incomeType]) {
+      delete updatedProfile.income_sources[incomeType]
+    } else {
+      switch (incomeType) {
+        case "work_income":
+          updatedProfile.income_sources.work_income = {
+            type: "salarie",
+            amount: 0,
+            documents: [],
+          }
+          break
+        case "scholarship":
+          updatedProfile.income_sources.scholarship = {
+            amount: 0,
+            documents: [],
+          }
+          break
+        case "no_income":
+          updatedProfile.income_sources.no_income = {
+            explanation: "",
+            documents: [],
+          }
+          break
+      }
+    }
+
+    onUpdate(updatedProfile)
+  }
+
   const FileUploadZone = ({
     category,
     label,
@@ -302,6 +347,58 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
     )
   }
 
+  const IncomeTypeCard = ({
+    icon: Icon,
+    title,
+    description,
+    isActive,
+    onToggle,
+    documentCount = 0,
+  }: {
+    icon: any
+    title: string
+    description: string
+    isActive: boolean
+    onToggle: () => void
+    documentCount?: number
+  }) => (
+    <Card
+      className={`cursor-pointer transition-all duration-200 ${
+        isActive ? "border-blue-500 bg-blue-50 shadow-md" : "border-gray-200 hover:border-gray-300 hover:shadow-sm"
+      }`}
+      onClick={onToggle}
+    >
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className={`p-2 rounded-lg ${isActive ? "bg-blue-100" : "bg-gray-100"}`}>
+              <Icon className={`h-5 w-5 ${isActive ? "text-blue-600" : "text-gray-600"}`} />
+            </div>
+            <div>
+              <h4 className="font-medium text-gray-900">{title}</h4>
+              <p className="text-sm text-gray-600">{description}</p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            {documentCount > 0 && (
+              <Badge variant="outline" className="bg-green-50">
+                <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
+                {documentCount}
+              </Badge>
+            )}
+            <div
+              className={`w-4 h-4 rounded-full border-2 ${
+                isActive ? "bg-blue-500 border-blue-500" : "border-gray-300"
+              }`}
+            >
+              {isActive && <CheckCircle className="h-3 w-3 text-white" />}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+
   const hasAnyIncome = profile.income_sources && Object.keys(profile.income_sources).length > 0
 
   return (
@@ -311,47 +408,58 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
           <div className="flex items-center space-x-2">
             <Euro className="h-5 w-5 text-blue-600" />
             <span>Justificatifs de ressources</span>
-            {hasAnyIncome && <Badge variant="outline">Ajouté</Badge>}
+            {hasAnyIncome && <Badge variant="outline">Configuré</Badge>}
           </div>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Revenus du travail */}
+        {/* Types de revenus principaux */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="work_income"
-                checked={!!profile.income_sources?.work_income}
-                onCheckedChange={(checked) => {
-                  const updatedProfile = { ...profile }
-                  if (!updatedProfile.income_sources) updatedProfile.income_sources = {}
-                  if (checked) {
-                    updatedProfile.income_sources.work_income = {
-                      type: "salarie",
-                      amount: 0,
-                      documents: [],
-                    }
-                  } else {
-                    delete updatedProfile.income_sources.work_income
-                  }
-                  onUpdate(updatedProfile)
-                }}
-              />
-              <Label htmlFor="work_income" className="font-medium">
-                Revenus du travail
-              </Label>
-            </div>
-            {profile.income_sources?.work_income?.documents?.length > 0 && (
-              <Badge variant="outline" className="bg-green-50">
-                <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
-                {profile.income_sources.work_income.documents.length} document(s)
-              </Badge>
-            )}
-          </div>
+          <h3 className="font-medium text-gray-900">Sélectionnez vos sources de revenus</h3>
 
-          {profile.income_sources?.work_income && (
-            <div className="ml-6 space-y-4 border-l-2 border-blue-200 pl-4">
+          <div className="grid gap-4">
+            {/* Revenus du travail */}
+            <IncomeTypeCard
+              icon={Briefcase}
+              title="Revenus du travail"
+              description="Salaire, freelance, auto-entrepreneur..."
+              isActive={!!profile.income_sources?.work_income}
+              onToggle={() => toggleIncomeType("work_income")}
+              documentCount={profile.income_sources?.work_income?.documents?.length || 0}
+            />
+
+            {/* Bourse */}
+            <IncomeTypeCard
+              icon={GraduationCap}
+              title="Bourse d'études"
+              description="Bourse CROUS, aide aux étudiants..."
+              isActive={!!profile.income_sources?.scholarship}
+              onToggle={() => toggleIncomeType("scholarship")}
+              documentCount={profile.income_sources?.scholarship?.documents?.length || 0}
+            />
+
+            {/* Pas de revenus */}
+            <IncomeTypeCard
+              icon={AlertCircle}
+              title="Aucun revenu"
+              description="Situation temporaire, recherche d'emploi..."
+              isActive={!!profile.income_sources?.no_income}
+              onToggle={() => toggleIncomeType("no_income")}
+              documentCount={profile.income_sources?.no_income?.documents?.length || 0}
+            />
+          </div>
+        </div>
+
+        {/* Détails des revenus du travail */}
+        {profile.income_sources?.work_income && (
+          <Card className="border-blue-200 bg-blue-50/50">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg flex items-center space-x-2">
+                <Briefcase className="h-5 w-5 text-blue-600" />
+                <span>Revenus du travail</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div>
                 <Label>Type de travail</Label>
                 <Select
@@ -388,269 +496,20 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
                 multiple
                 existingFiles={profile.income_sources.work_income.documents || []}
               />
-            </div>
-          )}
-        </div>
+            </CardContent>
+          </Card>
+        )}
 
-        {/* Aide sociale */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <Label className="font-medium">Aide sociale</Label>
-            <Button onClick={() => addIncomeSource("social_aid")} size="sm" variant="outline">
-              <Plus className="h-4 w-4 mr-2" />
-              Ajouter
-            </Button>
-          </div>
-
-          {profile.income_sources?.social_aid?.map((aid: any, index: number) => (
-            <div key={index} className="border rounded-lg p-4 space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="font-medium">Aide sociale {index + 1}</h4>
-                <div className="flex items-center space-x-2">
-                  {aid.documents?.length > 0 && (
-                    <Badge variant="outline" className="bg-green-50">
-                      <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
-                      {aid.documents.length} document(s)
-                    </Badge>
-                  )}
-                  <Button onClick={() => removeIncomeSource("social_aid", index)} size="sm" variant="outline">
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-
-              <div>
-                <Label>Type d'aide</Label>
-                <Select
-                  value={aid.type || "caf_msa"}
-                  onValueChange={(value) => updateIncomeSource("social_aid", index, "type", value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SOCIAL_AID_TYPES.map((type) => (
-                      <SelectItem key={type.value} value={type.value}>
-                        {type.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>Depuis quand ?</Label>
-                <Select
-                  value={aid.duration || "plus_3_mois"}
-                  onValueChange={(value) => updateIncomeSource("social_aid", index, "duration", value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DURATION_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor={`aid_amount_${index}`}>Montant mensuel (€)</Label>
-                <Input
-                  id={`aid_amount_${index}`}
-                  type="number"
-                  placeholder="500"
-                  value={aid.amount || ""}
-                  onChange={(e) => updateIncomeSource("social_aid", index, "amount", Number.parseFloat(e.target.value))}
-                />
-              </div>
-
-              <FileUploadZone
-                category={`income_social_aid_${index}`}
-                label="Justificatifs"
-                multiple
-                existingFiles={aid.documents || []}
-              />
-            </div>
-          ))}
-        </div>
-
-        {/* Retraite et pensions */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <Label className="font-medium">Retraite ou pension</Label>
-            <Button onClick={() => addIncomeSource("retirement_pension")} size="sm" variant="outline">
-              <Plus className="h-4 w-4 mr-2" />
-              Ajouter
-            </Button>
-          </div>
-
-          {profile.income_sources?.retirement_pension?.map((pension: any, index: number) => (
-            <div key={index} className="border rounded-lg p-4 space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="font-medium">Retraite/Pension {index + 1}</h4>
-                <div className="flex items-center space-x-2">
-                  {pension.documents?.length > 0 && (
-                    <Badge variant="outline" className="bg-green-50">
-                      <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
-                      {pension.documents.length} document(s)
-                    </Badge>
-                  )}
-                  <Button onClick={() => removeIncomeSource("retirement_pension", index)} size="sm" variant="outline">
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-
-              <div>
-                <Label>Type de pension</Label>
-                <Select
-                  value={pension.type || "retraite"}
-                  onValueChange={(value) => updateIncomeSource("retirement_pension", index, "type", value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {RETIREMENT_PENSION_TYPES.map((type) => (
-                      <SelectItem key={type.value} value={type.value}>
-                        {type.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor={`pension_amount_${index}`}>Montant mensuel (€)</Label>
-                <Input
-                  id={`pension_amount_${index}`}
-                  type="number"
-                  placeholder="1200"
-                  value={pension.amount || ""}
-                  onChange={(e) =>
-                    updateIncomeSource("retirement_pension", index, "amount", Number.parseFloat(e.target.value))
-                  }
-                />
-              </div>
-
-              <FileUploadZone
-                category={`income_retirement_pension_${index}`}
-                label="Justificatifs"
-                multiple
-                existingFiles={pension.documents || []}
-              />
-            </div>
-          ))}
-        </div>
-
-        {/* Rentes */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <Label className="font-medium">Rentes</Label>
-            <Button onClick={() => addIncomeSource("rent_income")} size="sm" variant="outline">
-              <Plus className="h-4 w-4 mr-2" />
-              Ajouter
-            </Button>
-          </div>
-
-          {profile.income_sources?.rent_income?.map((rent: any, index: number) => (
-            <div key={index} className="border rounded-lg p-4 space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="font-medium">Rente {index + 1}</h4>
-                <div className="flex items-center space-x-2">
-                  {rent.documents?.length > 0 && (
-                    <Badge variant="outline" className="bg-green-50">
-                      <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
-                      {rent.documents.length} document(s)
-                    </Badge>
-                  )}
-                  <Button onClick={() => removeIncomeSource("rent_income", index)} size="sm" variant="outline">
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-
-              <div>
-                <Label>Type de rente</Label>
-                <Select
-                  value={rent.type || "revenus_locatifs"}
-                  onValueChange={(value) => updateIncomeSource("rent_income", index, "type", value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {RENT_INCOME_TYPES.map((type) => (
-                      <SelectItem key={type.value} value={type.value}>
-                        {type.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor={`rent_amount_${index}`}>Montant mensuel (€)</Label>
-                <Input
-                  id={`rent_amount_${index}`}
-                  type="number"
-                  placeholder="800"
-                  value={rent.amount || ""}
-                  onChange={(e) =>
-                    updateIncomeSource("rent_income", index, "amount", Number.parseFloat(e.target.value))
-                  }
-                />
-              </div>
-
-              <FileUploadZone
-                category={`income_rent_income_${index}`}
-                label="Justificatifs"
-                multiple
-                existingFiles={rent.documents || []}
-              />
-            </div>
-          ))}
-        </div>
-
-        {/* Bourse */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="scholarship"
-                checked={!!profile.income_sources?.scholarship}
-                onCheckedChange={(checked) => {
-                  const updatedProfile = { ...profile }
-                  if (!updatedProfile.income_sources) updatedProfile.income_sources = {}
-                  if (checked) {
-                    updatedProfile.income_sources.scholarship = {
-                      amount: 0,
-                      documents: [],
-                    }
-                  } else {
-                    delete updatedProfile.income_sources.scholarship
-                  }
-                  onUpdate(updatedProfile)
-                }}
-              />
-              <Label htmlFor="scholarship" className="font-medium">
-                Bourse
-              </Label>
-            </div>
-            {profile.income_sources?.scholarship?.documents?.length > 0 && (
-              <Badge variant="outline" className="bg-green-50">
-                <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
-                {profile.income_sources.scholarship.documents.length} document(s)
-              </Badge>
-            )}
-          </div>
-
-          {profile.income_sources?.scholarship && (
-            <div className="ml-6 space-y-4 border-l-2 border-blue-200 pl-4">
+        {/* Détails de la bourse */}
+        {profile.income_sources?.scholarship && (
+          <Card className="border-green-200 bg-green-50/50">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg flex items-center space-x-2">
+                <GraduationCap className="h-5 w-5 text-green-600" />
+                <span>Bourse d'études</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div>
                 <Label htmlFor="scholarship_amount">Montant mensuel (€)</Label>
                 <Input
@@ -668,45 +527,20 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
                 multiple
                 existingFiles={profile.income_sources.scholarship.documents || []}
               />
-            </div>
-          )}
-        </div>
+            </CardContent>
+          </Card>
+        )}
 
-        {/* Pas de revenus */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="no_income"
-                checked={!!profile.income_sources?.no_income}
-                onCheckedChange={(checked) => {
-                  const updatedProfile = { ...profile }
-                  if (!updatedProfile.income_sources) updatedProfile.income_sources = {}
-                  if (checked) {
-                    updatedProfile.income_sources.no_income = {
-                      explanation: "",
-                      documents: [],
-                    }
-                  } else {
-                    delete updatedProfile.income_sources.no_income
-                  }
-                  onUpdate(updatedProfile)
-                }}
-              />
-              <Label htmlFor="no_income" className="font-medium">
-                Pas de revenus
-              </Label>
-            </div>
-            {profile.income_sources?.no_income?.documents?.length > 0 && (
-              <Badge variant="outline" className="bg-green-50">
-                <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
-                {profile.income_sources.no_income.documents.length} document(s)
-              </Badge>
-            )}
-          </div>
-
-          {profile.income_sources?.no_income && (
-            <div className="ml-6 space-y-4 border-l-2 border-blue-200 pl-4">
+        {/* Détails pas de revenus */}
+        {profile.income_sources?.no_income && (
+          <Card className="border-amber-200 bg-amber-50/50">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg flex items-center space-x-2">
+                <AlertCircle className="h-5 w-5 text-amber-600" />
+                <span>Aucun revenu</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div>
                 <Label htmlFor="no_income_explanation">Explication de votre situation</Label>
                 <Textarea
@@ -724,8 +558,276 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
                 multiple
                 existingFiles={profile.income_sources.no_income.documents || []}
               />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Sources de revenus supplémentaires */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-medium text-gray-900">Sources de revenus supplémentaires</h3>
+            <p className="text-sm text-gray-600">Optionnel</p>
+          </div>
+
+          {/* Aide sociale */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Heart className="h-4 w-4 text-pink-600" />
+                <Label className="font-medium">Aide sociale</Label>
+              </div>
+              <Button onClick={() => addIncomeSource("social_aid")} size="sm" variant="outline">
+                <Plus className="h-4 w-4 mr-2" />
+                Ajouter
+              </Button>
             </div>
-          )}
+
+            {profile.income_sources?.social_aid?.map((aid: any, index: number) => (
+              <Card key={index} className="border-pink-200 bg-pink-50/50">
+                <CardContent className="p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium flex items-center space-x-2">
+                      <Heart className="h-4 w-4 text-pink-600" />
+                      <span>Aide sociale {index + 1}</span>
+                    </h4>
+                    <div className="flex items-center space-x-2">
+                      {aid.documents?.length > 0 && (
+                        <Badge variant="outline" className="bg-green-50">
+                          <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
+                          {aid.documents.length}
+                        </Badge>
+                      )}
+                      <Button onClick={() => removeIncomeSource("social_aid", index)} size="sm" variant="outline">
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label>Type d'aide</Label>
+                      <Select
+                        value={aid.type || "caf_msa"}
+                        onValueChange={(value) => updateIncomeSource("social_aid", index, "type", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SOCIAL_AID_TYPES.map((type) => (
+                            <SelectItem key={type.value} value={type.value}>
+                              {type.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label>Depuis quand ?</Label>
+                      <Select
+                        value={aid.duration || "plus_3_mois"}
+                        onValueChange={(value) => updateIncomeSource("social_aid", index, "duration", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {DURATION_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor={`aid_amount_${index}`}>Montant mensuel (€)</Label>
+                    <Input
+                      id={`aid_amount_${index}`}
+                      type="number"
+                      placeholder="500"
+                      value={aid.amount || ""}
+                      onChange={(e) =>
+                        updateIncomeSource("social_aid", index, "amount", Number.parseFloat(e.target.value))
+                      }
+                    />
+                  </div>
+
+                  <FileUploadZone
+                    category={`income_social_aid_${index}`}
+                    label="Justificatifs"
+                    multiple
+                    existingFiles={aid.documents || []}
+                  />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Retraite et pensions */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <PiggyBank className="h-4 w-4 text-purple-600" />
+                <Label className="font-medium">Retraite ou pension</Label>
+              </div>
+              <Button onClick={() => addIncomeSource("retirement_pension")} size="sm" variant="outline">
+                <Plus className="h-4 w-4 mr-2" />
+                Ajouter
+              </Button>
+            </div>
+
+            {profile.income_sources?.retirement_pension?.map((pension: any, index: number) => (
+              <Card key={index} className="border-purple-200 bg-purple-50/50">
+                <CardContent className="p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium flex items-center space-x-2">
+                      <PiggyBank className="h-4 w-4 text-purple-600" />
+                      <span>Retraite/Pension {index + 1}</span>
+                    </h4>
+                    <div className="flex items-center space-x-2">
+                      {pension.documents?.length > 0 && (
+                        <Badge variant="outline" className="bg-green-50">
+                          <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
+                          {pension.documents.length}
+                        </Badge>
+                      )}
+                      <Button
+                        onClick={() => removeIncomeSource("retirement_pension", index)}
+                        size="sm"
+                        variant="outline"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label>Type de pension</Label>
+                      <Select
+                        value={pension.type || "retraite"}
+                        onValueChange={(value) => updateIncomeSource("retirement_pension", index, "type", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {RETIREMENT_PENSION_TYPES.map((type) => (
+                            <SelectItem key={type.value} value={type.value}>
+                              {type.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor={`pension_amount_${index}`}>Montant mensuel (€)</Label>
+                      <Input
+                        id={`pension_amount_${index}`}
+                        type="number"
+                        placeholder="1200"
+                        value={pension.amount || ""}
+                        onChange={(e) =>
+                          updateIncomeSource("retirement_pension", index, "amount", Number.parseFloat(e.target.value))
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <FileUploadZone
+                    category={`income_retirement_pension_${index}`}
+                    label="Justificatifs"
+                    multiple
+                    existingFiles={pension.documents || []}
+                  />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Rentes */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Building2 className="h-4 w-4 text-indigo-600" />
+                <Label className="font-medium">Rentes et revenus locatifs</Label>
+              </div>
+              <Button onClick={() => addIncomeSource("rent_income")} size="sm" variant="outline">
+                <Plus className="h-4 w-4 mr-2" />
+                Ajouter
+              </Button>
+            </div>
+
+            {profile.income_sources?.rent_income?.map((rent: any, index: number) => (
+              <Card key={index} className="border-indigo-200 bg-indigo-50/50">
+                <CardContent className="p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium flex items-center space-x-2">
+                      <Building2 className="h-4 w-4 text-indigo-600" />
+                      <span>Rente {index + 1}</span>
+                    </h4>
+                    <div className="flex items-center space-x-2">
+                      {rent.documents?.length > 0 && (
+                        <Badge variant="outline" className="bg-green-50">
+                          <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
+                          {rent.documents.length}
+                        </Badge>
+                      )}
+                      <Button onClick={() => removeIncomeSource("rent_income", index)} size="sm" variant="outline">
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label>Type de rente</Label>
+                      <Select
+                        value={rent.type || "revenus_locatifs"}
+                        onValueChange={(value) => updateIncomeSource("rent_income", index, "type", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {RENT_INCOME_TYPES.map((type) => (
+                            <SelectItem key={type.value} value={type.value}>
+                              {type.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor={`rent_amount_${index}`}>Montant mensuel (€)</Label>
+                      <Input
+                        id={`rent_amount_${index}`}
+                        type="number"
+                        placeholder="800"
+                        value={rent.amount || ""}
+                        onChange={(e) =>
+                          updateIncomeSource("rent_income", index, "amount", Number.parseFloat(e.target.value))
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <FileUploadZone
+                    category={`income_rent_income_${index}`}
+                    label="Justificatifs"
+                    multiple
+                    existingFiles={rent.documents || []}
+                  />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
       </CardContent>
     </Card>
