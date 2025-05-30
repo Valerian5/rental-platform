@@ -1,187 +1,153 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import {
-  Upload,
-  File,
-  Check,
-  ArrowLeft,
-  ArrowRight,
-  User,
-  Home,
-  Shield,
-  FileText,
-  AlertCircle,
-  CheckCircle,
-  Plus,
-  X,
-} from "lucide-react"
-import {
-  rentalFileService,
-  SITUATION_OPTIONS,
-  RENTAL_SITUATIONS,
-  CURRENT_HOUSING_TYPES,
-} from "@/lib/rental-file-service"
-import { authService } from "@/lib/auth-service"
-import { toast } from "sonner"
 import Link from "next/link"
+import {
+  Search,
+  Home,
+  FileText,
+  Calendar,
+  Heart,
+  Bell,
+  Settings,
+  Plus,
+  AlertTriangle,
+  MessageSquare,
+} from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { authService } from "@/lib/auth-service"
+import { rentalFileService } from "@/lib/rental-file-service"
+import { applicationService } from "@/lib/application-service"
+import { toast } from "sonner"
 
-export default function RentalFilePage() {
+export default function TenantDashboardPage() {
+  const [activeTab, setActiveTab] = useState("overview")
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [rentalFile, setRentalFile] = useState<any>(null)
+  const [applications, setApplications] = useState<any[]>([])
+  const [savedSearches, setSavedSearches] = useState<any[]>([])
+  const [favoriteProperties, setFavoriteProperties] = useState<any[]>([])
+  const [visits, setVisits] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [currentStep, setCurrentStep] = useState(1)
-  const [uploadingItem, setUploadingItem] = useState<string | null>(null)
-
-  const totalSteps = 4
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchDashboardData = async () => {
       try {
+        console.log("📊 Chargement dashboard locataire...")
+        setIsLoading(true)
+
+        // Récupérer l'utilisateur connecté avec debug
         const user = await authService.getCurrentUser()
-        if (user && user.user_type === "tenant") {
-          setCurrentUser(user)
+        console.log("👤 Utilisateur récupéré:", user)
 
-          let fileData = await rentalFileService.getRentalFile(user.id)
-
-          if (!fileData) {
-            fileData = await rentalFileService.initializeFromUserData(user.id, user)
-          }
-
-          setRentalFile(fileData)
+        if (!user) {
+          console.log("❌ Pas d'utilisateur connecté")
+          toast.error("Vous devez être connecté pour accéder à cette page")
+          window.location.href = "/login"
+          return
         }
+
+        if (user.user_type !== "tenant") {
+          console.log("❌ Type utilisateur incorrect:", user.user_type)
+          toast.error("Accès réservé aux locataires")
+          window.location.href = "/"
+          return
+        }
+
+        console.log("✅ Utilisateur locataire authentifié:", user)
+        setCurrentUser(user)
+
+        // Récupérer le dossier de location avec gestion d'erreur
+        try {
+          const fileData = await rentalFileService.getRentalFile(user.id)
+          setRentalFile(fileData || { completion_percentage: 0, missing_documents: [] })
+          console.log("📁 Dossier location:", fileData)
+        } catch (fileError) {
+          console.warn("⚠️ Erreur dossier location:", fileError)
+          setRentalFile({ completion_percentage: 0, missing_documents: [] })
+        }
+
+        // Récupérer les candidatures avec gestion d'erreur
+        try {
+          const applicationsData = await applicationService.getTenantApplications(user.id)
+          setApplications(Array.isArray(applicationsData) ? applicationsData : [])
+          console.log("📝 Candidatures:", applicationsData)
+        } catch (appError) {
+          console.warn("⚠️ Erreur candidatures:", appError)
+          setApplications([])
+        }
+
+        // Initialiser les autres données avec des valeurs par défaut
+        setSavedSearches([])
+        setFavoriteProperties([])
+        setVisits([])
+
+        console.log("✅ Dashboard chargé avec succès")
       } catch (error) {
-        console.error("Erreur chargement dossier:", error)
-        toast.error("Erreur lors du chargement du dossier")
+        console.error("❌ Erreur chargement dashboard:", error)
+        toast.error("Erreur lors du chargement du tableau de bord")
       } finally {
         setIsLoading(false)
       }
     }
 
-    fetchData()
+    fetchDashboardData()
   }, [])
 
-  const handleUpdateData = async (newData: any) => {
-    if (!currentUser) return
-
-    try {
-      const updatedData = { ...rentalFile, ...newData }
-      const updatedFile = await rentalFileService.updateRentalFile(currentUser.id, updatedData)
-      setRentalFile(updatedFile)
-      toast.success("Informations mises à jour")
-    } catch (error) {
-      console.error("Erreur mise à jour:", error)
-      toast.error("Erreur lors de la mise à jour")
+  const getStatusBadgeVariant = (status: string) => {
+    switch (status) {
+      case "pending":
+        return "secondary"
+      case "visit_proposed":
+        return "default"
+      case "rejected":
+        return "destructive"
+      case "accepted":
+        return "default"
+      default:
+        return "outline"
     }
   }
 
-  const handleFileUpload = async (category: string, files: FileList | null) => {
-    if (!files || !currentUser) return
-
-    setUploadingItem(category)
-
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-
-      const fileUrls = Array.from(files).map((file) => URL.createObjectURL(file))
-
-      const updatedMainTenant = {
-        ...rentalFile.main_tenant,
-        documents: {
-          ...rentalFile.main_tenant.documents,
-          [category]: category === "identity" || category === "income_proof" ? fileUrls : fileUrls[0],
-        },
-      }
-
-      await handleUpdateData({ main_tenant: updatedMainTenant })
-      toast.success("Document ajouté avec succès")
-    } catch (error) {
-      console.error("Erreur upload:", error)
-      toast.error("Erreur lors de l'upload du fichier")
-    } finally {
-      setUploadingItem(null)
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "pending":
+        return "En cours d'analyse"
+      case "visit_proposed":
+        return "Visite proposée"
+      case "rejected":
+        return "Refusé"
+      case "accepted":
+        return "Accepté"
+      default:
+        return status
     }
   }
 
-  const nextStep = () => {
-    if (currentStep < totalSteps) {
-      setCurrentStep(currentStep + 1)
-    }
-  }
-
-  const prevStep = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1)
-    }
-  }
-
-  const addCotenant = () => {
-    const newCotenant = {
-      type: "cotenant",
-      first_name: "",
-      last_name: "",
-      birth_date: "",
-      birth_place: "",
-      nationality: "française",
-      situation: "employee",
-      monthly_income: 0,
-      documents: {
-        identity: [],
-        income_proof: [],
-        tax_notice: "",
-      },
-    }
-
-    const updatedCotenants = [...(rentalFile.cotenants || []), newCotenant]
-    handleUpdateData({ cotenants: updatedCotenants })
-  }
-
-  const removeCotenant = (index: number) => {
-    const updatedCotenants = rentalFile.cotenants.filter((_: any, i: number) => i !== index)
-    handleUpdateData({ cotenants: updatedCotenants })
-  }
-
-  const addGuarantor = () => {
-    const newGuarantor = {
-      type: "physical",
-      first_name: "",
-      last_name: "",
-      birth_date: "",
-      monthly_income: 0,
-      documents: {
-        identity: [],
-        income_proof: [],
-        tax_notice: "",
-      },
-    }
-
-    const updatedGuarantors = [...(rentalFile.guarantors || []), newGuarantor]
-    handleUpdateData({ guarantors: updatedGuarantors })
-  }
+  // Utiliser la fonction getMissingDocuments du service
+  const missingDocuments = rentalFile ? rentalFileService.getMissingDocuments(rentalFile) : []
+  const completionPercentage = rentalFile?.completion_percentage || 0
 
   if (isLoading) {
     return (
-      <div className="container mx-auto py-8">
+      <div className="container mx-auto py-6">
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center space-y-4">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="text-gray-600">Chargement de votre dossier...</p>
+            <p className="text-gray-600">Chargement du tableau de bord...</p>
           </div>
         </div>
       </div>
     )
   }
 
-  if (!currentUser || currentUser.user_type !== "tenant") {
+  if (!currentUser) {
     return (
-      <div className="container mx-auto py-8">
+      <div className="container mx-auto py-6">
         <div className="text-center">
           <p className="text-red-600">Accès non autorisé</p>
         </div>
@@ -189,546 +155,440 @@ export default function RentalFilePage() {
     )
   }
 
-  const completionPercentage = rentalFile?.completion_percentage || 0
-  const validationScore = rentalFile?.validation_score || 0
-
   return (
-    <div className="container mx-auto py-8 max-w-4xl">
-      <div className="space-y-6">
-        {/* En-tête */}
-        <div className="flex items-center justify-between">
-          <div>
-            <Link href="/tenant/dashboard" className="text-blue-600 hover:underline flex items-center mb-4">
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              Retour au tableau de bord
-            </Link>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Mon dossier de location</h1>
-            <p className="text-gray-600">Créez votre dossier numérique certifié pour vos candidatures</p>
-          </div>
-          <div className="text-right space-y-2">
-            <Badge variant={completionPercentage >= 80 ? "default" : "secondary"} className="text-lg px-4 py-2">
-              {completionPercentage}% complété
-            </Badge>
-            <div className="text-sm text-gray-600">
-              Score de validation: <span className="font-medium">{validationScore}/100</span>
-            </div>
+    <div className="container mx-auto py-6">
+      <div className="flex flex-col md:flex-row gap-8">
+        {/* Sidebar */}
+        <div className="w-full md:w-1/4">
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center">
+                <Avatar className="h-10 w-10 mr-3">
+                  <AvatarImage
+                    src="/placeholder.svg?height=40&width=40&text=JD"
+                    alt={`${currentUser.first_name} ${currentUser.last_name}`}
+                  />
+                  <AvatarFallback>
+                    {currentUser.first_name?.[0]}
+                    {currentUser.last_name?.[0]}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <CardTitle>
+                    {currentUser.first_name} {currentUser.last_name}
+                  </CardTitle>
+                  <CardDescription>Locataire</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pb-2">
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Dossier de location</span>
+                  <span className="font-medium">{completionPercentage}% complet</span>
+                </div>
+                <Progress value={completionPercentage} className="h-2" />
+              </div>
+            </CardContent>
+            <CardFooter>
+              <Button variant="outline" size="sm" className="w-full" asChild>
+                <Link href="/tenant/profile/rental-file">Compléter mon dossier</Link>
+              </Button>
+            </CardFooter>
+          </Card>
+
+          <div className="mt-6 space-y-2">
+            <Button
+              variant={activeTab === "overview" ? "default" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => setActiveTab("overview")}
+            >
+              <Home className="h-4 w-4 mr-2" />
+              Vue d'ensemble
+            </Button>
+            <Button
+              variant={activeTab === "searches" ? "default" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => setActiveTab("searches")}
+            >
+              <Search className="h-4 w-4 mr-2" />
+              Mes recherches
+            </Button>
+            <Button
+              variant={activeTab === "favorites" ? "default" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => setActiveTab("favorites")}
+            >
+              <Heart className="h-4 w-4 mr-2" />
+              Favoris
+            </Button>
+            <Button
+              variant={activeTab === "applications" ? "default" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => setActiveTab("applications")}
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Mes candidatures
+            </Button>
+            <Button
+              variant={activeTab === "visits" ? "default" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => setActiveTab("visits")}
+            >
+              <Calendar className="h-4 w-4 mr-2" />
+              Visites
+            </Button>
+            <Button
+              variant={activeTab === "messaging" ? "default" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => setActiveTab("messaging")}
+            >
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Messagerie
+            </Button>
+            <Button
+              variant={activeTab === "notifications" ? "default" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => setActiveTab("notifications")}
+            >
+              <Bell className="h-4 w-4 mr-2" />
+              Notifications
+            </Button>
+            <Button
+              variant={activeTab === "settings" ? "default" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => setActiveTab("settings")}
+            >
+              <Settings className="h-4 w-4 mr-2" />
+              Paramètres
+            </Button>
           </div>
         </div>
 
-        {/* Progression */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="mb-4">
-              <Progress value={(currentStep / totalSteps) * 100} className="h-3" />
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className={currentStep >= 1 ? "text-blue-600 font-medium" : "text-gray-500"}>
-                1. Qui êtes-vous ?
-              </span>
-              <span className={currentStep >= 2 ? "text-blue-600 font-medium" : "text-gray-500"}>
-                2. Votre logement actuel
-              </span>
-              <span className={currentStep >= 3 ? "text-blue-600 font-medium" : "text-gray-500"}>3. Vos documents</span>
-              <span className={currentStep >= 4 ? "text-blue-600 font-medium" : "text-gray-500"}>4. Vos garants</span>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Main Content */}
+        <div className="flex-1">
+          {activeTab === "overview" && (
+            <div className="space-y-6">
+              <h1 className="text-2xl font-bold">Tableau de bord</h1>
 
-        {/* Étape 1: Qui êtes-vous ? */}
-        {currentStep === 1 && (
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <User className="h-5 w-5 mr-2" />
-                  Locataire principal
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="first_name">Prénom *</Label>
-                    <Input
-                      id="first_name"
-                      value={rentalFile?.main_tenant?.first_name || ""}
-                      onChange={(e) =>
-                        handleUpdateData({
-                          main_tenant: { ...rentalFile.main_tenant, first_name: e.target.value },
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="last_name">Nom *</Label>
-                    <Input
-                      id="last_name"
-                      value={rentalFile?.main_tenant?.last_name || ""}
-                      onChange={(e) =>
-                        handleUpdateData({
-                          main_tenant: { ...rentalFile.main_tenant, last_name: e.target.value },
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="birth_date">Date de naissance *</Label>
-                    <Input
-                      id="birth_date"
-                      type="date"
-                      value={rentalFile?.main_tenant?.birth_date || ""}
-                      onChange={(e) =>
-                        handleUpdateData({
-                          main_tenant: { ...rentalFile.main_tenant, birth_date: e.target.value },
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="birth_place">Lieu de naissance *</Label>
-                    <Input
-                      id="birth_place"
-                      placeholder="Ville, Pays"
-                      value={rentalFile?.main_tenant?.birth_place || ""}
-                      onChange={(e) =>
-                        handleUpdateData({
-                          main_tenant: { ...rentalFile.main_tenant, birth_place: e.target.value },
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label>Quelle est votre situation ? *</Label>
-                  <RadioGroup
-                    value={rentalFile?.main_tenant?.situation || "employee"}
-                    onValueChange={(value) =>
-                      handleUpdateData({
-                        main_tenant: { ...rentalFile.main_tenant, situation: value },
-                      })
-                    }
-                    className="mt-2"
-                  >
-                    {SITUATION_OPTIONS.map((option) => (
-                      <div key={option.value} className="space-y-2">
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value={option.value} id={option.value} />
-                          <Label htmlFor={option.value} className="font-medium">
-                            {option.label}
-                          </Label>
-                        </div>
-                        <p className="text-sm text-gray-600 ml-6">{option.description}</p>
+              {completionPercentage < 100 && (
+                <Card className="bg-blue-50 border-blue-200">
+                  <CardContent className="p-4">
+                    <div className="flex items-start">
+                      <AlertTriangle className="h-5 w-5 text-blue-600 mr-2 mt-0.5" />
+                      <div>
+                        <h3 className="font-semibold text-blue-800">Complétez votre dossier de location</h3>
+                        <p className="text-sm text-blue-700 mb-2">
+                          Votre dossier est incomplet. Ajoutez les documents manquants pour augmenter vos chances d'être
+                          sélectionné.
+                        </p>
+                        {missingDocuments.length > 0 && (
+                          <div className="text-sm text-blue-700 mb-3">
+                            <span className="font-medium">Documents manquants :</span>
+                            <ul className="list-disc list-inside">
+                              {missingDocuments.map((item, index) => (
+                                <li key={index}>{item}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        <Button size="sm" asChild>
+                          <Link href="/tenant/profile/rental-file">Compléter mon dossier</Link>
+                        </Button>
                       </div>
-                    ))}
-                  </RadioGroup>
-                </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
-                <div>
-                  <Label htmlFor="monthly_income">Revenus nets mensuels (€) *</Label>
-                  <Input
-                    id="monthly_income"
-                    type="number"
-                    placeholder="2500"
-                    value={rentalFile?.main_tenant?.monthly_income || ""}
-                    onChange={(e) =>
-                      handleUpdateData({
-                        main_tenant: { ...rentalFile.main_tenant, monthly_income: Number.parseFloat(e.target.value) },
-                      })
-                    }
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Situation de location</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div>
-                  <Label>Comment allez-vous louer ? *</Label>
-                  <RadioGroup
-                    value={rentalFile?.rental_situation || "alone"}
-                    onValueChange={(value) => handleUpdateData({ rental_situation: value })}
-                    className="mt-2"
-                  >
-                    {RENTAL_SITUATIONS.map((option) => (
-                      <div key={option.value} className="space-y-2">
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value={option.value} id={option.value} />
-                          <Label htmlFor={option.value} className="font-medium">
-                            {option.label}
-                          </Label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      <span>Mes candidatures récentes</span>
+                      <Badge>{applications.length}</Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {applications && applications.length > 0 ? (
+                      applications.slice(0, 2).map((application) => (
+                        <div key={application.id} className="flex items-start gap-3">
+                          <div className="w-16 h-16 rounded overflow-hidden flex-shrink-0">
+                            <img
+                              src={application.property?.property_images?.[0]?.url || "/placeholder.svg"}
+                              alt={application.property?.title || "Propriété"}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="font-medium text-sm">{application.property?.title || "Propriété"}</h4>
+                            <p className="text-xs text-muted-foreground">
+                              {application.property?.address || "Adresse non disponible"}
+                            </p>
+                            <div className="flex items-center justify-between mt-1">
+                              <Badge variant={getStatusBadgeVariant(application.status)} className="text-xs">
+                                {getStatusText(application.status)}
+                              </Badge>
+                              <span className="text-sm font-semibold">{application.property?.price || 0} €/mois</span>
+                            </div>
+                          </div>
                         </div>
-                        <p className="text-sm text-gray-600 ml-6">{option.description}</p>
+                      ))
+                    ) : (
+                      <div className="text-center py-4">
+                        <FileText className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground">Aucune candidature envoyée</p>
                       </div>
-                    ))}
-                  </RadioGroup>
-                </div>
-              </CardContent>
-            </Card>
+                    )}
+                  </CardContent>
+                  <CardFooter>
+                    <Button variant="outline" size="sm" className="w-full" onClick={() => setActiveTab("applications")}>
+                      Voir toutes mes candidatures
+                    </Button>
+                  </CardFooter>
+                </Card>
 
-            {/* Colocataires */}
-            {(rentalFile?.rental_situation === "colocation" || rentalFile?.rental_situation === "couple") && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      <span>Mes prochaines visites</span>
+                      <Badge>{visits.length}</Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {visits && visits.length > 0 ? (
+                      visits.slice(0, 2).map((visit) => (
+                        <div key={visit.id} className="flex items-start gap-3">
+                          <div className="w-16 h-16 rounded overflow-hidden flex-shrink-0">
+                            <img
+                              src={visit.property?.property_images?.[0]?.url || "/placeholder.svg"}
+                              alt={visit.property?.title || "Propriété"}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="font-medium text-sm">{visit.property?.title || "Propriété"}</h4>
+                            <p className="text-xs text-muted-foreground">
+                              {visit.property?.address || "Adresse non disponible"}
+                            </p>
+                            <div className="flex items-center justify-between mt-1">
+                              <div className="flex items-center">
+                                <Calendar className="h-3 w-3 mr-1" />
+                                <span className="text-xs">
+                                  {new Date(visit.visit_date).toLocaleDateString("fr-FR", {
+                                    day: "numeric",
+                                    month: "short",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </span>
+                              </div>
+                              <Badge variant="default" className="text-xs">
+                                {visit.status}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-4">
+                        <Calendar className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground">Aucune visite programmée</p>
+                      </div>
+                    )}
+                  </CardContent>
+                  <CardFooter>
+                    <Button variant="outline" size="sm" className="w-full" onClick={() => setActiveTab("visits")}>
+                      Gérer mes visites
+                    </Button>
+                  </CardFooter>
+                </Card>
+              </div>
+
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between">
-                    <span>{rentalFile?.rental_situation === "couple" ? "Votre conjoint(e)" : "Vos colocataires"}</span>
-                    <Button onClick={addCotenant} size="sm">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Ajouter
-                    </Button>
+                    <span>Mes recherches enregistrées</span>
+                    <Badge>{savedSearches.length}</Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {rentalFile?.cotenants?.map((cotenant: any, index: number) => (
-                    <div key={index} className="border rounded-lg p-4 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-medium">
-                          {rentalFile?.rental_situation === "couple" ? "Conjoint(e)" : `Colocataire ${index + 1}`}
-                        </h4>
-                        <Button onClick={() => removeCotenant(index)} size="sm" variant="outline">
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Input placeholder="Prénom" value={cotenant.first_name} />
-                        <Input placeholder="Nom" value={cotenant.last_name} />
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            )}
-
-            <div className="flex justify-end">
-              <Button onClick={nextStep}>
-                Suivant
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Étape 2: Logement actuel */}
-        {currentStep === 2 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Home className="h-5 w-5 mr-2" />
-                Votre logement actuel
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div>
-                <Label>Quelle est votre situation de logement actuelle ? *</Label>
-                <RadioGroup
-                  value={rentalFile?.current_housing?.type || "tenant"}
-                  onValueChange={(value) =>
-                    handleUpdateData({
-                      current_housing: { ...rentalFile.current_housing, type: value },
-                    })
-                  }
-                  className="mt-2"
-                >
-                  {CURRENT_HOUSING_TYPES.map((option) => (
-                    <div key={option.value} className="space-y-2">
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value={option.value} id={option.value} />
-                        <Label htmlFor={option.value} className="font-medium">
-                          {option.label}
-                        </Label>
-                      </div>
-                      <p className="text-sm text-gray-600 ml-6">{option.description}</p>
-                    </div>
-                  ))}
-                </RadioGroup>
-              </div>
-
-              {rentalFile?.current_housing?.type === "tenant" && (
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="current_address">Adresse actuelle</Label>
-                    <Input
-                      id="current_address"
-                      placeholder="Adresse complète"
-                      value={rentalFile?.current_housing?.address || ""}
-                      onChange={(e) =>
-                        handleUpdateData({
-                          current_housing: { ...rentalFile.current_housing, address: e.target.value },
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="current_rent">Loyer actuel (€)</Label>
-                    <Input
-                      id="current_rent"
-                      type="number"
-                      placeholder="800"
-                      value={rentalFile?.current_housing?.monthly_rent || ""}
-                      onChange={(e) =>
-                        handleUpdateData({
-                          current_housing: {
-                            ...rentalFile.current_housing,
-                            monthly_rent: Number.parseFloat(e.target.value),
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="departure_date">Date de départ prévue</Label>
-                    <Input
-                      id="departure_date"
-                      type="date"
-                      value={rentalFile?.current_housing?.departure_date || ""}
-                      onChange={(e) =>
-                        handleUpdateData({
-                          current_housing: { ...rentalFile.current_housing, departure_date: e.target.value },
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-between">
-                <Button variant="outline" onClick={prevStep}>
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Précédent
-                </Button>
-                <Button onClick={nextStep}>
-                  Suivant
-                  <ArrowRight className="h-4 w-4 ml-2" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Étape 3: Documents */}
-        {currentStep === 3 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <FileText className="h-5 w-5 mr-2" />
-                Vos documents justificatifs
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {rentalFile?.main_tenant?.situation && (
-                <div className="space-y-6">
-                  {Object.entries(rentalFileService.getRequiredDocuments(rentalFile.main_tenant.situation)).map(
-                    ([key, requirement]: [string, any]) => {
-                      const files = rentalFile?.main_tenant?.documents?.[key]
-                      const isUploading = uploadingItem === key
-                      const hasFiles = files && (Array.isArray(files) ? files.length > 0 : files.trim() !== "")
-
-                      return (
-                        <div key={key} className="space-y-3">
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <h4 className="font-medium flex items-center">
-                                {requirement.description}
-                                {requirement.required && <span className="text-red-500 ml-1">*</span>}
-                                {hasFiles && <Check className="h-4 w-4 text-green-600 ml-2" />}
-                              </h4>
-                            </div>
-                            <Badge variant={requirement.required ? "default" : "secondary"}>
-                              {requirement.required ? "Requis" : "Optionnel"}
-                            </Badge>
-                          </div>
-
-                          {/* Zone d'upload */}
-                          <div className="relative">
-                            <input
-                              type="file"
-                              multiple={key === "identity" || key === "income_proof"}
-                              accept=".pdf,.jpg,.jpeg,.png"
-                              onChange={(e) => handleFileUpload(key, e.target.files)}
-                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                              disabled={isUploading}
-                            />
-                            <div
-                              className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors ${
-                                isUploading ? "border-blue-300 bg-blue-50" : "border-gray-300 hover:border-gray-400"
-                              }`}
-                            >
-                              {isUploading ? (
-                                <div className="space-y-2">
-                                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
-                                  <p className="text-sm text-blue-600">Upload en cours...</p>
-                                </div>
-                              ) : (
-                                <div className="space-y-2">
-                                  <Upload className="h-6 w-6 text-gray-400 mx-auto" />
-                                  <p className="text-sm text-gray-600">
-                                    {hasFiles ? "Remplacer" : "Ajouter"} le document
-                                  </p>
-                                  <p className="text-xs text-gray-500">PDF, JPG, PNG (max 10MB)</p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Affichage des fichiers */}
-                          {hasFiles && (
-                            <div className="space-y-2">
-                              {Array.isArray(files) ? (
-                                files.map((file, index) => (
-                                  <div
-                                    key={index}
-                                    className="flex items-center justify-between p-2 bg-green-50 border border-green-200 rounded"
-                                  >
-                                    <div className="flex items-center">
-                                      <File className="h-4 w-4 text-green-600 mr-2" />
-                                      <span className="text-sm text-green-800">Document {index + 1}</span>
-                                    </div>
-                                    <CheckCircle className="h-4 w-4 text-green-600" />
-                                  </div>
-                                ))
-                              ) : (
-                                <div className="flex items-center justify-between p-2 bg-green-50 border border-green-200 rounded">
-                                  <div className="flex items-center">
-                                    <File className="h-4 w-4 text-green-600 mr-2" />
-                                    <span className="text-sm text-green-800">Document uploadé</span>
-                                  </div>
-                                  <CheckCircle className="h-4 w-4 text-green-600" />
-                                </div>
-                              )}
-                            </div>
+                  {savedSearches && savedSearches.length > 0 ? (
+                    savedSearches.map((search) => (
+                      <div key={search.id} className="border rounded-lg p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className="font-medium">{search.name}</h4>
+                          {search.new_matches > 0 && (
+                            <Badge className="bg-green-600 hover:bg-green-700">{search.new_matches} nouveaux</Badge>
                           )}
                         </div>
-                      )
-                    },
-                  )}
-                </div>
-              )}
-
-              <div className="flex justify-between">
-                <Button variant="outline" onClick={prevStep}>
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Précédent
-                </Button>
-                <Button onClick={nextStep}>
-                  Suivant
-                  <ArrowRight className="h-4 w-4 ml-2" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Étape 4: Garants */}
-        {currentStep === 4 && (
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span className="flex items-center">
-                    <Shield className="h-5 w-5 mr-2" />
-                    Vos garants
-                  </span>
-                  <Button onClick={addGuarantor} size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Ajouter un garant
-                  </Button>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <div className="flex items-start">
-                    <AlertCircle className="h-5 w-5 text-blue-600 mr-2 mt-0.5" />
-                    <div className="text-sm">
-                      <p className="font-medium text-blue-800 mb-1">Pourquoi ajouter un garant ?</p>
-                      <p className="text-blue-700">
-                        Un garant renforce votre dossier et rassure les propriétaires. Il s'engage à payer le loyer si
-                        vous ne pouvez pas le faire.
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm mb-3">
+                          <div className="flex items-center">
+                            <span className="text-muted-foreground mr-2">Ville:</span>
+                            <span>{search.city}</span>
+                          </div>
+                          <div className="flex items-center">
+                            <span className="text-muted-foreground mr-2">Type:</span>
+                            <span>{search.property_type}</span>
+                          </div>
+                          <div className="flex items-center">
+                            <span className="text-muted-foreground mr-2">Budget:</span>
+                            <span>Max {search.max_price} €</span>
+                          </div>
+                          <div className="flex items-center">
+                            <span className="text-muted-foreground mr-2">Surface:</span>
+                            <span>
+                              {search.min_surface} - {search.max_surface} m²
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">
+                            {search.match_count || 0} biens correspondent à vos critères
+                          </span>
+                          <Button size="sm" asChild>
+                            <Link href={`/properties?search=${search.id}`}>Voir les biens</Link>
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8">
+                      <Search className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                      <h3 className="text-lg font-semibold mb-2">Aucune recherche sauvegardée</h3>
+                      <p className="text-muted-foreground mb-4">
+                        Créez des alertes pour être notifié des nouveaux biens correspondant à vos critères.
                       </p>
-                    </div>
-                  </div>
-                </div>
-
-                {rentalFile?.guarantors?.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    <Shield className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <p>Aucun garant ajouté</p>
-                    <p className="text-sm">Cliquez sur "Ajouter un garant" pour commencer</p>
-                  </div>
-                )}
-
-                {rentalFile?.guarantors?.map((guarantor: any, index: number) => (
-                  <div key={index} className="border rounded-lg p-4 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-medium">Garant {index + 1}</h4>
-                      <Button
-                        onClick={() => {
-                          const updatedGuarantors = rentalFile.guarantors.filter((_: any, i: number) => i !== index)
-                          handleUpdateData({ guarantors: updatedGuarantors })
-                        }}
-                        size="sm"
-                        variant="outline"
-                      >
-                        <X className="h-4 w-4" />
+                      <Button asChild>
+                        <Link href="/tenant/search">
+                          <Plus className="h-4 w-4 mr-2" />
+                          Créer une recherche
+                        </Link>
                       </Button>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <Input placeholder="Prénom" value={guarantor.first_name} />
-                      <Input placeholder="Nom" value={guarantor.last_name} />
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <CheckCircle className="h-5 w-5 mr-2 text-green-600" />
-                  Votre dossier est prêt !
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-600">{completionPercentage}%</div>
-                    <div className="text-sm text-gray-600">Complété</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-green-600">{validationScore}/100</div>
-                    <div className="text-sm text-gray-600">Score de validation</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-purple-600">
-                      {(rentalFile?.guarantors?.length || 0) + 1}
-                    </div>
-                    <div className="text-sm text-gray-600">Personnes dans le dossier</div>
-                  </div>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <Button asChild className="flex-1">
-                    <Link href="/properties">Rechercher des logements</Link>
+                  )}
+                </CardContent>
+                <CardFooter>
+                  <Button variant="outline" size="sm" className="w-full" onClick={() => setActiveTab("searches")}>
+                    Gérer mes recherches
                   </Button>
-                  <Button variant="outline" asChild className="flex-1">
-                    <Link href="/tenant/dashboard">Retour au tableau de bord</Link>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="flex justify-start">
-              <Button variant="outline" onClick={prevStep}>
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Précédent
-              </Button>
+                </CardFooter>
+              </Card>
             </div>
-          </div>
-        )}
+          )}
+
+          {activeTab === "applications" && (
+            <div className="space-y-6">
+              <h1 className="text-2xl font-bold">Mes candidatures</h1>
+
+              <div className="space-y-4">
+                {applications && applications.length > 0 ? (
+                  applications.map((application) => (
+                    <Card key={application.id}>
+                      <CardContent className="p-6">
+                        <div className="flex flex-col md:flex-row gap-4">
+                          <div className="w-full md:w-1/4">
+                            <div className="aspect-video rounded-md overflow-hidden">
+                              <img
+                                src={application.property?.property_images?.[0]?.url || "/placeholder.svg"}
+                                alt={application.property?.title || "Propriété"}
+                                className="h-full w-full object-cover"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex justify-between items-start mb-2">
+                              <div>
+                                <h3 className="font-semibold">{application.property?.title || "Propriété"}</h3>
+                                <p className="text-sm text-muted-foreground">
+                                  {application.property?.address || "Adresse non disponible"}
+                                </p>
+                              </div>
+                              <Badge variant={getStatusBadgeVariant(application.status)}>
+                                {getStatusText(application.status)}
+                              </Badge>
+                            </div>
+
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 my-4">
+                              <div>
+                                <p className="text-sm text-muted-foreground">Loyer</p>
+                                <p className="font-medium">{application.property?.price || 0} €/mois</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-muted-foreground">Candidature</p>
+                                <p className="font-medium">
+                                  {new Date(application.created_at).toLocaleDateString("fr-FR")}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-muted-foreground">Dernière mise à jour</p>
+                                <p className="font-medium">
+                                  {new Date(application.updated_at).toLocaleDateString("fr-FR")}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-muted-foreground">Score de matching</p>
+                                <div className="flex items-center">
+                                  <span className="font-medium mr-2">
+                                    {applicationService.calculateMatchScore(application, application.property)}%
+                                  </span>
+                                  <Progress
+                                    value={applicationService.calculateMatchScore(application, application.property)}
+                                    className="h-2 w-16"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex justify-end gap-2">
+                              <Button variant="outline" size="sm" asChild>
+                                <Link href={`/properties/${application.property?.id}`}>Voir l'annonce</Link>
+                              </Button>
+                              <Button variant="outline" size="sm">
+                                Contacter le propriétaire
+                              </Button>
+                              {application.status === "pending" && (
+                                <Button variant="destructive" size="sm">
+                                  Retirer ma candidature
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                ) : (
+                  <div className="text-center py-12">
+                    <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                    <h3 className="text-lg font-semibold mb-2">Aucune candidature envoyée</h3>
+                    <p className="text-muted-foreground mb-4">
+                      Vous n'avez pas encore postulé à des annonces. Explorez nos propriétés disponibles.
+                    </p>
+                    <Button asChild>
+                      <Link href="/properties">Voir les annonces</Link>
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === "messaging" && (
+            <div className="space-y-6">
+              <h1 className="text-2xl font-bold">Messagerie</h1>
+              <div className="text-center py-12">
+                <MessageSquare className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <h3 className="text-lg font-semibold mb-2">Messagerie en cours de développement</h3>
+                <p className="text-muted-foreground">
+                  Cette fonctionnalité sera bientôt disponible pour communiquer avec les propriétaires.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Autres onglets similaires... */}
+        </div>
       </div>
     </div>
   )
