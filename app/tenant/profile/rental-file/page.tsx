@@ -8,10 +8,10 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { ArrowLeft, ArrowRight, Users, Home, Shield, CheckCircle, Plus, AlertCircle, X } from "lucide-react"
-import { rentalFileService, RENTAL_SITUATIONS, CURRENT_HOUSING_TYPES } from "@/lib/rental-file-service"
+import { ArrowLeft, ArrowRight, Users, Shield, CheckCircle, Plus, AlertCircle, X } from "lucide-react"
+import { rentalFileService, RENTAL_SITUATIONS, GUARANTOR_TYPES } from "@/lib/rental-file-service"
 import { authService } from "@/lib/auth-service"
-import { PersonProfileForm } from "@/components/rental-file/person-profile-form"
+import { CompletePersonProfile } from "@/components/rental-file/complete-person-profile"
 import { toast } from "sonner"
 import Link from "next/link"
 
@@ -63,23 +63,7 @@ export default function RentalFilePage() {
   }
 
   const addCotenant = () => {
-    const newCotenant = {
-      type: "cotenant",
-      first_name: "",
-      last_name: "",
-      birth_date: "",
-      birth_place: "",
-      nationality: "française",
-      situation: "employee",
-      monthly_income: 0,
-      documents: {
-        identity: [],
-        income_proof: [],
-        tax_notice: "",
-        other: [],
-      },
-    }
-
+    const newCotenant = rentalFileService.createEmptyTenantProfile("cotenant")
     const updatedCotenants = [...(rentalFile.cotenants || []), newCotenant]
     handleUpdateData({ cotenants: updatedCotenants })
   }
@@ -98,16 +82,7 @@ export default function RentalFilePage() {
   const addGuarantor = () => {
     const newGuarantor = {
       type: "physical",
-      first_name: "",
-      last_name: "",
-      birth_date: "",
-      monthly_income: 0,
-      documents: {
-        identity: [],
-        income_proof: [],
-        tax_notice: "",
-        other: [],
-      },
+      personal_info: rentalFileService.createEmptyTenantProfile("main"),
     }
 
     const updatedGuarantors = [...(rentalFile.guarantors || []), newGuarantor]
@@ -174,7 +149,7 @@ export default function RentalFilePage() {
               Retour au tableau de bord
             </Link>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Mon dossier de location</h1>
-            <p className="text-gray-600">Créez votre dossier numérique certifié pour vos candidatures</p>
+            <p className="text-gray-600">Créez votre dossier numérique certifié conforme à DossierFacile</p>
           </div>
           <div className="text-right space-y-2">
             <Badge variant={completionPercentage >= 80 ? "default" : "secondary"} className="text-lg px-4 py-2">
@@ -208,7 +183,7 @@ export default function RentalFilePage() {
         {/* Étape 1: Locataire principal */}
         {currentStep === 1 && (
           <div className="space-y-6">
-            <PersonProfileForm
+            <CompletePersonProfile
               profile={rentalFile?.main_tenant || {}}
               onUpdate={(updatedProfile) => handleUpdateData({ main_tenant: updatedProfile })}
               title="Locataire principal"
@@ -230,12 +205,11 @@ export default function RentalFilePage() {
               <CardHeader>
                 <CardTitle className="flex items-center">
                   <Users className="h-5 w-5 mr-2" />
-                  Situation de location
+                  Constituez-vous un dossier de location afin d'habiter
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div>
-                  <Label>Comment allez-vous louer ? *</Label>
                   <RadioGroup
                     value={rentalFile?.rental_situation || "alone"}
                     onValueChange={(value) => handleUpdateData({ rental_situation: value })}
@@ -283,7 +257,7 @@ export default function RentalFilePage() {
                 </Card>
 
                 {rentalFile?.cotenants?.map((cotenant: any, index: number) => (
-                  <PersonProfileForm
+                  <CompletePersonProfile
                     key={index}
                     profile={cotenant}
                     onUpdate={(updatedProfile) => updateCotenant(index, updatedProfile)}
@@ -312,84 +286,15 @@ export default function RentalFilePage() {
         {currentStep === 3 && (
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center">
-                <Home className="h-5 w-5 mr-2" />
-                Votre logement actuel
-              </CardTitle>
+              <CardTitle>Logement actuel</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div>
-                <Label>Quelle est votre situation de logement actuelle ? *</Label>
-                <RadioGroup
-                  value={rentalFile?.current_housing?.type || "tenant"}
-                  onValueChange={(value) =>
-                    handleUpdateData({
-                      current_housing: { ...rentalFile.current_housing, type: value },
-                    })
-                  }
-                  className="mt-2"
-                >
-                  {CURRENT_HOUSING_TYPES.map((option) => (
-                    <div key={option.value} className="space-y-2">
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value={option.value} id={option.value} />
-                        <Label htmlFor={option.value} className="font-medium">
-                          {option.label}
-                        </Label>
-                      </div>
-                      <p className="text-sm text-gray-600 ml-6">{option.description}</p>
-                    </div>
-                  ))}
-                </RadioGroup>
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <p className="text-blue-800 text-sm">
+                  Les informations sur votre situation d'hébergement actuel ont été renseignées dans les profils
+                  individuels. Cette étape permet de valider que toutes les informations sont complètes.
+                </p>
               </div>
-
-              {rentalFile?.current_housing?.type === "tenant" && (
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="current_address">Adresse actuelle</Label>
-                    <Input
-                      id="current_address"
-                      placeholder="Adresse complète"
-                      value={rentalFile?.current_housing?.address || ""}
-                      onChange={(e) =>
-                        handleUpdateData({
-                          current_housing: { ...rentalFile.current_housing, address: e.target.value },
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="current_rent">Loyer actuel (€)</Label>
-                    <Input
-                      id="current_rent"
-                      type="number"
-                      placeholder="800"
-                      value={rentalFile?.current_housing?.monthly_rent || ""}
-                      onChange={(e) =>
-                        handleUpdateData({
-                          current_housing: {
-                            ...rentalFile.current_housing,
-                            monthly_rent: Number.parseFloat(e.target.value) || 0,
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="departure_date">Date de départ prévue</Label>
-                    <Input
-                      id="departure_date"
-                      type="date"
-                      value={rentalFile?.current_housing?.departure_date || ""}
-                      onChange={(e) =>
-                        handleUpdateData({
-                          current_housing: { ...rentalFile.current_housing, departure_date: e.target.value },
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-              )}
 
               <div className="flex justify-between">
                 <Button variant="outline" onClick={prevStep}>
@@ -413,7 +318,7 @@ export default function RentalFilePage() {
                 <CardTitle className="flex items-center justify-between">
                   <span className="flex items-center">
                     <Shield className="h-5 w-5 mr-2" />
-                    Vos garants
+                    Garant
                   </span>
                   <Button onClick={addGuarantor} size="sm">
                     <Plus className="h-4 w-4 mr-2" />
@@ -462,96 +367,123 @@ export default function RentalFilePage() {
                       value={guarantor.type || "physical"}
                       onValueChange={(value) => {
                         const updatedGuarantor = { ...guarantor, type: value }
+                        if (value === "physical" && !updatedGuarantor.personal_info) {
+                          updatedGuarantor.personal_info = rentalFileService.createEmptyTenantProfile("main")
+                        }
                         updateGuarantor(index, updatedGuarantor)
                       }}
                       className="mt-2"
                     >
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="physical" id={`physical_${index}`} />
-                        <Label htmlFor={`physical_${index}`}>Personne physique</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="moral" id={`moral_${index}`} />
-                        <Label htmlFor={`moral_${index}`}>Personne morale</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="visale" id={`visale_${index}`} />
-                        <Label htmlFor={`visale_${index}`}>Garantie Visale</Label>
-                      </div>
+                      {GUARANTOR_TYPES.map((type) => (
+                        <div key={type.value} className="space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value={type.value} id={`${type.value}_${index}`} />
+                            <Label htmlFor={`${type.value}_${index}`} className="font-medium">
+                              {type.label}
+                            </Label>
+                          </div>
+                          <p className="text-sm text-gray-600 ml-6">{type.description}</p>
+                        </div>
+                      ))}
                     </RadioGroup>
                   </div>
 
-                  {guarantor.type === "physical" && (
+                  {guarantor.type === "physical" && guarantor.personal_info && (
+                    <CompletePersonProfile
+                      profile={guarantor.personal_info}
+                      onUpdate={(updatedProfile) => {
+                        const updatedGuarantor = { ...guarantor, personal_info: updatedProfile }
+                        updateGuarantor(index, updatedGuarantor)
+                      }}
+                      title="Informations du garant"
+                    />
+                  )}
+
+                  {guarantor.type === "organism" && (
                     <div className="space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <Label htmlFor={`guarantor_first_name_${index}`}>Prénom</Label>
-                          <Input
-                            id={`guarantor_first_name_${index}`}
-                            value={guarantor.first_name || ""}
-                            onChange={(e) => {
-                              const updatedGuarantor = { ...guarantor, first_name: e.target.value }
-                              updateGuarantor(index, updatedGuarantor)
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor={`guarantor_last_name_${index}`}>Nom</Label>
-                          <Input
-                            id={`guarantor_last_name_${index}`}
-                            value={guarantor.last_name || ""}
-                            onChange={(e) => {
-                              const updatedGuarantor = { ...guarantor, last_name: e.target.value }
-                              updateGuarantor(index, updatedGuarantor)
-                            }}
-                          />
-                        </div>
+                      <div>
+                        <Label>Type d'organisme</Label>
+                        <RadioGroup
+                          value={guarantor.organism_type || "visale"}
+                          onValueChange={(value) => {
+                            const updatedGuarantor = { ...guarantor, organism_type: value }
+                            updateGuarantor(index, updatedGuarantor)
+                          }}
+                          className="mt-2"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="visale" id={`visale_${index}`} />
+                            <Label htmlFor={`visale_${index}`}>Garantie Visale</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="autre" id={`autre_organism_${index}`} />
+                            <Label htmlFor={`autre_organism_${index}`}>Autre organisme</Label>
+                          </div>
+                        </RadioGroup>
                       </div>
 
+                      {guarantor.organism_type === "visale" && (
+                        <div className="bg-green-50 p-4 rounded-lg">
+                          <h4 className="font-medium text-green-800 mb-2">Garantie Visale</h4>
+                          <p className="text-sm text-green-700 mb-3">
+                            La garantie Visale est gratuite et couvre les loyers impayés. Vous devez faire votre demande
+                            sur le site d'Action Logement.
+                          </p>
+                          <Button variant="outline" size="sm" asChild>
+                            <a href="https://www.visale.fr" target="_blank" rel="noopener noreferrer">
+                              Faire ma demande Visale
+                            </a>
+                          </Button>
+                        </div>
+                      )}
+
+                      {guarantor.organism_type === "autre" && (
+                        <div>
+                          <Label htmlFor={`organism_name_${index}`}>Nom de l'organisme</Label>
+                          <Input
+                            id={`organism_name_${index}`}
+                            placeholder="Nom de l'organisme"
+                            value={guarantor.organism_name || ""}
+                            onChange={(e) => {
+                              const updatedGuarantor = { ...guarantor, organism_name: e.target.value }
+                              updateGuarantor(index, updatedGuarantor)
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {guarantor.type === "moral_person" && (
+                    <div className="space-y-4">
                       <div>
-                        <Label htmlFor={`guarantor_income_${index}`}>Revenus mensuels (€)</Label>
+                        <Label htmlFor={`company_name_${index}`}>Nom de la personne morale</Label>
                         <Input
-                          id={`guarantor_income_${index}`}
-                          type="number"
-                          value={guarantor.monthly_income || ""}
+                          id={`company_name_${index}`}
+                          placeholder="Nom de l'entreprise"
+                          value={guarantor.company_name || ""}
                           onChange={(e) => {
-                            const updatedGuarantor = {
-                              ...guarantor,
-                              monthly_income: Number.parseFloat(e.target.value) || 0,
-                            }
+                            const updatedGuarantor = { ...guarantor, company_name: e.target.value }
                             updateGuarantor(index, updatedGuarantor)
                           }}
                         />
                       </div>
+
+                      <div className="bg-yellow-50 p-4 rounded-lg">
+                        <p className="text-sm text-yellow-800">
+                          J'ajoute un extrait K bis de la société, ou toute autre pièce justifiant de l'existence légale
+                          de la personne.
+                        </p>
+                      </div>
                     </div>
                   )}
 
-                  {guarantor.type === "moral" && (
-                    <div>
-                      <Label htmlFor={`company_name_${index}`}>Nom de l'entreprise</Label>
-                      <Input
-                        id={`company_name_${index}`}
-                        value={guarantor.company_name || ""}
-                        onChange={(e) => {
-                          const updatedGuarantor = { ...guarantor, company_name: e.target.value }
-                          updateGuarantor(index, updatedGuarantor)
-                        }}
-                      />
-                    </div>
-                  )}
-
-                  {guarantor.type === "visale" && (
-                    <div className="bg-green-50 p-4 rounded-lg">
-                      <h4 className="font-medium text-green-800 mb-2">Garantie Visale</h4>
-                      <p className="text-sm text-green-700 mb-3">
-                        La garantie Visale est gratuite et couvre les loyers impayés. Vous devez faire votre demande sur
-                        le site d'Action Logement.
+                  {guarantor.type === "none" && (
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <p className="text-sm text-gray-700">
+                        Vous avez choisi de ne pas ajouter de garant. Cela peut réduire vos chances d'obtenir un
+                        logement.
                       </p>
-                      <Button variant="outline" size="sm" asChild>
-                        <a href="https://www.visale.fr" target="_blank" rel="noopener noreferrer">
-                          Faire ma demande Visale
-                        </a>
-                      </Button>
                     </div>
                   )}
                 </CardContent>
