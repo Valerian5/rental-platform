@@ -1,17 +1,19 @@
 "use client"
 
+import { Input } from "@/components/ui/input"
+
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { ArrowLeft, ArrowRight, Users, Shield, CheckCircle, Plus, AlertCircle, X } from "lucide-react"
+import { Label } from "@/components/ui/label"
+import { ArrowLeft, ArrowRight, Users, Shield, CheckCircle, Plus, AlertCircle, X, Eye } from "lucide-react"
 import { rentalFileService, RENTAL_SITUATIONS, GUARANTOR_TYPES } from "@/lib/rental-file-service"
 import { authService } from "@/lib/auth-service"
-import { CompletePersonProfile } from "@/components/rental-file/complete-person-profile"
+import { ImprovedPersonProfile } from "@/components/rental-file/improved-person-profile"
+import { RentalFileViewer } from "@/components/rental-file/rental-file-viewer"
 import { toast } from "sonner"
 import Link from "next/link"
 
@@ -20,8 +22,9 @@ export default function RentalFilePage() {
   const [rentalFile, setRentalFile] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [currentStep, setCurrentStep] = useState(1)
+  const [showViewer, setShowViewer] = useState(false)
 
-  const totalSteps = 4
+  const totalSteps = 3 // Suppression de l'étape logement
 
   useEffect(() => {
     const fetchData = async () => {
@@ -112,6 +115,20 @@ export default function RentalFilePage() {
     }
   }
 
+  const validateDossier = async () => {
+    try {
+      const updatedFile = await rentalFileService.updateRentalFile(currentUser.id, {
+        ...rentalFile,
+        status: "validated",
+      })
+      setRentalFile(updatedFile)
+      toast.success("Dossier validé avec succès !")
+    } catch (error) {
+      console.error("Erreur validation:", error)
+      toast.error("Erreur lors de la validation")
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="container mx-auto py-8">
@@ -138,6 +155,27 @@ export default function RentalFilePage() {
   const completionPercentage = rentalFile?.completion_percentage || 0
   const validationScore = rentalFile?.validation_score || 0
 
+  if (showViewer) {
+    return (
+      <div className="container mx-auto py-8 max-w-6xl">
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <Button onClick={() => setShowViewer(false)} variant="outline" className="mb-4">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Retour à l'édition
+              </Button>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">Aperçu de votre dossier</h1>
+              <p className="text-gray-600">Vérifiez et validez votre dossier de location</p>
+            </div>
+          </div>
+
+          <RentalFileViewer rentalFile={rentalFile} onValidate={validateDossier} />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="container mx-auto py-8 max-w-6xl">
       <div className="space-y-6">
@@ -152,9 +190,15 @@ export default function RentalFilePage() {
             <p className="text-gray-600">Créez votre dossier numérique certifié conforme à DossierFacile</p>
           </div>
           <div className="text-right space-y-2">
-            <Badge variant={completionPercentage >= 80 ? "default" : "secondary"} className="text-lg px-4 py-2">
-              {completionPercentage}% complété
-            </Badge>
+            <div className="flex items-center space-x-2">
+              <Badge variant={completionPercentage >= 80 ? "default" : "secondary"} className="text-lg px-4 py-2">
+                {completionPercentage}% complété
+              </Badge>
+              <Button onClick={() => setShowViewer(true)} variant="outline" size="sm">
+                <Eye className="h-4 w-4 mr-2" />
+                Aperçu
+              </Button>
+            </div>
             <div className="text-sm text-gray-600">
               Score: <span className="font-medium">{validationScore}/100</span>
             </div>
@@ -172,10 +216,7 @@ export default function RentalFilePage() {
                 1. Locataire principal
               </span>
               <span className={currentStep >= 2 ? "text-blue-600 font-medium" : "text-gray-500"}>2. Colocataires</span>
-              <span className={currentStep >= 3 ? "text-blue-600 font-medium" : "text-gray-500"}>
-                3. Logement actuel
-              </span>
-              <span className={currentStep >= 4 ? "text-blue-600 font-medium" : "text-gray-500"}>4. Garants</span>
+              <span className={currentStep >= 3 ? "text-blue-600 font-medium" : "text-gray-500"}>3. Garants</span>
             </div>
           </CardContent>
         </Card>
@@ -183,7 +224,7 @@ export default function RentalFilePage() {
         {/* Étape 1: Locataire principal */}
         {currentStep === 1 && (
           <div className="space-y-6">
-            <CompletePersonProfile
+            <ImprovedPersonProfile
               profile={rentalFile?.main_tenant || {}}
               onUpdate={(updatedProfile) => handleUpdateData({ main_tenant: updatedProfile })}
               title="Locataire principal"
@@ -257,7 +298,7 @@ export default function RentalFilePage() {
                 </Card>
 
                 {rentalFile?.cotenants?.map((cotenant: any, index: number) => (
-                  <CompletePersonProfile
+                  <ImprovedPersonProfile
                     key={index}
                     profile={cotenant}
                     onUpdate={(updatedProfile) => updateCotenant(index, updatedProfile)}
@@ -282,36 +323,8 @@ export default function RentalFilePage() {
           </div>
         )}
 
-        {/* Étape 3: Logement actuel */}
+        {/* Étape 3: Garants */}
         {currentStep === 3 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Logement actuel</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <p className="text-blue-800 text-sm">
-                  Les informations sur votre situation d'hébergement actuel ont été renseignées dans les profils
-                  individuels. Cette étape permet de valider que toutes les informations sont complètes.
-                </p>
-              </div>
-
-              <div className="flex justify-between">
-                <Button variant="outline" onClick={prevStep}>
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Précédent
-                </Button>
-                <Button onClick={nextStep}>
-                  Suivant
-                  <ArrowRight className="h-4 w-4 ml-2" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Étape 4: Garants */}
-        {currentStep === 4 && (
           <div className="space-y-6">
             <Card>
               <CardHeader>
@@ -389,7 +402,7 @@ export default function RentalFilePage() {
                   </div>
 
                   {guarantor.type === "physical" && guarantor.personal_info && (
-                    <CompletePersonProfile
+                    <ImprovedPersonProfile
                       profile={guarantor.personal_info}
                       onUpdate={(updatedProfile) => {
                         const updatedGuarantor = { ...guarantor, personal_info: updatedProfile }
@@ -434,21 +447,6 @@ export default function RentalFilePage() {
                               Faire ma demande Visale
                             </a>
                           </Button>
-                        </div>
-                      )}
-
-                      {guarantor.organism_type === "autre" && (
-                        <div>
-                          <Label htmlFor={`organism_name_${index}`}>Nom de l'organisme</Label>
-                          <Input
-                            id={`organism_name_${index}`}
-                            placeholder="Nom de l'organisme"
-                            value={guarantor.organism_name || ""}
-                            onChange={(e) => {
-                              const updatedGuarantor = { ...guarantor, organism_name: e.target.value }
-                              updateGuarantor(index, updatedGuarantor)
-                            }}
-                          />
                         </div>
                       )}
                     </div>
@@ -516,8 +514,9 @@ export default function RentalFilePage() {
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-4">
-                  <Button asChild className="flex-1">
-                    <Link href="/properties">Rechercher des logements</Link>
+                  <Button onClick={() => setShowViewer(true)} className="flex-1">
+                    <Eye className="h-4 w-4 mr-2" />
+                    Aperçu et validation
                   </Button>
                   <Button variant="outline" asChild className="flex-1">
                     <Link href="/tenant/dashboard">Retour au tableau de bord</Link>
