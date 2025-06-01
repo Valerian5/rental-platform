@@ -12,9 +12,11 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
   // Import dynamique de jsPDF pour éviter les erreurs SSR
   const { jsPDF } = await import("jspdf")
 
+  // Pour manipuler les images
   const doc = new jsPDF()
   let yPosition = 20
   const pageWidth = doc.internal.pageSize.width
+  const pageHeight = doc.internal.pageSize.height
   const margin = 20
 
   // Fonction helper pour ajouter du texte avec retour à la ligne
@@ -46,14 +48,95 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
 
   // Fonction pour ajouter une nouvelle page si nécessaire
   const checkPageBreak = (requiredSpace: number) => {
-    if (yPosition + requiredSpace > doc.internal.pageSize.height - 20) {
+    if (yPosition + requiredSpace > pageHeight - 20) {
       doc.addPage()
       yPosition = 20
     }
   }
 
-  // Fonction pour ajouter une section de documents
-  const addDocumentSection = (title: string, documents: string[] | undefined, description?: string) => {
+  // Fonction pour ajouter un document directement dans le PDF
+  const addDocumentToPDF = async (documentUrl: string, documentName: string) => {
+    try {
+      // Ajouter une nouvelle page pour le document
+      doc.addPage()
+
+      // En-tête de la page du document
+      doc.setFillColor("#3B82F6")
+      doc.rect(0, 0, pageWidth, 30, "F")
+
+      doc.setTextColor("#FFFFFF")
+      doc.setFontSize(14)
+      doc.setFont("helvetica", "bold")
+      doc.text("PIÈCE JOINTE", margin, 15)
+
+      doc.setFontSize(10)
+      doc.text(documentName, margin, 25)
+
+      // Essayer de charger l'image
+      try {
+        // Simuler le chargement d'une image (dans un environnement réel, vous utiliseriez fetch)
+        // Note: Dans un environnement réel, vous devrez gérer les CORS et les types de fichiers
+        const img = new Image()
+        img.crossOrigin = "Anonymous"
+
+        // Créer une promesse pour attendre le chargement de l'image
+        await new Promise((resolve, reject) => {
+          img.onload = () => {
+            try {
+              // Calculer les dimensions pour adapter l'image à la page
+              const imgRatio = img.width / img.height
+              let imgWidth = pageWidth - 2 * margin
+              let imgHeight = imgWidth / imgRatio
+
+              // Si l'image est trop haute, ajuster la hauteur
+              if (imgHeight > pageHeight - 60) {
+                imgHeight = pageHeight - 60
+                imgWidth = imgHeight * imgRatio
+              }
+
+              // Centrer l'image horizontalement
+              const xOffset = (pageWidth - imgWidth) / 2
+
+              // Ajouter l'image au PDF
+              doc.addImage(img, "JPEG", xOffset, 40, imgWidth, imgHeight)
+              resolve(true)
+            } catch (err) {
+              // En cas d'erreur lors de l'ajout de l'image
+              doc.setTextColor("#FF0000")
+              doc.setFontSize(12)
+              doc.text("Impossible d'afficher ce document", margin, 50)
+              doc.text("Type de document non supporté ou erreur de chargement", margin, 65)
+              resolve(false)
+            }
+          }
+
+          img.onerror = () => {
+            // En cas d'erreur de chargement
+            doc.setTextColor("#FF0000")
+            doc.setFontSize(12)
+            doc.text("Impossible de charger ce document", margin, 50)
+            doc.text("URL invalide ou problème d'accès", margin, 65)
+            resolve(false)
+          }
+
+          // Dans un environnement réel, vous utiliseriez l'URL réelle du document
+          // Pour cette démonstration, nous utilisons une URL de placeholder
+          img.src = documentUrl || "/placeholder.svg?height=400&width=300"
+        })
+      } catch (error) {
+        // Gérer les erreurs générales
+        doc.setTextColor("#FF0000")
+        doc.setFontSize(12)
+        doc.text("Erreur lors du traitement du document", margin, 50)
+        doc.text(`${error}`, margin, 65)
+      }
+    } catch (error) {
+      console.error("Erreur lors de l'ajout du document au PDF:", error)
+    }
+  }
+
+  // Fonction pour ajouter une section de documents avec prévisualisation
+  const addDocumentSection = async (title: string, documents: string[] | undefined, description?: string) => {
     if (!documents || documents.length === 0) return yPosition
 
     checkPageBreak(20)
@@ -63,10 +146,28 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       yPosition = addText(description, margin + 5, yPosition + 5, { fontSize: 10, color: "#666666" })
     }
 
-    documents.forEach((doc, index) => {
+    // Lister les documents
+    for (let i = 0; i < documents.length; i++) {
+      const doc = documents[i]
       checkPageBreak(10)
       yPosition = addText(`• ${doc}`, margin + 10, yPosition + 5, { fontSize: 10 })
-    })
+
+      // Ajouter un lien vers la page du document
+      const pageNumber = i + 1 // Numéro de page relatif pour ce document
+      yPosition = addText(`(Voir document en page ${pageNumber})`, margin + 20, yPosition + 5, {
+        fontSize: 8,
+        color: "#3B82F6",
+        style: "italic",
+      })
+    }
+
+    // Ajouter les documents eux-mêmes (chacun sur une page)
+    for (const document of documents) {
+      // Dans un environnement réel, vous utiliseriez l'URL réelle du document
+      // Pour cette démonstration, nous utilisons une URL fictive basée sur le nom
+      const documentUrl = `/api/documents/${encodeURIComponent(document)}`
+      await addDocumentToPDF(documentUrl, document)
+    }
 
     return yPosition + 5
   }
@@ -88,9 +189,8 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
 
   yPosition += 15
 
-  // Informations générales
-  checkPageBreak(40)
-  yPosition = addText("INFORMATIONS GÉNÉRALES", margin, yPosition, {
+  // Table des matières
+  yPosition = addText("TABLE DES MATIÈRES", margin, yPosition, {
     fontSize: 16,
     style: "bold",
     color: "#3B82F6",
@@ -98,6 +198,34 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
 
   yPosition += 5
   doc.setDrawColor("#3B82F6")
+  doc.line(margin, yPosition, pageWidth - margin, yPosition)
+  yPosition += 10
+
+  yPosition = addText("1. Informations générales", margin, yPosition)
+  yPosition = addText("2. Locataire principal", margin, yPosition + 5)
+  if (rentalFile.cotenants && rentalFile.cotenants.length > 0) {
+    yPosition = addText(
+      `3. ${rentalFile.rental_situation === "couple" ? "Conjoint(e)" : "Colocataires"}`,
+      margin,
+      yPosition + 5,
+    )
+  }
+  if (rentalFile.guarantors && rentalFile.guarantors.length > 0) {
+    yPosition = addText(`4. Garants`, margin, yPosition + 5)
+  }
+  yPosition = addText(`5. Pièces jointes`, margin, yPosition + 5)
+
+  // Informations générales
+  doc.addPage()
+  yPosition = 20
+
+  yPosition = addText("1. INFORMATIONS GÉNÉRALES", margin, yPosition, {
+    fontSize: 16,
+    style: "bold",
+    color: "#3B82F6",
+  })
+
+  yPosition += 5
   doc.line(margin, yPosition, pageWidth - margin, yPosition)
   yPosition += 10
 
@@ -116,8 +244,10 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
   yPosition += 15
 
   // Locataire principal
-  checkPageBreak(60)
-  yPosition = addText("LOCATAIRE PRINCIPAL", margin, yPosition, {
+  doc.addPage()
+  yPosition = 20
+
+  yPosition = addText("2. LOCATAIRE PRINCIPAL", margin, yPosition, {
     fontSize: 16,
     style: "bold",
     color: "#3B82F6",
@@ -150,15 +280,16 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
 
     yPosition += 10
 
-    // Documents d'identité
-    yPosition = addDocumentSection(
-      "PIÈCES D'IDENTITÉ",
-      mainTenant.identity_documents,
-      "Carte d'identité, passeport ou titre de séjour",
-    )
+    // Documents d'identité - on liste seulement, les documents seront ajoutés plus tard
+    if (mainTenant.identity_documents && mainTenant.identity_documents.length > 0) {
+      yPosition = addText("PIÈCES D'IDENTITÉ", margin, yPosition, { style: "bold", fontSize: 14 })
+      mainTenant.identity_documents.forEach((doc, index) => {
+        yPosition = addText(`• ${doc}`, margin + 5, yPosition + 5)
+      })
+      yPosition += 5
+    }
 
     // Activité professionnelle
-    yPosition += 5
     yPosition = addText("ACTIVITÉ PROFESSIONNELLE", margin, yPosition, { style: "bold", fontSize: 14 })
     const activity = MAIN_ACTIVITIES.find((a) => a.value === mainTenant.main_activity)
     yPosition = addText(`Activité: ${activity?.label || "Non renseignée"}`, margin + 5, yPosition + 5)
@@ -166,48 +297,23 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       yPosition = addText(`Description: ${activity.description}`, margin + 5, yPosition + 5, { fontSize: 10 })
     }
 
-    // Documents d'activité
-    yPosition = addDocumentSection(
-      "JUSTIFICATIFS D'ACTIVITÉ",
-      mainTenant.activity_documents,
-      activity?.required_documents?.join(", "),
-    )
+    // Documents d'activité - on liste seulement
+    if (mainTenant.activity_documents && mainTenant.activity_documents.length > 0) {
+      yPosition = addText("JUSTIFICATIFS D'ACTIVITÉ", margin, yPosition + 5, { style: "bold" })
+      mainTenant.activity_documents.forEach((doc, index) => {
+        yPosition = addText(`• ${doc}`, margin + 5, yPosition + 5)
+      })
+      yPosition += 5
+    }
 
     // Logement actuel
-    yPosition += 5
     yPosition = addText("LOGEMENT ACTUEL", margin, yPosition, { style: "bold", fontSize: 14 })
     const housing = CURRENT_HOUSING_SITUATIONS.find((h) => h.value === mainTenant.current_housing_situation)
     yPosition = addText(`Situation: ${housing?.label || "Non renseigné"}`, margin + 5, yPosition + 5)
 
-    // Documents logement actuel
-    if (mainTenant.current_housing_documents) {
-      if (mainTenant.current_housing_documents.quittances_loyer) {
-        yPosition = addDocumentSection(
-          "QUITTANCES DE LOYER",
-          mainTenant.current_housing_documents.quittances_loyer,
-          "3 dernières quittances de loyer",
-        )
-      }
-      if (mainTenant.current_housing_documents.attestation_bon_paiement) {
-        yPosition = addDocumentSection("ATTESTATION DE BON PAIEMENT", [
-          mainTenant.current_housing_documents.attestation_bon_paiement,
-        ])
-      }
-      if (mainTenant.current_housing_documents.attestation_hebergement) {
-        yPosition = addDocumentSection("ATTESTATION D'HÉBERGEMENT", [
-          mainTenant.current_housing_documents.attestation_hebergement,
-        ])
-      }
-      if (mainTenant.current_housing_documents.avis_taxe_fonciere) {
-        yPosition = addDocumentSection("AVIS DE TAXE FONCIÈRE", [
-          mainTenant.current_housing_documents.avis_taxe_fonciere,
-        ])
-      }
-    }
-
     // Revenus détaillés
-    yPosition += 10
-    yPosition = addText("SOURCES DE REVENUS", margin, yPosition, { style: "bold", fontSize: 14 })
+    checkPageBreak(40)
+    yPosition = addText("SOURCES DE REVENUS", margin, yPosition + 10, { style: "bold", fontSize: 14 })
 
     if (mainTenant.income_sources?.work_income) {
       const workIncomeType = WORK_INCOME_TYPES.find((t) => t.value === mainTenant.income_sources.work_income?.type)
@@ -216,7 +322,6 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
         margin + 5,
         yPosition + 5,
       )
-      yPosition = addDocumentSection("Justificatifs revenus travail", mainTenant.income_sources.work_income.documents)
     }
 
     if (mainTenant.income_sources?.social_aid?.length > 0) {
@@ -227,7 +332,6 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
           margin + 5,
           yPosition + 5,
         )
-        yPosition = addDocumentSection(`Justificatifs aide sociale ${index + 1}`, aid.documents)
       })
     }
 
@@ -238,14 +342,12 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
           margin + 5,
           yPosition + 5,
         )
-        yPosition = addDocumentSection(`Justificatifs retraite/pension ${index + 1}`, pension.documents)
       })
     }
 
     if (mainTenant.income_sources?.rent_income?.length > 0) {
       mainTenant.income_sources.rent_income.forEach((rent: any, index: number) => {
         yPosition = addText(`• Rente ${index + 1} (${rent.type}): ${rent.amount || 0}€/mois`, margin + 5, yPosition + 5)
-        yPosition = addDocumentSection(`Justificatifs rente ${index + 1}`, rent.documents)
       })
     }
 
@@ -255,7 +357,6 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
         margin + 5,
         yPosition + 5,
       )
-      yPosition = addDocumentSection("Justificatifs bourse", mainTenant.income_sources.scholarship.documents)
     }
 
     if (mainTenant.income_sources?.no_income) {
@@ -264,34 +365,33 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
         margin + 5,
         yPosition + 5,
       )
-      yPosition = addDocumentSection("Justificatifs absence de revenus", mainTenant.income_sources.no_income.documents)
     }
 
     // Situation fiscale
-    yPosition += 10
-    yPosition = addText("SITUATION FISCALE", margin, yPosition, { style: "bold", fontSize: 14 })
+    checkPageBreak(30)
+    yPosition = addText("SITUATION FISCALE", margin, yPosition + 10, { style: "bold", fontSize: 14 })
     const taxSituation = TAX_SITUATIONS.find((t) => t.value === mainTenant.tax_situation?.type)
     yPosition = addText(`Situation: ${taxSituation?.label || "Non renseignée"}`, margin + 5, yPosition + 5)
     if (mainTenant.tax_situation?.explanation) {
       yPosition = addText(`Explication: ${mainTenant.tax_situation.explanation}`, margin + 5, yPosition + 5)
     }
-    yPosition = addDocumentSection(
-      "DOCUMENTS FISCAUX",
-      mainTenant.tax_situation?.documents,
-      "Avis d'imposition ou justificatif fiscal",
-    )
   }
 
   // Colocataires
   if (rentalFile.cotenants && rentalFile.cotenants.length > 0) {
-    yPosition += 20
-    checkPageBreak(40)
+    doc.addPage()
+    yPosition = 20
 
-    yPosition = addText(rentalFile.rental_situation === "couple" ? "CONJOINT(E)" : "COLOCATAIRES", margin, yPosition, {
-      fontSize: 16,
-      style: "bold",
-      color: "#3B82F6",
-    })
+    yPosition = addText(
+      `3. ${rentalFile.rental_situation === "couple" ? "CONJOINT(E)" : "COLOCATAIRES"}`,
+      margin,
+      yPosition,
+      {
+        fontSize: 16,
+        style: "bold",
+        color: "#3B82F6",
+      },
+    )
 
     yPosition += 5
     doc.line(margin, yPosition, pageWidth - margin, yPosition)
@@ -314,21 +414,31 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
         yPosition = addText(`Activité: ${cotenantActivity.label}`, margin + 5, yPosition + 5)
       }
 
-      // Documents du colocataire
-      yPosition = addDocumentSection("Pièces d'identité", cotenant.identity_documents)
-      yPosition = addDocumentSection("Justificatifs d'activité", cotenant.activity_documents)
-      yPosition = addDocumentSection("Documents fiscaux", cotenant.tax_situation?.documents)
+      // Documents du colocataire - on liste seulement
+      if (cotenant.identity_documents && cotenant.identity_documents.length > 0) {
+        yPosition = addText("Pièces d'identité:", margin + 5, yPosition + 5, { style: "bold" })
+        cotenant.identity_documents.forEach((doc, index) => {
+          yPosition = addText(`• ${doc}`, margin + 10, yPosition + 5)
+        })
+      }
+
+      if (cotenant.activity_documents && cotenant.activity_documents.length > 0) {
+        yPosition = addText("Justificatifs d'activité:", margin + 5, yPosition + 5, { style: "bold" })
+        cotenant.activity_documents.forEach((doc, index) => {
+          yPosition = addText(`• ${doc}`, margin + 10, yPosition + 5)
+        })
+      }
 
       yPosition += 10
     })
   }
 
-  // Garants détaillés
+  // Garants
   if (rentalFile.guarantors && rentalFile.guarantors.length > 0) {
-    yPosition += 20
-    checkPageBreak(40)
+    doc.addPage()
+    yPosition = 20
 
-    yPosition = addText("GARANTS", margin, yPosition, {
+    yPosition = addText("4. GARANTS", margin, yPosition, {
       fontSize: 16,
       style: "bold",
       color: "#3B82F6",
@@ -377,15 +487,15 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
               yPosition + 5,
             )
           }
-
-          // Autres sources de revenus...
         }
 
-        // Documents du garant
-        yPosition += 5
-        yPosition = addDocumentSection("Pièces d'identité du garant", guarantorInfo.identity_documents)
-        yPosition = addDocumentSection("Justificatifs d'activité du garant", guarantorInfo.activity_documents)
-        yPosition = addDocumentSection("Documents fiscaux du garant", guarantorInfo.tax_situation?.documents)
+        // Documents du garant - on liste seulement
+        if (guarantorInfo.identity_documents && guarantorInfo.identity_documents.length > 0) {
+          yPosition = addText("Pièces d'identité:", margin + 5, yPosition + 5, { style: "bold" })
+          guarantorInfo.identity_documents.forEach((doc, index) => {
+            yPosition = addText(`• ${doc}`, margin + 10, yPosition + 5)
+          })
+        }
       } else if (guarantor.type === "organism") {
         if (guarantor.organism_type === "visale") {
           yPosition = addText("Organisme: Garantie Visale", margin + 5, yPosition + 5)
@@ -394,17 +504,24 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
         }
       } else if (guarantor.type === "moral_person") {
         yPosition = addText(`Entreprise: ${guarantor.company_name || "Non renseigné"}`, margin + 5, yPosition + 5)
-        yPosition = addDocumentSection("Documents KBIS", guarantor.kbis_documents)
+
+        if (guarantor.kbis_documents && guarantor.kbis_documents.length > 0) {
+          yPosition = addText("Documents KBIS:", margin + 5, yPosition + 5, { style: "bold" })
+          guarantor.kbis_documents.forEach((doc, index) => {
+            yPosition = addText(`• ${doc}`, margin + 10, yPosition + 5)
+          })
+        }
       }
 
       yPosition += 15
     })
   }
 
-  // Récapitulatif des documents
-  yPosition += 20
-  checkPageBreak(40)
-  yPosition = addText("RÉCAPITULATIF DES DOCUMENTS", margin, yPosition, {
+  // Section des pièces jointes
+  doc.addPage()
+  yPosition = 20
+
+  yPosition = addText("5. PIÈCES JOINTES", margin, yPosition, {
     fontSize: 16,
     style: "bold",
     color: "#3B82F6",
@@ -414,22 +531,118 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
   doc.line(margin, yPosition, pageWidth - margin, yPosition)
   yPosition += 10
 
-  let totalDocuments = 0
+  yPosition = addText("Toutes les pièces jointes sont présentées dans les pages suivantes.", margin, yPosition)
+  yPosition = addText("Chaque document est affiché sur une page dédiée.", margin, yPosition + 5)
 
-  // Compter tous les documents
-  if (mainTenant?.identity_documents) totalDocuments += mainTenant.identity_documents.length
-  if (mainTenant?.activity_documents) totalDocuments += mainTenant.activity_documents.length
-  if (mainTenant?.tax_situation?.documents) totalDocuments += mainTenant.tax_situation.documents.length
+  // Maintenant, ajoutons tous les documents
+  // Locataire principal
+  if (mainTenant) {
+    // Documents d'identité
+    if (mainTenant.identity_documents && mainTenant.identity_documents.length > 0) {
+      for (const doc of mainTenant.identity_documents) {
+        await addDocumentToPDF(`/api/documents/${encodeURIComponent(doc)}`, `Pièce d'identité: ${doc}`)
+      }
+    }
 
-  // Documents de revenus
-  if (mainTenant?.income_sources?.work_income?.documents) {
-    totalDocuments += mainTenant.income_sources.work_income.documents.length
+    // Documents d'activité
+    if (mainTenant.activity_documents && mainTenant.activity_documents.length > 0) {
+      for (const doc of mainTenant.activity_documents) {
+        await addDocumentToPDF(`/api/documents/${encodeURIComponent(doc)}`, `Justificatif d'activité: ${doc}`)
+      }
+    }
+
+    // Documents fiscaux
+    if (mainTenant.tax_situation?.documents && mainTenant.tax_situation.documents.length > 0) {
+      for (const doc of mainTenant.tax_situation.documents) {
+        await addDocumentToPDF(`/api/documents/${encodeURIComponent(doc)}`, `Document fiscal: ${doc}`)
+      }
+    }
+
+    // Documents de revenus
+    if (mainTenant.income_sources) {
+      // Revenus du travail
+      if (mainTenant.income_sources.work_income?.documents) {
+        for (const doc of mainTenant.income_sources.work_income.documents) {
+          await addDocumentToPDF(`/api/documents/${encodeURIComponent(doc)}`, `Justificatif de revenu: ${doc}`)
+        }
+      }
+
+      // Aides sociales
+      if (mainTenant.income_sources.social_aid) {
+        for (const aid of mainTenant.income_sources.social_aid) {
+          if (aid.documents) {
+            for (const doc of aid.documents) {
+              await addDocumentToPDF(`/api/documents/${encodeURIComponent(doc)}`, `Aide sociale: ${doc}`)
+            }
+          }
+        }
+      }
+
+      // Autres revenus...
+    }
+
+    // Documents de logement actuel
+    if (mainTenant.current_housing_documents) {
+      if (mainTenant.current_housing_documents.quittances_loyer) {
+        for (const doc of mainTenant.current_housing_documents.quittances_loyer) {
+          await addDocumentToPDF(`/api/documents/${encodeURIComponent(doc)}`, `Quittance de loyer: ${doc}`)
+        }
+      }
+
+      if (mainTenant.current_housing_documents.attestation_bon_paiement) {
+        await addDocumentToPDF(
+          `/api/documents/${encodeURIComponent(mainTenant.current_housing_documents.attestation_bon_paiement)}`,
+          `Attestation de bon paiement: ${mainTenant.current_housing_documents.attestation_bon_paiement}`,
+        )
+      }
+
+      // Autres documents de logement...
+    }
   }
 
-  // Ajouter les documents des colocataires et garants...
+  // Documents des colocataires
+  if (rentalFile.cotenants) {
+    for (const [coIndex, cotenant] of rentalFile.cotenants.entries()) {
+      // Documents d'identité
+      if (cotenant.identity_documents) {
+        for (const doc of cotenant.identity_documents) {
+          await addDocumentToPDF(
+            `/api/documents/${encodeURIComponent(doc)}`,
+            `${rentalFile.rental_situation === "couple" ? "Conjoint(e)" : `Colocataire ${coIndex + 1}`} - Pièce d'identité: ${doc}`,
+          )
+        }
+      }
 
-  yPosition = addText(`Total des documents fournis: ${totalDocuments}`, margin, yPosition, { style: "bold" })
-  yPosition = addText(`Dossier complété à ${rentalFile.completion_percentage}%`, margin, yPosition + 5)
+      // Autres documents du colocataire...
+    }
+  }
+
+  // Documents des garants
+  if (rentalFile.guarantors) {
+    for (const [gIndex, guarantor] of rentalFile.guarantors.entries()) {
+      if (guarantor.type === "physical" && guarantor.personal_info) {
+        // Documents d'identité du garant
+        if (guarantor.personal_info.identity_documents) {
+          for (const doc of guarantor.personal_info.identity_documents) {
+            await addDocumentToPDF(
+              `/api/documents/${encodeURIComponent(doc)}`,
+              `Garant ${gIndex + 1} - Pièce d'identité: ${doc}`,
+            )
+          }
+        }
+
+        // Autres documents du garant...
+      } else if (guarantor.type === "moral_person" && guarantor.kbis_documents) {
+        // Documents KBIS
+        for (const doc of guarantor.kbis_documents) {
+          await addDocumentToPDF(
+            `/api/documents/${encodeURIComponent(doc)}`,
+            `Garant ${gIndex + 1} - Document KBIS: ${doc}`,
+          )
+        }
+      }
+    }
+  }
 
   // Pied de page
   const pageCount = doc.getNumberOfPages()
@@ -437,8 +650,8 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     doc.setPage(i)
     doc.setFontSize(8)
     doc.setTextColor(128, 128, 128)
-    doc.text(`Page ${i} sur ${pageCount}`, pageWidth - margin, doc.internal.pageSize.height - 10, { align: "right" })
-    doc.text("Dossier de location numérique - Conforme DossierFacile", margin, doc.internal.pageSize.height - 10)
+    doc.text(`Page ${i} sur ${pageCount}`, pageWidth - margin, pageHeight - 10, { align: "right" })
+    doc.text("Dossier de location numérique - Conforme DossierFacile", margin, pageHeight - 10)
   }
 
   // Télécharger le PDF
