@@ -72,64 +72,37 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       doc.setFontSize(10)
       doc.text(documentName, margin, 25)
 
-      // Essayer de charger l'image
-      try {
-        // Simuler le chargement d'une image (dans un environnement réel, vous utiliseriez fetch)
-        // Note: Dans un environnement réel, vous devrez gérer les CORS et les types de fichiers
-        const img = new Image()
-        img.crossOrigin = "Anonymous"
+      // Au lieu d'essayer de charger l'image, afficher des informations sur le document
+      doc.setTextColor("#000000")
+      doc.setFontSize(12)
+      doc.text("Document référencé dans le dossier de location:", margin, 50)
+      doc.setFont("helvetica", "bold")
+      doc.text(documentName, margin, 65)
 
-        // Créer une promesse pour attendre le chargement de l'image
-        await new Promise((resolve, reject) => {
-          img.onload = () => {
-            try {
-              // Calculer les dimensions pour adapter l'image à la page
-              const imgRatio = img.width / img.height
-              let imgWidth = pageWidth - 2 * margin
-              let imgHeight = imgWidth / imgRatio
+      doc.setFont("helvetica", "normal")
+      doc.setFontSize(10)
+      doc.text("URL du document:", margin, 80)
+      doc.text(documentUrl, margin, 95)
 
-              // Si l'image est trop haute, ajuster la hauteur
-              if (imgHeight > pageHeight - 60) {
-                imgHeight = pageHeight - 60
-                imgWidth = imgHeight * imgRatio
-              }
+      // Ajouter un placeholder visuel
+      doc.setDrawColor("#E5E7EB")
+      doc.setFillColor("#F9FAFB")
+      doc.rect(margin, 110, pageWidth - 2 * margin, 150, "FD")
 
-              // Centrer l'image horizontalement
-              const xOffset = (pageWidth - imgWidth) / 2
+      doc.setTextColor("#6B7280")
+      doc.setFontSize(14)
+      doc.text("📄", pageWidth / 2 - 10, 170, { align: "center" })
+      doc.setFontSize(10)
+      doc.text("Document disponible en ligne", pageWidth / 2, 190, { align: "center" })
+      doc.text("Consultez votre dossier numérique pour voir ce document", pageWidth / 2, 205, { align: "center" })
 
-              // Ajouter l'image au PDF
-              doc.addImage(img, "JPEG", xOffset, 40, imgWidth, imgHeight)
-              resolve(true)
-            } catch (err) {
-              // En cas d'erreur lors de l'ajout de l'image
-              doc.setTextColor("#FF0000")
-              doc.setFontSize(12)
-              doc.text("Impossible d'afficher ce document", margin, 50)
-              doc.text("Type de document non supporté ou erreur de chargement", margin, 65)
-              resolve(false)
-            }
-          }
-
-          img.onerror = () => {
-            // En cas d'erreur de chargement
-            doc.setTextColor("#FF0000")
-            doc.setFontSize(12)
-            doc.text("Impossible de charger ce document", margin, 50)
-            doc.text("URL invalide ou problème d'accès", margin, 65)
-            resolve(false)
-          }
-
-          // Dans un environnement réel, vous utiliseriez l'URL réelle du document
-          // Pour cette démonstration, nous utilisons une URL de placeholder
-          img.src = documentUrl || "/placeholder.svg?height=400&width=300"
-        })
-      } catch (error) {
-        // Gérer les erreurs générales
-        doc.setTextColor("#FF0000")
-        doc.setFontSize(12)
-        doc.text("Erreur lors du traitement du document", margin, 50)
-        doc.text(`${error}`, margin, 65)
-      }
+      // Instructions d'accès
+      doc.setTextColor("#000000")
+      doc.setFontSize(10)
+      doc.text("Pour consulter ce document:", margin, 280)
+      doc.text("1. Connectez-vous à votre espace locataire", margin + 5, 295)
+      doc.text("2. Accédez à votre dossier de location", margin + 5, 310)
+      doc.text("3. Cliquez sur le nom du document pour le visualiser", margin + 5, 325)
     } catch (error) {
       console.error("Erreur lors de l'ajout du document au PDF:", error)
     }

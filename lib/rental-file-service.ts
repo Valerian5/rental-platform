@@ -259,6 +259,79 @@ export const RENT_INCOME_TYPES = [
   { value: "autre_rente", label: "Autre type de rente", description: "Autre rente" },
 ]
 
+export const checkCompatibility = (
+  rentalFile: RentalFileData,
+  property: any,
+  proposedIncome?: number,
+): {
+  compatible: boolean
+  score: number
+  warnings: string[]
+  recommendations: string[]
+} => {
+  const warnings: string[] = []
+  const recommendations: string[] = []
+  let score = 100
+
+  const income = proposedIncome || rentalFile.main_tenant?.income_sources?.work_income?.amount || 0
+  const rent = property.price || 0
+
+  // Vérifier le ratio revenus/loyer (règle des 33%)
+  if (income > 0 && rent > 0) {
+    const ratio = (rent / income) * 100
+    if (ratio > 33) {
+      score -= 30
+      warnings.push(`Le loyer représente ${ratio.toFixed(1)}% de vos revenus (recommandé: max 33%)`)
+      recommendations.push("Considérez un logement moins cher ou augmentez vos revenus")
+    } else if (ratio > 30) {
+      score -= 10
+      warnings.push(`Le loyer représente ${ratio.toFixed(1)}% de vos revenus (acceptable mais limite)`)
+    }
+  } else {
+    score -= 40
+    warnings.push("Revenus non renseignés ou insuffisants")
+    recommendations.push("Complétez vos informations de revenus")
+  }
+
+  // Vérifier la complétude du dossier
+  if (rentalFile.completion_percentage < 100) {
+    score -= (100 - rentalFile.completion_percentage) * 0.3
+    warnings.push(`Dossier incomplet (${rentalFile.completion_percentage}%)`)
+    recommendations.push("Complétez votre dossier de location")
+  }
+
+  // Vérifier les documents d'identité
+  if (!rentalFile.main_tenant?.identity_documents || rentalFile.main_tenant.identity_documents.length === 0) {
+    score -= 20
+    warnings.push("Aucune pièce d'identité fournie")
+    recommendations.push("Ajoutez votre pièce d'identité")
+  }
+
+  // Vérifier les justificatifs de revenus
+  if (
+    !rentalFile.main_tenant?.income_sources?.work_income?.documents ||
+    rentalFile.main_tenant.income_sources.work_income.documents.length === 0
+  ) {
+    score -= 15
+    warnings.push("Aucun justificatif de revenus fourni")
+    recommendations.push("Ajoutez vos justificatifs de revenus")
+  }
+
+  // Vérifier la situation d'emploi
+  if (rentalFile.main_tenant?.main_activity === "chomage") {
+    score -= 25
+    warnings.push("Situation d'emploi précaire")
+    recommendations.push("Présentez un garant solide")
+  }
+
+  return {
+    compatible: score >= 50,
+    score: Math.max(0, Math.round(score)),
+    warnings,
+    recommendations,
+  }
+}
+
 export const rentalFileService = {
   // Récupérer le dossier de location
   async getRentalFile(tenantId: string): Promise<RentalFileData | null> {
@@ -561,60 +634,6 @@ export const rentalFileService = {
     return { required, optional }
   },
 
-  // Calculer le score de validation
-  // calculateValidationScore(fileData: Partial<RentalFileData>): number {
-  //   let score = 0
-
-  //   if (!fileData.main_tenant) return 0
-
-  //   const tenant = fileData.main_tenant
-
-  //   // Score basé sur l'activité principale
-  //   switch (tenant.main_activity) {
-  //     case "cdi":
-  //     case "fonction_publique":
-  //       score += 40
-  //       break
-  //     case "cdd":
-  //     case "alternance":
-  //       score += 30
-  //       break
-  //     case "retraite":
-  //       score += 35
-  //       break
-  //     case "independant":
-  //       score += 25
-  //       break
-  //     case "etudes":
-  //       score += 20
-  //       break
-  //     case "chomage":
-  //       score += 15
-  //       break
-  //     default:
-  //       score += 10
-  //   }
-
-  //   // Score basé sur les revenus
-  //   const totalIncome = this.calculateTotalIncome(tenant.income_sources)
-  //   if (totalIncome >= 3000) score += 25
-  //   else if (totalIncome >= 2000) score += 20
-  //   else if (totalIncome >= 1500) score += 15
-  //   else if (totalIncome > 0) score += 10
-
-  //   // Score basé sur les documents
-  //   if (tenant.identity_documents?.length > 0) score += 5
-  //   if (tenant.activity_documents?.length > 0) score += 5
-  //   if (tenant.tax_situation?.documents?.length > 0) score += 5
-
-  //   // Bonus pour garants
-  //   if (fileData.guarantors && fileData.guarantors.length > 0) {
-  //     score += 15
-  //   }
-
-  //   return Math.min(score, 100)
-  // },
-
   // Calculer le total des revenus
   calculateTotalIncome(incomeSources: any): number {
     let total = 0
@@ -732,10 +751,6 @@ export const rentalFileService = {
       reasons.push("Dossier incomplet")
       recommendations.push("Complétez votre dossier à au moins 70%")
     }
-
-    // if (fileData.validation_score < 40) {
-    //   recommendations.push("Ajoutez un garant pour renforcer votre dossier")
-    // }
 
     return {
       eligible: reasons.length === 0,
