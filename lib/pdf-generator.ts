@@ -1,4 +1,12 @@
-import { type RentalFileData, MAIN_ACTIVITIES, CURRENT_HOUSING_SITUATIONS } from "./rental-file-service"
+import {
+  type RentalFileData,
+  MAIN_ACTIVITIES,
+  CURRENT_HOUSING_SITUATIONS,
+  WORK_INCOME_TYPES,
+  SOCIAL_AID_TYPES,
+  TAX_SITUATIONS,
+  GUARANTOR_TYPES,
+} from "./rental-file-service"
 
 export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise<void> => {
   // Import dynamique de jsPDF pour éviter les erreurs SSR
@@ -42,6 +50,25 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       doc.addPage()
       yPosition = 20
     }
+  }
+
+  // Fonction pour ajouter une section de documents
+  const addDocumentSection = (title: string, documents: string[] | undefined, description?: string) => {
+    if (!documents || documents.length === 0) return yPosition
+
+    checkPageBreak(20)
+    yPosition = addText(`${title}:`, margin, yPosition, { style: "bold" })
+
+    if (description) {
+      yPosition = addText(description, margin + 5, yPosition + 5, { fontSize: 10, color: "#666666" })
+    }
+
+    documents.forEach((doc, index) => {
+      checkPageBreak(10)
+      yPosition = addText(`• ${doc}`, margin + 10, yPosition + 5, { fontSize: 10 })
+    })
+
+    return yPosition + 5
   }
 
   // En-tête du document
@@ -102,78 +129,123 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
 
   const mainTenant = rentalFile.main_tenant
   if (mainTenant) {
-    yPosition = addText(`Nom: ${mainTenant.last_name || "Non renseigné"}`, margin, yPosition)
-    yPosition = addText(`Prénom: ${mainTenant.first_name || "Non renseigné"}`, margin, yPosition + 5)
+    // Informations personnelles
+    yPosition = addText("INFORMATIONS PERSONNELLES", margin, yPosition, { style: "bold", fontSize: 14 })
+    yPosition = addText(`Nom: ${mainTenant.last_name || "Non renseigné"}`, margin + 5, yPosition + 5)
+    yPosition = addText(`Prénom: ${mainTenant.first_name || "Non renseigné"}`, margin + 5, yPosition + 5)
 
     if (mainTenant.birth_date) {
       yPosition = addText(
         `Date de naissance: ${new Date(mainTenant.birth_date).toLocaleDateString("fr-FR")}`,
-        margin,
-        yPosition + 5,
-      )
-    }
-
-    if (mainTenant.birth_place) {
-      yPosition = addText(`Lieu de naissance: ${mainTenant.birth_place}`, margin, yPosition + 5)
-    }
-
-    yPosition = addText(`Nationalité: ${mainTenant.nationality || "Non renseignée"}`, margin, yPosition + 5)
-
-    // Activité professionnelle
-    yPosition += 10
-    yPosition = addText("Activité professionnelle:", margin, yPosition, { style: "bold" })
-    const activity = MAIN_ACTIVITIES.find((a) => a.value === mainTenant.main_activity)
-    yPosition = addText(
-      `${activity?.label || "Non renseignée"} - ${activity?.description || ""}`,
-      margin + 5,
-      yPosition + 5,
-    )
-
-    // Logement actuel
-    yPosition += 10
-    yPosition = addText("Logement actuel:", margin, yPosition, { style: "bold" })
-    const housing = CURRENT_HOUSING_SITUATIONS.find((h) => h.value === mainTenant.current_housing_situation)
-    yPosition = addText(
-      `${housing?.label || "Non renseigné"} - ${housing?.description || ""}`,
-      margin + 5,
-      yPosition + 5,
-    )
-
-    // Revenus
-    yPosition += 10
-    yPosition = addText("Sources de revenus:", margin, yPosition, { style: "bold" })
-
-    if (mainTenant.income_sources?.work_income) {
-      yPosition = addText(
-        `• Revenus du travail: ${mainTenant.income_sources.work_income.amount || 0}€/mois`,
         margin + 5,
         yPosition + 5,
       )
     }
 
+    if (mainTenant.birth_place) {
+      yPosition = addText(`Lieu de naissance: ${mainTenant.birth_place}`, margin + 5, yPosition + 5)
+    }
+
+    yPosition = addText(`Nationalité: ${mainTenant.nationality || "Non renseignée"}`, margin + 5, yPosition + 5)
+
+    yPosition += 10
+
+    // Documents d'identité
+    yPosition = addDocumentSection(
+      "PIÈCES D'IDENTITÉ",
+      mainTenant.identity_documents,
+      "Carte d'identité, passeport ou titre de séjour",
+    )
+
+    // Activité professionnelle
+    yPosition += 5
+    yPosition = addText("ACTIVITÉ PROFESSIONNELLE", margin, yPosition, { style: "bold", fontSize: 14 })
+    const activity = MAIN_ACTIVITIES.find((a) => a.value === mainTenant.main_activity)
+    yPosition = addText(`Activité: ${activity?.label || "Non renseignée"}`, margin + 5, yPosition + 5)
+    if (activity?.description) {
+      yPosition = addText(`Description: ${activity.description}`, margin + 5, yPosition + 5, { fontSize: 10 })
+    }
+
+    // Documents d'activité
+    yPosition = addDocumentSection(
+      "JUSTIFICATIFS D'ACTIVITÉ",
+      mainTenant.activity_documents,
+      activity?.required_documents?.join(", "),
+    )
+
+    // Logement actuel
+    yPosition += 5
+    yPosition = addText("LOGEMENT ACTUEL", margin, yPosition, { style: "bold", fontSize: 14 })
+    const housing = CURRENT_HOUSING_SITUATIONS.find((h) => h.value === mainTenant.current_housing_situation)
+    yPosition = addText(`Situation: ${housing?.label || "Non renseigné"}`, margin + 5, yPosition + 5)
+
+    // Documents logement actuel
+    if (mainTenant.current_housing_documents) {
+      if (mainTenant.current_housing_documents.quittances_loyer) {
+        yPosition = addDocumentSection(
+          "QUITTANCES DE LOYER",
+          mainTenant.current_housing_documents.quittances_loyer,
+          "3 dernières quittances de loyer",
+        )
+      }
+      if (mainTenant.current_housing_documents.attestation_bon_paiement) {
+        yPosition = addDocumentSection("ATTESTATION DE BON PAIEMENT", [
+          mainTenant.current_housing_documents.attestation_bon_paiement,
+        ])
+      }
+      if (mainTenant.current_housing_documents.attestation_hebergement) {
+        yPosition = addDocumentSection("ATTESTATION D'HÉBERGEMENT", [
+          mainTenant.current_housing_documents.attestation_hebergement,
+        ])
+      }
+      if (mainTenant.current_housing_documents.avis_taxe_fonciere) {
+        yPosition = addDocumentSection("AVIS DE TAXE FONCIÈRE", [
+          mainTenant.current_housing_documents.avis_taxe_fonciere,
+        ])
+      }
+    }
+
+    // Revenus détaillés
+    yPosition += 10
+    yPosition = addText("SOURCES DE REVENUS", margin, yPosition, { style: "bold", fontSize: 14 })
+
+    if (mainTenant.income_sources?.work_income) {
+      const workIncomeType = WORK_INCOME_TYPES.find((t) => t.value === mainTenant.income_sources.work_income?.type)
+      yPosition = addText(
+        `• Revenus du travail (${workIncomeType?.label || mainTenant.income_sources.work_income.type}): ${mainTenant.income_sources.work_income.amount || 0}€/mois`,
+        margin + 5,
+        yPosition + 5,
+      )
+      yPosition = addDocumentSection("Justificatifs revenus travail", mainTenant.income_sources.work_income.documents)
+    }
+
     if (mainTenant.income_sources?.social_aid?.length > 0) {
       mainTenant.income_sources.social_aid.forEach((aid: any, index: number) => {
+        const aidType = SOCIAL_AID_TYPES.find((t) => t.value === aid.type)
         yPosition = addText(
-          `• Aide sociale ${index + 1}: ${aid.amount || 0}€/mois (${aid.type})`,
+          `• Aide sociale ${index + 1} (${aidType?.label || aid.type}): ${aid.amount || 0}€/mois`,
           margin + 5,
           yPosition + 5,
         )
+        yPosition = addDocumentSection(`Justificatifs aide sociale ${index + 1}`, aid.documents)
       })
     }
 
     if (mainTenant.income_sources?.retirement_pension?.length > 0) {
       mainTenant.income_sources.retirement_pension.forEach((pension: any, index: number) => {
         yPosition = addText(
-          `• Retraite/Pension ${index + 1}: ${pension.amount || 0}€/mois (${pension.type})`,
+          `• Retraite/Pension ${index + 1} (${pension.type}): ${pension.amount || 0}€/mois`,
           margin + 5,
           yPosition + 5,
         )
+        yPosition = addDocumentSection(`Justificatifs retraite/pension ${index + 1}`, pension.documents)
       })
     }
 
     if (mainTenant.income_sources?.rent_income?.length > 0) {
       mainTenant.income_sources.rent_income.forEach((rent: any, index: number) => {
-        yPosition = addText(`• Rente ${index + 1}: ${rent.amount || 0}€/mois (${rent.type})`, margin + 5, yPosition + 5)
+        yPosition = addText(`• Rente ${index + 1} (${rent.type}): ${rent.amount || 0}€/mois`, margin + 5, yPosition + 5)
+        yPosition = addDocumentSection(`Justificatifs rente ${index + 1}`, rent.documents)
       })
     }
 
@@ -183,35 +255,31 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
         margin + 5,
         yPosition + 5,
       )
+      yPosition = addDocumentSection("Justificatifs bourse", mainTenant.income_sources.scholarship.documents)
     }
 
-    // Documents fournis
+    if (mainTenant.income_sources?.no_income) {
+      yPosition = addText(
+        `• Aucun revenu: ${mainTenant.income_sources.no_income.explanation}`,
+        margin + 5,
+        yPosition + 5,
+      )
+      yPosition = addDocumentSection("Justificatifs absence de revenus", mainTenant.income_sources.no_income.documents)
+    }
+
+    // Situation fiscale
     yPosition += 10
-    yPosition = addText("Documents fournis:", margin, yPosition, { style: "bold" })
-
-    if (mainTenant.identity_documents?.length > 0) {
-      yPosition = addText(
-        `• Pièces d'identité: ${mainTenant.identity_documents.length} document(s)`,
-        margin + 5,
-        yPosition + 5,
-      )
+    yPosition = addText("SITUATION FISCALE", margin, yPosition, { style: "bold", fontSize: 14 })
+    const taxSituation = TAX_SITUATIONS.find((t) => t.value === mainTenant.tax_situation?.type)
+    yPosition = addText(`Situation: ${taxSituation?.label || "Non renseignée"}`, margin + 5, yPosition + 5)
+    if (mainTenant.tax_situation?.explanation) {
+      yPosition = addText(`Explication: ${mainTenant.tax_situation.explanation}`, margin + 5, yPosition + 5)
     }
-
-    if (mainTenant.activity_documents?.length > 0) {
-      yPosition = addText(
-        `• Justificatifs d'activité: ${mainTenant.activity_documents.length} document(s)`,
-        margin + 5,
-        yPosition + 5,
-      )
-    }
-
-    if (mainTenant.tax_situation?.documents?.length > 0) {
-      yPosition = addText(
-        `• Documents fiscaux: ${mainTenant.tax_situation.documents.length} document(s)`,
-        margin + 5,
-        yPosition + 5,
-      )
-    }
+    yPosition = addDocumentSection(
+      "DOCUMENTS FISCAUX",
+      mainTenant.tax_situation?.documents,
+      "Avis d'imposition ou justificatif fiscal",
+    )
   }
 
   // Colocataires
@@ -232,22 +300,30 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     rentalFile.cotenants.forEach((cotenant: any, index: number) => {
       checkPageBreak(30)
       yPosition = addText(
-        `${rentalFile.rental_situation === "couple" ? "Conjoint(e)" : `Colocataire ${index + 1}`}:`,
+        `${rentalFile.rental_situation === "couple" ? "CONJOINT(E)" : `COLOCATAIRE ${index + 1}`}`,
         margin,
         yPosition,
-        { style: "bold" },
+        { style: "bold", fontSize: 14 },
       )
-      yPosition = addText(`${cotenant.first_name || ""} ${cotenant.last_name || ""}`, margin + 5, yPosition + 5)
+
+      yPosition = addText(`Nom: ${cotenant.last_name || "Non renseigné"}`, margin + 5, yPosition + 5)
+      yPosition = addText(`Prénom: ${cotenant.first_name || "Non renseigné"}`, margin + 5, yPosition + 5)
 
       const cotenantActivity = MAIN_ACTIVITIES.find((a) => a.value === cotenant.main_activity)
       if (cotenantActivity) {
         yPosition = addText(`Activité: ${cotenantActivity.label}`, margin + 5, yPosition + 5)
       }
+
+      // Documents du colocataire
+      yPosition = addDocumentSection("Pièces d'identité", cotenant.identity_documents)
+      yPosition = addDocumentSection("Justificatifs d'activité", cotenant.activity_documents)
+      yPosition = addDocumentSection("Documents fiscaux", cotenant.tax_situation?.documents)
+
       yPosition += 10
     })
   }
 
-  // Garants
+  // Garants détaillés
   if (rentalFile.guarantors && rentalFile.guarantors.length > 0) {
     yPosition += 20
     checkPageBreak(40)
@@ -263,31 +339,97 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     yPosition += 10
 
     rentalFile.guarantors.forEach((guarantor: any, index: number) => {
-      checkPageBreak(25)
-      yPosition = addText(`Garant ${index + 1}:`, margin, yPosition, { style: "bold" })
+      checkPageBreak(40)
+      yPosition = addText(`GARANT ${index + 1}`, margin, yPosition, { style: "bold", fontSize: 14 })
+
+      const guarantorType = GUARANTOR_TYPES.find((t) => t.value === guarantor.type)
+      yPosition = addText(`Type: ${guarantorType?.label || guarantor.type}`, margin + 5, yPosition + 5)
 
       if (guarantor.type === "physical" && guarantor.personal_info) {
-        yPosition = addText(
-          `${guarantor.personal_info.first_name || ""} ${guarantor.personal_info.last_name || ""} (Personne physique)`,
-          margin + 5,
-          yPosition + 5,
-        )
+        const guarantorInfo = guarantor.personal_info
+        yPosition = addText(`Nom: ${guarantorInfo.last_name || "Non renseigné"}`, margin + 5, yPosition + 5)
+        yPosition = addText(`Prénom: ${guarantorInfo.first_name || "Non renseigné"}`, margin + 5, yPosition + 5)
+
+        if (guarantorInfo.birth_date) {
+          yPosition = addText(
+            `Date de naissance: ${new Date(guarantorInfo.birth_date).toLocaleDateString("fr-FR")}`,
+            margin + 5,
+            yPosition + 5,
+          )
+        }
+
+        yPosition = addText(`Nationalité: ${guarantorInfo.nationality || "Non renseignée"}`, margin + 5, yPosition + 5)
+
+        const guarantorActivity = MAIN_ACTIVITIES.find((a) => a.value === guarantorInfo.main_activity)
+        if (guarantorActivity) {
+          yPosition = addText(`Activité: ${guarantorActivity.label}`, margin + 5, yPosition + 5)
+        }
+
+        // Revenus du garant
+        if (guarantorInfo.income_sources) {
+          yPosition += 5
+          yPosition = addText("Revenus du garant:", margin + 5, yPosition, { style: "bold" })
+
+          if (guarantorInfo.income_sources.work_income) {
+            yPosition = addText(
+              `• Revenus du travail: ${guarantorInfo.income_sources.work_income.amount || 0}€/mois`,
+              margin + 10,
+              yPosition + 5,
+            )
+          }
+
+          // Autres sources de revenus...
+        }
+
+        // Documents du garant
+        yPosition += 5
+        yPosition = addDocumentSection("Pièces d'identité du garant", guarantorInfo.identity_documents)
+        yPosition = addDocumentSection("Justificatifs d'activité du garant", guarantorInfo.activity_documents)
+        yPosition = addDocumentSection("Documents fiscaux du garant", guarantorInfo.tax_situation?.documents)
       } else if (guarantor.type === "organism") {
-        yPosition = addText(
-          `${guarantor.organism_type === "visale" ? "Garantie Visale" : guarantor.organism_name || "Organisme"} (Organisme)`,
-          margin + 5,
-          yPosition + 5,
-        )
+        if (guarantor.organism_type === "visale") {
+          yPosition = addText("Organisme: Garantie Visale", margin + 5, yPosition + 5)
+        } else {
+          yPosition = addText(`Organisme: ${guarantor.organism_name || "Non renseigné"}`, margin + 5, yPosition + 5)
+        }
       } else if (guarantor.type === "moral_person") {
-        yPosition = addText(
-          `${guarantor.company_name || "Personne morale"} (Personne morale)`,
-          margin + 5,
-          yPosition + 5,
-        )
+        yPosition = addText(`Entreprise: ${guarantor.company_name || "Non renseigné"}`, margin + 5, yPosition + 5)
+        yPosition = addDocumentSection("Documents KBIS", guarantor.kbis_documents)
       }
-      yPosition += 10
+
+      yPosition += 15
     })
   }
+
+  // Récapitulatif des documents
+  yPosition += 20
+  checkPageBreak(40)
+  yPosition = addText("RÉCAPITULATIF DES DOCUMENTS", margin, yPosition, {
+    fontSize: 16,
+    style: "bold",
+    color: "#3B82F6",
+  })
+
+  yPosition += 5
+  doc.line(margin, yPosition, pageWidth - margin, yPosition)
+  yPosition += 10
+
+  let totalDocuments = 0
+
+  // Compter tous les documents
+  if (mainTenant?.identity_documents) totalDocuments += mainTenant.identity_documents.length
+  if (mainTenant?.activity_documents) totalDocuments += mainTenant.activity_documents.length
+  if (mainTenant?.tax_situation?.documents) totalDocuments += mainTenant.tax_situation.documents.length
+
+  // Documents de revenus
+  if (mainTenant?.income_sources?.work_income?.documents) {
+    totalDocuments += mainTenant.income_sources.work_income.documents.length
+  }
+
+  // Ajouter les documents des colocataires et garants...
+
+  yPosition = addText(`Total des documents fournis: ${totalDocuments}`, margin, yPosition, { style: "bold" })
+  yPosition = addText(`Dossier complété à ${rentalFile.completion_percentage}%`, margin, yPosition + 5)
 
   // Pied de page
   const pageCount = doc.getNumberOfPages()
