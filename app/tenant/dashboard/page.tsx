@@ -206,61 +206,47 @@ export default function TenantDashboardPage() {
               <Home className="h-4 w-4 mr-2" />
               Vue d'ensemble
             </Button>
-            <Button
-              variant={activeTab === "searches" ? "default" : "ghost"}
-              className="w-full justify-start"
-              onClick={() => setActiveTab("searches")}
-            >
-              <Search className="h-4 w-4 mr-2" />
-              Mes recherches
+            <Button variant="ghost" className="w-full justify-start" asChild>
+              <Link href="/tenant/searches">
+                <Search className="h-4 w-4 mr-2" />
+                Mes recherches
+              </Link>
             </Button>
-            <Button
-              variant={activeTab === "favorites" ? "default" : "ghost"}
-              className="w-full justify-start"
-              onClick={() => setActiveTab("favorites")}
-            >
-              <Heart className="h-4 w-4 mr-2" />
-              Favoris
+            <Button variant="ghost" className="w-full justify-start" asChild>
+              <Link href="/tenant/favorites">
+                <Heart className="h-4 w-4 mr-2" />
+                Favoris
+              </Link>
             </Button>
-            <Button
-              variant={activeTab === "applications" ? "default" : "ghost"}
-              className="w-full justify-start"
-              onClick={() => setActiveTab("applications")}
-            >
-              <FileText className="h-4 w-4 mr-2" />
-              Mes candidatures
+            <Button variant="ghost" className="w-full justify-start" asChild>
+              <Link href="/tenant/applications">
+                <FileText className="h-4 w-4 mr-2" />
+                Mes candidatures
+              </Link>
             </Button>
-            <Button
-              variant={activeTab === "visits" ? "default" : "ghost"}
-              className="w-full justify-start"
-              onClick={() => setActiveTab("visits")}
-            >
-              <Calendar className="h-4 w-4 mr-2" />
-              Visites
+            <Button variant="ghost" className="w-full justify-start" asChild>
+              <Link href="/tenant/visits">
+                <Calendar className="h-4 w-4 mr-2" />
+                Visites
+              </Link>
             </Button>
-            <Button
-              variant={activeTab === "messaging" ? "default" : "ghost"}
-              className="w-full justify-start"
-              onClick={() => setActiveTab("messaging")}
-            >
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Messagerie
+            <Button variant="ghost" className="w-full justify-start" asChild>
+              <Link href="/tenant/messaging">
+                <MessageSquare className="h-4 w-4 mr-2" />
+                Messagerie
+              </Link>
             </Button>
-            <Button
-              variant={activeTab === "notifications" ? "default" : "ghost"}
-              className="w-full justify-start"
-              onClick={() => setActiveTab("notifications")}
-            >
-              <Bell className="h-4 w-4 mr-2" />
-              Notifications
+            <Button variant="ghost" className="w-full justify-start" asChild>
+              <Link href="/tenant/notifications">
+                <Bell className="h-4 w-4 mr-2" />
+                Notifications
+              </Link>
             </Button>
-            <Button
-              variant={activeTab === "settings" ? "default" : "ghost"}
-              className="w-full justify-start"
-              onClick={() => setActiveTab("settings")}
-            >
-              <Settings className="h-4 w-4 mr-2" />
-              Paramètres
+            <Button variant="ghost" className="w-full justify-start" asChild>
+              <Link href="/tenant/settings">
+                <Settings className="h-4 w-4 mr-2" />
+                Paramètres
+              </Link>
             </Button>
           </div>
         </div>
@@ -342,8 +328,8 @@ export default function TenantDashboardPage() {
                     )}
                   </CardContent>
                   <CardFooter>
-                    <Button variant="outline" size="sm" className="w-full" onClick={() => setActiveTab("applications")}>
-                      Voir toutes mes candidatures
+                    <Button variant="outline" size="sm" className="w-full" asChild>
+                      <Link href="/tenant/applications">Voir toutes mes candidatures</Link>
                     </Button>
                   </CardFooter>
                 </Card>
@@ -398,8 +384,8 @@ export default function TenantDashboardPage() {
                     )}
                   </CardContent>
                   <CardFooter>
-                    <Button variant="outline" size="sm" className="w-full" onClick={() => setActiveTab("visits")}>
-                      Gérer mes visites
+                    <Button variant="outline" size="sm" className="w-full" asChild>
+                      <Link href="/tenant/visits">Gérer mes visites</Link>
                     </Button>
                   </CardFooter>
                 </Card>
@@ -460,7 +446,7 @@ export default function TenantDashboardPage() {
                         Créez des alertes pour être notifié des nouveaux biens correspondant à vos critères.
                       </p>
                       <Button asChild>
-                        <Link href="/tenant/search">
+                        <Link href="/tenant/searches">
                           <Plus className="h-4 w-4 mr-2" />
                           Créer une recherche
                         </Link>
@@ -469,8 +455,8 @@ export default function TenantDashboardPage() {
                   )}
                 </CardContent>
                 <CardFooter>
-                  <Button variant="outline" size="sm" className="w-full" onClick={() => setActiveTab("searches")}>
-                    Gérer mes recherches
+                  <Button variant="outline" size="sm" className="w-full" asChild>
+                    <Link href="/tenant/searches">Gérer mes recherches</Link>
                   </Button>
                 </CardFooter>
               </Card>

@@ -19,91 +19,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Slider } from "@/components/ui/slider"
+import { authService } from "@/lib/auth-service"
+import type { SavedSearch } from "@/lib/saved-search-service"
 import { toast } from "sonner"
-
-interface SavedSearch {
-  id: string
-  name: string
-  city: string
-  property_type: string
-  min_price: number
-  max_price: number
-  min_rooms: number
-  min_surface: number
-  max_surface: number
-  furnished?: boolean
-  notifications_enabled: boolean
-  match_count: number
-  new_matches: number
-  created_at: string
-  last_checked: string
-}
 
 export default function TenantSearchesPage() {
   const [searches, setSearches] = useState<SavedSearch[]>([])
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [editingSearch, setEditingSearch] = useState<SavedSearch | null>(null)
   const [loading, setLoading] = useState(true)
-
-  // Données simulées réalistes
-  useEffect(() => {
-    // Simuler le chargement des recherches
-    setTimeout(() => {
-      setSearches([
-        {
-          id: "1",
-          name: "Appartement Paris Centre",
-          city: "Paris",
-          property_type: "apartment",
-          min_price: 800,
-          max_price: 1500,
-          min_rooms: 2,
-          min_surface: 40,
-          max_surface: 80,
-          furnished: false,
-          notifications_enabled: true,
-          match_count: 12,
-          new_matches: 3,
-          created_at: "2024-01-15T10:00:00Z",
-          last_checked: "2024-01-20T15:30:00Z",
-        },
-        {
-          id: "2",
-          name: "Studio meublé Quartier Latin",
-          city: "Paris 5e",
-          property_type: "studio",
-          min_price: 600,
-          max_price: 1000,
-          min_rooms: 1,
-          min_surface: 20,
-          max_surface: 35,
-          furnished: true,
-          notifications_enabled: true,
-          match_count: 8,
-          new_matches: 1,
-          created_at: "2024-01-10T14:20:00Z",
-          last_checked: "2024-01-20T12:00:00Z",
-        },
-        {
-          id: "3",
-          name: "Maison banlieue proche RER",
-          city: "Vincennes",
-          property_type: "house",
-          min_price: 1200,
-          max_price: 2000,
-          min_rooms: 3,
-          min_surface: 60,
-          max_surface: 120,
-          notifications_enabled: false,
-          match_count: 5,
-          new_matches: 0,
-          created_at: "2024-01-08T09:15:00Z",
-          last_checked: "2024-01-18T10:45:00Z",
-        },
-      ])
-      setLoading(false)
-    }, 1000)
-  }, [])
+  const [currentUser, setCurrentUser] = useState<any>(null)
 
   const [newSearch, setNewSearch] = useState({
     name: "",
@@ -118,23 +43,123 @@ export default function TenantSearchesPage() {
     notifications_enabled: true,
   })
 
-  const handleCreateSearch = () => {
-    if (!newSearch.name || !newSearch.city) {
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const user = await authService.getCurrentUser()
+        if (!user || user.user_type !== "tenant") {
+          toast.error("Accès non autorisé")
+          window.location.href = "/login"
+          return
+        }
+
+        setCurrentUser(user)
+        await loadSearches(user.id)
+      } catch (error) {
+        console.error("Erreur chargement données:", error)
+        toast.error("Erreur lors du chargement")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [])
+
+  const loadSearches = async (userId: string) => {
+    try {
+      const response = await fetch(`/api/saved-searches?user_id=${userId}`)
+      if (!response.ok) throw new Error("Erreur chargement recherches")
+
+      const data = await response.json()
+      setSearches(data.searches || [])
+    } catch (error) {
+      console.error("Erreur chargement recherches:", error)
+      toast.error("Erreur lors du chargement des recherches")
+    }
+  }
+
+  const handleCreateSearch = async () => {
+    if (!newSearch.name || !newSearch.city || !currentUser) {
       toast.error("Veuillez remplir les champs obligatoires")
       return
     }
 
-    const search: SavedSearch = {
-      id: Date.now().toString(),
-      ...newSearch,
-      match_count: Math.floor(Math.random() * 20),
-      new_matches: Math.floor(Math.random() * 5),
-      created_at: new Date().toISOString(),
-      last_checked: new Date().toISOString(),
-    }
+    try {
+      const response = await fetch("/api/saved-searches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: currentUser.id,
+          ...newSearch,
+        }),
+      })
 
-    setSearches((prev) => [search, ...prev])
-    setShowCreateDialog(false)
+      if (!response.ok) throw new Error("Erreur création recherche")
+
+      const data = await response.json()
+      setSearches((prev) => [data.search, ...prev])
+      setShowCreateDialog(false)
+      resetNewSearch()
+      toast.success("Recherche sauvegardée avec succès")
+    } catch (error) {
+      console.error("Erreur création recherche:", error)
+      toast.error("Erreur lors de la création de la recherche")
+    }
+  }
+
+  const handleDeleteSearch = async (id: string) => {
+    try {
+      const response = await fetch(`/api/saved-searches?search_id=${id}`, {
+        method: "DELETE",
+      })
+
+      if (!response.ok) throw new Error("Erreur suppression recherche")
+
+      setSearches((prev) => prev.filter((s) => s.id !== id))
+      toast.success("Recherche supprimée")
+    } catch (error) {
+      console.error("Erreur suppression recherche:", error)
+      toast.error("Erreur lors de la suppression")
+    }
+  }
+
+  const toggleNotifications = async (id: string, enabled: boolean) => {
+    try {
+      const response = await fetch("/api/saved-searches", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          search_id: id,
+          notifications_enabled: enabled,
+        }),
+      })
+
+      if (!response.ok) throw new Error("Erreur mise à jour notifications")
+
+      setSearches((prev) => prev.map((s) => (s.id === id ? { ...s, notifications_enabled: enabled } : s)))
+      toast.success("Notifications mises à jour")
+    } catch (error) {
+      console.error("Erreur toggle notifications:", error)
+      toast.error("Erreur lors de la mise à jour")
+    }
+  }
+
+  const runSearch = (search: SavedSearch) => {
+    const params = new URLSearchParams()
+    if (search.city) params.set("city", search.city)
+    if (search.property_type) params.set("property_type", search.property_type)
+    if (search.min_price) params.set("min_price", search.min_price.toString())
+    if (search.max_price) params.set("max_price", search.max_price.toString())
+    if (search.min_rooms) params.set("min_rooms", search.min_rooms.toString())
+    if (search.min_surface) params.set("min_surface", search.min_surface.toString())
+    if (search.max_surface) params.set("max_surface", search.max_surface.toString())
+    if (search.furnished !== undefined) params.set("furnished", search.furnished.toString())
+
+    window.open(`/tenant/search?${params.toString()}`, "_blank")
+  }
+
+  const resetNewSearch = () => {
     setNewSearch({
       name: "",
       city: "",
@@ -147,53 +172,22 @@ export default function TenantSearchesPage() {
       furnished: false,
       notifications_enabled: true,
     })
-    toast.success("Recherche sauvegardée avec succès")
-  }
-
-  const handleDeleteSearch = (id: string) => {
-    setSearches((prev) => prev.filter((s) => s.id !== id))
-    toast.success("Recherche supprimée")
-  }
-
-  const toggleNotifications = (id: string) => {
-    setSearches((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, notifications_enabled: !s.notifications_enabled } : s)),
-    )
-    toast.success("Notifications mises à jour")
-  }
-
-  const runSearch = (search: SavedSearch) => {
-    // Simuler une nouvelle recherche
-    const params = new URLSearchParams({
-      city: search.city,
-      property_type: search.property_type,
-      min_price: search.min_price.toString(),
-      max_price: search.max_price.toString(),
-      min_rooms: search.min_rooms.toString(),
-      min_surface: search.min_surface.toString(),
-      max_surface: search.max_surface.toString(),
-      furnished: search.furnished?.toString() || "false",
-    })
-
-    window.open(`/tenant/search?${params.toString()}`, "_blank")
   }
 
   if (loading) {
     return (
-      <div className="container mx-auto py-6">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center space-y-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="text-gray-600">Chargement de vos recherches...</p>
-          </div>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="text-gray-600">Chargement de vos recherches...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto py-6">
-      <div className="flex justify-between items-center mb-6">
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold">Mes recherches sauvegardées</h1>
           <p className="text-muted-foreground">
@@ -245,7 +239,7 @@ export default function TenantSearchesPage() {
                       <SelectValue placeholder="Tous types" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Tous types</SelectItem>
+                      <SelectItem value="all">Tous types</SelectItem>
                       <SelectItem value="apartment">Appartement</SelectItem>
                       <SelectItem value="house">Maison</SelectItem>
                       <SelectItem value="studio">Studio</SelectItem>
@@ -356,22 +350,21 @@ export default function TenantSearchesPage() {
                   <div>
                     <CardTitle className="flex items-center gap-2">
                       {search.name}
-                      {search.new_matches > 0 && (
+                      {search.new_matches && search.new_matches > 0 && (
                         <Badge className="bg-green-600 hover:bg-green-700">
                           {search.new_matches} nouveau{search.new_matches > 1 ? "x" : ""}
                         </Badge>
                       )}
                     </CardTitle>
                     <CardDescription>
-                      Créée le {new Date(search.created_at).toLocaleDateString("fr-FR")} • Dernière vérification:{" "}
-                      {new Date(search.last_checked).toLocaleDateString("fr-FR")}
+                      Créée le {new Date(search.created_at).toLocaleDateString("fr-FR")}
                     </CardDescription>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => toggleNotifications(search.id)}
+                      onClick={() => toggleNotifications(search.id, !search.notifications_enabled)}
                       title={search.notifications_enabled ? "Désactiver les alertes" : "Activer les alertes"}
                     >
                       {search.notifications_enabled ? (
@@ -396,7 +389,7 @@ export default function TenantSearchesPage() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                   <div>
                     <p className="text-sm text-muted-foreground">Ville</p>
-                    <p className="font-medium">{search.city}</p>
+                    <p className="font-medium">{search.city || "Toutes"}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Type</p>
@@ -411,23 +404,23 @@ export default function TenantSearchesPage() {
                   <div>
                     <p className="text-sm text-muted-foreground">Budget</p>
                     <p className="font-medium">
-                      {search.min_price} - {search.max_price} €/mois
+                      {search.min_price || 0} - {search.max_price || "∞"} €/mois
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Surface</p>
                     <p className="font-medium">
-                      {search.min_surface} - {search.max_surface} m²
+                      {search.min_surface || 0} - {search.max_surface || "∞"} m²
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-4 text-sm">
-                  <span>Pièces: {search.min_rooms}+</span>
+                  <span>Pièces: {search.min_rooms || 1}+</span>
                   {search.furnished && <Badge variant="secondary">Meublé</Badge>}
                   <span className="text-muted-foreground">
-                    {search.match_count} bien{search.match_count > 1 ? "s" : ""} trouvé
-                    {search.match_count > 1 ? "s" : ""}
+                    {search.match_count || 0} bien{(search.match_count || 0) > 1 ? "s" : ""} trouvé
+                    {(search.match_count || 0) > 1 ? "s" : ""}
                   </span>
                 </div>
               </CardContent>
@@ -450,7 +443,7 @@ export default function TenantSearchesPage() {
                   <Button variant="outline" size="sm" onClick={() => runSearch(search)}>
                     Lancer la recherche
                   </Button>
-                  {search.new_matches > 0 && (
+                  {search.new_matches && search.new_matches > 0 && (
                     <Button size="sm" onClick={() => runSearch(search)}>
                       Voir les nouveautés ({search.new_matches})
                     </Button>
