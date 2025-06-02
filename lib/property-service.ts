@@ -272,4 +272,92 @@ export const propertyService = {
       throw error
     }
   },
+
+  async getOwnerProperties(ownerId: string): Promise<Property[]> {
+    console.log("🏠 PropertyService.getOwnerProperties", ownerId)
+
+    try {
+      const { data, error } = await supabase
+        .from("properties")
+        .select(`
+        *,
+        owner:users!owner_id (id, first_name, last_name, email, phone),
+        property_images (id, url, is_primary)
+      `)
+        .eq("owner_id", ownerId)
+        .order("created_at", { ascending: false })
+
+      if (error) {
+        console.error("❌ Erreur récupération propriétés propriétaire:", error)
+        throw new Error(error.message)
+      }
+
+      console.log(`✅ ${data.length} propriétés récupérées pour le propriétaire`)
+      return data as Property[]
+    } catch (error) {
+      console.error("❌ Erreur dans getOwnerProperties:", error)
+      throw error
+    }
+  },
+
+  async searchProperties(filters: any = {}): Promise<Property[]> {
+    console.log("🔍 PropertyService.searchProperties", filters)
+
+    try {
+      let query = supabase
+        .from("properties")
+        .select(`
+        *,
+        owner:users!owner_id (id, first_name, last_name, email, phone),
+        property_images (id, url, is_primary)
+      `)
+        .eq("available", true)
+
+      // Appliquer les filtres de recherche
+      if (filters.city) {
+        query = query.ilike("city", `%${filters.city}%`)
+      }
+
+      if (filters.property_type && filters.property_type !== "all") {
+        query = query.eq("property_type", filters.property_type)
+      }
+
+      if (filters.min_price) {
+        query = query.gte("price", filters.min_price)
+      }
+
+      if (filters.max_price) {
+        query = query.lte("price", filters.max_price)
+      }
+
+      if (filters.min_rooms) {
+        query = query.gte("rooms", filters.min_rooms)
+      }
+
+      if (filters.min_surface) {
+        query = query.gte("surface", filters.min_surface)
+      }
+
+      if (filters.max_surface) {
+        query = query.lte("surface", filters.max_surface)
+      }
+
+      if (filters.furnished === true) {
+        query = query.eq("furnished", true)
+      }
+
+      const { data, error } = await query.order("created_at", { ascending: false })
+
+      if (error) {
+        console.error("❌ Erreur recherche propriétés:", error)
+        throw new Error(error.message)
+      }
+
+      console.log(`✅ ${data.length} propriétés trouvées`)
+      return data as Property[]
+    } catch (error) {
+      console.error("❌ Erreur dans searchProperties:", error)
+      throw error
+    }
+  },
 }

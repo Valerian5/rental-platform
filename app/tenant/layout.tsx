@@ -38,8 +38,13 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
           setCurrentUser(user)
 
           // Récupérer le nombre de notifications non lues
-          const count = await notificationsService.getUnreadCount(user.id)
-          setUnreadCount(count)
+          try {
+            const count = await notificationsService.getUnreadCount(user.id)
+            setUnreadCount(count)
+          } catch (error) {
+            console.error("Erreur comptage notifications:", error)
+            setUnreadCount(0)
+          }
         }
       } catch (error) {
         console.error("Erreur récupération utilisateur:", error)

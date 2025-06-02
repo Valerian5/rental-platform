@@ -1,30 +1,96 @@
 import { supabase } from "./supabase"
 
-export interface VisitData {
-  application_id: string
+export interface Visit {
+  id: string
   property_id: string
-  tenant_id: string
-  owner_id: string
+  visitor_name: string
+  visitor_email: string
+  visitor_phone: string
   visit_date: string
-  start_time: string
-  end_time: string
+  visit_time: string
+  status: "scheduled" | "completed" | "cancelled" | "no_show"
   notes?: string
+  created_at: string
+  property?: {
+    id: string
+    title: string
+    address: string
+    type: string
+    owner_id: string
+  }
 }
 
 export const visitService = {
-  // Créer une nouvelle visite
-  async createVisit(visitData: VisitData) {
-    console.log("📅 VisitService.createVisit", visitData)
+  async getOwnerVisits(ownerId: string): Promise<Visit[]> {
+    console.log("📅 VisitService.getOwnerVisits", ownerId)
+
+    try {
+      // Récupérer les visites via les propriétés du propriétaire
+      const { data, error } = await supabase
+        .from("visits")
+        .select(`
+          *,
+          property:properties!inner (
+            id,
+            title,
+            address,
+            property_type,
+            owner_id
+          )
+        `)
+        .eq("property.owner_id", ownerId)
+        .order("visit_date", { ascending: false })
+
+      if (error) {
+        console.error("❌ Erreur récupération visites propriétaire:", error)
+        throw new Error(error.message)
+      }
+
+      console.log(`✅ ${data.length} visites récupérées pour le propriétaire`)
+      return data as Visit[]
+    } catch (error) {
+      console.error("❌ Erreur dans getOwnerVisits:", error)
+      throw error
+    }
+  },
+
+  async getTenantVisits(tenantId: string): Promise<Visit[]> {
+    console.log("📅 VisitService.getTenantVisits", tenantId)
 
     try {
       const { data, error } = await supabase
         .from("visits")
-        .insert({
-          ...visitData,
-          status: "scheduled",
-        })
-        .select()
-        .single()
+        .select(`
+          *,
+          property:properties (
+            id,
+            title,
+            address,
+            property_type,
+            owner_id
+          )
+        `)
+        .eq("tenant_id", tenantId)
+        .order("visit_date", { ascending: false })
+
+      if (error) {
+        console.error("❌ Erreur récupération visites locataire:", error)
+        throw new Error(error.message)
+      }
+
+      console.log(`✅ ${data.length} visites récupérées pour le locataire`)
+      return data as Visit[]
+    } catch (error) {
+      console.error("❌ Erreur dans getTenantVisits:", error)
+      throw error
+    }
+  },
+
+  async createVisit(visitData: Partial<Visit>): Promise<Visit> {
+    console.log("📅 VisitService.createVisit")
+
+    try {
+      const { data, error } = await supabase.from("visits").insert(visitData).select().single()
 
       if (error) {
         console.error("❌ Erreur création visite:", error)
@@ -32,148 +98,51 @@ export const visitService = {
       }
 
       console.log("✅ Visite créée:", data)
-      return data
+      return data as Visit
     } catch (error) {
       console.error("❌ Erreur dans createVisit:", error)
       throw error
     }
   },
 
-  // Récupérer les visites d'un locataire
-  async getTenantVisits(tenantId: string) {
-    console.log("📋 VisitService.getTenantVisits", tenantId)
+  async updateVisitStatus(visitId: string, status: Visit["status"]): Promise<Visit> {
+    console.log("📅 VisitService.updateVisitStatus", { visitId, status })
 
     try {
       const { data, error } = await supabase
         .from("visits")
-        .select(`
-          *,
-          property:properties(
-            id, title, address, city, price
-          ),
-          owner:users!visits_owner_id_fkey(
-            id, first_name, last_name, phone
-          )
-        `)
-        .eq("tenant_id", tenantId)
-        .order("visit_date", { ascending: true })
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq("id", visitId)
+        .select()
+        .single()
 
       if (error) {
-        console.error("❌ Erreur récupération visites:", error)
+        console.error("❌ Erreur mise à jour statut visite:", error)
         throw new Error(error.message)
       }
 
-      console.log("✅ Visites récupérées:", data?.length || 0)
-      return data || []
-    } catch (error) {
-      console.error("❌ Erreur dans getTenantVisits:", error)
-      throw error
-    }
-  },
-
-  // Récupérer les visites d'un propriétaire
-  async getOwnerVisits(ownerId: string) {
-    console.log("📋 VisitService.getOwnerVisits", ownerId)
-
-    try {
-      const { data, error } = await supabase
-        .from("visits")
-        .select(`
-          *,
-          property:properties(
-            id, title, address, city
-          ),
-          tenant:users!visits_tenant_id_fkey(
-            id, first_name, last_name, phone
-          )
-        `)
-        .eq("owner_id", ownerId)
-        .order("visit_date", { ascending: true })
-
-      if (error) {
-        console.error("❌ Erreur récupération visites propriétaire:", error)
-        throw new Error(error.message)
-      }
-
-      console.log("✅ Visites propriétaire récupérées:", data?.length || 0)
-      return data || []
-    } catch (error) {
-      console.error("❌ Erreur dans getOwnerVisits:", error)
-      throw error
-    }
-  },
-
-  // Mettre à jour le statut d'une visite
-  async updateVisitStatus(visitId: string, status: string, notes?: string) {
-    console.log("🔄 VisitService.updateVisitStatus", visitId, status)
-
-    try {
-      const updateData: any = {
-        status,
-        updated_at: new Date().toISOString(),
-      }
-
-      if (notes) {
-        updateData.notes = notes
-      }
-
-      const { data, error } = await supabase.from("visits").update(updateData).eq("id", visitId).select().single()
-
-      if (error) {
-        console.error("❌ Erreur mise à jour visite:", error)
-        throw new Error(error.message)
-      }
-
-      console.log("✅ Visite mise à jour:", data)
-      return data
+      console.log("✅ Statut visite mis à jour:", data)
+      return data as Visit
     } catch (error) {
       console.error("❌ Erreur dans updateVisitStatus:", error)
       throw error
     }
   },
 
-  // Proposer des créneaux de visite
-  async proposeVisitSlots(applicationId: string, slots: Array<{ date: string; start_time: string; end_time: string }>) {
-    console.log("📅 VisitService.proposeVisitSlots", applicationId, slots)
+  async deleteVisit(visitId: string): Promise<void> {
+    console.log("📅 VisitService.deleteVisit", visitId)
 
     try {
-      // Récupérer les infos de la candidature
-      const { data: application, error: appError } = await supabase
-        .from("applications")
-        .select("property_id, tenant_id, owner_id")
-        .eq("id", applicationId)
-        .single()
-
-      if (appError || !application) {
-        throw new Error("Candidature non trouvée")
-      }
-
-      // Créer les visites proposées
-      const visitsToCreate = slots.map((slot) => ({
-        application_id: applicationId,
-        property_id: application.property_id,
-        tenant_id: application.tenant_id,
-        owner_id: application.owner_id,
-        visit_date: slot.date,
-        start_time: slot.start_time,
-        end_time: slot.end_time,
-        status: "scheduled",
-      }))
-
-      const { data, error } = await supabase.from("visits").insert(visitsToCreate).select()
+      const { error } = await supabase.from("visits").delete().eq("id", visitId)
 
       if (error) {
-        console.error("❌ Erreur proposition créneaux:", error)
+        console.error("❌ Erreur suppression visite:", error)
         throw new Error(error.message)
       }
 
-      // Mettre à jour le statut de la candidature
-      await supabase.from("applications").update({ status: "visit_scheduled" }).eq("id", applicationId)
-
-      console.log("✅ Créneaux proposés:", data?.length || 0)
-      return data
+      console.log("✅ Visite supprimée")
     } catch (error) {
-      console.error("❌ Erreur dans proposeVisitSlots:", error)
+      console.error("❌ Erreur dans deleteVisit:", error)
       throw error
     }
   },

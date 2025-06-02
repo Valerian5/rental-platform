@@ -1,61 +1,105 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { visitService } from "@/lib/visit-service"
+import { supabase } from "@/lib/supabase"
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const tenantId = searchParams.get("tenant_id")
     const ownerId = searchParams.get("owner_id")
+    const tenantId = searchParams.get("tenant_id")
 
-    if (tenantId) {
-      const visits = await visitService.getTenantVisits(tenantId)
-      return NextResponse.json({ visits })
-    }
+    console.log("📅 API Visits GET", { ownerId, tenantId })
 
     if (ownerId) {
-      const visits = await visitService.getOwnerVisits(ownerId)
-      return NextResponse.json({ visits })
+      // Récupérer les visites pour un propriétaire
+      const { data, error } = await supabase
+        .from("visits")
+        .select(`
+          *,
+          property:properties!inner (
+            id,
+            title,
+            address,
+            property_type,
+            owner_id
+          )
+        `)
+        .eq("property.owner_id", ownerId)
+        .order("visit_date", { ascending: false })
+
+      if (error) {
+        console.error("❌ Erreur récupération visites propriétaire:", error)
+        return NextResponse.json({ error: error.message }, { status: 400 })
+      }
+
+      return NextResponse.json({ visits: data })
     }
 
-    return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 })
+    if (tenantId) {
+      // Récupérer les visites pour un locataire
+      const { data, error } = await supabase
+        .from("visits")
+        .select(`
+          *,
+          property:properties (
+            id,
+            title,
+            address,
+            property_type
+          )
+        `)
+        .eq("tenant_id", tenantId)
+        .order("visit_date", { ascending: false })
+
+      if (error) {
+        console.error("❌ Erreur récupération visites locataire:", error)
+        return NextResponse.json({ error: error.message }, { status: 400 })
+      }
+
+      return NextResponse.json({ visits: data })
+    }
+
+    return NextResponse.json({ error: "owner_id ou tenant_id requis" }, { status: 400 })
   } catch (error) {
-    console.error("Erreur API visites:", error)
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur interne" }, { status: 500 })
+    console.error("❌ Erreur API visits:", error)
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { type } = body
+    console.log("📅 API Visits POST", body)
 
-    if (type === "propose_slots") {
-      const { application_id, slots } = body
-      const visits = await visitService.proposeVisitSlots(application_id, slots)
-      return NextResponse.json({ visits }, { status: 201 })
-    } else {
-      const visit = await visitService.createVisit(body)
-      return NextResponse.json({ visit }, { status: 201 })
+    const { data, error } = await supabase.from("visits").insert(body).select().single()
+
+    if (error) {
+      console.error("❌ Erreur création visite:", error)
+      return NextResponse.json({ error: error.message }, { status: 400 })
     }
+
+    return NextResponse.json({ visit: data })
   } catch (error) {
-    console.error("Erreur création visite:", error)
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur interne" }, { status: 500 })
+    console.error("❌ Erreur API visits POST:", error)
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }
 
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json()
-    const { id, status, notes } = body
+    const { id, ...updateData } = body
+    console.log("📅 API Visits PATCH", { id, updateData })
 
-    if (!id || !status) {
-      return NextResponse.json({ error: "ID et statut requis" }, { status: 400 })
+    const { data, error } = await supabase.from("visits").update(updateData).eq("id", id).select().single()
+
+    if (error) {
+      console.error("❌ Erreur mise à jour visite:", error)
+      return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
-    const visit = await visitService.updateVisitStatus(id, status, notes)
-    return NextResponse.json({ visit })
+    return NextResponse.json({ visit: data })
   } catch (error) {
-    console.error("Erreur mise à jour visite:", error)
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur interne" }, { status: 500 })
+    console.error("❌ Erreur API visits PATCH:", error)
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }
