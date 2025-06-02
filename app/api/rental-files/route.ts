@@ -1,50 +1,57 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
+
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const tenantId = searchParams.get("tenant_id")
+    const id = searchParams.get("id")
 
-    if (!tenantId) {
-      return NextResponse.json({ error: "tenant_id requis" }, { status: 400 })
+    console.log("🔍 Recherche dossier location - tenant_id:", tenantId, "id:", id)
+
+    let query = supabase.from("rental_files").select("*")
+
+    if (id) {
+      query = query.eq("id", id)
+    } else if (tenantId) {
+      query = query.eq("tenant_id", tenantId)
+    } else {
+      return NextResponse.json({ error: "tenant_id ou id requis" }, { status: 400 })
     }
 
-    console.log("🔍 Recherche dossier location pour tenant:", tenantId)
+    const { data: rentalFiles, error } = await query
 
-    // Récupérer le dossier de location simple
-    const { data: rentalFile, error: rentalFileError } = await supabase
-      .from("rental_files")
-      .select("*")
-      .eq("tenant_id", tenantId)
-      .single()
-
-    if (rentalFileError && rentalFileError.code !== "PGRST116") {
-      console.error("❌ Erreur récupération rental_files:", rentalFileError)
-      return NextResponse.json({ error: rentalFileError.message }, { status: 500 })
+    if (error) {
+      console.error("❌ Erreur Supabase:", error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // Récupérer le dossier de location complet
-    const { data: rentalFileData, error: rentalFileDataError } = await supabase
-      .from("rental_file_data")
-      .select("*")
-      .eq("tenant_id", tenantId)
-      .single()
+    console.log("✅ Dossiers trouvés:", rentalFiles?.length || 0)
 
-    if (rentalFileDataError && rentalFileDataError.code !== "PGRST116") {
-      console.error("❌ Erreur récupération rental_file_data:", rentalFileDataError)
+    if (!rentalFiles || rentalFiles.length === 0) {
+      return NextResponse.json({
+        rental_file: null,
+        message: "Aucun dossier de location trouvé",
+      })
     }
 
-    // Retourner les données disponibles
-    const result = {
+    const rentalFile = rentalFiles[0]
+    console.log("📄 Dossier récupéré:", {
+      id: rentalFile.id,
+      tenant_id: rentalFile.tenant_id,
+      has_main_tenant: !!rentalFile.main_tenant,
+      has_guarantors: !!rentalFile.guarantors,
+      guarantors_count: rentalFile.guarantors?.length || 0,
+    })
+
+    return NextResponse.json({
       rental_file: rentalFile,
-      rental_file_data: rentalFileData,
-    }
-
-    console.log("✅ Dossier trouvé:", !!rentalFile, "Données complètes:", !!rentalFileData)
-    return NextResponse.json(result)
+      success: true,
+    })
   } catch (error) {
     console.error("❌ Erreur serveur:", error)
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+    return NextResponse.json({ error: "Erreur interne du serveur" }, { status: 500 })
   }
 }

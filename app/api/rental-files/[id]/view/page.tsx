@@ -23,7 +23,7 @@ export default function RentalFileViewerPage({ params }: { params: { id: string 
       setLoading(true)
       console.log("🔍 Chargement dossier ID:", params.id)
 
-      const response = await fetch(`/api/rental-files/${params.id}`)
+      const response = await fetch(`/api/rental-files?id=${params.id}`)
 
       if (!response.ok) {
         const errorText = await response.text()
@@ -35,7 +35,6 @@ export default function RentalFileViewerPage({ params }: { params: { id: string 
       const data = await response.json()
       console.log("✅ Dossier chargé:", data)
       setRentalFile(data.rental_file)
-      setRentalFileData(data.rental_file_data)
     } catch (error) {
       console.error("Erreur:", error)
       toast.error("Erreur lors du chargement du dossier")
@@ -84,7 +83,7 @@ export default function RentalFileViewerPage({ params }: { params: { id: string 
     )
   }
 
-  if (!rentalFile && !rentalFileData) {
+  if (!rentalFile) {
     return (
       <div className="container mx-auto py-6">
         <Button variant="ghost" onClick={() => router.back()} className="mb-6">
@@ -104,8 +103,10 @@ export default function RentalFileViewerPage({ params }: { params: { id: string 
     )
   }
 
-  const mainTenant = rentalFileData?.main_tenant || {}
+  const mainTenant = rentalFile.main_tenant || {}
   const tenantName = `${mainTenant.first_name || "Prénom"} ${mainTenant.last_name || "Nom"}`
+  const income = mainTenant.income_sources?.work_income?.amount || 0
+  const guarantors = rentalFile.guarantors || []
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -153,6 +154,10 @@ export default function RentalFileViewerPage({ params }: { params: { id: string 
               <label className="text-sm font-medium text-muted-foreground">Nationalité</label>
               <p>{mainTenant.nationality || "Non spécifié"}</p>
             </div>
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Situation logement actuelle</label>
+              <p>{mainTenant.current_housing_situation || "Non spécifié"}</p>
+            </div>
           </CardContent>
         </Card>
 
@@ -167,12 +172,8 @@ export default function RentalFileViewerPage({ params }: { params: { id: string 
               <p>{mainTenant.main_activity || "Non spécifié"}</p>
             </div>
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Profession</label>
-              <p>{mainTenant.profession || rentalFile?.profession || "Non spécifié"}</p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Entreprise</label>
-              <p>{mainTenant.company || rentalFile?.company || "Non spécifié"}</p>
+              <label className="text-sm font-medium text-muted-foreground">Type de revenus</label>
+              <p>{mainTenant.income_sources?.work_income?.type || "Non spécifié"}</p>
             </div>
           </CardContent>
         </Card>
@@ -186,59 +187,54 @@ export default function RentalFileViewerPage({ params }: { params: { id: string 
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Revenus du travail</label>
-                <p className="text-lg font-semibold text-green-600">
-                  {formatAmount(mainTenant.income_sources?.work_income?.amount || rentalFile?.monthly_income || 0)}
-                </p>
+                <p className="text-lg font-semibold text-green-600">{formatAmount(income)}</p>
               </div>
               <div>
-                <label className="text-sm font-medium text-muted-foreground">Revenus totaux</label>
-                <p className="text-lg font-semibold">
-                  {formatAmount(mainTenant.income_sources?.work_income?.amount || rentalFile?.monthly_income || 0)}
-                </p>
+                <label className="text-sm font-medium text-muted-foreground">Type de revenus</label>
+                <p>{mainTenant.income_sources?.work_income?.type || "Non spécifié"}</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Garants */}
-        {(rentalFileData?.guarantors?.length > 0 || rentalFile?.has_guarantor) && (
+        {guarantors.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>Garants</CardTitle>
+              <CardTitle>Garants ({guarantors.length})</CardTitle>
             </CardHeader>
             <CardContent>
-              {rentalFileData?.guarantors?.length > 0 ? (
-                <div className="space-y-4">
-                  {rentalFileData.guarantors.map((guarantor, index) => (
-                    <div key={index} className="border rounded-lg p-4">
-                      <h4 className="font-medium mb-2">Garant {index + 1}</h4>
-                      <div className="grid gap-2 md:grid-cols-3">
-                        <div>
-                          <label className="text-sm font-medium text-muted-foreground">Type</label>
-                          <p>{guarantor.type || "Non spécifié"}</p>
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium text-muted-foreground">Nom</label>
-                          <p>
-                            {guarantor.personal_info?.first_name} {guarantor.personal_info?.last_name}
-                          </p>
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium text-muted-foreground">Revenus</label>
-                          <p>{formatAmount(guarantor.personal_info?.income_sources?.work_income?.amount)}</p>
-                        </div>
+              <div className="space-y-4">
+                {guarantors.map((guarantor, index) => (
+                  <div key={index} className="border rounded-lg p-4">
+                    <h4 className="font-medium mb-2">Garant {index + 1}</h4>
+                    <div className="grid gap-2 md:grid-cols-3">
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Type</label>
+                        <p>{guarantor.type === "physical" ? "Personne physique" : "Personne morale"}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Nom</label>
+                        <p>
+                          {guarantor.personal_info?.first_name} {guarantor.personal_info?.last_name}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Revenus</label>
+                        <p>{formatAmount(guarantor.personal_info?.income_sources?.work_income?.amount)}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Activité</label>
+                        <p>{guarantor.personal_info?.main_activity || "Non spécifié"}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Situation logement</label>
+                        <p>{guarantor.personal_info?.current_housing_situation || "Non spécifié"}</p>
                       </div>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-4">
-                  <p>Garant présent (informations dans le dossier simple)</p>
-                  {rentalFile?.guarantor_income && (
-                    <p>Revenus du garant: {formatAmount(rentalFile.guarantor_income)}</p>
-                  )}
-                </div>
-              )}
+                  </div>
+                ))}
+              </div>
             </CardContent>
           </Card>
         )}

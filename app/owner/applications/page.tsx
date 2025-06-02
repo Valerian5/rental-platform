@@ -66,33 +66,29 @@ export default function ApplicationsPage() {
                 const rentalFileResponse = await fetch(`/api/rental-files?tenant_id=${app.tenant_id}`)
                 if (rentalFileResponse.ok) {
                   const rentalFileData = await rentalFileResponse.json()
-
-                  // Utiliser les données du dossier de location si disponibles
                   const rentalFile = rentalFileData.rental_file
-                  const rentalFileDataComplete = rentalFileData.rental_file_data
 
-                  if (rentalFile || rentalFileDataComplete) {
-                    const mainTenant = rentalFileDataComplete?.main_tenant || {}
+                  if (rentalFile && rentalFile.main_tenant) {
+                    console.log("📊 Enrichissement candidature avec dossier:", {
+                      application_id: app.id,
+                      tenant_name: `${rentalFile.main_tenant.first_name} ${rentalFile.main_tenant.last_name}`,
+                      income: rentalFile.main_tenant.income_sources?.work_income?.amount,
+                      guarantors_count: rentalFile.guarantors?.length || 0,
+                    })
 
-                    // Récupérer les revenus
-                    const income =
-                      mainTenant.income_sources?.work_income?.amount || rentalFile?.monthly_income || app.income || 0
+                    // Récupérer les revenus depuis main_tenant
+                    const income = rentalFile.main_tenant.income_sources?.work_income?.amount || app.income || 0
 
                     // Vérifier la présence de garants
                     const hasGuarantor =
-                      (rentalFileDataComplete?.guarantors && rentalFileDataComplete.guarantors.length > 0) ||
-                      rentalFile?.has_guarantor ||
-                      app.has_guarantor ||
-                      false
+                      (rentalFile.guarantors && rentalFile.guarantors.length > 0) || app.has_guarantor || false
 
-                    // Récupérer la profession et l'entreprise
-                    const profession =
-                      mainTenant.profession || rentalFile?.profession || app.profession || "Non spécifié"
-                    const company = mainTenant.company || rentalFile?.company || app.company || "Non spécifié"
+                    // Récupérer la profession et l'entreprise depuis main_tenant
+                    const profession = rentalFile.main_tenant.profession || app.profession || "Non spécifié"
+                    const company = rentalFile.main_tenant.company || app.company || "Non spécifié"
 
-                    // Type de contrat
-                    const contractType =
-                      mainTenant.main_activity || rentalFile?.contract_type || app.contract_type || "Non spécifié"
+                    // Type de contrat depuis main_activity
+                    const contractType = rentalFile.main_tenant.main_activity || app.contract_type || "Non spécifié"
 
                     return {
                       ...app,
@@ -101,7 +97,10 @@ export default function ApplicationsPage() {
                       profession,
                       company,
                       contract_type: contractType,
-                      rental_file_id: rentalFile?.id || rentalFileDataComplete?.id,
+                      rental_file_id: rentalFile.id,
+                      // Ajouter les données complètes pour debug
+                      rental_file_main_tenant: rentalFile.main_tenant,
+                      rental_file_guarantors: rentalFile.guarantors,
                     }
                   }
                 }
