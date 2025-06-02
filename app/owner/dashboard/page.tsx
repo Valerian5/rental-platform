@@ -147,15 +147,24 @@ export default function OwnerDashboard() {
           pendingApplications: applications.filter((a: any) => a.status === "pending").length,
         }))
 
-        // Ajouter aux activités récentes
-        const recentApps = applications.slice(0, 2).map((app: any) => ({
-          id: app.id,
-          type: "application" as const,
-          title: "Nouvelle candidature",
-          description: `${app.tenant_name} pour ${app.property_title}`,
-          time: new Date(app.created_at).toLocaleDateString(),
-          status: app.status,
-        }))
+        // Ajouter aux activités récentes avec gestion des valeurs undefined
+        const recentApps = applications.slice(0, 2).map((app: any) => {
+          // Récupérer les informations du locataire et de la propriété de manière sécurisée
+          const tenantName = app.tenant?.first_name
+            ? `${app.tenant.first_name} ${app.tenant.last_name || ""}`
+            : "Candidat"
+
+          const propertyTitle = app.property?.title || "Propriété"
+
+          return {
+            id: app.id,
+            type: "application" as const,
+            title: "Nouvelle candidature",
+            description: `${tenantName} pour ${propertyTitle}`,
+            time: app.created_at ? new Date(app.created_at).toLocaleDateString() : "Date inconnue",
+            status: app.status || "pending",
+          }
+        })
 
         setRecentActivity((prev) => [...prev, ...recentApps])
       }
@@ -176,15 +185,20 @@ export default function OwnerDashboard() {
           scheduledVisits: visits.filter((v: any) => v.status === "scheduled").length,
         }))
 
-        // Ajouter aux activités récentes
-        const recentVisits = visits.slice(0, 2).map((visit: any) => ({
-          id: visit.id,
-          type: "visit" as const,
-          title: "Visite programmée",
-          description: `${visit.property_title} - ${visit.visitor_name}`,
-          time: new Date(visit.visit_date).toLocaleDateString(),
-          status: visit.status,
-        }))
+        // Ajouter aux activités récentes avec gestion des valeurs undefined
+        const recentVisits = visits.slice(0, 2).map((visit: any) => {
+          const propertyTitle = visit.property_title || "Propriété"
+          const visitorName = visit.visitor_name || "Visiteur"
+
+          return {
+            id: visit.id,
+            type: "visit" as const,
+            title: "Visite programmée",
+            description: `${propertyTitle} - ${visitorName}`,
+            time: visit.visit_date ? new Date(visit.visit_date).toLocaleDateString() : "Date inconnue",
+            status: visit.status || "scheduled",
+          }
+        })
 
         setRecentActivity((prev) => [...prev, ...recentVisits])
       }
@@ -273,7 +287,7 @@ export default function OwnerDashboard() {
       {/* Header */}
       <PageHeader
         title="Tableau de bord"
-        description={`Bonjour ${user?.first_name} ! Vue d'ensemble de votre activité immobilière`}
+        description={`Bonjour ${user?.first_name || "Propriétaire"} ! Vue d'ensemble de votre activité immobilière`}
       >
         <Button asChild>
           <Link href="/owner/properties/new">
@@ -443,11 +457,17 @@ export default function OwnerDashboard() {
                     )}
                   </div>
                   <CardContent className="p-4">
-                    <h3 className="font-semibold truncate">{property.title}</h3>
-                    <p className="text-sm text-muted-foreground truncate">{property.address}</p>
+                    <h3 className="font-semibold truncate">{property.title || "Sans titre"}</h3>
+                    <p className="text-sm text-muted-foreground truncate">
+                      {property.address || "Adresse non spécifiée"}
+                    </p>
                     <div className="flex items-center justify-between mt-2">
-                      <span className="font-bold text-lg">{property.price}€</span>
-                      <Badge variant={property.status === "active" ? "default" : "secondary"}>{property.status}</Badge>
+                      <span className="font-bold text-lg">
+                        {property.price ? `${property.price}€` : "Prix non défini"}
+                      </span>
+                      <Badge variant={property.status === "active" ? "default" : "secondary"}>
+                        {property.status || "inconnu"}
+                      </Badge>
                     </div>
                   </CardContent>
                 </Card>

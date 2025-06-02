@@ -4,420 +4,226 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { authService } from "@/lib/auth-service"
-import { applicationService } from "@/lib/application-service"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner"
-import { Users, Search, Check, X, SortAsc, SortDesc } from "lucide-react"
+import { authService } from "@/lib/auth-service"
+import { PageHeader } from "@/components/page-header"
 import { ModernApplicationCard } from "@/components/modern-application-card"
+import { Filter, Download, Users, CheckCircle, XCircle, Clock } from "lucide-react"
 
 export default function ApplicationsPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
-  const [applications, setApplications] = useState<any[]>([])
-  const [filteredApplications, setFilteredApplications] = useState<any[]>([])
-  const [properties, setProperties] = useState<any[]>([])
-  const [selectedApplications, setSelectedApplications] = useState<string[]>([])
-  const [sortBy, setSortBy] = useState<"date" | "score" | "name">("score")
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
-  const [filters, setFilters] = useState({
-    status: "all",
-    property: "all",
-    search: "",
-    scoreRange: "all",
-    hasGuarantor: "all",
-  })
+  const [applications, setApplications] = useState([])
+  const [activeTab, setActiveTab] = useState("all")
+  const [user, setUser] = useState(null)
 
   useEffect(() => {
     checkAuthAndLoadData()
   }, [])
 
-  useEffect(() => {
-    applyFiltersAndSort()
-  }, [applications, filters, sortBy, sortOrder])
-
   const checkAuthAndLoadData = async () => {
     try {
-      const user = await authService.getCurrentUser()
-      if (!user || user.user_type !== "owner") {
+      setLoading(true)
+      const currentUser = await authService.getCurrentUser()
+
+      if (!currentUser) {
+        toast.error("Vous devez être connecté pour accéder à cette page")
         router.push("/login")
         return
       }
 
-      await loadApplications(user.id)
-      await loadProperties(user.id)
+      if (currentUser.user_type !== "owner") {
+        toast.error("Accès réservé aux propriétaires")
+        router.push("/")
+        return
+      }
+
+      setUser(currentUser)
+      await loadApplications(currentUser.id)
     } catch (error) {
       console.error("Erreur auth:", error)
-      router.push("/login")
+      toast.error("Erreur d'authentification")
     } finally {
       setLoading(false)
     }
   }
 
-  const loadApplications = async (ownerId: string) => {
+  const loadApplications = async (ownerId) => {
     try {
-      const data = await applicationService.getOwnerApplications(ownerId)
-      const applicationsWithScore = data.map((app) => ({
-        ...app,
-        match_score: applicationService.calculateMatchScore(app, app.property),
-        documents_complete: Math.random() > 0.3, // Simulation
-      }))
-      setApplications(applicationsWithScore)
+      const response = await fetch(`/api/applications?owner_id=${ownerId}`)
+      if (response.ok) {
+        const data = await response.json()
+        console.log("Applications chargées:", data.applications)
+        setApplications(data.applications || [])
+      } else {
+        console.error("Erreur chargement candidatures:", await response.text())
+        toast.error("Erreur lors du chargement des candidatures")
+      }
     } catch (error) {
-      console.error("Erreur chargement candidatures:", error)
+      console.error("Erreur:", error)
       toast.error("Erreur lors du chargement des candidatures")
     }
   }
 
-  const loadProperties = async (ownerId: string) => {
-    try {
-      const response = await fetch(`/api/properties?owner_id=${ownerId}`)
-      if (response.ok) {
-        const data = await response.json()
-        setProperties(data.properties || [])
-      }
-    } catch (error) {
-      console.error("Erreur chargement propriétés:", error)
+  const getFilteredApplications = () => {
+    if (activeTab === "all") return applications
+    return applications.filter((app) => app.status === activeTab)
+  }
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case "pending":
+        return "bg-yellow-100 text-yellow-800"
+      case "approved":
+        return "bg-green-100 text-green-800"
+      case "rejected":
+        return "bg-red-100 text-red-800"
+      default:
+        return "bg-gray-100 text-gray-800"
     }
   }
 
-  const applyFiltersAndSort = () => {
-    let filtered = [...applications]
-
-    // Filtres
-    if (filters.status !== "all") {
-      filtered = filtered.filter((app) => app.status === filters.status)
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case "pending":
+        return <Clock className="h-4 w-4" />
+      case "approved":
+        return <CheckCircle className="h-4 w-4" />
+      case "rejected":
+        return <XCircle className="h-4 w-4" />
+      default:
+        return null
     }
+  }
 
-    if (filters.property !== "all") {
-      filtered = filtered.filter((app) => app.property_id === filters.property)
-    }
+  // Fonction sécurisée pour formater les dates
+  const formatDate = (dateString) => {
+    if (!dateString) return "Non spécifié"
 
-    if (filters.search) {
-      const search = filters.search.toLowerCase()
-      filtered = filtered.filter(
-        (app) =>
-          app.tenant?.first_name?.toLowerCase().includes(search) ||
-          app.tenant?.last_name?.toLowerCase().includes(search) ||
-          app.property?.title?.toLowerCase().includes(search) ||
-          app.tenant?.email?.toLowerCase().includes(search) ||
-          app.profession?.toLowerCase().includes(search),
-      )
-    }
-
-    if (filters.scoreRange !== "all") {
-      const [min, max] = filters.scoreRange.split("-").map(Number)
-      filtered = filtered.filter((app) => {
-        const score = app.match_score || 50
-        return score >= min && (max ? score <= max : true)
+    try {
+      const date = new Date(dateString)
+      return date.toLocaleDateString("fr-FR", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
       })
-    }
-
-    if (filters.hasGuarantor !== "all") {
-      const hasGuarantor = filters.hasGuarantor === "yes"
-      filtered = filtered.filter((app) => app.has_guarantor === hasGuarantor)
-    }
-
-    // Tri
-    filtered.sort((a, b) => {
-      let aValue, bValue
-
-      switch (sortBy) {
-        case "score":
-          aValue = a.match_score || 50
-          bValue = b.match_score || 50
-          break
-        case "date":
-          aValue = new Date(a.created_at).getTime()
-          bValue = new Date(b.created_at).getTime()
-          break
-        case "name":
-          aValue = `${a.tenant?.first_name || ""} ${a.tenant?.last_name || ""}`.toLowerCase()
-          bValue = `${b.tenant?.first_name || ""} ${b.tenant?.last_name || ""}`.toLowerCase()
-          break
-        default:
-          return 0
-      }
-
-      if (sortOrder === "asc") {
-        return aValue > bValue ? 1 : -1
-      } else {
-        return aValue < bValue ? 1 : -1
-      }
-    })
-
-    setFilteredApplications(filtered)
-  }
-
-  const handleApplicationAction = async (applicationId: string, action: string) => {
-    try {
-      switch (action) {
-        case "view_details":
-          router.push(`/owner/applications/${applicationId}`)
-          break
-        case "analyze":
-          router.push(`/owner/applications/${applicationId}?tab=analysis`)
-          break
-        case "accept":
-          await applicationService.updateApplicationStatus(applicationId, "waiting_tenant_confirmation")
-          toast.success("Candidature acceptée, en attente de confirmation du locataire")
-          break
-        case "refuse":
-          await applicationService.updateApplicationStatus(applicationId, "rejected")
-          toast.success("Candidature refusée")
-          break
-        case "contact":
-          // Ouvrir modal de contact ou rediriger vers messagerie
-          toast.info("Fonctionnalité de contact à venir")
-          break
-        case "generate_lease":
-          router.push(`/owner/leases/create?application_id=${applicationId}`)
-          break
-      }
-
-      // Recharger les données
-      const user = await authService.getCurrentUser()
-      if (user) {
-        await loadApplications(user.id)
-      }
     } catch (error) {
-      console.error("Erreur action:", error)
-      toast.error("Erreur lors de l'action")
+      console.error("Erreur formatage date:", error)
+      return "Date invalide"
     }
   }
 
-  const handleBulkAction = async (action: "approve" | "reject") => {
-    if (selectedApplications.length === 0) {
-      toast.error("Aucune candidature sélectionnée")
-      return
-    }
+  // Fonction sécurisée pour formater les montants
+  const formatAmount = (amount) => {
+    if (amount === null || amount === undefined) return "Non spécifié"
 
     try {
-      const promises = selectedApplications.map((id) =>
-        applicationService.updateApplicationStatus(
-          id,
-          action === "approve" ? "waiting_tenant_confirmation" : "rejected",
-        ),
-      )
-
-      await Promise.all(promises)
-      toast.success(
-        `${selectedApplications.length} candidature(s) ${action === "approve" ? "approuvée(s)" : "rejetée(s)"}`,
-      )
-
-      setSelectedApplications([])
-      const user = await authService.getCurrentUser()
-      if (user) {
-        await loadApplications(user.id)
-      }
+      return Number(amount).toLocaleString("fr-FR", {
+        style: "currency",
+        currency: "EUR",
+        maximumFractionDigits: 0,
+      })
     } catch (error) {
-      console.error("Erreur action groupée:", error)
-      toast.error("Erreur lors de l'action groupée")
+      console.error("Erreur formatage montant:", error)
+      return "Montant invalide"
     }
   }
 
   if (loading) {
     return (
       <div className="space-y-6 p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Candidatures</h1>
-            <p className="text-muted-foreground">Chargement...</p>
-          </div>
+        <div className="flex justify-between items-center">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-10 w-32" />
         </div>
-        <div className="space-y-3">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="animate-pulse bg-gray-200 h-24 rounded-lg"></div>
+        <Skeleton className="h-12 w-full" />
+        <div className="grid gap-4 md:grid-cols-2">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-64 w-full" />
           ))}
         </div>
       </div>
     )
   }
 
-  const pendingCount = applications.filter((a) => a.status === "pending").length
-  const acceptedCount = applications.filter((a) => a.status === "accepted").length
-  const waitingCount = applications.filter((a) => a.status === "waiting_tenant_confirmation").length
-  const rejectedCount = applications.filter((a) => a.status === "rejected").length
-
   return (
-    <div className="space-y-6 p-6">
-      {/* Header avec statistiques */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Candidatures</h1>
-          <p className="text-muted-foreground">
-            {applications.length} candidature{applications.length > 1 ? "s" : ""} au total
-          </p>
+    <>
+      <PageHeader title="Candidatures" description="Gérez les candidatures pour vos biens">
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm">
+            <Download className="h-4 w-4 mr-2" />
+            Exporter
+          </Button>
+          <Button variant="outline" size="sm">
+            <Filter className="h-4 w-4 mr-2" />
+            Filtres
+          </Button>
         </div>
+      </PageHeader>
 
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2 text-sm">
-            <div className="flex items-center space-x-1">
-              <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-              <span>{pendingCount} nouvelles</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-              <span>{waitingCount} en attente</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-              <span>{acceptedCount} acceptées</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-              <span>{rejectedCount} refusées</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <div className="p-6 space-y-6">
+        <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid grid-cols-4 mb-4">
+            <TabsTrigger value="all">Toutes</TabsTrigger>
+            <TabsTrigger value="pending">En attente</TabsTrigger>
+            <TabsTrigger value="approved">Acceptées</TabsTrigger>
+            <TabsTrigger value="rejected">Refusées</TabsTrigger>
+          </TabsList>
 
-      {/* Barre d'outils */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col lg:flex-row gap-4">
-            {/* Filtres */}
-            <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Rechercher..."
-                  value={filters.search}
-                  onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                  className="pl-10"
-                />
+          <TabsContent value={activeTab} className="mt-0">
+            {getFilteredApplications().length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-10">
+                  <Users className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-medium">Aucune candidature</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {activeTab === "all"
+                      ? "Vous n'avez pas encore reçu de candidatures"
+                      : `Vous n'avez pas de candidatures ${
+                          activeTab === "pending" ? "en attente" : activeTab === "approved" ? "acceptées" : "refusées"
+                        }`}
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                {getFilteredApplications().map((application) => (
+                  <ModernApplicationCard
+                    key={application.id}
+                    application={{
+                      id: application.id,
+                      propertyTitle: application.property?.title || "Propriété inconnue",
+                      propertyAddress: application.property?.address || "Adresse inconnue",
+                      propertyImage: application.property?.images?.[0] || "/placeholder.svg",
+                      tenantName: `${application.tenant?.first_name || "Prénom"} ${
+                        application.tenant?.last_name || "Nom"
+                      }`,
+                      tenantEmail: application.tenant?.email || "Email non disponible",
+                      tenantPhone: application.tenant?.phone || "Téléphone non disponible",
+                      tenantAvatar: application.tenant?.avatar_url || "/placeholder.svg?height=40&width=40",
+                      profession: application.profession || "Non spécifié",
+                      company: application.company || "Non spécifié",
+                      income: formatAmount(application.income),
+                      message: application.message || application.presentation || "Pas de message",
+                      status: application.status || "pending",
+                      matchScore: application.match_score || 0,
+                      createdAt: formatDate(application.created_at),
+                      moveInDate: formatDate(application.move_in_date),
+                      hasGuarantor: application.has_guarantor || false,
+                    }}
+                    onStatusChange={(status) => {
+                      console.log("Changement de statut:", status)
+                      // Implémenter la mise à jour du statut
+                    }}
+                  />
+                ))}
               </div>
-
-              <Select value={filters.status} onValueChange={(value) => setFilters({ ...filters, status: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Statut" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous les statuts</SelectItem>
-                  <SelectItem value="pending">Nouveau</SelectItem>
-                  <SelectItem value="analyzing">En cours d'analyse</SelectItem>
-                  <SelectItem value="visit_scheduled">Visite programmée</SelectItem>
-                  <SelectItem value="waiting_tenant_confirmation">En attente d'acceptation</SelectItem>
-                  <SelectItem value="accepted">Acceptée</SelectItem>
-                  <SelectItem value="rejected">Refusée</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select
-                value={filters.scoreRange}
-                onValueChange={(value) => setFilters({ ...filters, scoreRange: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Score" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous scores</SelectItem>
-                  <SelectItem value="80-100">Excellent (80-100%)</SelectItem>
-                  <SelectItem value="60-79">Bon (60-79%)</SelectItem>
-                  <SelectItem value="40-59">Moyen (40-59%)</SelectItem>
-                  <SelectItem value="0-39">Faible (0-39%)</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={filters.property} onValueChange={(value) => setFilters({ ...filters, property: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Propriété" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Toutes les propriétés</SelectItem>
-                  {properties.map((property) => (
-                    <SelectItem key={property.id} value={property.id}>
-                      {property.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Tri */}
-            <div className="flex items-center space-x-2">
-              <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="score">Score</SelectItem>
-                  <SelectItem value="date">Date</SelectItem>
-                  <SelectItem value="name">Nom</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Button variant="outline" size="sm" onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}>
-                {sortOrder === "asc" ? <SortAsc className="h-4 w-4" /> : <SortDesc className="h-4 w-4" />}
-              </Button>
-            </div>
-          </div>
-
-          {/* Actions groupées */}
-          {selectedApplications.length > 0 && (
-            <div className="flex items-center justify-between mt-4 p-3 bg-blue-50 rounded-lg">
-              <span className="text-sm font-medium">{selectedApplications.length} candidature(s) sélectionnée(s)</span>
-              <div className="flex space-x-2">
-                <Button
-                  size="sm"
-                  onClick={() => handleBulkAction("approve")}
-                  className="bg-green-600 hover:bg-green-700"
-                >
-                  <Check className="h-4 w-4 mr-1" />
-                  Accepter
-                </Button>
-                <Button size="sm" variant="destructive" onClick={() => handleBulkAction("reject")}>
-                  <X className="h-4 w-4 mr-1" />
-                  Refuser
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => setSelectedApplications([])}>
-                  Annuler
-                </Button>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Liste des candidatures */}
-      <div className="space-y-3">
-        {filteredApplications.length === 0 ? (
-          <Card>
-            <CardContent className="p-12 text-center">
-              <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Aucune candidature</h3>
-              <p className="text-muted-foreground">
-                {Object.values(filters).some((f) => f !== "all") || filters.search
-                  ? "Aucune candidature ne correspond à vos filtres"
-                  : "Vous n'avez pas encore reçu de candidatures"}
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <>
-            <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
-              <span>{filteredApplications.length} résultat(s)</span>
-            </div>
-
-            {filteredApplications.map((application) => (
-              <ModernApplicationCard
-                key={application.id}
-                application={application}
-                isSelected={selectedApplications.includes(application.id)}
-                onSelect={(selected) => {
-                  if (selected) {
-                    setSelectedApplications([...selectedApplications, application.id])
-                  } else {
-                    setSelectedApplications(selectedApplications.filter((id) => id !== application.id))
-                  }
-                }}
-                onAction={(action) => handleApplicationAction(application.id, action)}
-              />
-            ))}
-          </>
-        )}
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
-    </div>
+    </>
   )
 }

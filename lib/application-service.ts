@@ -1,4 +1,5 @@
 import { supabase } from "./supabase"
+import { notificationsService } from "./notifications-service"
 
 export interface ApplicationData {
   property_id: string
@@ -44,6 +45,44 @@ export const applicationService = {
       }
 
       console.log("✅ Candidature créée:", data)
+
+      // Récupérer les informations du propriétaire et du locataire pour les notifications
+      try {
+        // Récupérer la propriété pour avoir l'ID du propriétaire
+        const { data: property } = await supabase
+          .from("properties")
+          .select("owner_id, title")
+          .eq("id", applicationData.property_id)
+          .single()
+
+        if (property) {
+          // Récupérer les informations du locataire
+          const { data: tenant } = await supabase
+            .from("users")
+            .select("first_name, last_name")
+            .eq("id", applicationData.tenant_id)
+            .single()
+
+          // Créer une notification pour le propriétaire
+          if (property.owner_id && tenant) {
+            const tenantName = `${tenant.first_name || ""} ${tenant.last_name || ""}`.trim() || "Un locataire"
+            const propertyTitle = property.title || "votre bien"
+
+            await notificationsService.createNotification(property.owner_id, {
+              title: "Nouvelle candidature",
+              content: `${tenantName} a postulé pour ${propertyTitle}`,
+              type: "application",
+              action_url: `/owner/applications?id=${data.id}`,
+            })
+
+            console.log("✅ Notification créée pour le propriétaire")
+          }
+        }
+      } catch (notifError) {
+        console.error("❌ Erreur création notification:", notifError)
+        // On ne bloque pas le processus si la notification échoue
+      }
+
       return data
     } catch (error) {
       console.error("❌ Erreur dans createApplication:", error)
@@ -180,6 +219,48 @@ export const applicationService = {
       }
 
       console.log("✅ Statut mis à jour:", data)
+
+      // Créer une notification pour le locataire
+      try {
+        // Récupérer les informations de la propriété
+        const { data: application } = await supabase
+          .from("applications")
+          .select(`
+            tenant_id,
+            property:properties(title, owner_id)
+          `)
+          .eq("id", applicationId)
+          .single()
+
+        if (application && application.tenant_id) {
+          const propertyTitle = application.property?.title || "un bien"
+          let notificationTitle = ""
+          let notificationContent = ""
+
+          if (status === "approved") {
+            notificationTitle = "Candidature acceptée"
+            notificationContent = `Votre candidature pour ${propertyTitle} a été acceptée !`
+          } else if (status === "rejected") {
+            notificationTitle = "Candidature refusée"
+            notificationContent = `Votre candidature pour ${propertyTitle} n'a pas été retenue.`
+          }
+
+          if (notificationTitle) {
+            await notificationsService.createNotification(application.tenant_id, {
+              title: notificationTitle,
+              content: notificationContent,
+              type: "application_status",
+              action_url: `/tenant/applications`,
+            })
+
+            console.log("✅ Notification créée pour le locataire")
+          }
+        }
+      } catch (notifError) {
+        console.error("❌ Erreur création notification:", notifError)
+        // On ne bloque pas le processus si la notification échoue
+      }
+
       return data
     } catch (error) {
       console.error("❌ Erreur dans updateApplicationStatus:", error)
