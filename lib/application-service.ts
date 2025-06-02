@@ -146,7 +146,14 @@ export const applicationService = {
         .select(`
           *,
           property:properties(*),
-          tenant:users!applications_tenant_id_fkey(*)
+          tenant:users!inner(
+            id,
+            email,
+            first_name,
+            last_name,
+            phone,
+            avatar_url
+          )
         `)
         .in("property_id", propertyIds)
         .order("created_at", { ascending: false })

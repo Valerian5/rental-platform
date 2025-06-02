@@ -189,36 +189,41 @@ export default function ApplicationsPage() {
               </Card>
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
-                {getFilteredApplications().map((application) => (
-                  <ModernApplicationCard
-                    key={application.id}
-                    application={{
-                      id: application.id,
-                      propertyTitle: application.property?.title || "Propriété inconnue",
-                      propertyAddress: application.property?.address || "Adresse inconnue",
-                      propertyImage: application.property?.images?.[0] || "/placeholder.svg",
-                      tenantName: `${application.tenant?.first_name || "Prénom"} ${
-                        application.tenant?.last_name || "Nom"
-                      }`,
-                      tenantEmail: application.tenant?.email || "Email non disponible",
-                      tenantPhone: application.tenant?.phone || "Téléphone non disponible",
-                      tenantAvatar: application.tenant?.avatar_url || "/placeholder.svg?height=40&width=40",
-                      profession: application.profession || "Non spécifié",
-                      company: application.company || "Non spécifié",
-                      income: formatAmount(application.income),
-                      message: application.message || application.presentation || "Pas de message",
-                      status: application.status || "pending",
-                      matchScore: application.match_score || 0,
-                      createdAt: formatDate(application.created_at),
-                      moveInDate: formatDate(application.move_in_date),
-                      hasGuarantor: application.has_guarantor || false,
-                    }}
-                    onStatusChange={(status) => {
-                      console.log("Changement de statut:", status)
-                      // Implémenter la mise à jour du statut
-                    }}
-                  />
-                ))}
+                {getFilteredApplications().map((application) => {
+                  // Vérification sécurisée des données du tenant
+                  const tenant = application.tenant || {}
+                  const tenantName = `${tenant.first_name || "Prénom"} ${tenant.last_name || "Nom"}`.trim()
+                  const finalTenantName = tenantName === "Prénom Nom" ? "Locataire inconnu" : tenantName
+
+                  return (
+                    <ModernApplicationCard
+                      key={application.id}
+                      application={{
+                        id: application.id,
+                        propertyTitle: application.property?.title || "Propriété inconnue",
+                        propertyAddress: application.property?.address || "Adresse inconnue",
+                        propertyImage: application.property?.images?.[0] || "/placeholder.svg",
+                        tenantName: finalTenantName,
+                        tenantEmail: tenant.email || "Email non disponible",
+                        tenantPhone: tenant.phone || "Téléphone non disponible",
+                        tenantAvatar: tenant.avatar_url || "/placeholder.svg?height=40&width=40",
+                        profession: application.profession || "Non spécifié",
+                        company: application.company || "Non spécifié",
+                        income: formatAmount(application.income),
+                        message: application.message || application.presentation || "Pas de message",
+                        status: application.status || "pending",
+                        matchScore: application.match_score || 0,
+                        createdAt: formatDate(application.created_at),
+                        moveInDate: formatDate(application.move_in_date),
+                        hasGuarantor: application.has_guarantor || false,
+                      }}
+                      onStatusChange={(status) => {
+                        console.log("Changement de statut:", status)
+                        // Implémenter la mise à jour du statut
+                      }}
+                    />
+                  )
+                })}
               </div>
             )}
           </TabsContent>
