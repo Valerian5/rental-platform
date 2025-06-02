@@ -239,6 +239,270 @@ export default function RentalFileViewerPage({ params }: { params: { id: string 
           </Card>
         )}
 
+        {/* Pièces jointes */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Pièces jointes</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-6">
+              {/* Documents d'identité */}
+              {mainTenant.identity_documents && mainTenant.identity_documents.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-3">Pièces d'identité du locataire</h4>
+                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                    {mainTenant.identity_documents.map((doc, index) => (
+                      <div key={index} className="border rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <FileText className="h-4 w-4 text-blue-500" />
+                          <span className="text-sm font-medium">Pièce d'identité {index + 1}</span>
+                        </div>
+                        <img
+                          src={doc || "/placeholder.svg"}
+                          alt={`Pièce d'identité ${index + 1}`}
+                          className="w-full h-32 object-cover rounded border"
+                          onError={(e) => {
+                            e.target.style.display = "none"
+                            e.target.nextSibling.style.display = "flex"
+                          }}
+                        />
+                        <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
+                          <div className="text-center">
+                            <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
+                            <p className="text-xs text-gray-500">Document</p>
+                          </div>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full mt-2"
+                          onClick={() => window.open(doc, "_blank")}
+                        >
+                          Voir le document
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Documents d'activité */}
+              {mainTenant.activity_documents && mainTenant.activity_documents.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-3">Justificatifs d'activité</h4>
+                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                    {mainTenant.activity_documents.map((doc, index) => (
+                      <div key={index} className="border rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <FileText className="h-4 w-4 text-green-500" />
+                          <span className="text-sm font-medium">Justificatif {index + 1}</span>
+                        </div>
+                        <img
+                          src={doc || "/placeholder.svg"}
+                          alt={`Justificatif d'activité ${index + 1}`}
+                          className="w-full h-32 object-cover rounded border"
+                          onError={(e) => {
+                            e.target.style.display = "none"
+                            e.target.nextSibling.style.display = "flex"
+                          }}
+                        />
+                        <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
+                          <div className="text-center">
+                            <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
+                            <p className="text-xs text-gray-500">Document</p>
+                          </div>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full mt-2"
+                          onClick={() => window.open(doc, "_blank")}
+                        >
+                          Voir le document
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Documents de revenus */}
+              {mainTenant.income_sources?.work_income?.documents &&
+                mainTenant.income_sources.work_income.documents.length > 0 && (
+                  <div>
+                    <h4 className="font-medium mb-3">Justificatifs de revenus</h4>
+                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                      {mainTenant.income_sources.work_income.documents.map((doc, index) => (
+                        <div key={index} className="border rounded-lg p-3">
+                          <div className="flex items-center gap-2 mb-2">
+                            <FileText className="h-4 w-4 text-purple-500" />
+                            <span className="text-sm font-medium">Justificatif revenus {index + 1}</span>
+                          </div>
+                          <img
+                            src={doc || "/placeholder.svg"}
+                            alt={`Justificatif de revenus ${index + 1}`}
+                            className="w-full h-32 object-cover rounded border"
+                            onError={(e) => {
+                              e.target.style.display = "none"
+                              e.target.nextSibling.style.display = "flex"
+                            }}
+                          />
+                          <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
+                            <div className="text-center">
+                              <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
+                              <p className="text-xs text-gray-500">Document</p>
+                            </div>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full mt-2"
+                            onClick={() => window.open(doc, "_blank")}
+                          >
+                            Voir le document
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              {/* Documents fiscaux */}
+              {mainTenant.tax_situation?.documents && mainTenant.tax_situation.documents.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-3">Documents fiscaux</h4>
+                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                    {mainTenant.tax_situation.documents.map((doc, index) => (
+                      <div key={index} className="border rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <FileText className="h-4 w-4 text-orange-500" />
+                          <span className="text-sm font-medium">Document fiscal {index + 1}</span>
+                        </div>
+                        <img
+                          src={doc || "/placeholder.svg"}
+                          alt={`Document fiscal ${index + 1}`}
+                          className="w-full h-32 object-cover rounded border"
+                          onError={(e) => {
+                            e.target.style.display = "none"
+                            e.target.nextSibling.style.display = "flex"
+                          }}
+                        />
+                        <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
+                          <div className="text-center">
+                            <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
+                            <p className="text-xs text-gray-500">Document</p>
+                          </div>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full mt-2"
+                          onClick={() => window.open(doc, "_blank")}
+                        >
+                          Voir le document
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Documents de logement actuel */}
+              {mainTenant.current_housing_documents?.quittances_loyer &&
+                mainTenant.current_housing_documents.quittances_loyer.length > 0 && (
+                  <div>
+                    <h4 className="font-medium mb-3">Quittances de loyer</h4>
+                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                      {mainTenant.current_housing_documents.quittances_loyer.map((doc, index) => (
+                        <div key={index} className="border rounded-lg p-3">
+                          <div className="flex items-center gap-2 mb-2">
+                            <FileText className="h-4 w-4 text-red-500" />
+                            <span className="text-sm font-medium">Quittance {index + 1}</span>
+                          </div>
+                          <img
+                            src={doc || "/placeholder.svg"}
+                            alt={`Quittance de loyer ${index + 1}`}
+                            className="w-full h-32 object-cover rounded border"
+                            onError={(e) => {
+                              e.target.style.display = "none"
+                              e.target.nextSibling.style.display = "flex"
+                            }}
+                          />
+                          <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
+                            <div className="text-center">
+                              <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
+                              <p className="text-xs text-gray-500">Document</p>
+                            </div>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full mt-2"
+                            onClick={() => window.open(doc, "_blank")}
+                          >
+                            Voir le document
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              {/* Documents des garants */}
+              {guarantors.length > 0 && guarantors.some((g) => g.personal_info?.identity_documents?.length > 0) && (
+                <div>
+                  <h4 className="font-medium mb-3">Documents des garants</h4>
+                  {guarantors.map(
+                    (guarantor, gIndex) =>
+                      guarantor.personal_info?.identity_documents &&
+                      guarantor.personal_info.identity_documents.length > 0 && (
+                        <div key={gIndex} className="mb-4">
+                          <h5 className="text-sm font-medium text-muted-foreground mb-2">
+                            Garant {gIndex + 1} - {guarantor.personal_info.first_name}{" "}
+                            {guarantor.personal_info.last_name}
+                          </h5>
+                          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                            {guarantor.personal_info.identity_documents.map((doc, index) => (
+                              <div key={index} className="border rounded-lg p-3">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <FileText className="h-4 w-4 text-indigo-500" />
+                                  <span className="text-sm font-medium">Pièce d'identité {index + 1}</span>
+                                </div>
+                                <img
+                                  src={doc || "/placeholder.svg"}
+                                  alt={`Pièce d'identité garant ${gIndex + 1}`}
+                                  className="w-full h-32 object-cover rounded border"
+                                  onError={(e) => {
+                                    e.target.style.display = "none"
+                                    e.target.nextSibling.style.display = "flex"
+                                  }}
+                                />
+                                <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
+                                  <div className="text-center">
+                                    <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
+                                    <p className="text-xs text-gray-500">Document</p>
+                                  </div>
+                                </div>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full mt-2"
+                                  onClick={() => window.open(doc, "_blank")}
+                                >
+                                  Voir le document
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ),
+                  )}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Message de présentation */}
         {(rentalFileData?.presentation_message || rentalFile?.presentation_message) && (
           <Card>
