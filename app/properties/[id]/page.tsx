@@ -181,7 +181,14 @@ export default function PropertyPublicPage() {
     return rentalFileService.checkCompatibility(rentalFile, property, income)
   }
 
-  const compatibilityCheck = getCompatibilityCheck()
+  const compatibilityCheck =
+    rentalFile && property
+      ? rentalFileService.checkCompatibility(
+          rentalFile,
+          property,
+          applicationData.income ? Number.parseFloat(applicationData.income) : undefined,
+        )
+      : null
 
   // États de chargement et d'erreur
   if (isLoading) {

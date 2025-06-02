@@ -208,7 +208,7 @@ export default function TenantSearchPage() {
                 <SelectValue placeholder="Type de bien" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Tous les types</SelectItem>
+                <SelectItem value="all">Tous les types</SelectItem>
                 <SelectItem value="apartment">Appartement</SelectItem>
                 <SelectItem value="house">Maison</SelectItem>
                 <SelectItem value="studio">Studio</SelectItem>

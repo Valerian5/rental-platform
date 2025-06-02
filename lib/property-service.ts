@@ -1,520 +1,233 @@
 import { supabase } from "./supabase"
 
-export interface PropertyData {
+export interface Property {
+  id: string
   title: string
   description: string
   address: string
   city: string
   postal_code: string
-  hide_exact_address: boolean
+  price: number
+  charges?: number
   surface: number
-  rent_excluding_charges: number
-  charges_amount: number
-  property_type: "apartment" | "house" | "studio" | "loft"
-  rental_type: "unfurnished" | "furnished" | "shared"
-  construction_year: number
-  security_deposit: number
   rooms: number
   bedrooms: number
   bathrooms: number
-  exterior_type: string
-  equipment: string[]
-  energy_class: string
-  ges_class: string
-  heating_type: string
-  required_income: number
-  professional_situation: string
-  guarantor_required: boolean
-  lease_duration: number
-  move_in_date: string
-  rent_payment_day: number
+  floor?: number
+  property_type: string
+  furnished: boolean
+  available: boolean
+  available_from?: string
+  energy_class?: string
+  ges_class?: string
+  has_parking: boolean
+  has_balcony: boolean
+  has_elevator: boolean
+  has_security: boolean
+  internet: boolean
+  pets_allowed: boolean
+  equipment?: string[]
   owner_id: string
-}
-
-export interface VisitSlot {
-  id?: string
-  date: string
-  start_time: string
-  end_time: string
-  max_capacity: number
-  is_group_visit: boolean
-  current_bookings: number
+  owner?: {
+    id: string
+    first_name: string
+    last_name: string
+    email: string
+    phone?: string
+  }
+  property_images?: Array<{
+    id: string
+    url: string
+    is_primary: boolean
+  }>
+  created_at: string
+  updated_at: string
 }
 
 export const propertyService = {
-  // Créer une nouvelle propriété
-  async createProperty(propertyData: PropertyData) {
-    console.log("🏠 PropertyService.createProperty - Début", propertyData)
+  async getProperties(
+    filters: any = {},
+    page = 1,
+    limit = 10,
+  ): Promise<{ properties: Property[]; total: number; totalPages: number }> {
+    console.log("🏠 PropertyService.getProperties", { filters, page, limit })
 
     try {
-      // Test de connexion d'abord
-      console.log("🔗 Test de connexion Supabase...")
-      const { data: testData, error: testError } = await supabase.from("properties").select("count").limit(1)
-
-      if (testError) {
-        console.error("❌ Erreur de connexion Supabase:", testError)
-        throw new Error(`Connexion DB échouée: ${testError.message}`)
-      }
-      console.log("✅ Connexion Supabase OK")
-
-      // Préparer les données SANS les colonnes qui n'existent pas
-      const insertData = {
-        title: propertyData.title,
-        description: propertyData.description,
-        address: propertyData.address,
-        city: propertyData.city,
-        postal_code: propertyData.postal_code,
-        surface: propertyData.surface,
-        price: propertyData.rent_excluding_charges + propertyData.charges_amount, // Prix total
-        rooms: propertyData.rooms,
-        bedrooms: propertyData.bedrooms,
-        bathrooms: propertyData.bathrooms,
-        property_type: propertyData.property_type,
-        furnished: propertyData.rental_type === "furnished",
-        available: true, // Utiliser 'available' au lieu de 'status'
-        owner_id: propertyData.owner_id,
-        // Supprimer toutes les colonnes qui n'existent pas dans Supabase
-      }
-
-      console.log("📝 Données préparées pour insertion:", insertData)
-
-      const { data, error } = await supabase.from("properties").insert(insertData).select().single()
-
-      if (error) {
-        console.error("❌ Erreur lors de l'insertion:", error)
-        throw new Error(`Erreur création: ${error.message}`)
-      }
-
-      if (!data) {
-        console.error("❌ Aucune donnée retournée")
-        throw new Error("Aucune propriété retournée après création")
-      }
-
-      console.log("✅ Propriété créée avec succès:", data)
-      return data
-    } catch (error) {
-      console.error("❌ Erreur dans createProperty:", error)
-      throw error
-    }
-  },
-
-  // Récupérer les propriétés d'un propriétaire
-  async getOwnerProperties(ownerId: string) {
-    console.log("📋 PropertyService.getOwnerProperties - ownerId:", ownerId)
-
-    try {
-      const { data, error } = await supabase
-        .from("properties")
-        .select(`
+      let query = supabase.from("properties").select(`
           *,
-          property_images(id, url, is_primary)
+          owner:users!owner_id (id, first_name, last_name, email, phone),
+          property_images (id, url, is_primary)
         `)
-        .eq("owner_id", ownerId)
-        .order("created_at", { ascending: false })
+
+      // Appliquer les filtres
+      if (filters.city) {
+        query = query.ilike("city", `%${filters.city}%`)
+      }
+
+      if (filters.property_type && filters.property_type !== "all") {
+        query = query.eq("property_type", filters.property_type)
+      }
+
+      if (filters.min_price) {
+        query = query.gte("price", filters.min_price)
+      }
+
+      if (filters.max_price) {
+        query = query.lte("price", filters.max_price)
+      }
+
+      if (filters.min_rooms) {
+        query = query.gte("rooms", filters.min_rooms)
+      }
+
+      if (filters.min_bedrooms) {
+        query = query.gte("bedrooms", filters.min_bedrooms)
+      }
+
+      if (filters.min_surface) {
+        query = query.gte("surface", filters.min_surface)
+      }
+
+      if (filters.max_surface) {
+        query = query.lte("surface", filters.max_surface)
+      }
+
+      if (filters.furnished === true) {
+        query = query.eq("furnished", true)
+      }
+
+      // Compter le total
+      const { count, error: countError } = await supabase.from("properties").select("*", { count: "exact", head: true })
+
+      if (countError) {
+        console.error("❌ Erreur comptage propriétés:", countError)
+        throw new Error(countError.message)
+      }
+
+      // Pagination
+      const from = (page - 1) * limit
+      const to = from + limit - 1
+
+      query = query.range(from, to)
+
+      // Exécuter la requête
+      const { data, error } = await query
 
       if (error) {
-        console.error("❌ Erreur lors de la récupération:", error)
+        console.error("❌ Erreur récupération propriétés:", error)
         throw new Error(error.message)
       }
 
-      console.log("✅ Propriétés récupérées:", data?.length || 0, "propriétés")
-      console.log(
-        "📸 Images par propriété:",
-        data?.map((p) => ({ id: p.id, images: p.property_images?.length || 0 })),
-      )
-      return data || []
-    } catch (error) {
-      console.error("❌ Erreur dans getOwnerProperties:", error)
-      throw error
-    }
-  },
+      const total = count || 0
+      const totalPages = Math.ceil(total / limit)
 
-  // Récupérer les propriétés d'un propriétaire avec statistiques
-  async getOwnerPropertiesWithStats(ownerId: string) {
-    try {
-      const { data: properties, error: propertiesError } = await supabase
-        .from("properties")
-        .select(`
-          *,
-          property_images(id, url, is_primary),
-          applications(id, status),
-          visits(id, status, visit_date)
-        `)
-        .eq("owner_id", ownerId)
-        .order("created_at", { ascending: false })
+      console.log(`✅ ${data.length} propriétés récupérées sur ${total}`)
 
-      if (propertiesError) {
-        throw new Error(propertiesError.message)
+      return {
+        properties: data as Property[],
+        total,
+        totalPages,
       }
-
-      return properties || []
     } catch (error) {
-      console.error("Erreur lors de la récupération des propriétés:", error)
+      console.error("❌ Erreur dans getProperties:", error)
       throw error
     }
   },
 
-  // Récupérer une propriété par son ID
-  async getPropertyById(id: string) {
-    console.log("🔍 PropertyService.getPropertyById - ID:", id)
+  async getPropertyById(id: string): Promise<Property> {
+    console.log("🏠 PropertyService.getPropertyById", id)
 
     try {
       const { data, error } = await supabase
         .from("properties")
         .select(`
           *,
-          property_images(id, url, is_primary)
+          owner:users!owner_id (id, first_name, last_name, email, phone),
+          property_images (id, url, is_primary)
         `)
         .eq("id", id)
         .single()
 
       if (error) {
-        console.error("❌ Erreur lors de la récupération:", error)
+        console.error("❌ Erreur récupération propriété:", error)
         throw new Error(error.message)
       }
 
-      if (!data) {
-        console.error("❌ Aucune propriété trouvée")
-        throw new Error("Propriété non trouvée")
-      }
-
       console.log("✅ Propriété récupérée:", data)
-      console.log("📸 Images de la propriété:", data.property_images)
-
-      // Vérifier et nettoyer les URLs d'images
-      if (data.property_images) {
-        console.log("🔍 Vérification des images...")
-        data.property_images = data.property_images.map((image: any) => {
-          console.log("📸 Image URL:", image.url)
-
-          // Vérifier si l'URL est valide
-          if (!image.url || !image.url.startsWith("http")) {
-            console.warn("⚠️ URL d'image invalide:", image.url)
-            return {
-              ...image,
-              url: `/placeholder.svg?height=400&width=600&text=Image+non+disponible`,
-            }
-          }
-
-          return image
-        })
-      }
-
-      return data
+      return data as Property
     } catch (error) {
       console.error("❌ Erreur dans getPropertyById:", error)
       throw error
     }
   },
 
-  // Récupérer une propriété publique par son ID (pour l'affichage public)
-  async getPublicPropertyById(id: string) {
-    console.log("🌐 PropertyService.getPublicPropertyById - ID:", id)
+  async getPublicPropertyById(id: string): Promise<Property> {
+    // Pour les propriétés publiques, on utilise la même fonction
+    // mais on pourrait ajouter des restrictions si nécessaire
+    return this.getPropertyById(id)
+  },
+
+  async createProperty(propertyData: Partial<Property>): Promise<Property> {
+    console.log("🏠 PropertyService.createProperty")
 
     try {
-      const { data, error } = await supabase
-        .from("properties")
-        .select(`
-          *,
-          property_images(id, url, is_primary),
-          owner:users(first_name, last_name, phone, email)
-        `)
-        .eq("id", id)
-        .eq("available", true)
-        .single()
+      const { data, error } = await supabase.from("properties").insert(propertyData).select().single()
 
       if (error) {
-        console.error("❌ Erreur lors de la récupération publique:", error)
+        console.error("❌ Erreur création propriété:", error)
         throw new Error(error.message)
       }
 
-      if (!data) {
-        console.error("❌ Aucune propriété publique trouvée")
-        throw new Error("Propriété non trouvée ou non disponible")
-      }
-
-      console.log("✅ Propriété publique récupérée:", data)
-      console.log("📸 Images de la propriété publique:", data.property_images)
-      return data
+      console.log("✅ Propriété créée:", data)
+      return data as Property
     } catch (error) {
-      console.error("❌ Erreur dans getPublicPropertyById:", error)
+      console.error("❌ Erreur dans createProperty:", error)
       throw error
     }
   },
 
-  // Générer des créneaux de visite automatiques
-  async generateDefaultVisitSlots(propertyId: string, daysAhead = 14) {
-    console.log("📅 Génération de créneaux pour propriété:", propertyId)
+  async updateProperty(id: string, propertyData: Partial<Property>): Promise<Property> {
+    console.log("🏠 PropertyService.updateProperty", id)
 
     try {
-      const slots: VisitSlot[] = []
-      const today = new Date()
-
-      for (let i = 1; i <= daysAhead; i++) {
-        const date = new Date(today)
-        date.setDate(today.getDate() + i)
-
-        // Éviter les dimanches
-        if (date.getDay() === 0) continue
-
-        const dateStr = date.toISOString().split("T")[0]
-
-        // Créneaux de semaine (lundi-vendredi)
-        if (date.getDay() >= 1 && date.getDay() <= 5) {
-          // Matin : 9h-12h (créneaux de 30min)
-          for (let hour = 9; hour < 12; hour++) {
-            for (let minute = 0; minute < 60; minute += 30) {
-              const startTime = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`
-              const endHour = minute === 30 ? hour + 1 : hour
-              const endMinute = minute === 30 ? 0 : 30
-              const endTime = `${endHour.toString().padStart(2, "0")}:${endMinute.toString().padStart(2, "0")}`
-
-              slots.push({
-                date: dateStr,
-                start_time: startTime,
-                end_time: endTime,
-                max_capacity: 1,
-                is_group_visit: false,
-                current_bookings: 0,
-              })
-            }
-          }
-
-          // Après-midi : 14h-18h (créneaux de 30min)
-          for (let hour = 14; hour < 18; hour++) {
-            for (let minute = 0; minute < 60; minute += 30) {
-              const startTime = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`
-              const endHour = minute === 30 ? hour + 1 : hour
-              const endMinute = minute === 30 ? 0 : 30
-              const endTime = `${endHour.toString().padStart(2, "0")}:${endMinute.toString().padStart(2, "0")}`
-
-              slots.push({
-                date: dateStr,
-                start_time: startTime,
-                end_time: endTime,
-                max_capacity: 1,
-                is_group_visit: false,
-                current_bookings: 0,
-              })
-            }
-          }
-        }
-
-        // Créneaux de samedi (10h-17h)
-        if (date.getDay() === 6) {
-          for (let hour = 10; hour < 17; hour++) {
-            for (let minute = 0; minute < 60; minute += 30) {
-              const startTime = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`
-              const endHour = minute === 30 ? hour + 1 : hour
-              const endMinute = minute === 30 ? 0 : 30
-              const endTime = `${endHour.toString().padStart(2, "0")}:${endMinute.toString().padStart(2, "0")}`
-
-              slots.push({
-                date: dateStr,
-                start_time: startTime,
-                end_time: endTime,
-                max_capacity: 1,
-                is_group_visit: false,
-                current_bookings: 0,
-              })
-            }
-          }
-        }
-      }
-
-      // Insérer tous les créneaux en une fois
-      const slotsToInsert = slots.map((slot) => ({
-        property_id: propertyId,
-        ...slot,
-      }))
-
-      const { data, error } = await supabase.from("visit_availabilities").insert(slotsToInsert).select()
+      const { data, error } = await supabase.from("properties").update(propertyData).eq("id", id).select().single()
 
       if (error) {
-        console.error("❌ Erreur lors de la génération des créneaux:", error)
-        throw new Error(error.message)
-      }
-
-      console.log("✅ Créneaux générés:", data?.length || 0)
-      return data
-    } catch (error) {
-      console.error("Erreur lors de la génération des créneaux:", error)
-      throw error
-    }
-  },
-
-  // Ajouter une disponibilité de visite personnalisée
-  async addVisitAvailability(
-    propertyId: string,
-    date: string,
-    startTime: string,
-    endTime: string,
-    maxCapacity = 1,
-    isGroupVisit = false,
-  ) {
-    try {
-      const { data, error } = await supabase
-        .from("visit_availabilities")
-        .insert({
-          property_id: propertyId,
-          date,
-          start_time: startTime,
-          end_time: endTime,
-          max_capacity: maxCapacity,
-          is_group_visit: isGroupVisit,
-          current_bookings: 0,
-        })
-        .select()
-        .single()
-
-      if (error) {
-        throw new Error(error.message)
-      }
-
-      return data
-    } catch (error) {
-      console.error("Erreur lors de l'ajout de la disponibilité:", error)
-      throw error
-    }
-  },
-
-  // Récupérer les candidatures d'un propriétaire
-  async getOwnerApplications(ownerId: string) {
-    try {
-      const { data, error } = await supabase
-        .from("applications")
-        .select(`
-          *,
-          property:properties!inner(id, title, city, owner_id),
-          tenant:users(id, first_name, last_name, email, phone)
-        `)
-        .eq("property.owner_id", ownerId)
-        .order("created_at", { ascending: false })
-
-      if (error) {
-        throw new Error(error.message)
-      }
-
-      return data || []
-    } catch (error) {
-      console.error("Erreur lors de la récupération des candidatures:", error)
-      return []
-    }
-  },
-
-  // Récupérer les visites d'un propriétaire
-  async getOwnerVisits(ownerId: string) {
-    try {
-      const { data, error } = await supabase
-        .from("visits")
-        .select(`
-          *,
-          property:properties!inner(id, title, address, city, owner_id),
-          tenant:users(id, first_name, last_name, phone)
-        `)
-        .eq("property.owner_id", ownerId)
-        .order("visit_date", { ascending: true })
-
-      if (error) {
-        throw new Error(error.message)
-      }
-
-      return data || []
-    } catch (error) {
-      console.error("Erreur lors de la récupération des visites:", error)
-      return []
-    }
-  },
-
-  // Récupérer les messages d'un propriétaire
-  async getOwnerMessages(ownerId: string) {
-    try {
-      // Pour l'instant, retourner un tableau vide car la table messages n'est pas encore implémentée
-      return []
-    } catch (error) {
-      console.error("Erreur lors de la récupération des messages:", error)
-      return []
-    }
-  },
-
-  // Ajouter une fonction pour récupérer les disponibilités de visite
-  async getPropertyVisitAvailabilities(propertyId: string) {
-    console.log("📅 PropertyService.getPropertyVisitAvailabilities - ID:", propertyId)
-
-    try {
-      const response = await fetch(`/api/properties/${propertyId}/visit-slots`)
-
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`)
-      }
-
-      const data = await response.json()
-      console.log("✅ Créneaux récupérés via API:", data.slots?.length || 0)
-      return data.slots || []
-    } catch (error) {
-      console.error("❌ Erreur dans getPropertyVisitAvailabilities:", error)
-      return []
-    }
-  },
-
-  // Mettre à jour une propriété
-  async updateProperty(propertyId: string, updateData: any) {
-    console.log("🔄 PropertyService.updateProperty - ID:", propertyId, "Data:", updateData)
-
-    try {
-      const { data, error } = await supabase
-        .from("properties")
-        .update(updateData)
-        .eq("id", propertyId)
-        .select()
-        .single()
-
-      if (error) {
-        console.error("❌ Erreur lors de la mise à jour:", error)
+        console.error("❌ Erreur mise à jour propriété:", error)
         throw new Error(error.message)
       }
 
       console.log("✅ Propriété mise à jour:", data)
-      return data
+      return data as Property
     } catch (error) {
       console.error("❌ Erreur dans updateProperty:", error)
       throw error
     }
   },
 
-  // Supprimer une propriété
-  async deleteProperty(propertyId: string) {
-    console.log("🗑️ PropertyService.deleteProperty - ID:", propertyId)
+  async deleteProperty(id: string): Promise<void> {
+    console.log("🏠 PropertyService.deleteProperty", id)
 
     try {
-      // Supprimer d'abord les créneaux de visite
-      await supabase.from("visit_availabilities").delete().eq("property_id", propertyId)
-
-      // Supprimer les images
-      await supabase.from("property_images").delete().eq("property_id", propertyId)
-
-      // Supprimer la propriété
-      const { error } = await supabase.from("properties").delete().eq("id", propertyId)
+      const { error } = await supabase.from("properties").delete().eq("id", id)
 
       if (error) {
-        console.error("❌ Erreur lors de la suppression:", error)
+        console.error("❌ Erreur suppression propriété:", error)
         throw new Error(error.message)
       }
 
       console.log("✅ Propriété supprimée")
-      return true
     } catch (error) {
       console.error("❌ Erreur dans deleteProperty:", error)
       throw error
     }
   },
 
-  // Ajouter une image à une propriété
-  async addPropertyImage(propertyId: string, imageUrl: string, isPrimary = false) {
-    console.log("📸 PropertyService.addPropertyImage - ID:", propertyId, "URL:", imageUrl)
+  async addPropertyImage(propertyId: string, imageUrl: string, isPrimary = false): Promise<any> {
+    console.log("🏠 PropertyService.addPropertyImage", { propertyId, imageUrl, isPrimary })
 
     try {
-      // Si c'est l'image principale, désactiver les autres images principales
+      // Si l'image est définie comme principale, mettre à jour les autres images
       if (isPrimary) {
         await supabase.from("property_images").update({ is_primary: false }).eq("property_id", propertyId)
       }
@@ -530,7 +243,7 @@ export const propertyService = {
         .single()
 
       if (error) {
-        console.error("❌ Erreur lors de l'ajout de l'image:", error)
+        console.error("❌ Erreur ajout image:", error)
         throw new Error(error.message)
       }
 
@@ -542,89 +255,20 @@ export const propertyService = {
     }
   },
 
-  // Supprimer une image d'une propriété
-  async deletePropertyImage(imageId: string) {
-    console.log("🗑️ PropertyService.deletePropertyImage - ID:", imageId)
+  async deletePropertyImage(imageId: string): Promise<void> {
+    console.log("🏠 PropertyService.deletePropertyImage", imageId)
 
     try {
       const { error } = await supabase.from("property_images").delete().eq("id", imageId)
 
       if (error) {
-        console.error("❌ Erreur lors de la suppression de l'image:", error)
+        console.error("❌ Erreur suppression image:", error)
         throw new Error(error.message)
       }
 
       console.log("✅ Image supprimée")
-      return true
     } catch (error) {
       console.error("❌ Erreur dans deletePropertyImage:", error)
-      throw error
-    }
-  },
-
-  // Mettre à jour le statut d'une candidature
-  async updateApplicationStatus(applicationId: string, newStatus: string) {
-    console.log("🔄 PropertyService.updateApplicationStatus - ID:", applicationId, "Status:", newStatus)
-
-    try {
-      const { data, error } = await supabase
-        .from("applications")
-        .update({
-          status: newStatus,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", applicationId)
-        .select()
-        .single()
-
-      if (error) {
-        console.error("❌ Erreur lors de la mise à jour du statut:", error)
-        throw new Error(error.message)
-      }
-
-      console.log("✅ Statut de candidature mis à jour:", data)
-      return data
-    } catch (error) {
-      console.error("❌ Erreur dans updateApplicationStatus:", error)
-      throw error
-    }
-  },
-
-  // Créer une visite pour une candidature
-  async createVisitForApplication(
-    applicationId: string,
-    propertyId: string,
-    tenantId: string,
-    visitDate: string,
-    startTime: string,
-    endTime: string,
-  ) {
-    console.log("📅 PropertyService.createVisitForApplication - Application:", applicationId)
-
-    try {
-      const { data, error } = await supabase
-        .from("visits")
-        .insert({
-          application_id: applicationId,
-          property_id: propertyId,
-          tenant_id: tenantId,
-          visit_date: visitDate,
-          start_time: startTime,
-          end_time: endTime,
-          status: "scheduled",
-        })
-        .select()
-        .single()
-
-      if (error) {
-        console.error("❌ Erreur lors de la création de la visite:", error)
-        throw new Error(error.message)
-      }
-
-      console.log("✅ Visite créée:", data)
-      return data
-    } catch (error) {
-      console.error("❌ Erreur dans createVisitForApplication:", error)
       throw error
     }
   },
