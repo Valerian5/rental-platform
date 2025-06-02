@@ -16,6 +16,8 @@ import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { toast } from "sonner"
+import { authService } from "@/lib/auth-service"
+import { rentalFileService } from "@/lib/rental-file-service"
 
 interface Property {
   id: string
@@ -202,35 +204,48 @@ export default function PropertyApplicationPage({ params }: { params: { id: stri
       setSubmitting(true)
 
       // Récupérer l'utilisateur connecté
-      const user = JSON.parse(localStorage.getItem("user") || "{}")
-      if (!user.id) {
+      const user = await authService.getCurrentUser()
+      if (!user) {
         toast.error("Vous devez être connecté pour postuler")
         return
       }
 
-      // Récupérer les données du dossier de location
-      const rentalFileData = JSON.parse(localStorage.getItem(`rental_file_${user.id}`) || "{}")
+      // Récupérer le dossier de location complet
+      let rentalFileData = null
+      try {
+        rentalFileData = await rentalFileService.getRentalFileData(user.id)
+        console.log("Dossier de location récupéré:", rentalFileData)
+      } catch (error) {
+        console.error("Erreur récupération dossier de location:", error)
+      }
 
+      // Préparer les données de candidature
       const applicationData = {
         property_id: property.id,
         tenant_id: user.id,
         owner_id: property.owner_id,
         message: form.message,
+
         // Utiliser les données du dossier de location en priorité
-        income: rentalFileData.main_tenant?.income_sources?.work_income?.amount || form.income,
-        profession: rentalFileData.main_tenant?.profession || form.profession,
-        company: rentalFileData.main_tenant?.company || form.company,
-        contract_type: rentalFileData.main_tenant?.main_activity || form.contract_type,
-        has_guarantor: rentalFileData.guarantors?.length > 0 || form.has_guarantor,
-        // Autres champs du formulaire
-        guarantor_name: form.guarantor_name,
-        guarantor_relationship: form.guarantor_relationship,
-        guarantor_profession: form.guarantor_profession,
-        guarantor_income: form.guarantor_income,
-        move_in_date: form.move_in_date,
-        duration_preference: form.duration_preference,
-        presentation: form.presentation,
+        income: rentalFileData?.main_tenant?.income_sources?.work_income?.amount || form.income || 0,
+        profession: rentalFileData?.main_tenant?.profession || form.profession || "",
+        company: rentalFileData?.main_tenant?.company || form.company || "",
+        contract_type: rentalFileData?.main_tenant?.main_activity || form.contract_type || "",
+
+        // Garant
+        has_guarantor: rentalFileData?.guarantors?.length > 0 || form.has_guarantor || false,
+        guarantor_name: form.guarantor_name || "",
+        guarantor_relationship: form.guarantor_relationship || "",
+        guarantor_profession: form.guarantor_profession || "",
+        guarantor_income: form.guarantor_income || 0,
+
+        // Autres informations
+        move_in_date: form.move_in_date || "",
+        duration_preference: form.duration_preference || "",
+        presentation: rentalFileData?.presentation_message || form.presentation || "",
       }
+
+      console.log("Données de candidature:", applicationData)
 
       const response = await fetch("/api/applications", {
         method: "POST",

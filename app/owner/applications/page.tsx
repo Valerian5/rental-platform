@@ -9,8 +9,110 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
-import { ModernApplicationCard } from "@/components/modern-application-card"
-import { Filter, Download, Users, CheckCircle, XCircle, Clock } from "lucide-react"
+import { Filter, Download, Users } from "lucide-react"
+
+// Version simplifiée de la carte d'application pour éviter les erreurs
+function SimpleApplicationCard({ application, onStatusChange }) {
+  const formatDate = (dateString) => {
+    if (!dateString) return "Non spécifié"
+    try {
+      return new Date(dateString).toLocaleDateString()
+    } catch (e) {
+      return "Date invalide"
+    }
+  }
+
+  const formatAmount = (amount) => {
+    if (amount === null || amount === undefined) return "Non spécifié"
+    try {
+      return Number(amount).toLocaleString("fr-FR", {
+        style: "currency",
+        currency: "EUR",
+        maximumFractionDigits: 0,
+      })
+    } catch (e) {
+      return "Montant invalide"
+    }
+  }
+
+  // Récupération sécurisée des données
+  const property = application.property || {}
+  const tenant = application.tenant || {}
+
+  // Valeurs par défaut pour éviter les erreurs
+  const propertyTitle = property.title || "Propriété inconnue"
+  const propertyAddress = property.address || "Adresse inconnue"
+  const tenantName = tenant.first_name ? `${tenant.first_name} ${tenant.last_name || ""}` : "Locataire inconnu"
+  const profession = application.profession || "Non spécifié"
+  const income = formatAmount(application.income)
+  const createdAt = formatDate(application.created_at)
+  const status = application.status || "pending"
+
+  return (
+    <Card className="overflow-hidden">
+      <CardContent className="p-6">
+        <div className="flex flex-col space-y-4">
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="font-semibold text-lg">{propertyTitle}</h3>
+              <p className="text-sm text-muted-foreground">{propertyAddress}</p>
+            </div>
+            <div
+              className={`px-3 py-1 rounded-full text-xs font-medium ${
+                status === "pending"
+                  ? "bg-yellow-100 text-yellow-800"
+                  : status === "approved"
+                    ? "bg-green-100 text-green-800"
+                    : "bg-red-100 text-red-800"
+              }`}
+            >
+              {status === "pending" ? "En attente" : status === "approved" ? "Acceptée" : "Refusée"}
+            </div>
+          </div>
+
+          <div className="border-t border-b py-3">
+            <div className="flex justify-between">
+              <div>
+                <p className="text-sm font-medium">Candidat</p>
+                <p className="text-sm">{tenantName}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium">Profession</p>
+                <p className="text-sm">{profession}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium">Revenus</p>
+                <p className="text-sm">{income}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-between items-center">
+            <div className="text-sm text-muted-foreground">Candidature reçue le {createdAt}</div>
+            <div className="space-x-2">
+              <Button
+                size="sm"
+                variant={status === "approved" ? "default" : "outline"}
+                onClick={() => onStatusChange("approved")}
+                disabled={status === "approved"}
+              >
+                Accepter
+              </Button>
+              <Button
+                size="sm"
+                variant={status === "rejected" ? "destructive" : "outline"}
+                onClick={() => onStatusChange("rejected")}
+                disabled={status === "rejected"}
+              >
+                Refuser
+              </Button>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
 
 export default function ApplicationsPage() {
   const router = useRouter()
@@ -18,6 +120,7 @@ export default function ApplicationsPage() {
   const [applications, setApplications] = useState([])
   const [activeTab, setActiveTab] = useState("all")
   const [user, setUser] = useState(null)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     checkAuthAndLoadData()
@@ -26,6 +129,7 @@ export default function ApplicationsPage() {
   const checkAuthAndLoadData = async () => {
     try {
       setLoading(true)
+      setError(null)
       const currentUser = await authService.getCurrentUser()
 
       if (!currentUser) {
@@ -44,6 +148,7 @@ export default function ApplicationsPage() {
       await loadApplications(currentUser.id)
     } catch (error) {
       console.error("Erreur auth:", error)
+      setError("Erreur d'authentification: " + error.message)
       toast.error("Erreur d'authentification")
     } finally {
       setLoading(false)
@@ -52,17 +157,30 @@ export default function ApplicationsPage() {
 
   const loadApplications = async (ownerId) => {
     try {
+      console.log("Chargement des candidatures pour le propriétaire:", ownerId)
       const response = await fetch(`/api/applications?owner_id=${ownerId}`)
-      if (response.ok) {
-        const data = await response.json()
-        console.log("Applications chargées:", data.applications)
-        setApplications(data.applications || [])
-      } else {
-        console.error("Erreur chargement candidatures:", await response.text())
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("Erreur chargement candidatures:", errorText)
+        setError("Erreur lors du chargement des candidatures: " + errorText)
         toast.error("Erreur lors du chargement des candidatures")
+        return
       }
+
+      const data = await response.json()
+      console.log("Applications chargées:", data)
+
+      if (!data.applications) {
+        console.error("Format de réponse invalide:", data)
+        setError("Format de réponse invalide")
+        return
+      }
+
+      setApplications(data.applications || [])
     } catch (error) {
       console.error("Erreur:", error)
+      setError("Erreur: " + error.message)
       toast.error("Erreur lors du chargement des candidatures")
     }
   }
@@ -72,62 +190,29 @@ export default function ApplicationsPage() {
     return applications.filter((app) => app.status === activeTab)
   }
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "pending":
-        return "bg-yellow-100 text-yellow-800"
-      case "approved":
-        return "bg-green-100 text-green-800"
-      case "rejected":
-        return "bg-red-100 text-red-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
-  }
-
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case "pending":
-        return <Clock className="h-4 w-4" />
-      case "approved":
-        return <CheckCircle className="h-4 w-4" />
-      case "rejected":
-        return <XCircle className="h-4 w-4" />
-      default:
-        return null
-    }
-  }
-
-  // Fonction sécurisée pour formater les dates
-  const formatDate = (dateString) => {
-    if (!dateString) return "Non spécifié"
-
+  const handleStatusChange = async (applicationId, newStatus) => {
     try {
-      const date = new Date(dateString)
-      return date.toLocaleDateString("fr-FR", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
+      const response = await fetch(`/api/applications/${applicationId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: applicationId,
+          status: newStatus,
+        }),
       })
-    } catch (error) {
-      console.error("Erreur formatage date:", error)
-      return "Date invalide"
-    }
-  }
 
-  // Fonction sécurisée pour formater les montants
-  const formatAmount = (amount) => {
-    if (amount === null || amount === undefined) return "Non spécifié"
-
-    try {
-      return Number(amount).toLocaleString("fr-FR", {
-        style: "currency",
-        currency: "EUR",
-        maximumFractionDigits: 0,
-      })
+      if (response.ok) {
+        toast.success(`Candidature ${newStatus === "approved" ? "acceptée" : "refusée"}`)
+        // Mettre à jour l'état local
+        setApplications(applications.map((app) => (app.id === applicationId ? { ...app, status: newStatus } : app)))
+      } else {
+        toast.error("Erreur lors de la mise à jour du statut")
+      }
     } catch (error) {
-      console.error("Erreur formatage montant:", error)
-      return "Montant invalide"
+      console.error("Erreur:", error)
+      toast.error("Erreur lors de la mise à jour du statut")
     }
   }
 
@@ -144,6 +229,21 @@ export default function ApplicationsPage() {
             <Skeleton key={i} className="h-64 w-full" />
           ))}
         </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <PageHeader title="Erreur" description="Une erreur est survenue lors du chargement des candidatures">
+          <Button onClick={checkAuthAndLoadData}>Réessayer</Button>
+        </PageHeader>
+        <Card className="mt-6">
+          <CardContent className="p-6">
+            <pre className="whitespace-pre-wrap text-red-500">{error}</pre>
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -189,41 +289,13 @@ export default function ApplicationsPage() {
               </Card>
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
-                {getFilteredApplications().map((application) => {
-                  // Vérification sécurisée des données du tenant
-                  const tenant = application.tenant || {}
-                  const tenantName = `${tenant.first_name || "Prénom"} ${tenant.last_name || "Nom"}`.trim()
-                  const finalTenantName = tenantName === "Prénom Nom" ? "Locataire inconnu" : tenantName
-
-                  return (
-                    <ModernApplicationCard
-                      key={application.id}
-                      application={{
-                        id: application.id,
-                        propertyTitle: application.property?.title || "Propriété inconnue",
-                        propertyAddress: application.property?.address || "Adresse inconnue",
-                        propertyImage: application.property?.images?.[0] || "/placeholder.svg",
-                        tenantName: finalTenantName,
-                        tenantEmail: tenant.email || "Email non disponible",
-                        tenantPhone: tenant.phone || "Téléphone non disponible",
-                        tenantAvatar: tenant.avatar_url || "/placeholder.svg?height=40&width=40",
-                        profession: application.profession || "Non spécifié",
-                        company: application.company || "Non spécifié",
-                        income: formatAmount(application.income),
-                        message: application.message || application.presentation || "Pas de message",
-                        status: application.status || "pending",
-                        matchScore: application.match_score || 0,
-                        createdAt: formatDate(application.created_at),
-                        moveInDate: formatDate(application.move_in_date),
-                        hasGuarantor: application.has_guarantor || false,
-                      }}
-                      onStatusChange={(status) => {
-                        console.log("Changement de statut:", status)
-                        // Implémenter la mise à jour du statut
-                      }}
-                    />
-                  )
-                })}
+                {getFilteredApplications().map((application) => (
+                  <SimpleApplicationCard
+                    key={application.id}
+                    application={application}
+                    onStatusChange={(status) => handleStatusChange(application.id, status)}
+                  />
+                ))}
               </div>
             )}
           </TabsContent>

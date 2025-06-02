@@ -141,19 +141,13 @@ export const applicationService = {
       const propertyIds = properties.map((p) => p.id)
 
       // Ensuite récupérer les candidatures pour ces propriétés
+      // Utiliser une jointure LEFT JOIN pour récupérer les candidatures même si le tenant n'existe pas
       const { data, error } = await supabase
         .from("applications")
         .select(`
           *,
           property:properties(*),
-          tenant:users!inner(
-            id,
-            email,
-            first_name,
-            last_name,
-            phone,
-            avatar_url
-          )
+          tenant:users(*)
         `)
         .in("property_id", propertyIds)
         .order("created_at", { ascending: false })
@@ -181,7 +175,7 @@ export const applicationService = {
         .select(`
           *,
           property:properties(*),
-          tenant:users!applications_tenant_id_fkey(*)
+          tenant:users(*)
         `)
         .eq("id", applicationId)
         .single()
