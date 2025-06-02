@@ -28,7 +28,7 @@ import { RentalFileViewer } from "@/components/rental-file/rental-file-viewer"
 import { toast } from "sonner"
 import Link from "next/link"
 import { CompletionDiagnostic } from "@/components/rental-file/completion-diagnostic"
-import { BasicInfoForm } from "@/components/rental-file/basic-info-form"
+import { ProfessionalInfoForm } from "@/components/rental-file/professional-info-form"
 
 export default function RentalFilePage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
@@ -310,8 +310,6 @@ export default function RentalFilePage() {
               title="Locataire principal"
             />
 
-            <BasicInfoForm data={rentalFile} onUpdate={(data) => handleUpdateData(data)} />
-
             <div className="flex justify-end">
               <Button onClick={nextStep}>
                 Suivant
@@ -368,6 +366,9 @@ export default function RentalFilePage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Ajouter le formulaire d'informations professionnelles */}
+            <ProfessionalInfoForm data={rentalFile} onUpdate={(data) => handleUpdateData(data)} />
 
             <CompletionDiagnostic rentalFile={rentalFile} />
 

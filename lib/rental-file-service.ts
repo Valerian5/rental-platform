@@ -321,8 +321,8 @@ export const rentalFileService = {
     const recommendations: string[] = []
     let score = 100
 
-    // Utiliser le revenu actuel ou celui du dossier
-    const income = currentIncome || rentalFile.monthly_income || 0
+    // Utiliser les revenus du dossier de location en priorité
+    const income = rentalFile.monthly_income || currentIncome || 0
     const rent = property.price || 0
 
     // Détails des vérifications
@@ -369,9 +369,9 @@ export const rentalFileService = {
       }
     } else if (income === 0) {
       score -= 30
-      details.income_check.message = "Revenus non renseignés"
-      warnings.push("Revenus non renseignés")
-      recommendations.push("Complétez vos informations de revenus dans votre dossier")
+      details.income_check.message = "Revenus non renseignés dans votre dossier de location"
+      warnings.push("Revenus non renseignés dans votre dossier de location")
+      recommendations.push("Complétez vos revenus dans votre dossier de location")
     } else {
       // Pas de critères spécifiques, utiliser la règle générale des 33%
       const ratio = (rent / income) * 100
@@ -387,7 +387,7 @@ export const rentalFileService = {
 
     // 2. Vérification de la situation professionnelle
     if (property.accepted_professional_situations && property.accepted_professional_situations.length > 0) {
-      const tenantSituation = rentalFile.professional_situation || rentalFile.profession
+      const tenantSituation = rentalFile.professional_situation
       if (tenantSituation && property.accepted_professional_situations.includes(tenantSituation)) {
         details.professional_situation_check.passed = true
         details.professional_situation_check.message = `Situation professionnelle acceptée (${tenantSituation})`
@@ -465,22 +465,6 @@ export const rentalFileService = {
     } else {
       details.documents_check.passed = true
       details.documents_check.message = "Message de présentation complet"
-    }
-
-    // Vérifications supplémentaires selon les critères de la propriété
-    if (property.student_accepted === false && rentalFile.professional_situation === "etudes") {
-      score -= 20
-      warnings.push("Les étudiants ne sont pas acceptés pour ce logement")
-    }
-
-    if (property.retired_accepted === false && rentalFile.professional_situation === "retraite") {
-      score -= 20
-      warnings.push("Les retraités ne sont pas acceptés pour ce logement")
-    }
-
-    if (property.unemployed_accepted === false && rentalFile.professional_situation === "chomage") {
-      score -= 30
-      warnings.push("Les demandeurs d'emploi ne sont pas acceptés pour ce logement")
     }
 
     // S'assurer que le score reste dans les limites

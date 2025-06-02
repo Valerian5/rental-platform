@@ -128,10 +128,17 @@ export default function PropertyApplicationPage({ params }: { params: { id: stri
   }
 
   const calculateCompatibilityScore = () => {
-    if (!property || !form.income) return 0
+    if (!property) return 0
+
+    // Récupérer les données du dossier de location de l'utilisateur
+    const user = JSON.parse(localStorage.getItem("user") || "{}")
+    const rentalFileData = JSON.parse(localStorage.getItem(`rental_file_${user.id}`) || "{}")
+
+    // Utiliser les revenus du dossier de location en priorité
+    const income = rentalFileData.monthly_income || form.income || 0
 
     let score = 0
-    const rentRatio = form.income / property.price
+    const rentRatio = income / property.price
 
     // Ratio revenus/loyer (40 points)
     if (rentRatio >= 3) score += 40
@@ -140,13 +147,17 @@ export default function PropertyApplicationPage({ params }: { params: { id: stri
     else score += 10
 
     // Stabilité professionnelle (20 points)
-    if (form.contract_type === "CDI") score += 20
-    else if (form.contract_type === "CDD") score += 15
+    const professionalSituation = rentalFileData.professional_situation || form.contract_type
+    if (professionalSituation === "cdi") score += 20
+    else if (professionalSituation === "cdd") score += 15
     else score += 10
 
     // Garant (20 points)
-    if (form.has_guarantor && form.guarantor_income) {
-      const guarantorRatio = form.guarantor_income / property.price
+    const hasGuarantor = rentalFileData.has_guarantor || form.has_guarantor
+    const guarantorIncome = rentalFileData.guarantor_income || form.guarantor_income
+
+    if (hasGuarantor && guarantorIncome) {
+      const guarantorRatio = guarantorIncome / property.price
       if (guarantorRatio >= 3) score += 20
       else if (guarantorRatio >= 2) score += 15
       else score += 10
@@ -158,7 +169,8 @@ export default function PropertyApplicationPage({ params }: { params: { id: stri
     score += (uploadedRequiredDocs.length / requiredDocs.length) * 15
 
     // Présentation (5 points)
-    if (form.presentation.length > 100) score += 5
+    const presentationMessage = rentalFileData.presentation_message || form.presentation
+    if (presentationMessage && presentationMessage.length > 100) score += 5
 
     return Math.min(Math.round(score), 100)
   }
@@ -202,10 +214,20 @@ export default function PropertyApplicationPage({ params }: { params: { id: stri
         return
       }
 
+      // Récupérer les données du dossier de location
+      const rentalFileData = JSON.parse(localStorage.getItem(`rental_file_${user.id}`) || "{}")
+
       const applicationData = {
         property_id: property.id,
         tenant_id: user.id,
         owner_id: property.owner_id,
+        message: form.message,
+        // Utiliser les données du dossier de location en priorité
+        income: rentalFileData.monthly_income || form.income,
+        profession: rentalFileData.profession || form.profession,
+        company: rentalFileData.company || form.company,
+        has_guarantor: rentalFileData.has_guarantor || form.has_guarantor,
+        // Autres champs du formulaire
         ...form,
       }
 

@@ -288,11 +288,6 @@ export default function NewPropertyPage() {
         accepted_professional_situations: formData.accepted_professional_situations || [],
         min_guarantor_income: formData.min_guarantor_income ? Number.parseFloat(formData.min_guarantor_income) : null,
         max_occupants: formData.max_occupants ? Number.parseInt(formData.max_occupants) : null,
-        student_accepted: formData.student_accepted !== false,
-        retired_accepted: formData.retired_accepted !== false,
-        unemployed_accepted: formData.unemployed_accepted || false,
-        pets_allowed: formData.pets_allowed || false,
-        smoking_allowed: formData.smoking_allowed || false,
       }
 
       console.log("🏠 Données de la propriété:", propertyData)
@@ -744,25 +739,93 @@ export default function NewPropertyPage() {
                 <CardTitle>Situations professionnelles acceptées</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {MAIN_ACTIVITIES.map((activity) => (
-                    <div key={activity.value} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={activity.value}
-                        checked={formData.accepted_professional_situations?.includes(activity.value) || false}
-                        onCheckedChange={(checked) => {
-                          const current = formData.accepted_professional_situations || []
-                          const updated = checked
-                            ? [...current, activity.value]
-                            : current.filter((s) => s !== activity.value)
-                          handleChange("accepted_professional_situations", updated)
-                        }}
-                      />
-                      <Label htmlFor={activity.value} className="text-sm">
-                        {activity.label} - {activity.description}
-                      </Label>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="cdi"
+                      checked={formData.accepted_professional_situations?.includes("cdi") || false}
+                      onCheckedChange={(checked) => {
+                        const current = formData.accepted_professional_situations || []
+                        const updated = checked ? [...current, "cdi"] : current.filter((s) => s !== "cdi")
+                        handleChange("accepted_professional_situations", updated)
+                      }}
+                    />
+                    <Label htmlFor="cdi" className="text-sm">
+                      CDI - Contrat à durée indéterminée
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="cdd"
+                      checked={formData.accepted_professional_situations?.includes("cdd") || false}
+                      onCheckedChange={(checked) => {
+                        const current = formData.accepted_professional_situations || []
+                        const updated = checked ? [...current, "cdd"] : current.filter((s) => s !== "cdd")
+                        handleChange("accepted_professional_situations", updated)
+                      }}
+                    />
+                    <Label htmlFor="cdd" className="text-sm">
+                      CDD - Contrat à durée déterminée
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="interim"
+                      checked={formData.accepted_professional_situations?.includes("interim") || false}
+                      onCheckedChange={(checked) => {
+                        const current = formData.accepted_professional_situations || []
+                        const updated = checked ? [...current, "interim"] : current.filter((s) => s !== "interim")
+                        handleChange("accepted_professional_situations", updated)
+                      }}
+                    />
+                    <Label htmlFor="interim" className="text-sm">
+                      Intérimaire - Travail temporaire
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="independant"
+                      checked={formData.accepted_professional_situations?.includes("independant") || false}
+                      onCheckedChange={(checked) => {
+                        const current = formData.accepted_professional_situations || []
+                        const updated = checked
+                          ? [...current, "independant"]
+                          : current.filter((s) => s !== "independant")
+                        handleChange("accepted_professional_situations", updated)
+                      }}
+                    />
+                    <Label htmlFor="independant" className="text-sm">
+                      Indépendant - Travailleur indépendant
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="retraite"
+                      checked={formData.accepted_professional_situations?.includes("retraite") || false}
+                      onCheckedChange={(checked) => {
+                        const current = formData.accepted_professional_situations || []
+                        const updated = checked ? [...current, "retraite"] : current.filter((s) => s !== "retraite")
+                        handleChange("accepted_professional_situations", updated)
+                      }}
+                    />
+                    <Label htmlFor="retraite" className="text-sm">
+                      Retraité - Pension de retraite
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="etudes"
+                      checked={formData.accepted_professional_situations?.includes("etudes") || false}
+                      onCheckedChange={(checked) => {
+                        const current = formData.accepted_professional_situations || []
+                        const updated = checked ? [...current, "etudes"] : current.filter((s) => s !== "etudes")
+                        handleChange("accepted_professional_situations", updated)
+                      }}
+                    />
+                    <Label htmlFor="etudes" className="text-sm">
+                      Étudiant - Avec ou sans bourse
+                    </Label>
+                  </div>
                 </div>
                 <p className="text-sm text-gray-500">Si aucune situation n'est sélectionnée, toutes seront acceptées</p>
               </CardContent>
@@ -805,7 +868,7 @@ export default function NewPropertyPage() {
                 <CardTitle>Autres critères</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="max_occupants">Nombre maximum d'occupants</Label>
                     <Input
@@ -815,6 +878,7 @@ export default function NewPropertyPage() {
                       onChange={(e) => handleChange("max_occupants", e.target.value)}
                       placeholder="2"
                     />
+                    <p className="text-sm text-gray-500">Informatif uniquement</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="lease_duration">Durée de location souhaitée (mois)</Label>
@@ -825,81 +889,33 @@ export default function NewPropertyPage() {
                       onChange={(e) => handleChange("lease_duration", e.target.value)}
                       placeholder="12"
                     />
+                    <p className="text-sm text-gray-500">Informatif uniquement</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="move_in_date">Date d'emménagement souhaitée</Label>
+                    <Input
+                      id="move_in_date"
+                      type="date"
+                      value={formData.move_in_date}
+                      onChange={(e) => handleChange("move_in_date", e.target.value)}
+                    />
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="student_accepted"
-                      checked={formData.student_accepted !== false}
-                      onCheckedChange={(checked) => handleChange("student_accepted", checked)}
-                    />
-                    <Label htmlFor="student_accepted">Étudiants acceptés</Label>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="retired_accepted"
-                      checked={formData.retired_accepted !== false}
-                      onCheckedChange={(checked) => handleChange("retired_accepted", checked)}
-                    />
-                    <Label htmlFor="retired_accepted">Retraités acceptés</Label>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="unemployed_accepted"
-                      checked={formData.unemployed_accepted || false}
-                      onCheckedChange={(checked) => handleChange("unemployed_accepted", checked)}
-                    />
-                    <Label htmlFor="unemployed_accepted">Demandeurs d'emploi acceptés</Label>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="pets_allowed"
-                      checked={formData.pets_allowed || false}
-                      onCheckedChange={(checked) => handleChange("pets_allowed", checked)}
-                    />
-                    <Label htmlFor="pets_allowed">Animaux de compagnie autorisés</Label>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="smoking_allowed"
-                      checked={formData.smoking_allowed || false}
-                      onCheckedChange={(checked) => handleChange("smoking_allowed", checked)}
-                    />
-                    <Label htmlFor="smoking_allowed">Fumeurs acceptés</Label>
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="rent_payment_day">Jour de paiement du loyer</Label>
+                  <Input
+                    id="rent_payment_day"
+                    type="number"
+                    min="1"
+                    max="31"
+                    value={formData.rent_payment_day}
+                    onChange={(e) => handleChange("rent_payment_day", e.target.value)}
+                    placeholder="5"
+                  />
                 </div>
               </CardContent>
             </Card>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="move_in_date">Date d'emménagement souhaitée</Label>
-                <Input
-                  id="move_in_date"
-                  type="date"
-                  value={formData.move_in_date}
-                  onChange={(e) => handleChange("move_in_date", e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="rent_payment_day">Jour de paiement du loyer</Label>
-                <Input
-                  id="rent_payment_day"
-                  type="number"
-                  min="1"
-                  max="31"
-                  value={formData.rent_payment_day}
-                  onChange={(e) => handleChange("rent_payment_day", e.target.value)}
-                  placeholder="5"
-                />
-              </div>
-            </div>
           </div>
         )
 
