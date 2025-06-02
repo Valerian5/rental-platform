@@ -12,65 +12,33 @@ export async function GET(request: NextRequest) {
     }
 
     const notifications = await notificationsService.getUserNotifications(userId, unreadOnly)
-    const unreadCount = await notificationsService.getUnreadCount(userId)
 
-    return NextResponse.json({ notifications, unread_count: unreadCount })
-  } catch (error) {
-    console.error("Erreur API notifications:", error)
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur interne" }, { status: 500 })
+    return NextResponse.json({ notifications })
+  } catch (error: any) {
+    console.error("❌ Erreur API notifications:", error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { user_id, ...notificationData } = body
+    const { user_id, title, content, type, action_url } = body
 
-    if (!user_id) {
-      return NextResponse.json({ error: "user_id requis" }, { status: 400 })
+    if (!user_id || !title || !content || !type) {
+      return NextResponse.json({ error: "Données manquantes" }, { status: 400 })
     }
 
-    const notification = await notificationsService.createNotification(user_id, notificationData)
-    return NextResponse.json({ notification }, { status: 201 })
-  } catch (error) {
-    console.error("Erreur création notification:", error)
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur interne" }, { status: 500 })
-  }
-}
+    const notification = await notificationsService.createNotification(user_id, {
+      title,
+      content,
+      type,
+      action_url,
+    })
 
-export async function PATCH(request: NextRequest) {
-  try {
-    const body = await request.json()
-    const { notification_id, action, user_id } = body
-
-    if (action === "mark_read" && notification_id) {
-      await notificationsService.markAsRead(notification_id)
-      return NextResponse.json({ success: true })
-    } else if (action === "mark_all_read" && user_id) {
-      await notificationsService.markAllAsRead(user_id)
-      return NextResponse.json({ success: true })
-    } else {
-      return NextResponse.json({ error: "Action ou paramètres invalides" }, { status: 400 })
-    }
-  } catch (error) {
-    console.error("Erreur mise à jour notification:", error)
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur interne" }, { status: 500 })
-  }
-}
-
-export async function DELETE(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url)
-    const notificationId = searchParams.get("notification_id")
-
-    if (!notificationId) {
-      return NextResponse.json({ error: "notification_id requis" }, { status: 400 })
-    }
-
-    await notificationsService.deleteNotification(notificationId)
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error("Erreur suppression notification:", error)
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur interne" }, { status: 500 })
+    return NextResponse.json({ notification })
+  } catch (error: any) {
+    console.error("❌ Erreur création notification:", error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

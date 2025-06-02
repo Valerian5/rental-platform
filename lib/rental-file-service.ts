@@ -109,6 +109,27 @@ export interface RentalFileData {
   updated_at?: string
 }
 
+export interface RentalFile {
+  id: string
+  tenant_id: string
+  monthly_income?: number
+  profession?: string
+  company?: string
+  presentation_message?: string
+  desired_move_date?: string
+  guarantor_income?: number
+  has_guarantor?: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface CompatibilityResult {
+  compatible: boolean
+  score: number
+  warnings: string[]
+  recommendations: string[]
+}
+
 // Activités principales avec documents requis
 export const MAIN_ACTIVITIES = [
   {
@@ -259,82 +280,8 @@ export const RENT_INCOME_TYPES = [
   { value: "autre_rente", label: "Autre type de rente", description: "Autre rente" },
 ]
 
-export const checkCompatibility = (
-  rentalFile: RentalFileData,
-  property: any,
-  proposedIncome?: number,
-): {
-  compatible: boolean
-  score: number
-  warnings: string[]
-  recommendations: string[]
-} => {
-  const warnings: string[] = []
-  const recommendations: string[] = []
-  let score = 100
-
-  const income = proposedIncome || rentalFile.main_tenant?.income_sources?.work_income?.amount || 0
-  const rent = property.price || 0
-
-  // Vérifier le ratio revenus/loyer (règle des 33%)
-  if (income > 0 && rent > 0) {
-    const ratio = (rent / income) * 100
-    if (ratio > 33) {
-      score -= 30
-      warnings.push(`Le loyer représente ${ratio.toFixed(1)}% de vos revenus (recommandé: max 33%)`)
-      recommendations.push("Considérez un logement moins cher ou augmentez vos revenus")
-    } else if (ratio > 30) {
-      score -= 10
-      warnings.push(`Le loyer représente ${ratio.toFixed(1)}% de vos revenus (acceptable mais limite)`)
-    }
-  } else {
-    score -= 40
-    warnings.push("Revenus non renseignés ou insuffisants")
-    recommendations.push("Complétez vos informations de revenus")
-  }
-
-  // Vérifier la complétude du dossier
-  if (rentalFile.completion_percentage < 100) {
-    score -= (100 - rentalFile.completion_percentage) * 0.3
-    warnings.push(`Dossier incomplet (${rentalFile.completion_percentage}%)`)
-    recommendations.push("Complétez votre dossier de location")
-  }
-
-  // Vérifier les documents d'identité
-  if (!rentalFile.main_tenant?.identity_documents || rentalFile.main_tenant.identity_documents.length === 0) {
-    score -= 20
-    warnings.push("Aucune pièce d'identité fournie")
-    recommendations.push("Ajoutez votre pièce d'identité")
-  }
-
-  // Vérifier les justificatifs de revenus
-  if (
-    !rentalFile.main_tenant?.income_sources?.work_income?.documents ||
-    rentalFile.main_tenant.income_sources.work_income.documents.length === 0
-  ) {
-    score -= 15
-    warnings.push("Aucun justificatif de revenus fourni")
-    recommendations.push("Ajoutez vos justificatifs de revenus")
-  }
-
-  // Vérifier la situation d'emploi
-  if (rentalFile.main_tenant?.main_activity === "chomage") {
-    score -= 25
-    warnings.push("Situation d'emploi précaire")
-    recommendations.push("Présentez un garant solide")
-  }
-
-  return {
-    compatible: score >= 50,
-    score: Math.max(0, Math.round(score)),
-    warnings,
-    recommendations,
-  }
-}
-
 export const rentalFileService = {
-  // Récupérer le dossier de location
-  async getRentalFile(tenantId: string): Promise<RentalFileData | null> {
+  async getRentalFile(tenantId: string): Promise<RentalFile | null> {
     console.log("📋 RentalFileService.getRentalFile", tenantId)
 
     try {
@@ -342,39 +289,139 @@ export const rentalFileService = {
 
       if (error) {
         if (error.code === "PGRST116") {
-          console.log("ℹ️ Aucun dossier de location trouvé")
+          // Pas de dossier trouvé
           return null
         }
         console.error("❌ Erreur récupération dossier:", error)
         throw new Error(error.message)
       }
 
-      console.log("✅ Dossier de location récupéré:", data)
-      return data
+      console.log("✅ Dossier récupéré")
+      return data as RentalFile
     } catch (error) {
       console.error("❌ Erreur dans getRentalFile:", error)
+      return null
+    }
+  },
+
+  checkCompatibility(rentalFile: RentalFile, property: any, currentIncome?: number): CompatibilityResult {
+    console.log("🔍 Vérification compatibilité dossier")
+
+    const warnings: string[] = []
+    const recommendations: string[] = []
+    let score = 100
+
+    // Utiliser le revenu actuel ou celui du dossier
+    const income = currentIncome || rentalFile.monthly_income || 0
+    const rent = property.price || 0
+
+    // Vérification du ratio revenus/loyer (règle des 33%)
+    if (income > 0 && rent > 0) {
+      const ratio = (rent / income) * 100
+
+      if (ratio > 33) {
+        score -= 30
+        warnings.push(`Le loyer représente ${ratio.toFixed(1)}% de vos revenus (recommandé: max 33%)`)
+
+        if (rentalFile.has_guarantor && rentalFile.guarantor_income) {
+          const totalIncome = income + (rentalFile.guarantor_income || 0)
+          const newRatio = (rent / totalIncome) * 100
+          if (newRatio <= 33) {
+            score += 15
+            recommendations.push("Votre garant améliore significativement votre dossier")
+          }
+        } else {
+          recommendations.push("Un garant pourrait renforcer votre dossier")
+        }
+      } else if (ratio > 25) {
+        score -= 10
+        warnings.push(`Le loyer représente ${ratio.toFixed(1)}% de vos revenus`)
+      }
+    } else {
+      score -= 20
+      warnings.push("Revenus non renseignés")
+      recommendations.push("Complétez vos informations de revenus")
+    }
+
+    // Vérification de la profession
+    if (!rentalFile.profession) {
+      score -= 10
+      warnings.push("Profession non renseignée")
+      recommendations.push("Ajoutez votre profession à votre dossier")
+    }
+
+    // Vérification du message de présentation
+    if (!rentalFile.presentation_message || rentalFile.presentation_message.length < 50) {
+      score -= 10
+      warnings.push("Message de présentation incomplet")
+      recommendations.push("Rédigez un message de présentation détaillé")
+    }
+
+    // Vérification de l'entreprise
+    if (!rentalFile.company) {
+      score -= 5
+      recommendations.push("Ajoutez le nom de votre entreprise")
+    }
+
+    // Bonus pour un garant
+    if (rentalFile.has_guarantor) {
+      score += 10
+      if (!rentalFile.guarantor_income) {
+        recommendations.push("Précisez les revenus de votre garant")
+      }
+    }
+
+    // S'assurer que le score reste dans les limites
+    score = Math.max(0, Math.min(100, score))
+
+    const compatible = score >= 60
+
+    return {
+      compatible,
+      score,
+      warnings,
+      recommendations,
+    }
+  },
+
+  async createRentalFile(rentalFileData: Partial<RentalFile>): Promise<RentalFile> {
+    console.log("📋 RentalFileService.createRentalFile")
+
+    try {
+      const { data, error } = await supabase
+        .from("rental_files")
+        .insert({
+          ...rentalFileData,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single()
+
+      if (error) {
+        console.error("❌ Erreur création dossier:", error)
+        throw new Error(error.message)
+      }
+
+      console.log("✅ Dossier créé")
+      return data as RentalFile
+    } catch (error) {
+      console.error("❌ Erreur dans createRentalFile:", error)
       throw error
     }
   },
 
-  // Créer ou mettre à jour le dossier
-  async updateRentalFile(tenantId: string, fileData: Partial<RentalFileData>): Promise<RentalFileData> {
-    console.log("💾 RentalFileService.updateRentalFile", tenantId)
+  async updateRentalFile(tenantId: string, updates: Partial<RentalFile>): Promise<RentalFile> {
+    console.log("📋 RentalFileService.updateRentalFile")
 
     try {
-      const completionPercentage = this.calculateCompletionPercentage(fileData)
-
-      const dataToUpdate = {
-        ...fileData,
-        tenant_id: tenantId,
-        completion_percentage: completionPercentage,
-        status: completionPercentage >= 100 ? "completed" : "in_progress",
-        updated_at: new Date().toISOString(),
-      }
-
       const { data, error } = await supabase
         .from("rental_files")
-        .upsert(dataToUpdate, { onConflict: "tenant_id" })
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("tenant_id", tenantId)
         .select()
         .single()
 
@@ -383,8 +430,8 @@ export const rentalFileService = {
         throw new Error(error.message)
       }
 
-      console.log("✅ Dossier mis à jour:", data)
-      return data
+      console.log("✅ Dossier mis à jour")
+      return data as RentalFile
     } catch (error) {
       console.error("❌ Erreur dans updateRentalFile:", error)
       throw error

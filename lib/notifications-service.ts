@@ -4,9 +4,9 @@ export interface Notification {
   id: string
   user_id: string
   title: string
-  message: string
+  content: string // Changé de 'message' à 'content'
   type: string
-  read_at: string | null
+  read: boolean | null // Changé de 'read_at' à 'read'
   action_url: string | null
   created_at: string
 }
@@ -23,7 +23,7 @@ export const notificationsService = {
         .order("created_at", { ascending: false })
 
       if (unreadOnly) {
-        query = query.is("read_at", null)
+        query = query.eq("read", false)
       }
 
       const { data, error } = await query
@@ -33,7 +33,7 @@ export const notificationsService = {
         throw new Error(error.message)
       }
 
-      console.log(`✅ ${data.length} notifications récupérées`)
+      console.log(`✅ ${data?.length || 0} notifications récupérées`)
       return data as Notification[]
     } catch (error) {
       console.error("❌ Erreur dans getUserNotifications:", error)
@@ -49,7 +49,7 @@ export const notificationsService = {
         .from("notifications")
         .select("id", { count: "exact", head: true })
         .eq("user_id", userId)
-        .is("read_at", null)
+        .eq("read", false)
 
       if (error) {
         console.error("❌ Erreur comptage non lues:", error)
@@ -59,7 +59,7 @@ export const notificationsService = {
       return count || 0
     } catch (error) {
       console.error("❌ Erreur dans getUnreadCount:", error)
-      return 0 // En cas d'erreur, on retourne 0 pour éviter de bloquer l'interface
+      return 0
     }
   },
 
@@ -71,7 +71,11 @@ export const notificationsService = {
         .from("notifications")
         .insert({
           user_id: userId,
-          ...notificationData,
+          title: notificationData.title,
+          content: notificationData.content,
+          type: notificationData.type,
+          action_url: notificationData.action_url,
+          read: false,
           created_at: new Date().toISOString(),
         })
         .select()
@@ -94,10 +98,7 @@ export const notificationsService = {
     console.log("🔔 NotificationsService.markAsRead", notificationId)
 
     try {
-      const { error } = await supabase
-        .from("notifications")
-        .update({ read_at: new Date().toISOString() })
-        .eq("id", notificationId)
+      const { error } = await supabase.from("notifications").update({ read: true }).eq("id", notificationId)
 
       if (error) {
         console.error("❌ Erreur marquage notification:", error)
@@ -117,9 +118,9 @@ export const notificationsService = {
     try {
       const { error } = await supabase
         .from("notifications")
-        .update({ read_at: new Date().toISOString() })
+        .update({ read: true })
         .eq("user_id", userId)
-        .is("read_at", null)
+        .eq("read", false)
 
       if (error) {
         console.error("❌ Erreur marquage toutes notifications:", error)

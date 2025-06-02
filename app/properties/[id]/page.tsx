@@ -38,10 +38,10 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { propertyService } from "@/lib/property-service"
-import { rentalFileService } from "@/lib/rental-file-service"
 import { applicationService } from "@/lib/application-service"
 import { authService } from "@/lib/auth-service"
 import { toast } from "sonner"
+import { rentalFileService } from "@/lib/rental-file-service"
 
 export default function PropertyPublicPage() {
   const router = useRouter()
@@ -181,14 +181,7 @@ export default function PropertyPublicPage() {
     return rentalFileService.checkCompatibility(rentalFile, property, income)
   }
 
-  const compatibilityCheck =
-    rentalFile && property
-      ? rentalFileService.checkCompatibility(
-          rentalFile,
-          property,
-          applicationData.income ? Number.parseFloat(applicationData.income) : undefined,
-        )
-      : null
+  const compatibilityCheck = getCompatibilityCheck()
 
   // États de chargement et d'erreur
   if (isLoading) {
