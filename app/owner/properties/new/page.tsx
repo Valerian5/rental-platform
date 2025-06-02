@@ -61,6 +61,15 @@ interface FormData {
     date: Date
     timeSlots: Array<{ start: string; end: string }>
   }>
+  income_multiplier?: string
+  accepted_professional_situations?: string[]
+  min_guarantor_income?: string
+  max_occupants?: string
+  student_accepted?: boolean
+  retired_accepted?: boolean
+  unemployed_accepted?: boolean
+  pets_allowed?: boolean
+  smoking_allowed?: boolean
 }
 
 const EQUIPMENT_OPTIONS = [
@@ -83,6 +92,14 @@ const EQUIPMENT_OPTIONS = [
 ]
 
 const ENERGY_CLASSES = ["A", "B", "C", "D", "E", "F", "G"]
+
+const MAIN_ACTIVITIES = [
+  { value: "employee", label: "Salarié", description: "CDI, CDD, Intérimaire" },
+  { value: "self_employed", label: "Indépendant", description: "Profession libérale, Auto-entrepreneur" },
+  { value: "student", label: "Étudiant", description: "Avec ou sans bourse" },
+  { value: "retired", label: "Retraité", description: "Pension de retraite" },
+  { value: "unemployed", label: "Demandeur d'emploi", description: "Avec ou sans allocations" },
+]
 
 export default function NewPropertyPage() {
   const router = useRouter()
@@ -267,6 +284,15 @@ export default function NewPropertyPage() {
         move_in_date: formData.move_in_date || null,
         rent_payment_day: formData.rent_payment_day ? Number.parseInt(formData.rent_payment_day) : null,
         owner_id: currentUser.id,
+        income_multiplier: formData.income_multiplier || "3.0",
+        accepted_professional_situations: formData.accepted_professional_situations || [],
+        min_guarantor_income: formData.min_guarantor_income ? Number.parseFloat(formData.min_guarantor_income) : null,
+        max_occupants: formData.max_occupants ? Number.parseInt(formData.max_occupants) : null,
+        student_accepted: formData.student_accepted !== false,
+        retired_accepted: formData.retired_accepted !== false,
+        unemployed_accepted: formData.unemployed_accepted || false,
+        pets_allowed: formData.pets_allowed || false,
+        smoking_allowed: formData.smoking_allowed || false,
       }
 
       console.log("🏠 Données de la propriété:", propertyData)
@@ -664,50 +690,196 @@ export default function NewPropertyPage() {
           <div className="space-y-6">
             <h2 className="text-2xl font-bold">Critères vis-à-vis du locataire</h2>
 
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <h3 className="font-semibold text-blue-800 mb-2">Critères de sélection</h3>
+              <p className="text-blue-700 text-sm">
+                Définissez vos critères de sélection pour filtrer automatiquement les candidatures et calculer la
+                compatibilité des dossiers.
+              </p>
+            </div>
+
+            {/* Critères de revenus */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Critères de revenus</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="required_income">Revenus minimum requis (€)</Label>
+                    <Input
+                      id="required_income"
+                      type="number"
+                      value={formData.required_income}
+                      onChange={(e) => handleChange("required_income", e.target.value)}
+                      placeholder="3000"
+                    />
+                    <p className="text-sm text-gray-500">Revenus nets mensuels minimum acceptés</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="income_multiplier">Multiplicateur de revenus</Label>
+                    <Select
+                      value={formData.income_multiplier || "3.0"}
+                      onValueChange={(value) => handleChange("income_multiplier", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionnez" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="2.5">2,5x le loyer</SelectItem>
+                        <SelectItem value="3.0">3x le loyer (recommandé)</SelectItem>
+                        <SelectItem value="3.5">3,5x le loyer</SelectItem>
+                        <SelectItem value="4.0">4x le loyer</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-sm text-gray-500">Alternative au montant fixe</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Situations professionnelles acceptées */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Situations professionnelles acceptées</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {MAIN_ACTIVITIES.map((activity) => (
+                    <div key={activity.value} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={activity.value}
+                        checked={formData.accepted_professional_situations?.includes(activity.value) || false}
+                        onCheckedChange={(checked) => {
+                          const current = formData.accepted_professional_situations || []
+                          const updated = checked
+                            ? [...current, activity.value]
+                            : current.filter((s) => s !== activity.value)
+                          handleChange("accepted_professional_situations", updated)
+                        }}
+                      />
+                      <Label htmlFor={activity.value} className="text-sm">
+                        {activity.label} - {activity.description}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-sm text-gray-500">Si aucune situation n'est sélectionnée, toutes seront acceptées</p>
+              </CardContent>
+            </Card>
+
+            {/* Critères de garant */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Critères de garant</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="guarantor_required"
+                    checked={formData.guarantor_required}
+                    onCheckedChange={(checked) => handleChange("guarantor_required", checked)}
+                  />
+                  <Label htmlFor="guarantor_required">Garant obligatoire</Label>
+                </div>
+
+                {formData.guarantor_required && (
+                  <div className="space-y-2">
+                    <Label htmlFor="min_guarantor_income">Revenus minimum du garant (€)</Label>
+                    <Input
+                      id="min_guarantor_income"
+                      type="number"
+                      value={formData.min_guarantor_income || ""}
+                      onChange={(e) => handleChange("min_guarantor_income", e.target.value)}
+                      placeholder="4000"
+                    />
+                    <p className="text-sm text-gray-500">Revenus nets mensuels minimum du garant</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Autres critères */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Autres critères</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="max_occupants">Nombre maximum d'occupants</Label>
+                    <Input
+                      id="max_occupants"
+                      type="number"
+                      value={formData.max_occupants || ""}
+                      onChange={(e) => handleChange("max_occupants", e.target.value)}
+                      placeholder="2"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lease_duration">Durée de location souhaitée (mois)</Label>
+                    <Input
+                      id="lease_duration"
+                      type="number"
+                      value={formData.lease_duration}
+                      onChange={(e) => handleChange("lease_duration", e.target.value)}
+                      placeholder="12"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="student_accepted"
+                      checked={formData.student_accepted !== false}
+                      onCheckedChange={(checked) => handleChange("student_accepted", checked)}
+                    />
+                    <Label htmlFor="student_accepted">Étudiants acceptés</Label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="retired_accepted"
+                      checked={formData.retired_accepted !== false}
+                      onCheckedChange={(checked) => handleChange("retired_accepted", checked)}
+                    />
+                    <Label htmlFor="retired_accepted">Retraités acceptés</Label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="unemployed_accepted"
+                      checked={formData.unemployed_accepted || false}
+                      onCheckedChange={(checked) => handleChange("unemployed_accepted", checked)}
+                    />
+                    <Label htmlFor="unemployed_accepted">Demandeurs d'emploi acceptés</Label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="pets_allowed"
+                      checked={formData.pets_allowed || false}
+                      onCheckedChange={(checked) => handleChange("pets_allowed", checked)}
+                    />
+                    <Label htmlFor="pets_allowed">Animaux de compagnie autorisés</Label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="smoking_allowed"
+                      checked={formData.smoking_allowed || false}
+                      onCheckedChange={(checked) => handleChange("smoking_allowed", checked)}
+                    />
+                    <Label htmlFor="smoking_allowed">Fumeurs acceptés</Label>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="required_income">Revenus minimum requis (€)</Label>
-                <Input
-                  id="required_income"
-                  type="number"
-                  value={formData.required_income}
-                  onChange={(e) => handleChange("required_income", e.target.value)}
-                  placeholder="3000"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="professional_situation">Situation professionnelle souhaitée</Label>
-                <Input
-                  id="professional_situation"
-                  value={formData.professional_situation}
-                  onChange={(e) => handleChange("professional_situation", e.target.value)}
-                  placeholder="CDI, Fonctionnaire, etc."
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="guarantor_required"
-                checked={formData.guarantor_required}
-                onCheckedChange={(checked) => handleChange("guarantor_required", checked)}
-              />
-              <Label htmlFor="guarantor_required">Garant requis</Label>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="lease_duration">Durée de location (mois)</Label>
-                <Input
-                  id="lease_duration"
-                  type="number"
-                  value={formData.lease_duration}
-                  onChange={(e) => handleChange("lease_duration", e.target.value)}
-                  placeholder="12"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="move_in_date">Date d'emménagement</Label>
+                <Label htmlFor="move_in_date">Date d'emménagement souhaitée</Label>
                 <Input
                   id="move_in_date"
                   type="date"

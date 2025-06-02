@@ -119,6 +119,10 @@ export interface RentalFile {
   desired_move_date?: string
   guarantor_income?: number
   has_guarantor?: boolean
+  professional_situation?: string
+  contract_type?: string
+  employment_start_date?: string
+  guarantor_profession?: string
   created_at: string
   updated_at: string
 }
@@ -128,6 +132,12 @@ export interface CompatibilityResult {
   score: number
   warnings: string[]
   recommendations: string[]
+  details: {
+    income_check: { passed: boolean; message: string }
+    professional_situation_check: { passed: boolean; message: string }
+    guarantor_check: { passed: boolean; message: string }
+    documents_check: { passed: boolean; message: string }
+  }
 }
 
 // Activités principales avec documents requis
@@ -305,7 +315,7 @@ export const rentalFileService = {
   },
 
   checkCompatibility(rentalFile: RentalFile, property: any, currentIncome?: number): CompatibilityResult {
-    console.log("🔍 Vérification compatibilité dossier")
+    console.log("🔍 Vérification compatibilité dossier avec critères propriétaire")
 
     const warnings: string[] = []
     const recommendations: string[] = []
@@ -315,60 +325,162 @@ export const rentalFileService = {
     const income = currentIncome || rentalFile.monthly_income || 0
     const rent = property.price || 0
 
-    // Vérification du ratio revenus/loyer (règle des 33%)
-    if (income > 0 && rent > 0) {
-      const ratio = (rent / income) * 100
+    // Détails des vérifications
+    const details = {
+      income_check: { passed: false, message: "" },
+      professional_situation_check: { passed: false, message: "" },
+      guarantor_check: { passed: false, message: "" },
+      documents_check: { passed: false, message: "" },
+    }
 
-      if (ratio > 33) {
-        score -= 30
-        warnings.push(`Le loyer représente ${ratio.toFixed(1)}% de vos revenus (recommandé: max 33%)`)
+    // 1. Vérification des revenus selon les critères du propriétaire
+    if (property.min_income_required && income > 0) {
+      if (income >= property.min_income_required) {
+        details.income_check.passed = true
+        details.income_check.message = `Revenus suffisants (${income}€ ≥ ${property.min_income_required}€ requis)`
+      } else {
+        score -= 40
+        details.income_check.message = `Revenus insuffisants (${income}€ < ${property.min_income_required}€ requis)`
+        warnings.push(`Revenus insuffisants : ${income}€ (minimum requis : ${property.min_income_required}€)`)
 
+        // Vérifier si un garant peut compenser
         if (rentalFile.has_guarantor && rentalFile.guarantor_income) {
-          const totalIncome = income + (rentalFile.guarantor_income || 0)
-          const newRatio = (rent / totalIncome) * 100
-          if (newRatio <= 33) {
-            score += 15
-            recommendations.push("Votre garant améliore significativement votre dossier")
+          const totalIncome = income + rentalFile.guarantor_income
+          if (totalIncome >= property.min_income_required) {
+            score += 20
+            details.income_check.passed = true
+            details.income_check.message += ` - Compensé par le garant (total: ${totalIncome}€)`
+            recommendations.push("Votre garant compense l'insuffisance de revenus")
           }
-        } else {
-          recommendations.push("Un garant pourrait renforcer votre dossier")
         }
-      } else if (ratio > 25) {
-        score -= 10
-        warnings.push(`Le loyer représente ${ratio.toFixed(1)}% de vos revenus`)
+      }
+    } else if (property.income_multiplier && rent > 0 && income > 0) {
+      // Utiliser le multiplicateur de revenus (par défaut 3x le loyer)
+      const requiredIncome = rent * property.income_multiplier
+      if (income >= requiredIncome) {
+        details.income_check.passed = true
+        details.income_check.message = `Revenus suffisants (${income}€ ≥ ${requiredIncome}€ requis, soit ${property.income_multiplier}x le loyer)`
+      } else {
+        score -= 30
+        details.income_check.message = `Revenus insuffisants (${income}€ < ${requiredIncome}€ requis, soit ${property.income_multiplier}x le loyer)`
+        warnings.push(
+          `Revenus insuffisants : ${income}€ (requis : ${property.income_multiplier}x le loyer = ${requiredIncome}€)`,
+        )
+      }
+    } else if (income === 0) {
+      score -= 30
+      details.income_check.message = "Revenus non renseignés"
+      warnings.push("Revenus non renseignés")
+      recommendations.push("Complétez vos informations de revenus dans votre dossier")
+    } else {
+      // Pas de critères spécifiques, utiliser la règle générale des 33%
+      const ratio = (rent / income) * 100
+      if (ratio <= 33) {
+        details.income_check.passed = true
+        details.income_check.message = `Ratio loyer/revenus acceptable (${ratio.toFixed(1)}%)`
+      } else {
+        score -= 20
+        details.income_check.message = `Ratio loyer/revenus élevé (${ratio.toFixed(1)}%)`
+        warnings.push(`Le loyer représente ${ratio.toFixed(1)}% de vos revenus (recommandé: max 33%)`)
+      }
+    }
+
+    // 2. Vérification de la situation professionnelle
+    if (property.accepted_professional_situations && property.accepted_professional_situations.length > 0) {
+      const tenantSituation = rentalFile.professional_situation || rentalFile.profession
+      if (tenantSituation && property.accepted_professional_situations.includes(tenantSituation)) {
+        details.professional_situation_check.passed = true
+        details.professional_situation_check.message = `Situation professionnelle acceptée (${tenantSituation})`
+      } else if (tenantSituation) {
+        score -= 20
+        details.professional_situation_check.message = `Situation professionnelle non préférée (${tenantSituation})`
+        warnings.push(
+          `Votre situation professionnelle (${tenantSituation}) n'est pas dans les préférences du propriétaire`,
+        )
+      } else {
+        score -= 15
+        details.professional_situation_check.message = "Situation professionnelle non renseignée"
+        warnings.push("Situation professionnelle non renseignée")
+        recommendations.push("Ajoutez votre situation professionnelle à votre dossier")
       }
     } else {
-      score -= 20
-      warnings.push("Revenus non renseignés")
-      recommendations.push("Complétez vos informations de revenus")
+      // Vérification basique si pas de critères spécifiques
+      if (rentalFile.profession) {
+        details.professional_situation_check.passed = true
+        details.professional_situation_check.message = `Profession renseignée (${rentalFile.profession})`
+      } else {
+        score -= 10
+        details.professional_situation_check.message = "Profession non renseignée"
+        warnings.push("Profession non renseignée")
+        recommendations.push("Ajoutez votre profession à votre dossier")
+      }
     }
 
-    // Vérification de la profession
-    if (!rentalFile.profession) {
-      score -= 10
-      warnings.push("Profession non renseignée")
-      recommendations.push("Ajoutez votre profession à votre dossier")
+    // 3. Vérification du garant
+    if (property.guarantor_required) {
+      if (rentalFile.has_guarantor) {
+        if (property.min_guarantor_income && rentalFile.guarantor_income) {
+          if (rentalFile.guarantor_income >= property.min_guarantor_income) {
+            details.guarantor_check.passed = true
+            details.guarantor_check.message = `Garant avec revenus suffisants (${rentalFile.guarantor_income}€ ≥ ${property.min_guarantor_income}€ requis)`
+          } else {
+            score -= 15
+            details.guarantor_check.message = `Garant avec revenus insuffisants (${rentalFile.guarantor_income}€ < ${property.min_guarantor_income}€ requis)`
+            warnings.push(
+              `Revenus du garant insuffisants : ${rentalFile.guarantor_income}€ (minimum requis : ${property.min_guarantor_income}€)`,
+            )
+          }
+        } else {
+          details.guarantor_check.passed = true
+          details.guarantor_check.message = "Garant présent (revenus à vérifier)"
+          if (!rentalFile.guarantor_income) {
+            recommendations.push("Précisez les revenus de votre garant")
+          }
+        }
+      } else {
+        score -= 25
+        details.guarantor_check.message = "Garant requis mais absent"
+        warnings.push("Un garant est requis pour ce logement")
+        recommendations.push("Ajoutez un garant à votre dossier")
+      }
+    } else {
+      // Garant non requis mais peut être un plus
+      if (rentalFile.has_guarantor) {
+        score += 10
+        details.guarantor_check.passed = true
+        details.guarantor_check.message = "Garant présent (bonus)"
+        recommendations.push("Votre garant renforce votre dossier")
+      } else {
+        details.guarantor_check.passed = true
+        details.guarantor_check.message = "Garant non requis"
+      }
     }
 
-    // Vérification du message de présentation
+    // 4. Vérification du message de présentation
     if (!rentalFile.presentation_message || rentalFile.presentation_message.length < 50) {
       score -= 10
+      details.documents_check.message = "Message de présentation incomplet"
       warnings.push("Message de présentation incomplet")
-      recommendations.push("Rédigez un message de présentation détaillé")
+      recommendations.push("Rédigez un message de présentation détaillé dans votre dossier")
+    } else {
+      details.documents_check.passed = true
+      details.documents_check.message = "Message de présentation complet"
     }
 
-    // Vérification de l'entreprise
-    if (!rentalFile.company) {
-      score -= 5
-      recommendations.push("Ajoutez le nom de votre entreprise")
+    // Vérifications supplémentaires selon les critères de la propriété
+    if (property.student_accepted === false && rentalFile.professional_situation === "etudes") {
+      score -= 20
+      warnings.push("Les étudiants ne sont pas acceptés pour ce logement")
     }
 
-    // Bonus pour un garant
-    if (rentalFile.has_guarantor) {
-      score += 10
-      if (!rentalFile.guarantor_income) {
-        recommendations.push("Précisez les revenus de votre garant")
-      }
+    if (property.retired_accepted === false && rentalFile.professional_situation === "retraite") {
+      score -= 20
+      warnings.push("Les retraités ne sont pas acceptés pour ce logement")
+    }
+
+    if (property.unemployed_accepted === false && rentalFile.professional_situation === "chomage") {
+      score -= 30
+      warnings.push("Les demandeurs d'emploi ne sont pas acceptés pour ce logement")
     }
 
     // S'assurer que le score reste dans les limites
@@ -381,6 +493,7 @@ export const rentalFileService = {
       score,
       warnings,
       recommendations,
+      details,
     }
   },
 
