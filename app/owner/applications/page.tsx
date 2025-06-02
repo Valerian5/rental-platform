@@ -9,110 +9,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
+import { ModernApplicationCard } from "@/components/modern-application-card"
 import { Filter, Download, Users } from "lucide-react"
-
-// Version simplifiée de la carte d'application pour éviter les erreurs
-function SimpleApplicationCard({ application, onStatusChange }) {
-  const formatDate = (dateString) => {
-    if (!dateString) return "Non spécifié"
-    try {
-      return new Date(dateString).toLocaleDateString()
-    } catch (e) {
-      return "Date invalide"
-    }
-  }
-
-  const formatAmount = (amount) => {
-    if (amount === null || amount === undefined) return "Non spécifié"
-    try {
-      return Number(amount).toLocaleString("fr-FR", {
-        style: "currency",
-        currency: "EUR",
-        maximumFractionDigits: 0,
-      })
-    } catch (e) {
-      return "Montant invalide"
-    }
-  }
-
-  // Récupération sécurisée des données
-  const property = application.property || {}
-  const tenant = application.tenant || {}
-
-  // Valeurs par défaut pour éviter les erreurs
-  const propertyTitle = property.title || "Propriété inconnue"
-  const propertyAddress = property.address || "Adresse inconnue"
-  const tenantName = tenant.first_name ? `${tenant.first_name} ${tenant.last_name || ""}` : "Locataire inconnu"
-  const profession = application.profession || "Non spécifié"
-  const income = formatAmount(application.income)
-  const createdAt = formatDate(application.created_at)
-  const status = application.status || "pending"
-
-  return (
-    <Card className="overflow-hidden">
-      <CardContent className="p-6">
-        <div className="flex flex-col space-y-4">
-          <div className="flex justify-between items-start">
-            <div>
-              <h3 className="font-semibold text-lg">{propertyTitle}</h3>
-              <p className="text-sm text-muted-foreground">{propertyAddress}</p>
-            </div>
-            <div
-              className={`px-3 py-1 rounded-full text-xs font-medium ${
-                status === "pending"
-                  ? "bg-yellow-100 text-yellow-800"
-                  : status === "approved"
-                    ? "bg-green-100 text-green-800"
-                    : "bg-red-100 text-red-800"
-              }`}
-            >
-              {status === "pending" ? "En attente" : status === "approved" ? "Acceptée" : "Refusée"}
-            </div>
-          </div>
-
-          <div className="border-t border-b py-3">
-            <div className="flex justify-between">
-              <div>
-                <p className="text-sm font-medium">Candidat</p>
-                <p className="text-sm">{tenantName}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium">Profession</p>
-                <p className="text-sm">{profession}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium">Revenus</p>
-                <p className="text-sm">{income}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-between items-center">
-            <div className="text-sm text-muted-foreground">Candidature reçue le {createdAt}</div>
-            <div className="space-x-2">
-              <Button
-                size="sm"
-                variant={status === "approved" ? "default" : "outline"}
-                onClick={() => onStatusChange("approved")}
-                disabled={status === "approved"}
-              >
-                Accepter
-              </Button>
-              <Button
-                size="sm"
-                variant={status === "rejected" ? "destructive" : "outline"}
-                onClick={() => onStatusChange("rejected")}
-                disabled={status === "rejected"}
-              >
-                Refuser
-              </Button>
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
 
 export default function ApplicationsPage() {
   const router = useRouter()
@@ -120,7 +18,7 @@ export default function ApplicationsPage() {
   const [applications, setApplications] = useState([])
   const [activeTab, setActiveTab] = useState("all")
   const [user, setUser] = useState(null)
-  const [error, setError] = useState(null)
+  const [selectedApplications, setSelectedApplications] = useState(new Set())
 
   useEffect(() => {
     checkAuthAndLoadData()
@@ -129,7 +27,6 @@ export default function ApplicationsPage() {
   const checkAuthAndLoadData = async () => {
     try {
       setLoading(true)
-      setError(null)
       const currentUser = await authService.getCurrentUser()
 
       if (!currentUser) {
@@ -148,7 +45,6 @@ export default function ApplicationsPage() {
       await loadApplications(currentUser.id)
     } catch (error) {
       console.error("Erreur auth:", error)
-      setError("Erreur d'authentification: " + error.message)
       toast.error("Erreur d'authentification")
     } finally {
       setLoading(false)
@@ -157,30 +53,17 @@ export default function ApplicationsPage() {
 
   const loadApplications = async (ownerId) => {
     try {
-      console.log("Chargement des candidatures pour le propriétaire:", ownerId)
       const response = await fetch(`/api/applications?owner_id=${ownerId}`)
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Erreur chargement candidatures:", errorText)
-        setError("Erreur lors du chargement des candidatures: " + errorText)
+      if (response.ok) {
+        const data = await response.json()
+        console.log("Applications chargées:", data.applications)
+        setApplications(data.applications || [])
+      } else {
+        console.error("Erreur chargement candidatures:", await response.text())
         toast.error("Erreur lors du chargement des candidatures")
-        return
       }
-
-      const data = await response.json()
-      console.log("Applications chargées:", data)
-
-      if (!data.applications) {
-        console.error("Format de réponse invalide:", data)
-        setError("Format de réponse invalide")
-        return
-      }
-
-      setApplications(data.applications || [])
     } catch (error) {
       console.error("Erreur:", error)
-      setError("Erreur: " + error.message)
       toast.error("Erreur lors du chargement des candidatures")
     }
   }
@@ -188,6 +71,35 @@ export default function ApplicationsPage() {
   const getFilteredApplications = () => {
     if (activeTab === "all") return applications
     return applications.filter((app) => app.status === activeTab)
+  }
+
+  const handleApplicationAction = async (action, applicationId) => {
+    console.log("Action:", action, "pour candidature:", applicationId)
+
+    switch (action) {
+      case "view_details":
+        router.push(`/owner/applications/${applicationId}`)
+        break
+      case "analyze":
+        // Logique d'analyse
+        toast.info("Analyse en cours...")
+        break
+      case "accept":
+        await handleStatusChange(applicationId, "accepted")
+        break
+      case "refuse":
+        await handleStatusChange(applicationId, "rejected")
+        break
+      case "contact":
+        // Logique de contact
+        toast.info("Ouverture de la messagerie...")
+        break
+      case "generate_lease":
+        router.push(`/owner/leases/new?application=${applicationId}`)
+        break
+      default:
+        console.log("Action non reconnue:", action)
+    }
   }
 
   const handleStatusChange = async (applicationId, newStatus) => {
@@ -198,13 +110,12 @@ export default function ApplicationsPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          id: applicationId,
           status: newStatus,
         }),
       })
 
       if (response.ok) {
-        toast.success(`Candidature ${newStatus === "approved" ? "acceptée" : "refusée"}`)
+        toast.success(`Candidature ${newStatus === "accepted" ? "acceptée" : "refusée"}`)
         // Mettre à jour l'état local
         setApplications(applications.map((app) => (app.id === applicationId ? { ...app, status: newStatus } : app)))
       } else {
@@ -214,6 +125,49 @@ export default function ApplicationsPage() {
       console.error("Erreur:", error)
       toast.error("Erreur lors de la mise à jour du statut")
     }
+  }
+
+  const handleSelectApplication = (applicationId, selected) => {
+    const newSelected = new Set(selectedApplications)
+    if (selected) {
+      newSelected.add(applicationId)
+    } else {
+      newSelected.delete(applicationId)
+    }
+    setSelectedApplications(newSelected)
+  }
+
+  // Fonction pour calculer le score de matching de manière sécurisée
+  const calculateMatchScore = (application) => {
+    if (!application.property || !application.income) return 50 // Score par défaut
+
+    const property = application.property
+    let score = 0
+
+    // Ratio revenus/loyer (40 points max)
+    if (application.income && property.price) {
+      const rentRatio = application.income / property.price
+      if (rentRatio >= 3) score += 40
+      else if (rentRatio >= 2.5) score += 30
+      else if (rentRatio >= 2) score += 20
+      else score += 10
+    } else {
+      score += 10
+    }
+
+    // Stabilité professionnelle (20 points max)
+    if (application.contract_type === "CDI") score += 20
+    else if (application.contract_type === "CDD") score += 15
+    else score += 10
+
+    // Présence d'un garant (20 points max)
+    if (application.has_guarantor) score += 20
+
+    // Documents et présentation (20 points max)
+    if (application.presentation && application.presentation.length > 50) score += 10
+    if (application.profession && application.company) score += 10
+
+    return Math.min(score, 100)
   }
 
   if (loading) {
@@ -229,21 +183,6 @@ export default function ApplicationsPage() {
             <Skeleton key={i} className="h-64 w-full" />
           ))}
         </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="p-6">
-        <PageHeader title="Erreur" description="Une erreur est survenue lors du chargement des candidatures">
-          <Button onClick={checkAuthAndLoadData}>Réessayer</Button>
-        </PageHeader>
-        <Card className="mt-6">
-          <CardContent className="p-6">
-            <pre className="whitespace-pre-wrap text-red-500">{error}</pre>
-          </CardContent>
-        </Card>
       </div>
     )
   }
@@ -268,7 +207,7 @@ export default function ApplicationsPage() {
           <TabsList className="grid grid-cols-4 mb-4">
             <TabsTrigger value="all">Toutes</TabsTrigger>
             <TabsTrigger value="pending">En attente</TabsTrigger>
-            <TabsTrigger value="approved">Acceptées</TabsTrigger>
+            <TabsTrigger value="accepted">Acceptées</TabsTrigger>
             <TabsTrigger value="rejected">Refusées</TabsTrigger>
           </TabsList>
 
@@ -282,20 +221,53 @@ export default function ApplicationsPage() {
                     {activeTab === "all"
                       ? "Vous n'avez pas encore reçu de candidatures"
                       : `Vous n'avez pas de candidatures ${
-                          activeTab === "pending" ? "en attente" : activeTab === "approved" ? "acceptées" : "refusées"
+                          activeTab === "pending" ? "en attente" : activeTab === "accepted" ? "acceptées" : "refusées"
                         }`}
                   </p>
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2">
-                {getFilteredApplications().map((application) => (
-                  <SimpleApplicationCard
-                    key={application.id}
-                    application={application}
-                    onStatusChange={(status) => handleStatusChange(application.id, status)}
-                  />
-                ))}
+              <div className="grid gap-4 md:grid-cols-1">
+                {getFilteredApplications().map((application) => {
+                  // Gestion sécurisée des données du tenant
+                  const tenant = application.tenant || {}
+                  const property = application.property || {}
+
+                  // Calcul du score de matching
+                  const matchScore = calculateMatchScore(application)
+
+                  // Préparation des données pour le composant ModernApplicationCard
+                  const applicationData = {
+                    id: application.id,
+                    tenant: {
+                      first_name: tenant.first_name || "Prénom",
+                      last_name: tenant.last_name || "Nom",
+                      email: tenant.email || "email@example.com",
+                      phone: tenant.phone || "Non renseigné",
+                    },
+                    property: {
+                      title: property.title || "Propriété inconnue",
+                      address: property.address || "Adresse inconnue",
+                    },
+                    profession: application.profession || "Non spécifié",
+                    income: application.income || 0,
+                    has_guarantor: application.has_guarantor || false,
+                    documents_complete: true, // Valeur par défaut
+                    status: application.status || "pending",
+                    match_score: matchScore,
+                    created_at: application.created_at || new Date().toISOString(),
+                  }
+
+                  return (
+                    <ModernApplicationCard
+                      key={application.id}
+                      application={applicationData}
+                      isSelected={selectedApplications.has(application.id)}
+                      onSelect={(selected) => handleSelectApplication(application.id, selected)}
+                      onAction={(action) => handleApplicationAction(action, application.id)}
+                    />
+                  )
+                })}
               </div>
             )}
           </TabsContent>
