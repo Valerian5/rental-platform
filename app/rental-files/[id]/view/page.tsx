@@ -7,12 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner"
 import { ArrowLeft, Download, Printer, FileText } from "lucide-react"
+import { convertBlobUrlToApiUrl, openDocument } from "@/lib/document-utils"
 
 export default function RentalFileViewerPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [rentalFile, setRentalFile] = useState(null)
-  const [rentalFileData, setRentalFileData] = useState(null)
 
   useEffect(() => {
     loadRentalFile()
@@ -47,9 +47,8 @@ export default function RentalFileViewerPage({ params }: { params: { id: string 
     try {
       toast.info("Génération du PDF en cours...")
       // Ici on pourrait appeler une API pour générer le PDF
-      // Pour l'instant, on simule le téléchargement
       const link = document.createElement("a")
-      link.href = `/placeholder.svg?height=800&width=600&query=Dossier de location PDF`
+      link.href = `/placeholder.svg?height=800&width=600&query=Dossier de location PDF complet`
       link.download = `dossier-location-${params.id}.pdf`
       link.click()
       toast.success("PDF téléchargé avec succès")
@@ -258,7 +257,7 @@ export default function RentalFileViewerPage({ params }: { params: { id: string 
                           <span className="text-sm font-medium">Pièce d'identité {index + 1}</span>
                         </div>
                         <img
-                          src={doc || "/placeholder.svg"}
+                          src={convertBlobUrlToApiUrl(doc) || "/placeholder.svg"}
                           alt={`Pièce d'identité ${index + 1}`}
                           className="w-full h-32 object-cover rounded border"
                           onError={(e) => {
@@ -272,12 +271,7 @@ export default function RentalFileViewerPage({ params }: { params: { id: string 
                             <p className="text-xs text-gray-500">Document</p>
                           </div>
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full mt-2"
-                          onClick={() => window.open(doc, "_blank")}
-                        >
+                        <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => openDocument(doc)}>
                           Voir le document
                         </Button>
                       </div>
@@ -298,7 +292,7 @@ export default function RentalFileViewerPage({ params }: { params: { id: string 
                           <span className="text-sm font-medium">Justificatif {index + 1}</span>
                         </div>
                         <img
-                          src={doc || "/placeholder.svg"}
+                          src={convertBlobUrlToApiUrl(doc) || "/placeholder.svg"}
                           alt={`Justificatif d'activité ${index + 1}`}
                           className="w-full h-32 object-cover rounded border"
                           onError={(e) => {
@@ -312,12 +306,7 @@ export default function RentalFileViewerPage({ params }: { params: { id: string 
                             <p className="text-xs text-gray-500">Document</p>
                           </div>
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full mt-2"
-                          onClick={() => window.open(doc, "_blank")}
-                        >
+                        <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => openDocument(doc)}>
                           Voir le document
                         </Button>
                       </div>
@@ -339,7 +328,7 @@ export default function RentalFileViewerPage({ params }: { params: { id: string 
                             <span className="text-sm font-medium">Justificatif revenus {index + 1}</span>
                           </div>
                           <img
-                            src={doc || "/placeholder.svg"}
+                            src={convertBlobUrlToApiUrl(doc) || "/placeholder.svg"}
                             alt={`Justificatif de revenus ${index + 1}`}
                             className="w-full h-32 object-cover rounded border"
                             onError={(e) => {
@@ -353,12 +342,7 @@ export default function RentalFileViewerPage({ params }: { params: { id: string 
                               <p className="text-xs text-gray-500">Document</p>
                             </div>
                           </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full mt-2"
-                            onClick={() => window.open(doc, "_blank")}
-                          >
+                          <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => openDocument(doc)}>
                             Voir le document
                           </Button>
                         </div>
@@ -379,7 +363,7 @@ export default function RentalFileViewerPage({ params }: { params: { id: string 
                           <span className="text-sm font-medium">Document fiscal {index + 1}</span>
                         </div>
                         <img
-                          src={doc || "/placeholder.svg"}
+                          src={convertBlobUrlToApiUrl(doc) || "/placeholder.svg"}
                           alt={`Document fiscal ${index + 1}`}
                           className="w-full h-32 object-cover rounded border"
                           onError={(e) => {
@@ -393,12 +377,7 @@ export default function RentalFileViewerPage({ params }: { params: { id: string 
                             <p className="text-xs text-gray-500">Document</p>
                           </div>
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full mt-2"
-                          onClick={() => window.open(doc, "_blank")}
-                        >
+                        <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => openDocument(doc)}>
                           Voir le document
                         </Button>
                       </div>
@@ -420,7 +399,7 @@ export default function RentalFileViewerPage({ params }: { params: { id: string 
                             <span className="text-sm font-medium">Quittance {index + 1}</span>
                           </div>
                           <img
-                            src={doc || "/placeholder.svg"}
+                            src={convertBlobUrlToApiUrl(doc) || "/placeholder.svg"}
                             alt={`Quittance de loyer ${index + 1}`}
                             className="w-full h-32 object-cover rounded border"
                             onError={(e) => {
@@ -434,12 +413,7 @@ export default function RentalFileViewerPage({ params }: { params: { id: string 
                               <p className="text-xs text-gray-500">Document</p>
                             </div>
                           </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full mt-2"
-                            onClick={() => window.open(doc, "_blank")}
-                          >
+                          <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => openDocument(doc)}>
                             Voir le document
                           </Button>
                         </div>
@@ -469,7 +443,7 @@ export default function RentalFileViewerPage({ params }: { params: { id: string 
                                   <span className="text-sm font-medium">Pièce d'identité {index + 1}</span>
                                 </div>
                                 <img
-                                  src={doc || "/placeholder.svg"}
+                                  src={convertBlobUrlToApiUrl(doc) || "/placeholder.svg"}
                                   alt={`Pièce d'identité garant ${gIndex + 1}`}
                                   className="w-full h-32 object-cover rounded border"
                                   onError={(e) => {
@@ -487,7 +461,7 @@ export default function RentalFileViewerPage({ params }: { params: { id: string 
                                   variant="outline"
                                   size="sm"
                                   className="w-full mt-2"
-                                  onClick={() => window.open(doc, "_blank")}
+                                  onClick={() => openDocument(doc)}
                                 >
                                   Voir le document
                                 </Button>
@@ -499,53 +473,6 @@ export default function RentalFileViewerPage({ params }: { params: { id: string 
                   )}
                 </div>
               )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Message de présentation */}
-        {(rentalFileData?.presentation_message || rentalFile?.presentation_message) && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Message de présentation</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="whitespace-pre-wrap">
-                {rentalFileData?.presentation_message || rentalFile?.presentation_message}
-              </p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Simulation PDF */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Aperçu du dossier PDF</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="bg-gray-100 rounded-lg p-4 flex justify-center">
-              <div className="w-full max-w-2xl bg-white border rounded-lg p-6 shadow-sm">
-                <div className="text-center mb-6">
-                  <h2 className="text-xl font-bold">DOSSIER DE LOCATION</h2>
-                  <p className="text-gray-600">{tenantName}</p>
-                </div>
-                <div className="space-y-4 text-sm">
-                  <div className="border-b pb-2">
-                    <strong>Situation professionnelle:</strong> {mainTenant.profession || "Non spécifié"}
-                  </div>
-                  <div className="border-b pb-2">
-                    <strong>Revenus mensuels:</strong>{" "}
-                    {formatAmount(mainTenant.income_sources?.work_income?.amount || rentalFile?.monthly_income || 0)}
-                  </div>
-                  <div className="border-b pb-2">
-                    <strong>Garants:</strong>{" "}
-                    {rentalFileData?.guarantors?.length > 0 || rentalFile?.has_guarantor ? "Oui" : "Non"}
-                  </div>
-                  <div className="text-center text-gray-500 mt-6">
-                    <p>Ceci est un aperçu simplifié du dossier PDF complet</p>
-                  </div>
-                </div>
-              </div>
             </div>
           </CardContent>
         </Card>
