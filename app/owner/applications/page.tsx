@@ -57,7 +57,64 @@ export default function ApplicationsPage() {
       if (response.ok) {
         const data = await response.json()
         console.log("Applications chargées:", data.applications)
-        setApplications(data.applications || [])
+
+        // Enrichir chaque candidature avec les données du dossier de location
+        const enrichedApplications = await Promise.all(
+          (data.applications || []).map(async (app) => {
+            try {
+              if (app.tenant_id) {
+                const rentalFileResponse = await fetch(`/api/rental-files?tenant_id=${app.tenant_id}`)
+                if (rentalFileResponse.ok) {
+                  const rentalFileData = await rentalFileResponse.json()
+
+                  // Utiliser les données du dossier de location si disponibles
+                  const rentalFile = rentalFileData.rental_file
+                  const rentalFileDataComplete = rentalFileData.rental_file_data
+
+                  if (rentalFile || rentalFileDataComplete) {
+                    const mainTenant = rentalFileDataComplete?.main_tenant || {}
+
+                    // Récupérer les revenus
+                    const income =
+                      mainTenant.income_sources?.work_income?.amount || rentalFile?.monthly_income || app.income || 0
+
+                    // Vérifier la présence de garants
+                    const hasGuarantor =
+                      (rentalFileDataComplete?.guarantors && rentalFileDataComplete.guarantors.length > 0) ||
+                      rentalFile?.has_guarantor ||
+                      app.has_guarantor ||
+                      false
+
+                    // Récupérer la profession et l'entreprise
+                    const profession =
+                      mainTenant.profession || rentalFile?.profession || app.profession || "Non spécifié"
+                    const company = mainTenant.company || rentalFile?.company || app.company || "Non spécifié"
+
+                    // Type de contrat
+                    const contractType =
+                      mainTenant.main_activity || rentalFile?.contract_type || app.contract_type || "Non spécifié"
+
+                    return {
+                      ...app,
+                      income,
+                      has_guarantor: hasGuarantor,
+                      profession,
+                      company,
+                      contract_type: contractType,
+                      rental_file_id: rentalFile?.id || rentalFileDataComplete?.id,
+                    }
+                  }
+                }
+              }
+              return app
+            } catch (error) {
+              console.error("Erreur enrichissement candidature:", error)
+              return app
+            }
+          }),
+        )
+
+        setApplications(enrichedApplications)
       } else {
         console.error("Erreur chargement candidatures:", await response.text())
         toast.error("Erreur lors du chargement des candidatures")
@@ -182,8 +239,8 @@ export default function ApplicationsPage() {
     }
 
     // Stabilité professionnelle (20 points max)
-    if (application.contract_type === "CDI") score += 20
-    else if (application.contract_type === "CDD") score += 15
+    if (application.contract_type === "CDI" || application.contract_type === "cdi") score += 20
+    else if (application.contract_type === "CDD" || application.contract_type === "cdd") score += 15
     else score += 10
 
     // Présence d'un garant (20 points max)
@@ -194,68 +251,6 @@ export default function ApplicationsPage() {
     if (application.profession && application.company) score += 10
 
     return Math.min(score, 100)
-  }
-
-  const getStatusConfig = (status) => {
-    switch (status) {
-      case "pending":
-        return {
-          label: "Nouveau",
-          color: "text-blue-600",
-          bgColor: "bg-blue-50",
-          message: "Analysez le dossier et proposez une visite ou refusez la candidature.",
-          actions: ["analyze", "refuse", "contact"],
-        }
-      case "analyzing":
-        return {
-          label: "En cours d'analyse",
-          color: "text-orange-600",
-          bgColor: "bg-orange-50",
-          message: "Complétez l'analyse du dossier pour prendre une décision.",
-          actions: ["accept", "contact"],
-        }
-      case "visit_scheduled":
-        return {
-          label: "Visite programée",
-          color: "text-purple-600",
-          bgColor: "bg-purple-50",
-          message: "Une visite est programmée. Vous pourrez accepter ou refuser après la visite.",
-          actions: ["accept", "refuse", "contact"],
-        }
-      case "waiting_tenant_confirmation":
-        return {
-          label: "En attente d'acceptation",
-          color: "text-yellow-600",
-          bgColor: "bg-yellow-50",
-          message: "Le locataire doit confirmer son choix pour cet appartement.",
-          actions: ["contact"],
-        }
-      case "accepted":
-      case "approved":
-        return {
-          label: "Candidature acceptée",
-          color: "text-green-600",
-          bgColor: "bg-green-50",
-          message: "La candidature a été acceptée. Vous pouvez maintenant générer le bail.",
-          actions: ["generate_lease", "contact"],
-        }
-      case "rejected":
-        return {
-          label: "Dossier refusé",
-          color: "text-red-600",
-          bgColor: "bg-red-50",
-          message: "Cette candidature a été refusée.",
-          actions: ["contact"],
-        }
-      default:
-        return {
-          label: status,
-          color: "text-gray-600",
-          bgColor: "bg-gray-50",
-          message: "",
-          actions: ["contact"],
-        }
-    }
   }
 
   if (loading) {

@@ -17,6 +17,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const [loading, setLoading] = useState(true)
   const [application, setApplication] = useState(null)
   const [rentalFile, setRentalFile] = useState(null)
+  const [rentalFileData, setRentalFileData] = useState(null)
   const [user, setUser] = useState(null)
 
   useEffect(() => {
@@ -71,10 +72,9 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
           const rentalFileResponse = await fetch(`/api/rental-files?tenant_id=${data.application.tenant_id}`)
           if (rentalFileResponse.ok) {
             const rentalFileData = await rentalFileResponse.json()
-            if (rentalFileData.rental_file) {
-              console.log("✅ Dossier de location chargé:", rentalFileData.rental_file.id)
-              setRentalFile(rentalFileData.rental_file)
-            }
+            console.log("✅ Dossier de location chargé:", rentalFileData)
+            setRentalFile(rentalFileData.rental_file)
+            setRentalFileData(rentalFileData.rental_file_data)
           }
         } catch (error) {
           console.error("Erreur chargement dossier location:", error)
@@ -143,9 +143,15 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
     const property = application.property
 
     // Utiliser les données du dossier de location en priorité
-    const income = rentalFile?.main_tenant?.income_sources?.work_income?.amount || application.income || 0
-    const hasGuarantor = rentalFile?.guarantors?.length > 0 || application.has_guarantor || false
-    const contractType = rentalFile?.main_tenant?.contract_type || application.contract_type
+    const mainTenant = rentalFileData?.main_tenant || {}
+    const income =
+      mainTenant.income_sources?.work_income?.amount || rentalFile?.monthly_income || application.income || 0
+    const hasGuarantor =
+      (rentalFileData?.guarantors && rentalFileData.guarantors.length > 0) ||
+      rentalFile?.has_guarantor ||
+      application.has_guarantor ||
+      false
+    const contractType = mainTenant.main_activity || rentalFile?.contract_type || application.contract_type
 
     // Ratio revenus/loyer (40 points max)
     if (income && property.price) {
@@ -159,8 +165,8 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
     }
 
     // Stabilité professionnelle (20 points max)
-    if (contractType === "CDI") score += 20
-    else if (contractType === "CDD") score += 15
+    if (contractType === "CDI" || contractType === "cdi") score += 20
+    else if (contractType === "CDD" || contractType === "cdd") score += 15
     else score += 10
 
     // Présence d'un garant (20 points max)
@@ -207,9 +213,20 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
 
   const tenant = application.tenant || {}
   const property = application.property || {}
-  const mainTenant = rentalFile?.main_tenant || {}
-  const income = mainTenant.income_sources?.work_income?.amount || application.income || 0
-  const hasGuarantor = rentalFile?.guarantors?.length > 0 || application.has_guarantor || false
+  const mainTenant = rentalFileData?.main_tenant || {}
+
+  // Utiliser les données du dossier de location en priorité
+  const income = mainTenant.income_sources?.work_income?.amount || rentalFile?.monthly_income || application.income || 0
+  const hasGuarantor =
+    (rentalFileData?.guarantors && rentalFileData.guarantors.length > 0) ||
+    rentalFile?.has_guarantor ||
+    application.has_guarantor ||
+    false
+  const profession = mainTenant.profession || rentalFile?.profession || application.profession || "Non spécifié"
+  const company = mainTenant.company || rentalFile?.company || application.company || "Non spécifié"
+  const contractType =
+    mainTenant.main_activity || rentalFile?.contract_type || application.contract_type || "Non spécifié"
+
   const matchScore = calculateMatchScore()
 
   return (
@@ -334,15 +351,15 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
           <CardContent className="grid gap-4 md:grid-cols-3">
             <div>
               <label className="text-sm font-medium text-muted-foreground">Profession</label>
-              <p>{mainTenant.profession || application.profession || "Non spécifié"}</p>
+              <p>{profession}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Entreprise</label>
-              <p>{mainTenant.company || application.company || "Non spécifié"}</p>
+              <p>{company}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Type de contrat</label>
-              <p>{mainTenant.contract_type || application.contract_type || "Non spécifié"}</p>
+              <p>{contractType}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Revenus mensuels</label>
@@ -364,7 +381,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
         </Card>
 
         {/* Message de candidature */}
-        {(application.message || application.presentation) && (
+        {(application.message || application.presentation || rentalFileData?.presentation_message) && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -373,13 +390,15 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="whitespace-pre-wrap">{application.presentation || application.message}</p>
+              <p className="whitespace-pre-wrap">
+                {rentalFileData?.presentation_message || application.presentation || application.message}
+              </p>
             </CardContent>
           </Card>
         )}
 
         {/* Informations sur les garants */}
-        {rentalFile?.guarantors && rentalFile.guarantors.length > 0 && (
+        {rentalFileData?.guarantors && rentalFileData.guarantors.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -389,23 +408,23 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {rentalFile.guarantors.map((guarantor, index) => (
+                {rentalFileData.guarantors.map((guarantor, index) => (
                   <div key={index} className="border rounded-lg p-4">
                     <h4 className="font-medium mb-2">Garant {index + 1}</h4>
                     <div className="grid gap-2 md:grid-cols-3">
                       <div>
+                        <label className="text-sm font-medium text-muted-foreground">Type</label>
+                        <p>{guarantor.type || "Personne physique"}</p>
+                      </div>
+                      <div>
                         <label className="text-sm font-medium text-muted-foreground">Nom</label>
                         <p>
-                          {guarantor.first_name} {guarantor.last_name}
+                          {guarantor.personal_info?.first_name} {guarantor.personal_info?.last_name}
                         </p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-muted-foreground">Relation</label>
-                        <p>{guarantor.relationship || "Non spécifié"}</p>
-                      </div>
-                      <div>
                         <label className="text-sm font-medium text-muted-foreground">Revenus</label>
-                        <p>{formatAmount(guarantor.income)}</p>
+                        <p>{formatAmount(guarantor.personal_info?.income_sources?.work_income?.amount)}</p>
                       </div>
                     </div>
                   </div>
@@ -417,8 +436,11 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
 
         {/* Actions */}
         <div className="flex justify-center gap-4">
-          {rentalFile && (
-            <Button variant="outline" onClick={() => router.push(`/rental-files/${rentalFile.id}/view`)}>
+          {(rentalFile || rentalFileData) && (
+            <Button
+              variant="outline"
+              onClick={() => router.push(`/rental-files/${rentalFile?.id || rentalFileData?.id}/view`)}
+            >
               <FileText className="mr-2 h-4 w-4" />
               Voir le dossier complet
             </Button>
