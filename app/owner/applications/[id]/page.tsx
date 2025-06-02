@@ -1,731 +1,433 @@
 "use client"
 
-import { useState } from "react"
-import Link from "next/link"
-import {
-  ArrowLeft,
-  Calendar,
-  Download,
-  FileText,
-  Home,
-  Phone,
-  Mail,
-  Briefcase,
-  CheckCircle,
-  X,
-  Clock,
-} from "lucide-react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { VisitSlotSelector } from "@/components/visit-slot-selector"
+import { Skeleton } from "@/components/ui/skeleton"
+import { toast } from "sonner"
+import { authService } from "@/lib/auth-service"
+import { PageHeader } from "@/components/page-header"
+import { CircularScore } from "@/components/circular-score"
+import { ArrowLeft, User, MapPin, Briefcase, Shield, FileText, MessageSquare, CheckCircle, XCircle } from "lucide-react"
 
-// Données simulées pour une candidature
-const application = {
-  id: 1,
-  status: "En cours d'analyse",
-  appliedDate: "2023-05-20",
-  lastUpdate: "2023-05-21",
-  matchScore: 85,
-  property: {
-    id: 1,
-    title: "Appartement moderne au centre-ville",
-    address: "123 Rue Principale, Paris",
-    price: 1200,
-    charges: 150,
-    deposit: 2400,
-    surface: 65,
-    rooms: 3,
-    bedrooms: 2,
-    image: "/placeholder.svg?height=200&width=300",
-  },
-  tenant: {
-    id: 101,
-    name: "Jean Dupont",
-    age: 32,
-    email: "jean.dupont@example.com",
-    phone: "06 12 34 56 78",
-    profession: "Ingénieur logiciel",
-    company: "Tech Solutions",
-    contractType: "CDI",
-    income: 3800,
-    additionalIncome: 0,
-    totalIncome: 3800,
-    hasGuarantor: true,
-    guarantor: {
-      name: "Marie Dupont",
-      relationship: "Parent",
-      profession: "Enseignante",
-      income: 3200,
-    },
-    currentAddress: "45 Avenue des Lilas, 75011 Paris",
-    moveInDate: "2023-06-15",
-    duration: "Long terme (3+ ans)",
-    presentation:
-      "Bonjour, je suis ingénieur logiciel en CDI depuis 5 ans. Je recherche un appartement spacieux et lumineux pour m'installer durablement. Je suis non-fumeur, sans animaux, et j'apprécie le calme. Mes revenus sont stables et je peux fournir toutes les garanties nécessaires.",
-    documents: [
-      { type: "Pièce d'identité", status: "Vérifié", date: "2023-05-20" },
-      { type: "Justificatifs de revenus (3 derniers mois)", status: "Vérifié", date: "2023-05-20" },
-      { type: "Attestation employeur", status: "Vérifié", date: "2023-05-20" },
-      { type: "Avis d'imposition", status: "Vérifié", date: "2023-05-20" },
-      { type: "Quittances de loyer", status: "Vérifié", date: "2023-05-20" },
-      { type: "Garantie Visale", status: "Non fourni", date: null },
-    ],
-  },
-  notes: "",
-}
+export default function ApplicationDetailsPage({ params }: { params: { id: string } }) {
+  const router = useRouter()
+  const [loading, setLoading] = useState(true)
+  const [application, setApplication] = useState(null)
+  const [rentalFile, setRentalFile] = useState(null)
+  const [user, setUser] = useState(null)
 
-export default function ApplicationDetailPage({ params }: { params: { id: string } }) {
-  const [activeTab, setActiveTab] = useState("profile")
-  const [notes, setNotes] = useState(application.notes)
-  const [visitDialogOpen, setVisitDialogOpen] = useState(false)
-  const [visitDate, setVisitDate] = useState("")
-  const [visitTime, setVisitTime] = useState("")
-  const [visitNotes, setVisitNotes] = useState("")
-  const [refusalDialogOpen, setRefusalDialogOpen] = useState(false)
-  const [refusalReason, setRefusalReason] = useState("")
-  const [refusalMessage, setRefusalMessage] = useState("")
-  const [showVisitSelector, setShowVisitSelector] = useState(false)
+  useEffect(() => {
+    checkAuthAndLoadData()
+  }, [])
 
-  const getStatusBadgeVariant = (status: string) => {
-    switch (status) {
-      case "En cours d'analyse":
-        return "secondary"
-      case "Visite programmée":
-        return "default"
-      case "Dossier accepté":
-        return "success"
-      case "Refusé":
-        return "destructive"
-      default:
-        return "outline"
-    }
-  }
-
-  const getDocumentStatusBadgeVariant = (status: string) => {
-    switch (status) {
-      case "Vérifié":
-        return "success"
-      case "En attente":
-        return "secondary"
-      case "Non fourni":
-        return "outline"
-      case "Rejeté":
-        return "destructive"
-      default:
-        return "outline"
-    }
-  }
-
-  const handleSaveNotes = () => {
-    // Logique pour sauvegarder les notes
-    alert("Notes sauvegardées")
-  }
-
-  const handleScheduleVisit = () => {
-    setShowVisitSelector(true)
-  }
-
-  const handleSlotsSelected = async (selectedSlots) => {
+  const checkAuthAndLoadData = async () => {
     try {
-      // Ici on pourrait envoyer les créneaux proposés au candidat
-      // Pour l'instant, on met juste à jour le statut
-      // await propertyService.updateApplicationStatus(application.id, "visit_scheduled")
-      setShowVisitSelector(false)
-      alert(`${selectedSlots.length} créneau(x) proposé(s) au candidat`)
-      // Recharger la page ou mettre à jour les données
-      // window.location.reload()
+      setLoading(true)
+      const currentUser = await authService.getCurrentUser()
+
+      if (!currentUser) {
+        toast.error("Vous devez être connecté pour accéder à cette page")
+        router.push("/login")
+        return
+      }
+
+      if (currentUser.user_type !== "owner") {
+        toast.error("Accès réservé aux propriétaires")
+        router.push("/")
+        return
+      }
+
+      setUser(currentUser)
+      await loadApplicationDetails()
     } catch (error) {
-      alert("Erreur lors de la proposition de visite")
+      console.error("Erreur auth:", error)
+      toast.error("Erreur d'authentification")
+    } finally {
+      setLoading(false)
     }
   }
 
-  const handleCancelVisitSelection = () => {
-    setShowVisitSelector(false)
+  const loadApplicationDetails = async () => {
+    try {
+      console.log("🔍 Chargement détails candidature:", params.id)
+
+      // Récupérer les détails de la candidature
+      const response = await fetch(`/api/applications/${params.id}`)
+      if (!response.ok) {
+        toast.error("Erreur lors du chargement de la candidature")
+        return
+      }
+
+      const data = await response.json()
+      console.log("✅ Candidature chargée:", data.application)
+      setApplication(data.application)
+
+      // Récupérer le dossier de location si disponible
+      if (data.application?.tenant_id) {
+        try {
+          const rentalFileResponse = await fetch(`/api/rental-files?tenant_id=${data.application.tenant_id}`)
+          if (rentalFileResponse.ok) {
+            const rentalFileData = await rentalFileResponse.json()
+            if (rentalFileData.rental_file) {
+              console.log("✅ Dossier de location chargé:", rentalFileData.rental_file.id)
+              setRentalFile(rentalFileData.rental_file)
+            }
+          }
+        } catch (error) {
+          console.error("Erreur chargement dossier location:", error)
+        }
+      }
+    } catch (error) {
+      console.error("Erreur:", error)
+      toast.error("Erreur lors du chargement des détails")
+    }
   }
 
-  const handleRefuseApplication = () => {
-    // Logique pour refuser la candidature
-    setRefusalDialogOpen(false)
-    alert("Candidature refusée")
+  const handleStatusChange = async (newStatus) => {
+    try {
+      const response = await fetch(`/api/applications/${params.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status: newStatus,
+        }),
+      })
+
+      if (response.ok) {
+        toast.success(`Candidature ${newStatus === "accepted" ? "acceptée" : "refusée"}`)
+        setApplication({ ...application, status: newStatus })
+      } else {
+        toast.error("Erreur lors de la mise à jour du statut")
+      }
+    } catch (error) {
+      console.error("Erreur:", error)
+      toast.error("Erreur lors de la mise à jour du statut")
+    }
   }
 
-  const handleAcceptApplication = () => {
-    // Logique pour accepter la candidature
-    alert("Candidature acceptée")
+  const formatDate = (dateString) => {
+    if (!dateString) return "Non spécifié"
+    try {
+      return new Date(dateString).toLocaleDateString("fr-FR", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      })
+    } catch (e) {
+      return "Date invalide"
+    }
   }
+
+  const formatAmount = (amount) => {
+    if (amount === null || amount === undefined) return "Non spécifié"
+    try {
+      return new Intl.NumberFormat("fr-FR", {
+        style: "currency",
+        currency: "EUR",
+        maximumFractionDigits: 0,
+      }).format(amount)
+    } catch (e) {
+      return "Montant invalide"
+    }
+  }
+
+  const calculateMatchScore = () => {
+    if (!application || !application.property) return 50
+
+    let score = 0
+    const property = application.property
+
+    // Utiliser les données du dossier de location en priorité
+    const income = rentalFile?.main_tenant?.income_sources?.work_income?.amount || application.income || 0
+    const hasGuarantor = rentalFile?.guarantors?.length > 0 || application.has_guarantor || false
+    const contractType = rentalFile?.main_tenant?.contract_type || application.contract_type
+
+    // Ratio revenus/loyer (40 points max)
+    if (income && property.price) {
+      const rentRatio = income / property.price
+      if (rentRatio >= 3) score += 40
+      else if (rentRatio >= 2.5) score += 30
+      else if (rentRatio >= 2) score += 20
+      else score += 10
+    } else {
+      score += 10
+    }
+
+    // Stabilité professionnelle (20 points max)
+    if (contractType === "CDI") score += 20
+    else if (contractType === "CDD") score += 15
+    else score += 10
+
+    // Présence d'un garant (20 points max)
+    if (hasGuarantor) score += 20
+
+    // Documents et présentation (20 points max)
+    if (application.presentation && application.presentation.length > 50) score += 10
+    if (application.profession && application.company) score += 10
+
+    return Math.min(score, 100)
+  }
+
+  if (loading) {
+    return (
+      <div className="container mx-auto py-6 space-y-6">
+        <Skeleton className="h-8 w-64" />
+        <div className="grid gap-6 md:grid-cols-2">
+          <Skeleton className="h-64" />
+          <Skeleton className="h-64" />
+        </div>
+        <Skeleton className="h-96" />
+      </div>
+    )
+  }
+
+  if (!application) {
+    return (
+      <div className="container mx-auto py-6">
+        <Button variant="ghost" onClick={() => router.back()}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Retour
+        </Button>
+        <Card className="mt-6">
+          <CardContent className="flex flex-col items-center justify-center py-10">
+            <h3 className="text-lg font-medium">Candidature introuvable</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              La candidature demandée n'existe pas ou vous n'avez pas les permissions nécessaires.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  const tenant = application.tenant || {}
+  const property = application.property || {}
+  const mainTenant = rentalFile?.main_tenant || {}
+  const income = mainTenant.income_sources?.work_income?.amount || application.income || 0
+  const hasGuarantor = rentalFile?.guarantors?.length > 0 || application.has_guarantor || false
+  const matchScore = calculateMatchScore()
 
   return (
-    <div className="container mx-auto py-6">
-      <Button asChild variant="ghost" className="mb-4">
-        <Link href="/owner/dashboard?tab=applications">
+    <>
+      <PageHeader
+        title={`Candidature de ${tenant.first_name} ${tenant.last_name}`}
+        description={`Pour ${property.title}`}
+      >
+        <Button variant="ghost" onClick={() => router.back()}>
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Retour aux candidatures
-        </Link>
-      </Button>
+          Retour
+        </Button>
+      </PageHeader>
 
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">Candidature de {application.tenant.name}</h1>
-          <p className="text-muted-foreground">
-            Pour {application.property.title} • Reçue le {new Date(application.appliedDate).toLocaleDateString("fr-FR")}
-          </p>
-        </div>
-        <Badge variant={getStatusBadgeVariant(application.status)} className="text-sm">
-          {application.status}
-        </Badge>
-      </div>
-      {showVisitSelector && (
-        <div className="mb-6">
-          <VisitSlotSelector
-            propertyId={application.property.id.toString()}
-            applicationId={application.id.toString()}
-            onSlotsSelected={handleSlotsSelected}
-            onCancel={handleCancelVisitSelection}
-          />
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Sidebar */}
-        <div className="lg:col-span-1 space-y-6">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">Score de compatibilité</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-3xl font-bold">{application.matchScore}%</span>
-                <Badge
-                  variant={
-                    application.matchScore >= 80 ? "success" : application.matchScore >= 60 ? "secondary" : "outline"
-                  }
-                >
-                  {application.matchScore >= 80 ? "Excellent" : application.matchScore >= 60 ? "Bon" : "Moyen"}
-                </Badge>
-              </div>
-              <Progress value={application.matchScore} className="h-2" />
-              <p className="text-xs text-muted-foreground mt-2">
-                Score basé sur les revenus, la stabilité professionnelle et les critères de recherche
+      <div className="container mx-auto py-6 space-y-6">
+        {/* Score et actions */}
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <CircularScore score={matchScore} size="lg" />
+            <div>
+              <h2 className="text-xl font-semibold">Score de compatibilité</h2>
+              <p className="text-sm text-muted-foreground">
+                Basé sur les revenus, la stabilité professionnelle et les garants
               </p>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => router.push(`/owner/messaging?tenant_id=${application.tenant_id}`)}
+            >
+              <MessageSquare className="mr-2 h-4 w-4" />
+              Contacter
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => handleStatusChange("accepted")}
+              disabled={application.status === "accepted"}
+            >
+              <CheckCircle className="mr-2 h-4 w-4" />
+              Accepter
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => handleStatusChange("rejected")}
+              disabled={application.status === "rejected"}
+            >
+              <XCircle className="mr-2 h-4 w-4" />
+              Refuser
+            </Button>
+          </div>
+        </div>
 
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* Informations du candidat */}
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">Informations sur le bien</CardTitle>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <User className="h-5 w-5" />
+                Informations du candidat
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="aspect-video w-full overflow-hidden rounded-md">
-                <img
-                  src={application.property.image || "/placeholder.svg"}
-                  alt={application.property.title}
-                  className="h-full w-full object-cover"
-                />
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Nom complet</label>
+                <p className="text-lg">
+                  {tenant.first_name} {tenant.last_name}
+                </p>
               </div>
               <div>
-                <h3 className="font-semibold">{application.property.title}</h3>
-                <p className="text-sm text-muted-foreground">{application.property.address}</p>
+                <label className="text-sm font-medium text-muted-foreground">Email</label>
+                <p>{tenant.email}</p>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div>
-                  <p className="text-muted-foreground">Loyer</p>
-                  <p className="font-medium">{application.property.price} €/mois</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Charges</p>
-                  <p className="font-medium">{application.property.charges} €/mois</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Dépôt</p>
-                  <p className="font-medium">{application.property.deposit} €</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Surface</p>
-                  <p className="font-medium">{application.property.surface} m²</p>
-                </div>
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Téléphone</label>
+                <p>{tenant.phone || "Non renseigné"}</p>
               </div>
-              <Button variant="outline" size="sm" className="w-full" asChild>
-                <Link href={`/properties/${application.property.id}`}>Voir l'annonce</Link>
-              </Button>
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Date de candidature</label>
+                <p>{formatDate(application.created_at)}</p>
+              </div>
             </CardContent>
           </Card>
 
+          {/* Informations du bien */}
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">Actions</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {application.status === "En cours d'analyse" && (
-                <>
-                  <Button className="w-full" onClick={handleScheduleVisit}>
-                    Proposer une visite
-                  </Button>
-
-                  <Dialog open={refusalDialogOpen} onOpenChange={setRefusalDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button variant="destructive" className="w-full">
-                        Refuser la candidature
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Refuser la candidature</DialogTitle>
-                        <DialogDescription>
-                          Veuillez indiquer la raison du refus. Un message sera envoyé au candidat.
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="grid gap-4 py-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="refusal-reason">Motif du refus</Label>
-                          <Select value={refusalReason} onValueChange={setRefusalReason}>
-                            <SelectTrigger id="refusal-reason">
-                              <SelectValue placeholder="Sélectionnez un motif" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="income">Revenus insuffisants</SelectItem>
-                              <SelectItem value="documents">Documents incomplets</SelectItem>
-                              <SelectItem value="profile">Profil ne correspondant pas aux critères</SelectItem>
-                              <SelectItem value="other">Autre candidature retenue</SelectItem>
-                              <SelectItem value="custom">Autre raison</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="refusal-message">Message (optionnel)</Label>
-                          <Textarea
-                            id="refusal-message"
-                            placeholder="Message personnalisé pour le candidat..."
-                            value={refusalMessage}
-                            onChange={(e) => setRefusalMessage(e.target.value)}
-                          />
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setRefusalDialogOpen(false)}>
-                          Annuler
-                        </Button>
-                        <Button variant="destructive" onClick={handleRefuseApplication} disabled={!refusalReason}>
-                          Confirmer le refus
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </>
-              )}
-
-              {application.status === "Visite programmée" && (
-                <>
-                  <Button className="w-full" onClick={handleAcceptApplication}>
-                    Accepter le dossier
-                  </Button>
-                  <Dialog open={refusalDialogOpen} onOpenChange={setRefusalDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button variant="destructive" className="w-full">
-                        Refuser la candidature
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Refuser la candidature</DialogTitle>
-                        <DialogDescription>
-                          Veuillez indiquer la raison du refus. Un message sera envoyé au candidat.
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="grid gap-4 py-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="refusal-reason">Motif du refus</Label>
-                          <Select value={refusalReason} onValueChange={setRefusalReason}>
-                            <SelectTrigger id="refusal-reason">
-                              <SelectValue placeholder="Sélectionnez un motif" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="income">Revenus insuffisants</SelectItem>
-                              <SelectItem value="documents">Documents incomplets</SelectItem>
-                              <SelectItem value="profile">Profil ne correspondant pas aux critères</SelectItem>
-                              <SelectItem value="other">Autre candidature retenue</SelectItem>
-                              <SelectItem value="visit">Suite à la visite</SelectItem>
-                              <SelectItem value="custom">Autre raison</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="refusal-message">Message (optionnel)</Label>
-                          <Textarea
-                            id="refusal-message"
-                            placeholder="Message personnalisé pour le candidat..."
-                            value={refusalMessage}
-                            onChange={(e) => setRefusalMessage(e.target.value)}
-                          />
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setRefusalDialogOpen(false)}>
-                          Annuler
-                        </Button>
-                        <Button variant="destructive" onClick={handleRefuseApplication} disabled={!refusalReason}>
-                          Confirmer le refus
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </>
-              )}
-
-              {application.status === "Dossier accepté" && (
-                <Button className="w-full" asChild>
-                  <Link href={`/owner/leases/new?application=${application.id}`}>Créer le bail</Link>
-                </Button>
-              )}
-
-              <Button variant="outline" className="w-full">
-                Contacter le candidat
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">Notes</CardTitle>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="h-5 w-5" />
+                Bien concerné
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Textarea
-                placeholder="Ajouter des notes sur ce candidat..."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={4}
-              />
-              <Button size="sm" onClick={handleSaveNotes}>
-                Sauvegarder
-              </Button>
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Titre</label>
+                <p className="text-lg">{property.title}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Adresse</label>
+                <p>{property.address}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Loyer</label>
+                <p>{formatAmount(property.price)}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Type</label>
+                <p>{property.type || "Non spécifié"}</p>
+              </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Main Content */}
-        <div className="lg:col-span-2">
+        {/* Informations professionnelles et financières */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Briefcase className="h-5 w-5" />
+              Situation professionnelle et financière
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-3">
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Profession</label>
+              <p>{mainTenant.profession || application.profession || "Non spécifié"}</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Entreprise</label>
+              <p>{mainTenant.company || application.company || "Non spécifié"}</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Type de contrat</label>
+              <p>{mainTenant.contract_type || application.contract_type || "Non spécifié"}</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Revenus mensuels</label>
+              <p className="text-lg font-semibold text-green-600">{formatAmount(income)}</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Ratio revenus/loyer</label>
+              <p className="text-lg font-semibold">
+                {income && property.price ? `${(income / property.price).toFixed(1)}x` : "N/A"}
+              </p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Garants</label>
+              <Badge variant={hasGuarantor ? "default" : "secondary"}>
+                {hasGuarantor ? "Avec garants" : "Sans garants"}
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Message de candidature */}
+        {(application.message || application.presentation) && (
           <Card>
-            <CardHeader className="pb-2">
-              <div className="flex items-center">
-                <Avatar className="h-10 w-10 mr-3">
-                  <AvatarFallback>
-                    {application.tenant.name
-                      .split(" ")
-                      .map((n) => n[0])
-                      .join("")}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <CardTitle>{application.tenant.name}</CardTitle>
-                  <CardDescription>{application.tenant.age} ans</CardDescription>
-                </div>
-              </div>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Message de candidature
+              </CardTitle>
             </CardHeader>
-
-            <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
-              <div className="px-6">
-                <TabsList className="w-full">
-                  <TabsTrigger value="profile" className="flex-1">
-                    Profil
-                  </TabsTrigger>
-                  <TabsTrigger value="financial" className="flex-1">
-                    Situation financière
-                  </TabsTrigger>
-                  <TabsTrigger value="documents" className="flex-1">
-                    Documents
-                  </TabsTrigger>
-                </TabsList>
-              </div>
-
-              <TabsContent value="profile" className="p-6 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <div>
-                      <h3 className="text-sm font-medium text-muted-foreground mb-2">Coordonnées</h3>
-                      <div className="space-y-2">
-                        <div className="flex items-center">
-                          <Mail className="h-4 w-4 mr-2 text-muted-foreground" />
-                          <span>{application.tenant.email}</span>
-                        </div>
-                        <div className="flex items-center">
-                          <Phone className="h-4 w-4 mr-2 text-muted-foreground" />
-                          <span>{application.tenant.phone}</span>
-                        </div>
-                        <div className="flex items-center">
-                          <Home className="h-4 w-4 mr-2 text-muted-foreground" />
-                          <span>{application.tenant.currentAddress}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h3 className="text-sm font-medium text-muted-foreground mb-2">Situation professionnelle</h3>
-                      <div className="space-y-2">
-                        <div className="flex items-center">
-                          <Briefcase className="h-4 w-4 mr-2 text-muted-foreground" />
-                          <span>{application.tenant.profession}</span>
-                        </div>
-                        <div className="flex items-center">
-                          <Briefcase className="h-4 w-4 mr-2 text-muted-foreground" />
-                          <span>{application.tenant.company}</span>
-                        </div>
-                        <div className="flex items-center">
-                          <FileText className="h-4 w-4 mr-2 text-muted-foreground" />
-                          <span>{application.tenant.contractType}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div>
-                      <h3 className="text-sm font-medium text-muted-foreground mb-2">Projet de location</h3>
-                      <div className="space-y-2">
-                        <div className="flex items-center">
-                          <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
-                          <span>
-                            Emménagement souhaité: {new Date(application.tenant.moveInDate).toLocaleDateString("fr-FR")}
-                          </span>
-                        </div>
-                        <div className="flex items-center">
-                          <Clock className="h-4 w-4 mr-2 text-muted-foreground" />
-                          <span>Durée souhaitée: {application.tenant.duration}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h3 className="text-sm font-medium text-muted-foreground mb-2">Présentation</h3>
-                      <div className="bg-gray-50 p-3 rounded-md">
-                        <p className="text-sm">{application.tenant.presentation}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="financial" className="p-6 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <div>
-                      <h3 className="text-sm font-medium text-muted-foreground mb-2">Revenus</h3>
-                      <div className="space-y-2">
-                        <div className="flex justify-between">
-                          <span>Revenus mensuels</span>
-                          <span className="font-medium">{application.tenant.income} €</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Revenus complémentaires</span>
-                          <span className="font-medium">{application.tenant.additionalIncome} €</span>
-                        </div>
-                        <div className="flex justify-between border-t pt-1">
-                          <span className="font-medium">Total des revenus</span>
-                          <span className="font-medium">{application.tenant.totalIncome} €</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h3 className="text-sm font-medium text-muted-foreground mb-2">Taux d'effort</h3>
-                      <div className="space-y-2">
-                        <div className="flex justify-between">
-                          <span>Loyer charges comprises</span>
-                          <span className="font-medium">
-                            {application.property.price + application.property.charges} €
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Taux d'effort</span>
-                          <span className="font-medium">
-                            {Math.round(
-                              ((application.property.price + application.property.charges) /
-                                application.tenant.totalIncome) *
-                                100,
-                            )}
-                            %
-                          </span>
-                        </div>
-                        <div className="mt-2">
-                          <div className="flex justify-between mb-1">
-                            <span className="text-xs text-muted-foreground">Recommandé: maximum 33%</span>
-                            <span className="text-xs font-medium">
-                              {Math.round(
-                                ((application.property.price + application.property.charges) /
-                                  application.tenant.totalIncome) *
-                                  100,
-                              ) <= 33 ? (
-                                <span className="text-green-600">Bon</span>
-                              ) : (
-                                <span className="text-amber-600">Élevé</span>
-                              )}
-                            </span>
-                          </div>
-                          <Progress
-                            value={Math.round(
-                              ((application.property.price + application.property.charges) /
-                                application.tenant.totalIncome) *
-                                100,
-                            )}
-                            max={50}
-                            className="h-2"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    {application.tenant.hasGuarantor && (
-                      <div>
-                        <h3 className="text-sm font-medium text-muted-foreground mb-2">Garant</h3>
-                        <div className="space-y-2">
-                          <div className="flex justify-between">
-                            <span>Nom</span>
-                            <span className="font-medium">{application.tenant.guarantor.name}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Lien</span>
-                            <span className="font-medium">{application.tenant.guarantor.relationship}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Profession</span>
-                            <span className="font-medium">{application.tenant.guarantor.profession}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Revenus mensuels</span>
-                            <span className="font-medium">{application.tenant.guarantor.income} €</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Ratio revenus/loyer</span>
-                            <span className="font-medium">
-                              {Math.round(
-                                application.tenant.guarantor.income /
-                                  (application.property.price + application.property.charges),
-                              )}
-                              x
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    <div>
-                      <h3 className="text-sm font-medium text-muted-foreground mb-2">Capacité financière</h3>
-                      <div className="space-y-3">
-                        <div className="flex items-center">
-                          {application.tenant.totalIncome >=
-                          (application.property.price + application.property.charges) * 3 ? (
-                            <CheckCircle className="h-4 w-4 text-green-600 mr-2" />
-                          ) : (
-                            <X className="h-4 w-4 text-red-600 mr-2" />
-                          )}
-                          <span>
-                            Revenus ≥ 3x le loyer
-                            {application.tenant.totalIncome >=
-                            (application.property.price + application.property.charges) * 3
-                              ? ""
-                              : ` (${Math.round((application.tenant.totalIncome / (application.property.price + application.property.charges)) * 10) / 10}x)`}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center">
-                          {application.tenant.hasGuarantor ? (
-                            <CheckCircle className="h-4 w-4 text-green-600 mr-2" />
-                          ) : (
-                            <X className="h-4 w-4 text-red-600 mr-2" />
-                          )}
-                          <span>Présence d'un garant</span>
-                        </div>
-
-                        {application.tenant.hasGuarantor && (
-                          <div className="flex items-center">
-                            {application.tenant.guarantor.income >=
-                            (application.property.price + application.property.charges) * 3 ? (
-                              <CheckCircle className="h-4 w-4 text-green-600 mr-2" />
-                            ) : (
-                              <X className="h-4 w-4 text-red-600 mr-2" />
-                            )}
-                            <span>
-                              Revenus du garant ≥ 3x le loyer
-                              {application.tenant.guarantor.income >=
-                              (application.property.price + application.property.charges) * 3
-                                ? ""
-                                : ` (${Math.round((application.tenant.guarantor.income / (application.property.price + application.property.charges)) * 10) / 10}x)`}
-                            </span>
-                          </div>
-                        )}
-
-                        <div className="flex items-center">
-                          {application.tenant.contractType === "CDI" ? (
-                            <CheckCircle className="h-4 w-4 text-green-600 mr-2" />
-                          ) : (
-                            <X className="h-4 w-4 text-red-600 mr-2" />
-                          )}
-                          <span>Contrat stable (CDI)</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="documents" className="p-6 space-y-6">
-                <div className="space-y-4">
-                  <h3 className="text-sm font-medium text-muted-foreground mb-2">Documents fournis</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {application.tenant.documents.map((doc, index) => (
-                      <div key={index} className="flex justify-between items-center p-3 border rounded-md">
-                        <div className="flex items-center">
-                          <FileText className="h-5 w-5 mr-2 text-blue-600" />
-                          <span>{doc.type}</span>
-                        </div>
-                        <div className="flex items-center">
-                          <Badge variant={getDocumentStatusBadgeVariant(doc.status)} className="mr-2">
-                            {doc.status}
-                          </Badge>
-                          {doc.status === "Vérifié" && (
-                            <Button variant="ghost" size="sm">
-                              <Download className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="bg-blue-50 p-4 rounded-md">
-                  <div className="flex items-start">
-                    <CheckCircle className="h-5 w-5 text-blue-600 mr-2 mt-0.5" />
-                    <div>
-                      <h3 className="font-medium text-blue-800">Vérification des documents</h3>
-                      <p className="text-sm text-blue-700">
-                        Tous les documents ont été vérifiés automatiquement par notre système. Les pièces d'identité ont
-                        été contrôlées et les justificatifs de revenus ont été authentifiés.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </TabsContent>
-            </Tabs>
+            <CardContent>
+              <p className="whitespace-pre-wrap">{application.presentation || application.message}</p>
+            </CardContent>
           </Card>
+        )}
+
+        {/* Informations sur les garants */}
+        {rentalFile?.guarantors && rentalFile.guarantors.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5" />
+                Garants
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {rentalFile.guarantors.map((guarantor, index) => (
+                  <div key={index} className="border rounded-lg p-4">
+                    <h4 className="font-medium mb-2">Garant {index + 1}</h4>
+                    <div className="grid gap-2 md:grid-cols-3">
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Nom</label>
+                        <p>
+                          {guarantor.first_name} {guarantor.last_name}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Relation</label>
+                        <p>{guarantor.relationship || "Non spécifié"}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Revenus</label>
+                        <p>{formatAmount(guarantor.income)}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Actions */}
+        <div className="flex justify-center gap-4">
+          {rentalFile && (
+            <Button variant="outline" onClick={() => router.push(`/rental-files/${rentalFile.id}/view`)}>
+              <FileText className="mr-2 h-4 w-4" />
+              Voir le dossier complet
+            </Button>
+          )}
+          <Button onClick={() => router.push(`/owner/leases/new?application=${application.id}`)}>
+            Générer le bail
+          </Button>
         </div>
       </div>
-    </div>
+    </>
   )
 }

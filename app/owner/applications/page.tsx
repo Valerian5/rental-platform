@@ -57,43 +57,7 @@ export default function ApplicationsPage() {
       if (response.ok) {
         const data = await response.json()
         console.log("Applications chargées:", data.applications)
-
-        // Récupérer les données du dossier de location pour chaque candidature
-        const applicationsWithRentalFiles = await Promise.all(
-          (data.applications || []).map(async (app) => {
-            try {
-              if (app.tenant_id) {
-                const rentalFileResponse = await fetch(`/api/rental-files?tenant_id=${app.tenant_id}`)
-                if (rentalFileResponse.ok) {
-                  const rentalFileData = await rentalFileResponse.json()
-                  if (rentalFileData.rental_file) {
-                    // Enrichir l'application avec les données du dossier de location
-                    const mainTenant = rentalFileData.rental_file.main_tenant || {}
-                    const income = mainTenant.income_sources?.work_income?.amount || app.income || 0
-                    const hasGuarantor = rentalFileData.rental_file.guarantors?.length > 0 || app.has_guarantor || false
-                    const profession = mainTenant.profession || app.profession || "Non spécifié"
-                    const contractType = mainTenant.contract_type || app.contract_type || "Non spécifié"
-
-                    return {
-                      ...app,
-                      income,
-                      has_guarantor: hasGuarantor,
-                      profession,
-                      contract_type: contractType,
-                      rental_file_id: rentalFileData.rental_file.id,
-                    }
-                  }
-                }
-              }
-              return app
-            } catch (error) {
-              console.error("Erreur récupération dossier location:", error)
-              return app
-            }
-          }),
-        )
-
-        setApplications(applicationsWithRentalFiles)
+        setApplications(data.applications || [])
       } else {
         console.error("Erreur chargement candidatures:", await response.text())
         toast.error("Erreur lors du chargement des candidatures")
@@ -376,7 +340,7 @@ export default function ApplicationsPage() {
                     profession: application.profession || "Non spécifié",
                     income: application.income || 0,
                     has_guarantor: application.has_guarantor || false,
-                    documents_complete: true, // Valeur par défaut
+                    documents_complete: true,
                     status: application.status || "pending",
                     match_score: matchScore,
                     created_at: application.created_at || new Date().toISOString(),

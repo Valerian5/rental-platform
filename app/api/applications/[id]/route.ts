@@ -1,57 +1,64 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
-import { authService } from "@/lib/auth-service"
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const applicationId = params.id
-    const body = await request.json()
+    const { id } = params
 
-    // Vérifier l'authentification
-    const user = await authService.getCurrentUser()
-    if (!user) {
-      return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
-    }
+    console.log("🔍 Recherche candidature ID:", id)
 
-    // Vérifier que l'utilisateur est bien le propriétaire de cette candidature
-    const { data: application, error: appError } = await supabase
+    // Récupérer la candidature avec les informations du tenant et de la propriété
+    const { data: application, error } = await supabase
       .from("applications")
-      .select("property_id")
-      .eq("id", applicationId)
+      .select(`
+        *,
+        property:properties(*),
+        tenant:users(*)
+      `)
+      .eq("id", id)
       .single()
-
-    if (appError) {
-      return NextResponse.json({ error: "Candidature introuvable" }, { status: 404 })
-    }
-
-    // Vérifier que la propriété appartient bien à l'utilisateur
-    const { data: property, error: propError } = await supabase
-      .from("properties")
-      .select("owner_id")
-      .eq("id", application.property_id)
-      .single()
-
-    if (propError || property.owner_id !== user.id) {
-      return NextResponse.json({ error: "Non autorisé" }, { status: 403 })
-    }
-
-    // Mettre à jour le statut de la candidature
-    const { data, error } = await supabase
-      .from("applications")
-      .update({
-        status: body.status,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", applicationId)
-      .select()
 
     if (error) {
+      console.error("❌ Erreur récupération candidature:", error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ application: data[0] })
+    console.log("✅ Candidature trouvée:", application?.id)
+    return NextResponse.json({ application })
   } catch (error) {
-    console.error("Erreur:", error)
+    console.error("❌ Erreur serveur:", error)
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+  }
+}
+
+export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const { id } = params
+    const body = await request.json()
+    const { status, notes } = body
+
+    console.log("🔄 Mise à jour candidature:", id, "nouveau statut:", status)
+
+    const updateData: any = {
+      status,
+      updated_at: new Date().toISOString(),
+    }
+
+    if (notes) {
+      updateData.notes = notes
+    }
+
+    const { data, error } = await supabase.from("applications").update(updateData).eq("id", id).select().single()
+
+    if (error) {
+      console.error("❌ Erreur mise à jour candidature:", error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    console.log("✅ Candidature mise à jour:", data?.id)
+    return NextResponse.json({ application: data })
+  } catch (error) {
+    console.error("❌ Erreur serveur:", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }
