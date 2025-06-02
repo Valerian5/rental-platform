@@ -134,8 +134,9 @@ export default function PropertyApplicationPage({ params }: { params: { id: stri
     const user = JSON.parse(localStorage.getItem("user") || "{}")
     const rentalFileData = JSON.parse(localStorage.getItem(`rental_file_${user.id}`) || "{}")
 
-    // Utiliser les revenus du dossier de location en priorité
-    const income = rentalFileData.monthly_income || form.income || 0
+    // Utiliser les revenus du travail du dossier de location
+    const workIncome = rentalFileData.main_tenant?.income_sources?.work_income?.amount || 0
+    const income = workIncome || form.income || 0
 
     let score = 0
     const rentRatio = income / property.price
@@ -147,21 +148,14 @@ export default function PropertyApplicationPage({ params }: { params: { id: stri
     else score += 10
 
     // Stabilité professionnelle (20 points)
-    const professionalSituation = rentalFileData.professional_situation || form.contract_type
+    const professionalSituation = rentalFileData.main_tenant?.main_activity || form.contract_type
     if (professionalSituation === "cdi") score += 20
     else if (professionalSituation === "cdd") score += 15
     else score += 10
 
     // Garant (20 points)
-    const hasGuarantor = rentalFileData.has_guarantor || form.has_guarantor
-    const guarantorIncome = rentalFileData.guarantor_income || form.guarantor_income
-
-    if (hasGuarantor && guarantorIncome) {
-      const guarantorRatio = guarantorIncome / property.price
-      if (guarantorRatio >= 3) score += 20
-      else if (guarantorRatio >= 2) score += 15
-      else score += 10
-    }
+    const hasGuarantor = rentalFileData.guarantors?.length > 0 || form.has_guarantor
+    if (hasGuarantor) score += 20
 
     // Documents (15 points)
     const requiredDocs = REQUIRED_DOCUMENTS.filter((doc) => doc.required)
@@ -223,12 +217,19 @@ export default function PropertyApplicationPage({ params }: { params: { id: stri
         owner_id: property.owner_id,
         message: form.message,
         // Utiliser les données du dossier de location en priorité
-        income: rentalFileData.monthly_income || form.income,
-        profession: rentalFileData.profession || form.profession,
-        company: rentalFileData.company || form.company,
-        has_guarantor: rentalFileData.has_guarantor || form.has_guarantor,
+        income: rentalFileData.main_tenant?.income_sources?.work_income?.amount || form.income,
+        profession: rentalFileData.main_tenant?.profession || form.profession,
+        company: rentalFileData.main_tenant?.company || form.company,
+        contract_type: rentalFileData.main_tenant?.main_activity || form.contract_type,
+        has_guarantor: rentalFileData.guarantors?.length > 0 || form.has_guarantor,
         // Autres champs du formulaire
-        ...form,
+        guarantor_name: form.guarantor_name,
+        guarantor_relationship: form.guarantor_relationship,
+        guarantor_profession: form.guarantor_profession,
+        guarantor_income: form.guarantor_income,
+        move_in_date: form.move_in_date,
+        duration_preference: form.duration_preference,
+        presentation: form.presentation,
       }
 
       const response = await fetch("/api/applications", {
@@ -280,9 +281,9 @@ export default function PropertyApplicationPage({ params }: { params: { id: stri
         </Link>
       </Button>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Sidebar - Informations du bien */}
-        <div className="lg:col-span-1 space-y-6">
+        <div className="xl:col-span-1 order-2 xl:order-1 space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Bien concerné</CardTitle>
@@ -346,7 +347,7 @@ export default function PropertyApplicationPage({ params }: { params: { id: stri
         </div>
 
         {/* Formulaire principal */}
-        <div className="lg:col-span-2">
+        <div className="xl:col-span-2 order-1 xl:order-2">
           <form onSubmit={handleSubmit} className="space-y-6">
             <Card>
               <CardHeader>
@@ -369,7 +370,7 @@ export default function PropertyApplicationPage({ params }: { params: { id: stri
                 {/* Situation professionnelle */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Situation professionnelle</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="profession">Profession *</Label>
                       <Input
@@ -430,7 +431,7 @@ export default function PropertyApplicationPage({ params }: { params: { id: stri
                   </div>
 
                   {form.has_guarantor && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 border rounded-lg">
                       <div className="space-y-2">
                         <Label htmlFor="guarantor_name">Nom du garant *</Label>
                         <Input
@@ -483,7 +484,7 @@ export default function PropertyApplicationPage({ params }: { params: { id: stri
                 {/* Projet de location */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Projet de location</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="move_in_date">Date d'emménagement souhaitée *</Label>
                       <Input

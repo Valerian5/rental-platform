@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input"
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -28,7 +28,8 @@ import { RentalFileViewer } from "@/components/rental-file/rental-file-viewer"
 import { toast } from "sonner"
 import Link from "next/link"
 import { CompletionDiagnostic } from "@/components/rental-file/completion-diagnostic"
-import { ProfessionalInfoForm } from "@/components/rental-file/professional-info-form"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 
 export default function RentalFilePage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
@@ -367,8 +368,46 @@ export default function RentalFilePage() {
               </CardContent>
             </Card>
 
-            {/* Ajouter le formulaire d'informations professionnelles */}
-            <ProfessionalInfoForm data={rentalFile} onUpdate={(data) => handleUpdateData(data)} />
+            {/* Message de présentation */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Message de présentation</CardTitle>
+                <CardDescription>
+                  Présentez-vous aux propriétaires pour vous démarquer des autres candidats
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="presentation_message">Votre message de présentation *</Label>
+                  <Textarea
+                    id="presentation_message"
+                    placeholder="Présentez-vous en quelques lignes : qui vous êtes, votre situation, pourquoi vous cherchez un logement, vos qualités en tant que locataire..."
+                    rows={4}
+                    value={rentalFile?.presentation_message || ""}
+                    onChange={(e) => handleUpdateData({ presentation_message: e.target.value })}
+                    className="resize-none"
+                  />
+                  <div className="flex justify-between items-center">
+                    <p className="text-sm text-gray-500">
+                      Ce message sera visible par les propriétaires. Soyez authentique et rassurant.
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {(rentalFile?.presentation_message || "").length}/500 caractères
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <h4 className="font-medium text-blue-800 mb-2">Conseils pour un bon message :</h4>
+                  <ul className="text-sm text-blue-700 space-y-1">
+                    <li>• Présentez votre situation professionnelle et personnelle</li>
+                    <li>• Expliquez pourquoi vous cherchez ce logement</li>
+                    <li>• Mettez en avant vos qualités de locataire</li>
+                    <li>• Restez authentique et professionnel</li>
+                  </ul>
+                </div>
+              </CardContent>
+            </Card>
 
             <CompletionDiagnostic rentalFile={rentalFile} />
 

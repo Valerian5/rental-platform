@@ -399,6 +399,27 @@ export function CompletePersonProfile({
 
               {selectedActivity && (
                 <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="profession">Profession</Label>
+                      <Input
+                        id="profession"
+                        placeholder="Ex: Ingénieur informatique, Professeur..."
+                        value={profile.profession || ""}
+                        onChange={(e) => onUpdate({ ...profile, profession: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="company">Entreprise/Employeur</Label>
+                      <Input
+                        id="company"
+                        placeholder="Nom de votre entreprise"
+                        value={profile.company || ""}
+                        onChange={(e) => onUpdate({ ...profile, company: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
                   <div className="bg-blue-50 p-4 rounded-lg">
                     <h4 className="font-medium text-blue-800 mb-2">Documents requis pour {selectedActivity.label} :</h4>
                     <ul className="text-sm text-blue-700 space-y-1">

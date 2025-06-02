@@ -18,8 +18,10 @@ export interface TenantInfo {
     avis_taxe_fonciere?: string
   }
 
-  // Activité principale
+  // Activité principale (avec profession et entreprise ajoutées)
   main_activity: "cdi" | "cdd" | "fonction_publique" | "independant" | "retraite" | "chomage" | "etudes" | "alternance"
+  profession?: string // Ajouté ici
+  company?: string // Ajouté ici
   activity_documents: string[] // Documents spécifiques à l'activité
 
   // Revenus détaillés
@@ -92,13 +94,12 @@ export interface RentalFileData {
   // Étape 1: Locataire principal
   main_tenant: TenantInfo
 
-  // Étape 2: Colocataires (selon situation)
+  // Étape 2: Colocataires (selon situation) + Message de présentation
   rental_situation: "alone" | "couple" | "colocation"
   cotenants: TenantInfo[]
+  presentation_message?: string // Ajouté ici
 
-  // Étape 3: Logement actuel (déjà géré dans current_housing_situation de chaque personne)
-
-  // Étape 4: Garants
+  // Étape 3: Garants
   guarantors: GuarantorInfo[]
 
   // Métadonnées
@@ -121,7 +122,6 @@ export interface RentalFile {
   has_guarantor?: boolean
   professional_situation?: string
   contract_type?: string
-  employment_start_date?: string
   guarantor_profession?: string
   created_at: string
   updated_at: string
@@ -314,15 +314,39 @@ export const rentalFileService = {
     }
   },
 
-  checkCompatibility(rentalFile: RentalFile, property: any, currentIncome?: number): CompatibilityResult {
+  // Nouvelle fonction pour récupérer le dossier de location complet
+  async getRentalFileData(tenantId: string): Promise<RentalFileData | null> {
+    console.log("📋 RentalFileService.getRentalFileData", tenantId)
+
+    try {
+      const { data, error } = await supabase.from("rental_file_data").select("*").eq("tenant_id", tenantId).single()
+
+      if (error) {
+        if (error.code === "PGRST116") {
+          return null
+        }
+        console.error("❌ Erreur récupération dossier complet:", error)
+        throw new Error(error.message)
+      }
+
+      console.log("✅ Dossier complet récupéré")
+      return data as RentalFileData
+    } catch (error) {
+      console.error("❌ Erreur dans getRentalFileData:", error)
+      return null
+    }
+  },
+
+  checkCompatibility(rentalFileData: RentalFileData | null, property: any): CompatibilityResult {
     console.log("🔍 Vérification compatibilité dossier avec critères propriétaire")
 
     const warnings: string[] = []
     const recommendations: string[] = []
     let score = 100
 
-    // Utiliser les revenus du dossier de location en priorité
-    const income = rentalFile.monthly_income || currentIncome || 0
+    // Utiliser les revenus du travail du dossier de location complet
+    const workIncome = rentalFileData?.main_tenant?.income_sources?.work_income?.amount || 0
+    const totalIncome = this.calculateTotalIncome(rentalFileData?.main_tenant?.income_sources || {})
     const rent = property.price || 0
 
     // Détails des vérifications
@@ -334,47 +358,51 @@ export const rentalFileService = {
     }
 
     // 1. Vérification des revenus selon les critères du propriétaire
-    if (property.min_income_required && income > 0) {
-      if (income >= property.min_income_required) {
+    if (property.min_income_required && totalIncome > 0) {
+      if (totalIncome >= property.min_income_required) {
         details.income_check.passed = true
-        details.income_check.message = `Revenus suffisants (${income}€ ≥ ${property.min_income_required}€ requis)`
+        details.income_check.message = `Revenus suffisants (${totalIncome}€ ≥ ${property.min_income_required}€ requis)`
       } else {
         score -= 40
-        details.income_check.message = `Revenus insuffisants (${income}€ < ${property.min_income_required}€ requis)`
-        warnings.push(`Revenus insuffisants : ${income}€ (minimum requis : ${property.min_income_required}€)`)
+        details.income_check.message = `Revenus insuffisants (${totalIncome}€ < ${property.min_income_required}€ requis)`
+        warnings.push(`Revenus insuffisants : ${totalIncome}€ (minimum requis : ${property.min_income_required}€)`)
 
         // Vérifier si un garant peut compenser
-        if (rentalFile.has_guarantor && rentalFile.guarantor_income) {
-          const totalIncome = income + rentalFile.guarantor_income
-          if (totalIncome >= property.min_income_required) {
-            score += 20
-            details.income_check.passed = true
-            details.income_check.message += ` - Compensé par le garant (total: ${totalIncome}€)`
-            recommendations.push("Votre garant compense l'insuffisance de revenus")
+        if (rentalFileData?.guarantors && rentalFileData.guarantors.length > 0) {
+          const guarantor = rentalFileData.guarantors[0]
+          if (guarantor.type === "physical" && guarantor.personal_info?.income_sources?.work_income?.amount) {
+            const guarantorIncome = this.calculateTotalIncome(guarantor.personal_info.income_sources)
+            const totalWithGuarantor = totalIncome + guarantorIncome
+            if (totalWithGuarantor >= property.min_income_required) {
+              score += 20
+              details.income_check.passed = true
+              details.income_check.message += ` - Compensé par le garant (total: ${totalWithGuarantor}€)`
+              recommendations.push("Votre garant compense l'insuffisance de revenus")
+            }
           }
         }
       }
-    } else if (property.income_multiplier && rent > 0 && income > 0) {
+    } else if (property.income_multiplier && rent > 0 && totalIncome > 0) {
       // Utiliser le multiplicateur de revenus (par défaut 3x le loyer)
       const requiredIncome = rent * property.income_multiplier
-      if (income >= requiredIncome) {
+      if (totalIncome >= requiredIncome) {
         details.income_check.passed = true
-        details.income_check.message = `Revenus suffisants (${income}€ ≥ ${requiredIncome}€ requis, soit ${property.income_multiplier}x le loyer)`
+        details.income_check.message = `Revenus suffisants (${totalIncome}€ ≥ ${requiredIncome}€ requis, soit ${property.income_multiplier}x le loyer)`
       } else {
         score -= 30
-        details.income_check.message = `Revenus insuffisants (${income}€ < ${requiredIncome}€ requis, soit ${property.income_multiplier}x le loyer)`
+        details.income_check.message = `Revenus insuffisants (${totalIncome}€ < ${requiredIncome}€ requis, soit ${property.income_multiplier}x le loyer)`
         warnings.push(
-          `Revenus insuffisants : ${income}€ (requis : ${property.income_multiplier}x le loyer = ${requiredIncome}€)`,
+          `Revenus insuffisants : ${totalIncome}€ (requis : ${property.income_multiplier}x le loyer = ${requiredIncome}€)`,
         )
       }
-    } else if (income === 0) {
+    } else if (totalIncome === 0) {
       score -= 30
       details.income_check.message = "Revenus non renseignés dans votre dossier de location"
       warnings.push("Revenus non renseignés dans votre dossier de location")
       recommendations.push("Complétez vos revenus dans votre dossier de location")
     } else {
       // Pas de critères spécifiques, utiliser la règle générale des 33%
-      const ratio = (rent / income) * 100
+      const ratio = (rent / totalIncome) * 100
       if (ratio <= 33) {
         details.income_check.passed = true
         details.income_check.message = `Ratio loyer/revenus acceptable (${ratio.toFixed(1)}%)`
@@ -387,7 +415,7 @@ export const rentalFileService = {
 
     // 2. Vérification de la situation professionnelle
     if (property.accepted_professional_situations && property.accepted_professional_situations.length > 0) {
-      const tenantSituation = rentalFile.professional_situation
+      const tenantSituation = rentalFileData?.main_tenant?.main_activity
       if (tenantSituation && property.accepted_professional_situations.includes(tenantSituation)) {
         details.professional_situation_check.passed = true
         details.professional_situation_check.message = `Situation professionnelle acceptée (${tenantSituation})`
@@ -405,9 +433,9 @@ export const rentalFileService = {
       }
     } else {
       // Vérification basique si pas de critères spécifiques
-      if (rentalFile.profession) {
+      if (rentalFileData?.main_tenant?.profession) {
         details.professional_situation_check.passed = true
-        details.professional_situation_check.message = `Profession renseignée (${rentalFile.profession})`
+        details.professional_situation_check.message = `Profession renseignée (${rentalFileData.main_tenant.profession})`
       } else {
         score -= 10
         details.professional_situation_check.message = "Profession non renseignée"
@@ -418,24 +446,24 @@ export const rentalFileService = {
 
     // 3. Vérification du garant
     if (property.guarantor_required) {
-      if (rentalFile.has_guarantor) {
-        if (property.min_guarantor_income && rentalFile.guarantor_income) {
-          if (rentalFile.guarantor_income >= property.min_guarantor_income) {
+      if (rentalFileData?.guarantors && rentalFileData.guarantors.length > 0) {
+        const guarantor = rentalFileData.guarantors[0]
+        if (guarantor.type === "physical" && guarantor.personal_info) {
+          const guarantorIncome = this.calculateTotalIncome(guarantor.personal_info.income_sources || {})
+          if (property.min_guarantor_income && guarantorIncome >= property.min_guarantor_income) {
             details.guarantor_check.passed = true
-            details.guarantor_check.message = `Garant avec revenus suffisants (${rentalFile.guarantor_income}€ ≥ ${property.min_guarantor_income}€ requis)`
+            details.guarantor_check.message = `Garant avec revenus suffisants (${guarantorIncome}€ ≥ ${property.min_guarantor_income}€ requis)`
+          } else if (guarantorIncome > 0) {
+            details.guarantor_check.passed = true
+            details.guarantor_check.message = "Garant présent avec revenus"
           } else {
-            score -= 15
-            details.guarantor_check.message = `Garant avec revenus insuffisants (${rentalFile.guarantor_income}€ < ${property.min_guarantor_income}€ requis)`
-            warnings.push(
-              `Revenus du garant insuffisants : ${rentalFile.guarantor_income}€ (minimum requis : ${property.min_guarantor_income}€)`,
-            )
+            score -= 10
+            details.guarantor_check.message = "Garant présent mais revenus non renseignés"
+            recommendations.push("Complétez les revenus de votre garant")
           }
         } else {
           details.guarantor_check.passed = true
-          details.guarantor_check.message = "Garant présent (revenus à vérifier)"
-          if (!rentalFile.guarantor_income) {
-            recommendations.push("Précisez les revenus de votre garant")
-          }
+          details.guarantor_check.message = "Garant présent (organisme ou personne morale)"
         }
       } else {
         score -= 25
@@ -445,7 +473,7 @@ export const rentalFileService = {
       }
     } else {
       // Garant non requis mais peut être un plus
-      if (rentalFile.has_guarantor) {
+      if (rentalFileData?.guarantors && rentalFileData.guarantors.length > 0) {
         score += 10
         details.guarantor_check.passed = true
         details.guarantor_check.message = "Garant présent (bonus)"
@@ -457,7 +485,7 @@ export const rentalFileService = {
     }
 
     // 4. Vérification du message de présentation
-    if (!rentalFile.presentation_message || rentalFile.presentation_message.length < 50) {
+    if (!rentalFileData?.presentation_message || rentalFileData.presentation_message.length < 50) {
       score -= 10
       details.documents_check.message = "Message de présentation incomplet"
       warnings.push("Message de présentation incomplet")
@@ -531,6 +559,33 @@ export const rentalFileService = {
       return data as RentalFile
     } catch (error) {
       console.error("❌ Erreur dans updateRentalFile:", error)
+      throw error
+    }
+  },
+
+  async updateRentalFileData(tenantId: string, updates: Partial<RentalFileData>): Promise<RentalFileData> {
+    console.log("📋 RentalFileService.updateRentalFileData")
+
+    try {
+      const { data, error } = await supabase
+        .from("rental_file_data")
+        .upsert({
+          tenant_id: tenantId,
+          ...updates,
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single()
+
+      if (error) {
+        console.error("❌ Erreur mise à jour dossier complet:", error)
+        throw new Error(error.message)
+      }
+
+      console.log("✅ Dossier complet mis à jour")
+      return data as RentalFileData
+    } catch (error) {
+      console.error("❌ Erreur dans updateRentalFileData:", error)
       throw error
     }
   },
@@ -650,6 +705,21 @@ export const rentalFileService = {
       description: "Votre activité professionnelle principale",
     })
 
+    // Profession et entreprise (optionnelles mais recommandées)
+    optional.push({
+      category: "Activité professionnelle",
+      item: "Profession",
+      completed: !!tenant.profession,
+      description: "Votre profession exacte",
+    })
+
+    optional.push({
+      category: "Activité professionnelle",
+      item: "Entreprise",
+      completed: !!tenant.company,
+      description: "Nom de votre entreprise",
+    })
+
     required.push({
       category: "Activité professionnelle",
       item: "Justificatifs d'activité",
@@ -739,6 +809,14 @@ export const rentalFileService = {
       item: "Type de location",
       completed: !!fileData.rental_situation,
       description: "Seul, en couple ou en colocation",
+    })
+
+    // Message de présentation (optionnel mais recommandé)
+    optional.push({
+      category: "Présentation",
+      item: "Message de présentation",
+      completed: !!(fileData.presentation_message && fileData.presentation_message.length >= 50),
+      description: "Message de présentation pour les propriétaires",
     })
 
     // Colocataires (si applicable)
@@ -855,6 +933,8 @@ export const rentalFileService = {
       current_housing_situation: "locataire",
       current_housing_documents: {},
       main_activity: "cdi",
+      profession: "", // Ajouté
+      company: "", // Ajouté
       activity_documents: [],
       income_sources: {},
       tax_situation: {
@@ -920,6 +1000,27 @@ export const rentalFileService = {
       validation_score: 0,
     }
 
-    return this.updateRentalFile(tenantId, initialData)
+    return this.updateRentalFileData(tenantId, initialData)
+  },
+
+  // Convertir les données du dossier complet vers le format simple pour les candidatures
+  convertToSimpleFormat(fileData: RentalFileData): Partial<RentalFile> {
+    const totalIncome = this.calculateTotalIncome(fileData.main_tenant?.income_sources || {})
+
+    return {
+      tenant_id: fileData.tenant_id,
+      monthly_income: totalIncome,
+      profession: fileData.main_tenant?.profession,
+      company: fileData.main_tenant?.company,
+      presentation_message: fileData.presentation_message,
+      professional_situation: fileData.main_tenant?.main_activity,
+      has_guarantor: !!(fileData.guarantors && fileData.guarantors.length > 0),
+      guarantor_income:
+        fileData.guarantors?.[0]?.type === "physical"
+          ? this.calculateTotalIncome(fileData.guarantors[0].personal_info?.income_sources || {})
+          : undefined,
+      guarantor_profession:
+        fileData.guarantors?.[0]?.type === "physical" ? fileData.guarantors[0].personal_info?.profession : undefined,
+    }
   },
 }
