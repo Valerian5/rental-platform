@@ -57,7 +57,43 @@ export default function ApplicationsPage() {
       if (response.ok) {
         const data = await response.json()
         console.log("Applications chargées:", data.applications)
-        setApplications(data.applications || [])
+
+        // Récupérer les données du dossier de location pour chaque candidature
+        const applicationsWithRentalFiles = await Promise.all(
+          (data.applications || []).map(async (app) => {
+            try {
+              if (app.tenant_id) {
+                const rentalFileResponse = await fetch(`/api/rental-files?tenant_id=${app.tenant_id}`)
+                if (rentalFileResponse.ok) {
+                  const rentalFileData = await rentalFileResponse.json()
+                  if (rentalFileData.rental_file) {
+                    // Enrichir l'application avec les données du dossier de location
+                    const mainTenant = rentalFileData.rental_file.main_tenant || {}
+                    const income = mainTenant.income_sources?.work_income?.amount || app.income || 0
+                    const hasGuarantor = rentalFileData.rental_file.guarantors?.length > 0 || app.has_guarantor || false
+                    const profession = mainTenant.profession || app.profession || "Non spécifié"
+                    const contractType = mainTenant.contract_type || app.contract_type || "Non spécifié"
+
+                    return {
+                      ...app,
+                      income,
+                      has_guarantor: hasGuarantor,
+                      profession,
+                      contract_type: contractType,
+                      rental_file_id: rentalFileData.rental_file.id,
+                    }
+                  }
+                }
+              }
+              return app
+            } catch (error) {
+              console.error("Erreur récupération dossier location:", error)
+              return app
+            }
+          }),
+        )
+
+        setApplications(applicationsWithRentalFiles)
       } else {
         console.error("Erreur chargement candidatures:", await response.text())
         toast.error("Erreur lors du chargement des candidatures")
@@ -70,19 +106,41 @@ export default function ApplicationsPage() {
 
   const getFilteredApplications = () => {
     if (activeTab === "all") return applications
-    return applications.filter((app) => app.status === activeTab)
+
+    // Mapper les statuts de l'interface vers les statuts en base de données
+    const statusMap = {
+      pending: ["pending", "analyzing", "visit_scheduled", "waiting_tenant_confirmation"],
+      accepted: ["accepted", "approved"],
+      rejected: ["rejected"],
+    }
+
+    return applications.filter((app) => {
+      const status = app.status || "pending"
+      return statusMap[activeTab]?.includes(status)
+    })
   }
 
   const handleApplicationAction = async (action, applicationId) => {
     console.log("Action:", action, "pour candidature:", applicationId)
 
+    const application = applications.find((app) => app.id === applicationId)
+    if (!application) {
+      toast.error("Candidature introuvable")
+      return
+    }
+
     switch (action) {
       case "view_details":
-        router.push(`/owner/applications/${applicationId}`)
+        // Rediriger vers la visionneuse de dossier PDF
+        if (application.rental_file_id) {
+          router.push(`/rental-files/${application.rental_file_id}/view`)
+        } else {
+          toast.error("Dossier de location non disponible")
+        }
         break
       case "analyze":
-        // Logique d'analyse
-        toast.info("Analyse en cours...")
+        // Rediriger vers la page de détails de la candidature
+        router.push(`/owner/applications/${applicationId}`)
         break
       case "accept":
         await handleStatusChange(applicationId, "accepted")
@@ -91,8 +149,12 @@ export default function ApplicationsPage() {
         await handleStatusChange(applicationId, "rejected")
         break
       case "contact":
-        // Logique de contact
-        toast.info("Ouverture de la messagerie...")
+        // Rediriger vers la messagerie avec ce locataire
+        if (application.tenant_id) {
+          router.push(`/owner/messaging?tenant_id=${application.tenant_id}`)
+        } else {
+          toast.error("Impossible de contacter ce locataire")
+        }
         break
       case "generate_lease":
         router.push(`/owner/leases/new?application=${applicationId}`)
@@ -168,6 +230,68 @@ export default function ApplicationsPage() {
     if (application.profession && application.company) score += 10
 
     return Math.min(score, 100)
+  }
+
+  const getStatusConfig = (status) => {
+    switch (status) {
+      case "pending":
+        return {
+          label: "Nouveau",
+          color: "text-blue-600",
+          bgColor: "bg-blue-50",
+          message: "Analysez le dossier et proposez une visite ou refusez la candidature.",
+          actions: ["analyze", "refuse", "contact"],
+        }
+      case "analyzing":
+        return {
+          label: "En cours d'analyse",
+          color: "text-orange-600",
+          bgColor: "bg-orange-50",
+          message: "Complétez l'analyse du dossier pour prendre une décision.",
+          actions: ["accept", "contact"],
+        }
+      case "visit_scheduled":
+        return {
+          label: "Visite programée",
+          color: "text-purple-600",
+          bgColor: "bg-purple-50",
+          message: "Une visite est programmée. Vous pourrez accepter ou refuser après la visite.",
+          actions: ["accept", "refuse", "contact"],
+        }
+      case "waiting_tenant_confirmation":
+        return {
+          label: "En attente d'acceptation",
+          color: "text-yellow-600",
+          bgColor: "bg-yellow-50",
+          message: "Le locataire doit confirmer son choix pour cet appartement.",
+          actions: ["contact"],
+        }
+      case "accepted":
+      case "approved":
+        return {
+          label: "Candidature acceptée",
+          color: "text-green-600",
+          bgColor: "bg-green-50",
+          message: "La candidature a été acceptée. Vous pouvez maintenant générer le bail.",
+          actions: ["generate_lease", "contact"],
+        }
+      case "rejected":
+        return {
+          label: "Dossier refusé",
+          color: "text-red-600",
+          bgColor: "bg-red-50",
+          message: "Cette candidature a été refusée.",
+          actions: ["contact"],
+        }
+      default:
+        return {
+          label: status,
+          color: "text-gray-600",
+          bgColor: "bg-gray-50",
+          message: "",
+          actions: ["contact"],
+        }
+    }
   }
 
   if (loading) {

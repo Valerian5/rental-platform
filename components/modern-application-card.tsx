@@ -72,6 +72,7 @@ export function ModernApplicationCard({ application, isSelected, onSelect, onAct
           actions: ["contact"],
         }
       case "accepted":
+      case "approved":
         return {
           label: "Candidature acceptée",
           color: "text-green-600",
@@ -112,7 +113,7 @@ export function ModernApplicationCard({ application, isSelected, onSelect, onAct
           className="text-gray-600 border-gray-300"
         >
           <Eye className="h-4 w-4 mr-1" />
-          Voir détails
+          Voir dossier
         </Button>
 
         {actions.includes("analyze") && (
@@ -156,6 +157,14 @@ export function ModernApplicationCard({ application, isSelected, onSelect, onAct
     )
   }
 
+  // Formater le montant du revenu
+  const formatIncome = (amount: number) => {
+    if (!amount) return "Non spécifié"
+    return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(
+      amount,
+    )
+  }
+
   return (
     <div
       className={`
@@ -190,7 +199,7 @@ export function ModernApplicationCard({ application, isSelected, onSelect, onAct
 
               {/* Financial info */}
               <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
-                <span className="font-medium">{application.income.toLocaleString()}€/mois</span>
+                <span className="font-medium">{formatIncome(application.income)}</span>
                 <span className={application.has_guarantor ? "text-green-600" : "text-gray-500"}>
                   {application.has_guarantor ? "Avec garants" : "Sans garants"}
                 </span>
