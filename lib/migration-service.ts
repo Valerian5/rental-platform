@@ -13,15 +13,12 @@ export class MigrationService {
     try {
       console.log("🔍 Analyse des URLs blob...")
 
-      // Analyser les deux tables
-      const { data: rentalFiles, error: error1 } = await supabase.from("rental_files").select("*")
-      const { data: rentalFileData, error: error2 } = await supabase.from("rental_file_data").select("*")
+      // Analyser uniquement la table rental_files
+      const { data: rentalFiles, error } = await supabase.from("rental_files").select("*")
 
-      if (error1) {
-        console.error("❌ Erreur rental_files:", error1)
-      }
-      if (error2) {
-        console.error("❌ Erreur rental_file_data:", error2)
+      if (error) {
+        console.error("❌ Erreur rental_files:", error)
+        throw error
       }
 
       const allUrls: string[] = []
@@ -51,12 +48,6 @@ export class MigrationService {
       console.log("📋 Analyse de rental_files:", rentalFiles?.length || 0, "entrées")
       for (const file of rentalFiles || []) {
         extractUrls(file, `rental_files.${file.id}`)
-      }
-
-      // Analyser rental_file_data
-      console.log("📋 Analyse de rental_file_data:", rentalFileData?.length || 0, "entrées")
-      for (const file of rentalFileData || []) {
-        extractUrls(file, `rental_file_data.${file.id}`)
       }
 
       console.log("📊 Analyse terminée:", {
@@ -90,104 +81,55 @@ export class MigrationService {
       let filesUpdated = 0
       let urlsReplaced = 0
 
-      // Traiter rental_files
-      const { data: rentalFiles, error: error1 } = await supabase.from("rental_files").select("*")
-      if (error1) {
-        console.error("❌ Erreur récupération rental_files:", error1)
-      } else {
-        for (const file of rentalFiles || []) {
-          let hasChanges = false
-          const updatedFile = JSON.parse(JSON.stringify(file))
+      // Traiter uniquement rental_files
+      const { data: rentalFiles, error } = await supabase.from("rental_files").select("*")
 
-          const replaceUrls = (obj: any): any => {
-            if (!obj) return obj
-
-            if (typeof obj === "string" && obj.includes("blob:")) {
-              urlsReplaced++
-              hasChanges = true
-              console.log("🔄 Remplacement URL blob:", obj)
-              return "DOCUMENT_MIGRE_PLACEHOLDER"
-            } else if (Array.isArray(obj)) {
-              return obj.map((item) => replaceUrls(item))
-            } else if (typeof obj === "object") {
-              const newObj = {}
-              Object.keys(obj).forEach((key) => {
-                newObj[key] = replaceUrls(obj[key])
-              })
-              return newObj
-            }
-
-            return obj
-          }
-
-          // Remplacer dans tous les champs
-          Object.keys(updatedFile).forEach((key) => {
-            if (key !== "id" && key !== "created_at" && key !== "updated_at") {
-              updatedFile[key] = replaceUrls(updatedFile[key])
-            }
-          })
-
-          // Mettre à jour si des changements ont été faits
-          if (hasChanges) {
-            const { error: updateError } = await supabase.from("rental_files").update(updatedFile).eq("id", file.id)
-
-            if (updateError) {
-              console.error("❌ Erreur mise à jour rental_files:", updateError)
-            } else {
-              filesUpdated++
-              console.log("✅ rental_files mis à jour:", file.id)
-            }
-          }
-        }
+      if (error) {
+        console.error("❌ Erreur récupération rental_files:", error)
+        throw error
       }
 
-      // Traiter rental_file_data
-      const { data: rentalFileData, error: error2 } = await supabase.from("rental_file_data").select("*")
-      if (error2) {
-        console.error("❌ Erreur récupération rental_file_data:", error2)
-      } else {
-        for (const file of rentalFileData || []) {
-          let hasChanges = false
-          const updatedFile = JSON.parse(JSON.stringify(file))
+      for (const file of rentalFiles || []) {
+        let hasChanges = false
+        const updatedFile = JSON.parse(JSON.stringify(file))
 
-          const replaceUrls = (obj: any): any => {
-            if (!obj) return obj
+        const replaceUrls = (obj: any): any => {
+          if (!obj) return obj
 
-            if (typeof obj === "string" && obj.includes("blob:")) {
-              urlsReplaced++
-              hasChanges = true
-              console.log("🔄 Remplacement URL blob:", obj)
-              return "DOCUMENT_MIGRE_PLACEHOLDER"
-            } else if (Array.isArray(obj)) {
-              return obj.map((item) => replaceUrls(item))
-            } else if (typeof obj === "object") {
-              const newObj = {}
-              Object.keys(obj).forEach((key) => {
-                newObj[key] = replaceUrls(obj[key])
-              })
-              return newObj
-            }
-
-            return obj
+          if (typeof obj === "string" && obj.includes("blob:")) {
+            urlsReplaced++
+            hasChanges = true
+            console.log("🔄 Remplacement URL blob:", obj)
+            return "DOCUMENT_MIGRE_PLACEHOLDER"
+          } else if (Array.isArray(obj)) {
+            return obj.map((item) => replaceUrls(item))
+          } else if (typeof obj === "object") {
+            const newObj = {}
+            Object.keys(obj).forEach((key) => {
+              newObj[key] = replaceUrls(obj[key])
+            })
+            return newObj
           }
 
-          // Remplacer dans tous les champs
-          Object.keys(updatedFile).forEach((key) => {
-            if (key !== "id" && key !== "created_at" && key !== "updated_at") {
-              updatedFile[key] = replaceUrls(updatedFile[key])
-            }
-          })
+          return obj
+        }
 
-          // Mettre à jour si des changements ont été faits
-          if (hasChanges) {
-            const { error: updateError } = await supabase.from("rental_file_data").update(updatedFile).eq("id", file.id)
+        // Remplacer dans tous les champs
+        Object.keys(updatedFile).forEach((key) => {
+          if (key !== "id" && key !== "created_at" && key !== "updated_at") {
+            updatedFile[key] = replaceUrls(updatedFile[key])
+          }
+        })
 
-            if (updateError) {
-              console.error("❌ Erreur mise à jour rental_file_data:", updateError)
-            } else {
-              filesUpdated++
-              console.log("✅ rental_file_data mis à jour:", file.id)
-            }
+        // Mettre à jour si des changements ont été faits
+        if (hasChanges) {
+          const { error: updateError } = await supabase.from("rental_files").update(updatedFile).eq("id", file.id)
+
+          if (updateError) {
+            console.error("❌ Erreur mise à jour rental_files:", updateError)
+          } else {
+            filesUpdated++
+            console.log("✅ rental_files mis à jour:", file.id)
           }
         }
       }
@@ -237,20 +179,12 @@ export class MigrationService {
     try {
       console.log("🧹 Nettoyage du dossier pour tenant:", tenantId)
 
-      // Supprimer de rental_file_data
-      const { error: error1 } = await supabase.from("rental_file_data").delete().eq("tenant_id", tenantId)
+      // Supprimer uniquement de rental_files
+      const { error } = await supabase.from("rental_files").delete().eq("tenant_id", tenantId)
 
-      if (error1) {
-        console.error("❌ Erreur suppression rental_file_data:", error1)
-      } else {
-        console.log("✅ rental_file_data nettoyé")
-      }
-
-      // Supprimer de rental_files
-      const { error: error2 } = await supabase.from("rental_files").delete().eq("tenant_id", tenantId)
-
-      if (error2) {
-        console.error("❌ Erreur suppression rental_files:", error2)
+      if (error) {
+        console.error("❌ Erreur suppression rental_files:", error)
+        throw error
       } else {
         console.log("✅ rental_files nettoyé")
       }
