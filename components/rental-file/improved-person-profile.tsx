@@ -99,6 +99,13 @@ export function ImprovedPersonProfile({
   }
 
   const handleFileUpload = async (category: string, urls: string[]) => {
+    console.log("📁 Upload reçu:", { category, urls, count: urls.length })
+
+    if (!urls || urls.length === 0) {
+      toast.error("Aucun fichier reçu")
+      return
+    }
+
     const updatedProfile = { ...profile }
 
     // Gestion des différents types de documents
@@ -118,6 +125,7 @@ export function ImprovedPersonProfile({
       ]
     }
 
+    console.log("📁 Profil mis à jour:", updatedProfile)
     onUpdate(updatedProfile)
     toast.success(`${urls.length} document(s) ajouté(s) avec succès`)
   }
