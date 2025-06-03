@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { X, Upload, File, Check } from "lucide-react"
-import { BlobStorageService } from "@/lib/blob-storage-service"
 
 interface FileUploadProps {
   onFilesUploaded: (urls: string[]) => void
@@ -48,61 +47,88 @@ export function FileUpload({
     setUploadedFiles((prev) => [...prev, ...newFiles].slice(0, maxFiles))
   }
 
-  const uploadFiles = async () => {
-    const filesToUpload = uploadedFiles.filter((f) => !f.url && !f.uploading)
-
-    for (let i = 0; i < filesToUpload.length; i++) {
-      const fileData = filesToUpload[i]
-      const fileIndex = uploadedFiles.findIndex((f) => f.file === fileData.file)
-
+  const uploadFile = async (fileData: UploadedFile, fileIndex: number) => {
+    try {
       // Marquer comme en cours d'upload
-      setUploadedFiles((prev) => prev.map((f, idx) => (idx === fileIndex ? { ...f, uploading: true, progress: 0 } : f)))
+      setUploadedFiles((prev) =>
+        prev.map((f, idx) => (idx === fileIndex ? { ...f, uploading: true, progress: 10 } : f)),
+      )
 
-      try {
-        // Simuler le progrès
-        for (let progress = 0; progress <= 90; progress += 10) {
-          setUploadedFiles((prev) => prev.map((f, idx) => (idx === fileIndex ? { ...f, progress } : f)))
-          await new Promise((resolve) => setTimeout(resolve, 100))
-        }
+      // Préparer les données
+      const formData = new FormData()
+      formData.append("file", fileData.file)
+      formData.append("folder", folder)
 
-        // Upload réel
-        const result = await BlobStorageService.uploadFile(fileData.file, folder)
+      // Simuler le progrès
+      setUploadedFiles((prev) => prev.map((f, idx) => (idx === fileIndex ? { ...f, progress: 30 } : f)))
 
-        // Marquer comme terminé
-        setUploadedFiles((prev) =>
-          prev.map((f, idx) =>
-            idx === fileIndex
-              ? {
-                  ...f,
-                  url: result.url,
-                  uploading: false,
-                  progress: 100,
-                }
-              : f,
-          ),
-        )
+      // Upload via API
+      const response = await fetch("/api/upload-blob", {
+        method: "POST",
+        body: formData,
+      })
 
-        console.log("✅ Fichier uploadé:", result.url)
-      } catch (error) {
-        console.error("❌ Erreur upload:", error)
-        setUploadedFiles((prev) =>
-          prev.map((f, idx) =>
-            idx === fileIndex
-              ? {
-                  ...f,
-                  uploading: false,
-                  error: error.message,
-                  progress: 0,
-                }
-              : f,
-          ),
-        )
+      setUploadedFiles((prev) => prev.map((f, idx) => (idx === fileIndex ? { ...f, progress: 80 } : f)))
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `HTTP ${response.status}`)
+      }
+
+      const result = await response.json()
+
+      // Marquer comme terminé
+      setUploadedFiles((prev) =>
+        prev.map((f, idx) =>
+          idx === fileIndex
+            ? {
+                ...f,
+                url: result.url,
+                uploading: false,
+                progress: 100,
+                error: undefined,
+              }
+            : f,
+        ),
+      )
+
+      console.log("✅ Fichier uploadé:", result.url)
+      return result.url
+    } catch (error) {
+      console.error("❌ Erreur upload:", error)
+      setUploadedFiles((prev) =>
+        prev.map((f, idx) =>
+          idx === fileIndex
+            ? {
+                ...f,
+                uploading: false,
+                error: error.message,
+                progress: 0,
+              }
+            : f,
+        ),
+      )
+      return null
+    }
+  }
+
+  const uploadFiles = async () => {
+    const filesToUpload = uploadedFiles
+      .map((f, index) => ({ file: f, index }))
+      .filter(({ file }) => !file.url && !file.uploading)
+
+    const uploadedUrls = []
+
+    for (const { file, index } of filesToUpload) {
+      const url = await uploadFile(file, index)
+      if (url) {
+        uploadedUrls.push(url)
       }
     }
 
     // Notifier les URLs uploadées
-    const uploadedUrls = uploadedFiles.filter((f) => f.url).map((f) => f.url!)
-    onFilesUploaded([...existingFiles, ...uploadedUrls])
+    const allUrls = [...existingFiles, ...uploadedFiles.filter((f) => f.url).map((f) => f.url!)]
+    onFilesUploaded(allUrls)
   }
 
   const removeFile = (index: number) => {

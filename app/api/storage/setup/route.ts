@@ -23,20 +23,38 @@ export async function GET() {
       })
     }
 
-    // Tester la connexion à Vercel Blob
+    // Tester la connexion à Vercel Blob via API REST
     try {
-      // Import dynamique pour éviter les erreurs si le package n'est pas installé
-      const { put, list } = await import("@vercel/blob")
+      // Test simple : créer un fichier de test
+      const testContent = "Test file for Vercel Blob Storage"
+      const testBlob = new Blob([testContent], { type: "text/plain" })
+      const testFormData = new FormData()
+      testFormData.append("file", testBlob, "test.txt")
 
-      // Test simple : lister les fichiers existants
-      const { blobs } = await list()
-
-      return NextResponse.json({
-        configured: true,
-        blob_count: blobs.length,
-        blobs: blobs.slice(0, 5), // Premiers 5 fichiers
-        message: "Vercel Blob Storage configuré et fonctionnel",
+      const testResponse = await fetch(`https://blob.vercel-storage.com?filename=test-${Date.now()}.txt`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${blobReadWriteToken}`,
+        },
+        body: testFormData,
       })
+
+      if (testResponse.ok) {
+        const testResult = await testResponse.json()
+        return NextResponse.json({
+          configured: true,
+          test_file: testResult,
+          message: "Vercel Blob Storage configuré et fonctionnel",
+        })
+      } else {
+        const errorText = await testResponse.text()
+        return NextResponse.json({
+          configured: false,
+          error: "Erreur de connexion à Vercel Blob",
+          details: `HTTP ${testResponse.status}: ${errorText}`,
+          suggestion: "Vérifiez que le token est correct",
+        })
+      }
     } catch (blobError) {
       console.error("❌ Erreur Vercel Blob:", blobError)
 
@@ -44,7 +62,7 @@ export async function GET() {
         configured: false,
         error: "Erreur de connexion à Vercel Blob",
         details: blobError.message,
-        suggestion: "Vérifiez que @vercel/blob est installé et que le token est correct",
+        suggestion: "Vérifiez la connexion réseau et le token",
       })
     }
   } catch (error) {
@@ -63,20 +81,35 @@ export async function GET() {
 export async function POST() {
   try {
     // Tester l'upload d'un fichier de test
-    const { put } = await import("@vercel/blob")
+    const blobReadWriteToken = process.env.BLOB_READ_WRITE_TOKEN
+    if (!blobReadWriteToken) {
+      throw new Error("BLOB_READ_WRITE_TOKEN manquant")
+    }
 
     const testContent = "Test file for Vercel Blob Storage"
     const testBlob = new Blob([testContent], { type: "text/plain" })
+    const testFormData = new FormData()
+    testFormData.append("file", testBlob, "test.txt")
 
-    const result = await put(`test-${Date.now()}.txt`, testBlob, {
-      access: "public",
+    const result = await fetch(`https://blob.vercel-storage.com?filename=test-${Date.now()}.txt`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${blobReadWriteToken}`,
+      },
+      body: testFormData,
     })
 
-    return NextResponse.json({
-      success: true,
-      test_file: result,
-      message: "Test d'upload réussi",
-    })
+    if (result.ok) {
+      const data = await result.json()
+      return NextResponse.json({
+        success: true,
+        test_file: data,
+        message: "Test d'upload réussi",
+      })
+    } else {
+      const errorText = await result.text()
+      throw new Error(`HTTP ${result.status}: ${errorText}`)
+    }
   } catch (error) {
     console.error("❌ Erreur test upload:", error)
     return NextResponse.json(
