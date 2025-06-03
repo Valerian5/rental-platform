@@ -123,6 +123,16 @@ export interface RentalFile {
   professional_situation?: string
   contract_type?: string
   guarantor_profession?: string
+
+  // Nouvelles colonnes pour stocker les données complètes
+  main_tenant?: TenantInfo
+  cotenants?: TenantInfo[]
+  guarantors?: GuarantorInfo[]
+  rental_situation?: "alone" | "couple" | "colocation"
+  status?: "draft" | "in_progress" | "completed" | "validated"
+  completion_percentage?: number
+  validation_score?: number
+
   created_at: string
   updated_at: string
 }
@@ -314,30 +324,7 @@ export const rentalFileService = {
     }
   },
 
-  // Nouvelle fonction pour récupérer le dossier de location complet
-  async getRentalFileData(tenantId: string): Promise<RentalFileData | null> {
-    console.log("📋 RentalFileService.getRentalFileData", tenantId)
-
-    try {
-      const { data, error } = await supabase.from("rental_file_data").select("*").eq("tenant_id", tenantId).single()
-
-      if (error) {
-        if (error.code === "PGRST116") {
-          return null
-        }
-        console.error("❌ Erreur récupération dossier complet:", error)
-        throw new Error(error.message)
-      }
-
-      console.log("✅ Dossier complet récupéré")
-      return data as RentalFileData
-    } catch (error) {
-      console.error("❌ Erreur dans getRentalFileData:", error)
-      return null
-    }
-  },
-
-  checkCompatibility(rentalFileData: RentalFileData | null, property: any): CompatibilityResult {
+  checkCompatibility(rentalFileData: RentalFile | null, property: any): CompatibilityResult {
     console.log("🔍 Vérification compatibilité dossier avec critères propriétaire")
 
     const warnings: string[] = []
@@ -540,13 +527,18 @@ export const rentalFileService = {
     console.log("📋 RentalFileService.updateRentalFile")
 
     try {
+      // Calculer le pourcentage de complétion si les données complètes sont fournies
+      if (updates.main_tenant) {
+        updates.completion_percentage = this.calculateCompletionPercentage(updates as any)
+      }
+
       const { data, error } = await supabase
         .from("rental_files")
-        .update({
+        .upsert({
+          tenant_id: tenantId,
           ...updates,
           updated_at: new Date().toISOString(),
         })
-        .eq("tenant_id", tenantId)
         .select()
         .single()
 
@@ -563,35 +555,8 @@ export const rentalFileService = {
     }
   },
 
-  async updateRentalFileData(tenantId: string, updates: Partial<RentalFileData>): Promise<RentalFileData> {
-    console.log("📋 RentalFileService.updateRentalFileData")
-
-    try {
-      const { data, error } = await supabase
-        .from("rental_file_data")
-        .upsert({
-          tenant_id: tenantId,
-          ...updates,
-          updated_at: new Date().toISOString(),
-        })
-        .select()
-        .single()
-
-      if (error) {
-        console.error("❌ Erreur mise à jour dossier complet:", error)
-        throw new Error(error.message)
-      }
-
-      console.log("✅ Dossier complet mis à jour")
-      return data as RentalFileData
-    } catch (error) {
-      console.error("❌ Erreur dans updateRentalFileData:", error)
-      throw error
-    }
-  },
-
   // Calculer le pourcentage de complétion
-  calculateCompletionPercentage(fileData: Partial<RentalFileData>): number {
+  calculateCompletionPercentage(fileData: Partial<RentalFile>): number {
     const diagnostic = this.getDiagnostic(fileData)
     const totalRequired = diagnostic.required.length
     const completed = diagnostic.required.filter((item) => item.completed).length
@@ -599,7 +564,7 @@ export const rentalFileService = {
     return totalRequired > 0 ? Math.round((completed / totalRequired) * 100) : 0
   },
 
-  getDiagnostic(fileData: Partial<RentalFileData>): {
+  getDiagnostic(fileData: Partial<RentalFile>): {
     required: Array<{
       category: string
       item: string
@@ -890,7 +855,7 @@ export const rentalFileService = {
   },
 
   // Obtenir la liste des documents manquants
-  getMissingDocuments(fileData: RentalFileData | null): string[] {
+  getMissingDocuments(fileData: RentalFile | null): string[] {
     if (!fileData || !fileData.main_tenant) {
       return ["Dossier de location non créé"]
     }
@@ -946,7 +911,7 @@ export const rentalFileService = {
   },
 
   // Vérifier si le dossier est éligible pour candidature
-  isEligibleForApplication(fileData: RentalFileData | null): {
+  isEligibleForApplication(fileData: RentalFile | null): {
     eligible: boolean
     reasons: string[]
     recommendations: string[]
@@ -971,7 +936,7 @@ export const rentalFileService = {
       reasons.push("Avis d'imposition manquant")
     }
 
-    if (fileData.completion_percentage < 70) {
+    if ((fileData.completion_percentage || 0) < 70) {
       reasons.push("Dossier incomplet")
       recommendations.push("Complétez votre dossier à au moins 70%")
     }
@@ -984,12 +949,12 @@ export const rentalFileService = {
   },
 
   // Initialiser un dossier avec les données utilisateur
-  async initializeFromUserData(tenantId: string, userData: any): Promise<RentalFileData> {
+  async initializeFromUserData(tenantId: string, userData: any): Promise<RentalFile> {
     const mainTenant = this.createEmptyTenantProfile("main")
     mainTenant.first_name = userData.first_name || ""
     mainTenant.last_name = userData.last_name || ""
 
-    const initialData: Partial<RentalFileData> = {
+    const initialData: Partial<RentalFile> = {
       tenant_id: tenantId,
       main_tenant: mainTenant,
       cotenants: [],
@@ -1000,11 +965,11 @@ export const rentalFileService = {
       validation_score: 0,
     }
 
-    return this.updateRentalFileData(tenantId, initialData)
+    return this.updateRentalFile(tenantId, initialData)
   },
 
   // Convertir les données du dossier complet vers le format simple pour les candidatures
-  convertToSimpleFormat(fileData: RentalFileData): Partial<RentalFile> {
+  convertToSimpleFormat(fileData: RentalFile): Partial<RentalFile> {
     const totalIncome = this.calculateTotalIncome(fileData.main_tenant?.income_sources || {})
 
     return {
