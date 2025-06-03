@@ -13,36 +13,50 @@ export class MigrationService {
     try {
       console.log("🔍 Analyse des URLs blob...")
 
-      const { data: rentalFiles, error } = await supabase.from("rental_files").select("*")
+      // Analyser les deux tables
+      const { data: rentalFiles, error: error1 } = await supabase.from("rental_files").select("*")
+      const { data: rentalFileData, error: error2 } = await supabase.from("rental_file_data").select("*")
 
-      if (error) {
-        throw error
+      if (error1) {
+        console.error("❌ Erreur rental_files:", error1)
+      }
+      if (error2) {
+        console.error("❌ Erreur rental_file_data:", error2)
       }
 
       const allUrls: string[] = []
       const blobUrls: string[] = []
       const validUrls: string[] = []
 
-      // Extraire toutes les URLs des dossiers
-      for (const file of rentalFiles || []) {
-        const extractUrls = (obj: any, path = ""): void => {
-          if (!obj) return
+      // Fonction pour extraire les URLs récursivement
+      const extractUrls = (obj: any, path = ""): void => {
+        if (!obj) return
 
-          if (typeof obj === "string" && obj.startsWith("http")) {
-            allUrls.push(obj)
-            if (obj.includes("blob:")) {
-              blobUrls.push(obj)
-            } else {
-              validUrls.push(obj)
-            }
-          } else if (Array.isArray(obj)) {
-            obj.forEach((item, index) => extractUrls(item, `${path}[${index}]`))
-          } else if (typeof obj === "object") {
-            Object.keys(obj).forEach((key) => extractUrls(obj[key], `${path}.${key}`))
+        if (typeof obj === "string" && obj.startsWith("http")) {
+          allUrls.push(obj)
+          if (obj.includes("blob:")) {
+            blobUrls.push(obj)
+            console.log("🔍 URL blob trouvée:", obj, "dans", path)
+          } else {
+            validUrls.push(obj)
           }
+        } else if (Array.isArray(obj)) {
+          obj.forEach((item, index) => extractUrls(item, `${path}[${index}]`))
+        } else if (typeof obj === "object") {
+          Object.keys(obj).forEach((key) => extractUrls(obj[key], `${path}.${key}`))
         }
+      }
 
-        extractUrls(file)
+      // Analyser rental_files
+      console.log("📋 Analyse de rental_files:", rentalFiles?.length || 0, "entrées")
+      for (const file of rentalFiles || []) {
+        extractUrls(file, `rental_files.${file.id}`)
+      }
+
+      // Analyser rental_file_data
+      console.log("📋 Analyse de rental_file_data:", rentalFileData?.length || 0, "entrées")
+      for (const file of rentalFileData || []) {
+        extractUrls(file, `rental_file_data.${file.id}`)
       }
 
       console.log("📊 Analyse terminée:", {
@@ -73,63 +87,107 @@ export class MigrationService {
     try {
       console.log("🔄 Remplacement des URLs blob...")
 
-      const { data: rentalFiles, error } = await supabase.from("rental_files").select("*")
-
-      if (error) {
-        throw error
-      }
-
       let filesUpdated = 0
       let urlsReplaced = 0
 
-      for (const file of rentalFiles || []) {
-        let hasChanges = false
-        const updatedFile = JSON.parse(JSON.stringify(file))
+      // Traiter rental_files
+      const { data: rentalFiles, error: error1 } = await supabase.from("rental_files").select("*")
+      if (error1) {
+        console.error("❌ Erreur récupération rental_files:", error1)
+      } else {
+        for (const file of rentalFiles || []) {
+          let hasChanges = false
+          const updatedFile = JSON.parse(JSON.stringify(file))
 
-        const replaceUrls = (obj: any): any => {
-          if (!obj) return obj
+          const replaceUrls = (obj: any): any => {
+            if (!obj) return obj
 
-          if (typeof obj === "string" && obj.includes("blob:")) {
-            urlsReplaced++
-            hasChanges = true
-            return "DOCUMENT_MIGRE_PLACEHOLDER"
-          } else if (Array.isArray(obj)) {
-            return obj.map((item) => replaceUrls(item))
-          } else if (typeof obj === "object") {
-            const newObj = {}
-            Object.keys(obj).forEach((key) => {
-              newObj[key] = replaceUrls(obj[key])
-            })
-            return newObj
+            if (typeof obj === "string" && obj.includes("blob:")) {
+              urlsReplaced++
+              hasChanges = true
+              console.log("🔄 Remplacement URL blob:", obj)
+              return "DOCUMENT_MIGRE_PLACEHOLDER"
+            } else if (Array.isArray(obj)) {
+              return obj.map((item) => replaceUrls(item))
+            } else if (typeof obj === "object") {
+              const newObj = {}
+              Object.keys(obj).forEach((key) => {
+                newObj[key] = replaceUrls(obj[key])
+              })
+              return newObj
+            }
+
+            return obj
           }
 
-          return obj
+          // Remplacer dans tous les champs
+          Object.keys(updatedFile).forEach((key) => {
+            if (key !== "id" && key !== "created_at" && key !== "updated_at") {
+              updatedFile[key] = replaceUrls(updatedFile[key])
+            }
+          })
+
+          // Mettre à jour si des changements ont été faits
+          if (hasChanges) {
+            const { error: updateError } = await supabase.from("rental_files").update(updatedFile).eq("id", file.id)
+
+            if (updateError) {
+              console.error("❌ Erreur mise à jour rental_files:", updateError)
+            } else {
+              filesUpdated++
+              console.log("✅ rental_files mis à jour:", file.id)
+            }
+          }
         }
+      }
 
-        // Remplacer dans main_tenant
-        if (updatedFile.main_tenant) {
-          updatedFile.main_tenant = replaceUrls(updatedFile.main_tenant)
-        }
+      // Traiter rental_file_data
+      const { data: rentalFileData, error: error2 } = await supabase.from("rental_file_data").select("*")
+      if (error2) {
+        console.error("❌ Erreur récupération rental_file_data:", error2)
+      } else {
+        for (const file of rentalFileData || []) {
+          let hasChanges = false
+          const updatedFile = JSON.parse(JSON.stringify(file))
 
-        // Remplacer dans cotenants
-        if (updatedFile.cotenants) {
-          updatedFile.cotenants = replaceUrls(updatedFile.cotenants)
-        }
+          const replaceUrls = (obj: any): any => {
+            if (!obj) return obj
 
-        // Remplacer dans guarantors
-        if (updatedFile.guarantors) {
-          updatedFile.guarantors = replaceUrls(updatedFile.guarantors)
-        }
+            if (typeof obj === "string" && obj.includes("blob:")) {
+              urlsReplaced++
+              hasChanges = true
+              console.log("🔄 Remplacement URL blob:", obj)
+              return "DOCUMENT_MIGRE_PLACEHOLDER"
+            } else if (Array.isArray(obj)) {
+              return obj.map((item) => replaceUrls(item))
+            } else if (typeof obj === "object") {
+              const newObj = {}
+              Object.keys(obj).forEach((key) => {
+                newObj[key] = replaceUrls(obj[key])
+              })
+              return newObj
+            }
 
-        // Mettre à jour si des changements ont été faits
-        if (hasChanges) {
-          const { error: updateError } = await supabase.from("rental_files").update(updatedFile).eq("id", file.id)
+            return obj
+          }
 
-          if (updateError) {
-            console.error("❌ Erreur mise à jour:", updateError)
-          } else {
-            filesUpdated++
-            console.log("✅ Fichier mis à jour:", file.id)
+          // Remplacer dans tous les champs
+          Object.keys(updatedFile).forEach((key) => {
+            if (key !== "id" && key !== "created_at" && key !== "updated_at") {
+              updatedFile[key] = replaceUrls(updatedFile[key])
+            }
+          })
+
+          // Mettre à jour si des changements ont été faits
+          if (hasChanges) {
+            const { error: updateError } = await supabase.from("rental_file_data").update(updatedFile).eq("id", file.id)
+
+            if (updateError) {
+              console.error("❌ Erreur mise à jour rental_file_data:", updateError)
+            } else {
+              filesUpdated++
+              console.log("✅ rental_file_data mis à jour:", file.id)
+            }
           }
         }
       }
@@ -168,6 +226,38 @@ export class MigrationService {
       }
     } catch (error) {
       console.error("❌ Erreur rapport:", error)
+      throw error
+    }
+  }
+
+  /**
+   * Nettoyer complètement un dossier de location (pour les tests)
+   */
+  static async cleanRentalFile(tenantId: string): Promise<void> {
+    try {
+      console.log("🧹 Nettoyage du dossier pour tenant:", tenantId)
+
+      // Supprimer de rental_file_data
+      const { error: error1 } = await supabase.from("rental_file_data").delete().eq("tenant_id", tenantId)
+
+      if (error1) {
+        console.error("❌ Erreur suppression rental_file_data:", error1)
+      } else {
+        console.log("✅ rental_file_data nettoyé")
+      }
+
+      // Supprimer de rental_files
+      const { error: error2 } = await supabase.from("rental_files").delete().eq("tenant_id", tenantId)
+
+      if (error2) {
+        console.error("❌ Erreur suppression rental_files:", error2)
+      } else {
+        console.log("✅ rental_files nettoyé")
+      }
+
+      console.log("🎉 Nettoyage terminé pour tenant:", tenantId)
+    } catch (error) {
+      console.error("❌ Erreur nettoyage:", error)
       throw error
     }
   }

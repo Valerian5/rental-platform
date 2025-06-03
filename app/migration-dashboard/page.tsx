@@ -4,7 +4,9 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { AlertTriangle, CheckCircle, RefreshCw, Database, FileText } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { AlertTriangle, CheckCircle, RefreshCw, Database, FileText, Trash2 } from "lucide-react"
 import { MigrationService } from "@/lib/migration-service"
 import { toast } from "sonner"
 
@@ -12,6 +14,7 @@ export default function MigrationDashboardPage() {
   const [analysis, setAnalysis] = useState<any>(null)
   const [migrationResult, setMigrationResult] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  const [tenantIdToClean, setTenantIdToClean] = useState("")
 
   const runAnalysis = async () => {
     try {
@@ -61,6 +64,27 @@ export default function MigrationDashboardPage() {
     }
   }
 
+  const cleanRentalFile = async () => {
+    if (!tenantIdToClean.trim()) {
+      toast.error("Veuillez saisir un tenant ID")
+      return
+    }
+
+    try {
+      setLoading(true)
+      toast.info("Nettoyage en cours...")
+
+      await MigrationService.cleanRentalFile(tenantIdToClean)
+      toast.success("Dossier nettoyé avec succès")
+      setTenantIdToClean("")
+    } catch (error) {
+      console.error("Erreur nettoyage:", error)
+      toast.error("Erreur lors du nettoyage")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -68,7 +92,7 @@ export default function MigrationDashboardPage() {
         <Badge variant="outline">Nettoyage des données</Badge>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -109,6 +133,33 @@ export default function MigrationDashboardPage() {
           <CardContent>
             <Button onClick={generateReport} disabled={loading} variant="outline" className="w-full">
               Générer rapport
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5" />
+              Nettoyage
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Label htmlFor="tenant-id">Tenant ID</Label>
+            <Input
+              id="tenant-id"
+              placeholder="UUID du tenant"
+              value={tenantIdToClean}
+              onChange={(e) => setTenantIdToClean(e.target.value)}
+            />
+            <Button
+              onClick={cleanRentalFile}
+              disabled={loading || !tenantIdToClean}
+              variant="destructive"
+              size="sm"
+              className="w-full"
+            >
+              Nettoyer dossier
             </Button>
           </CardContent>
         </Card>
@@ -158,6 +209,22 @@ export default function MigrationDashboardPage() {
                 <div className="flex items-center gap-2">
                   <CheckCircle className="h-5 w-5 text-green-600" />
                   <span className="font-medium text-green-800">Aucune migration nécessaire</span>
+                </div>
+              </div>
+            )}
+
+            {analysis.blobUrls.length > 0 && (
+              <div className="mt-4">
+                <h4 className="font-medium mb-2">URLs blob détectées :</h4>
+                <div className="bg-gray-50 p-3 rounded max-h-40 overflow-y-auto">
+                  {analysis.blobUrls.slice(0, 10).map((url, index) => (
+                    <div key={index} className="text-xs text-gray-600 mb-1">
+                      {url}
+                    </div>
+                  ))}
+                  {analysis.blobUrls.length > 10 && (
+                    <div className="text-xs text-gray-500">... et {analysis.blobUrls.length - 10} autres</div>
+                  )}
                 </div>
               </div>
             )}
@@ -220,11 +287,17 @@ export default function MigrationDashboardPage() {
               <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
                 <span className="text-xs font-medium text-blue-600">3</span>
               </div>
-              <span>Tester le nouveau système d'upload Supabase</span>
+              <span>Nettoyer un dossier de test pour re-tester l'upload</span>
             </div>
             <div className="flex items-center gap-3">
               <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
                 <span className="text-xs font-medium text-blue-600">4</span>
+              </div>
+              <span>Tester le nouveau système d'upload Supabase</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
+                <span className="text-xs font-medium text-blue-600">5</span>
               </div>
               <span>Informer les utilisateurs de re-uploader leurs documents</span>
             </div>

@@ -1,4 +1,5 @@
 "use client"
+
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -33,40 +34,10 @@ interface ImprovedIncomeSourceProps {
   onUpdate: (profile: any) => void
 }
 
-interface IncomeTypeCardProps {
-  icon: any
-  title: string
-  description: string
-  isActive: boolean
-  onToggle: () => void
-  documentCount: number
-}
-
-function IncomeTypeCard({ icon: Icon, title, description, isActive, onToggle, documentCount }: IncomeTypeCardProps) {
-  return (
-    <Card
-      className={`cursor-pointer hover:opacity-80 transition-opacity ${isActive ? "border-2 border-blue-500" : ""}`}
-      onClick={onToggle}
-    >
-      <CardContent className="flex items-center space-x-4">
-        <Icon className="h-6 w-6 text-gray-500" />
-        <div>
-          <h4 className="font-medium">{title}</h4>
-          <p className="text-sm text-gray-500">{description}</p>
-          {documentCount > 0 && (
-            <Badge variant="outline" className="mt-2 bg-green-50">
-              <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
-              {documentCount}
-            </Badge>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
 export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourceProps) {
   const handleFileUpload = async (category: string, urls: string[]) => {
+    console.log("📁 Upload revenus - Catégorie:", category, "URLs:", urls)
+
     const updatedProfile = { ...profile }
     if (!updatedProfile.income_sources) updatedProfile.income_sources = {}
 
@@ -137,6 +108,7 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
       ]
     }
 
+    console.log("📁 Profil mis à jour avec URLs Supabase:", updatedProfile.income_sources)
     onUpdate(updatedProfile)
     toast.success(`${urls.length} document(s) ajouté(s) avec succès`)
   }
@@ -237,6 +209,58 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
     onUpdate(updatedProfile)
   }
 
+  const IncomeTypeCard = ({
+    icon: Icon,
+    title,
+    description,
+    isActive,
+    onToggle,
+    documentCount = 0,
+  }: {
+    icon: any
+    title: string
+    description: string
+    isActive: boolean
+    onToggle: () => void
+    documentCount?: number
+  }) => (
+    <Card
+      className={`cursor-pointer transition-all duration-200 ${
+        isActive ? "border-blue-500 bg-blue-50 shadow-md" : "border-gray-200 hover:border-gray-300 hover:shadow-sm"
+      }`}
+      onClick={onToggle}
+    >
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className={`p-2 rounded-lg ${isActive ? "bg-blue-100" : "bg-gray-100"}`}>
+              <Icon className={`h-5 w-5 ${isActive ? "text-blue-600" : "text-gray-600"}`} />
+            </div>
+            <div>
+              <h4 className="font-medium text-gray-900">{title}</h4>
+              <p className="text-sm text-gray-600">{description}</p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            {documentCount > 0 && (
+              <Badge variant="outline" className="bg-green-50">
+                <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
+                {documentCount}
+              </Badge>
+            )}
+            <div
+              className={`w-4 h-4 rounded-full border-2 ${
+                isActive ? "bg-blue-500 border-blue-500" : "border-gray-300"
+              }`}
+            >
+              {isActive && <CheckCircle className="h-3 w-3 text-white" />}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+
   const hasAnyIncome = profile.income_sources && Object.keys(profile.income_sources).length > 0
 
   return (
@@ -328,13 +352,17 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
                 />
               </div>
 
-              <SupabaseFileUpload
-                category="income_work_income"
-                label="Justificatifs de revenus *"
-                multiple
-                existingFiles={profile.income_sources.work_income.documents || []}
-                onChange={handleFileUpload}
-              />
+              <div>
+                <Label className="text-sm font-medium">Justificatifs de revenus *</Label>
+                <SupabaseFileUpload
+                  onFilesUploaded={(urls) => handleFileUpload("income_work_income", urls)}
+                  maxFiles={5}
+                  bucket="documents"
+                  folder="income/work"
+                  existingFiles={profile.income_sources.work_income.documents || []}
+                  acceptedTypes={["image/*", "application/pdf"]}
+                />
+              </div>
             </CardContent>
           </Card>
         )}
@@ -360,13 +388,17 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
                 />
               </div>
 
-              <SupabaseFileUpload
-                category="income_scholarship"
-                label="Justificatifs de bourse"
-                multiple
-                existingFiles={profile.income_sources.scholarship.documents || []}
-                onChange={handleFileUpload}
-              />
+              <div>
+                <Label className="text-sm font-medium">Justificatifs de bourse</Label>
+                <SupabaseFileUpload
+                  onFilesUploaded={(urls) => handleFileUpload("income_scholarship", urls)}
+                  maxFiles={3}
+                  bucket="documents"
+                  folder="income/scholarship"
+                  existingFiles={profile.income_sources.scholarship.documents || []}
+                  acceptedTypes={["image/*", "application/pdf"]}
+                />
+              </div>
             </CardContent>
           </Card>
         )}
@@ -392,13 +424,17 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
                 />
               </div>
 
-              <SupabaseFileUpload
-                category="income_no_income"
-                label="Justificatifs (optionnel)"
-                multiple
-                existingFiles={profile.income_sources.no_income.documents || []}
-                onChange={handleFileUpload}
-              />
+              <div>
+                <Label className="text-sm font-medium">Justificatifs (optionnel)</Label>
+                <SupabaseFileUpload
+                  onFilesUploaded={(urls) => handleFileUpload("income_no_income", urls)}
+                  maxFiles={3}
+                  bucket="documents"
+                  folder="income/none"
+                  existingFiles={profile.income_sources.no_income.documents || []}
+                  acceptedTypes={["image/*", "application/pdf"]}
+                />
+              </div>
             </CardContent>
           </Card>
         )}
@@ -497,13 +533,17 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
                     />
                   </div>
 
-                  <SupabaseFileUpload
-                    category={`income_social_aid_${index}`}
-                    label="Justificatifs"
-                    multiple
-                    existingFiles={aid.documents || []}
-                    onChange={handleFileUpload}
-                  />
+                  <div>
+                    <Label className="text-sm font-medium">Justificatifs</Label>
+                    <SupabaseFileUpload
+                      onFilesUploaded={(urls) => handleFileUpload(`income_social_aid_${index}`, urls)}
+                      maxFiles={3}
+                      bucket="documents"
+                      folder={`income/social_aid/${index}`}
+                      existingFiles={aid.documents || []}
+                      acceptedTypes={["image/*", "application/pdf"]}
+                    />
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -581,13 +621,17 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
                     </div>
                   </div>
 
-                  <SupabaseFileUpload
-                    category={`income_retirement_pension_${index}`}
-                    label="Justificatifs"
-                    multiple
-                    existingFiles={pension.documents || []}
-                    onChange={handleFileUpload}
-                  />
+                  <div>
+                    <Label className="text-sm font-medium">Justificatifs</Label>
+                    <SupabaseFileUpload
+                      onFilesUploaded={(urls) => handleFileUpload(`income_retirement_pension_${index}`, urls)}
+                      maxFiles={3}
+                      bucket="documents"
+                      folder={`income/retirement/${index}`}
+                      existingFiles={pension.documents || []}
+                      acceptedTypes={["image/*", "application/pdf"]}
+                    />
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -661,13 +705,17 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
                     </div>
                   </div>
 
-                  <SupabaseFileUpload
-                    category={`income_rent_income_${index}`}
-                    label="Justificatifs"
-                    multiple
-                    existingFiles={rent.documents || []}
-                    onChange={handleFileUpload}
-                  />
+                  <div>
+                    <Label className="text-sm font-medium">Justificatifs</Label>
+                    <SupabaseFileUpload
+                      onFilesUploaded={(urls) => handleFileUpload(`income_rent_income_${index}`, urls)}
+                      maxFiles={3}
+                      bucket="documents"
+                      folder={`income/rent/${index}`}
+                      existingFiles={rent.documents || []}
+                      acceptedTypes={["image/*", "application/pdf"]}
+                    />
+                  </div>
                 </CardContent>
               </Card>
             ))}
