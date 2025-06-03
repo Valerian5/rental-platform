@@ -10,18 +10,53 @@ export async function POST(request: NextRequest) {
 
     console.log("🔄 Extraction des pages PDF:", pdfUrl)
 
-    // Import dynamique des dépendances côté serveur
-    const { PDFDocument } = await import("pdf-lib")
-    const { createCanvas } = await import("canvas")
-    const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.js")
+    // Vérifier que l'URL est accessible
+    const testResponse = await fetch(pdfUrl, { method: "HEAD" })
+    if (!testResponse.ok) {
+      throw new Error(`PDF non accessible: ${testResponse.status}`)
+    }
+
+    // Import dynamique avec gestion d'erreur
+    let PDFDocument, createCanvas, pdfjsLib
+
+    try {
+      const pdfLibModule = await import("pdf-lib")
+      PDFDocument = pdfLibModule.PDFDocument
+      console.log("✅ pdf-lib importé")
+    } catch (error) {
+      console.error("❌ Erreur import pdf-lib:", error)
+      throw new Error("pdf-lib non disponible")
+    }
+
+    try {
+      const canvasModule = await import("canvas")
+      createCanvas = canvasModule.createCanvas
+      console.log("✅ canvas importé")
+    } catch (error) {
+      console.error("❌ Erreur import canvas:", error)
+      throw new Error("canvas non disponible")
+    }
+
+    try {
+      pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.js")
+      console.log("✅ pdfjs-dist importé")
+    } catch (error) {
+      console.error("❌ Erreur import pdfjs-dist:", error)
+      throw new Error("pdfjs-dist non disponible")
+    }
 
     // Récupérer le PDF
+    console.log("📥 Téléchargement du PDF...")
     const response = await fetch(pdfUrl)
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
 
     const pdfArrayBuffer = await response.arrayBuffer()
+    console.log(`📦 PDF téléchargé: ${pdfArrayBuffer.byteLength} bytes`)
+
+    // Charger le PDF avec pdf-lib
+    console.log("📖 Chargement du PDF...")
     const pdfDoc = await PDFDocument.load(pdfArrayBuffer)
     const pageCount = pdfDoc.getPageCount()
 
@@ -41,6 +76,7 @@ export async function POST(request: NextRequest) {
 
         // Convertir en ArrayBuffer
         const singlePagePdfBytes = await singlePagePdf.save()
+        console.log(`📄 Page ${i + 1} extraite: ${singlePagePdfBytes.byteLength} bytes`)
 
         // Utiliser PDF.js pour rendre la page
         const loadingTask = pdfjsLib.getDocument({ data: singlePagePdfBytes })
@@ -49,6 +85,7 @@ export async function POST(request: NextRequest) {
 
         // Calculer la taille optimale
         const viewport = page.getViewport({ scale: 2.0 })
+        console.log(`📄 Page ${i + 1} viewport: ${viewport.width}x${viewport.height}`)
 
         // Créer un canvas côté serveur
         const canvas = createCanvas(viewport.width, viewport.height)
@@ -59,6 +96,8 @@ export async function POST(request: NextRequest) {
           canvasContext: context,
           viewport: viewport,
         }).promise
+
+        console.log(`📄 Page ${i + 1} rendue`)
 
         // Convertir en base64
         const imageData = canvas.toDataURL("image/jpeg", 0.8)
@@ -80,7 +119,7 @@ export async function POST(request: NextRequest) {
           imageData: null,
           width: 595,
           height: 842,
-          error: `Erreur lors du traitement de la page ${i + 1}`,
+          error: `Erreur lors du traitement de la page ${i + 1}: ${pageError.message}`,
         })
       }
     }
@@ -100,6 +139,7 @@ export async function POST(request: NextRequest) {
         success: false,
         error: "Erreur lors de l'extraction du PDF",
         message: error.message,
+        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
       },
       { status: 500 },
     )
