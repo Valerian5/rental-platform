@@ -53,7 +53,7 @@ export default function RentalFileViewerPage({ params }: { params: { id: string 
       }
 
       // Importer dynamiquement le générateur PDF
-      const { generateRentalFilePDF } = await import("@/lib/pdf-generator")
+      const { generateRentalFilePDF } = await import("@/lib/pdf-generator-fixed")
 
       // Générer le PDF
       await generateRentalFilePDF(rentalFile)

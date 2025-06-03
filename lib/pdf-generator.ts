@@ -333,6 +333,13 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
   const addDocumentCard = (name: string, type: string, x: number, y: number, width: number) => {
     const cardHeight = 25
 
+    // Vérifier si on a besoin d'une nouvelle page
+    if (y + cardHeight > pageHeight - 40) {
+      doc.addPage()
+      yPosition = addPageHeader("ANNEXES - PIÈCES JUSTIFICATIVES (SUITE)")
+      y = yPosition
+    }
+
     // Fond de la carte
     doc.setFillColor("#F3F4F6")
     doc.roundedRect(x, y, width, cardHeight, 2, 2, "F")
@@ -784,8 +791,8 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
         yPosition = addSectionWithIcon(category.title, yPosition, "document")
 
         // Afficher les documents de cette catégorie
-        category.docs.forEach((doc) => {
-          yPosition = addDocumentCard(doc.name, doc.type, margin, yPosition, pageWidth - 2 * margin)
+        category.docs.forEach((docItem) => {
+          yPosition = addDocumentCard(docItem.name, docItem.type, margin, yPosition, pageWidth - 2 * margin)
 
           // Ajouter une page si nécessaire
           if (yPosition > pageHeight - 40) {
