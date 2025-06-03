@@ -1,5 +1,4 @@
 import { type RentalFileData, MAIN_ACTIVITIES } from "./rental-file-service"
-import { fetchDocumentAsBase64 } from "./document-utils"
 
 export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise<void> => {
   // Import dynamique de jsPDF pour éviter les erreurs SSR
@@ -44,9 +43,9 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
   }
 
   // Fonction pour ajouter une image dans le PDF
-  const addImageToPDF = async (blobUrl: string, documentName: string, maxWidth = 150, maxHeight = 200) => {
+  const addImageToPDF = async (documentUrl: string, documentName: string, maxWidth = 150, maxHeight = 200) => {
     try {
-      console.log("📄 Tentative d'ajout du document:", documentName)
+      console.log("📄 Tentative d'ajout du document:", documentName, "URL:", documentUrl)
 
       // Ajouter une nouvelle page pour le document
       doc.addPage()
@@ -63,64 +62,99 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       doc.setFontSize(10)
       doc.text(documentName, margin, 25)
 
-      // Essayer de récupérer le document
-      const base64Data = await fetchDocumentAsBase64(blobUrl)
+      // Vérifier si c'est un placeholder
+      if (documentUrl === "DOCUMENT_MIGRE_PLACEHOLDER" || documentUrl.includes("blob:")) {
+        console.log("📋 Document placeholder détecté")
 
-      if (base64Data) {
-        console.log("✅ Document récupéré, ajout au PDF")
+        doc.setTextColor("#000000")
+        doc.setFontSize(12)
+        doc.text("Document à re-uploader", margin, 50)
+        doc.setFontSize(10)
+        doc.text("Ce document doit être uploadé à nouveau via le nouveau système.", margin, 70)
 
-        // Ajouter l'image
+        // Ajouter un placeholder visuel
+        const xPos = (pageWidth - 150) / 2
+        const yPos = 90
+
+        doc.setDrawColor("#FFA500")
+        doc.setFillColor("#FFF3CD")
+        doc.rect(xPos, yPos, 150, 200, "FD")
+
+        doc.setTextColor("#856404")
+        doc.setFontSize(24)
+        doc.text("📄", xPos + 75, yPos + 100, { align: "center" })
+        doc.setFontSize(12)
+        doc.text("Document à re-uploader", xPos + 75, yPos + 120, { align: "center" })
+        doc.setFontSize(10)
+        doc.text("Utilisez le nouveau système", xPos + 75, yPos + 135, { align: "center" })
+
+        return
+      }
+
+      // Essayer de récupérer le document Supabase
+      try {
+        const response = await fetch(documentUrl)
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`)
+        }
+
+        const blob = await response.blob()
+        const base64Data = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = reject
+          reader.readAsDataURL(blob)
+        })
+
+        console.log("✅ Document Supabase récupéré")
+
+        // Ajouter l'image au PDF
         doc.setTextColor("#000000")
         doc.setFontSize(12)
         doc.text("Document:", margin, 50)
 
-        try {
-          // Créer une image pour obtenir les dimensions
-          const img = new Image()
-          img.crossOrigin = "anonymous"
+        const img = new Image()
+        img.crossOrigin = "anonymous"
 
-          await new Promise((resolve, reject) => {
-            img.onload = () => {
-              try {
-                const imgWidth = img.width
-                const imgHeight = img.height
+        await new Promise((resolve, reject) => {
+          img.onload = () => {
+            try {
+              const imgWidth = img.width
+              const imgHeight = img.height
 
-                // Calculer les dimensions finales en gardant le ratio
-                let finalWidth = maxWidth
-                let finalHeight = (imgHeight * maxWidth) / imgWidth
+              // Calculer les dimensions finales
+              let finalWidth = maxWidth
+              let finalHeight = (imgHeight * maxWidth) / imgWidth
 
-                if (finalHeight > maxHeight) {
-                  finalHeight = maxHeight
-                  finalWidth = (imgWidth * maxHeight) / imgHeight
-                }
-
-                // Centrer l'image
-                const xPos = (pageWidth - finalWidth) / 2
-                const yPos = 60
-
-                // Ajouter l'image au PDF
-                doc.addImage(base64Data, "JPEG", xPos, yPos, finalWidth, finalHeight)
-                console.log("✅ Image ajoutée au PDF:", documentName)
-                resolve(true)
-              } catch (addError) {
-                console.error("❌ Erreur ajout image:", addError)
-                reject(addError)
+              if (finalHeight > maxHeight) {
+                finalHeight = maxHeight
+                finalWidth = (imgWidth * maxHeight) / imgHeight
               }
-            }
 
-            img.onerror = (error) => {
-              console.error("❌ Erreur chargement image:", error)
-              reject(error)
-            }
+              // Centrer l'image
+              const xPos = (pageWidth - finalWidth) / 2
+              const yPos = 60
 
-            img.src = base64Data
-          })
-        } catch (imageError) {
-          console.error("❌ Erreur traitement image:", imageError)
-          throw imageError
-        }
-      } else {
-        throw new Error("Impossible de récupérer le document")
+              doc.addImage(base64Data, "JPEG", xPos, yPos, finalWidth, finalHeight)
+              console.log("✅ Image ajoutée au PDF:", documentName)
+              resolve(true)
+            } catch (addError) {
+              console.error("❌ Erreur ajout image:", addError)
+              reject(addError)
+            }
+          }
+
+          img.onerror = (error) => {
+            console.error("❌ Erreur chargement image:", error)
+            reject(error)
+          }
+
+          img.src = base64Data
+        })
+      } catch (fetchError) {
+        console.error("❌ Erreur récupération document Supabase:", fetchError)
+        throw fetchError
       }
     } catch (error) {
       console.error("❌ Erreur lors de l'ajout du document au PDF:", error)
@@ -140,25 +174,25 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
 
       doc.setTextColor("#000000")
       doc.setFontSize(12)
-      doc.text("Document en cours de traitement", margin, 50)
+      doc.text("Document temporairement indisponible", margin, 50)
       doc.setFontSize(10)
-      doc.text("Ce document sera disponible dans une version ultérieure du dossier.", margin, 70)
+      doc.text("Ce document sera disponible après re-upload via le nouveau système.", margin, 70)
 
       // Ajouter un placeholder visuel
       const xPos = (pageWidth - 150) / 2
       const yPos = 90
 
-      doc.setDrawColor("#E5E7EB")
-      doc.setFillColor("#F9FAFB")
+      doc.setDrawColor("#DC3545")
+      doc.setFillColor("#F8D7DA")
       doc.rect(xPos, yPos, 150, 200, "FD")
 
-      doc.setTextColor("#6B7280")
+      doc.setTextColor("#721C24")
       doc.setFontSize(24)
-      doc.text("📄", xPos + 75, yPos + 100, { align: "center" })
+      doc.text("⚠️", xPos + 75, yPos + 100, { align: "center" })
       doc.setFontSize(12)
-      doc.text("Document référencé", xPos + 75, yPos + 120, { align: "center" })
+      doc.text("Document indisponible", xPos + 75, yPos + 120, { align: "center" })
       doc.setFontSize(10)
-      doc.text("Disponible en ligne", xPos + 75, yPos + 135, { align: "center" })
+      doc.text("Re-upload nécessaire", xPos + 75, yPos + 135, { align: "center" })
     }
   }
 
@@ -323,57 +357,67 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
 
   yPosition = addText("Les documents suivants sont intégrés dans ce PDF.", margin, yPosition)
 
-  // Collecter tous les documents
+  // Collecter tous les documents (ignorer les placeholders)
   const documentsToAdd = []
 
   if (mainTenant) {
     // Documents d'identité
     if (mainTenant.identity_documents && mainTenant.identity_documents.length > 0) {
       for (const [index, doc] of mainTenant.identity_documents.entries()) {
-        documentsToAdd.push({
-          url: doc,
-          name: `Pièce d'identité du locataire ${index + 1}`,
-        })
+        if (doc !== "DOCUMENT_MIGRE_PLACEHOLDER" && !doc.includes("blob:")) {
+          documentsToAdd.push({
+            url: doc,
+            name: `Pièce d'identité du locataire ${index + 1}`,
+          })
+        }
       }
     }
 
     // Documents d'activité
     if (mainTenant.activity_documents && mainTenant.activity_documents.length > 0) {
       for (const [index, doc] of mainTenant.activity_documents.entries()) {
-        documentsToAdd.push({
-          url: doc,
-          name: `Justificatif d'activité ${index + 1}`,
-        })
+        if (doc !== "DOCUMENT_MIGRE_PLACEHOLDER" && !doc.includes("blob:")) {
+          documentsToAdd.push({
+            url: doc,
+            name: `Justificatif d'activité ${index + 1}`,
+          })
+        }
       }
     }
 
     // Documents fiscaux
     if (mainTenant.tax_situation?.documents && mainTenant.tax_situation.documents.length > 0) {
       for (const [index, doc] of mainTenant.tax_situation.documents.entries()) {
-        documentsToAdd.push({
-          url: doc,
-          name: `Document fiscal ${index + 1}`,
-        })
+        if (doc !== "DOCUMENT_MIGRE_PLACEHOLDER" && !doc.includes("blob:")) {
+          documentsToAdd.push({
+            url: doc,
+            name: `Document fiscal ${index + 1}`,
+          })
+        }
       }
     }
 
     // Documents de revenus
     if (mainTenant.income_sources?.work_income?.documents) {
       for (const [index, doc] of mainTenant.income_sources.work_income.documents.entries()) {
-        documentsToAdd.push({
-          url: doc,
-          name: `Justificatif de revenu ${index + 1}`,
-        })
+        if (doc !== "DOCUMENT_MIGRE_PLACEHOLDER" && !doc.includes("blob:")) {
+          documentsToAdd.push({
+            url: doc,
+            name: `Justificatif de revenu ${index + 1}`,
+          })
+        }
       }
     }
 
     // Documents de logement
     if (mainTenant.current_housing_documents?.quittances_loyer) {
       for (const [index, doc] of mainTenant.current_housing_documents.quittances_loyer.entries()) {
-        documentsToAdd.push({
-          url: doc,
-          name: `Quittance de loyer ${index + 1}`,
-        })
+        if (doc !== "DOCUMENT_MIGRE_PLACEHOLDER" && !doc.includes("blob:")) {
+          documentsToAdd.push({
+            url: doc,
+            name: `Quittance de loyer ${index + 1}`,
+          })
+        }
       }
     }
   }
@@ -383,10 +427,12 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     for (const [gIndex, guarantor] of rentalFile.guarantors.entries()) {
       if (guarantor.type === "physical" && guarantor.personal_info?.identity_documents) {
         for (const [index, doc] of guarantor.personal_info.identity_documents.entries()) {
-          documentsToAdd.push({
-            url: doc,
-            name: `Garant ${gIndex + 1} - Pièce d'identité ${index + 1}`,
-          })
+          if (doc !== "DOCUMENT_MIGRE_PLACEHOLDER" && !doc.includes("blob:")) {
+            documentsToAdd.push({
+              url: doc,
+              name: `Garant ${gIndex + 1} - Pièce d'identité ${index + 1}`,
+            })
+          }
         }
       }
     }

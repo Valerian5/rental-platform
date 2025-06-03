@@ -9,22 +9,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import {
-  Upload,
-  X,
-  User,
-  Briefcase,
-  FileText,
-  ChevronRight,
-  Home,
-  CheckCircle,
-  AlertTriangle,
-  Euro,
-  CreditCard,
-} from "lucide-react"
+import { X, User, Briefcase, ChevronRight, Home, CheckCircle, AlertTriangle, Euro, CreditCard } from "lucide-react"
 import { MAIN_ACTIVITIES, TAX_SITUATIONS, CURRENT_HOUSING_SITUATIONS } from "@/lib/rental-file-service"
 import { toast } from "sonner"
 import { ImprovedIncomeSection } from "./improved-income-section"
+import { SupabaseFileUpload } from "@/components/supabase-file-upload"
 
 interface ImprovedPersonProfileProps {
   profile: any
@@ -42,7 +31,6 @@ export function ImprovedPersonProfile({
   canRemove = false,
 }: ImprovedPersonProfileProps) {
   const [currentSubStep, setCurrentSubStep] = useState(1)
-  const [uploadingItem, setUploadingItem] = useState<string | null>(null)
   const [validationErrors, setValidationErrors] = useState<string[]>([])
 
   const totalSubSteps = 5
@@ -110,168 +98,28 @@ export function ImprovedPersonProfile({
     return Math.round((completed / total) * 100)
   }
 
-  const handleFileUpload = async (category: string, files: FileList | null) => {
-    if (!files) return
+  const handleFileUpload = async (category: string, urls: string[]) => {
+    const updatedProfile = { ...profile }
 
-    setUploadingItem(category)
-
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-
-      const fileUrls = Array.from(files).map((file) => URL.createObjectURL(file))
-
-      const updatedProfile = { ...profile }
-
-      // Gestion des différents types de documents
-      if (category === "identity") {
-        updatedProfile.identity_documents = [...(updatedProfile.identity_documents || []), ...fileUrls]
-      } else if (category === "activity") {
-        updatedProfile.activity_documents = [...(updatedProfile.activity_documents || []), ...fileUrls]
-      } else if (category === "tax") {
-        if (!updatedProfile.tax_situation) updatedProfile.tax_situation = { type: "own_notice", documents: [] }
-        updatedProfile.tax_situation.documents = [...(updatedProfile.tax_situation.documents || []), ...fileUrls]
-      } else if (category.startsWith("housing_")) {
-        const docType = category.replace("housing_", "")
-        if (!updatedProfile.current_housing_documents) updatedProfile.current_housing_documents = {}
-        updatedProfile.current_housing_documents[docType] = [
-          ...(updatedProfile.current_housing_documents[docType] || []),
-          ...fileUrls,
-        ]
-      } else {
-        // Documents de revenus
-        const [source, type] = category.split("_")
-        if (!updatedProfile.income_sources) updatedProfile.income_sources = {}
-
-        if (Array.isArray(updatedProfile.income_sources[source])) {
-          const index = Number.parseInt(type)
-          if (updatedProfile.income_sources[source][index]) {
-            updatedProfile.income_sources[source][index].documents = [
-              ...(updatedProfile.income_sources[source][index].documents || []),
-              ...fileUrls,
-            ]
-          }
-        } else {
-          if (!updatedProfile.income_sources[source]) {
-            updatedProfile.income_sources[source] = { documents: [] }
-          }
-          updatedProfile.income_sources[source].documents = [
-            ...(updatedProfile.income_sources[source].documents || []),
-            ...fileUrls,
-          ]
-        }
-      }
-
-      onUpdate(updatedProfile)
-      toast.success("Document ajouté avec succès")
-    } catch (error) {
-      console.error("Erreur upload:", error)
-      toast.error("Erreur lors de l'upload du fichier")
-    } finally {
-      setUploadingItem(null)
-    }
-  }
-
-  const FileUploadZone = ({
-    category,
-    label,
-    multiple = false,
-    existingFiles = [],
-  }: {
-    category: string
-    label: string
-    multiple?: boolean
-    existingFiles?: string[]
-  }) => {
-    const isUploading = uploadingItem === category
-
-    const removeFile = (fileIndex: number) => {
-      const updatedProfile = { ...profile }
-
-      if (category === "identity") {
-        updatedProfile.identity_documents =
-          updatedProfile.identity_documents?.filter((_: any, i: number) => i !== fileIndex) || []
-      } else if (category === "activity") {
-        updatedProfile.activity_documents =
-          updatedProfile.activity_documents?.filter((_: any, i: number) => i !== fileIndex) || []
-      } else if (category === "tax") {
-        if (updatedProfile.tax_situation?.documents) {
-          updatedProfile.tax_situation.documents = updatedProfile.tax_situation.documents.filter(
-            (_: any, i: number) => i !== fileIndex,
-          )
-        }
-      } else if (category.startsWith("housing_")) {
-        const docType = category.replace("housing_", "")
-        if (updatedProfile.current_housing_documents?.[docType]) {
-          updatedProfile.current_housing_documents[docType] = updatedProfile.current_housing_documents[docType].filter(
-            (_: any, i: number) => i !== fileIndex,
-          )
-        }
-      }
-
-      onUpdate(updatedProfile)
+    // Gestion des différents types de documents
+    if (category === "identity") {
+      updatedProfile.identity_documents = [...(updatedProfile.identity_documents || []), ...urls]
+    } else if (category === "activity") {
+      updatedProfile.activity_documents = [...(updatedProfile.activity_documents || []), ...urls]
+    } else if (category === "tax") {
+      if (!updatedProfile.tax_situation) updatedProfile.tax_situation = { type: "own_notice", documents: [] }
+      updatedProfile.tax_situation.documents = [...(updatedProfile.tax_situation.documents || []), ...urls]
+    } else if (category.startsWith("housing_")) {
+      const docType = category.replace("housing_", "")
+      if (!updatedProfile.current_housing_documents) updatedProfile.current_housing_documents = {}
+      updatedProfile.current_housing_documents[docType] = [
+        ...(updatedProfile.current_housing_documents[docType] || []),
+        ...urls,
+      ]
     }
 
-    return (
-      <div className="space-y-2">
-        <Label className="text-sm font-medium">{label}</Label>
-
-        {/* Fichiers existants */}
-        {existingFiles.length > 0 && (
-          <div className="space-y-2">
-            {existingFiles.map((file, index) => (
-              <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded border">
-                <div className="flex items-center space-x-2">
-                  <FileText className="h-4 w-4 text-gray-500" />
-                  <span className="text-sm text-gray-700">
-                    {file.includes("blob:")
-                      ? `Document ${index + 1}`
-                      : file.split("/").pop() || `Document ${index + 1}`}
-                  </span>
-                </div>
-                <Button
-                  onClick={() => removeFile(index)}
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
-                >
-                  <X className="h-3 w-3" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Zone d'upload */}
-        <div className="relative">
-          <input
-            type="file"
-            multiple={multiple}
-            accept=".pdf,.jpg,.jpeg,.png"
-            onChange={(e) => handleFileUpload(category, e.target.files)}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            disabled={isUploading}
-          />
-          <div
-            className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors ${
-              isUploading ? "border-blue-300 bg-blue-50" : "border-gray-300 hover:border-gray-400"
-            }`}
-          >
-            {isUploading ? (
-              <div className="space-y-2">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="text-sm text-blue-600">Upload en cours...</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <Upload className="h-6 w-6 text-gray-400 mx-auto" />
-                <p className="text-sm text-gray-600">Ajouter {multiple ? "des documents" : "un document"}</p>
-                <p className="text-xs text-gray-500">PDF, JPG, PNG (max 10MB)</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    )
+    onUpdate(updatedProfile)
+    toast.success(`${urls.length} document(s) ajouté(s) avec succès`)
   }
 
   // Fonction pour obtenir l'icône de chaque sous-étape
@@ -448,11 +296,13 @@ export function ImprovedPersonProfile({
               />
             </div>
 
-            <FileUploadZone
-              category="identity"
-              label="Carte Nationale d'Identité *"
-              multiple
+            <SupabaseFileUpload
+              onFilesUploaded={(urls) => handleFileUpload("identity", urls)}
+              maxFiles={3}
+              bucket="documents"
+              folder="identity"
               existingFiles={profile.identity_documents || []}
+              acceptedTypes={["image/*", "application/pdf"]}
             />
           </div>
         )}
@@ -496,10 +346,12 @@ export function ImprovedPersonProfile({
                     <li>• Attestation de bon paiement des loyers</li>
                   </ul>
                 </div>
-                <FileUploadZone category="housing_quittances_loyer" label="3 dernières quittances de loyer" multiple />
-                <FileUploadZone
-                  category="housing_attestation_bon_paiement"
-                  label="Attestation de bon paiement des loyers"
+                <SupabaseFileUpload
+                  onFilesUploaded={(urls) => handleFileUpload("housing_quittances_loyer", urls)}
+                  maxFiles={3}
+                  bucket="documents"
+                  folder="housing"
+                  existingFiles={profile.current_housing_documents?.quittances_loyer || []}
                 />
               </div>
             )}
@@ -512,10 +364,6 @@ export function ImprovedPersonProfile({
                     <li>• Attestation d'hébergement de moins de 3 mois</li>
                   </ul>
                 </div>
-                <FileUploadZone
-                  category="housing_attestation_hebergement"
-                  label="Attestation d'hébergement de moins de 3 mois"
-                />
               </div>
             )}
 
@@ -527,7 +375,6 @@ export function ImprovedPersonProfile({
                     <li>• Avis de taxe foncière 2024</li>
                   </ul>
                 </div>
-                <FileUploadZone category="housing_avis_taxe_fonciere" label="Avis de taxe foncière 2024" />
               </div>
             )}
           </div>
@@ -585,10 +432,11 @@ export function ImprovedPersonProfile({
                   </ul>
                 </div>
 
-                <FileUploadZone
-                  category="activity"
-                  label={`Documents justificatifs - ${MAIN_ACTIVITIES.find((a) => a.value === profile.main_activity)?.label} *`}
-                  multiple
+                <SupabaseFileUpload
+                  onFilesUploaded={(urls) => handleFileUpload("activity", urls)}
+                  maxFiles={5}
+                  bucket="documents"
+                  folder="activity"
                   existingFiles={profile.activity_documents || []}
                 />
               </div>
@@ -651,7 +499,13 @@ export function ImprovedPersonProfile({
               </div>
             )}
 
-            <FileUploadZone category="tax" label="Avis d'imposition *" multiple />
+            <SupabaseFileUpload
+              onFilesUploaded={(urls) => handleFileUpload("tax", urls)}
+              maxFiles={3}
+              bucket="documents"
+              folder="tax"
+              existingFiles={profile.tax_situation?.documents || []}
+            />
 
             {completion >= 80 && (
               <div className="bg-green-50 border border-green-200 rounded-lg p-4">

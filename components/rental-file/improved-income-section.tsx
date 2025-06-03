@@ -1,6 +1,4 @@
 "use client"
-
-import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -9,11 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
-  Upload,
   Plus,
   X,
   Euro,
-  FileText,
   CheckCircle,
   Briefcase,
   Heart,
@@ -30,103 +26,119 @@ import {
   RENT_INCOME_TYPES,
 } from "@/lib/rental-file-service"
 import { toast } from "sonner"
+import { SupabaseFileUpload } from "@/components/supabase-file-upload"
 
 interface ImprovedIncomeSourceProps {
   profile: any
   onUpdate: (profile: any) => void
 }
 
+interface IncomeTypeCardProps {
+  icon: any
+  title: string
+  description: string
+  isActive: boolean
+  onToggle: () => void
+  documentCount: number
+}
+
+function IncomeTypeCard({ icon: Icon, title, description, isActive, onToggle, documentCount }: IncomeTypeCardProps) {
+  return (
+    <Card
+      className={`cursor-pointer hover:opacity-80 transition-opacity ${isActive ? "border-2 border-blue-500" : ""}`}
+      onClick={onToggle}
+    >
+      <CardContent className="flex items-center space-x-4">
+        <Icon className="h-6 w-6 text-gray-500" />
+        <div>
+          <h4 className="font-medium">{title}</h4>
+          <p className="text-sm text-gray-500">{description}</p>
+          {documentCount > 0 && (
+            <Badge variant="outline" className="mt-2 bg-green-50">
+              <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
+              {documentCount}
+            </Badge>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourceProps) {
-  const [uploadingItem, setUploadingItem] = useState<string | null>(null)
+  const handleFileUpload = async (category: string, urls: string[]) => {
+    const updatedProfile = { ...profile }
+    if (!updatedProfile.income_sources) updatedProfile.income_sources = {}
 
-  const handleFileUpload = async (category: string, files: FileList | null) => {
-    if (!files) return
-
-    setUploadingItem(category)
-
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-
-      const fileUrls = Array.from(files).map((file) => URL.createObjectURL(file))
-
-      const updatedProfile = { ...profile }
-      if (!updatedProfile.income_sources) updatedProfile.income_sources = {}
-
-      // Gestion spécifique pour les revenus du travail
-      if (category === "income_work_income") {
-        if (!updatedProfile.income_sources.work_income) {
-          updatedProfile.income_sources.work_income = { documents: [] }
-        }
-        updatedProfile.income_sources.work_income.documents = [
-          ...(updatedProfile.income_sources.work_income.documents || []),
-          ...fileUrls,
-        ]
+    // Gestion spécifique pour les revenus du travail
+    if (category === "income_work_income") {
+      if (!updatedProfile.income_sources.work_income) {
+        updatedProfile.income_sources.work_income = { documents: [] }
       }
-      // Gestion pour les aides sociales
-      else if (category.startsWith("income_social_aid_")) {
-        const index = Number.parseInt(category.split("_")[3])
-        if (!updatedProfile.income_sources.social_aid) updatedProfile.income_sources.social_aid = []
-        if (!updatedProfile.income_sources.social_aid[index]) {
-          updatedProfile.income_sources.social_aid[index] = { documents: [] }
-        }
-        updatedProfile.income_sources.social_aid[index].documents = [
-          ...(updatedProfile.income_sources.social_aid[index].documents || []),
-          ...fileUrls,
-        ]
-      }
-      // Gestion pour les retraites/pensions
-      else if (category.startsWith("income_retirement_pension_")) {
-        const index = Number.parseInt(category.split("_")[3])
-        if (!updatedProfile.income_sources.retirement_pension) updatedProfile.income_sources.retirement_pension = []
-        if (!updatedProfile.income_sources.retirement_pension[index]) {
-          updatedProfile.income_sources.retirement_pension[index] = { documents: [] }
-        }
-        updatedProfile.income_sources.retirement_pension[index].documents = [
-          ...(updatedProfile.income_sources.retirement_pension[index].documents || []),
-          ...fileUrls,
-        ]
-      }
-      // Gestion pour les rentes
-      else if (category.startsWith("income_rent_income_")) {
-        const index = Number.parseInt(category.split("_")[3])
-        if (!updatedProfile.income_sources.rent_income) updatedProfile.income_sources.rent_income = []
-        if (!updatedProfile.income_sources.rent_income[index]) {
-          updatedProfile.income_sources.rent_income[index] = { documents: [] }
-        }
-        updatedProfile.income_sources.rent_income[index].documents = [
-          ...(updatedProfile.income_sources.rent_income[index].documents || []),
-          ...fileUrls,
-        ]
-      }
-      // Gestion pour les bourses
-      else if (category === "income_scholarship") {
-        if (!updatedProfile.income_sources.scholarship) {
-          updatedProfile.income_sources.scholarship = { documents: [] }
-        }
-        updatedProfile.income_sources.scholarship.documents = [
-          ...(updatedProfile.income_sources.scholarship.documents || []),
-          ...fileUrls,
-        ]
-      }
-      // Gestion pour pas de revenus
-      else if (category === "income_no_income") {
-        if (!updatedProfile.income_sources.no_income) {
-          updatedProfile.income_sources.no_income = { documents: [] }
-        }
-        updatedProfile.income_sources.no_income.documents = [
-          ...(updatedProfile.income_sources.no_income.documents || []),
-          ...fileUrls,
-        ]
-      }
-
-      onUpdate(updatedProfile)
-      toast.success("Document ajouté avec succès")
-    } catch (error) {
-      console.error("Erreur upload:", error)
-      toast.error("Erreur lors de l'upload du fichier")
-    } finally {
-      setUploadingItem(null)
+      updatedProfile.income_sources.work_income.documents = [
+        ...(updatedProfile.income_sources.work_income.documents || []),
+        ...urls,
+      ]
     }
+    // Gestion pour les aides sociales
+    else if (category.startsWith("income_social_aid_")) {
+      const index = Number.parseInt(category.split("_")[3])
+      if (!updatedProfile.income_sources.social_aid) updatedProfile.income_sources.social_aid = []
+      if (!updatedProfile.income_sources.social_aid[index]) {
+        updatedProfile.income_sources.social_aid[index] = { documents: [] }
+      }
+      updatedProfile.income_sources.social_aid[index].documents = [
+        ...(updatedProfile.income_sources.social_aid[index].documents || []),
+        ...urls,
+      ]
+    }
+    // Gestion pour les retraites/pensions
+    else if (category.startsWith("income_retirement_pension_")) {
+      const index = Number.parseInt(category.split("_")[3])
+      if (!updatedProfile.income_sources.retirement_pension) updatedProfile.income_sources.retirement_pension = []
+      if (!updatedProfile.income_sources.retirement_pension[index]) {
+        updatedProfile.income_sources.retirement_pension[index] = { documents: [] }
+      }
+      updatedProfile.income_sources.retirement_pension[index].documents = [
+        ...(updatedProfile.income_sources.retirement_pension[index].documents || []),
+        ...urls,
+      ]
+    }
+    // Gestion pour les rentes
+    else if (category.startsWith("income_rent_income_")) {
+      const index = Number.parseInt(category.split("_")[3])
+      if (!updatedProfile.income_sources.rent_income) updatedProfile.income_sources.rent_income = []
+      if (!updatedProfile.income_sources.rent_income[index]) {
+        updatedProfile.income_sources.rent_income[index] = { documents: [] }
+      }
+      updatedProfile.income_sources.rent_income[index].documents = [
+        ...(updatedProfile.income_sources.rent_income[index].documents || []),
+        ...urls,
+      ]
+    }
+    // Gestion pour les bourses
+    else if (category === "income_scholarship") {
+      if (!updatedProfile.income_sources.scholarship) {
+        updatedProfile.income_sources.scholarship = { documents: [] }
+      }
+      updatedProfile.income_sources.scholarship.documents = [
+        ...(updatedProfile.income_sources.scholarship.documents || []),
+        ...urls,
+      ]
+    }
+    // Gestion pour pas de revenus
+    else if (category === "income_no_income") {
+      if (!updatedProfile.income_sources.no_income) {
+        updatedProfile.income_sources.no_income = { documents: [] }
+      }
+      updatedProfile.income_sources.no_income.documents = [
+        ...(updatedProfile.income_sources.no_income.documents || []),
+        ...urls,
+      ]
+    }
+
+    onUpdate(updatedProfile)
+    toast.success(`${urls.length} document(s) ajouté(s) avec succès`)
   }
 
   const addIncomeSource = (sourceType: string) => {
@@ -225,180 +237,6 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
     onUpdate(updatedProfile)
   }
 
-  const FileUploadZone = ({
-    category,
-    label,
-    multiple = false,
-    existingFiles = [],
-  }: {
-    category: string
-    label: string
-    multiple?: boolean
-    existingFiles?: string[]
-  }) => {
-    const isUploading = uploadingItem === category
-
-    const removeFile = (fileIndex: number) => {
-      const updatedProfile = { ...profile }
-
-      if (category === "income_work_income") {
-        if (updatedProfile.income_sources?.work_income?.documents) {
-          updatedProfile.income_sources.work_income.documents =
-            updatedProfile.income_sources.work_income.documents.filter((_: any, i: number) => i !== fileIndex)
-        }
-      } else if (category.startsWith("income_social_aid_")) {
-        const index = Number.parseInt(category.split("_")[3])
-        if (updatedProfile.income_sources?.social_aid?.[index]?.documents) {
-          updatedProfile.income_sources.social_aid[index].documents = updatedProfile.income_sources.social_aid[
-            index
-          ].documents.filter((_: any, i: number) => i !== fileIndex)
-        }
-      } else if (category.startsWith("income_retirement_pension_")) {
-        const index = Number.parseInt(category.split("_")[3])
-        if (updatedProfile.income_sources?.retirement_pension?.[index]?.documents) {
-          updatedProfile.income_sources.retirement_pension[index].documents =
-            updatedProfile.income_sources.retirement_pension[index].documents.filter(
-              (_: any, i: number) => i !== fileIndex,
-            )
-        }
-      } else if (category.startsWith("income_rent_income_")) {
-        const index = Number.parseInt(category.split("_")[3])
-        if (updatedProfile.income_sources?.rent_income?.[index]?.documents) {
-          updatedProfile.income_sources.rent_income[index].documents = updatedProfile.income_sources.rent_income[
-            index
-          ].documents.filter((_: any, i: number) => i !== fileIndex)
-        }
-      } else if (category === "income_scholarship") {
-        if (updatedProfile.income_sources?.scholarship?.documents) {
-          updatedProfile.income_sources.scholarship.documents =
-            updatedProfile.income_sources.scholarship.documents.filter((_: any, i: number) => i !== fileIndex)
-        }
-      } else if (category === "income_no_income") {
-        if (updatedProfile.income_sources?.no_income?.documents) {
-          updatedProfile.income_sources.no_income.documents = updatedProfile.income_sources.no_income.documents.filter(
-            (_: any, i: number) => i !== fileIndex,
-          )
-        }
-      }
-
-      onUpdate(updatedProfile)
-    }
-
-    return (
-      <div className="space-y-2">
-        <Label className="text-sm font-medium">{label}</Label>
-
-        {/* Fichiers existants */}
-        {existingFiles.length > 0 && (
-          <div className="space-y-2">
-            {existingFiles.map((file, index) => (
-              <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded border">
-                <div className="flex items-center space-x-2">
-                  <FileText className="h-4 w-4 text-gray-500" />
-                  <span className="text-sm text-gray-700">
-                    {file.includes("blob:")
-                      ? `Document ${index + 1}`
-                      : file.split("/").pop() || `Document ${index + 1}`}
-                  </span>
-                </div>
-                <Button
-                  onClick={() => removeFile(index)}
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
-                >
-                  <X className="h-3 w-3" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Zone d'upload */}
-        <div className="relative">
-          <input
-            type="file"
-            multiple={multiple}
-            accept=".pdf,.jpg,.jpeg,.png"
-            onChange={(e) => handleFileUpload(category, e.target.files)}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            disabled={isUploading}
-          />
-          <div
-            className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors ${
-              isUploading ? "border-blue-300 bg-blue-50" : "border-gray-300 hover:border-gray-400"
-            }`}
-          >
-            {isUploading ? (
-              <div className="space-y-2">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="text-sm text-blue-600">Upload en cours...</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <Upload className="h-6 w-6 text-gray-400 mx-auto" />
-                <p className="text-sm text-gray-600">Ajouter {multiple ? "des documents" : "un document"}</p>
-                <p className="text-xs text-gray-500">PDF, JPG, PNG (max 10MB)</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  const IncomeTypeCard = ({
-    icon: Icon,
-    title,
-    description,
-    isActive,
-    onToggle,
-    documentCount = 0,
-  }: {
-    icon: any
-    title: string
-    description: string
-    isActive: boolean
-    onToggle: () => void
-    documentCount?: number
-  }) => (
-    <Card
-      className={`cursor-pointer transition-all duration-200 ${
-        isActive ? "border-blue-500 bg-blue-50 shadow-md" : "border-gray-200 hover:border-gray-300 hover:shadow-sm"
-      }`}
-      onClick={onToggle}
-    >
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className={`p-2 rounded-lg ${isActive ? "bg-blue-100" : "bg-gray-100"}`}>
-              <Icon className={`h-5 w-5 ${isActive ? "text-blue-600" : "text-gray-600"}`} />
-            </div>
-            <div>
-              <h4 className="font-medium text-gray-900">{title}</h4>
-              <p className="text-sm text-gray-600">{description}</p>
-            </div>
-          </div>
-          <div className="flex items-center space-x-2">
-            {documentCount > 0 && (
-              <Badge variant="outline" className="bg-green-50">
-                <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
-                {documentCount}
-              </Badge>
-            )}
-            <div
-              className={`w-4 h-4 rounded-full border-2 ${
-                isActive ? "bg-blue-500 border-blue-500" : "border-gray-300"
-              }`}
-            >
-              {isActive && <CheckCircle className="h-3 w-3 text-white" />}
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-
   const hasAnyIncome = profile.income_sources && Object.keys(profile.income_sources).length > 0
 
   return (
@@ -490,11 +328,12 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
                 />
               </div>
 
-              <FileUploadZone
+              <SupabaseFileUpload
                 category="income_work_income"
                 label="Justificatifs de revenus *"
                 multiple
                 existingFiles={profile.income_sources.work_income.documents || []}
+                onChange={handleFileUpload}
               />
             </CardContent>
           </Card>
@@ -521,11 +360,12 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
                 />
               </div>
 
-              <FileUploadZone
+              <SupabaseFileUpload
                 category="income_scholarship"
                 label="Justificatifs de bourse"
                 multiple
                 existingFiles={profile.income_sources.scholarship.documents || []}
+                onChange={handleFileUpload}
               />
             </CardContent>
           </Card>
@@ -552,11 +392,12 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
                 />
               </div>
 
-              <FileUploadZone
+              <SupabaseFileUpload
                 category="income_no_income"
                 label="Justificatifs (optionnel)"
                 multiple
                 existingFiles={profile.income_sources.no_income.documents || []}
+                onChange={handleFileUpload}
               />
             </CardContent>
           </Card>
@@ -656,11 +497,12 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
                     />
                   </div>
 
-                  <FileUploadZone
+                  <SupabaseFileUpload
                     category={`income_social_aid_${index}`}
                     label="Justificatifs"
                     multiple
                     existingFiles={aid.documents || []}
+                    onChange={handleFileUpload}
                   />
                 </CardContent>
               </Card>
@@ -739,11 +581,12 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
                     </div>
                   </div>
 
-                  <FileUploadZone
+                  <SupabaseFileUpload
                     category={`income_retirement_pension_${index}`}
                     label="Justificatifs"
                     multiple
                     existingFiles={pension.documents || []}
+                    onChange={handleFileUpload}
                   />
                 </CardContent>
               </Card>
@@ -818,11 +661,12 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
                     </div>
                   </div>
 
-                  <FileUploadZone
+                  <SupabaseFileUpload
                     category={`income_rent_income_${index}`}
                     label="Justificatifs"
                     multiple
                     existingFiles={rent.documents || []}
+                    onChange={handleFileUpload}
                   />
                 </CardContent>
               </Card>
