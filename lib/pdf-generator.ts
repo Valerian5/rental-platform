@@ -1,9 +1,8 @@
 import { type RentalFileData, MAIN_ACTIVITIES } from "./rental-file-service"
 
 export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise<void> => {
-  // Import dynamique des bibliothèques pour éviter les erreurs SSR
+  // Import dynamique de jsPDF pour éviter les erreurs SSR
   const { jsPDF } = await import("jspdf")
-  const { PDFDocument } = await import("pdf-lib")
 
   const doc = new jsPDF()
   let yPosition = 20
@@ -57,22 +56,31 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     }
   }
 
-  // Fonction pour convertir un PDF en images et les ajouter au document
+  // Fonction pour intégrer toutes les pages d'un PDF
   const addPDFPages = async (pdfUrl: string, documentName: string) => {
     try {
-      console.log("📄 Intégration du PDF:", documentName, "URL:", pdfUrl)
+      console.log("📄 Intégration complète du PDF:", documentName, "URL:", pdfUrl)
 
-      // Récupérer le PDF
-      const response = await fetch(pdfUrl)
+      // Appeler l'API pour extraire les pages
+      const response = await fetch("/api/pdf/extract-pages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ pdfUrl }),
+      })
+
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        throw new Error(`API Error: ${response.status}`)
       }
 
-      const pdfArrayBuffer = await response.arrayBuffer()
-      const pdfDoc = await PDFDocument.load(pdfArrayBuffer)
-      const pageCount = pdfDoc.getPageCount()
+      const result = await response.json()
 
-      console.log(`📋 PDF chargé: ${pageCount} page(s)`)
+      if (!result.success) {
+        throw new Error(result.message || "Erreur lors de l'extraction")
+      }
+
+      console.log(`📋 ${result.pageCount} pages extraites du PDF`)
 
       // Ajouter une page de titre pour le document
       doc.addPage()
@@ -82,72 +90,50 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       doc.setTextColor("#FFFFFF")
       doc.setFontSize(14)
       doc.setFont("helvetica", "bold")
-      doc.text("DOCUMENT PDF", margin, 15)
+      doc.text("DOCUMENT PDF INTÉGRÉ", margin, 15)
 
       doc.setFontSize(10)
       doc.text(documentName, margin, 25)
 
       doc.setTextColor("#000000")
       doc.setFontSize(12)
-      doc.text(`Document PDF - ${pageCount} page(s)`, margin, 50)
+      doc.text(`Document PDF complet - ${result.pageCount} page(s)`, margin, 50)
       doc.setFontSize(10)
-      doc.text("Les pages suivantes contiennent le document complet.", margin, 65)
+      doc.text("Toutes les pages du document original sont intégrées ci-après.", margin, 65)
 
-      // Pour chaque page du PDF, la convertir en image et l'ajouter
-      for (let i = 0; i < pageCount; i++) {
+      // Ajouter chaque page du PDF
+      for (const pageData of result.pages) {
         try {
-          console.log(`📄 Traitement page ${i + 1}/${pageCount}`)
+          if (pageData.error) {
+            // Ajouter une page d'erreur
+            doc.addPage()
+            doc.setTextColor("#000000")
+            doc.setFontSize(12)
+            doc.text(`Page ${pageData.pageNumber} - Erreur`, margin, 50)
+            doc.setFontSize(10)
+            doc.text(pageData.error, margin, 70)
+            continue
+          }
 
-          // Créer un nouveau PDF avec juste cette page
-          const singlePagePdf = await PDFDocument.create()
-          const [copiedPage] = await singlePagePdf.copyPages(pdfDoc, [i])
-          singlePagePdf.addPage(copiedPage)
+          if (!pageData.imageData) {
+            continue
+          }
 
-          // Convertir en ArrayBuffer
-          const singlePagePdfBytes = await singlePagePdf.save()
-
-          // Utiliser PDF.js pour rendre la page en canvas
-          const pdfjsLib = await import("pdfjs-dist")
-
-          // Configurer le worker
-          pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`
-
-          const loadingTask = pdfjsLib.getDocument({ data: singlePagePdfBytes })
-          const pdf = await loadingTask.promise
-          const page = await pdf.getPage(1)
-
-          // Créer un canvas pour rendre la page
-          const canvas = document.createElement("canvas")
-          const context = canvas.getContext("2d")
-
-          // Calculer la taille optimale
-          const viewport = page.getViewport({ scale: 2.0 })
-          canvas.height = viewport.height
-          canvas.width = viewport.width
-
-          // Rendre la page
-          await page.render({
-            canvasContext: context,
-            viewport: viewport,
-          }).promise
-
-          // Convertir le canvas en image
-          const imageData = canvas.toDataURL("image/jpeg", 0.8)
+          console.log(`📄 Ajout page ${pageData.pageNumber}`)
 
           // Ajouter une nouvelle page au PDF final
           doc.addPage()
 
           // Calculer les dimensions pour ajuster l'image à la page
-          const imgWidth = pageWidth - 2 * margin
-          const imgHeight = (viewport.height * imgWidth) / viewport.width
+          const availableWidth = pageWidth - 2 * margin
+          const availableHeight = pageHeight - 2 * margin
 
-          // Si l'image est trop haute, l'ajuster
-          let finalWidth = imgWidth
-          let finalHeight = imgHeight
+          let finalWidth = availableWidth
+          let finalHeight = (pageData.height * availableWidth) / pageData.width
 
-          if (imgHeight > pageHeight - 2 * margin) {
-            finalHeight = pageHeight - 2 * margin
-            finalWidth = (viewport.width * finalHeight) / viewport.height
+          if (finalHeight > availableHeight) {
+            finalHeight = availableHeight
+            finalWidth = (pageData.width * availableHeight) / pageData.height
           }
 
           // Centrer l'image
@@ -155,23 +141,23 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
           const yPos = (pageHeight - finalHeight) / 2
 
           // Ajouter l'image au PDF
-          doc.addImage(imageData, "JPEG", xPos, yPos, finalWidth, finalHeight)
+          doc.addImage(pageData.imageData, "JPEG", xPos, yPos, finalWidth, finalHeight)
 
-          console.log(`✅ Page ${i + 1} ajoutée au PDF`)
+          console.log(`✅ Page ${pageData.pageNumber} ajoutée au PDF`)
         } catch (pageError) {
-          console.error(`❌ Erreur page ${i + 1}:`, pageError)
+          console.error(`❌ Erreur ajout page ${pageData.pageNumber}:`, pageError)
 
           // Ajouter une page d'erreur
           doc.addPage()
           doc.setTextColor("#000000")
           doc.setFontSize(12)
-          doc.text(`Erreur lors du chargement de la page ${i + 1}`, margin, 50)
+          doc.text(`Erreur page ${pageData.pageNumber}`, margin, 50)
           doc.setFontSize(10)
-          doc.text("Cette page n'a pas pu être intégrée au PDF.", margin, 70)
+          doc.text("Cette page n'a pas pu être intégrée.", margin, 70)
         }
       }
 
-      console.log(`✅ PDF intégré: ${documentName}`)
+      console.log(`✅ PDF complet intégré: ${documentName}`)
     } catch (error) {
       console.error("❌ Erreur lors de l'intégration du PDF:", error)
 
@@ -193,11 +179,12 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       doc.text("Erreur lors de l'intégration du PDF", margin, 50)
       doc.setFontSize(10)
       doc.text("Ce document n'a pas pu être intégré au PDF final.", margin, 70)
+      doc.text(`Erreur: ${error.message}`, margin, 85)
     }
   }
 
   // Fonction pour ajouter une image dans le PDF
-  const addImageToPDF = async (documentUrl: string, documentName: string, maxWidth = 150, maxHeight = 200) => {
+  const addImageToPDF = async (documentUrl: string, documentName: string) => {
     try {
       console.log("📄 Tentative d'ajout du document:", documentName, "URL:", documentUrl)
 
@@ -230,7 +217,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       const fileType = getFileType(documentUrl)
       console.log("📋 Type de fichier détecté:", fileType)
 
-      // Traitement spécial pour les PDF
+      // Traitement spécial pour les PDF - INTÉGRATION COMPLÈTE
       if (fileType === "pdf") {
         await addPDFPages(documentUrl, documentName)
         return
@@ -291,13 +278,16 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
             const imgWidth = img.width
             const imgHeight = img.height
 
-            // Calculer les dimensions finales
-            let finalWidth = maxWidth
-            let finalHeight = (imgHeight * maxWidth) / imgWidth
+            // Calculer les dimensions finales pour utiliser toute la page
+            const availableWidth = pageWidth - 2 * margin
+            const availableHeight = pageHeight - 80 // Espace pour l'en-tête
 
-            if (finalHeight > maxHeight) {
-              finalHeight = maxHeight
-              finalWidth = (imgWidth * maxHeight) / imgHeight
+            let finalWidth = availableWidth
+            let finalHeight = (imgHeight * availableWidth) / imgWidth
+
+            if (finalHeight > availableHeight) {
+              finalHeight = availableHeight
+              finalWidth = (imgWidth * availableHeight) / imgHeight
             }
 
             // Centrer l'image
