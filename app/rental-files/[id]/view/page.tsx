@@ -46,12 +46,19 @@ export default function RentalFileViewerPage({ params }: { params: { id: string 
   const handleDownload = async () => {
     try {
       toast.info("Génération du PDF en cours...")
-      // Ici on pourrait appeler une API pour générer le PDF
-      const link = document.createElement("a")
-      link.href = `/placeholder.svg?height=800&width=600&query=Dossier de location PDF complet`
-      link.download = `dossier-location-${params.id}.pdf`
-      link.click()
-      toast.success("PDF téléchargé avec succès")
+
+      if (!rentalFile) {
+        toast.error("Aucun dossier à télécharger")
+        return
+      }
+
+      // Importer dynamiquement le générateur PDF
+      const { generateRentalFilePDF } = await import("@/lib/pdf-generator")
+
+      // Générer le PDF
+      await generateRentalFilePDF(rentalFile)
+
+      toast.success("PDF généré avec succès")
     } catch (error) {
       console.error("Erreur:", error)
       toast.error("Erreur lors de la génération du PDF")

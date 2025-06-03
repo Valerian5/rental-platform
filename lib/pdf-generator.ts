@@ -5,14 +5,23 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
   const { jsPDF } = await import("jspdf")
   const { PDFDocument } = await import("pdf-lib")
 
+  // Configuration générale
   const doc = new jsPDF()
   let yPosition = 20
   const pageWidth = doc.internal.pageSize.width
   const pageHeight = doc.internal.pageSize.height
   const margin = 20
 
+  // Couleurs de la charte graphique
+  const primaryColor = "#3B82F6" // Bleu principal
+  const secondaryColor = "#1E40AF" // Bleu foncé
+  const accentColor = "#10B981" // Vert pour les montants
+
   // Stocker les PDF à merger à la fin
   const pdfsToMerge = []
+
+  // Collecter tous les documents pour les annexes
+  const allDocuments = []
 
   // Fonction helper pour ajouter du texte avec retour à la ligne
   const addText = (text: string, x: number, y: number, options: any = {}) => {
@@ -61,7 +70,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
   }
 
   // Fonction pour préparer un PDF pour le merge
-  const preparePDFForMerge = async (pdfUrl: string, documentName: string) => {
+  const preparePDFForMerge = async (pdfUrl: string, documentName: string, category: string) => {
     try {
       console.log("📄 Préparation PDF pour merge:", documentName, "URL:", pdfUrl)
 
@@ -86,102 +95,57 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
 
       console.log(`📋 PDF préparé: ${result.pageCount} pages`)
 
-      // Ajouter une page de titre pour le document
-      doc.addPage()
-      doc.setFillColor("#3B82F6")
-      doc.rect(0, 0, pageWidth, 30, "F")
-
-      doc.setTextColor("#FFFFFF")
-      doc.setFontSize(14)
-      doc.setFont("helvetica", "bold")
-      doc.text("DOCUMENT PDF INTÉGRÉ", margin, 15)
-
-      doc.setFontSize(10)
-      doc.text(documentName, margin, 25)
-
-      doc.setTextColor("#000000")
-      doc.setFontSize(12)
-      doc.text(`Document PDF complet - ${result.pageCount} page(s)`, margin, 50)
-      doc.setFontSize(10)
-      doc.text("Le document PDF complet sera intégré après cette page.", margin, 65)
+      // Ajouter le document à la liste des annexes
+      allDocuments.push({
+        name: documentName,
+        type: "pdf",
+        category: category,
+        pageCount: result.pageCount,
+      })
 
       // Stocker le PDF pour le merge final
       pdfsToMerge.push({
         name: documentName,
         data: new Uint8Array(result.pdfData),
         pageCount: result.pageCount,
+        category: category,
       })
 
       console.log(`✅ PDF préparé pour merge: ${documentName}`)
     } catch (error) {
       console.error("❌ Erreur lors de la préparation du PDF:", error)
 
-      // Ajouter une page d'erreur
-      doc.addPage()
-      doc.setFillColor("#3B82F6")
-      doc.rect(0, 0, pageWidth, 30, "F")
-
-      doc.setTextColor("#FFFFFF")
-      doc.setFontSize(14)
-      doc.setFont("helvetica", "bold")
-      doc.text("DOCUMENT PDF", margin, 15)
-
-      doc.setFontSize(10)
-      doc.text(documentName, margin, 25)
-
-      doc.setTextColor("#000000")
-      doc.setFontSize(12)
-      doc.text("Erreur lors de la préparation du PDF", margin, 50)
-      doc.setFontSize(10)
-      doc.text("Ce document n'a pas pu être préparé pour l'intégration.", margin, 70)
-      doc.text(`Erreur: ${error.message}`, margin, 85)
+      // Ajouter quand même à la liste des annexes avec une erreur
+      allDocuments.push({
+        name: documentName,
+        type: "error",
+        category: category,
+        error: error.message,
+      })
     }
   }
 
-  // Fonction pour ajouter une image dans le PDF
-  const addImageToPDF = async (documentUrl: string, documentName: string) => {
+  // Fonction pour préparer une image pour le PDF
+  const prepareImageForPDF = async (imageUrl: string, documentName: string, category: string) => {
     try {
-      console.log("📄 Tentative d'ajout du document:", documentName, "URL:", documentUrl)
+      console.log("🖼️ Préparation image:", documentName, "URL:", imageUrl)
 
       // Vérifier si c'est un placeholder ou une URL blob
-      if (!isValidDocumentUrl(documentUrl)) {
-        console.log("📋 Document placeholder ou blob détecté")
+      if (!isValidDocumentUrl(imageUrl)) {
+        console.log("📋 Image placeholder ou blob détectée")
 
-        doc.addPage()
-        doc.setFillColor("#3B82F6")
-        doc.rect(0, 0, pageWidth, 30, "F")
-
-        doc.setTextColor("#FFFFFF")
-        doc.setFontSize(14)
-        doc.setFont("helvetica", "bold")
-        doc.text("PIÈCE JOINTE", margin, 15)
-
-        doc.setFontSize(10)
-        doc.text(documentName, margin, 25)
-
-        doc.setTextColor("#000000")
-        doc.setFontSize(12)
-        doc.text("Document à re-uploader", margin, 50)
-        doc.setFontSize(10)
-        doc.text("Ce document doit être uploadé à nouveau via le nouveau système.", margin, 70)
+        // Ajouter à la liste des annexes avec un statut spécial
+        allDocuments.push({
+          name: documentName,
+          type: "placeholder",
+          category: category,
+        })
 
         return
       }
 
-      // Déterminer le type de fichier
-      const fileType = getFileType(documentUrl)
-      console.log("📋 Type de fichier détecté:", fileType)
-
-      // Traitement spécial pour les PDF - PRÉPARATION POUR MERGE
-      if (fileType === "pdf") {
-        await preparePDFForMerge(documentUrl, documentName)
-        return
-      }
-
-      // Traitement pour les images
-      console.log("🔗 Récupération image:", documentUrl)
-
-      const response = await fetch(documentUrl, {
+      // Récupérer l'image
+      const response = await fetch(imageUrl, {
         method: "GET",
         headers: {
           Accept: "image/*,*/*",
@@ -204,195 +168,394 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
 
       console.log("✅ Image récupérée et convertie en base64")
 
-      // Ajouter une nouvelle page pour l'image
-      doc.addPage()
-
-      // En-tête de la page du document
-      doc.setFillColor("#3B82F6")
-      doc.rect(0, 0, pageWidth, 30, "F")
-
-      doc.setTextColor("#FFFFFF")
-      doc.setFontSize(14)
-      doc.setFont("helvetica", "bold")
-      doc.text("PIÈCE JOINTE", margin, 15)
-
-      doc.setFontSize(10)
-      doc.text(documentName, margin, 25)
-
-      // Ajouter l'image au PDF
-      doc.setTextColor("#000000")
-      doc.setFontSize(12)
-      doc.text("Document:", margin, 50)
-
-      const img = new Image()
-      img.crossOrigin = "anonymous"
-
-      await new Promise((resolve, reject) => {
-        img.onload = () => {
-          try {
-            const imgWidth = img.width
-            const imgHeight = img.height
-
-            // Calculer les dimensions finales pour utiliser toute la page
-            const availableWidth = pageWidth - 2 * margin
-            const availableHeight = pageHeight - 80 // Espace pour l'en-tête
-
-            let finalWidth = availableWidth
-            let finalHeight = (imgHeight * availableWidth) / imgWidth
-
-            if (finalHeight > availableHeight) {
-              finalHeight = availableHeight
-              finalWidth = (imgWidth * availableHeight) / imgHeight
-            }
-
-            // Centrer l'image
-            const xPos = (pageWidth - finalWidth) / 2
-            const yPos = 60
-
-            doc.addImage(base64Data, "JPEG", xPos, yPos, finalWidth, finalHeight)
-            console.log("✅ Image ajoutée au PDF:", documentName)
-            resolve(true)
-          } catch (addError) {
-            console.error("❌ Erreur ajout image:", addError)
-            reject(addError)
-          }
-        }
-
-        img.onerror = (error) => {
-          console.error("❌ Erreur chargement image:", error)
-          reject(error)
-        }
-
-        img.src = base64Data
+      // Ajouter à la liste des annexes
+      allDocuments.push({
+        name: documentName,
+        type: "image",
+        category: category,
+        data: base64Data,
       })
     } catch (error) {
-      console.error("❌ Erreur lors de l'ajout du document au PDF:", error)
+      console.error("❌ Erreur lors de la préparation de l'image:", error)
 
-      // Ajouter une page d'erreur
-      doc.addPage()
-      doc.setFillColor("#3B82F6")
-      doc.rect(0, 0, pageWidth, 30, "F")
-
-      doc.setTextColor("#FFFFFF")
-      doc.setFontSize(14)
-      doc.setFont("helvetica", "bold")
-      doc.text("PIÈCE JOINTE", margin, 15)
-
-      doc.setFontSize(10)
-      doc.text(documentName, margin, 25)
-
-      doc.setTextColor("#000000")
-      doc.setFontSize(12)
-      doc.text("Erreur de chargement du document", margin, 50)
-      doc.setFontSize(10)
-      doc.text("Le document n'a pas pu être chargé dans le PDF.", margin, 70)
+      // Ajouter quand même à la liste des annexes avec une erreur
+      allDocuments.push({
+        name: documentName,
+        type: "error",
+        category: category,
+        error: error.message,
+      })
     }
   }
 
-  // [Reste du code du PDF identique...]
-  // En-tête du document
-  doc.setFillColor("#3B82F6")
-  doc.rect(0, 0, pageWidth, 30, "F")
+  // Fonction pour ajouter un document au PDF
+  const addDocumentToPDF = async (documentUrl: string, documentName: string, category: string) => {
+    try {
+      console.log("📄 Traitement du document:", documentName, "URL:", documentUrl)
 
-  yPosition = addText("DOSSIER DE LOCATION NUMÉRIQUE", margin, 20, {
-    fontSize: 20,
-    style: "bold",
-    color: "#FFFFFF",
-  })
+      // Déterminer le type de fichier
+      const fileType = getFileType(documentUrl)
+      console.log("📋 Type de fichier détecté:", fileType)
 
-  yPosition = addText(`Généré le ${new Date().toLocaleDateString("fr-FR")}`, margin, yPosition + 5, {
-    fontSize: 10,
-    color: "#FFFFFF",
-  })
+      // Traitement selon le type
+      if (fileType === "pdf") {
+        await preparePDFForMerge(documentUrl, documentName, category)
+      } else {
+        await prepareImageForPDF(documentUrl, documentName, category)
+      }
+    } catch (error) {
+      console.error("❌ Erreur lors du traitement du document:", error)
+
+      // Ajouter quand même à la liste des annexes avec une erreur
+      allDocuments.push({
+        name: documentName,
+        type: "error",
+        category: category,
+        error: error.message,
+      })
+    }
+  }
+
+  // Fonction pour ajouter le logo
+  const addLogo = () => {
+    // Logo placeholder - à remplacer par le vrai logo
+    const logoSize = 30
+    const logoX = pageWidth - margin - logoSize
+    const logoY = margin - 10
+
+    // Dessiner un cercle comme placeholder de logo
+    doc.setFillColor(primaryColor)
+    doc.circle(logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2, "F")
+
+    // Texte du logo
+    doc.setTextColor("#FFFFFF")
+    doc.setFontSize(12)
+    doc.setFont("helvetica", "bold")
+    doc.text("LOGO", logoX + 5, logoY + 18)
+  }
+
+  // Fonction pour ajouter un en-tête de page
+  const addPageHeader = (title: string) => {
+    doc.setFillColor(primaryColor)
+    doc.rect(0, 0, pageWidth, 30, "F")
+
+    doc.setTextColor("#FFFFFF")
+    doc.setFontSize(16)
+    doc.setFont("helvetica", "bold")
+    doc.text(title, margin, 20)
+
+    addLogo()
+
+    return 40 // Position Y après l'en-tête
+  }
+
+  // Fonction pour ajouter un pied de page
+  const addPageFooter = (pageNumber: number, totalPages: number) => {
+    doc.setFontSize(8)
+    doc.setTextColor(128, 128, 128)
+    doc.text(`Page ${pageNumber} sur ${totalPages}`, pageWidth - margin, pageHeight - 10, { align: "right" })
+    doc.text("Dossier de location numérique - Confidentiel", margin, pageHeight - 10)
+  }
+
+  // Fonction pour ajouter une section avec icône
+  const addSectionWithIcon = (title: string, y: number, iconType = "info") => {
+    const iconSize = 8
+    const iconX = margin
+    const iconY = y - 4
+    const textX = margin + iconSize + 5
+
+    // Dessiner l'icône selon le type
+    doc.setFillColor(primaryColor)
+
+    if (iconType === "info") {
+      doc.circle(iconX + iconSize / 2, iconY + iconSize / 2, iconSize / 2, "F")
+    } else if (iconType === "document") {
+      doc.rect(iconX, iconY, iconSize, iconSize, "F")
+    } else if (iconType === "person") {
+      // Dessiner une icône de personne simplifiée
+      doc.circle(iconX + iconSize / 2, iconY + iconSize / 3, iconSize / 3, "F")
+      doc.setFillColor(primaryColor)
+      doc.rect(iconX, iconY + iconSize / 2, iconSize, iconSize / 2, "F")
+    }
+
+    // Texte du titre
+    doc.setTextColor(primaryColor)
+    doc.setFontSize(14)
+    doc.setFont("helvetica", "bold")
+    doc.text(title, textX, y)
+
+    // Ligne de séparation
+    doc.setDrawColor(primaryColor)
+    doc.line(margin, y + 5, pageWidth - margin, y + 5)
+
+    return y + 15
+  }
+
+  // Fonction pour ajouter une propriété avec sa valeur
+  const addProperty = (label: string, value: string, x: number, y: number, options: any = {}) => {
+    doc.setTextColor("#666666")
+    doc.setFontSize(10)
+    doc.setFont("helvetica", "normal")
+    doc.text(label, x, y)
+
+    doc.setTextColor(options.valueColor || "#000000")
+    doc.setFontSize(11)
+    doc.setFont("helvetica", options.valueStyle || "normal")
+
+    // Si la valeur est vide, afficher "Non renseigné"
+    const displayValue = value || "Non renseigné"
+    doc.text(displayValue, x, y + 5)
+
+    return y + 10
+  }
+
+  // Fonction pour ajouter un montant formaté
+  const addAmount = (label: string, amount: number, x: number, y: number) => {
+    doc.setTextColor("#666666")
+    doc.setFontSize(10)
+    doc.setFont("helvetica", "normal")
+    doc.text(label, x, y)
+
+    // Formater le montant
+    const formattedAmount = amount
+      ? new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(amount)
+      : "Non renseigné"
+
+    doc.setTextColor(accentColor)
+    doc.setFontSize(12)
+    doc.setFont("helvetica", "bold")
+    doc.text(formattedAmount, x, y + 5)
+
+    return y + 10
+  }
+
+  // Fonction pour ajouter une carte de document
+  const addDocumentCard = (name: string, type: string, x: number, y: number, width: number) => {
+    const cardHeight = 25
+
+    // Fond de la carte
+    doc.setFillColor("#F3F4F6")
+    doc.roundedRect(x, y, width, cardHeight, 2, 2, "F")
+
+    // Icône selon le type
+    doc.setFillColor(primaryColor)
+    if (type === "pdf") {
+      // Icône PDF
+      doc.rect(x + 5, y + 5, 15, 15, "F")
+      doc.setTextColor("#FFFFFF")
+      doc.setFontSize(8)
+      doc.setFont("helvetica", "bold")
+      doc.text("PDF", x + 8, y + 14)
+    } else {
+      // Icône image
+      doc.circle(x + 12, y + 12, 7, "F")
+      doc.setTextColor("#FFFFFF")
+      doc.setFontSize(8)
+      doc.setFont("helvetica", "bold")
+      doc.text("IMG", x + 5, y + 14)
+    }
+
+    // Nom du document
+    doc.setTextColor("#000000")
+    doc.setFontSize(10)
+    doc.setFont("helvetica", "normal")
+    doc.text(name, x + 25, y + 15)
+
+    return y + cardHeight + 5
+  }
+
+  // DÉBUT DE LA GÉNÉRATION DU PDF
+
+  // Page de couverture
+  yPosition = addPageHeader("DOSSIER DE LOCATION NUMÉRIQUE")
+
+  // Informations de génération
+  doc.setTextColor("#666666")
+  doc.setFontSize(10)
+  doc.text(`Généré le ${new Date().toLocaleDateString("fr-FR")}`, margin, yPosition)
+  yPosition += 15
+
+  // Image de couverture (placeholder)
+  const coverImageY = yPosition
+  const coverImageHeight = 100
+  doc.setFillColor("#E5E7EB")
+  doc.roundedRect(margin, coverImageY, pageWidth - 2 * margin, coverImageHeight, 3, 3, "F")
+
+  doc.setTextColor("#9CA3AF")
+  doc.setFontSize(14)
+  doc.setFont("helvetica", "bold")
+  doc.text("DOSSIER DE LOCATION", pageWidth / 2, coverImageY + coverImageHeight / 2 - 10, { align: "center" })
+  doc.setFontSize(12)
+  doc.text("Image de couverture", pageWidth / 2, coverImageY + coverImageHeight / 2 + 10, { align: "center" })
+
+  yPosition = coverImageY + coverImageHeight + 20
+
+  // Informations principales
+  const mainTenant = rentalFile.main_tenant || {}
+  const tenantName = `${mainTenant.first_name || ""} ${mainTenant.last_name || ""}`.trim() || "Locataire"
+
+  doc.setTextColor("#000000")
+  doc.setFontSize(20)
+  doc.setFont("helvetica", "bold")
+  doc.text(tenantName, pageWidth / 2, yPosition, { align: "center" })
 
   yPosition += 15
 
-  // Table des matières
-  yPosition = addText("TABLE DES MATIÈRES", margin, yPosition, {
-    fontSize: 16,
-    style: "bold",
-    color: "#3B82F6",
-  })
+  // Statut du dossier
+  const statusText = rentalFile.status === "completed" ? "Dossier complet" : "Dossier en cours"
+  const statusColor = rentalFile.status === "completed" ? "#10B981" : "#F59E0B"
 
-  yPosition += 5
-  doc.setDrawColor("#3B82F6")
-  doc.line(margin, yPosition, pageWidth - margin, yPosition)
+  doc.setFillColor(statusColor)
+  doc.roundedRect(pageWidth / 2 - 40, yPosition, 80, 20, 10, 10, "F")
+
+  doc.setTextColor("#FFFFFF")
+  doc.setFontSize(12)
+  doc.setFont("helvetica", "bold")
+  doc.text(statusText, pageWidth / 2, yPosition + 13, { align: "center" })
+
+  yPosition += 40
+
+  // Informations complémentaires
+  doc.setTextColor("#666666")
+  doc.setFontSize(12)
+
+  const situationText =
+    rentalFile.rental_situation === "alone"
+      ? "Location individuelle"
+      : rentalFile.rental_situation === "couple"
+        ? "Location en couple"
+        : "Colocation"
+
+  doc.text(`Situation: ${situationText}`, margin, yPosition)
   yPosition += 10
 
-  yPosition = addText("1. Informations générales", margin, yPosition)
-  yPosition = addText("2. Locataire principal", margin, yPosition + 5)
+  const guarantorsCount = rentalFile.guarantors?.length || 0
+  doc.text(`Garant(s): ${guarantorsCount}`, margin, yPosition)
+  yPosition += 10
+
+  const completionText = `Complétude: ${rentalFile.completion_percentage || 100}%`
+  doc.text(completionText, margin, yPosition)
+
+  // Table des matières
+  doc.addPage()
+  yPosition = addPageHeader("TABLE DES MATIÈRES")
+
+  const sections = [
+    { title: "1. Informations générales", page: 3 },
+    { title: "2. Locataire principal", page: 4 },
+  ]
+
+  let sectionIndex = 3
+
   if (rentalFile.cotenants && rentalFile.cotenants.length > 0) {
-    yPosition = addText(
-      `3. ${rentalFile.rental_situation === "couple" ? "Conjoint(e)" : "Colocataires"}`,
-      margin,
-      yPosition + 5,
-    )
+    sections.push({
+      title: `${sectionIndex}. ${rentalFile.rental_situation === "couple" ? "Conjoint(e)" : "Colocataires"}`,
+      page: sections[sections.length - 1].page + 1,
+    })
+    sectionIndex++
   }
+
   if (rentalFile.guarantors && rentalFile.guarantors.length > 0) {
-    yPosition = addText(`4. Garants`, margin, yPosition + 5)
+    sections.push({
+      title: `${sectionIndex}. Garants`,
+      page: sections[sections.length - 1].page + 1,
+    })
+    sectionIndex++
   }
-  yPosition = addText(`5. Pièces jointes`, margin, yPosition + 5)
+
+  sections.push({
+    title: `${sectionIndex}. Annexes - Pièces justificatives`,
+    page: sections[sections.length - 1].page + 1,
+  })
+
+  // Afficher la table des matières
+  doc.setDrawColor(primaryColor)
+
+  sections.forEach((section, index) => {
+    // Ligne pointillée
+    const dotCount = 50
+    const startX = margin + 100
+    const endX = pageWidth - margin - 20
+    const dotSpacing = (endX - startX) / dotCount
+
+    doc.setTextColor("#000000")
+    doc.setFontSize(12)
+    doc.setFont("helvetica", index === 0 ? "bold" : "normal")
+    doc.text(section.title, margin, yPosition)
+
+    // Points de conduite
+    for (let i = 0; i < dotCount; i++) {
+      const x = startX + i * dotSpacing
+      doc.setFillColor("#CCCCCC")
+      doc.circle(x, yPosition - 2, 0.5, "F")
+    }
+
+    // Numéro de page
+    doc.setTextColor(primaryColor)
+    doc.setFont("helvetica", "bold")
+    doc.text(section.page.toString(), pageWidth - margin, yPosition, { align: "right" })
+
+    yPosition += 15
+  })
 
   // Informations générales
   doc.addPage()
-  yPosition = 20
+  yPosition = addPageHeader("INFORMATIONS GÉNÉRALES")
 
-  yPosition = addText("1. INFORMATIONS GÉNÉRALES", margin, yPosition, {
-    fontSize: 16,
-    style: "bold",
-    color: "#3B82F6",
+  yPosition = addSectionWithIcon("SITUATION DE LOCATION", yPosition, "info")
+
+  // Afficher les informations générales
+  yPosition = addProperty("Type de location", situationText, margin, yPosition)
+  yPosition = addProperty("Statut du dossier", statusText, margin, yPosition, {
+    valueColor: statusColor,
+    valueStyle: "bold",
   })
+  yPosition = addProperty("Complétude", `${rentalFile.completion_percentage || 100}%`, margin, yPosition)
 
-  yPosition += 5
-  doc.line(margin, yPosition, pageWidth - margin, yPosition)
-  yPosition += 10
+  // Locataire principal
+  doc.addPage()
+  yPosition = addPageHeader("LOCATAIRE PRINCIPAL")
 
-  yPosition = addText(
-    `Statut du dossier: ${rentalFile.status === "completed" ? "Complété" : "En cours"}`,
-    margin,
-    yPosition,
-  )
-  yPosition = addText(`Complétude: ${rentalFile.completion_percentage || 100}%`, margin, yPosition + 5)
-  yPosition = addText(
-    `Situation de location: ${rentalFile.rental_situation === "alone" ? "Seul" : rentalFile.rental_situation === "couple" ? "En couple" : "En colocation"}`,
-    margin,
-    yPosition + 5,
-  )
-
-  // [Continuer avec le reste du contenu...]
-  const mainTenant = rentalFile.main_tenant
   if (mainTenant) {
-    doc.addPage()
-    yPosition = 20
-
-    yPosition = addText("2. LOCATAIRE PRINCIPAL", margin, yPosition, {
-      fontSize: 16,
-      style: "bold",
-      color: "#3B82F6",
-    })
-
-    yPosition += 5
-    doc.line(margin, yPosition, pageWidth - margin, yPosition)
-    yPosition += 10
-
     // Informations personnelles
-    yPosition = addText("INFORMATIONS PERSONNELLES", margin, yPosition, { style: "bold", fontSize: 14 })
-    yPosition = addText(`Nom: ${mainTenant.last_name || "Non renseigné"}`, margin + 5, yPosition + 5)
-    yPosition = addText(`Prénom: ${mainTenant.first_name || "Non renseigné"}`, margin + 5, yPosition + 5)
-    yPosition = addText(`Nationalité: ${mainTenant.nationality || "Non renseignée"}`, margin + 5, yPosition + 5)
+    yPosition = addSectionWithIcon("INFORMATIONS PERSONNELLES", yPosition, "person")
 
-    // Activité professionnelle
-    yPosition = addText("ACTIVITÉ PROFESSIONNELLE", margin, yPosition + 10, { style: "bold", fontSize: 14 })
+    const colWidth = (pageWidth - 2 * margin) / 2
+    const col2X = margin + colWidth + 10
+
+    let col1Y = yPosition
+    let col2Y = yPosition
+
+    col1Y = addProperty("Nom", mainTenant.last_name || "", margin, col1Y)
+    col2Y = addProperty("Prénom", mainTenant.first_name || "", col2X, col2Y)
+
+    col1Y = addProperty("Date de naissance", mainTenant.birth_date || "", margin, col1Y)
+    col2Y = addProperty("Lieu de naissance", mainTenant.birth_place || "", col2X, col2Y)
+
+    col1Y = addProperty("Nationalité", mainTenant.nationality || "", margin, col1Y)
+    col2Y = addProperty("Situation logement actuelle", mainTenant.current_housing_situation || "", col2X, col2Y)
+
+    yPosition = Math.max(col1Y, col2Y) + 10
+
+    // Situation professionnelle
+    yPosition = addSectionWithIcon("SITUATION PROFESSIONNELLE", yPosition, "info")
+
     const activity = MAIN_ACTIVITIES.find((a) => a.value === mainTenant.main_activity)
-    yPosition = addText(`Activité: ${activity?.label || "Non renseignée"}`, margin + 5, yPosition + 5)
+    yPosition = addProperty("Activité principale", activity?.label || mainTenant.main_activity || "", margin, yPosition)
+
+    if (mainTenant.income_sources?.work_income?.type) {
+      yPosition = addProperty("Type de revenus", mainTenant.income_sources.work_income.type, margin, yPosition)
+    }
 
     // Revenus
-    yPosition = addText("SOURCES DE REVENUS", margin, yPosition + 10, { style: "bold", fontSize: 14 })
+    yPosition = addSectionWithIcon("REVENUS", yPosition, "info")
+
     if (mainTenant.income_sources?.work_income) {
-      yPosition = addText(
-        `• Revenus du travail: ${mainTenant.income_sources.work_income.amount || 0}€/mois`,
-        margin + 5,
-        yPosition + 5,
+      yPosition = addAmount(
+        "Revenus du travail (mensuel)",
+        mainTenant.income_sources.work_income.amount || 0,
+        margin,
+        yPosition,
       )
     }
   }
@@ -400,32 +563,45 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
   // Garants
   if (rentalFile.guarantors && rentalFile.guarantors.length > 0) {
     doc.addPage()
-    yPosition = 20
-
-    yPosition = addText("4. GARANTS", margin, yPosition, {
-      fontSize: 16,
-      style: "bold",
-      color: "#3B82F6",
-    })
-
-    yPosition += 5
-    doc.line(margin, yPosition, pageWidth - margin, yPosition)
-    yPosition += 10
+    yPosition = addPageHeader("GARANTS")
 
     rentalFile.guarantors.forEach((guarantor: any, index: number) => {
-      yPosition = addText(`GARANT ${index + 1}`, margin, yPosition, { style: "bold", fontSize: 14 })
-      yPosition = addText(`Type: Personne physique`, margin + 5, yPosition + 5)
+      yPosition = addSectionWithIcon(`GARANT ${index + 1}`, yPosition, "person")
+
+      yPosition = addProperty(
+        "Type",
+        guarantor.type === "physical" ? "Personne physique" : "Personne morale",
+        margin,
+        yPosition,
+      )
 
       if (guarantor.personal_info) {
         const guarantorInfo = guarantor.personal_info
-        yPosition = addText(`Nom: ${guarantorInfo.last_name || "Non renseigné"}`, margin + 5, yPosition + 5)
-        yPosition = addText(`Prénom: ${guarantorInfo.first_name || "Non renseigné"}`, margin + 5, yPosition + 5)
+        const colWidth = (pageWidth - 2 * margin) / 2
+        const col2X = margin + colWidth + 10
+
+        let col1Y = yPosition
+        let col2Y = yPosition
+
+        col1Y = addProperty("Nom", guarantorInfo.last_name || "", margin, col1Y)
+        col2Y = addProperty("Prénom", guarantorInfo.first_name || "", col2X, col2Y)
+
+        if (guarantorInfo.birth_date) {
+          col1Y = addProperty("Date de naissance", guarantorInfo.birth_date, margin, col1Y)
+        }
+
+        if (guarantorInfo.nationality) {
+          col2Y = addProperty("Nationalité", guarantorInfo.nationality, col2X, col2Y)
+        }
+
+        yPosition = Math.max(col1Y, col2Y) + 5
 
         if (guarantorInfo.income_sources?.work_income) {
-          yPosition = addText(
-            `• Revenus du travail: ${guarantorInfo.income_sources.work_income.amount || 0}€/mois`,
-            margin + 10,
-            yPosition + 5,
+          yPosition = addAmount(
+            "Revenus du travail (mensuel)",
+            guarantorInfo.income_sources.work_income.amount || 0,
+            margin,
+            yPosition,
           )
         }
       }
@@ -433,22 +609,6 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       yPosition += 15
     })
   }
-
-  // Section des pièces jointes
-  doc.addPage()
-  yPosition = 20
-
-  yPosition = addText("5. PIÈCES JOINTES", margin, yPosition, {
-    fontSize: 16,
-    style: "bold",
-    color: "#3B82F6",
-  })
-
-  yPosition += 5
-  doc.line(margin, yPosition, pageWidth - margin, yPosition)
-  yPosition += 10
-
-  yPosition = addText("Les documents suivants sont intégrés dans ce PDF.", margin, yPosition)
 
   // Collecter tous les documents valides (URLs Supabase)
   const documentsToAdd = []
@@ -461,6 +621,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
           documentsToAdd.push({
             url: doc,
             name: `Pièce d'identité du locataire ${index + 1}`,
+            category: "identity",
           })
         }
       }
@@ -473,6 +634,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
           documentsToAdd.push({
             url: doc,
             name: `Justificatif d'activité ${index + 1}`,
+            category: "activity",
           })
         }
       }
@@ -485,6 +647,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
           documentsToAdd.push({
             url: doc,
             name: `Document fiscal ${index + 1}`,
+            category: "tax",
           })
         }
       }
@@ -500,6 +663,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
           documentsToAdd.push({
             url: doc,
             name: `Justificatif de revenu ${index + 1}`,
+            category: "income",
           })
         }
       }
@@ -515,6 +679,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
           documentsToAdd.push({
             url: doc,
             name: `Quittance de loyer ${index + 1}`,
+            category: "housing",
           })
         }
       }
@@ -524,6 +689,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
   // Documents des garants
   if (rentalFile.guarantors && Array.isArray(rentalFile.guarantors)) {
     for (const [gIndex, guarantor] of rentalFile.guarantors.entries()) {
+      // Documents d'identité des garants
       if (
         guarantor.type === "physical" &&
         guarantor.personal_info?.identity_documents &&
@@ -534,6 +700,41 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
             documentsToAdd.push({
               url: doc,
               name: `Garant ${gIndex + 1} - Pièce d'identité ${index + 1}`,
+              category: "guarantor_identity",
+            })
+          }
+        }
+      }
+
+      // Documents de revenus des garants
+      if (
+        guarantor.type === "physical" &&
+        guarantor.personal_info?.income_sources?.work_income?.documents &&
+        Array.isArray(guarantor.personal_info.income_sources.work_income.documents)
+      ) {
+        for (const [index, doc] of guarantor.personal_info.income_sources.work_income.documents.entries()) {
+          if (isValidDocumentUrl(doc)) {
+            documentsToAdd.push({
+              url: doc,
+              name: `Garant ${gIndex + 1} - Justificatif de revenu ${index + 1}`,
+              category: "guarantor_income",
+            })
+          }
+        }
+      }
+
+      // Documents fiscaux des garants
+      if (
+        guarantor.type === "physical" &&
+        guarantor.personal_info?.tax_situation?.documents &&
+        Array.isArray(guarantor.personal_info.tax_situation.documents)
+      ) {
+        for (const [index, doc] of guarantor.personal_info.tax_situation.documents.entries()) {
+          if (isValidDocumentUrl(doc)) {
+            documentsToAdd.push({
+              url: doc,
+              name: `Garant ${gIndex + 1} - Document fiscal ${index + 1}`,
+              category: "guarantor_tax",
             })
           }
         }
@@ -541,16 +742,78 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     }
   }
 
-  console.log(`📋 ${documentsToAdd.length} documents valides à ajouter au PDF`)
+  console.log(`📋 ${documentsToAdd.length} documents valides à traiter`)
 
-  // Ajouter tous les documents (images et préparer les PDF)
+  // Traiter tous les documents (images et PDF)
   for (const document of documentsToAdd) {
-    await addImageToPDF(document.url, document.name)
+    await addDocumentToPDF(document.url, document.name, document.category)
+  }
+
+  // Page d'annexes
+  doc.addPage()
+  yPosition = addPageHeader("ANNEXES - PIÈCES JUSTIFICATIVES")
+
+  // Afficher la liste des documents
+  if (allDocuments.length > 0) {
+    // Regrouper par catégorie
+    const documentsByCategory = {
+      identity: { title: "Pièces d'identité", docs: [] },
+      activity: { title: "Justificatifs d'activité", docs: [] },
+      income: { title: "Justificatifs de revenus", docs: [] },
+      tax: { title: "Documents fiscaux", docs: [] },
+      housing: { title: "Quittances de loyer", docs: [] },
+      guarantor_identity: { title: "Pièces d'identité des garants", docs: [] },
+      guarantor_income: { title: "Justificatifs de revenus des garants", docs: [] },
+      guarantor_tax: { title: "Documents fiscaux des garants", docs: [] },
+      other: { title: "Autres documents", docs: [] },
+    }
+
+    // Classer les documents par catégorie
+    allDocuments.forEach((doc) => {
+      const category = doc.category || "other"
+      if (documentsByCategory[category]) {
+        documentsByCategory[category].docs.push(doc)
+      } else {
+        documentsByCategory.other.docs.push(doc)
+      }
+    })
+
+    // Afficher les documents par catégorie
+    Object.values(documentsByCategory).forEach((category) => {
+      if (category.docs.length > 0) {
+        yPosition = addSectionWithIcon(category.title, yPosition, "document")
+
+        // Afficher les documents de cette catégorie
+        category.docs.forEach((doc) => {
+          yPosition = addDocumentCard(doc.name, doc.type, margin, yPosition, pageWidth - 2 * margin)
+
+          // Ajouter une page si nécessaire
+          if (yPosition > pageHeight - 40) {
+            doc.addPage()
+            yPosition = addPageHeader("ANNEXES - PIÈCES JUSTIFICATIVES (SUITE)")
+          }
+        })
+
+        yPosition += 10
+      }
+    })
+
+    // Ajouter une note sur les annexes
+    doc.setTextColor("#666666")
+    doc.setFontSize(10)
+    doc.setFont("helvetica", "italic")
+    doc.text("Note: Les documents listés ci-dessus sont intégrés dans les pages suivantes.", margin, yPosition)
+  } else {
+    doc.setTextColor("#666666")
+    doc.setFontSize(12)
+    doc.text("Aucune pièce justificative n'a été fournie.", margin, yPosition)
   }
 
   // MAINTENANT LE MERGE FINAL DES PDF !
-  if (pdfsToMerge.length > 0) {
-    console.log(`🔄 Merge de ${pdfsToMerge.length} PDF(s)...`)
+  if (pdfsToMerge.length > 0 || allDocuments.some((doc) => doc.type === "image")) {
+    console.log(
+      `🔄 Préparation du PDF final avec ${pdfsToMerge.length} PDF(s) et ${allDocuments.filter((d) => d.type === "image").length} image(s)...`,
+    )
 
     try {
       // Convertir le PDF jsPDF en ArrayBuffer
@@ -559,10 +822,143 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       // Charger le PDF principal avec pdf-lib
       const mainPdfDoc = await PDFDocument.load(jsPdfOutput)
 
+      // Ajouter une page de séparation pour les annexes
+      const annexPage = mainPdfDoc.addPage()
+
+      // Dessiner un fond coloré en haut
+      const { width, height } = annexPage.getSize()
+      annexPage.drawRectangle({
+        x: 0,
+        y: height - 100,
+        width: width,
+        height: 100,
+        color: { r: 0.23, g: 0.51, b: 0.97 }, // Bleu primaire
+      })
+
+      // Ajouter le texte
+      annexPage.drawText("ANNEXES", {
+        x: 50,
+        y: height - 60,
+        size: 30,
+        color: { r: 1, g: 1, b: 1 }, // Blanc
+      })
+
+      annexPage.drawText("Pièces justificatives", {
+        x: 50,
+        y: height - 90,
+        size: 16,
+        color: { r: 1, g: 1, b: 1 }, // Blanc
+      })
+
+      // Ajouter les images
+      for (const doc of allDocuments) {
+        if (doc.type === "image" && doc.data) {
+          try {
+            console.log(`📄 Ajout de l'image: ${doc.name}...`)
+
+            // Ajouter une page pour l'image
+            const imagePage = mainPdfDoc.addPage()
+            const { width, height } = imagePage.getSize()
+
+            // Dessiner un en-tête
+            imagePage.drawRectangle({
+              x: 0,
+              y: height - 40,
+              width: width,
+              height: 40,
+              color: { r: 0.23, g: 0.51, b: 0.97 }, // Bleu primaire
+            })
+
+            // Ajouter le nom du document
+            imagePage.drawText(doc.name, {
+              x: 50,
+              y: height - 25,
+              size: 12,
+              color: { r: 1, g: 1, b: 1 }, // Blanc
+            })
+
+            // Convertir l'image base64 en format compatible avec pdf-lib
+            const base64Data = doc.data.split(",")[1]
+            const imageBytes = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0))
+
+            // Déterminer le type d'image
+            let pdfImage
+            if (doc.data.includes("image/jpeg") || doc.data.includes("image/jpg")) {
+              pdfImage = await mainPdfDoc.embedJpg(imageBytes)
+            } else if (doc.data.includes("image/png")) {
+              pdfImage = await mainPdfDoc.embedPng(imageBytes)
+            } else {
+              // Fallback pour les autres types
+              pdfImage = await mainPdfDoc.embedJpg(imageBytes)
+            }
+
+            // Calculer les dimensions pour ajuster l'image à la page
+            const imgWidth = pdfImage.width
+            const imgHeight = pdfImage.height
+
+            const availableWidth = width - 100
+            const availableHeight = height - 100
+
+            let finalWidth = availableWidth
+            let finalHeight = (imgHeight * availableWidth) / imgWidth
+
+            if (finalHeight > availableHeight) {
+              finalHeight = availableHeight
+              finalWidth = (imgWidth * availableHeight) / imgHeight
+            }
+
+            // Centrer l'image
+            const xPos = (width - finalWidth) / 2
+            const yPos = (height - finalHeight) / 2
+
+            // Dessiner l'image
+            imagePage.drawImage(pdfImage, {
+              x: xPos,
+              y: yPos,
+              width: finalWidth,
+              height: finalHeight,
+            })
+
+            console.log(`✅ Image ajoutée: ${doc.name}`)
+          } catch (imageError) {
+            console.error(`❌ Erreur ajout image ${doc.name}:`, imageError)
+          }
+        }
+      }
+
       // Merger chaque PDF
       for (const pdfToMerge of pdfsToMerge) {
         try {
           console.log(`📄 Merge de ${pdfToMerge.name}...`)
+
+          // Ajouter une page de séparation pour ce PDF
+          const pdfSeparatorPage = mainPdfDoc.addPage()
+          const { width, height } = pdfSeparatorPage.getSize()
+
+          // Dessiner un en-tête
+          pdfSeparatorPage.drawRectangle({
+            x: 0,
+            y: height - 40,
+            width: width,
+            height: 40,
+            color: { r: 0.23, g: 0.51, b: 0.97 }, // Bleu primaire
+          })
+
+          // Ajouter le nom du document
+          pdfSeparatorPage.drawText(pdfToMerge.name, {
+            x: 50,
+            y: height - 25,
+            size: 12,
+            color: { r: 1, g: 1, b: 1 }, // Blanc
+          })
+
+          // Ajouter le nombre de pages
+          pdfSeparatorPage.drawText(`Document PDF - ${pdfToMerge.pageCount} page(s)`, {
+            x: 50,
+            y: height - 100,
+            size: 14,
+            color: { r: 0, g: 0, b: 0 }, // Noir
+          })
 
           const sourcePdfDoc = await PDFDocument.load(pdfToMerge.data)
           const pageIndices = Array.from({ length: pdfToMerge.pageCount }, (_, i) => i)
@@ -592,7 +988,9 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       a.click()
       URL.revokeObjectURL(url)
 
-      console.log(`🎉 PDF final généré avec ${pdfsToMerge.length} PDF(s) intégré(s) !`)
+      console.log(
+        `🎉 PDF final généré avec ${pdfsToMerge.length} PDF(s) et ${allDocuments.filter((d) => d.type === "image").length} image(s) intégré(s) !`,
+      )
     } catch (mergeError) {
       console.error("❌ Erreur lors du merge final:", mergeError)
 
