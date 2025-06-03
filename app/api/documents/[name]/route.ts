@@ -3,95 +3,67 @@ import { type NextRequest, NextResponse } from "next/server"
 export async function GET(request: NextRequest, { params }: { params: { name: string } }) {
   try {
     const documentName = params.name
-    console.log("🔍 Récupération document:", documentName)
+    console.log("📄 Récupération document:", documentName)
 
     // Décoder l'URL si elle est encodée
-    const cleanName = decodeURIComponent(documentName)
-    console.log("🔍 Nom décodé:", cleanName)
+    const decodedUrl = decodeURIComponent(documentName)
+    console.log("🔗 URL décodée:", decodedUrl)
 
-    // Si c'est une URL blob complète, on l'utilise directement
-    if (cleanName.includes("blob:https://")) {
-      console.log("🔗 URL blob détectée, redirection directe")
+    // Si c'est une URL blob Vercel, on essaie de la récupérer directement
+    if (decodedUrl.includes("blob:")) {
+      console.log("🔵 URL Vercel Blob détectée")
 
-      try {
-        // Essayer de récupérer le contenu depuis l'URL blob
-        const response = await fetch(cleanName)
-
-        if (!response.ok) {
-          throw new Error(`Erreur HTTP: ${response.status}`)
-        }
-
-        const blob = await response.blob()
-        console.log("✅ Blob récupéré:", blob.type, blob.size, "bytes")
-
-        // Déterminer le type de contenu
-        let contentType = blob.type || "application/octet-stream"
-        if (!contentType || contentType === "application/octet-stream") {
-          // Essayer de deviner le type basé sur l'extension ou le contenu
-          if (cleanName.includes("image") || blob.type.startsWith("image/")) {
-            contentType = "image/jpeg"
-          } else if (cleanName.includes("pdf")) {
-            contentType = "application/pdf"
-          }
-        }
-
-        // Retourner le contenu du blob
-        const arrayBuffer = await blob.arrayBuffer()
-        return new NextResponse(arrayBuffer, {
-          headers: {
-            "Content-Type": contentType,
-            "Content-Disposition": `inline; filename="document"`,
-            "Cache-Control": "public, max-age=3600",
-          },
-        })
-      } catch (fetchError) {
-        console.error("❌ Erreur récupération blob:", fetchError)
-
-        // Si on ne peut pas récupérer le blob, rediriger vers l'URL directement
-        return NextResponse.redirect(cleanName)
-      }
+      // Pour les URLs blob, on ne peut pas les récupérer directement côté serveur
+      // On retourne une erreur explicative
+      return NextResponse.json(
+        {
+          error: "Les URLs blob ne peuvent pas être récupérées côté serveur",
+          suggestion: "Utilisez l'URL directement côté client",
+          url: decodedUrl,
+        },
+        { status: 400 },
+      )
     }
 
-    // Si c'est juste un ID, essayer de construire l'URL blob
-    let documentId = cleanName
-    if (cleanName.includes("/")) {
-      const urlParts = cleanName.split("/")
-      documentId = urlParts[urlParts.length - 1]
-    }
-
-    // Construire l'URL blob probable
-    const blobUrl = `https://rental-platform-h5sj.vercel.app/${documentId}`
-    console.log("🔗 URL blob construite:", blobUrl)
-
+    // Si c'est une URL normale, on essaie de la récupérer
     try {
-      const response = await fetch(blobUrl)
+      console.log("🌐 Tentative de récupération HTTP:", decodedUrl)
+      const response = await fetch(decodedUrl)
 
       if (!response.ok) {
-        throw new Error(`Document non trouvé: ${response.status}`)
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
 
-      const blob = await response.blob()
-      const arrayBuffer = await blob.arrayBuffer()
+      const contentType = response.headers.get("content-type") || "application/octet-stream"
+      const buffer = await response.arrayBuffer()
 
-      return new NextResponse(arrayBuffer, {
+      console.log("✅ Document récupéré:", buffer.byteLength, "bytes, type:", contentType)
+
+      return new NextResponse(buffer, {
         headers: {
-          "Content-Type": blob.type || "image/jpeg",
-          "Content-Disposition": `inline; filename="${documentId}"`,
+          "Content-Type": contentType,
           "Cache-Control": "public, max-age=3600",
         },
       })
-    } catch (blobError) {
-      console.error("❌ Erreur récupération depuis URL construite:", blobError)
-
-      // Dernière tentative : générer un placeholder
-      const placeholderUrl = `/placeholder.svg?height=600&width=400&query=Document ${documentId.substring(0, 8)} - Fichier temporairement indisponible`
-      return NextResponse.redirect(new URL(placeholderUrl, request.url))
+    } catch (fetchError) {
+      console.error("❌ Erreur récupération HTTP:", fetchError)
+      return NextResponse.json(
+        {
+          error: "Impossible de récupérer le document",
+          details: fetchError.message,
+          url: decodedUrl,
+        },
+        { status: 404 },
+      )
     }
   } catch (error) {
-    console.error("❌ Erreur générale:", error)
-
-    // Retourner une image d'erreur
-    const errorPlaceholder = `/placeholder.svg?height=400&width=300&query=Document non disponible - ${error.message}`
-    return NextResponse.redirect(new URL(errorPlaceholder, request.url))
+    console.error("❌ Erreur serveur:", error)
+    return NextResponse.json(
+      {
+        error: "Erreur interne du serveur",
+        details: error.message,
+      },
+      { status: 500 },
+    )
   }
 }
