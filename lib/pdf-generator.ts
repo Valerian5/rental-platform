@@ -1,14 +1,18 @@
 import { type RentalFileData, MAIN_ACTIVITIES } from "./rental-file-service"
 
 export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise<void> => {
-  // Import dynamique de jsPDF pour éviter les erreurs SSR
+  // Import dynamique de jsPDF et pdf-lib
   const { jsPDF } = await import("jspdf")
+  const { PDFDocument } = await import("pdf-lib")
 
   const doc = new jsPDF()
   let yPosition = 20
   const pageWidth = doc.internal.pageSize.width
   const pageHeight = doc.internal.pageSize.height
   const margin = 20
+
+  // Stocker les PDF à merger à la fin
+  const pdfsToMerge = []
 
   // Fonction helper pour ajouter du texte avec retour à la ligne
   const addText = (text: string, x: number, y: number, options: any = {}) => {
@@ -56,13 +60,13 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     }
   }
 
-  // Fonction pour intégrer toutes les pages d'un PDF
-  const addPDFPages = async (pdfUrl: string, documentName: string) => {
+  // Fonction pour préparer un PDF pour le merge
+  const preparePDFForMerge = async (pdfUrl: string, documentName: string) => {
     try {
-      console.log("📄 Intégration complète du PDF:", documentName, "URL:", pdfUrl)
+      console.log("📄 Préparation PDF pour merge:", documentName, "URL:", pdfUrl)
 
-      // Appeler l'API pour extraire les pages
-      const response = await fetch("/api/pdf/extract-pages", {
+      // Appeler l'API pour récupérer le PDF
+      const response = await fetch("/api/pdf/merge-pages", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -77,10 +81,10 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       const result = await response.json()
 
       if (!result.success) {
-        throw new Error(result.message || "Erreur lors de l'extraction")
+        throw new Error(result.message || "Erreur lors de la récupération")
       }
 
-      console.log(`📋 ${result.pageCount} pages extraites du PDF`)
+      console.log(`📋 PDF préparé: ${result.pageCount} pages`)
 
       // Ajouter une page de titre pour le document
       doc.addPage()
@@ -99,67 +103,18 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       doc.setFontSize(12)
       doc.text(`Document PDF complet - ${result.pageCount} page(s)`, margin, 50)
       doc.setFontSize(10)
-      doc.text("Toutes les pages du document original sont intégrées ci-après.", margin, 65)
+      doc.text("Le document PDF complet sera intégré après cette page.", margin, 65)
 
-      // Ajouter chaque page du PDF
-      for (const pageData of result.pages) {
-        try {
-          if (pageData.error) {
-            // Ajouter une page d'erreur
-            doc.addPage()
-            doc.setTextColor("#000000")
-            doc.setFontSize(12)
-            doc.text(`Page ${pageData.pageNumber} - Erreur`, margin, 50)
-            doc.setFontSize(10)
-            doc.text(pageData.error, margin, 70)
-            continue
-          }
+      // Stocker le PDF pour le merge final
+      pdfsToMerge.push({
+        name: documentName,
+        data: new Uint8Array(result.pdfData),
+        pageCount: result.pageCount,
+      })
 
-          if (!pageData.imageData) {
-            continue
-          }
-
-          console.log(`📄 Ajout page ${pageData.pageNumber}`)
-
-          // Ajouter une nouvelle page au PDF final
-          doc.addPage()
-
-          // Calculer les dimensions pour ajuster l'image à la page
-          const availableWidth = pageWidth - 2 * margin
-          const availableHeight = pageHeight - 2 * margin
-
-          let finalWidth = availableWidth
-          let finalHeight = (pageData.height * availableWidth) / pageData.width
-
-          if (finalHeight > availableHeight) {
-            finalHeight = availableHeight
-            finalWidth = (pageData.width * availableHeight) / pageData.height
-          }
-
-          // Centrer l'image
-          const xPos = (pageWidth - finalWidth) / 2
-          const yPos = (pageHeight - finalHeight) / 2
-
-          // Ajouter l'image au PDF
-          doc.addImage(pageData.imageData, "JPEG", xPos, yPos, finalWidth, finalHeight)
-
-          console.log(`✅ Page ${pageData.pageNumber} ajoutée au PDF`)
-        } catch (pageError) {
-          console.error(`❌ Erreur ajout page ${pageData.pageNumber}:`, pageError)
-
-          // Ajouter une page d'erreur
-          doc.addPage()
-          doc.setTextColor("#000000")
-          doc.setFontSize(12)
-          doc.text(`Erreur page ${pageData.pageNumber}`, margin, 50)
-          doc.setFontSize(10)
-          doc.text("Cette page n'a pas pu être intégrée.", margin, 70)
-        }
-      }
-
-      console.log(`✅ PDF complet intégré: ${documentName}`)
+      console.log(`✅ PDF préparé pour merge: ${documentName}`)
     } catch (error) {
-      console.error("❌ Erreur lors de l'intégration du PDF:", error)
+      console.error("❌ Erreur lors de la préparation du PDF:", error)
 
       // Ajouter une page d'erreur
       doc.addPage()
@@ -176,9 +131,9 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
 
       doc.setTextColor("#000000")
       doc.setFontSize(12)
-      doc.text("Erreur lors de l'intégration du PDF", margin, 50)
+      doc.text("Erreur lors de la préparation du PDF", margin, 50)
       doc.setFontSize(10)
-      doc.text("Ce document n'a pas pu être intégré au PDF final.", margin, 70)
+      doc.text("Ce document n'a pas pu être préparé pour l'intégration.", margin, 70)
       doc.text(`Erreur: ${error.message}`, margin, 85)
     }
   }
@@ -217,9 +172,9 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       const fileType = getFileType(documentUrl)
       console.log("📋 Type de fichier détecté:", fileType)
 
-      // Traitement spécial pour les PDF - INTÉGRATION COMPLÈTE
+      // Traitement spécial pour les PDF - PRÉPARATION POUR MERGE
       if (fileType === "pdf") {
-        await addPDFPages(documentUrl, documentName)
+        await preparePDFForMerge(documentUrl, documentName)
         return
       }
 
@@ -588,22 +543,66 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
 
   console.log(`📋 ${documentsToAdd.length} documents valides à ajouter au PDF`)
 
-  // Ajouter tous les documents
+  // Ajouter tous les documents (images et préparer les PDF)
   for (const document of documentsToAdd) {
     await addImageToPDF(document.url, document.name)
   }
 
-  // Pied de page
-  const pageCount = doc.getNumberOfPages()
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i)
-    doc.setFontSize(8)
-    doc.setTextColor(128, 128, 128)
-    doc.text(`Page ${i} sur ${pageCount}`, pageWidth - margin, pageHeight - 10, { align: "right" })
-    doc.text("Dossier de location numérique - Conforme DossierFacile", margin, pageHeight - 10)
-  }
+  // MAINTENANT LE MERGE FINAL DES PDF !
+  if (pdfsToMerge.length > 0) {
+    console.log(`🔄 Merge de ${pdfsToMerge.length} PDF(s)...`)
 
-  // Télécharger le PDF
-  const fileName = `dossier-location-${mainTenant?.first_name || "locataire"}-${mainTenant?.last_name || ""}.pdf`
-  doc.save(fileName)
+    try {
+      // Convertir le PDF jsPDF en ArrayBuffer
+      const jsPdfOutput = doc.output("arraybuffer")
+
+      // Charger le PDF principal avec pdf-lib
+      const mainPdfDoc = await PDFDocument.load(jsPdfOutput)
+
+      // Merger chaque PDF
+      for (const pdfToMerge of pdfsToMerge) {
+        try {
+          console.log(`📄 Merge de ${pdfToMerge.name}...`)
+
+          const sourcePdfDoc = await PDFDocument.load(pdfToMerge.data)
+          const pageIndices = Array.from({ length: pdfToMerge.pageCount }, (_, i) => i)
+          const copiedPages = await mainPdfDoc.copyPages(sourcePdfDoc, pageIndices)
+
+          copiedPages.forEach((page) => {
+            mainPdfDoc.addPage(page)
+          })
+
+          console.log(`✅ ${pdfToMerge.name} mergé (${pdfToMerge.pageCount} pages)`)
+        } catch (mergeError) {
+          console.error(`❌ Erreur merge ${pdfToMerge.name}:`, mergeError)
+        }
+      }
+
+      // Sauvegarder le PDF final
+      const finalPdfBytes = await mainPdfDoc.save()
+
+      // Télécharger le PDF final
+      const fileName = `dossier-location-${mainTenant?.first_name || "locataire"}-${mainTenant?.last_name || ""}.pdf`
+
+      const blob = new Blob([finalPdfBytes], { type: "application/pdf" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = fileName
+      a.click()
+      URL.revokeObjectURL(url)
+
+      console.log(`🎉 PDF final généré avec ${pdfsToMerge.length} PDF(s) intégré(s) !`)
+    } catch (mergeError) {
+      console.error("❌ Erreur lors du merge final:", mergeError)
+
+      // Fallback : télécharger le PDF sans les PDF mergés
+      const fileName = `dossier-location-${mainTenant?.first_name || "locataire"}-${mainTenant?.last_name || ""}.pdf`
+      doc.save(fileName)
+    }
+  } else {
+    // Pas de PDF à merger, télécharger normalement
+    const fileName = `dossier-location-${mainTenant?.first_name || "locataire"}-${mainTenant?.last_name || ""}.pdf`
+    doc.save(fileName)
+  }
 }
