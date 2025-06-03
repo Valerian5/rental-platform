@@ -51,6 +51,20 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     return false
   }
 
+  // Fonction pour déterminer le type de fichier à partir de l'URL
+  const getFileType = (url: string): string => {
+    const extension = url.split(".").pop()?.toLowerCase() || ""
+
+    if (["jpg", "jpeg", "png", "gif", "webp"].includes(extension)) {
+      return "image"
+    } else if (extension === "pdf") {
+      return "pdf"
+    } else {
+      // Par défaut, on suppose que c'est une image
+      return "document"
+    }
+  }
+
   // Fonction pour ajouter une image dans le PDF
   const addImageToPDF = async (documentUrl: string, documentName: string, maxWidth = 150, maxHeight = 200) => {
     try {
@@ -100,7 +114,56 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
         return
       }
 
-      // Essayer de récupérer le document Supabase
+      // Déterminer le type de fichier
+      const fileType = getFileType(documentUrl)
+      console.log("📋 Type de fichier détecté:", fileType)
+
+      // Traitement spécial pour les PDF
+      if (fileType === "pdf") {
+        console.log("📋 Document PDF détecté, ajout d'une vignette")
+
+        doc.setTextColor("#000000")
+        doc.setFontSize(14)
+        doc.text("Document PDF", margin, 50)
+
+        doc.setFontSize(10)
+        doc.text("Ce document est au format PDF et ne peut pas être intégré directement.", margin, 65)
+        doc.text("Vous pouvez le consulter en ligne via l'application.", margin, 75)
+
+        // Ajouter une vignette PDF
+        const xPos = (pageWidth - 150) / 2
+        const yPos = 90
+
+        doc.setDrawColor("#E2E8F0")
+        doc.setFillColor("#F8FAFC")
+        doc.rect(xPos, yPos, 150, 180, "FD")
+
+        // Icône PDF
+        doc.setFillColor("#DC2626")
+        doc.roundedRect(xPos + 50, yPos + 60, 50, 60, 3, 3, "F")
+
+        doc.setTextColor("#FFFFFF")
+        doc.setFontSize(24)
+        doc.setFont("helvetica", "bold")
+        doc.text("PDF", xPos + 75, yPos + 95, { align: "center" })
+
+        doc.setTextColor("#000000")
+        doc.setFontSize(12)
+        doc.setFont("helvetica", "normal")
+        doc.text("Document PDF", xPos + 75, yPos + 140, { align: "center" })
+        doc.setFontSize(10)
+        doc.text(documentName, xPos + 75, yPos + 155, { align: "center" })
+
+        // URL du document
+        doc.setTextColor("#2563EB")
+        doc.setFontSize(8)
+        const urlText = documentUrl.length > 50 ? documentUrl.substring(0, 47) + "..." : documentUrl
+        doc.text(urlText, xPos + 75, yPos + 170, { align: "center" })
+
+        return
+      }
+
+      // Essayer de récupérer le document Supabase (pour les images)
       try {
         console.log("🔗 Récupération document Supabase:", documentUrl)
 
