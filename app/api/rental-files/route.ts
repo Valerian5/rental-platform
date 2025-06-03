@@ -11,21 +11,29 @@ export async function GET(request: NextRequest) {
 
     console.log("🔍 Recherche dossier location - tenant_id:", tenantId, "id:", id)
 
+    if (!tenantId && !id) {
+      return NextResponse.json({ error: "tenant_id ou id requis" }, { status: 400 })
+    }
+
     let query = supabase.from("rental_files").select("*")
 
     if (id) {
       query = query.eq("id", id)
     } else if (tenantId) {
       query = query.eq("tenant_id", tenantId)
-    } else {
-      return NextResponse.json({ error: "tenant_id ou id requis" }, { status: 400 })
     }
 
     const { data: rentalFiles, error } = await query
 
     if (error) {
       console.error("❌ Erreur Supabase:", error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json(
+        {
+          error: `Erreur base de données: ${error.message}`,
+          details: error,
+        },
+        { status: 500 },
+      )
     }
 
     console.log("✅ Dossiers trouvés:", rentalFiles?.length || 0)
@@ -34,6 +42,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         rental_file: null,
         message: "Aucun dossier de location trouvé",
+        success: false,
       })
     }
 
@@ -52,6 +61,13 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error("❌ Erreur serveur:", error)
-    return NextResponse.json({ error: "Erreur interne du serveur" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Erreur interne du serveur",
+        details: error.message,
+        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
+      },
+      { status: 500 },
+    )
   }
 }

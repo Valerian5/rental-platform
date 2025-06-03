@@ -5,37 +5,121 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("📋 Listage des documents disponibles...")
+    console.log("🔍 Listage des documents disponibles...")
 
-    // Lister les fichiers dans le bucket 'documents'
-    const { data: documentsFiles, error: documentsError } = await supabase.storage
-      .from("documents")
-      .list("", { limit: 100 })
+    // Récupérer tous les dossiers de location pour voir les URLs blob
+    const { data: rentalFiles, error } = await supabase
+      .from("rental_files")
+      .select("id, main_tenant, guarantors")
+      .limit(10)
 
-    // Lister les fichiers dans le bucket 'rental-files'
-    const { data: rentalFiles, error: rentalError } = await supabase.storage
-      .from("rental-files")
-      .list("", { limit: 100 })
-
-    const result = {
-      documents_bucket: {
-        files: documentsFiles || [],
-        error: documentsError?.message,
-        count: documentsFiles?.length || 0,
-      },
-      rental_files_bucket: {
-        files: rentalFiles || [],
-        error: rentalError?.message,
-        count: rentalFiles?.length || 0,
-      },
-      total_files: (documentsFiles?.length || 0) + (rentalFiles?.length || 0),
+    if (error) {
+      throw error
     }
 
-    console.log("📊 Résultat du listage:", result)
+    const documentUrls = new Set()
+    let totalDocuments = 0
 
-    return NextResponse.json(result)
+    // Extraire toutes les URLs de documents
+    rentalFiles.forEach((file) => {
+      // Documents du locataire principal
+      if (file.main_tenant) {
+        const tenant = file.main_tenant
+
+        // Pièces d'identité
+        if (tenant.identity_documents) {
+          tenant.identity_documents.forEach((doc) => {
+            documentUrls.add(doc)
+            totalDocuments++
+          })
+        }
+
+        // Documents d'activité
+        if (tenant.activity_documents) {
+          tenant.activity_documents.forEach((doc) => {
+            documentUrls.add(doc)
+            totalDocuments++
+          })
+        }
+
+        // Documents de revenus
+        if (tenant.income_sources?.work_income?.documents) {
+          tenant.income_sources.work_income.documents.forEach((doc) => {
+            documentUrls.add(doc)
+            totalDocuments++
+          })
+        }
+
+        // Documents fiscaux
+        if (tenant.tax_situation?.documents) {
+          tenant.tax_situation.documents.forEach((doc) => {
+            documentUrls.add(doc)
+            totalDocuments++
+          })
+        }
+
+        // Documents de logement
+        if (tenant.current_housing_documents?.quittances_loyer) {
+          tenant.current_housing_documents.quittances_loyer.forEach((doc) => {
+            documentUrls.add(doc)
+            totalDocuments++
+          })
+        }
+      }
+
+      // Documents des garants
+      if (file.guarantors) {
+        file.guarantors.forEach((guarantor) => {
+          if (guarantor.personal_info?.identity_documents) {
+            guarantor.personal_info.identity_documents.forEach((doc) => {
+              documentUrls.add(doc)
+              totalDocuments++
+            })
+          }
+        })
+      }
+    })
+
+    // Tester l'accessibilité de quelques documents
+    const documentTests = []
+    const urlArray = Array.from(documentUrls).slice(0, 5) // Tester les 5 premiers
+
+    for (const url of urlArray) {
+      try {
+        const response = await fetch(url, { method: "HEAD" })
+        documentTests.push({
+          url,
+          accessible: response.ok,
+          status: response.status,
+          type: response.headers.get("content-type"),
+        })
+      } catch (error) {
+        documentTests.push({
+          url,
+          accessible: false,
+          error: error.message,
+        })
+      }
+    }
+
+    return NextResponse.json({
+      total_rental_files: rentalFiles.length,
+      total_documents: totalDocuments,
+      unique_document_urls: documentUrls.size,
+      document_tests: documentTests,
+      sample_urls: Array.from(documentUrls).slice(0, 10),
+      storage_type: "Vercel Blob Storage",
+      note: "Les documents sont stockés dans Vercel Blob Storage, pas Supabase Storage",
+    })
   } catch (error) {
-    console.error("❌ Erreur lors du listage:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("❌ Erreur listage documents:", error)
+    return NextResponse.json(
+      {
+        error: error.message,
+        total_documents: 0,
+        note: "Erreur lors de la récupération des documents",
+      },
+      { status: 500 },
+    )
   }
 }
