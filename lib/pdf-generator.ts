@@ -42,6 +42,15 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     }
   }
 
+  // Fonction pour vérifier si une URL est valide (Supabase ou autre)
+  const isValidDocumentUrl = (url: string): boolean => {
+    if (!url || url === "DOCUMENT_MIGRE_PLACEHOLDER") return false
+    if (url.includes("blob:")) return false
+    if (url.startsWith("https://") && url.includes("supabase")) return true
+    if (url.startsWith("http")) return true
+    return false
+  }
+
   // Fonction pour ajouter une image dans le PDF
   const addImageToPDF = async (documentUrl: string, documentName: string, maxWidth = 150, maxHeight = 200) => {
     try {
@@ -62,9 +71,9 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       doc.setFontSize(10)
       doc.text(documentName, margin, 25)
 
-      // Vérifier si c'est un placeholder
-      if (documentUrl === "DOCUMENT_MIGRE_PLACEHOLDER" || documentUrl.includes("blob:")) {
-        console.log("📋 Document placeholder détecté")
+      // Vérifier si c'est un placeholder ou une URL blob
+      if (!isValidDocumentUrl(documentUrl)) {
+        console.log("📋 Document placeholder ou blob détecté")
 
         doc.setTextColor("#000000")
         doc.setFontSize(12)
@@ -93,13 +102,23 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
 
       // Essayer de récupérer le document Supabase
       try {
-        const response = await fetch(documentUrl)
+        console.log("🔗 Récupération document Supabase:", documentUrl)
+
+        // Pour les URLs Supabase publiques, on peut les utiliser directement
+        const response = await fetch(documentUrl, {
+          method: "GET",
+          headers: {
+            Accept: "image/*,application/pdf,*/*",
+          },
+        })
 
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`)
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
         }
 
         const blob = await response.blob()
+        console.log("📦 Blob récupéré:", blob.type, blob.size, "bytes")
+
         const base64Data = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader()
           reader.onload = () => resolve(reader.result as string)
@@ -107,7 +126,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
           reader.readAsDataURL(blob)
         })
 
-        console.log("✅ Document Supabase récupéré")
+        console.log("✅ Document Supabase récupéré et converti en base64")
 
         // Ajouter l'image au PDF
         doc.setTextColor("#000000")
@@ -174,11 +193,11 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
 
       doc.setTextColor("#000000")
       doc.setFontSize(12)
-      doc.text("Document temporairement indisponible", margin, 50)
+      doc.text("Erreur de chargement du document", margin, 50)
       doc.setFontSize(10)
-      doc.text("Ce document sera disponible après re-upload via le nouveau système.", margin, 70)
+      doc.text("Le document n'a pas pu être chargé dans le PDF.", margin, 70)
 
-      // Ajouter un placeholder visuel
+      // Ajouter un placeholder visuel d'erreur
       const xPos = (pageWidth - 150) / 2
       const yPos = 90
 
@@ -188,11 +207,11 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
 
       doc.setTextColor("#721C24")
       doc.setFontSize(24)
-      doc.text("⚠️", xPos + 75, yPos + 100, { align: "center" })
+      doc.text("❌", xPos + 75, yPos + 100, { align: "center" })
       doc.setFontSize(12)
-      doc.text("Document indisponible", xPos + 75, yPos + 120, { align: "center" })
+      doc.text("Erreur de chargement", xPos + 75, yPos + 120, { align: "center" })
       doc.setFontSize(10)
-      doc.text("Re-upload nécessaire", xPos + 75, yPos + 135, { align: "center" })
+      doc.text("Document non disponible", xPos + 75, yPos + 135, { align: "center" })
     }
   }
 
@@ -357,14 +376,14 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
 
   yPosition = addText("Les documents suivants sont intégrés dans ce PDF.", margin, yPosition)
 
-  // Collecter tous les documents (ignorer les placeholders)
+  // Collecter tous les documents valides (URLs Supabase)
   const documentsToAdd = []
 
   if (mainTenant) {
     // Documents d'identité
-    if (mainTenant.identity_documents && mainTenant.identity_documents.length > 0) {
+    if (mainTenant.identity_documents && Array.isArray(mainTenant.identity_documents)) {
       for (const [index, doc] of mainTenant.identity_documents.entries()) {
-        if (doc !== "DOCUMENT_MIGRE_PLACEHOLDER" && !doc.includes("blob:")) {
+        if (isValidDocumentUrl(doc)) {
           documentsToAdd.push({
             url: doc,
             name: `Pièce d'identité du locataire ${index + 1}`,
@@ -374,9 +393,9 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     }
 
     // Documents d'activité
-    if (mainTenant.activity_documents && mainTenant.activity_documents.length > 0) {
+    if (mainTenant.activity_documents && Array.isArray(mainTenant.activity_documents)) {
       for (const [index, doc] of mainTenant.activity_documents.entries()) {
-        if (doc !== "DOCUMENT_MIGRE_PLACEHOLDER" && !doc.includes("blob:")) {
+        if (isValidDocumentUrl(doc)) {
           documentsToAdd.push({
             url: doc,
             name: `Justificatif d'activité ${index + 1}`,
@@ -386,9 +405,9 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     }
 
     // Documents fiscaux
-    if (mainTenant.tax_situation?.documents && mainTenant.tax_situation.documents.length > 0) {
+    if (mainTenant.tax_situation?.documents && Array.isArray(mainTenant.tax_situation.documents)) {
       for (const [index, doc] of mainTenant.tax_situation.documents.entries()) {
-        if (doc !== "DOCUMENT_MIGRE_PLACEHOLDER" && !doc.includes("blob:")) {
+        if (isValidDocumentUrl(doc)) {
           documentsToAdd.push({
             url: doc,
             name: `Document fiscal ${index + 1}`,
@@ -398,9 +417,12 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     }
 
     // Documents de revenus
-    if (mainTenant.income_sources?.work_income?.documents) {
+    if (
+      mainTenant.income_sources?.work_income?.documents &&
+      Array.isArray(mainTenant.income_sources.work_income.documents)
+    ) {
       for (const [index, doc] of mainTenant.income_sources.work_income.documents.entries()) {
-        if (doc !== "DOCUMENT_MIGRE_PLACEHOLDER" && !doc.includes("blob:")) {
+        if (isValidDocumentUrl(doc)) {
           documentsToAdd.push({
             url: doc,
             name: `Justificatif de revenu ${index + 1}`,
@@ -410,9 +432,12 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     }
 
     // Documents de logement
-    if (mainTenant.current_housing_documents?.quittances_loyer) {
+    if (
+      mainTenant.current_housing_documents?.quittances_loyer &&
+      Array.isArray(mainTenant.current_housing_documents.quittances_loyer)
+    ) {
       for (const [index, doc] of mainTenant.current_housing_documents.quittances_loyer.entries()) {
-        if (doc !== "DOCUMENT_MIGRE_PLACEHOLDER" && !doc.includes("blob:")) {
+        if (isValidDocumentUrl(doc)) {
           documentsToAdd.push({
             url: doc,
             name: `Quittance de loyer ${index + 1}`,
@@ -423,11 +448,15 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
   }
 
   // Documents des garants
-  if (rentalFile.guarantors) {
+  if (rentalFile.guarantors && Array.isArray(rentalFile.guarantors)) {
     for (const [gIndex, guarantor] of rentalFile.guarantors.entries()) {
-      if (guarantor.type === "physical" && guarantor.personal_info?.identity_documents) {
+      if (
+        guarantor.type === "physical" &&
+        guarantor.personal_info?.identity_documents &&
+        Array.isArray(guarantor.personal_info.identity_documents)
+      ) {
         for (const [index, doc] of guarantor.personal_info.identity_documents.entries()) {
-          if (doc !== "DOCUMENT_MIGRE_PLACEHOLDER" && !doc.includes("blob:")) {
+          if (isValidDocumentUrl(doc)) {
             documentsToAdd.push({
               url: doc,
               name: `Garant ${gIndex + 1} - Pièce d'identité ${index + 1}`,
@@ -438,7 +467,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     }
   }
 
-  console.log(`📋 ${documentsToAdd.length} documents à ajouter au PDF`)
+  console.log(`📋 ${documentsToAdd.length} documents valides à ajouter au PDF`)
 
   // Ajouter tous les documents
   for (const document of documentsToAdd) {
