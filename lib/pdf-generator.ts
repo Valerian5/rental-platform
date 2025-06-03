@@ -1,8 +1,9 @@
 import { type RentalFileData, MAIN_ACTIVITIES } from "./rental-file-service"
 
 export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise<void> => {
-  // Import dynamique de jsPDF pour éviter les erreurs SSR
+  // Import dynamique des bibliothèques pour éviter les erreurs SSR
   const { jsPDF } = await import("jspdf")
+  const { PDFDocument } = await import("pdf-lib")
 
   const doc = new jsPDF()
   let yPosition = 20
@@ -34,14 +35,6 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     return y + lines.length * (options.lineHeight || 6)
   }
 
-  // Fonction pour ajouter une nouvelle page si nécessaire
-  const checkPageBreak = (requiredSpace: number) => {
-    if (yPosition + requiredSpace > pageHeight - 20) {
-      doc.addPage()
-      yPosition = 20
-    }
-  }
-
   // Fonction pour vérifier si une URL est valide (Supabase ou autre)
   const isValidDocumentUrl = (url: string): boolean => {
     if (!url || url === "DOCUMENT_MIGRE_PLACEHOLDER") return false
@@ -60,8 +53,146 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     } else if (extension === "pdf") {
       return "pdf"
     } else {
-      // Par défaut, on suppose que c'est une image
       return "document"
+    }
+  }
+
+  // Fonction pour convertir un PDF en images et les ajouter au document
+  const addPDFPages = async (pdfUrl: string, documentName: string) => {
+    try {
+      console.log("📄 Intégration du PDF:", documentName, "URL:", pdfUrl)
+
+      // Récupérer le PDF
+      const response = await fetch(pdfUrl)
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const pdfArrayBuffer = await response.arrayBuffer()
+      const pdfDoc = await PDFDocument.load(pdfArrayBuffer)
+      const pageCount = pdfDoc.getPageCount()
+
+      console.log(`📋 PDF chargé: ${pageCount} page(s)`)
+
+      // Ajouter une page de titre pour le document
+      doc.addPage()
+      doc.setFillColor("#3B82F6")
+      doc.rect(0, 0, pageWidth, 30, "F")
+
+      doc.setTextColor("#FFFFFF")
+      doc.setFontSize(14)
+      doc.setFont("helvetica", "bold")
+      doc.text("DOCUMENT PDF", margin, 15)
+
+      doc.setFontSize(10)
+      doc.text(documentName, margin, 25)
+
+      doc.setTextColor("#000000")
+      doc.setFontSize(12)
+      doc.text(`Document PDF - ${pageCount} page(s)`, margin, 50)
+      doc.setFontSize(10)
+      doc.text("Les pages suivantes contiennent le document complet.", margin, 65)
+
+      // Pour chaque page du PDF, la convertir en image et l'ajouter
+      for (let i = 0; i < pageCount; i++) {
+        try {
+          console.log(`📄 Traitement page ${i + 1}/${pageCount}`)
+
+          // Créer un nouveau PDF avec juste cette page
+          const singlePagePdf = await PDFDocument.create()
+          const [copiedPage] = await singlePagePdf.copyPages(pdfDoc, [i])
+          singlePagePdf.addPage(copiedPage)
+
+          // Convertir en ArrayBuffer
+          const singlePagePdfBytes = await singlePagePdf.save()
+
+          // Utiliser PDF.js pour rendre la page en canvas
+          const pdfjsLib = await import("pdfjs-dist")
+
+          // Configurer le worker
+          pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`
+
+          const loadingTask = pdfjsLib.getDocument({ data: singlePagePdfBytes })
+          const pdf = await loadingTask.promise
+          const page = await pdf.getPage(1)
+
+          // Créer un canvas pour rendre la page
+          const canvas = document.createElement("canvas")
+          const context = canvas.getContext("2d")
+
+          // Calculer la taille optimale
+          const viewport = page.getViewport({ scale: 2.0 })
+          canvas.height = viewport.height
+          canvas.width = viewport.width
+
+          // Rendre la page
+          await page.render({
+            canvasContext: context,
+            viewport: viewport,
+          }).promise
+
+          // Convertir le canvas en image
+          const imageData = canvas.toDataURL("image/jpeg", 0.8)
+
+          // Ajouter une nouvelle page au PDF final
+          doc.addPage()
+
+          // Calculer les dimensions pour ajuster l'image à la page
+          const imgWidth = pageWidth - 2 * margin
+          const imgHeight = (viewport.height * imgWidth) / viewport.width
+
+          // Si l'image est trop haute, l'ajuster
+          let finalWidth = imgWidth
+          let finalHeight = imgHeight
+
+          if (imgHeight > pageHeight - 2 * margin) {
+            finalHeight = pageHeight - 2 * margin
+            finalWidth = (viewport.width * finalHeight) / viewport.height
+          }
+
+          // Centrer l'image
+          const xPos = (pageWidth - finalWidth) / 2
+          const yPos = (pageHeight - finalHeight) / 2
+
+          // Ajouter l'image au PDF
+          doc.addImage(imageData, "JPEG", xPos, yPos, finalWidth, finalHeight)
+
+          console.log(`✅ Page ${i + 1} ajoutée au PDF`)
+        } catch (pageError) {
+          console.error(`❌ Erreur page ${i + 1}:`, pageError)
+
+          // Ajouter une page d'erreur
+          doc.addPage()
+          doc.setTextColor("#000000")
+          doc.setFontSize(12)
+          doc.text(`Erreur lors du chargement de la page ${i + 1}`, margin, 50)
+          doc.setFontSize(10)
+          doc.text("Cette page n'a pas pu être intégrée au PDF.", margin, 70)
+        }
+      }
+
+      console.log(`✅ PDF intégré: ${documentName}`)
+    } catch (error) {
+      console.error("❌ Erreur lors de l'intégration du PDF:", error)
+
+      // Ajouter une page d'erreur
+      doc.addPage()
+      doc.setFillColor("#3B82F6")
+      doc.rect(0, 0, pageWidth, 30, "F")
+
+      doc.setTextColor("#FFFFFF")
+      doc.setFontSize(14)
+      doc.setFont("helvetica", "bold")
+      doc.text("DOCUMENT PDF", margin, 15)
+
+      doc.setFontSize(10)
+      doc.text(documentName, margin, 25)
+
+      doc.setTextColor("#000000")
+      doc.setFontSize(12)
+      doc.text("Erreur lors de l'intégration du PDF", margin, 50)
+      doc.setFontSize(10)
+      doc.text("Ce document n'a pas pu être intégré au PDF final.", margin, 70)
     }
   }
 
@@ -70,7 +201,68 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     try {
       console.log("📄 Tentative d'ajout du document:", documentName, "URL:", documentUrl)
 
-      // Ajouter une nouvelle page pour le document
+      // Vérifier si c'est un placeholder ou une URL blob
+      if (!isValidDocumentUrl(documentUrl)) {
+        console.log("📋 Document placeholder ou blob détecté")
+
+        doc.addPage()
+        doc.setFillColor("#3B82F6")
+        doc.rect(0, 0, pageWidth, 30, "F")
+
+        doc.setTextColor("#FFFFFF")
+        doc.setFontSize(14)
+        doc.setFont("helvetica", "bold")
+        doc.text("PIÈCE JOINTE", margin, 15)
+
+        doc.setFontSize(10)
+        doc.text(documentName, margin, 25)
+
+        doc.setTextColor("#000000")
+        doc.setFontSize(12)
+        doc.text("Document à re-uploader", margin, 50)
+        doc.setFontSize(10)
+        doc.text("Ce document doit être uploadé à nouveau via le nouveau système.", margin, 70)
+
+        return
+      }
+
+      // Déterminer le type de fichier
+      const fileType = getFileType(documentUrl)
+      console.log("📋 Type de fichier détecté:", fileType)
+
+      // Traitement spécial pour les PDF
+      if (fileType === "pdf") {
+        await addPDFPages(documentUrl, documentName)
+        return
+      }
+
+      // Traitement pour les images
+      console.log("🔗 Récupération image:", documentUrl)
+
+      const response = await fetch(documentUrl, {
+        method: "GET",
+        headers: {
+          Accept: "image/*,*/*",
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const blob = await response.blob()
+      console.log("📦 Blob récupéré:", blob.type, blob.size, "bytes")
+
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(blob)
+      })
+
+      console.log("✅ Image récupérée et convertie en base64")
+
+      // Ajouter une nouvelle page pour l'image
       doc.addPage()
 
       // En-tête de la page du document
@@ -85,163 +277,53 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       doc.setFontSize(10)
       doc.text(documentName, margin, 25)
 
-      // Vérifier si c'est un placeholder ou une URL blob
-      if (!isValidDocumentUrl(documentUrl)) {
-        console.log("📋 Document placeholder ou blob détecté")
+      // Ajouter l'image au PDF
+      doc.setTextColor("#000000")
+      doc.setFontSize(12)
+      doc.text("Document:", margin, 50)
 
-        doc.setTextColor("#000000")
-        doc.setFontSize(12)
-        doc.text("Document à re-uploader", margin, 50)
-        doc.setFontSize(10)
-        doc.text("Ce document doit être uploadé à nouveau via le nouveau système.", margin, 70)
+      const img = new Image()
+      img.crossOrigin = "anonymous"
 
-        // Ajouter un placeholder visuel
-        const xPos = (pageWidth - 150) / 2
-        const yPos = 90
+      await new Promise((resolve, reject) => {
+        img.onload = () => {
+          try {
+            const imgWidth = img.width
+            const imgHeight = img.height
 
-        doc.setDrawColor("#FFA500")
-        doc.setFillColor("#FFF3CD")
-        doc.rect(xPos, yPos, 150, 200, "FD")
+            // Calculer les dimensions finales
+            let finalWidth = maxWidth
+            let finalHeight = (imgHeight * maxWidth) / imgWidth
 
-        doc.setTextColor("#856404")
-        doc.setFontSize(24)
-        doc.text("📄", xPos + 75, yPos + 100, { align: "center" })
-        doc.setFontSize(12)
-        doc.text("Document à re-uploader", xPos + 75, yPos + 120, { align: "center" })
-        doc.setFontSize(10)
-        doc.text("Utilisez le nouveau système", xPos + 75, yPos + 135, { align: "center" })
+            if (finalHeight > maxHeight) {
+              finalHeight = maxHeight
+              finalWidth = (imgWidth * maxHeight) / imgHeight
+            }
 
-        return
-      }
+            // Centrer l'image
+            const xPos = (pageWidth - finalWidth) / 2
+            const yPos = 60
 
-      // Déterminer le type de fichier
-      const fileType = getFileType(documentUrl)
-      console.log("📋 Type de fichier détecté:", fileType)
-
-      // Traitement spécial pour les PDF
-      if (fileType === "pdf") {
-        console.log("📋 Document PDF détecté, ajout d'une vignette")
-
-        doc.setTextColor("#000000")
-        doc.setFontSize(14)
-        doc.text("Document PDF", margin, 50)
-
-        doc.setFontSize(10)
-        doc.text("Ce document est au format PDF et ne peut pas être intégré directement.", margin, 65)
-        doc.text("Vous pouvez le consulter en ligne via l'application.", margin, 75)
-
-        // Ajouter une vignette PDF
-        const xPos = (pageWidth - 150) / 2
-        const yPos = 90
-
-        doc.setDrawColor("#E2E8F0")
-        doc.setFillColor("#F8FAFC")
-        doc.rect(xPos, yPos, 150, 180, "FD")
-
-        // Icône PDF
-        doc.setFillColor("#DC2626")
-        doc.roundedRect(xPos + 50, yPos + 60, 50, 60, 3, 3, "F")
-
-        doc.setTextColor("#FFFFFF")
-        doc.setFontSize(24)
-        doc.setFont("helvetica", "bold")
-        doc.text("PDF", xPos + 75, yPos + 95, { align: "center" })
-
-        doc.setTextColor("#000000")
-        doc.setFontSize(12)
-        doc.setFont("helvetica", "normal")
-        doc.text("Document PDF", xPos + 75, yPos + 140, { align: "center" })
-        doc.setFontSize(10)
-        doc.text(documentName, xPos + 75, yPos + 155, { align: "center" })
-
-        // URL du document
-        doc.setTextColor("#2563EB")
-        doc.setFontSize(8)
-        const urlText = documentUrl.length > 50 ? documentUrl.substring(0, 47) + "..." : documentUrl
-        doc.text(urlText, xPos + 75, yPos + 170, { align: "center" })
-
-        return
-      }
-
-      // Essayer de récupérer le document Supabase (pour les images)
-      try {
-        console.log("🔗 Récupération document Supabase:", documentUrl)
-
-        // Pour les URLs Supabase publiques, on peut les utiliser directement
-        const response = await fetch(documentUrl, {
-          method: "GET",
-          headers: {
-            Accept: "image/*,application/pdf,*/*",
-          },
-        })
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+            doc.addImage(base64Data, "JPEG", xPos, yPos, finalWidth, finalHeight)
+            console.log("✅ Image ajoutée au PDF:", documentName)
+            resolve(true)
+          } catch (addError) {
+            console.error("❌ Erreur ajout image:", addError)
+            reject(addError)
+          }
         }
 
-        const blob = await response.blob()
-        console.log("📦 Blob récupéré:", blob.type, blob.size, "bytes")
+        img.onerror = (error) => {
+          console.error("❌ Erreur chargement image:", error)
+          reject(error)
+        }
 
-        const base64Data = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader()
-          reader.onload = () => resolve(reader.result as string)
-          reader.onerror = reject
-          reader.readAsDataURL(blob)
-        })
-
-        console.log("✅ Document Supabase récupéré et converti en base64")
-
-        // Ajouter l'image au PDF
-        doc.setTextColor("#000000")
-        doc.setFontSize(12)
-        doc.text("Document:", margin, 50)
-
-        const img = new Image()
-        img.crossOrigin = "anonymous"
-
-        await new Promise((resolve, reject) => {
-          img.onload = () => {
-            try {
-              const imgWidth = img.width
-              const imgHeight = img.height
-
-              // Calculer les dimensions finales
-              let finalWidth = maxWidth
-              let finalHeight = (imgHeight * maxWidth) / imgWidth
-
-              if (finalHeight > maxHeight) {
-                finalHeight = maxHeight
-                finalWidth = (imgWidth * maxHeight) / imgHeight
-              }
-
-              // Centrer l'image
-              const xPos = (pageWidth - finalWidth) / 2
-              const yPos = 60
-
-              doc.addImage(base64Data, "JPEG", xPos, yPos, finalWidth, finalHeight)
-              console.log("✅ Image ajoutée au PDF:", documentName)
-              resolve(true)
-            } catch (addError) {
-              console.error("❌ Erreur ajout image:", addError)
-              reject(addError)
-            }
-          }
-
-          img.onerror = (error) => {
-            console.error("❌ Erreur chargement image:", error)
-            reject(error)
-          }
-
-          img.src = base64Data
-        })
-      } catch (fetchError) {
-        console.error("❌ Erreur récupération document Supabase:", fetchError)
-        throw fetchError
-      }
+        img.src = base64Data
+      })
     } catch (error) {
       console.error("❌ Erreur lors de l'ajout du document au PDF:", error)
 
-      // Ajouter une page d'erreur avec un placeholder
+      // Ajouter une page d'erreur
       doc.addPage()
       doc.setFillColor("#3B82F6")
       doc.rect(0, 0, pageWidth, 30, "F")
@@ -259,22 +341,6 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       doc.text("Erreur de chargement du document", margin, 50)
       doc.setFontSize(10)
       doc.text("Le document n'a pas pu être chargé dans le PDF.", margin, 70)
-
-      // Ajouter un placeholder visuel d'erreur
-      const xPos = (pageWidth - 150) / 2
-      const yPos = 90
-
-      doc.setDrawColor("#DC3545")
-      doc.setFillColor("#F8D7DA")
-      doc.rect(xPos, yPos, 150, 200, "FD")
-
-      doc.setTextColor("#721C24")
-      doc.setFontSize(24)
-      doc.text("❌", xPos + 75, yPos + 100, { align: "center" })
-      doc.setFontSize(12)
-      doc.text("Erreur de chargement", xPos + 75, yPos + 120, { align: "center" })
-      doc.setFontSize(10)
-      doc.text("Document non disponible", xPos + 75, yPos + 135, { align: "center" })
     }
   }
 
