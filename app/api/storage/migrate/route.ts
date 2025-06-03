@@ -28,14 +28,14 @@ export async function POST() {
         let needsUpdate = false
         const updatedFile = { ...file }
 
-        // Fonction pour remplacer les URLs blob
+        // Fonction pour migrer les URLs blob vers des placeholders informatifs
         const replaceBlobUrls = (documents: string[]) => {
           return documents.map((url) => {
             if (url.includes("blob:")) {
               needsUpdate = true
-              // Pour l'instant, on remplace par un placeholder
-              // En production, il faudrait uploader le fichier vers Vercel Blob
-              return `/placeholder.svg?height=400&width=300&query=Document migré - ${url.split("/").pop()}`
+              // Créer un placeholder informatif
+              const docId = url.split("/").pop() || "unknown"
+              return `/placeholder.svg?height=400&width=300&query=Document à re-uploader - ID: ${docId.substring(0, 8)}`
             }
             return url
           })
@@ -117,7 +117,13 @@ export async function POST() {
       total_files: rentalFiles?.length || 0,
       results: migrationResults,
       message: "Migration terminée - URLs blob remplacées par des placeholders",
-      note: "Pour une vraie migration, il faudrait uploader les fichiers vers Vercel Blob Storage",
+      note: "Les utilisateurs devront re-uploader leurs documents via le nouveau système",
+      next_steps: [
+        "1. Les formulaires utilisent maintenant Vercel Blob Storage",
+        "2. Les anciens documents sont remplacés par des placeholders",
+        "3. Les utilisateurs peuvent re-uploader leurs documents",
+        "4. Les nouveaux uploads seront persistants",
+      ],
     })
   } catch (error) {
     console.error("❌ Erreur migration:", error)

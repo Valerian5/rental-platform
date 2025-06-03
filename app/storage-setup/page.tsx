@@ -47,6 +47,24 @@ export default function StorageSetupPage() {
     }
   }
 
+  const migrateDocuments = async () => {
+    setLoading(true)
+    try {
+      const response = await fetch("/api/storage/migrate", { method: "POST" })
+      const data = await response.json()
+      setTestResult(data)
+      console.log("🔄 Résultat migration:", data)
+    } catch (error) {
+      console.error("❌ Erreur migration:", error)
+      setTestResult({
+        success: false,
+        error: "Erreur lors de la migration",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
     checkStorageStatus()
   }, [])
@@ -100,6 +118,9 @@ export default function StorageSetupPage() {
 
                   <Button onClick={testUpload} disabled={loading}>
                     {loading ? "Test en cours..." : "Tester l'upload"}
+                  </Button>
+                  <Button onClick={migrateDocuments} disabled={loading} variant="secondary">
+                    {loading ? "Migration..." : "Migrer les documents"}
                   </Button>
                 </div>
               ) : (
