@@ -11,6 +11,8 @@ import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { CircularScore } from "@/components/circular-score"
+import { VisitProposalDialog } from "@/components/visit-proposal-dialog"
+import { RefusalDialog } from "@/components/refusal-dialog"
 import {
   ArrowLeft,
   User,
@@ -42,8 +44,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const [activeTab, setActiveTab] = useState("overview")
   const [showVisitDialog, setShowVisitDialog] = useState(false)
   const [showRefuseDialog, setShowRefuseDialog] = useState(false)
-  const [refusalReason, setRefusalReason] = useState("")
-  const [refusalType, setRefusalType] = useState("insufficient_income")
 
   useEffect(() => {
     checkAuthAndLoadData()
@@ -89,13 +89,13 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
 
       const data = await response.json()
       console.log("✅ Candidature chargée:", data.application)
-      
+
       // Mettre à jour le statut en "analyzing" si nécessaire
       if (data.application.status === "pending") {
         await updateApplicationStatus("analyzing")
         data.application.status = "analyzing"
       }
-      
+
       setApplication(data.application)
 
       // Récupérer le dossier de location si disponible
@@ -140,15 +140,15 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       })
 
       if (response.ok) {
-        const statusMessages = {
+        const statusMessages: { [key: string]: string } = {
           analyzing: "Candidature en cours d'analyse",
           accepted: "Candidature acceptée",
           rejected: "Candidature refusée",
           visit_scheduled: "Visite proposée au candidat",
           waiting_tenant_confirmation: "En attente de confirmation du locataire",
         }
-        
-        toast.success(statusMessages[newStatus as keyof typeof statusMessages] || "Statut mis à jour")
+
+        toast.success(statusMessages[newStatus] || "Statut mis à jour")
         setApplication({ ...application, status: newStatus })
         return true
       } else {
@@ -177,20 +177,20 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
     setShowRefuseDialog(true)
   }
 
-  const handleRefuseConfirm = async () => {
+  const handleRefuseConfirm = async (reason: string, type: string) => {
     // Préparer le message de refus
     let notes = ""
-    
-    const refusalReasons = {
+
+    const refusalReasons: { [key: string]: string } = {
       insufficient_income: "Revenus insuffisants",
       incomplete_file: "Dossier incomplet",
       missing_guarantor: "Absence de garant",
       unstable_situation: "Situation professionnelle instable",
-      other: refusalReason,
+      other: reason,
     }
-    
-    notes = refusalReasons[refusalType as keyof typeof refusalReasons] || refusalReason
-    
+
+    notes = refusalReasons[type] || reason
+
     const success = await updateApplicationStatus("rejected", notes)
     if (success) {
       setShowRefuseDialog(false)
@@ -276,21 +276,33 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
 
   const getStatusBadge = () => {
     if (!application) return null
-    
+
     switch (application.status) {
       case "pending":
         return <Badge variant="outline">En attente</Badge>
       case "analyzing":
         return <Badge variant="secondary">En analyse</Badge>
       case "visit_scheduled":
-        return <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200">Visite planifiée</Badge>
+        return (
+          <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200">
+            Visite planifiée
+          </Badge>
+        )
       case "accepted":
       case "approved":
-        return <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-200">Acceptée</Badge>
+        return (
+          <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-200">
+            Acceptée
+          </Badge>
+        )
       case "rejected":
         return <Badge variant="destructive">Refusée</Badge>
       case "waiting_tenant_confirmation":
-        return <Badge variant="outline" className="bg-amber-100 text-amber-800 hover:bg-amber-200">En attente de confirmation</Badge>
+        return (
+          <Badge variant="outline" className="bg-amber-100 text-amber-800 hover:bg-amber-200">
+            En attente de confirmation
+          </Badge>
+        )
       default:
         return <Badge variant="outline">Statut inconnu</Badge>
     }
@@ -298,7 +310,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
 
   const getActionButtons = () => {
     if (!application) return null
-    
+
     // Définir les actions disponibles en fonction du statut
     switch (application.status) {
       case "analyzing":
@@ -453,9 +465,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               </p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {getActionButtons()}
-          </div>
+          <div className="flex flex-wrap gap-2">{getActionButtons()}</div>
         </div>
 
         {/* Onglets */}
@@ -676,9 +686,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                     </div>
                     <div className="flex justify-between pt-2 border-t">
                       <span className="font-medium">Ratio revenus/loyer</span>
-                      <span className="font-bold">
-                        {rentRatio !== "N/A" ? `${rentRatio}x` : "N/A"}
-                      </span>
+                      <span className="font-bold">{rentRatio !== "N/A" ? `${rentRatio}x` : "N/A"}</span>
                     </div>
                   </div>
 
@@ -752,15 +760,11 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-muted-foreground">Ancienneté professionnelle</span>
-                      <span className="font-medium">
-                        {mainTenant.professional_info?.seniority || "Non spécifié"}
-                      </span>
+                      <span className="font-medium">{mainTenant.professional_info?.seniority || "Non spécifié"}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-muted-foreground">Période d'essai</span>
-                      <span className="font-medium">
-                        {mainTenant.professional_info?.trial_period ? "Oui" : "Non"}
-                      </span>
+                      <span className="font-medium">{mainTenant.professional_info?.trial_period ? "Oui" : "Non"}</span>
                     </div>
                   </div>
 
@@ -787,7 +791,8 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                             </p>
                           </div>
                         </div>
-                      ) : contractType?.toLowerCase() === "freelance" || contractType?.toLowerCase() === "indépendant" ? (
+                      ) : contractType?.toLowerCase() === "freelance" ||
+                        contractType?.toLowerCase() === "indépendant" ? (
                         <div className="flex items-start gap-2">
                           <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
                           <div>
@@ -850,8 +855,9 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
 
                     {rentalFile?.guarantors?.map((guarantor: any, index: number) => {
                       const guarantorIncome = guarantor.personal_info?.income_sources?.work_income?.amount || 0
-                      const guarantorRatio = guarantorIncome && property.price ? (guarantorIncome / property.price).toFixed(1) : "N/A"
-                      
+                      const guarantorRatio =
+                        guarantorIncome && property.price ? (guarantorIncome / property.price).toFixed(1) : "N/A"
+
                       return (
                         <div key={index} className="border rounded-lg p-4">
                           <h4 className="font-medium mb-2">Garant {index + 1}</h4>
@@ -873,7 +879,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                               </span>
                             </div>
                           </div>
-                          
+
                           {guarantorRatio !== "N/A" && (
                             <div className="mt-2 pt-2 border-t">
                               {Number(guarantorRatio) >= 3 ? (
@@ -1020,7 +1026,8 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                         <div>
                           <p className="font-medium text-red-700">Dossier fragile</p>
                           <p className="text-sm text-muted-foreground">
-                            Ce dossier présente des risques financiers importants. Candidature à considérer avec prudence.
+                            Ce dossier présente des risques financiers importants. Candidature à considérer avec
+                            prudence.
                           </p>
                         </div>
                       </div>
@@ -1094,4 +1101,28 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                   </div>
                 ) : (
                   <div className="text-center py-6">
-                    <p className="text-muted-foreground\">
+                    <p className="text-muted-foreground">Aucun justificatif de domicile disponible</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      {/* Dialogues */}
+      <VisitProposalDialog
+        open={showVisitDialog}
+        onClose={() => setShowVisitDialog(false)}
+        onConfirm={handleVisitProposed}
+        propertyId={application?.property_id || ""}
+      />
+
+      <RefusalDialog
+        open={showRefuseDialog}
+        onClose={() => setShowRefuseDialog(false)}
+        onConfirm={handleRefuseConfirm}
+      />
+    </>
+  )
+}
