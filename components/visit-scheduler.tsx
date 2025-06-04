@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, ChevronLeft, ChevronRight, Plus, Minus, Save, RefreshCw } from "lucide-react"
+import { Calendar, ChevronLeft, ChevronRight, Plus, Minus, Save, RefreshCw, CheckCircle, Clock } from "lucide-react"
 import { toast } from "sonner"
 
 interface VisitSlot {
@@ -241,23 +241,38 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
 
     // Charger la configuration existante pour ce jour
     const existingSlots = visitSlots.filter((slot) => slot.date === dateStr)
+
     if (existingSlots.length > 0) {
+      // Calculer la durée en analysant les créneaux existants
       const firstSlot = existingSlots[0]
+      const startTime = new Date(`2000-01-01T${firstSlot.start_time}:00`)
+      const endTime = new Date(`2000-01-01T${firstSlot.end_time}:00`)
+      const duration = (endTime.getTime() - startTime.getTime()) / 60000
+
+      // Trouver l'heure de début et fin globale
+      const allStartTimes = existingSlots.map((slot) => slot.start_time).sort()
+      const allEndTimes = existingSlots.map((slot) => slot.end_time).sort()
+
       setDayConfig({
         date: dateStr,
-        slotDuration: 30, // Par défaut, on peut améliorer en détectant la durée
-        startTime: existingSlots[0].start_time,
-        endTime: existingSlots[existingSlots.length - 1].end_time,
+        slotDuration: duration,
+        startTime: allStartTimes[0],
+        endTime: allEndTimes[allEndTimes.length - 1],
         isGroupVisit: firstSlot.is_group_visit,
         capacity: firstSlot.max_capacity,
         selectedSlots: existingSlots.map((slot) => `${slot.start_time}-${slot.end_time}`),
       })
     } else {
-      setDayConfig((prev) => ({
-        ...prev,
+      // Réinitialiser avec les valeurs par défaut mais garder la date
+      setDayConfig({
         date: dateStr,
+        slotDuration: 30,
+        startTime: "08:00",
+        endTime: "20:00",
+        isGroupVisit: false,
+        capacity: 1,
         selectedSlots: [],
-      }))
+      })
     }
   }
 
@@ -459,6 +474,70 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                   )}
                 </div>
 
+                {/* Créneaux générés - Vue complète */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-base font-medium">Créneaux disponibles</Label>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">{timeSlots.length} générés</Badge>
+                      <Badge variant="default">{dayConfig.selectedSlots.length} sélectionnés</Badge>
+                    </div>
+                  </div>
+
+                  {timeSlots.length > 0 ? (
+                    <div className="border rounded-lg p-3 max-h-80 overflow-y-auto">
+                      <div className="grid grid-cols-2 gap-2">
+                        {timeSlots.map((slot) => (
+                          <div
+                            key={slot.key}
+                            className={`
+                              flex items-center justify-between p-2 rounded border cursor-pointer transition-colors
+                              ${
+                                dayConfig.selectedSlots.includes(slot.key)
+                                  ? "bg-blue-100 border-blue-300 text-blue-800"
+                                  : "bg-gray-50 border-gray-200 hover:bg-gray-100"
+                              }
+                            `}
+                            onClick={() => toggleSlot(slot.key)}
+                          >
+                            <span className="text-sm font-medium">{slot.label}</span>
+                            {dayConfig.selectedSlots.includes(slot.key) && (
+                              <CheckCircle className="h-4 w-4 text-blue-600" />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="mt-3 pt-3 border-t flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            setDayConfig((prev) => ({
+                              ...prev,
+                              selectedSlots: timeSlots.map((slot) => slot.key),
+                            }))
+                          }
+                        >
+                          Tout sélectionner
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setDayConfig((prev) => ({ ...prev, selectedSlots: [] }))}
+                        >
+                          Tout désélectionner
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-4 text-muted-foreground border rounded-lg">
+                      <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p>Configurez la durée et l'amplitude pour générer les créneaux</p>
+                    </div>
+                  )}
+                </div>
+
                 {/* Amplitude horaire */}
                 <div className="space-y-3">
                   <Label className="text-base font-medium">Amplitude horaire</Label>
@@ -531,7 +610,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                 </div>
 
                 {/* Créneaux générés */}
-                <div className="space-y-3">
+                {/* <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <Label className="text-base font-medium">Sélectionner les créneaux disponibles</Label>
                     <Badge variant="outline">{dayConfig.selectedSlots.length} sélectionnés</Badge>
@@ -550,7 +629,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                       </Button>
                     ))}
                   </div>
-                </div>
+                </div> */}
 
                 {/* Actions */}
                 <div className="flex gap-2 pt-4">

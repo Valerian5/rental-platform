@@ -7,14 +7,30 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { authService } from "@/lib/auth-service"
 import { visitService } from "@/lib/visit-service"
 import { toast } from "sonner"
-import { format } from "date-fns"
+import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, addWeeks, subWeeks } from "date-fns"
 import { fr } from "date-fns/locale"
-import { CalendarIcon, Clock, MapPin, User, Phone, Mail, Check, X, Filter, Search } from "lucide-react"
+import {
+  CalendarIcon,
+  Clock,
+  MapPin,
+  User,
+  Phone,
+  Mail,
+  Check,
+  X,
+  Filter,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  List,
+  CalendarIcon as CalendarViewIcon,
+  Eye,
+} from "lucide-react"
+import { PageHeader } from "@/components/page-header"
 
 interface Visit {
   id: string
@@ -39,12 +55,12 @@ export default function VisitsPage() {
   const [visits, setVisits] = useState<Visit[]>([])
   const [filteredVisits, setFilteredVisits] = useState<Visit[]>([])
   const [properties, setProperties] = useState<any[]>([])
-  const [selectedDate, setSelectedDate] = useState<Date>()
+  const [currentWeek, setCurrentWeek] = useState(new Date())
+  const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar")
   const [filters, setFilters] = useState({
     status: "all",
     property: "all",
     search: "",
-    date: null as Date | null,
   })
 
   useEffect(() => {
@@ -116,11 +132,6 @@ export default function VisitsPage() {
       )
     }
 
-    if (filters.date) {
-      const filterDate = format(filters.date, "yyyy-MM-dd")
-      filtered = filtered.filter((visit) => visit.visit_date === filterDate)
-    }
-
     setFilteredVisits(filtered)
   }
 
@@ -158,23 +169,35 @@ export default function VisitsPage() {
     }
   }
 
-  const getUpcomingVisits = () => {
-    const now = new Date()
-    return visits.filter((visit) => {
-      const visitDateTime = new Date(`${visit.visit_date}T${visit.visit_time}`)
-      return visitDateTime > now && visit.status === "scheduled"
-    })
+  // Génération de la vue calendrier
+  const getWeekDays = () => {
+    const start = startOfWeek(currentWeek, { weekStartsOn: 1 })
+    const end = endOfWeek(currentWeek, { weekStartsOn: 1 })
+    return eachDayOfInterval({ start, end })
+  }
+
+  const getVisitsForDay = (day: Date) => {
+    const dayStr = format(day, "yyyy-MM-dd")
+    return filteredVisits.filter((visit) => visit.visit_date === dayStr)
+  }
+
+  const navigateWeek = (direction: "prev" | "next") => {
+    setCurrentWeek(direction === "prev" ? subWeeks(currentWeek, 1) : addWeeks(currentWeek, 1))
+  }
+
+  const getTimeSlots = () => {
+    const slots = []
+    for (let hour = 8; hour <= 20; hour++) {
+      slots.push(`${hour.toString().padStart(2, "0")}:00`)
+      slots.push(`${hour.toString().padStart(2, "0")}:30`)
+    }
+    return slots
   }
 
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Visites</h1>
-            <p className="text-muted-foreground">Gérez vos visites de propriétés</p>
-          </div>
-        </div>
+        <PageHeader title="Visites" description="Chargement..." />
         <div className="grid gap-4">
           {[...Array(3)].map((_, i) => (
             <Card key={i} className="animate-pulse">
@@ -189,19 +212,32 @@ export default function VisitsPage() {
     )
   }
 
-  const upcomingVisits = getUpcomingVisits()
+  const weekDays = getWeekDays()
+  const timeSlots = getTimeSlots()
+  const upcomingVisits = visits.filter((visit) => {
+    const visitDateTime = new Date(`${visit.visit_date}T${visit.visit_time}`)
+    return visitDateTime > new Date() && visit.status === "scheduled"
+  })
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Visites</h1>
-          <p className="text-muted-foreground">
-            {visits.length} visite{visits.length > 1 ? "s" : ""} au total
-          </p>
+      <PageHeader title="Visites" description={`${visits.length} visite${visits.length > 1 ? "s" : ""} au total`}>
+        <div className="flex items-center gap-2">
+          <Button
+            variant={viewMode === "calendar" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setViewMode("calendar")}
+          >
+            <CalendarViewIcon className="h-4 w-4 mr-2" />
+            Calendrier
+          </Button>
+          <Button variant={viewMode === "list" ? "default" : "outline"} size="sm" onClick={() => setViewMode("list")}>
+            <List className="h-4 w-4 mr-2" />
+            Liste
+          </Button>
         </div>
-      </div>
+      </PageHeader>
 
       {/* Statistiques rapides */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -263,7 +299,7 @@ export default function VisitsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
@@ -301,140 +337,199 @@ export default function VisitsPage() {
               </SelectContent>
             </Select>
 
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="justify-start text-left font-normal">
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {filters.date ? format(filters.date, "PPP", { locale: fr }) : "Sélectionner une date"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={filters.date || undefined}
-                  onSelect={(date) => setFilters({ ...filters, date: date || null })}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-
-            <Button
-              variant="outline"
-              onClick={() => setFilters({ status: "all", property: "all", search: "", date: null })}
-            >
+            <Button variant="outline" onClick={() => setFilters({ status: "all", property: "all", search: "" })}>
               Réinitialiser
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Liste des visites */}
-      <div className="space-y-4">
-        {filteredVisits.length === 0 ? (
+      {/* Contenu principal */}
+      <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as "calendar" | "list")}>
+        <TabsContent value="calendar">
           <Card>
-            <CardContent className="p-12 text-center">
-              <CalendarIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Aucune visite</h3>
-              <p className="text-muted-foreground">
-                {filters.status !== "all" || filters.property !== "all" || filters.search || filters.date
-                  ? "Aucune visite ne correspond à vos filtres"
-                  : "Vous n'avez pas encore de visites programmées"}
-              </p>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Vue Calendrier</CardTitle>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => navigateWeek("prev")}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="font-medium min-w-[200px] text-center">
+                    {format(weekDays[0], "d MMM", { locale: fr })} - {format(weekDays[6], "d MMM yyyy", { locale: fr })}
+                  </span>
+                  <Button variant="outline" size="sm" onClick={() => navigateWeek("next")}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setCurrentWeek(new Date())}>
+                    Aujourd'hui
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-8 gap-1">
+                {/* En-tête avec les heures */}
+                <div className="p-2"></div>
+                {weekDays.map((day) => (
+                  <div key={day.toISOString()} className="p-2 text-center border-b">
+                    <div className="font-medium">{format(day, "EEE", { locale: fr })}</div>
+                    <div className={`text-lg ${isSameDay(day, new Date()) ? "text-blue-600 font-bold" : ""}`}>
+                      {format(day, "d")}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Grille horaire */}
+                {timeSlots.map((timeSlot) => (
+                  <div key={timeSlot} className="contents">
+                    <div className="p-2 text-xs text-muted-foreground border-r">{timeSlot}</div>
+                    {weekDays.map((day) => {
+                      const dayVisits = getVisitsForDay(day).filter((visit) => visit.visit_time === timeSlot)
+                      return (
+                        <div key={`${day.toISOString()}-${timeSlot}`} className="p-1 border-r border-b min-h-[60px]">
+                          {dayVisits.map((visit) => (
+                            <div
+                              key={visit.id}
+                              className={`
+                                p-2 rounded text-xs cursor-pointer mb-1
+                                ${visit.status === "scheduled" ? "bg-blue-100 text-blue-800 border border-blue-200" : ""}
+                                ${visit.status === "completed" ? "bg-green-100 text-green-800 border border-green-200" : ""}
+                                ${visit.status === "cancelled" ? "bg-gray-100 text-gray-800 border border-gray-200" : ""}
+                                ${visit.status === "no_show" ? "bg-red-100 text-red-800 border border-red-200" : ""}
+                              `}
+                              onClick={() => {
+                                // Ouvrir un modal ou naviguer vers les détails
+                                console.log("Voir détails visite:", visit.id)
+                              }}
+                            >
+                              <div className="font-medium truncate">{visit.visitor_name}</div>
+                              <div className="truncate">{visit.property.title}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
             </CardContent>
           </Card>
-        ) : (
-          filteredVisits.map((visit) => (
-            <Card key={visit.id}>
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-4 mb-4">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                        <User className="h-6 w-6 text-white" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-semibold">{visit.visitor_name}</h3>
-                        <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                          <div className="flex items-center">
-                            <Mail className="h-4 w-4 mr-1" />
-                            {visit.visitor_email}
-                          </div>
-                          <div className="flex items-center">
-                            <Phone className="h-4 w-4 mr-1" />
-                            {visit.visitor_phone}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+        </TabsContent>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <h4 className="font-medium mb-2">Propriété</h4>
-                        <div className="space-y-1 text-sm">
-                          <p className="font-medium">{visit.property.title}</p>
-                          <div className="flex items-center text-muted-foreground">
-                            <MapPin className="h-4 w-4 mr-1" />
-                            {visit.property.address}
+        <TabsContent value="list">
+          <div className="space-y-4">
+            {filteredVisits.length === 0 ? (
+              <Card>
+                <CardContent className="p-12 text-center">
+                  <CalendarIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">Aucune visite</h3>
+                  <p className="text-muted-foreground">
+                    {filters.status !== "all" || filters.property !== "all" || filters.search
+                      ? "Aucune visite ne correspond à vos filtres"
+                      : "Vous n'avez pas encore de visites programmées"}
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              filteredVisits.map((visit) => (
+                <Card key={visit.id}>
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-4 mb-4">
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                            <User className="h-6 w-6 text-white" />
                           </div>
-                        </div>
-                      </div>
-
-                      <div>
-                        <h4 className="font-medium mb-2">Date et heure</h4>
-                        <div className="space-y-1 text-sm">
-                          <div className="flex items-center">
-                            <CalendarIcon className="h-4 w-4 mr-1" />
-                            {format(new Date(visit.visit_date), "PPP", { locale: fr })}
-                          </div>
-                          <div className="flex items-center">
-                            <Clock className="h-4 w-4 mr-1" />
-                            {visit.visit_time}
+                          <div>
+                            <h3 className="text-lg font-semibold">{visit.visitor_name}</h3>
+                            <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                              <div className="flex items-center">
+                                <Mail className="h-4 w-4 mr-1" />
+                                {visit.visitor_email}
+                              </div>
+                              <div className="flex items-center">
+                                <Phone className="h-4 w-4 mr-1" />
+                                {visit.visitor_phone}
+                              </div>
+                            </div>
                           </div>
                         </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <h4 className="font-medium mb-2">Propriété</h4>
+                            <div className="space-y-1 text-sm">
+                              <p className="font-medium">{visit.property.title}</p>
+                              <div className="flex items-center text-muted-foreground">
+                                <MapPin className="h-4 w-4 mr-1" />
+                                {visit.property.address}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div>
+                            <h4 className="font-medium mb-2">Date et heure</h4>
+                            <div className="space-y-1 text-sm">
+                              <div className="flex items-center">
+                                <CalendarIcon className="h-4 w-4 mr-1" />
+                                {format(new Date(visit.visit_date), "PPP", { locale: fr })}
+                              </div>
+                              <div className="flex items-center">
+                                <Clock className="h-4 w-4 mr-1" />
+                                {visit.visit_time}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {visit.notes && (
+                          <div className="mt-4">
+                            <h4 className="font-medium mb-2">Notes</h4>
+                            <p className="text-sm text-muted-foreground bg-gray-50 p-3 rounded-lg">{visit.notes}</p>
+                          </div>
+                        )}
                       </div>
-                    </div>
 
-                    {visit.notes && (
-                      <div className="mt-4">
-                        <h4 className="font-medium mb-2">Notes</h4>
-                        <p className="text-sm text-muted-foreground bg-gray-50 p-3 rounded-lg">{visit.notes}</p>
-                      </div>
-                    )}
-                  </div>
+                      <div className="flex flex-col items-end space-y-3">
+                        {getStatusBadge(visit.status)}
 
-                  <div className="flex flex-col items-end space-y-3">
-                    {getStatusBadge(visit.status)}
-
-                    <div className="flex flex-col space-y-2">
-                      {visit.status === "scheduled" && (
-                        <div className="flex space-x-2">
-                          <Button
-                            size="sm"
-                            variant="default"
-                            onClick={() => handleStatusChange(visit.id, "completed")}
-                            className="bg-green-600 hover:bg-green-700"
-                          >
-                            <Check className="h-4 w-4 mr-1" />
-                            Effectuée
+                        <div className="flex flex-col space-y-2">
+                          {visit.status === "scheduled" && (
+                            <div className="flex space-x-2">
+                              <Button
+                                size="sm"
+                                variant="default"
+                                onClick={() => handleStatusChange(visit.id, "completed")}
+                                className="bg-green-600 hover:bg-green-700"
+                              >
+                                <Check className="h-4 w-4 mr-1" />
+                                Effectuée
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => handleStatusChange(visit.id, "cancelled")}
+                              >
+                                <X className="h-4 w-4 mr-1" />
+                                Annuler
+                              </Button>
+                            </div>
+                          )}
+                          <Button size="sm" variant="outline">
+                            <Eye className="h-4 w-4 mr-1" />
+                            Détails
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => handleStatusChange(visit.id, "cancelled")}
-                          >
-                            <X className="h-4 w-4 mr-1" />
-                            Annuler
-                          </Button>
                         </div>
-                      )}
+                      </div>
                     </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
