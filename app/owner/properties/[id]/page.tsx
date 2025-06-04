@@ -7,7 +7,21 @@ import { useRouter, useParams, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Edit, Trash2, Eye, Calendar, MapPin, Home, Bed, Bath, Square, Upload, X } from "lucide-react"
+import {
+  ArrowLeft,
+  Edit,
+  Trash2,
+  Eye,
+  Calendar,
+  MapPin,
+  Home,
+  Bed,
+  Bath,
+  Square,
+  Upload,
+  X,
+  RefreshCw,
+} from "lucide-react"
 import Link from "next/link"
 import { propertyService } from "@/lib/property-service"
 import { authService } from "@/lib/auth-service"
@@ -31,6 +45,20 @@ export default function PropertyDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [isUploadingImages, setIsUploadingImages] = useState(false)
   const [activeTab, setActiveTab] = useState(initialTab)
+  const [mode, setMode] = useState("management") // Assuming a default mode
+  const loadSlotsFromDatabase = async () => {
+    setIsLoading(true)
+    try {
+      const slotsData = await propertyService.getPropertyVisitAvailabilities(params.id as string)
+      setVisitSlots(slotsData)
+      toast.success("Créneaux de visite actualisés.")
+    } catch (error) {
+      console.error("Erreur lors du chargement des créneaux:", error)
+      toast.error("Erreur lors du chargement des créneaux de visite")
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const handleSlotsChange = useCallback((newSlots: any[]) => {
     setVisitSlots(newSlots)
@@ -198,7 +226,15 @@ export default function PropertyDetailPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">Gestion des visites</h3>
-          <Badge variant="outline">{visitSlots.length} créneaux disponibles</Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline">{visitSlots.length} créneaux disponibles</Badge>
+            {mode === "management" && (
+              <Button variant="outline" size="sm" onClick={loadSlotsFromDatabase} disabled={isLoading}>
+                <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+                Actualiser
+              </Button>
+            )}
+          </div>
         </div>
 
         <VisitScheduler
