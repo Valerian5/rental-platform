@@ -114,7 +114,6 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
     }
   }
 
-  // Sauvegarder les créneaux en base de données
   const saveSlotsToDatabase = async (slots: VisitSlot[]) => {
     if (!propertyId || mode !== "management") return
 
@@ -122,15 +121,31 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
     try {
       console.log("💾 Sauvegarde des créneaux en DB...", slots.length)
 
-      const validatedSlots = slots.map((slot) => ({
-        date: slot.date,
-        start_time: slot.start_time,
-        end_time: slot.end_time,
-        max_capacity: slot.max_capacity || 1,
-        is_group_visit: slot.is_group_visit || false,
-        current_bookings: slot.current_bookings || 0,
-        is_available: slot.is_available !== false,
-      }))
+      // Validation et nettoyage des créneaux
+      const validatedSlots = slots.map((slot, index) => {
+        // Validation du format d'heure
+        const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
+
+        if (!timeRegex.test(slot.start_time)) {
+          console.error(`Créneau ${index + 1}: format d'heure de début invalide (${slot.start_time})`)
+          throw new Error(`Créneau ${index + 1}: format d'heure invalide (attendu: HH:MM)`)
+        }
+
+        if (!timeRegex.test(slot.end_time)) {
+          console.error(`Créneau ${index + 1}: format d'heure de fin invalide (${slot.end_time})`)
+          throw new Error(`Créneau ${index + 1}: format d'heure invalide (attendu: HH:MM)`)
+        }
+
+        return {
+          date: slot.date,
+          start_time: slot.start_time,
+          end_time: slot.end_time,
+          max_capacity: slot.max_capacity || 1,
+          is_group_visit: slot.is_group_visit || false,
+          current_bookings: slot.current_bookings || 0,
+          is_available: slot.is_available !== false,
+        }
+      })
 
       const response = await fetch(`/api/properties/${propertyId}/visit-slots`, {
         method: "POST",
@@ -150,7 +165,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
       }
     } catch (error) {
       console.error("❌ Erreur sauvegarde créneaux:", error)
-      toast.error("Erreur lors de la sauvegarde des créneaux")
+      toast.error(error.message || "Erreur lors de la sauvegarde des créneaux")
     } finally {
       setIsSaving(false)
     }
@@ -253,9 +268,18 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
       const allStartTimes = existingSlots.map((slot) => slot.start_time).sort()
       const allEndTimes = existingSlots.map((slot) => slot.end_time).sort()
 
+      // Déterminer la durée commune ou utiliser la première
+      let commonDuration = duration
+      if (DURATION_OPTIONS.some((opt) => opt.value === duration)) {
+        commonDuration = duration
+      } else {
+        commonDuration = 0 // Durée personnalisée
+        setCustomDuration(duration)
+      }
+
       setDayConfig({
         date: dateStr,
-        slotDuration: duration,
+        slotDuration: commonDuration,
         startTime: allStartTimes[0],
         endTime: allEndTimes[allEndTimes.length - 1],
         isGroupVisit: firstSlot.is_group_visit,
@@ -338,6 +362,26 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
       toast.success("Créneaux supprimés pour ce jour")
     }
   }
+
+  // Régénérer les créneaux quand la configuration change
+  useEffect(() => {
+    if (selectedDate && dayConfig.date === selectedDate) {
+      // Régénérer les créneaux disponibles
+      const newTimeSlots = generateTimeSlots(dayConfig)
+
+      // Filtrer les créneaux sélectionnés pour ne garder que ceux qui existent encore
+      const validSelectedSlots = dayConfig.selectedSlots.filter((slotKey) =>
+        newTimeSlots.some((slot) => slot.key === slotKey),
+      )
+
+      if (validSelectedSlots.length !== dayConfig.selectedSlots.length) {
+        setDayConfig((prev) => ({
+          ...prev,
+          selectedSlots: validSelectedSlots,
+        }))
+      }
+    }
+  }, [dayConfig.slotDuration, dayConfig.startTime, dayConfig.endTime, customDuration, selectedDate])
 
   const calendarDays = generateCalendarDays()
   const timeSlots = generateTimeSlots(dayConfig)
