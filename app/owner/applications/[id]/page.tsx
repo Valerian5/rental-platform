@@ -209,6 +209,12 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
     }
   }
 
+  const handleViewAnalysis = () => {
+    setActiveTab("financial")
+    // Scroll vers le haut pour voir l'analyse
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
   const formatDate = (dateString: string | undefined) => {
     if (!dateString) return "Non spécifié"
     try {
@@ -311,6 +317,23 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const getActionButtons = () => {
     if (!application) return null
 
+    // Bouton "Voir dossier" toujours disponible
+    const viewDossierButton = (
+      <Button variant="outline" onClick={() => setActiveTab("overview")}>
+        <FileText className="h-4 w-4 mr-2" />
+        Voir dossier
+      </Button>
+    )
+
+    // Dans getActionButtons, ajouter ce bouton pour tous les statuts sauf "analyzing"
+    const viewAnalysisButton =
+      application.status !== "analyzing" ? (
+        <Button variant="outline" onClick={handleViewAnalysis}>
+          <BarChart3 className="h-4 w-4 mr-2" />
+          Voir analyse
+        </Button>
+      ) : null
+
     // Définir les actions disponibles en fonction du statut
     switch (application.status) {
       case "analyzing":
@@ -328,6 +351,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               <MessageSquare className="h-4 w-4 mr-2" />
               Contacter
             </Button>
+            {viewDossierButton}
           </>
         )
       case "visit_scheduled":
@@ -345,6 +369,8 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               <MessageSquare className="h-4 w-4 mr-2" />
               Contacter
             </Button>
+            {viewDossierButton}
+            {viewAnalysisButton}
           </>
         )
       case "waiting_tenant_confirmation":
@@ -358,6 +384,8 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               <MessageSquare className="h-4 w-4 mr-2" />
               Contacter
             </Button>
+            {viewDossierButton}
+            {viewAnalysisButton}
           </>
         )
       case "accepted":
@@ -372,21 +400,31 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               <MessageSquare className="h-4 w-4 mr-2" />
               Contacter
             </Button>
+            {viewDossierButton}
+            {viewAnalysisButton}
           </>
         )
       case "rejected":
         return (
-          <Button variant="outline" onClick={handleContact}>
-            <MessageSquare className="h-4 w-4 mr-2" />
-            Contacter
-          </Button>
+          <>
+            <Button variant="outline" onClick={handleContact}>
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Contacter
+            </Button>
+            {viewDossierButton}
+            {viewAnalysisButton}
+          </>
         )
       default:
         return (
-          <Button variant="outline" onClick={handleContact}>
-            <MessageSquare className="h-4 w-4 mr-2" />
-            Contacter
-          </Button>
+          <>
+            <Button variant="outline" onClick={handleContact}>
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Contacter
+            </Button>
+            {viewDossierButton}
+            {viewAnalysisButton}
+          </>
         )
     }
   }
@@ -808,7 +846,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                           <div>
                             <p className="font-medium text-red-700">Situation à clarifier</p>
                             <p className="text-sm text-muted-foreground">
-                              Le type de contrat n'est pas clairement identifié ou présente des risques.
+                              Le type de contrat n'est pas clairement identifié ou présente des risques
                             </p>
                           </div>
                         </div>
