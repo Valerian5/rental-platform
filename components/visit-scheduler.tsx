@@ -440,7 +440,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
           <CardContent className="space-y-6">
             {selectedDate ? (
               <>
-                {/* Durée des créneaux */}
+                {/* 1. Durée des créneaux */}
                 <div className="space-y-3">
                   <Label className="text-base font-medium">
                     De combien de temps avez-vous besoin pour une visite ?
@@ -474,7 +474,80 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                   )}
                 </div>
 
-                {/* Créneaux générés - Vue complète */}
+                {/* 2. Amplitude horaire */}
+                <div className="space-y-3">
+                  <Label className="text-base font-medium">Amplitude horaire</Label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Début</Label>
+                      <Input
+                        type="time"
+                        value={dayConfig.startTime}
+                        onChange={(e) => setDayConfig((prev) => ({ ...prev, startTime: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Fin</Label>
+                      <Input
+                        type="time"
+                        value={dayConfig.endTime}
+                        onChange={(e) => setDayConfig((prev) => ({ ...prev, endTime: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Type de visite */}
+                <div className="space-y-3">
+                  <Label className="text-base font-medium">S'agit-il d'une visite groupée ?</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant={!dayConfig.isGroupVisit ? "default" : "outline"}
+                      onClick={() => setDayConfig((prev) => ({ ...prev, isGroupVisit: false, capacity: 1 }))}
+                    >
+                      Non
+                    </Button>
+                    <Button
+                      variant={dayConfig.isGroupVisit ? "default" : "outline"}
+                      onClick={() => setDayConfig((prev) => ({ ...prev, isGroupVisit: true }))}
+                    >
+                      Oui
+                    </Button>
+                  </div>
+                </div>
+
+                {/* 4. Capacité - seulement si visite groupée */}
+                {dayConfig.isGroupVisit && (
+                  <div className="space-y-3">
+                    <Label className="text-base font-medium">Capacité par visite</Label>
+                    <div className="flex items-center justify-center gap-4 p-4 border rounded-lg">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDayConfig((prev) => ({ ...prev, capacity: Math.max(1, prev.capacity - 1) }))}
+                        disabled={dayConfig.capacity <= 1}
+                      >
+                        <Minus className="h-4 w-4" />
+                      </Button>
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg font-medium">{dayConfig.capacity}</span>
+                        <span className="text-sm text-muted-foreground">
+                          {dayConfig.capacity === 1 ? "personne" : "personnes"}
+                        </span>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDayConfig((prev) => ({ ...prev, capacity: Math.min(10, prev.capacity + 1) }))}
+                        disabled={dayConfig.capacity >= 10}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* 5. Créneaux générés - Vue complète */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <Label className="text-base font-medium">Créneaux disponibles</Label>
@@ -537,99 +610,6 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                     </div>
                   )}
                 </div>
-
-                {/* Amplitude horaire */}
-                <div className="space-y-3">
-                  <Label className="text-base font-medium">Amplitude horaire</Label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Début</Label>
-                      <Input
-                        type="time"
-                        value={dayConfig.startTime}
-                        onChange={(e) => setDayConfig((prev) => ({ ...prev, startTime: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Fin</Label>
-                      <Input
-                        type="time"
-                        value={dayConfig.endTime}
-                        onChange={(e) => setDayConfig((prev) => ({ ...prev, endTime: e.target.value }))}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Type de visite */}
-                <div className="space-y-3">
-                  <Label className="text-base font-medium">S'agit-il d'une visite groupée ?</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      variant={!dayConfig.isGroupVisit ? "default" : "outline"}
-                      onClick={() => setDayConfig((prev) => ({ ...prev, isGroupVisit: false, capacity: 1 }))}
-                    >
-                      Non
-                    </Button>
-                    <Button
-                      variant={dayConfig.isGroupVisit ? "default" : "outline"}
-                      onClick={() => setDayConfig((prev) => ({ ...prev, isGroupVisit: true }))}
-                    >
-                      Oui
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Capacité */}
-                <div className="space-y-3">
-                  <Label className="text-base font-medium">Capacité par visite</Label>
-                  <div className="flex items-center justify-center gap-4 p-4 border rounded-lg">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setDayConfig((prev) => ({ ...prev, capacity: Math.max(1, prev.capacity - 1) }))}
-                      disabled={dayConfig.capacity <= 1}
-                    >
-                      <Minus className="h-4 w-4" />
-                    </Button>
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg font-medium">{dayConfig.capacity}</span>
-                      <span className="text-sm text-muted-foreground">
-                        {dayConfig.capacity === 1 ? "personne" : "personnes"}
-                      </span>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setDayConfig((prev) => ({ ...prev, capacity: Math.min(10, prev.capacity + 1) }))}
-                      disabled={dayConfig.capacity >= 10}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Créneaux générés */}
-                {/* <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-base font-medium">Sélectionner les créneaux disponibles</Label>
-                    <Badge variant="outline">{dayConfig.selectedSlots.length} sélectionnés</Badge>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 max-h-60 overflow-y-auto">
-                    {timeSlots.map((slot) => (
-                      <Button
-                        key={slot.key}
-                        variant={dayConfig.selectedSlots.includes(slot.key) ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => toggleSlot(slot.key)}
-                        className="text-xs"
-                      >
-                        {slot.label}
-                      </Button>
-                    ))}
-                  </div>
-                </div> */}
 
                 {/* Actions */}
                 <div className="flex gap-2 pt-4">
