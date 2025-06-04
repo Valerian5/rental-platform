@@ -4,9 +4,13 @@ import { supabase } from "@/lib/supabase"
 
 export async function POST(request: NextRequest) {
   try {
+    console.log("📤 POST /api/admin/upload-logo")
+
     const formData = await request.formData()
     const file = formData.get("file") as File
     const logoType = formData.get("logoType") as string
+
+    console.log("📋 Upload logo:", { fileName: file?.name, logoType, fileSize: file?.size })
 
     if (!file || !logoType) {
       return NextResponse.json({ success: false, error: "Fichier ou type manquant" }, { status: 400 })
@@ -23,8 +27,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Fichier trop volumineux (max 5MB)" }, { status: 400 })
     }
 
+    console.log("✅ Validation OK, upload vers Supabase...")
+
     // Upload vers Supabase Storage
     const uploadResult = await SupabaseStorageService.uploadFile(file, "logos", "admin")
+    console.log("✅ Upload Supabase terminé:", uploadResult)
 
     // Enregistrer dans la base de données
     const { data: fileRecord, error: dbError } = await supabase
@@ -40,7 +47,12 @@ export async function POST(request: NextRequest) {
       .select()
       .single()
 
-    if (dbError) throw dbError
+    if (dbError) {
+      console.error("❌ Erreur DB:", dbError)
+      throw dbError
+    }
+
+    console.log("✅ Fichier enregistré en DB:", fileRecord)
 
     // Mettre à jour les paramètres du site
     const { data: currentLogos } = await supabase
@@ -58,7 +70,12 @@ export async function POST(request: NextRequest) {
       updated_at: new Date().toISOString(),
     })
 
-    if (updateError) throw updateError
+    if (updateError) {
+      console.error("❌ Erreur update settings:", updateError)
+      throw updateError
+    }
+
+    console.log("✅ Paramètres mis à jour")
 
     return NextResponse.json({
       success: true,
@@ -69,7 +86,14 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("Erreur upload logo:", error)
-    return NextResponse.json({ success: false, error: "Erreur lors de l'upload" }, { status: 500 })
+    console.error("❌ Erreur upload logo:", error)
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Erreur lors de l'upload",
+        details: error.message,
+      },
+      { status: 500 },
+    )
   }
 }

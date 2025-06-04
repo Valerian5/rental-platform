@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator"
 import { Download, FileText, User, Shield, CheckCircle, AlertTriangle } from "lucide-react"
 import { rentalFileService, MAIN_ACTIVITIES, CURRENT_HOUSING_SITUATIONS } from "@/lib/rental-file-service"
 import { toast } from "sonner"
-import { generateRentalFilePDF } from "@/lib/pdf-generator"
+import { generateRentalFilePDF } from "@/lib/pdf-generator-corrected"
 
 interface RentalFileViewerProps {
   rentalFile: any
