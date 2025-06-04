@@ -198,7 +198,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     }
 
     // Fonction pour ajouter un montant
-    const addAmount = (label: string, amount: number, x: number, y: number): number => {
+    const addAmount = async (label: string, amount: number, x: number, y: number): Promise<number> => {
       // Vérifier si on dépasse la page
       if (y > pageHeight - 40) {
         doc.addPage()
@@ -417,14 +417,14 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       let col1Y = yPosition
       let col2Y = yPosition
 
-      col1Y = addProperty("Nom", mainTenant.last_name || "", margin, col1Y)
-      col2Y = addProperty("Prénom", mainTenant.first_name || "", col2X, col2Y)
+      col1Y = await addProperty("Nom", mainTenant.last_name || "", margin, col1Y)
+      col2Y = await addProperty("Prénom", mainTenant.first_name || "", col2X, col2Y)
 
-      col1Y = addProperty("Date de naissance", mainTenant.birth_date || "", margin, col1Y)
-      col2Y = addProperty("Lieu de naissance", mainTenant.birth_place || "", col2X, col2Y)
+      col1Y = await addProperty("Date de naissance", mainTenant.birth_date || "", margin, col1Y)
+      col2Y = await addProperty("Lieu de naissance", mainTenant.birth_place || "", col2X, col2Y)
 
-      col1Y = addProperty("Nationalité", mainTenant.nationality || "", margin, col1Y)
-      col2Y = addProperty("Situation logement", mainTenant.current_housing_situation || "", col2X, col2Y)
+      col1Y = await addProperty("Nationalité", mainTenant.nationality || "", margin, col1Y)
+      col2Y = await addProperty("Situation logement", mainTenant.current_housing_situation || "", col2X, col2Y)
 
       yPosition = Math.max(col1Y, col2Y) + 10
 
@@ -432,7 +432,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       yPosition = addSectionWithIcon("SITUATION PROFESSIONNELLE", yPosition)
 
       const activity = MAIN_ACTIVITIES.find((a) => a.value === mainTenant.main_activity)
-      yPosition = addProperty(
+      yPosition = await addProperty(
         "Activité principale",
         activity?.label || mainTenant.main_activity || "",
         margin,
@@ -440,7 +440,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       )
 
       if (mainTenant.income_sources?.work_income?.type) {
-        yPosition = addProperty("Type de revenus", mainTenant.income_sources.work_income.type, margin, yPosition)
+        yPosition = await addProperty("Type de revenus", mainTenant.income_sources.work_income.type, margin, yPosition)
       }
 
       yPosition += 10
@@ -449,7 +449,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       yPosition = addSectionWithIcon("REVENUS", yPosition)
 
       if (mainTenant.income_sources?.work_income?.amount) {
-        yPosition = addAmount(
+        yPosition = await addAmount(
           "Revenus du travail (mensuel)",
           mainTenant.income_sources.work_income.amount,
           margin,
@@ -459,22 +459,24 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
 
       // Autres revenus si présents
       if (mainTenant.income_sources?.social_aid && mainTenant.income_sources.social_aid.length > 0) {
-        mainTenant.income_sources.social_aid.forEach((aid: any, index: number) => {
+        for (let index = 0; index < mainTenant.income_sources.social_aid.length; index++) {
+          const aid = mainTenant.income_sources.social_aid[index]
           if (aid.amount) {
-            yPosition = addAmount(`Aide sociale ${index + 1}`, aid.amount, margin, yPosition)
+            yPosition = await addAmount(`Aide sociale ${index + 1}`, aid.amount, margin, yPosition)
           }
-        })
+        }
       }
     }
 
     // PAGES GARANTS (même mise en forme que locataire principal)
     if (rentalFile.guarantors && rentalFile.guarantors.length > 0) {
-      rentalFile.guarantors.forEach((guarantor: any, index: number) => {
+      for (let index = 0; index < rentalFile.guarantors.length; index++) {
+        const guarantor = rentalFile.guarantors[index]
         doc.addPage()
         yPosition = await addPageHeader(`GARANT ${index + 1}`)
 
         yPosition = addSectionWithIcon("TYPE DE GARANT", yPosition)
-        yPosition = addProperty(
+        yPosition = await addProperty(
           "Type",
           guarantor.type === "physical" ? "Personne physique" : "Personne morale",
           margin,
@@ -494,19 +496,19 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
           let col1Y = yPosition
           let col2Y = yPosition
 
-          col1Y = addProperty("Nom", guarantorInfo.last_name || "", margin, col1Y)
-          col2Y = addProperty("Prénom", guarantorInfo.first_name || "", col2X, col2Y)
+          col1Y = await addProperty("Nom", guarantorInfo.last_name || "", margin, col1Y)
+          col2Y = await addProperty("Prénom", guarantorInfo.first_name || "", col2X, col2Y)
 
           if (guarantorInfo.birth_date) {
-            col1Y = addProperty("Date de naissance", guarantorInfo.birth_date, margin, col1Y)
+            col1Y = await addProperty("Date de naissance", guarantorInfo.birth_date, margin, col1Y)
           }
 
           if (guarantorInfo.nationality) {
-            col2Y = addProperty("Nationalité", guarantorInfo.nationality, col2X, col2Y)
+            col2Y = await addProperty("Nationalité", guarantorInfo.nationality, col2X, col2Y)
           }
 
           if (guarantorInfo.current_housing_situation) {
-            col1Y = addProperty("Situation logement", guarantorInfo.current_housing_situation, margin, col1Y)
+            col1Y = await addProperty("Situation logement", guarantorInfo.current_housing_situation, margin, col1Y)
           }
 
           yPosition = Math.max(col1Y, col2Y) + 10
@@ -515,7 +517,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
           if (guarantorInfo.main_activity) {
             yPosition = addSectionWithIcon("SITUATION PROFESSIONNELLE", yPosition)
             const guarantorActivity = MAIN_ACTIVITIES.find((a) => a.value === guarantorInfo.main_activity)
-            yPosition = addProperty(
+            yPosition = await addProperty(
               "Activité principale",
               guarantorActivity?.label || guarantorInfo.main_activity,
               margin,
@@ -527,7 +529,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
           if (guarantorInfo.income_sources?.work_income?.amount) {
             yPosition += 10
             yPosition = addSectionWithIcon("REVENUS", yPosition)
-            yPosition = addAmount(
+            yPosition = await addAmount(
               "Revenus du travail (mensuel)",
               guarantorInfo.income_sources.work_income.amount,
               margin,
@@ -535,7 +537,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
             )
           }
         }
-      })
+      }
     }
 
     // COLLECTE DES DOCUMENTS
