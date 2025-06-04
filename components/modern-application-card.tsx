@@ -1,33 +1,17 @@
 "use client"
-
-import { useState } from "react"
-import { Card, CardContent } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { CircularScore } from "@/components/circular-score"
-import {
-  User,
-  Building,
-  Calendar,
-  CheckCircle,
-  XCircle,
-  FileText,
-  MessageSquare,
-  ChevronDown,
-  ChevronUp,
-  Clock,
-  AlertCircle,
-  Eye,
-} from "lucide-react"
+import { CircularScore } from "./circular-score"
+import { Eye, Search, CheckCircle, XCircle, MessageSquare, FileText } from "lucide-react"
 
-interface ApplicationCardProps {
+interface ModernApplicationCardProps {
   application: {
     id: string
     tenant: {
       first_name: string
       last_name: string
       email: string
-      phone: string
+      phone?: string
     }
     property: {
       title: string
@@ -41,274 +25,208 @@ interface ApplicationCardProps {
     match_score: number
     created_at: string
   }
-  isSelected?: boolean
-  onSelect?: (selected: boolean) => void
+  isSelected: boolean
+  onSelect: (selected: boolean) => void
   onAction: (action: string) => void
 }
 
-export function ModernApplicationCard({ application, isSelected, onSelect, onAction }: ApplicationCardProps) {
-  const [expanded, setExpanded] = useState(false)
-
-  const formatDate = (dateString: string) => {
-    try {
-      return new Date(dateString).toLocaleDateString("fr-FR", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      })
-    } catch (e) {
-      return "Date inconnue"
-    }
+export function ModernApplicationCard({ application, isSelected, onSelect, onAction }: ModernApplicationCardProps) {
+  const getInitials = () => {
+    const first = application.tenant.first_name?.[0] || ""
+    const last = application.tenant.last_name?.[0] || ""
+    return (first + last).toUpperCase()
   }
 
-  const formatAmount = (amount: number) => {
-    try {
-      return new Intl.NumberFormat("fr-FR", {
-        style: "currency",
-        currency: "EUR",
-        maximumFractionDigits: 0,
-      }).format(amount)
-    } catch (e) {
-      return "Montant inconnu"
-    }
-  }
-
-  const getStatusBadge = () => {
-    switch (application.status) {
+  const getStatusConfig = (status: string) => {
+    switch (status) {
       case "pending":
-        return <Badge variant="outline">En attente</Badge>
+        return {
+          label: "Nouveau",
+          color: "text-blue-600",
+          bgColor: "bg-blue-50",
+          message: "Analysez le dossier et proposez une visite ou refusez la candidature.",
+          actions: ["analyze", "refuse", "contact"],
+        }
       case "analyzing":
-        return <Badge variant="secondary">En analyse</Badge>
+        return {
+          label: "En cours d'analyse",
+          color: "text-orange-600",
+          bgColor: "bg-orange-50",
+          message: "Complétez l'analyse du dossier pour prendre une décision.",
+          actions: ["accept", "contact"],
+        }
       case "visit_scheduled":
-        return (
-          <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200">
-            Visite planifiée
-          </Badge>
-        )
+        return {
+          label: "Visite programée",
+          color: "text-purple-600",
+          bgColor: "bg-purple-50",
+          message: "Une visite est programmée. Vous pourrez accepter ou refuser après la visite.",
+          actions: ["accept", "refuse", "contact"],
+        }
+      case "waiting_tenant_confirmation":
+        return {
+          label: "En attente d'acceptation",
+          color: "text-yellow-600",
+          bgColor: "bg-yellow-50",
+          message: "Le locataire doit confirmer son choix pour cet appartement.",
+          actions: ["contact"],
+        }
       case "accepted":
       case "approved":
-        return (
-          <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-200">
-            Acceptée
-          </Badge>
-        )
+        return {
+          label: "Candidature acceptée",
+          color: "text-green-600",
+          bgColor: "bg-green-50",
+          message: "La candidature a été acceptée. Vous pouvez maintenant générer le bail.",
+          actions: ["generate_lease", "contact"],
+        }
       case "rejected":
-        return <Badge variant="destructive">Refusée</Badge>
-      case "waiting_tenant_confirmation":
-        return (
-          <Badge variant="outline" className="bg-amber-100 text-amber-800 hover:bg-amber-200">
-            En attente de confirmation
-          </Badge>
-        )
+        return {
+          label: "Dossier refusé",
+          color: "text-red-600",
+          bgColor: "bg-red-50",
+          message: "Cette candidature a été refusée.",
+          actions: ["contact"],
+        }
       default:
-        return <Badge variant="outline">Statut inconnu</Badge>
+        return {
+          label: status,
+          color: "text-gray-600",
+          bgColor: "bg-gray-50",
+          message: "",
+          actions: ["contact"],
+        }
     }
   }
+
+  const statusConfig = getStatusConfig(application.status)
 
   const getActionButtons = () => {
-    // Définir les actions disponibles en fonction du statut
-    switch (application.status) {
-      case "pending":
-        return (
-          <>
-            <Button size="sm" variant="default" onClick={() => onAction("analyze")}>
-              <Eye className="h-4 w-4 mr-1" />
-              Analyser le dossier
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-          </>
-        )
-      case "analyzing":
-        return (
-          <>
-            <Button size="sm" variant="default" onClick={() => onAction("propose_visit")}>
-              <Calendar className="h-4 w-4 mr-1" />
-              Proposer une visite
-            </Button>
-            <Button size="sm" variant="destructive" onClick={() => onAction("refuse")}>
-              <XCircle className="h-4 w-4 mr-1" />
-              Refuser
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-          </>
-        )
-      case "visit_scheduled":
-        return (
-          <>
-            <Button size="sm" variant="default" onClick={() => onAction("accept")}>
-              <CheckCircle className="h-4 w-4 mr-1" />
-              Accepter le dossier
-            </Button>
-            <Button size="sm" variant="destructive" onClick={() => onAction("refuse")}>
-              <XCircle className="h-4 w-4 mr-1" />
-              Refuser
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-          </>
-        )
-      case "waiting_tenant_confirmation":
-        return (
-          <>
-            <Button size="sm" variant="outline" disabled>
-              <Clock className="h-4 w-4 mr-1" />
-              En attente du locataire
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-          </>
-        )
-      case "accepted":
-      case "approved":
-        return (
-          <>
-            <Button size="sm" variant="default" onClick={() => onAction("generate_lease")}>
-              <FileText className="h-4 w-4 mr-1" />
-              Générer le bail
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-          </>
-        )
-      case "rejected":
-        return (
-          <>
-            <Button size="sm" variant="outline" onClick={() => onAction("view_details")}>
-              <Eye className="h-4 w-4 mr-1" />
-              Voir détails
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-          </>
-        )
-      default:
-        return (
-          <>
-            <Button size="sm" variant="outline" onClick={() => onAction("view_details")}>
-              <Eye className="h-4 w-4 mr-1" />
-              Voir détails
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-          </>
-        )
-    }
+    const actions = statusConfig.actions
+
+    return (
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onAction("view_details")}
+          className="text-gray-600 border-gray-300"
+        >
+          <Eye className="h-4 w-4 mr-1" />
+          Voir dossier
+        </Button>
+
+        {actions.includes("analyze") && (
+          <Button size="sm" onClick={() => onAction("analyze")} className="bg-blue-600 hover:bg-blue-700">
+            <Search className="h-4 w-4 mr-1" />
+            Analyser
+          </Button>
+        )}
+
+        {actions.includes("accept") && (
+          <Button size="sm" onClick={() => onAction("accept")} className="bg-blue-600 hover:bg-blue-700">
+            <CheckCircle className="h-4 w-4 mr-1" />
+            Accepter
+          </Button>
+        )}
+
+        {actions.includes("generate_lease") && (
+          <Button size="sm" onClick={() => onAction("generate_lease")} className="bg-blue-600 hover:bg-blue-700">
+            <FileText className="h-4 w-4 mr-1" />
+            Générer le bail
+          </Button>
+        )}
+
+        {actions.includes("refuse") && (
+          <Button variant="destructive" size="sm" onClick={() => onAction("refuse")}>
+            <XCircle className="h-4 w-4 mr-1" />
+            Refuser
+          </Button>
+        )}
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onAction("contact")}
+          className="text-gray-600 border-gray-300"
+        >
+          <MessageSquare className="h-4 w-4 mr-1" />
+          Contacter
+        </Button>
+      </div>
+    )
+  }
+
+  // Formater le montant du revenu
+  const formatIncome = (amount: number) => {
+    if (!amount) return "Non spécifié"
+    return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(
+      amount,
+    )
   }
 
   return (
-    <Card className={`overflow-hidden transition-all ${isSelected ? "border-blue-500 shadow-md" : ""}`}>
-      <CardContent className="p-0">
-        <div className="p-4 flex justify-between items-start">
-          <div className="flex items-center gap-3">
-            {onSelect && (
-              <input
-                type="checkbox"
-                checked={isSelected}
-                onChange={(e) => onSelect(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300"
-              />
-            )}
-            <div>
-              <h3 className="font-medium">
-                {application.tenant.first_name} {application.tenant.last_name}
-              </h3>
-              <p className="text-sm text-muted-foreground">{application.tenant.email}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {getStatusBadge()}
-            <CircularScore score={application.match_score} />
-          </div>
+    <div
+      className={`
+      p-4 bg-white border border-gray-200 rounded-lg
+      hover:shadow-md transition-all duration-200
+      ${isSelected ? "ring-2 ring-blue-500 border-blue-500" : ""}
+    `}
+    >
+      <div className="flex items-start gap-4">
+        {/* Checkbox */}
+        <Checkbox checked={isSelected} onCheckedChange={onSelect} className="flex-shrink-0 mt-1" />
+
+        {/* Avatar */}
+        <div className="flex-shrink-0 w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
+          <span className="text-white font-semibold text-sm">{getInitials()}</span>
         </div>
 
-        <div className="px-4 pb-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-          <div className="flex items-center gap-1">
-            <Building className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="truncate">{application.property.title}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <User className="h-3.5 w-3.5 text-muted-foreground" />
-            <span>{application.profession}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-            <span>{formatDate(application.created_at)}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            {application.has_guarantor ? (
-              <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-            ) : (
-              <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
-            )}
-            <span>{application.has_guarantor ? "Avec garant" : "Sans garant"}</span>
-          </div>
-        </div>
+        {/* Main content */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between">
+            <div className="min-w-0 flex-1">
+              {/* Name and property */}
+              <div className="flex items-center gap-3 mb-1">
+                <h3 className="font-semibold text-gray-900 text-base">
+                  {application.tenant.first_name} {application.tenant.last_name}
+                </h3>
+              </div>
 
-        {expanded && (
-          <div className="px-4 py-2 bg-gray-50 border-t text-sm">
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-              <div>
-                <p className="text-muted-foreground">Revenus</p>
-                <p className="font-medium">{formatAmount(application.income)}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Téléphone</p>
-                <p>{application.tenant.phone || "Non renseigné"}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Adresse du bien</p>
-                <p className="truncate">{application.property.address}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Documents</p>
-                <p>
-                  {application.documents_complete ? (
-                    <span className="flex items-center">
-                      <CheckCircle className="h-3.5 w-3.5 text-green-500 mr-1" /> Complets
-                    </span>
-                  ) : (
-                    <span className="flex items-center">
-                      <AlertCircle className="h-3.5 w-3.5 text-amber-500 mr-1" /> Incomplets
-                    </span>
-                  )}
-                </p>
+              <div className="text-sm text-gray-600 mb-1">{application.property.title}</div>
+
+              <div className="text-sm text-gray-600 mb-2">{application.profession}</div>
+
+              {/* Financial info */}
+              <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
+                <span className="font-medium">{formatIncome(application.income)}</span>
+                <span className={application.has_guarantor ? "text-green-600" : "text-gray-500"}>
+                  {application.has_guarantor ? "Avec garants" : "Sans garants"}
+                </span>
+                <span className={application.documents_complete ? "text-green-600" : "text-orange-600"}>
+                  {application.documents_complete ? "Dossier complet" : "Dossier incomplet"}
+                </span>
               </div>
             </div>
+
+            {/* Score */}
+            <div className="flex-shrink-0">
+              <CircularScore score={application.match_score} size="md" />
+            </div>
           </div>
-        )}
 
-        <div className="px-4 py-3 border-t flex items-center justify-between">
-          <Button variant="ghost" size="sm" onClick={() => setExpanded(!expanded)} className="text-muted-foreground">
-            {expanded ? (
-              <>
-                <ChevronUp className="h-4 w-4 mr-1" /> Moins de détails
-              </>
-            ) : (
-              <>
-                <ChevronDown className="h-4 w-4 mr-1" /> Plus de détails
-              </>
-            )}
-          </Button>
+          {/* Status and message */}
+          <div className={`${statusConfig.bgColor} rounded-md px-3 py-2 mt-2 mb-3`}>
+            <div className="flex items-center gap-2 mb-1">
+              <span className={`text-sm font-medium ${statusConfig.color}`}>{statusConfig.label}</span>
+            </div>
+            {statusConfig.message && <p className="text-xs text-gray-600">{statusConfig.message}</p>}
+          </div>
 
-          <div className="flex gap-2">{getActionButtons()}</div>
+          {/* Actions */}
+          <div className="mt-2">{getActionButtons()}</div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }
