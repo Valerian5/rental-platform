@@ -76,13 +76,15 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
   const [customDuration, setCustomDuration] = useState(45)
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [hasLoadedInitialSlots, setHasLoadedInitialSlots] = useState(false)
 
   // Charger les créneaux depuis la base de données
   useEffect(() => {
-    if (mode === "management" && propertyId) {
+    if (mode === "management" && propertyId && !hasLoadedInitialSlots) {
+      setHasLoadedInitialSlots(true)
       loadSlotsFromDatabase()
     }
-  }, [mode, propertyId])
+  }, [mode, propertyId, hasLoadedInitialSlots])
 
   const loadSlotsFromDatabase = async () => {
     if (!propertyId || isLoading) return
@@ -95,7 +97,11 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
       if (response.ok) {
         const data = await response.json()
         console.log("✅ Créneaux chargés:", data.slots?.length || 0)
-        onSlotsChange(data.slots || [])
+
+        // Seulement mettre à jour si les données ont changé
+        if (JSON.stringify(data.slots) !== JSON.stringify(visitSlots)) {
+          onSlotsChange(data.slots || [])
+        }
       } else {
         console.error("❌ Erreur chargement créneaux:", response.status)
         toast.error("Erreur lors du chargement des créneaux")

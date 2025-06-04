@@ -45,13 +45,16 @@ export default function PropertyDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [isUploadingImages, setIsUploadingImages] = useState(false)
   const [activeTab, setActiveTab] = useState(initialTab)
-  const [mode, setMode] = useState("management") // Assuming a default mode
+  // Supprimer cette ligne
+  // const [mode, setMode] = useState("management") // Assuming a default mode
   const loadSlotsFromDatabase = async () => {
+    if (isLoading) return
+
     setIsLoading(true)
     try {
       const slotsData = await propertyService.getPropertyVisitAvailabilities(params.id as string)
       setVisitSlots(slotsData)
-      toast.success("Créneaux de visite actualisés.")
+      console.log("✅ Créneaux actualisés:", slotsData.length)
     } catch (error) {
       console.error("Erreur lors du chargement des créneaux:", error)
       toast.error("Erreur lors du chargement des créneaux de visite")
@@ -228,12 +231,10 @@ export default function PropertyDetailPage() {
           <h3 className="text-lg font-semibold">Gestion des visites</h3>
           <div className="flex items-center gap-2">
             <Badge variant="outline">{visitSlots.length} créneaux disponibles</Badge>
-            {mode === "management" && (
-              <Button variant="outline" size="sm" onClick={loadSlotsFromDatabase} disabled={isLoading}>
-                <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-                Actualiser
-              </Button>
-            )}
+            <Button variant="outline" size="sm" onClick={loadSlotsFromDatabase} disabled={isLoading}>
+              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+              Actualiser
+            </Button>
           </div>
         </div>
 
