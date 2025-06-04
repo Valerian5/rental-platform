@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect, useCallback } from "react"
-import { useRouter, useParams } from "next/navigation"
+import { useRouter, useParams, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -21,12 +21,16 @@ import { toast } from "sonner"
 export default function PropertyDetailPage() {
   const router = useRouter()
   const params = useParams()
+  const searchParams = useSearchParams()
+  const initialTab = searchParams.get("tab") || "overview"
+
   const [property, setProperty] = useState<any>(null)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [visitSlots, setVisitSlots] = useState<any[]>([])
   const [error, setError] = useState<string | null>(null)
   const [isUploadingImages, setIsUploadingImages] = useState(false)
+  const [activeTab, setActiveTab] = useState(initialTab)
 
   const handleSlotsChange = useCallback((newSlots: any[]) => {
     setVisitSlots(newSlots)
@@ -75,9 +79,14 @@ export default function PropertyDetailPage() {
 
         // Récupérer les créneaux de visite - une seule fois
         console.log("📅 Récupération des créneaux de visite...")
-        const slotsData = await propertyService.getPropertyVisitAvailabilities(params.id as string)
-        setVisitSlots(slotsData)
-        console.log("✅ Créneaux chargés:", slotsData.length)
+        try {
+          const slotsData = await propertyService.getPropertyVisitAvailabilities(params.id as string)
+          setVisitSlots(slotsData)
+          console.log("✅ Créneaux chargés:", slotsData.length)
+        } catch (slotError) {
+          console.error("❌ Erreur lors du chargement des créneaux:", slotError)
+          toast.error("Erreur lors du chargement des créneaux de visite")
+        }
       } catch (error: any) {
         console.error("❌ Erreur lors du chargement:", error)
         setError(error.message || "Erreur lors du chargement du bien")
@@ -234,9 +243,9 @@ export default function PropertyDetailPage() {
     <div className="container mx-auto py-8 max-w-6xl">
       {/* En-tête avec navigation */}
       <div className="mb-6">
-        <Link href="/owner/dashboard" className="text-blue-600 hover:underline flex items-center mb-4">
+        <Link href="/owner/properties" className="text-blue-600 hover:underline flex items-center mb-4">
           <ArrowLeft className="h-4 w-4 mr-1" />
-          Retour au tableau de bord
+          Retour à mes annonces
         </Link>
 
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
@@ -263,7 +272,7 @@ export default function PropertyDetailPage() {
       </div>
 
       {/* Onglets principaux */}
-      <Tabs defaultValue="overview" className="space-y-6">
+      <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
           <TabsTrigger value="visits">Gestion des visites</TabsTrigger>
@@ -483,8 +492,7 @@ export default function PropertyDetailPage() {
                       variant="outline"
                       className="w-full mt-4"
                       onClick={() => {
-                        const visitsTab = document.querySelector('[value="visits"]') as HTMLElement
-                        visitsTab?.click()
+                        setActiveTab("visits")
                       }}
                     >
                       <Calendar className="h-4 w-4 mr-2" />
@@ -531,14 +539,17 @@ export default function PropertyDetailPage() {
         <TabsContent value="applications">
           <Card>
             <CardHeader>
-              <CardTitle>Candidatures reçues</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>Candidatures reçues</CardTitle>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/owner/applications?propertyId=${property.id}`}>Voir toutes les candidatures</Link>
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="text-center py-8 text-gray-500">
-                <p>Aucune candidature pour le moment</p>
-                <p className="text-sm mt-2">
-                  Les candidatures apparaîtront ici une fois que des locataires auront postulé
-                </p>
+                <p>Chargement des candidatures...</p>
+                <p className="text-sm mt-2">Les candidatures pour ce bien apparaîtront ici</p>
               </div>
             </CardContent>
           </Card>

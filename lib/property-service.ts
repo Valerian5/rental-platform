@@ -360,4 +360,75 @@ export const propertyService = {
       throw error
     }
   },
+
+  // Ajout ou correction de la méthode getPropertyVisitAvailabilities
+  getPropertyVisitAvailabilities: async (propertyId: string) => {
+    try {
+      console.log("🔍 Récupération des créneaux de visite pour la propriété:", propertyId)
+
+      const { data, error } = await supabase
+        .from("visit_availabilities")
+        .select("*")
+        .eq("property_id", propertyId)
+        .order("date", { ascending: true })
+        .order("start_time", { ascending: true })
+
+      if (error) {
+        console.error("❌ Erreur lors de la récupération des créneaux:", error)
+        throw error
+      }
+
+      console.log(`✅ ${data?.length || 0} créneaux récupérés`)
+      return data || []
+    } catch (error) {
+      console.error("❌ Erreur service getPropertyVisitAvailabilities:", error)
+      throw error
+    }
+  },
+
+  // Méthode pour sauvegarder les créneaux de visite
+  savePropertyVisitAvailabilities: async (propertyId: string, slots: any[]) => {
+    try {
+      console.log("💾 Sauvegarde des créneaux pour la propriété:", propertyId)
+
+      // D'abord supprimer les créneaux existants
+      const { error: deleteError } = await supabase.from("visit_availabilities").delete().eq("property_id", propertyId)
+
+      if (deleteError) {
+        console.error("❌ Erreur lors de la suppression des anciens créneaux:", deleteError)
+        throw deleteError
+      }
+
+      // Si aucun créneau à ajouter, on s'arrête là
+      if (slots.length === 0) {
+        return { success: true, message: "Tous les créneaux ont été supprimés" }
+      }
+
+      // Préparer les données pour l'insertion
+      const slotsToInsert = slots.map((slot) => ({
+        property_id: propertyId,
+        date: slot.date,
+        start_time: slot.start_time,
+        end_time: slot.end_time,
+        max_capacity: Number(slot.max_capacity) || 1,
+        is_group_visit: Boolean(slot.is_group_visit),
+        current_bookings: Number(slot.current_bookings) || 0,
+        is_available: slot.is_available !== false,
+      }))
+
+      // Insérer les nouveaux créneaux
+      const { data, error } = await supabase.from("visit_availabilities").insert(slotsToInsert).select()
+
+      if (error) {
+        console.error("❌ Erreur lors de l'insertion des créneaux:", error)
+        throw error
+      }
+
+      console.log(`✅ ${data?.length || 0} créneaux sauvegardés`)
+      return { success: true, slots: data, message: `${data?.length || 0} créneaux sauvegardés` }
+    } catch (error) {
+      console.error("❌ Erreur service savePropertyVisitAvailabilities:", error)
+      throw error
+    }
+  },
 }
