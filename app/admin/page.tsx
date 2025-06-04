@@ -704,28 +704,165 @@ function AdminContent() {
                 <TabsContent value="logo" className="space-y-6">
                   <Card>
                     <CardHeader>
-                      <CardTitle>Logo et Titre</CardTitle>
-                      <CardDescription>Personnalisez le logo et le titre de votre site</CardDescription>
+                      <CardTitle>Logos et Branding</CardTitle>
+                      <CardDescription>Gérez les différents logos utilisés sur votre plateforme</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="site-title">Titre du site</Label>
-                        <Input
-                          id="site-title"
-                          type="text"
-                          value={siteTitle}
-                          onChange={(e) => setSiteTitle(e.target.value)}
-                        />
+                    <CardContent className="space-y-6">
+                      {/* Logo principal */}
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-medium">Logo principal</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-2">
+                            <Label htmlFor="main-logo">Logo principal (format horizontal)</Label>
+                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                              <div className="space-y-2">
+                                <div className="mx-auto h-12 w-12 text-gray-400">
+                                  <svg fill="none" stroke="currentColor" viewBox="0 0 48 48">
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                                    />
+                                  </svg>
+                                </div>
+                                <div className="text-sm text-gray-600">
+                                  <p>Cliquez pour uploader ou glissez-déposez</p>
+                                  <p className="text-xs">PNG, JPG jusqu'à 2MB</p>
+                                </div>
+                              </div>
+                              <input type="file" className="hidden" accept="image/*" />
+                            </div>
+                            <p className="text-xs text-gray-500">
+                              Utilisé dans l'en-tête du site et les documents officiels
+                            </p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="icon-logo">Icône/Favicon</Label>
+                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                              <div className="space-y-2">
+                                <div className="mx-auto h-12 w-12 text-gray-400">
+                                  <svg fill="none" stroke="currentColor" viewBox="0 0 48 48">
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                                    />
+                                  </svg>
+                                </div>
+                                <div className="text-sm text-gray-600">
+                                  <p>Format carré recommandé</p>
+                                  <p className="text-xs">PNG, ICO jusqu'à 1MB</p>
+                                </div>
+                              </div>
+                              <input type="file" className="hidden" accept="image/*" />
+                            </div>
+                            <p className="text-xs text-gray-500">Utilisé comme favicon et icône d'application</p>
+                          </div>
+                        </div>
                       </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="site-description">Description du site</Label>
-                        <Input
-                          id="site-description"
-                          type="text"
-                          value={siteDescription}
-                          onChange={(e) => setSiteDescription(e.target.value)}
-                        />
+                      <Separator />
+
+                      {/* Logo pour documents */}
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-medium">Logos pour documents</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-2">
+                            <Label htmlFor="pdf-logo">Logo pour dossiers de location</Label>
+                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                              <div className="space-y-2">
+                                <div className="mx-auto h-12 w-12 text-gray-400">
+                                  <FileText className="h-12 w-12" />
+                                </div>
+                                <div className="text-sm text-gray-600">
+                                  <p>Logo optimisé pour PDF</p>
+                                  <p className="text-xs">PNG, JPG haute résolution</p>
+                                </div>
+                              </div>
+                              <input type="file" className="hidden" accept="image/*" />
+                            </div>
+                            <p className="text-xs text-gray-500">
+                              Utilisé dans les en-têtes des dossiers de location PDF
+                            </p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="watermark-logo">Filigrane (optionnel)</Label>
+                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                              <div className="space-y-2">
+                                <div className="mx-auto h-12 w-12 text-gray-400">
+                                  <svg fill="none" stroke="currentColor" viewBox="0 0 48 48">
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                    />
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                                    />
+                                  </svg>
+                                </div>
+                                <div className="text-sm text-gray-600">
+                                  <p>Filigrane transparent</p>
+                                  <p className="text-xs">PNG avec transparence</p>
+                                </div>
+                              </div>
+                              <input type="file" className="hidden" accept="image/*" />
+                            </div>
+                            <p className="text-xs text-gray-500">Filigrane discret sur les documents sensibles</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <Separator />
+
+                      {/* Prévisualisation */}
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-medium">Prévisualisation</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-2">
+                            <Label>En-tête de site</Label>
+                            <div className="border rounded-lg p-4 bg-white">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 bg-blue-600 rounded-md flex items-center justify-center">
+                                    <span className="text-white font-bold text-sm">L</span>
+                                  </div>
+                                  <div>
+                                    <div className="font-bold text-lg">{siteTitle}</div>
+                                    <div className="text-xs text-gray-500">{siteDescription}</div>
+                                  </div>
+                                </div>
+                                <Button size="sm">Connexion</Button>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label>En-tête de document PDF</Label>
+                            <div className="border rounded-lg p-4 bg-blue-600 text-white">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
+                                    <span className="text-blue-600 font-bold text-sm">L</span>
+                                  </div>
+                                  <span className="font-bold">DOSSIER DE LOCATION</span>
+                                </div>
+                                <div className="text-right text-sm">
+                                  <div>{siteTitle}</div>
+                                  <div className="text-xs opacity-80">Document officiel</div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
