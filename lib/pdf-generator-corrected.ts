@@ -1,7 +1,39 @@
 import { type RentalFileData, MAIN_ACTIVITIES } from "./rental-file-service"
 
+// Fonction pour récupérer les logos depuis la base de données
+const getLogos = async (): Promise<any> => {
+  try {
+    const response = await fetch("/api/admin/settings?key=logos")
+    const result = await response.json()
+    return result.success ? result.data : {}
+  } catch (error) {
+    console.error("Erreur récupération logos:", error)
+    return {}
+  }
+}
+
+// Fonction pour récupérer les informations du site
+const getSiteInfo = async (): Promise<any> => {
+  try {
+    const response = await fetch("/api/admin/settings?key=site_info")
+    const result = await response.json()
+    return result.success
+      ? result.data
+      : { title: "Louer Ici", description: "Plateforme de gestion locative intelligente" }
+  } catch (error) {
+    console.error("Erreur récupération site info:", error)
+    return { title: "Louer Ici", description: "Plateforme de gestion locative intelligente" }
+  }
+}
+
 export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise<void> => {
   try {
+    // Charger les paramètres du site
+    const [logos, siteInfo] = await Promise.all([getLogos(), getSiteInfo()])
+
+    console.log("🎨 Logos chargés:", logos)
+    console.log("ℹ️ Info site:", siteInfo)
+
     // Import dynamique de jsPDF et pdf-lib
     const { jsPDF } = await import("jspdf")
     const { PDFDocument } = await import("pdf-lib")
@@ -52,9 +84,32 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       return "document"
     }
 
-    // Fonction pour ajouter le logo (placeholder simple)
-    const addLogo = (x: number, y: number, size = 25) => {
-      // Logo simple - cercle avec initiale
+    // Fonction pour ajouter le logo
+    const addLogo = async (x: number, y: number, size = 25, logoUrl?: string) => {
+      if (logoUrl && logoUrl !== "DOCUMENT_MIGRE_PLACEHOLDER") {
+        try {
+          // Charger l'image du logo
+          const response = await fetch(logoUrl)
+          if (response.ok) {
+            const blob = await response.blob()
+            const base64Data = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader()
+              reader.onload = () => resolve(reader.result as string)
+              reader.onerror = reject
+              reader.readAsDataURL(blob)
+            })
+
+            // Ajouter l'image au PDF
+            const imgFormat = logoUrl.toLowerCase().includes(".png") ? "PNG" : "JPEG"
+            doc.addImage(base64Data, imgFormat, x, y, size, size * 0.6) // Ratio 5:3 pour les logos
+            return
+          }
+        } catch (error) {
+          console.error("Erreur chargement logo:", error)
+        }
+      }
+
+      // Fallback : logo simple
       doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])
       doc.circle(x + size / 2, y + size / 2, size / 2, "F")
 
@@ -65,19 +120,23 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     }
 
     // Fonction pour ajouter un en-tête de page
-    const addPageHeader = (title: string): number => {
+    const addPageHeader = async (title: string): Promise<number> => {
       // Fond bleu
       doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])
       doc.rect(0, 0, pageWidth, 35, "F")
 
-      // Logo
-      addLogo(pageWidth - margin - 30, 5, 25)
+      // Logo (utiliser le logo PDF s'il existe)
+      await addLogo(pageWidth - margin - 30, 5, 25, logos.pdf || logos.main)
 
       // Titre
       doc.setTextColor(255, 255, 255)
       doc.setFontSize(16)
       doc.setFont("helvetica", "bold")
       doc.text(title, margin, 22)
+
+      // Sous-titre avec le nom du site
+      doc.setFontSize(10)
+      doc.text(siteInfo.title || "Louer Ici", margin, 30)
 
       // Ligne de séparation
       doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2])
@@ -108,11 +167,17 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     }
 
     // Fonction pour ajouter une propriété
-    const addProperty = (label: string, value: string, x: number, y: number, options: any = {}): number => {
+    const addProperty = async (
+      label: string,
+      value: string,
+      x: number,
+      y: number,
+      options: any = {},
+    ): Promise<number> => {
       // Vérifier si on dépasse la page
       if (y > pageHeight - 40) {
         doc.addPage()
-        y = addPageHeader("DOSSIER DE LOCATION (SUITE)")
+        y = await addPageHeader("DOSSIER DE LOCATION (SUITE)")
       }
 
       // Label
@@ -137,7 +202,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       // Vérifier si on dépasse la page
       if (y > pageHeight - 40) {
         doc.addPage()
-        y = addPageHeader("DOSSIER DE LOCATION (SUITE)")
+        y = await addPageHeader("DOSSIER DE LOCATION (SUITE)")
       }
 
       // Label
@@ -218,16 +283,63 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     const tenantName = `${mainTenant.first_name || ""} ${mainTenant.last_name || ""}`.trim() || "Locataire"
 
     // PAGE DE COUVERTURE SIMPLIFIÉE
-    yPosition = addPageHeader("DOSSIER DE LOCATION NUMÉRIQUE")
+    yPosition = await addPageHeader("DOSSIER DE LOCATION NUMÉRIQUE")
+
+    // Logo principal centré (si disponible)
+    if (logos.main) {
+      try {
+        const response = await fetch(logos.main)
+        if (response.ok) {
+          const blob = await response.blob()
+          const base64Data = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(reader.result as string)
+            reader.onerror = reject
+            reader.readAsDataURL(blob)
+          })
+
+          const imgFormat = logos.main.toLowerCase().includes(".png") ? "PNG" : "JPEG"
+          doc.addImage(base64Data, imgFormat, (pageWidth - 60) / 2, yPosition, 60, 36) // Logo centré
+          yPosition += 50
+        }
+      } catch (error) {
+        console.error("Erreur chargement logo principal:", error)
+        yPosition += 20
+      }
+    } else {
+      yPosition += 20
+    }
+
+    // Nom du site
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2])
+    doc.setFontSize(18)
+    doc.setFont("helvetica", "bold")
+    const siteTitleWidth = doc.getTextWidth(siteInfo.title || "Louer Ici")
+    doc.text(siteInfo.title || "Louer Ici", (pageWidth - siteTitleWidth) / 2, yPosition)
+
+    yPosition += 15
+
+    // Description du site
+    doc.setTextColor(grayColor[0], grayColor[1], grayColor[2])
+    doc.setFontSize(12)
+    doc.setFont("helvetica", "normal")
+    const descWidth = doc.getTextWidth(siteInfo.description || "Plateforme de gestion locative intelligente")
+    doc.text(
+      siteInfo.description || "Plateforme de gestion locative intelligente",
+      (pageWidth - descWidth) / 2,
+      yPosition,
+    )
+
+    yPosition += 30
 
     // Nom du locataire (centré et grand)
     doc.setTextColor(0, 0, 0)
     doc.setFontSize(24)
     doc.setFont("helvetica", "bold")
     const nameWidth = doc.getTextWidth(tenantName)
-    doc.text(tenantName, (pageWidth - nameWidth) / 2, yPosition + 30)
+    doc.text(tenantName, (pageWidth - nameWidth) / 2, yPosition)
 
-    yPosition += 60
+    yPosition += 30
 
     // Synthèse du dossier
     doc.setTextColor(grayColor[0], grayColor[1], grayColor[2])
@@ -293,7 +405,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
 
     // PAGE LOCATAIRE PRINCIPAL
     doc.addPage()
-    yPosition = addPageHeader("LOCATAIRE PRINCIPAL")
+    yPosition = await addPageHeader("LOCATAIRE PRINCIPAL")
 
     if (mainTenant) {
       // Informations personnelles
@@ -359,7 +471,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     if (rentalFile.guarantors && rentalFile.guarantors.length > 0) {
       rentalFile.guarantors.forEach((guarantor: any, index: number) => {
         doc.addPage()
-        yPosition = addPageHeader(`GARANT ${index + 1}`)
+        yPosition = await addPageHeader(`GARANT ${index + 1}`)
 
         yPosition = addSectionWithIcon("TYPE DE GARANT", yPosition)
         yPosition = addProperty(
@@ -549,7 +661,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     // PAGE ANNEXES SIMPLIFIÉE
     if (pdfsToMerge.length > 0 || imagesToAdd.length > 0) {
       doc.addPage()
-      yPosition = addPageHeader("ANNEXES - PIÈCES JUSTIFICATIVES")
+      yPosition = await addPageHeader("ANNEXES - PIÈCES JUSTIFICATIVES")
 
       doc.setTextColor(0, 0, 0)
       doc.setFontSize(12)

@@ -2,7 +2,21 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Settings, Users, Palette, FileText, Save, Eye, Menu, Home, Bell, MessageSquare, BarChart } from "lucide-react"
+import {
+  Upload,
+  ImageIcon,
+  FileText,
+  Eye,
+  Palette,
+  Users,
+  Settings,
+  BarChart,
+  Home,
+  Bell,
+  MessageSquare,
+  Menu,
+  Save,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -23,8 +37,20 @@ import {
   SidebarFooter,
   SidebarProvider,
 } from "@/components/ui/sidebar"
+import { useToast } from "@/hooks/use-toast"
+import React from "react"
+import { Toaster } from "@/components/ui/toaster"
 
 function AdminContent() {
+  const { toast } = useToast()
+  const [isUploading, setIsUploading] = useState(false)
+  const [logos, setLogos] = useState({
+    main: null,
+    icon: null,
+    pdf: null,
+    watermark: null,
+  })
+  const [settings, setSettings] = useState({})
   const [activeTab, setActiveTab] = useState("appearance")
   const [primaryColor, setPrimaryColor] = useState("#0066FF")
   const [secondaryColor, setSecondaryColor] = useState("#FF6B00")
@@ -39,6 +65,114 @@ function AdminContent() {
   const [darkMode, setDarkMode] = useState(false)
   const [siteTitle, setSiteTitle] = useState("Louer Ici")
   const [siteDescription, setSiteDescription] = useState("Plateforme de gestion locative intelligente")
+
+  // Fonction pour charger les paramètres
+  const loadSettings = async () => {
+    try {
+      const response = await fetch("/api/admin/settings")
+      const result = await response.json()
+      if (result.success) {
+        setSettings(result.data)
+        setLogos(result.data.logos || {})
+        // Mettre à jour les autres états avec les données chargées
+        if (result.data.colors) {
+          setPrimaryColor(result.data.colors.primary || "#0066FF")
+          setSecondaryColor(result.data.colors.secondary || "#FF6B00")
+          setAccentColor(result.data.colors.accent || "#00C48C")
+        }
+        if (result.data.site_info) {
+          setSiteTitle(result.data.site_info.title || "Louer Ici")
+          setSiteDescription(result.data.site_info.description || "Plateforme de gestion locative intelligente")
+        }
+      }
+    } catch (error) {
+      console.error("Erreur chargement paramètres:", error)
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les paramètres",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Fonction pour sauvegarder les paramètres
+  const saveSettings = async () => {
+    try {
+      const settingsToSave = {
+        colors: { primary: primaryColor, secondary: secondaryColor, accent: accentColor },
+        typography: { primary: fontPrimary, secondary: fontSecondary },
+        site_info: { title: siteTitle, description: siteDescription },
+        layout: { header_type: headerType, footer_type: footerType, logo_position: logoPosition },
+        components: { button_style: buttonStyle, border_radius: borderRadius },
+        theme: { dark_mode: darkMode },
+      }
+
+      for (const [key, value] of Object.entries(settingsToSave)) {
+        await fetch("/api/admin/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key, value }),
+        })
+      }
+
+      toast({
+        title: "Succès",
+        description: "Paramètres sauvegardés avec succès",
+      })
+    } catch (error) {
+      console.error("Erreur sauvegarde:", error)
+      toast({
+        title: "Erreur",
+        description: "Erreur lors de la sauvegarde",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Fonction pour gérer l'upload des logos
+  const handleLogoUpload = async (file: File, logoType: string) => {
+    if (!file) return
+
+    setIsUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("logoType", logoType)
+
+      const response = await fetch("/api/admin/upload-logo", {
+        method: "POST",
+        body: formData,
+      })
+
+      const result = await response.json()
+      if (result.success) {
+        setLogos((prev) => ({
+          ...prev,
+          [logoType]: result.data.url,
+        }))
+        toast({
+          title: "Succès",
+          description: `Logo ${logoType} uploadé avec succès`,
+        })
+      } else {
+        throw new Error(result.error)
+      }
+    } catch (error) {
+      console.error("Erreur upload:", error)
+      toast({
+        title: "Erreur",
+        description: "Erreur lors de l'upload du logo",
+        variant: "destructive",
+      })
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  // Charger les paramètres au montage du composant
+  React.useEffect(() => {
+    loadSettings()
+  }, [])
 
   // Prévisualisation des types de header
   const headerPreviews = {
@@ -198,9 +332,9 @@ function AdminContent() {
                   Voir le site
                 </Link>
               </Button>
-              <Button size="sm">
+              <Button size="sm" onClick={saveSettings} disabled={isUploading}>
                 <Save className="h-4 w-4 mr-2" />
-                Enregistrer les modifications
+                {isUploading ? "Upload en cours..." : "Enregistrer les modifications"}
               </Button>
             </div>
           </div>
@@ -352,7 +486,7 @@ function AdminContent() {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold">Apparence</h2>
-                <Button>
+                <Button onClick={saveSettings}>
                   <Save className="h-4 w-4 mr-2" />
                   Enregistrer les modifications
                 </Button>
@@ -704,34 +838,55 @@ function AdminContent() {
                 <TabsContent value="logo" className="space-y-6">
                   <Card>
                     <CardHeader>
-                      <CardTitle>Logos et Branding</CardTitle>
+                      <CardTitle className="flex items-center gap-2">
+                        <ImageIcon className="h-5 w-5" />
+                        Logos et Branding
+                      </CardTitle>
                       <CardDescription>Gérez les différents logos utilisés sur votre plateforme</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
                       {/* Logo principal */}
                       <div className="space-y-4">
-                        <h3 className="text-lg font-medium">Logo principal</h3>
+                        <h3 className="text-lg font-medium flex items-center gap-2">
+                          <Upload className="h-4 w-4" />
+                          Logo principal
+                        </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <div className="space-y-2">
                             <Label htmlFor="main-logo">Logo principal (format horizontal)</Label>
-                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                              <div className="space-y-2">
-                                <div className="mx-auto h-12 w-12 text-gray-400">
-                                  <svg fill="none" stroke="currentColor" viewBox="0 0 48 48">
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                                    />
-                                  </svg>
+                            <div
+                              className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors cursor-pointer"
+                              onClick={() => document.getElementById("main-logo-input")?.click()}
+                            >
+                              {logos.main ? (
+                                <div className="space-y-2">
+                                  <img
+                                    src={logos.main || "/placeholder.svg"}
+                                    alt="Logo principal"
+                                    className="max-h-16 mx-auto"
+                                  />
+                                  <p className="text-sm text-green-600">Logo uploadé</p>
                                 </div>
-                                <div className="text-sm text-gray-600">
-                                  <p>Cliquez pour uploader ou glissez-déposez</p>
-                                  <p className="text-xs">PNG, JPG jusqu'à 2MB</p>
+                              ) : (
+                                <div className="space-y-2">
+                                  <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                                  <div className="text-sm text-gray-600">
+                                    <p>Cliquez pour uploader ou glissez-déposez</p>
+                                    <p className="text-xs">PNG, JPG jusqu'à 5MB</p>
+                                  </div>
                                 </div>
-                              </div>
-                              <input type="file" className="hidden" accept="image/*" />
+                              )}
+                              <input
+                                id="main-logo-input"
+                                type="file"
+                                className="hidden"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  if (file) handleLogoUpload(file, "main")
+                                }}
+                                disabled={isUploading}
+                              />
                             </div>
                             <p className="text-xs text-gray-500">
                               Utilisé dans l'en-tête du site et les documents officiels
@@ -740,24 +895,39 @@ function AdminContent() {
 
                           <div className="space-y-2">
                             <Label htmlFor="icon-logo">Icône/Favicon</Label>
-                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                              <div className="space-y-2">
-                                <div className="mx-auto h-12 w-12 text-gray-400">
-                                  <svg fill="none" stroke="currentColor" viewBox="0 0 48 48">
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                                    />
-                                  </svg>
+                            <div
+                              className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors cursor-pointer"
+                              onClick={() => document.getElementById("icon-logo-input")?.click()}
+                            >
+                              {logos.icon ? (
+                                <div className="space-y-2">
+                                  <img
+                                    src={logos.icon || "/placeholder.svg"}
+                                    alt="Icône"
+                                    className="max-h-12 mx-auto"
+                                  />
+                                  <p className="text-sm text-green-600">Icône uploadée</p>
                                 </div>
-                                <div className="text-sm text-gray-600">
-                                  <p>Format carré recommandé</p>
-                                  <p className="text-xs">PNG, ICO jusqu'à 1MB</p>
+                              ) : (
+                                <div className="space-y-2">
+                                  <ImageIcon className="mx-auto h-12 w-12 text-gray-400" />
+                                  <div className="text-sm text-gray-600">
+                                    <p>Format carré recommandé</p>
+                                    <p className="text-xs">PNG, ICO jusqu'à 5MB</p>
+                                  </div>
                                 </div>
-                              </div>
-                              <input type="file" className="hidden" accept="image/*" />
+                              )}
+                              <input
+                                id="icon-logo-input"
+                                type="file"
+                                className="hidden"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  if (file) handleLogoUpload(file, "icon")
+                                }}
+                                disabled={isUploading}
+                              />
                             </div>
                             <p className="text-xs text-gray-500">Utilisé comme favicon et icône d'application</p>
                           </div>
@@ -768,21 +938,46 @@ function AdminContent() {
 
                       {/* Logo pour documents */}
                       <div className="space-y-4">
-                        <h3 className="text-lg font-medium">Logos pour documents</h3>
+                        <h3 className="text-lg font-medium flex items-center gap-2">
+                          <FileText className="h-4 w-4" />
+                          Logos pour documents
+                        </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <div className="space-y-2">
                             <Label htmlFor="pdf-logo">Logo pour dossiers de location</Label>
-                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                              <div className="space-y-2">
-                                <div className="mx-auto h-12 w-12 text-gray-400">
-                                  <FileText className="h-12 w-12" />
+                            <div
+                              className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors cursor-pointer"
+                              onClick={() => document.getElementById("pdf-logo-input")?.click()}
+                            >
+                              {logos.pdf ? (
+                                <div className="space-y-2">
+                                  <img
+                                    src={logos.pdf || "/placeholder.svg"}
+                                    alt="Logo PDF"
+                                    className="max-h-12 mx-auto"
+                                  />
+                                  <p className="text-sm text-green-600">Logo PDF uploadé</p>
                                 </div>
-                                <div className="text-sm text-gray-600">
-                                  <p>Logo optimisé pour PDF</p>
-                                  <p className="text-xs">PNG, JPG haute résolution</p>
+                              ) : (
+                                <div className="space-y-2">
+                                  <FileText className="mx-auto h-12 w-12 text-gray-400" />
+                                  <div className="text-sm text-gray-600">
+                                    <p>Logo optimisé pour PDF</p>
+                                    <p className="text-xs">PNG, JPG haute résolution</p>
+                                  </div>
                                 </div>
-                              </div>
-                              <input type="file" className="hidden" accept="image/*" />
+                              )}
+                              <input
+                                id="pdf-logo-input"
+                                type="file"
+                                className="hidden"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  if (file) handleLogoUpload(file, "pdf")
+                                }}
+                                disabled={isUploading}
+                              />
                             </div>
                             <p className="text-xs text-gray-500">
                               Utilisé dans les en-têtes des dossiers de location PDF
@@ -791,30 +986,39 @@ function AdminContent() {
 
                           <div className="space-y-2">
                             <Label htmlFor="watermark-logo">Filigrane (optionnel)</Label>
-                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                              <div className="space-y-2">
-                                <div className="mx-auto h-12 w-12 text-gray-400">
-                                  <svg fill="none" stroke="currentColor" viewBox="0 0 48 48">
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                                    />
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                                    />
-                                  </svg>
+                            <div
+                              className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors cursor-pointer"
+                              onClick={() => document.getElementById("watermark-logo-input")?.click()}
+                            >
+                              {logos.watermark ? (
+                                <div className="space-y-2">
+                                  <img
+                                    src={logos.watermark || "/placeholder.svg"}
+                                    alt="Filigrane"
+                                    className="max-h-12 mx-auto opacity-50"
+                                  />
+                                  <p className="text-sm text-green-600">Filigrane uploadé</p>
                                 </div>
-                                <div className="text-sm text-gray-600">
-                                  <p>Filigrane transparent</p>
-                                  <p className="text-xs">PNG avec transparence</p>
+                              ) : (
+                                <div className="space-y-2">
+                                  <Eye className="mx-auto h-12 w-12 text-gray-400" />
+                                  <div className="text-sm text-gray-600">
+                                    <p>Filigrane transparent</p>
+                                    <p className="text-xs">PNG avec transparence</p>
+                                  </div>
                                 </div>
-                              </div>
-                              <input type="file" className="hidden" accept="image/*" />
+                              )}
+                              <input
+                                id="watermark-logo-input"
+                                type="file"
+                                className="hidden"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  if (file) handleLogoUpload(file, "watermark")
+                                }}
+                                disabled={isUploading}
+                              />
                             </div>
                             <p className="text-xs text-gray-500">Filigrane discret sur les documents sensibles</p>
                           </div>
@@ -825,16 +1029,23 @@ function AdminContent() {
 
                       {/* Prévisualisation */}
                       <div className="space-y-4">
-                        <h3 className="text-lg font-medium">Prévisualisation</h3>
+                        <h3 className="text-lg font-medium flex items-center gap-2">
+                          <Eye className="h-4 w-4" />
+                          Prévisualisation
+                        </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <div className="space-y-2">
                             <Label>En-tête de site</Label>
                             <div className="border rounded-lg p-4 bg-white">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                  <div className="w-10 h-10 bg-blue-600 rounded-md flex items-center justify-center">
-                                    <span className="text-white font-bold text-sm">L</span>
-                                  </div>
+                                  {logos.main ? (
+                                    <img src={logos.main || "/placeholder.svg"} alt="Logo" className="h-10" />
+                                  ) : (
+                                    <div className="w-10 h-10 bg-blue-600 rounded-md flex items-center justify-center">
+                                      <span className="text-white font-bold text-sm">L</span>
+                                    </div>
+                                  )}
                                   <div>
                                     <div className="font-bold text-lg">{siteTitle}</div>
                                     <div className="text-xs text-gray-500">{siteDescription}</div>
@@ -850,9 +1061,17 @@ function AdminContent() {
                             <div className="border rounded-lg p-4 bg-blue-600 text-white">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                  <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
-                                    <span className="text-blue-600 font-bold text-sm">L</span>
-                                  </div>
+                                  {logos.pdf ? (
+                                    <img
+                                      src={logos.pdf || "/placeholder.svg"}
+                                      alt="Logo PDF"
+                                      className="h-8 bg-white rounded p-1"
+                                    />
+                                  ) : (
+                                    <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
+                                      <span className="text-blue-600 font-bold text-sm">L</span>
+                                    </div>
+                                  )}
                                   <span className="font-bold">DOSSIER DE LOCATION</span>
                                 </div>
                                 <div className="text-right text-sm">
@@ -901,6 +1120,7 @@ export default function AdminPage() {
   return (
     <SidebarProvider>
       <AdminContent />
+      <Toaster />
     </SidebarProvider>
   )
 }
