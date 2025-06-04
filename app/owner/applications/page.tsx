@@ -2,17 +2,15 @@
 
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { toast } from "sonner"
-import { authService } from "@/lib/auth-service"
-import { PageHeader } from "@/components/page-header"
-import { ModernApplicationCard } from "@/components/modern-application-card"
-import { Filter } from "lucide-react"
 import { Input } from "@/components/ui/input"
-import { Search, SlidersHorizontal } from "lucide-react"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Search, Filter, SlidersHorizontal } from "lucide-react"
 import { applicationService } from "@/lib/application-service"
+import { authService } from "@/lib/auth-service"
+import { toast } from "sonner"
+import ModernApplicationCard from "@/components/modern-application-card"
+import { PageHeader } from "@/components/page-header"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { propertyService } from "@/lib/property-service"
 
@@ -29,7 +27,6 @@ export default function ApplicationsPage() {
   const [activeTab, setActiveTab] = useState("all")
   const [properties, setProperties] = useState<any[]>([])
   const [selectedProperty, setSelectedProperty] = useState<string>(propertyIdFilter || "all")
-  const [selectedApplications, setSelectedApplications] = useState(new Set())
 
   useEffect(() => {
     const fetchData = async () => {
@@ -93,81 +90,6 @@ export default function ApplicationsPage() {
     }
   }, [propertyIdFilter])
 
-  const handleSelectApplication = (applicationId, selected) => {
-    const newSelectedApplications = new Set(selectedApplications)
-    if (selected) {
-      newSelectedApplications.add(applicationId)
-    } else {
-      newSelectedApplications.delete(applicationId)
-    }
-    setSelectedApplications(newSelectedApplications)
-  }
-
-  const handleApplicationAction = async (action, applicationId) => {
-    try {
-      // Logique pour gérer l'action sur la candidature (ex: accepter, refuser)
-      console.log(`Action ${action} sur la candidature ${applicationId}`)
-      toast.success(`Candidature ${applicationId} ${action}`)
-    } catch (error) {
-      console.error("Erreur lors de l'action sur la candidature:", error)
-      toast.error("Erreur lors de l'action sur la candidature")
-    }
-  }
-
-  const getFilteredApplications = () => {
-    if (activeTab === "all") return applications
-
-    // Mapper les statuts de l'interface vers les statuts en base de données
-    const statusMap = {
-      pending: ["pending", "analyzing", "visit_scheduled", "waiting_tenant_confirmation"],
-      accepted: ["accepted", "approved"],
-      rejected: ["rejected"],
-    }
-
-    return applications.filter((app) => {
-      const status = app.status || "pending"
-      return statusMap[activeTab]?.includes(status)
-    })
-  }
-
-  // Fonction pour calculer le score de matching de manière sécurisée
-  const calculateMatchScore = (application) => {
-    try {
-      if (!application || !application.property) return 50 // Score par défaut
-
-      const property = application.property
-      let score = 0
-
-      // Ratio revenus/loyer (40 points max)
-      if (application.income && property.price) {
-        const rentRatio = application.income / property.price
-        if (rentRatio >= 3) score += 40
-        else if (rentRatio >= 2.5) score += 30
-        else if (rentRatio >= 2) score += 20
-        else score += 10
-      } else {
-        score += 10
-      }
-
-      // Stabilité professionnelle (20 points max)
-      if (application.contract_type === "CDI" || application.contract_type === "cdi") score += 20
-      else if (application.contract_type === "CDD" || application.contract_type === "cdd") score += 15
-      else score += 10
-
-      // Présence d'un garant (20 points max)
-      if (application.has_guarantor) score += 20
-
-      // Documents et présentation (20 points max)
-      if (application.presentation && application.presentation.length > 50) score += 10
-      if (application.profession && application.company) score += 10
-
-      return Math.min(score, 100)
-    } catch (error) {
-      console.error("Erreur calcul score:", error)
-      return 50
-    }
-  }
-
   if (isLoading) {
     return <div className="text-center">Chargement...</div>
   }
@@ -221,7 +143,10 @@ export default function ApplicationsPage() {
           <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab}>
             <TabsList>
               <TabsTrigger value="all">Toutes</TabsTrigger>
-              <TabsTrigger value="pending">En attente</TabsTrigger>
+              <TabsTrigger value="new">Nouvelles</TabsTrigger>
+              <TabsTrigger value="reviewing">En analyse</TabsTrigger>
+              <TabsTrigger value="visit_proposed">Visite proposée</TabsTrigger>
+              <TabsTrigger value="visit_scheduled">Visite programmée</TabsTrigger>
               <TabsTrigger value="accepted">Acceptées</TabsTrigger>
               <TabsTrigger value="rejected">Refusées</TabsTrigger>
             </TabsList>
@@ -229,74 +154,33 @@ export default function ApplicationsPage() {
         </div>
       )}
 
-      {applications.length === 0 ? (
+      {filteredApplications.length === 0 ? (
         <div className="bg-white rounded-lg border p-8 text-center">
-          <>
-            <h3 className="text-lg font-semibold mb-2">Aucune candidature reçue</h3>
-            <p className="text-gray-500">
-              Les candidatures pour vos biens apparaîtront ici une fois que des locataires auront postulé
-            </p>
-          </>
+          {applications.length === 0 ? (
+            <>
+              <h3 className="text-lg font-semibold mb-2">Aucune candidature reçue</h3>
+              <p className="text-gray-500">
+                Les candidatures pour vos biens apparaîtront ici une fois que des locataires auront postulé
+              </p>
+            </>
+          ) : (
+            <>
+              <h3 className="text-lg font-semibold mb-2">Aucun résultat</h3>
+              <p className="text-gray-500">Aucune candidature ne correspond à votre recherche</p>
+            </>
+          )}
         </div>
       ) : (
-        <>
-          {getFilteredApplications().map((application) => {
-            try {
-              // Gestion sécurisée des données du tenant
-              const tenant = application.tenant || {}
-              const property = application.property || {}
-
-              // Calcul du score de matching
-              const matchScore = calculateMatchScore(application)
-
-              // Préparation des données pour le composant ModernApplicationCard
-              const applicationData = {
-                id: application.id,
-                tenant: {
-                  first_name: tenant.first_name || "Prénom",
-                  last_name: tenant.last_name || "Nom",
-                  email: tenant.email || "email@example.com",
-                  phone: tenant.phone || "Non renseigné",
-                },
-                property: {
-                  title: property.title || "Propriété inconnue",
-                  address: property.address || "Adresse inconnue",
-                },
-                profession: application.profession || "Non spécifié",
-                income: application.income || 0,
-                has_guarantor: application.has_guarantor || false,
-                documents_complete: true,
-                status: application.status || "pending",
-                match_score: matchScore,
-                created_at: application.created_at || new Date().toISOString(),
-              }
-
-              return (
-                <ModernApplicationCard
-                  key={application.id}
-                  application={applicationData}
-                  isSelected={selectedApplications.has(application.id)}
-                  onSelect={(selected) => handleSelectApplication(application.id, selected)}
-                  onAction={(action) => handleApplicationAction(action, application.id)}
-                />
-              )
-            } catch (error) {
-              console.error("Erreur rendu candidature:", error)
-              return (
-                <Card key={application.id}>
-                  <CardContent className="p-4">
-                    <p className="text-red-500">Erreur lors de l'affichage de cette candidature</p>
-                  </CardContent>
-                </Card>
-              )
-            }
-          })}
-        </>
+        <div className="space-y-4">
+          {filteredApplications.map((application) => (
+            <ModernApplicationCard key={application.id} application={application} />
+          ))}
+        </div>
       )}
 
-      {getFilteredApplications().length > 0 && (
+      {filteredApplications.length > 0 && (
         <div className="mt-8 text-center text-gray-500">
-          {getFilteredApplications().length} candidature(s) affichée(s) sur {applications.length} total
+          {filteredApplications.length} candidature(s) affichée(s) sur {applications.length} total
         </div>
       )}
     </>
