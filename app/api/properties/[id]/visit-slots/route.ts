@@ -106,6 +106,19 @@ export async function GET(request: Request, { params }: { params: { id: string }
       : slots || []
 
     console.log("✅ Créneaux filtrés:", filteredSlots.length)
+
+    // Vérifier la table utilisée
+    console.log("📊 Table utilisée pour les créneaux:", "property_visit_slots")
+
+    // Vérifier si la table existe
+    const { data: tableExists, error: tableError } = await supabase.from("property_visit_slots").select("id").limit(1)
+
+    if (tableError) {
+      console.error("❌ Erreur vérification table:", tableError)
+    } else {
+      console.log("✅ Table property_visit_slots accessible:", tableExists !== null)
+    }
+
     return NextResponse.json({ slots: filteredSlots })
   } catch (error) {
     console.error("❌ Erreur générale lors de la récupération des créneaux:", error)
