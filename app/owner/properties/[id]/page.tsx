@@ -7,21 +7,7 @@ import { useRouter, useParams, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import {
-  ArrowLeft,
-  Edit,
-  Trash2,
-  Eye,
-  Calendar,
-  MapPin,
-  Home,
-  Bed,
-  Bath,
-  Square,
-  Upload,
-  X,
-  RefreshCw,
-} from "lucide-react"
+import { ArrowLeft, Edit, Trash2, Eye, Calendar, MapPin, Home, Bed, Bath, Square, Upload, X } from "lucide-react"
 import Link from "next/link"
 import { propertyService } from "@/lib/property-service"
 import { authService } from "@/lib/auth-service"
@@ -46,22 +32,9 @@ export default function PropertyDetailPage() {
   const [isUploadingImages, setIsUploadingImages] = useState(false)
   const [activeTab, setActiveTab] = useState(initialTab)
 
-  // Fonction pour charger les créneaux - ISOLÉE pour éviter les boucles
-  const loadSlotsFromDatabase = useCallback(async () => {
-    if (!params.id) return
-
-    try {
-      const slotsData = await propertyService.getPropertyVisitAvailabilities(params.id as string)
-      setVisitSlots(slotsData)
-      console.log("✅ Créneaux actualisés:", slotsData.length)
-    } catch (error) {
-      console.error("Erreur lors du chargement des créneaux:", error)
-      toast.error("Erreur lors du chargement des créneaux de visite")
-    }
-  }, [params.id])
-
   // Gestionnaire de changement de créneaux - MÉMORISÉ
   const handleSlotsChange = useCallback((newSlots: any[]) => {
+    console.log("🔄 Mise à jour des créneaux:", newSlots.length)
     setVisitSlots(newSlots)
   }, [])
 
@@ -106,8 +79,8 @@ export default function PropertyDetailPage() {
         setProperty(propertyData)
         console.log("✅ Propriété chargée:", propertyData)
 
-        // Charger les créneaux une seule fois
-        await loadSlotsFromDatabase()
+        // Initialiser les créneaux vides - le VisitScheduler se chargera du loading
+        setVisitSlots([])
       } catch (error: any) {
         console.error("❌ Erreur lors du chargement:", error)
         setError(error.message || "Erreur lors du chargement du bien")
@@ -121,7 +94,7 @@ export default function PropertyDetailPage() {
     }
 
     fetchData()
-  }, [params.id, router, loadSlotsFromDatabase])
+  }, [params.id, router])
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
@@ -213,7 +186,7 @@ export default function PropertyDetailPage() {
     }
   }
 
-  // Composant de gestion des visites
+  // Composant de gestion des visites - SIMPLIFIÉ
   const VisitManagement = () => {
     return (
       <div className="space-y-6">
@@ -221,10 +194,6 @@ export default function PropertyDetailPage() {
           <h3 className="text-lg font-semibold">Gestion des visites</h3>
           <div className="flex items-center gap-2">
             <Badge variant="outline">{visitSlots.length} créneaux disponibles</Badge>
-            <Button variant="outline" size="sm" onClick={loadSlotsFromDatabase} disabled={isLoading}>
-              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-              Actualiser
-            </Button>
           </div>
         </div>
 

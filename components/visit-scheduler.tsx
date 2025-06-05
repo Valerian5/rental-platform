@@ -77,7 +77,6 @@ const formatTimeString = (timeStr: string): string => {
 // Fonction pour formater une date CORRECTEMENT
 const formatDateForDisplay = (dateStr: string): string => {
   try {
-    // Extraire les composants de la date directement
     const [year, month, day] = dateStr.split("-").map(Number)
     const date = new Date(year, month - 1, day)
 
@@ -113,8 +112,9 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
-  // Référence pour éviter les chargements multiples
+  // Référence pour éviter les chargements multiples - CORRIGÉE
   const hasLoadedRef = useRef(false)
+  const isLoadingRef = useRef(false)
 
   // Fonction pour récupérer le token d'authentification
   const getAuthToken = useCallback(async () => {
@@ -129,12 +129,17 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
     }
   }, [])
 
-  // Fonction de chargement des créneaux
+  // Fonction de chargement des créneaux - CORRIGÉE
   const loadSlotsFromDatabase = useCallback(async () => {
-    if (!propertyId || hasLoadedRef.current) return
+    // Éviter les chargements multiples
+    if (!propertyId || hasLoadedRef.current || isLoadingRef.current) {
+      console.log("🚫 Chargement évité - déjà fait ou en cours")
+      return
+    }
 
     console.log("🔄 Chargement des créneaux depuis la DB...")
     setIsLoading(true)
+    isLoadingRef.current = true
 
     try {
       const token = await getAuthToken()
@@ -173,15 +178,21 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
       toast.error("Erreur lors du chargement des créneaux")
     } finally {
       setIsLoading(false)
+      isLoadingRef.current = false
     }
   }, [propertyId, getAuthToken, onSlotsChange])
 
-  // Charger les créneaux UNE SEULE FOIS
+  // Charger les créneaux UNE SEULE FOIS au montage
   useEffect(() => {
-    if (mode === "management" && propertyId && !hasLoadedRef.current) {
-      loadSlotsFromDatabase()
+    if (mode === "management" && propertyId) {
+      // Petit délai pour éviter les conflits
+      const timer = setTimeout(() => {
+        loadSlotsFromDatabase()
+      }, 100)
+
+      return () => clearTimeout(timer)
     }
-  }, []) // AUCUNE dépendance pour éviter les boucles
+  }, [mode, propertyId, loadSlotsFromDatabase])
 
   const saveSlotsToDatabase = async (slots: VisitSlot[]) => {
     if (!propertyId || mode !== "management") return
