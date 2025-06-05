@@ -54,7 +54,7 @@ export default function DebugAuthPage() {
   const testLogin = async () => {
     try {
       // Test avec un compte existant (remplacez par vos vraies données)
-      const result = await authService.login("test@example.com", "password123")
+      const result = await authService.login("valerian.joubert@gmail.com", "M7g75re51")
       console.log("✅ Test login réussi:", result)
       await checkAuth()
     } catch (err) {
