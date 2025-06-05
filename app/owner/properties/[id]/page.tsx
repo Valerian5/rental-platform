@@ -45,12 +45,11 @@ export default function PropertyDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [isUploadingImages, setIsUploadingImages] = useState(false)
   const [activeTab, setActiveTab] = useState(initialTab)
-  // Supprimer cette ligne
-  // const [mode, setMode] = useState("management") // Assuming a default mode
-  const loadSlotsFromDatabase = async () => {
-    if (isLoading) return
 
-    setIsLoading(true)
+  // Fonction pour charger les créneaux - ISOLÉE pour éviter les boucles
+  const loadSlotsFromDatabase = useCallback(async () => {
+    if (!params.id) return
+
     try {
       const slotsData = await propertyService.getPropertyVisitAvailabilities(params.id as string)
       setVisitSlots(slotsData)
@@ -58,11 +57,10 @@ export default function PropertyDetailPage() {
     } catch (error) {
       console.error("Erreur lors du chargement des créneaux:", error)
       toast.error("Erreur lors du chargement des créneaux de visite")
-    } finally {
-      setIsLoading(false)
     }
-  }
+  }, [params.id])
 
+  // Gestionnaire de changement de créneaux - MÉMORISÉ
   const handleSlotsChange = useCallback((newSlots: any[]) => {
     setVisitSlots(newSlots)
   }, [])
@@ -108,16 +106,8 @@ export default function PropertyDetailPage() {
         setProperty(propertyData)
         console.log("✅ Propriété chargée:", propertyData)
 
-        // Récupérer les créneaux de visite - une seule fois
-        console.log("📅 Récupération des créneaux de visite...")
-        try {
-          const slotsData = await propertyService.getPropertyVisitAvailabilities(params.id as string)
-          setVisitSlots(slotsData)
-          console.log("✅ Créneaux chargés:", slotsData.length)
-        } catch (slotError) {
-          console.error("❌ Erreur lors du chargement des créneaux:", slotError)
-          toast.error("Erreur lors du chargement des créneaux de visite")
-        }
+        // Charger les créneaux une seule fois
+        await loadSlotsFromDatabase()
       } catch (error: any) {
         console.error("❌ Erreur lors du chargement:", error)
         setError(error.message || "Erreur lors du chargement du bien")
@@ -131,7 +121,7 @@ export default function PropertyDetailPage() {
     }
 
     fetchData()
-  }, [params.id, router])
+  }, [params.id, router, loadSlotsFromDatabase])
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files

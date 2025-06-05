@@ -73,11 +73,15 @@ const formatTimeString = (timeStr: string): string => {
   return "00:00"
 }
 
-// Fonction pour formater une date CORRECTEMENT (nouvelle approche)
+// NOUVELLE APPROCHE pour le formatage de date - SANS TIMEZONE
 const formatDateForDisplay = (dateStr: string): string => {
   try {
-    // Approche simple : parser directement la date ISO et formater
-    const date = new Date(dateStr + "T12:00:00") // Ajouter midi pour éviter les problèmes de timezone
+    // Extraire les composants de la date directement
+    const [year, month, day] = dateStr.split("-").map(Number)
+
+    // Créer un objet Date en spécifiant explicitement l'année, le mois et le jour
+    // Le mois est 0-indexé en JavaScript (0 = janvier, 11 = décembre)
+    const date = new Date(year, month - 1, day)
 
     // Vérifier que la date est valide
     if (isNaN(date.getTime())) {
@@ -85,11 +89,14 @@ const formatDateForDisplay = (dateStr: string): string => {
       return "Date invalide"
     }
 
-    return date.toLocaleDateString("fr-FR", {
+    // Formater la date en français
+    const options: Intl.DateTimeFormatOptions = {
       weekday: "long",
       day: "numeric",
       month: "long",
-    })
+    }
+
+    return date.toLocaleDateString("fr-FR", options)
   } catch (error) {
     console.error("Erreur formatage date:", error, "pour:", dateStr)
     return "Date invalide"
@@ -112,47 +119,58 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
-  // Utiliser useRef pour éviter les re-renders infinis
+  // Référence pour éviter les chargements multiples
   const hasLoadedRef = useRef(false)
+  const initialSlotsRef = useRef<VisitSlot[]>([])
 
-  // Fonction de chargement des créneaux (SIMPLIFIÉE MAXIMUM)
-  const loadSlotsFromDatabase = async () => {
-    if (!propertyId || isLoading || hasLoadedRef.current) return
-
-    console.log("🔄 Chargement des créneaux depuis la DB...")
-    setIsLoading(true)
-    hasLoadedRef.current = true
-
-    try {
-      const response = await fetch(`/api/properties/${propertyId}/visit-slots`)
-
-      if (response.ok) {
-        const data = await response.json()
-        console.log("✅ Créneaux chargés:", data.slots?.length || 0)
-
-        const cleanedSlots = (data.slots || []).map((slot: any) => ({
-          ...slot,
-          start_time: formatTimeString(slot.start_time),
-          end_time: formatTimeString(slot.end_time),
-        }))
-
-        onSlotsChange(cleanedSlots)
-      } else {
-        console.error("❌ Erreur chargement créneaux:", response.status)
-        toast.error("Erreur lors du chargement des créneaux")
-      }
-    } catch (error) {
-      console.error("❌ Erreur chargement créneaux:", error)
-      toast.error("Erreur lors du chargement des créneaux")
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Charger les créneaux UNE SEULE FOIS (CORRIGÉ)
+  // NOUVELLE APPROCHE pour le chargement - COMPLÈTEMENT ISOLÉE
   useEffect(() => {
-    if (mode === "management" && propertyId && !hasLoadedRef.current) {
-      loadSlotsFromDatabase()
+    // Fonction de chargement isolée
+    const loadSlots = async () => {
+      if (!propertyId || hasLoadedRef.current) return
+
+      console.log("🔄 Chargement initial des créneaux...")
+      setIsLoading(true)
+
+      try {
+        const response = await fetch(`/api/properties/${propertyId}/visit-slots`)
+
+        if (response.ok) {
+          const data = await response.json()
+          console.log("✅ Créneaux chargés:", data.slots?.length || 0)
+
+          const cleanedSlots = (data.slots || []).map((slot: any) => ({
+            ...slot,
+            start_time: formatTimeString(slot.start_time),
+            end_time: formatTimeString(slot.end_time),
+          }))
+
+          // Stocker dans la référence pour éviter les re-renders
+          initialSlotsRef.current = cleanedSlots
+
+          // Mettre à jour l'état une seule fois
+          onSlotsChange(cleanedSlots)
+        } else {
+          console.error("❌ Erreur chargement créneaux:", response.status)
+          toast.error("Erreur lors du chargement des créneaux")
+        }
+      } catch (error) {
+        console.error("❌ Erreur chargement créneaux:", error)
+        toast.error("Erreur lors du chargement des créneaux")
+      } finally {
+        setIsLoading(false)
+        hasLoadedRef.current = true
+      }
+    }
+
+    // Exécuter uniquement en mode management et si propertyId existe
+    if (mode === "management" && propertyId) {
+      loadSlots()
+    }
+
+    // Nettoyage pour éviter les fuites mémoire
+    return () => {
+      // Rien à nettoyer
     }
   }, []) // AUCUNE dépendance pour éviter les boucles
 
@@ -211,7 +229,12 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
       const date = new Date(startDate)
       date.setDate(startDate.getDate() + i)
 
-      const dateStr = date.toISOString().split("T")[0]
+      // Formatage explicite de la date pour éviter les problèmes de timezone
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, "0")
+      const day = String(date.getDate()).padStart(2, "0")
+      const dateStr = `${year}-${month}-${day}`
+
       const isCurrentMonth = date.getMonth() === month
       const isToday = date.getTime() === today.getTime()
       const isPast = date < today
@@ -415,13 +438,6 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
 
   return (
     <div className="space-y-6">
-      {/* Debug info */}
-      {selectedDate && (
-        <div className="text-xs text-gray-500 p-2 bg-gray-50 rounded">
-          Debug: Date sélectionnée = {selectedDate} | Formatée = {formatDateForDisplay(selectedDate)}
-        </div>
-      )}
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Calendrier */}
         <Card>

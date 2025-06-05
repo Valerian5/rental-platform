@@ -1,137 +1,155 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { NextResponse } from "next/server"
+import { createClient } from "@/lib/supabase"
+import { authService } from "@/lib/auth-service"
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
-    console.log("🔍 GET visit-slots pour propriété:", params.id)
+    // Vérifier l'authentification
+    const user = await authService.getCurrentUser()
+    if (!user) {
+      return NextResponse.json({ error: "Vous devez être connecté" }, { status: 401 })
+    }
 
-    const { data: slots, error } = await supabase
-      .from("visit_availabilities")
+    // Vérifier que l'ID de propriété est fourni
+    if (!params.id) {
+      return NextResponse.json({ error: "ID de propriété manquant" }, { status: 400 })
+    }
+
+    // Créer le client Supabase
+    const supabase = createClient()
+
+    // Vérifier que la propriété existe et appartient à l'utilisateur
+    const { data: property, error: propertyError } = await supabase
+      .from("properties")
+      .select("id, owner_id")
+      .eq("id", params.id)
+      .single()
+
+    if (propertyError || !property) {
+      console.error("Erreur lors de la récupération de la propriété:", propertyError)
+      return NextResponse.json({ error: "Propriété non trouvée" }, { status: 404 })
+    }
+
+    // Vérifier que l'utilisateur est le propriétaire ou un locataire qui a accès
+    const isOwner = property.owner_id === user.id
+    const isTenant = user.user_type === "tenant"
+
+    if (!isOwner && !isTenant) {
+      return NextResponse.json({ error: "Vous n'avez pas accès à cette propriété" }, { status: 403 })
+    }
+
+    // Récupérer les créneaux de visite
+    const { data: slots, error: slotsError } = await supabase
+      .from("property_visit_slots")
       .select("*")
       .eq("property_id", params.id)
       .order("date", { ascending: true })
       .order("start_time", { ascending: true })
 
-    if (error) {
-      console.error("❌ Erreur récupération créneaux:", error)
-      throw error
+    if (slotsError) {
+      console.error("Erreur lors de la récupération des créneaux:", slotsError)
+      return NextResponse.json({ error: "Erreur lors de la récupération des créneaux" }, { status: 500 })
     }
 
-    console.log("✅ Créneaux récupérés:", slots?.length || 0)
-    return NextResponse.json({ slots: slots || [] })
+    // Filtrer les créneaux pour les locataires (ne montrer que les disponibles)
+    const filteredSlots = isTenant
+      ? slots.filter((slot) => slot.is_available && new Date(slot.date) >= new Date())
+      : slots
+
+    return NextResponse.json({ slots: filteredSlots })
   } catch (error) {
-    console.error("❌ Erreur API créneaux visite:", error)
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur interne" }, { status: 500 })
+    console.error("Erreur lors de la récupération des créneaux:", error)
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: Request, { params }: { params: { id: string } }) {
   try {
-    console.log("💾 POST visit-slots pour propriété:", params.id)
-
-    const body = await request.json()
-    const { slots } = body
-
-    if (!slots || !Array.isArray(slots)) {
-      console.error("❌ Créneaux manquants ou invalides:", slots)
-      return NextResponse.json({ error: "Créneaux manquants ou invalides" }, { status: 400 })
+    // Vérifier l'authentification
+    const user = await authService.getCurrentUser()
+    if (!user || user.user_type !== "owner") {
+      return NextResponse.json({ error: "Vous devez être connecté en tant que propriétaire" }, { status: 401 })
     }
 
-    console.log("📝 Créneaux à sauvegarder:", slots.length)
+    // Vérifier que l'ID de propriété est fourni
+    if (!params.id) {
+      return NextResponse.json({ error: "ID de propriété manquant" }, { status: 400 })
+    }
 
-    // Vérifier que la propriété existe
+    // Créer le client Supabase
+    const supabase = createClient()
+
+    // Vérifier que la propriété existe et appartient à l'utilisateur
     const { data: property, error: propertyError } = await supabase
       .from("properties")
-      .select("id")
+      .select("id, owner_id")
       .eq("id", params.id)
       .single()
 
     if (propertyError || !property) {
-      console.error("❌ Propriété non trouvée:", propertyError)
+      console.error("Erreur lors de la récupération de la propriété:", propertyError)
       return NextResponse.json({ error: "Propriété non trouvée" }, { status: 404 })
     }
 
-    // Supprimer les anciens créneaux pour cette propriété
-    const { error: deleteError } = await supabase.from("visit_availabilities").delete().eq("property_id", params.id)
+    if (property.owner_id !== user.id) {
+      return NextResponse.json({ error: "Vous n'êtes pas le propriétaire de cette propriété" }, { status: 403 })
+    }
+
+    // Récupérer les données du corps de la requête
+    const { slots } = await request.json()
+
+    if (!Array.isArray(slots)) {
+      return NextResponse.json({ error: "Format de données invalide" }, { status: 400 })
+    }
+
+    // Supprimer tous les créneaux existants pour cette propriété
+    const { error: deleteError } = await supabase.from("property_visit_slots").delete().eq("property_id", params.id)
 
     if (deleteError) {
-      console.error("❌ Erreur suppression anciens créneaux:", deleteError)
-      return NextResponse.json({ error: "Erreur lors de la suppression des anciens créneaux" }, { status: 500 })
+      console.error("Erreur lors de la suppression des créneaux:", deleteError)
+      return NextResponse.json({ error: "Erreur lors de la mise à jour des créneaux" }, { status: 500 })
     }
+
+    // Si aucun nouveau créneau n'est fourni, terminer ici
+    if (slots.length === 0) {
+      console.log("✅ Tous les créneaux supprimés pour la propriété:", params.id)
+      return NextResponse.json({
+        message: "Tous les créneaux ont été supprimés",
+        slots: [],
+      })
+    }
+
+    // Valider et préparer les nouveaux créneaux
+    const validatedSlots = slots.map((slot: any) => ({
+      property_id: params.id,
+      date: slot.date,
+      start_time: slot.start_time,
+      end_time: slot.end_time,
+      max_capacity: slot.max_capacity || 1,
+      is_group_visit: slot.is_group_visit || false,
+      current_bookings: slot.current_bookings || 0,
+      is_available: slot.is_available !== false,
+    }))
 
     // Insérer les nouveaux créneaux
-    if (slots.length > 0) {
-      const slotsToInsert = slots.map((slot: any) => ({
-        property_id: params.id,
-        date: slot.date,
-        start_time: slot.start_time,
-        end_time: slot.end_time,
-        max_capacity: Number(slot.max_capacity) || 1,
-        is_group_visit: Boolean(slot.is_group_visit),
-        current_bookings: Number(slot.current_bookings) || 0,
-        is_available: slot.is_available !== false,
-      }))
+    const { data: insertedSlots, error: insertError } = await supabase
+      .from("property_visit_slots")
+      .insert(validatedSlots)
+      .select()
 
-      const { data, error: insertError } = await supabase.from("visit_availabilities").insert(slotsToInsert).select()
-
-      if (insertError) {
-        console.error("❌ Erreur insertion créneaux:", insertError)
-        return NextResponse.json({ error: "Erreur lors de l'insertion des créneaux" }, { status: 500 })
-      }
-
-      console.log("✅ Créneaux sauvegardés:", data?.length || 0)
-      return NextResponse.json({
-        success: true,
-        slots: data,
-        message: `${data?.length || 0} créneaux sauvegardés`,
-      })
-    } else {
-      return NextResponse.json({
-        success: true,
-        slots: [],
-        message: "Tous les créneaux ont été supprimés",
-      })
+    if (insertError) {
+      console.error("Erreur lors de l'insertion des créneaux:", insertError)
+      return NextResponse.json({ error: "Erreur lors de la sauvegarde des créneaux" }, { status: 500 })
     }
+
+    console.log("✅ Créneaux sauvegardés avec succès:", insertedSlots?.length || 0)
+
+    return NextResponse.json({
+      message: `${insertedSlots?.length || 0} créneaux sauvegardés avec succès`,
+      slots: insertedSlots,
+    })
   } catch (error) {
-    console.error("❌ Erreur API sauvegarde créneaux:", error)
-    return NextResponse.json({ error: "Erreur lors de la sauvegarde des créneaux" }, { status: 500 })
-  }
-}
-
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    console.log("🗑️ DELETE visit-slots pour propriété:", params.id)
-
-    const { searchParams } = new URL(request.url)
-    const slotId = searchParams.get("slotId")
-
-    if (slotId) {
-      // Supprimer un créneau spécifique
-      const { error } = await supabase
-        .from("visit_availabilities")
-        .delete()
-        .eq("id", slotId)
-        .eq("property_id", params.id)
-
-      if (error) {
-        console.error("❌ Erreur suppression créneau:", error)
-        throw error
-      }
-
-      return NextResponse.json({ success: true, message: "Créneau supprimé" })
-    } else {
-      // Supprimer tous les créneaux de la propriété
-      const { error } = await supabase.from("visit_availabilities").delete().eq("property_id", params.id)
-
-      if (error) {
-        console.error("❌ Erreur suppression tous créneaux:", error)
-        throw error
-      }
-
-      return NextResponse.json({ success: true, message: "Tous les créneaux supprimés" })
-    }
-  } catch (error) {
-    console.error("❌ Erreur API suppression créneaux:", error)
-    return NextResponse.json({ error: "Erreur lors de la suppression des créneaux" }, { status: 500 })
+    console.error("Erreur lors de la sauvegarde des créneaux:", error)
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }
