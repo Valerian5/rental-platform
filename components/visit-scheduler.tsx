@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -61,6 +61,7 @@ const MONTHS = [
 
 const DAYS_SHORT = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
 
+// Fonction pour formater l'heure
 const formatTimeString = (timeStr: string): string => {
   if (!timeStr) return "00:00"
   if (/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(timeStr)) {
@@ -72,21 +73,27 @@ const formatTimeString = (timeStr: string): string => {
   return "00:00"
 }
 
-const formatDateToYMD = (date: Date): string => {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
+// Fonction pour formater une date CORRECTEMENT (nouvelle approche)
 const formatDateForDisplay = (dateStr: string): string => {
-  const [year, month, day] = dateStr.split('-').map(Number)
-  const date = new Date(year, month - 1, day)
-  return date.toLocaleDateString("fr-FR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  })
+  try {
+    // Approche simple : parser directement la date ISO et formater
+    const date = new Date(dateStr + "T12:00:00") // Ajouter midi pour éviter les problèmes de timezone
+
+    // Vérifier que la date est valide
+    if (isNaN(date.getTime())) {
+      console.error("Date invalide:", dateStr)
+      return "Date invalide"
+    }
+
+    return date.toLocaleDateString("fr-FR", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    })
+  } catch (error) {
+    console.error("Erreur formatage date:", error, "pour:", dateStr)
+    return "Date invalide"
+  }
 }
 
 export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: VisitSchedulerProps) {
@@ -105,12 +112,18 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
-  const loadSlotsFromDatabase = useCallback(async () => {
-    if (!propertyId || isLoading) return
+  // Utiliser useRef pour éviter les re-renders infinis
+  const hasLoadedRef = useRef(false)
 
+  // Fonction de chargement des créneaux (SIMPLIFIÉE MAXIMUM)
+  const loadSlotsFromDatabase = async () => {
+    if (!propertyId || isLoading || hasLoadedRef.current) return
+
+    console.log("🔄 Chargement des créneaux depuis la DB...")
     setIsLoading(true)
+    hasLoadedRef.current = true
+
     try {
-      console.log("🔄 Chargement des créneaux depuis la DB...")
       const response = await fetch(`/api/properties/${propertyId}/visit-slots`)
 
       if (response.ok) {
@@ -134,13 +147,14 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
     } finally {
       setIsLoading(false)
     }
-  }, [propertyId, isLoading, onSlotsChange])
+  }
 
+  // Charger les créneaux UNE SEULE FOIS (CORRIGÉ)
   useEffect(() => {
-    if (mode === "management" && propertyId) {
+    if (mode === "management" && propertyId && !hasLoadedRef.current) {
       loadSlotsFromDatabase()
     }
-  }, [mode, propertyId])
+  }, []) // AUCUNE dépendance pour éviter les boucles
 
   const saveSlotsToDatabase = async (slots: VisitSlot[]) => {
     if (!propertyId || mode !== "management") return
@@ -178,6 +192,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
     }
   }
 
+  // Générer les jours du calendrier
   const generateCalendarDays = () => {
     const year = currentDate.getFullYear()
     const month = currentDate.getMonth()
@@ -196,10 +211,10 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
       const date = new Date(startDate)
       date.setDate(startDate.getDate() + i)
 
-      const dateStr = formatDateToYMD(date)
+      const dateStr = date.toISOString().split("T")[0]
       const isCurrentMonth = date.getMonth() === month
-      const isToday = formatDateToYMD(date) === formatDateToYMD(today)
-      const isPast = date < today && !isToday
+      const isToday = date.getTime() === today.getTime()
+      const isPast = date < today
       const hasSlots = visitSlots.some((slot) => slot.date === dateStr)
 
       days.push({
@@ -215,6 +230,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
     return days
   }
 
+  // Générer TOUS les créneaux possibles
   const generateTimeSlots = (config: DayConfiguration) => {
     const slots = []
     const duration = config.slotDuration === 0 ? customDuration : config.slotDuration
@@ -266,11 +282,17 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
     setCurrentDate(newDate)
   }
 
+  // Sélectionner un jour (LOGIQUE SIMPLIFIÉE)
   const selectDate = (dateStr: string) => {
+    console.log("📅 Date sélectionnée:", dateStr)
     setSelectedDate(dateStr)
+
+    // Récupérer les créneaux existants pour ce jour
     const existingSlots = visitSlots.filter((slot) => slot.date === dateStr)
+    console.log("🔍 Créneaux existants pour", dateStr, ":", existingSlots.length)
 
     if (existingSlots.length > 0) {
+      // Il y a des créneaux existants
       const firstSlot = existingSlots[0]
 
       try {
@@ -287,7 +309,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
         setDayConfig({
           date: dateStr,
           slotDuration: commonDuration,
-          startTime: "08:00",
+          startTime: "08:00", // Amplitude large pour voir tous les créneaux possibles
           endTime: "20:00",
           isGroupVisit: firstSlot.is_group_visit,
           capacity: firstSlot.max_capacity,
@@ -308,6 +330,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
         })
       }
     } else {
+      // Pas de créneaux existants
       setDayConfig({
         date: dateStr,
         slotDuration: 30,
@@ -392,6 +415,13 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
 
   return (
     <div className="space-y-6">
+      {/* Debug info */}
+      {selectedDate && (
+        <div className="text-xs text-gray-500 p-2 bg-gray-50 rounded">
+          Debug: Date sélectionnée = {selectedDate} | Formatée = {formatDateForDisplay(selectedDate)}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Calendrier */}
         <Card>
@@ -577,7 +607,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                   </div>
                 )}
 
-                {/* Créneaux */}
+                {/* Créneaux - TOUS AFFICHÉS */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <Label className="text-base font-medium">Créneaux disponibles</Label>
@@ -634,7 +664,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                         </Button>
                       </div>
                     </div>
-                  ) else (
+                  ) : (
                     <div className="text-center py-4 text-muted-foreground border rounded-lg">
                       <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
                       <p>Configurez la durée et l'amplitude pour générer les créneaux</p>
