@@ -75,17 +75,25 @@ const formatTimeString = (timeStr: string): string => {
     return timeStr.substring(0, 5)
   }
 
-  // Essayer de parser et reformater
-  try {
-    const date = new Date(`2000-01-01T${timeStr}`)
-    if (!isNaN(date.getTime())) {
-      return date.toTimeString().substring(0, 5)
-    }
-  } catch (e) {
-    console.warn("Format d'heure invalide:", timeStr)
-  }
-
   return "00:00"
+}
+
+// Fonction pour formater une date correctement
+const formatDateForDisplay = (dateStr: string): string => {
+  try {
+    // Créer la date en UTC pour éviter les problèmes de timezone
+    const [year, month, day] = dateStr.split("-").map(Number)
+    const date = new Date(year, month - 1, day) // month - 1 car les mois commencent à 0
+
+    return date.toLocaleDateString("fr-FR", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    })
+  } catch (error) {
+    console.error("Erreur formatage date:", error)
+    return "Date invalide"
+  }
 }
 
 export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: VisitSchedulerProps) {
@@ -132,17 +140,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
           end_time: formatTimeString(slot.end_time),
         }))
 
-        // Seulement mettre à jour si les données ont vraiment changé
-        const currentSlotsStr = JSON.stringify(
-          visitSlots.sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time)),
-        )
-        const newSlotsStr = JSON.stringify(
-          cleanedSlots.sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time)),
-        )
-
-        if (currentSlotsStr !== newSlotsStr) {
-          onSlotsChange(cleanedSlots)
-        }
+        onSlotsChange(cleanedSlots)
       } else {
         console.error("❌ Erreur chargement créneaux:", response.status)
         toast.error("Erreur lors du chargement des créneaux")
@@ -163,33 +161,15 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
       console.log("💾 Sauvegarde des créneaux en DB...", slots.length)
 
       // Validation et nettoyage des créneaux
-      const validatedSlots = slots.map((slot, index) => {
-        const startTime = formatTimeString(slot.start_time)
-        const endTime = formatTimeString(slot.end_time)
-
-        // Validation finale du format
-        const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
-
-        if (!timeRegex.test(startTime)) {
-          console.error(`Créneau ${index + 1}: format d'heure de début invalide (${startTime})`)
-          throw new Error(`Créneau ${index + 1}: format d'heure invalide (attendu: HH:MM)`)
-        }
-
-        if (!timeRegex.test(endTime)) {
-          console.error(`Créneau ${index + 1}: format d'heure de fin invalide (${endTime})`)
-          throw new Error(`Créneau ${index + 1}: format d'heure invalide (attendu: HH:MM)`)
-        }
-
-        return {
-          date: slot.date,
-          start_time: startTime,
-          end_time: endTime,
-          max_capacity: slot.max_capacity || 1,
-          is_group_visit: slot.is_group_visit || false,
-          current_bookings: slot.current_bookings || 0,
-          is_available: slot.is_available !== false,
-        }
-      })
+      const validatedSlots = slots.map((slot) => ({
+        date: slot.date,
+        start_time: formatTimeString(slot.start_time),
+        end_time: formatTimeString(slot.end_time),
+        max_capacity: slot.max_capacity || 1,
+        is_group_visit: slot.is_group_visit || false,
+        current_bookings: slot.current_bookings || 0,
+        is_available: slot.is_available !== false,
+      }))
 
       const response = await fetch(`/api/properties/${propertyId}/visit-slots`, {
         method: "POST",
@@ -201,8 +181,6 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
         const data = await response.json()
         console.log("✅ Créneaux sauvegardés:", data.message)
         toast.success(data.message || "Créneaux sauvegardés avec succès")
-        // Supprimer le rechargement automatique qui cause la boucle
-        // setTimeout(() => loadSlotsFromDatabase(), 500)
       } else {
         const errorData = await response.json()
         console.error("❌ Erreur sauvegarde:", errorData)
@@ -210,7 +188,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
       }
     } catch (error) {
       console.error("❌ Erreur sauvegarde créneaux:", error)
-      toast.error(error.message || "Erreur lors de la sauvegarde des créneaux")
+      toast.error("Erreur lors de la sauvegarde des créneaux")
     } finally {
       setIsSaving(false)
     }
@@ -336,20 +314,21 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
           setCustomDuration(duration)
         }
 
-        // Générer tous les créneaux possibles pour cette configuration
-        const tempConfig = {
+        // Calculer l'amplitude complète pour afficher tous les créneaux possibles
+        const minStartTime = allStartTimes[0]
+        const maxEndTime = allEndTimes[allEndTimes.length - 1]
+
+        setDayConfig({
           date: dateStr,
-          slotDuration: commonDuration === 0 ? duration : commonDuration,
-          startTime: allStartTimes[0],
-          endTime: allEndTimes[allEndTimes.length - 1],
+          slotDuration: commonDuration,
+          startTime: minStartTime,
+          endTime: maxEndTime,
           isGroupVisit: firstSlot.is_group_visit,
           capacity: firstSlot.max_capacity,
           selectedSlots: existingSlots.map(
             (slot) => `${formatTimeString(slot.start_time)}-${formatTimeString(slot.end_time)}`,
           ),
-        }
-
-        setDayConfig(tempConfig)
+        })
       } catch (error) {
         console.error("Erreur parsing créneaux existants:", error)
         // Fallback vers configuration par défaut
@@ -418,9 +397,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
     if (mode === "management") {
       await saveSlotsToDatabase(allSlots)
     } else {
-      toast.success(
-        `${newSlots.length} créneaux configurés pour le ${new Date(selectedDate).toLocaleDateString("fr-FR")}`,
-      )
+      toast.success(`${newSlots.length} créneaux configurés pour le ${formatDateForDisplay(selectedDate)}`)
     }
   }
 
@@ -442,7 +419,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
 
   // Régénérer les créneaux quand la configuration change
   useEffect(() => {
-    if (selectedDate && dayConfig.date === selectedDate) {
+    if (selectedDate) {
       // Régénérer les créneaux disponibles
       const newTimeSlots = generateTimeSlots(dayConfig)
 
@@ -553,16 +530,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
         <Card>
           <CardHeader>
             <CardTitle>
-              {selectedDate
-                ? `Configuration du ${(() => {
-                    const date = new Date(selectedDate + "T12:00:00") // Utiliser midi pour éviter les problèmes de timezone
-                    return date.toLocaleDateString("fr-FR", {
-                      weekday: "long",
-                      day: "numeric",
-                      month: "long",
-                    })
-                  })()}`
-                : "Sélectionnez un jour"}
+              {selectedDate ? `Configuration du ${formatDateForDisplay(selectedDate)}` : "Sélectionnez un jour"}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">

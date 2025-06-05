@@ -18,6 +18,7 @@ import {
   Clock,
   AlertCircle,
   Eye,
+  BarChart3,
 } from "lucide-react"
 
 interface ApplicationCardProps {
@@ -40,13 +41,21 @@ interface ApplicationCardProps {
     status: string
     match_score: number
     created_at: string
+    tenant_id?: string
   }
   isSelected?: boolean
   onSelect?: (selected: boolean) => void
   onAction: (action: string) => void
+  rentalFile?: any // Dossier de location associé
 }
 
-export function ModernApplicationCard({ application, isSelected, onSelect, onAction }: ApplicationCardProps) {
+export function ModernApplicationCard({
+  application,
+  isSelected,
+  onSelect,
+  onAction,
+  rentalFile,
+}: ApplicationCardProps) {
   const [expanded, setExpanded] = useState(false)
 
   const formatDate = (dateString: string) => {
@@ -106,6 +115,22 @@ export function ModernApplicationCard({ application, isSelected, onSelect, onAct
   }
 
   const getActionButtons = () => {
+    // Bouton "Voir dossier complet" - toujours disponible si un dossier de location existe
+    const viewRentalFileButton = rentalFile ? (
+      <Button size="sm" variant="outline" onClick={() => onAction("view_rental_file")}>
+        <FileText className="h-4 w-4 mr-1" />
+        Voir dossier complet
+      </Button>
+    ) : null
+
+    // Bouton "Voir analyse" - disponible pour certains statuts
+    const viewAnalysisButton = ["visit_scheduled", "accepted", "approved", "rejected"].includes(application.status) ? (
+      <Button size="sm" variant="outline" onClick={() => onAction("view_analysis")}>
+        <BarChart3 className="h-4 w-4 mr-1" />
+        Voir analyse
+      </Button>
+    ) : null
+
     // Définir les actions disponibles en fonction du statut
     switch (application.status) {
       case "pending":
@@ -119,6 +144,7 @@ export function ModernApplicationCard({ application, isSelected, onSelect, onAct
               <MessageSquare className="h-4 w-4 mr-1" />
               Contacter
             </Button>
+            {viewRentalFileButton}
           </>
         )
       case "analyzing":
@@ -136,6 +162,7 @@ export function ModernApplicationCard({ application, isSelected, onSelect, onAct
               <MessageSquare className="h-4 w-4 mr-1" />
               Contacter
             </Button>
+            {viewRentalFileButton}
           </>
         )
       case "visit_scheduled":
@@ -153,6 +180,8 @@ export function ModernApplicationCard({ application, isSelected, onSelect, onAct
               <MessageSquare className="h-4 w-4 mr-1" />
               Contacter
             </Button>
+            {viewRentalFileButton}
+            {viewAnalysisButton}
           </>
         )
       case "waiting_tenant_confirmation":
@@ -166,6 +195,8 @@ export function ModernApplicationCard({ application, isSelected, onSelect, onAct
               <MessageSquare className="h-4 w-4 mr-1" />
               Contacter
             </Button>
+            {viewRentalFileButton}
+            {viewAnalysisButton}
           </>
         )
       case "accepted":
@@ -180,6 +211,8 @@ export function ModernApplicationCard({ application, isSelected, onSelect, onAct
               <MessageSquare className="h-4 w-4 mr-1" />
               Contacter
             </Button>
+            {viewRentalFileButton}
+            {viewAnalysisButton}
           </>
         )
       case "rejected":
@@ -193,6 +226,8 @@ export function ModernApplicationCard({ application, isSelected, onSelect, onAct
               <MessageSquare className="h-4 w-4 mr-1" />
               Contacter
             </Button>
+            {viewRentalFileButton}
+            {viewAnalysisButton}
           </>
         )
       default:
@@ -206,6 +241,8 @@ export function ModernApplicationCard({ application, isSelected, onSelect, onAct
               <MessageSquare className="h-4 w-4 mr-1" />
               Contacter
             </Button>
+            {viewRentalFileButton}
+            {viewAnalysisButton}
           </>
         )
     }
