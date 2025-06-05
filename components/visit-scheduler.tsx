@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Calendar, ChevronLeft, ChevronRight, Plus, Minus, Save, RefreshCw, CheckCircle, Clock } from "lucide-react"
 import { toast } from "sonner"
+import { supabase } from "@/lib/supabase"
 
 interface VisitSlot {
   id?: string
@@ -73,30 +74,23 @@ const formatTimeString = (timeStr: string): string => {
   return "00:00"
 }
 
-// NOUVELLE APPROCHE pour le formatage de date - SANS TIMEZONE
+// Fonction pour formater une date CORRECTEMENT
 const formatDateForDisplay = (dateStr: string): string => {
   try {
     // Extraire les composants de la date directement
     const [year, month, day] = dateStr.split("-").map(Number)
-
-    // Créer un objet Date en spécifiant explicitement l'année, le mois et le jour
-    // Le mois est 0-indexé en JavaScript (0 = janvier, 11 = décembre)
     const date = new Date(year, month - 1, day)
 
-    // Vérifier que la date est valide
     if (isNaN(date.getTime())) {
       console.error("Date invalide:", dateStr)
       return "Date invalide"
     }
 
-    // Formater la date en français
-    const options: Intl.DateTimeFormatOptions = {
+    return date.toLocaleDateString("fr-FR", {
       weekday: "long",
       day: "numeric",
       month: "long",
-    }
-
-    return date.toLocaleDateString("fr-FR", options)
+    })
   } catch (error) {
     console.error("Erreur formatage date:", error, "pour:", dateStr)
     return "Date invalide"
@@ -121,56 +115,71 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
 
   // Référence pour éviter les chargements multiples
   const hasLoadedRef = useRef(false)
-  const initialSlotsRef = useRef<VisitSlot[]>([])
 
-  // NOUVELLE APPROCHE pour le chargement - COMPLÈTEMENT ISOLÉE
-  useEffect(() => {
-    // Fonction de chargement isolée
-    const loadSlots = async () => {
-      if (!propertyId || hasLoadedRef.current) return
+  // Fonction pour récupérer le token d'authentification
+  const getAuthToken = useCallback(async () => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      return session?.access_token || null
+    } catch (error) {
+      console.error("Erreur récupération token:", error)
+      return null
+    }
+  }, [])
 
-      console.log("🔄 Chargement initial des créneaux...")
-      setIsLoading(true)
+  // Fonction de chargement des créneaux
+  const loadSlotsFromDatabase = useCallback(async () => {
+    if (!propertyId || hasLoadedRef.current) return
 
-      try {
-        const response = await fetch(`/api/properties/${propertyId}/visit-slots`)
+    console.log("🔄 Chargement des créneaux depuis la DB...")
+    setIsLoading(true)
 
-        if (response.ok) {
-          const data = await response.json()
-          console.log("✅ Créneaux chargés:", data.slots?.length || 0)
-
-          const cleanedSlots = (data.slots || []).map((slot: any) => ({
-            ...slot,
-            start_time: formatTimeString(slot.start_time),
-            end_time: formatTimeString(slot.end_time),
-          }))
-
-          // Stocker dans la référence pour éviter les re-renders
-          initialSlotsRef.current = cleanedSlots
-
-          // Mettre à jour l'état une seule fois
-          onSlotsChange(cleanedSlots)
-        } else {
-          console.error("❌ Erreur chargement créneaux:", response.status)
-          toast.error("Erreur lors du chargement des créneaux")
-        }
-      } catch (error) {
-        console.error("❌ Erreur chargement créneaux:", error)
-        toast.error("Erreur lors du chargement des créneaux")
-      } finally {
-        setIsLoading(false)
-        hasLoadedRef.current = true
+    try {
+      const token = await getAuthToken()
+      if (!token) {
+        console.error("❌ Pas de token d'authentification")
+        toast.error("Vous devez être connecté")
+        return
       }
-    }
 
-    // Exécuter uniquement en mode management et si propertyId existe
-    if (mode === "management" && propertyId) {
-      loadSlots()
-    }
+      const response = await fetch(`/api/properties/${propertyId}/visit-slots`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
 
-    // Nettoyage pour éviter les fuites mémoire
-    return () => {
-      // Rien à nettoyer
+      if (response.ok) {
+        const data = await response.json()
+        console.log("✅ Créneaux chargés:", data.slots?.length || 0)
+
+        const cleanedSlots = (data.slots || []).map((slot: any) => ({
+          ...slot,
+          start_time: formatTimeString(slot.start_time),
+          end_time: formatTimeString(slot.end_time),
+        }))
+
+        onSlotsChange(cleanedSlots)
+        hasLoadedRef.current = true
+      } else {
+        const errorData = await response.json()
+        console.error("❌ Erreur chargement créneaux:", response.status, errorData)
+        toast.error(errorData.error || "Erreur lors du chargement des créneaux")
+      }
+    } catch (error) {
+      console.error("❌ Erreur chargement créneaux:", error)
+      toast.error("Erreur lors du chargement des créneaux")
+    } finally {
+      setIsLoading(false)
+    }
+  }, [propertyId, getAuthToken, onSlotsChange])
+
+  // Charger les créneaux UNE SEULE FOIS
+  useEffect(() => {
+    if (mode === "management" && propertyId && !hasLoadedRef.current) {
+      loadSlotsFromDatabase()
     }
   }, []) // AUCUNE dépendance pour éviter les boucles
 
@@ -179,6 +188,12 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
 
     setIsSaving(true)
     try {
+      const token = await getAuthToken()
+      if (!token) {
+        toast.error("Vous devez être connecté")
+        return
+      }
+
       const validatedSlots = slots.map((slot) => ({
         date: slot.date,
         start_time: formatTimeString(slot.start_time),
@@ -191,7 +206,10 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
 
       const response = await fetch(`/api/properties/${propertyId}/visit-slots`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ slots: validatedSlots }),
       })
 
@@ -235,7 +253,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
       const day = String(date.getDate()).padStart(2, "0")
       const dateStr = `${year}-${month}-${day}`
 
-      const isCurrentMonth = date.getMonth() === month
+      const isCurrentMonth = date.getMonth() === currentDate.getMonth()
       const isToday = date.getTime() === today.getTime()
       const isPast = date < today
       const hasSlots = visitSlots.some((slot) => slot.date === dateStr)
@@ -305,7 +323,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
     setCurrentDate(newDate)
   }
 
-  // Sélectionner un jour (LOGIQUE SIMPLIFIÉE)
+  // Sélectionner un jour
   const selectDate = (dateStr: string) => {
     console.log("📅 Date sélectionnée:", dateStr)
     setSelectedDate(dateStr)
@@ -332,7 +350,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
         setDayConfig({
           date: dateStr,
           slotDuration: commonDuration,
-          startTime: "08:00", // Amplitude large pour voir tous les créneaux possibles
+          startTime: "08:00",
           endTime: "20:00",
           isGroupVisit: firstSlot.is_group_visit,
           capacity: firstSlot.max_capacity,
@@ -623,7 +641,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                   </div>
                 )}
 
-                {/* Créneaux - TOUS AFFICHÉS */}
+                {/* Créneaux */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <Label className="text-base font-medium">Créneaux disponibles</Label>
