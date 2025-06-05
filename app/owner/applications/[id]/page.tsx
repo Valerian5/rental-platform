@@ -201,11 +201,39 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
     await updateApplicationStatus("accepted")
   }
 
-  const handleContact = () => {
-    if (application?.tenant_id) {
-      router.push(`/owner/messaging?tenant_id=${application.tenant_id}`)
-    } else {
+  const handleContact = async () => {
+    if (!application?.tenant_id || !application?.property_id) {
       toast.error("Impossible de contacter ce locataire")
+      return
+    }
+
+    try {
+      // Créer ou récupérer une conversation
+      const response = await fetch("/api/conversations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          tenant_id: application.tenant_id,
+          owner_id: user.id,
+          property_id: application.property_id,
+          subject: `Candidature pour ${application.property?.title || "le bien"}`,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        // Rediriger vers la messagerie avec l'ID de la conversation
+        router.push(`/owner/messaging?conversation_id=${data.conversation.id}`)
+      } else {
+        // Fallback vers l'ancienne méthode
+        router.push(`/owner/messaging?tenant_id=${application.tenant_id}`)
+      }
+    } catch (error) {
+      console.error("Erreur création conversation:", error)
+      // Fallback vers l'ancienne méthode
+      router.push(`/owner/messaging?tenant_id=${application.tenant_id}`)
     }
   }
 
@@ -317,15 +345,15 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const getActionButtons = () => {
     if (!application) return null
 
-    // Bouton "Voir dossier" toujours disponible
-    const viewDossierButton = (
-      <Button variant="outline" onClick={() => setActiveTab("overview")}>
+    // Bouton "Voir dossier" - toujours disponible si un dossier de location existe
+    const viewRentalFileButton = rentalFile ? (
+      <Button variant="outline" onClick={() => router.push(`/rental-files/${rentalFile.id}/view`)}>
         <FileText className="h-4 w-4 mr-2" />
-        Voir dossier
+        Voir dossier complet
       </Button>
-    )
+    ) : null
 
-    // Dans getActionButtons, ajouter ce bouton pour tous les statuts sauf "analyzing"
+    // Bouton "Voir analyse" - disponible pour tous les statuts sauf "analyzing"
     const viewAnalysisButton =
       application.status !== "analyzing" ? (
         <Button variant="outline" onClick={handleViewAnalysis}>
@@ -351,7 +379,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               <MessageSquare className="h-4 w-4 mr-2" />
               Contacter
             </Button>
-            {viewDossierButton}
+            {viewRentalFileButton}
           </>
         )
       case "visit_scheduled":
@@ -369,7 +397,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               <MessageSquare className="h-4 w-4 mr-2" />
               Contacter
             </Button>
-            {viewDossierButton}
+            {viewRentalFileButton}
             {viewAnalysisButton}
           </>
         )
@@ -384,7 +412,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               <MessageSquare className="h-4 w-4 mr-2" />
               Contacter
             </Button>
-            {viewDossierButton}
+            {viewRentalFileButton}
             {viewAnalysisButton}
           </>
         )
@@ -400,7 +428,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               <MessageSquare className="h-4 w-4 mr-2" />
               Contacter
             </Button>
-            {viewDossierButton}
+            {viewRentalFileButton}
             {viewAnalysisButton}
           </>
         )
@@ -411,7 +439,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               <MessageSquare className="h-4 w-4 mr-2" />
               Contacter
             </Button>
-            {viewDossierButton}
+            {viewRentalFileButton}
             {viewAnalysisButton}
           </>
         )
@@ -422,7 +450,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               <MessageSquare className="h-4 w-4 mr-2" />
               Contacter
             </Button>
-            {viewDossierButton}
+            {viewRentalFileButton}
             {viewAnalysisButton}
           </>
         )

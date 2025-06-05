@@ -69,6 +69,58 @@ export default function MessagingPage() {
         if (user.id) {
           const userConversations = await messageService.getUserConversations(user.id)
           setConversations(userConversations)
+
+          // Gérer les paramètres URL pour sélectionner automatiquement une conversation
+          const urlParams = new URLSearchParams(window.location.search)
+          const conversationId = urlParams.get("conversation_id")
+          const tenantId = urlParams.get("tenant_id")
+
+          if (conversationId) {
+            // Sélectionner la conversation spécifique
+            const targetConversation = userConversations.find((conv) => conv.id === conversationId)
+            if (targetConversation) {
+              setActiveConversation(targetConversation)
+            }
+          } else if (tenantId) {
+            // Trouver ou créer une conversation avec ce locataire
+            const existingConversation = userConversations.find(
+              (conv) => conv.tenant_id === tenantId || conv.owner_id === tenantId,
+            )
+
+            if (existingConversation) {
+              setActiveConversation(existingConversation)
+            } else {
+              // Créer une nouvelle conversation
+              try {
+                const response = await fetch("/api/conversations", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    tenant_id: tenantId,
+                    owner_id: user.id,
+                    subject: "Nouvelle conversation",
+                  }),
+                })
+
+                if (response.ok) {
+                  const data = await response.json()
+                  // Recharger les conversations pour inclure la nouvelle
+                  const updatedConversations = await messageService.getUserConversations(user.id)
+                  setConversations(updatedConversations)
+
+                  // Sélectionner la nouvelle conversation
+                  const newConversation = updatedConversations.find((conv) => conv.id === data.conversation.id)
+                  if (newConversation) {
+                    setActiveConversation(newConversation)
+                  }
+                }
+              } catch (error) {
+                console.error("Erreur création conversation:", error)
+              }
+            }
+          }
         }
       } catch (error) {
         console.error("Erreur chargement conversations:", error)
