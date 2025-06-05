@@ -58,6 +58,7 @@ export default function LoginPage() {
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
+  // Améliorer la gestion de la connexion
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
@@ -76,31 +77,24 @@ export default function LoginPage() {
 
       toast.success("Connexion réussie !")
 
-      // Attendre un peu pour que l'authentification se stabilise
+      // Attendre que la session soit bien établie
       await new Promise((resolve) => setTimeout(resolve, 1000))
 
-      // Récupérer les informations de l'utilisateur pour rediriger selon son type
-      const currentUser = await authService.getCurrentUser()
-      console.log("👤 Utilisateur connecté:", currentUser)
+      console.log("🎯 Redirection vers:", user.user_type)
 
-      if (currentUser) {
-        console.log("🎯 Redirection vers:", currentUser.user_type)
-        // Redirection selon le type d'utilisateur avec replace pour éviter les retours
-        switch (currentUser.user_type) {
-          case "owner":
-            window.location.href = "/owner/dashboard"
-            break
-          case "tenant":
-            window.location.href = "/tenant/dashboard"
-            break
-          case "admin":
-            window.location.href = "/admin"
-            break
-          default:
-            window.location.href = "/"
-        }
-      } else {
-        window.location.href = "/"
+      // Redirection selon le type d'utilisateur
+      switch (user.user_type) {
+        case "owner":
+          window.location.href = "/owner/dashboard"
+          break
+        case "tenant":
+          window.location.href = "/tenant/dashboard"
+          break
+        case "admin":
+          window.location.href = "/admin"
+          break
+        default:
+          window.location.href = "/"
       }
     } catch (error: any) {
       console.error("❌ Erreur lors de la connexion:", error)

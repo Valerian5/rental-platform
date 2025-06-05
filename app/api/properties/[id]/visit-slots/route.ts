@@ -1,24 +1,32 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase"
-import { authService } from "@/lib/auth-service"
+import { createServerSupabaseClient } from "@/lib/supabase-server"
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
+    console.log("🔍 GET visit-slots pour propriété:", params.id)
+
+    // Créer le client Supabase côté serveur
+    const supabase = createServerSupabaseClient()
+
     // Vérifier l'authentification
-    const user = await authService.getCurrentUser()
-    if (!user) {
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      console.log("❌ Pas d'utilisateur authentifié")
       return NextResponse.json({ error: "Vous devez être connecté" }, { status: 401 })
     }
+
+    console.log("✅ Utilisateur authentifié:", user.id)
 
     // Vérifier que l'ID de propriété est fourni
     if (!params.id) {
       return NextResponse.json({ error: "ID de propriété manquant" }, { status: 400 })
     }
 
-    // Créer le client Supabase
-    const supabase = createClient()
-
-    // Vérifier que la propriété existe et appartient à l'utilisateur
+    // Vérifier que la propriété existe
     const { data: property, error: propertyError } = await supabase
       .from("properties")
       .select("id, owner_id")
@@ -30,9 +38,21 @@ export async function GET(request: Request, { params }: { params: { id: string }
       return NextResponse.json({ error: "Propriété non trouvée" }, { status: 404 })
     }
 
-    // Vérifier que l'utilisateur est le propriétaire ou un locataire qui a accès
+    // Récupérer le profil utilisateur
+    const { data: userProfile, error: profileError } = await supabase
+      .from("users")
+      .select("user_type")
+      .eq("id", user.id)
+      .single()
+
+    if (profileError) {
+      console.error("Erreur profil:", profileError)
+      return NextResponse.json({ error: "Erreur profil utilisateur" }, { status: 500 })
+    }
+
+    // Vérifier les permissions
     const isOwner = property.owner_id === user.id
-    const isTenant = user.user_type === "tenant"
+    const isTenant = userProfile.user_type === "tenant"
 
     if (!isOwner && !isTenant) {
       return NextResponse.json({ error: "Vous n'avez pas accès à cette propriété" }, { status: 403 })
@@ -51,23 +71,45 @@ export async function GET(request: Request, { params }: { params: { id: string }
       return NextResponse.json({ error: "Erreur lors de la récupération des créneaux" }, { status: 500 })
     }
 
-    // Filtrer les créneaux pour les locataires (ne montrer que les disponibles)
+    // Filtrer les créneaux pour les locataires
     const filteredSlots = isTenant
-      ? slots.filter((slot) => slot.is_available && new Date(slot.date) >= new Date())
-      : slots
+      ? (slots || []).filter((slot) => slot.is_available && new Date(slot.date) >= new Date())
+      : slots || []
 
+    console.log("✅ Créneaux récupérés:", filteredSlots.length)
     return NextResponse.json({ slots: filteredSlots })
   } catch (error) {
-    console.error("Erreur lors de la récupération des créneaux:", error)
+    console.error("❌ Erreur lors de la récupération des créneaux:", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   try {
+    console.log("💾 POST visit-slots pour propriété:", params.id)
+
+    // Créer le client Supabase côté serveur
+    const supabase = createServerSupabaseClient()
+
     // Vérifier l'authentification
-    const user = await authService.getCurrentUser()
-    if (!user || user.user_type !== "owner") {
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      console.log("❌ Pas d'utilisateur authentifié")
+      return NextResponse.json({ error: "Vous devez être connecté" }, { status: 401 })
+    }
+
+    // Récupérer le profil utilisateur
+    const { data: userProfile, error: profileError } = await supabase
+      .from("users")
+      .select("user_type")
+      .eq("id", user.id)
+      .single()
+
+    if (profileError || userProfile.user_type !== "owner") {
       return NextResponse.json({ error: "Vous devez être connecté en tant que propriétaire" }, { status: 401 })
     }
 
@@ -75,9 +117,6 @@ export async function POST(request: Request, { params }: { params: { id: string 
     if (!params.id) {
       return NextResponse.json({ error: "ID de propriété manquant" }, { status: 400 })
     }
-
-    // Créer le client Supabase
-    const supabase = createClient()
 
     // Vérifier que la propriété existe et appartient à l'utilisateur
     const { data: property, error: propertyError } = await supabase
@@ -149,7 +188,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       slots: insertedSlots,
     })
   } catch (error) {
-    console.error("Erreur lors de la sauvegarde des créneaux:", error)
+    console.error("❌ Erreur lors de la sauvegarde des créneaux:", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }

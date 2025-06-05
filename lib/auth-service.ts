@@ -86,7 +86,7 @@ export const authService = {
   },
 
   // Connexion
-  async login(email: string, password: string): Promise<UserProfile> {
+  async login(email: string, password: string): Promise<{ user: UserProfile | null; session: any }> {
     console.log("🔐 AuthService.login", email)
 
     try {
@@ -100,9 +100,14 @@ export const authService = {
         throw new Error(authError.message)
       }
 
-      if (!authData.user) {
+      if (!authData.user || !authData.session) {
         throw new Error("Erreur lors de la connexion")
       }
+
+      console.log("✅ Auth réussie, récupération du profil...")
+
+      // Attendre un peu pour que la session soit bien établie
+      await new Promise((resolve) => setTimeout(resolve, 500))
 
       // Récupérer le profil utilisateur
       const { data: profile, error: profileError } = await supabase
@@ -116,8 +121,8 @@ export const authService = {
         throw new Error("Erreur lors de la récupération du profil")
       }
 
-      console.log("✅ Connexion réussie:", profile)
-      return profile
+      console.log("✅ Connexion complète réussie:", profile)
+      return { user: profile, session: authData.session }
     } catch (error) {
       console.error("❌ Erreur dans login:", error)
       throw error
@@ -233,6 +238,40 @@ export const authService = {
     } catch (error) {
       console.error("❌ Erreur dans updateProfile:", error)
       throw error
+    }
+  },
+
+  // Ajouter une méthode pour l'authentification côté serveur
+  async getServerUser(): Promise<UserProfile | null> {
+    try {
+      console.log("🔍 AuthService.getServerUser - Début")
+
+      // Pour les API routes, on utilise les cookies directement
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser()
+
+      if (error || !user) {
+        console.log("❌ Pas d'utilisateur authentifié côté serveur")
+        return null
+      }
+
+      console.log("👤 Utilisateur serveur trouvé:", user.id)
+
+      // Récupérer le profil
+      const { data: profile, error: profileError } = await supabase.from("users").select("*").eq("id", user.id).single()
+
+      if (profileError) {
+        console.error("❌ Erreur profil serveur:", profileError)
+        return null
+      }
+
+      console.log("✅ Profil serveur récupéré:", profile)
+      return profile
+    } catch (error) {
+      console.error("❌ Erreur dans getServerUser:", error)
+      return null
     }
   },
 }
