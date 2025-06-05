@@ -132,7 +132,17 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
           end_time: formatTimeString(slot.end_time),
         }))
 
-        onSlotsChange(cleanedSlots)
+        // Seulement mettre à jour si les données ont vraiment changé
+        const currentSlotsStr = JSON.stringify(
+          visitSlots.sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time)),
+        )
+        const newSlotsStr = JSON.stringify(
+          cleanedSlots.sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time)),
+        )
+
+        if (currentSlotsStr !== newSlotsStr) {
+          onSlotsChange(cleanedSlots)
+        }
       } else {
         console.error("❌ Erreur chargement créneaux:", response.status)
         toast.error("Erreur lors du chargement des créneaux")
@@ -191,7 +201,8 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
         const data = await response.json()
         console.log("✅ Créneaux sauvegardés:", data.message)
         toast.success(data.message || "Créneaux sauvegardés avec succès")
-        setTimeout(() => loadSlotsFromDatabase(), 500)
+        // Supprimer le rechargement automatique qui cause la boucle
+        // setTimeout(() => loadSlotsFromDatabase(), 500)
       } else {
         const errorData = await response.json()
         console.error("❌ Erreur sauvegarde:", errorData)
@@ -325,9 +336,10 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
           setCustomDuration(duration)
         }
 
-        setDayConfig({
+        // Générer tous les créneaux possibles pour cette configuration
+        const tempConfig = {
           date: dateStr,
-          slotDuration: commonDuration,
+          slotDuration: commonDuration === 0 ? duration : commonDuration,
           startTime: allStartTimes[0],
           endTime: allEndTimes[allEndTimes.length - 1],
           isGroupVisit: firstSlot.is_group_visit,
@@ -335,7 +347,9 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
           selectedSlots: existingSlots.map(
             (slot) => `${formatTimeString(slot.start_time)}-${formatTimeString(slot.end_time)}`,
           ),
-        })
+        }
+
+        setDayConfig(tempConfig)
       } catch (error) {
         console.error("Erreur parsing créneaux existants:", error)
         // Fallback vers configuration par défaut
@@ -444,7 +458,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
         }))
       }
     }
-  }, [dayConfig.slotDuration, dayConfig.startTime, dayConfig.endTime, customDuration, selectedDate])
+  }, [dayConfig.slotDuration, dayConfig.startTime, dayConfig.endTime, customDuration, selectedDate, dayConfig.date])
 
   const calendarDays = generateCalendarDays()
   const timeSlots = generateTimeSlots(dayConfig)
@@ -540,7 +554,14 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
           <CardHeader>
             <CardTitle>
               {selectedDate
-                ? `Configuration du ${new Date(selectedDate + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}`
+                ? `Configuration du ${(() => {
+                    const date = new Date(selectedDate + "T12:00:00") // Utiliser midi pour éviter les problèmes de timezone
+                    return date.toLocaleDateString("fr-FR", {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                    })
+                  })()}`
                 : "Sélectionnez un jour"}
             </CardTitle>
           </CardHeader>

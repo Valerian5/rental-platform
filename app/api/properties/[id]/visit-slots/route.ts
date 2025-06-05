@@ -1,275 +1,99 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
+
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    console.log("🔍 GET visit-slots pour propriété:", params.id)
+    const propertyId = params.id
+
+    console.log("🔍 Récupération des créneaux pour la propriété:", propertyId)
 
     const { data: slots, error } = await supabase
-      .from("visit_availabilities")
+      .from("visit_slots")
       .select("*")
-      .eq("property_id", params.id)
+      .eq("property_id", propertyId)
       .order("date", { ascending: true })
       .order("start_time", { ascending: true })
 
     if (error) {
-      console.error("❌ Erreur récupération créneaux:", error)
-      throw error
+      console.error("❌ Erreur Supabase:", error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    console.log("✅ Créneaux récupérés:", slots?.length || 0)
-    return NextResponse.json({ slots: slots || [] })
+    // Nettoyer et formater les créneaux
+    const cleanedSlots = (slots || []).map((slot) => ({
+      id: slot.id,
+      date: slot.date,
+      start_time: slot.start_time?.substring(0, 5) || "00:00", // Assurer le format HH:MM
+      end_time: slot.end_time?.substring(0, 5) || "00:00",
+      max_capacity: slot.max_capacity || 1,
+      is_group_visit: slot.is_group_visit || false,
+      current_bookings: slot.current_bookings || 0,
+      is_available: slot.is_available !== false,
+    }))
+
+    console.log("✅ Créneaux récupérés:", cleanedSlots.length)
+
+    return NextResponse.json({
+      slots: cleanedSlots,
+      message: `${cleanedSlots.length} créneaux récupérés`,
+    })
   } catch (error) {
-    console.error("❌ Erreur API créneaux visite:", error)
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur interne" }, { status: 500 })
+    console.error("❌ Erreur serveur:", error)
+    return NextResponse.json({ error: "Erreur lors de la récupération des créneaux" }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    console.log("💾 POST visit-slots pour propriété:", params.id)
+    const propertyId = params.id
+    const { slots } = await request.json()
 
-    const body = await request.json()
-    const { slots } = body
+    console.log("💾 Sauvegarde des créneaux pour la propriété:", propertyId)
+    console.log("📝 Nombre de créneaux à sauvegarder:", slots?.length || 0)
 
     if (!slots || !Array.isArray(slots)) {
-      console.error("❌ Créneaux manquants ou invalides:", slots)
-      return NextResponse.json({ error: "Créneaux manquants ou invalides" }, { status: 400 })
+      return NextResponse.json({ error: "Format de données invalide" }, { status: 400 })
     }
 
-    console.log("📝 Créneaux à sauvegarder:", slots.length)
-    console.log("📋 Premier créneau exemple:", slots[0])
-
-    // Vérifier que la propriété existe
-    console.log("🏠 Vérification de la propriété...")
-    const { data: property, error: propertyError } = await supabase
-      .from("properties")
-      .select("id")
-      .eq("id", params.id)
-      .single()
-
-    if (propertyError) {
-      console.error("❌ Erreur propriété:", propertyError)
-      return NextResponse.json(
-        {
-          error: "Propriété non trouvée",
-          details: propertyError.message,
-          propertyId: params.id,
-        },
-        { status: 404 },
-      )
-    }
-
-    if (!property) {
-      console.error("❌ Propriété non trouvée")
-      return NextResponse.json({ error: "Propriété non trouvée", propertyId: params.id }, { status: 404 })
-    }
-
-    console.log("✅ Propriété trouvée:", property.id)
-
-    // Supprimer les anciens créneaux pour cette propriété
-    console.log("🗑️ Suppression des anciens créneaux...")
-    const { error: deleteError } = await supabase.from("visit_availabilities").delete().eq("property_id", params.id)
+    // Supprimer tous les créneaux existants pour cette propriété
+    const { error: deleteError } = await supabase.from("visit_slots").delete().eq("property_id", propertyId)
 
     if (deleteError) {
-      console.error("❌ Erreur suppression anciens créneaux:", deleteError)
-      return NextResponse.json(
-        {
-          error: "Erreur lors de la suppression des anciens créneaux",
-          details: deleteError.message,
-          code: deleteError.code,
-        },
-        { status: 500 },
-      )
+      console.error("❌ Erreur suppression:", deleteError)
+      return NextResponse.json({ error: deleteError.message }, { status: 500 })
     }
 
-    console.log("✅ Anciens créneaux supprimés")
-
-    // Insérer les nouveaux créneaux
+    // Insérer les nouveaux créneaux si il y en a
     if (slots.length > 0) {
-      // Valider et nettoyer les données
-      console.log("📝 Validation des créneaux...")
-      const slotsToInsert = slots.map((slot: any, index: number) => {
-        console.log(`📝 Traitement créneau ${index + 1}:`, slot)
+      const slotsToInsert = slots.map((slot) => ({
+        property_id: propertyId,
+        date: slot.date,
+        start_time: slot.start_time,
+        end_time: slot.end_time,
+        max_capacity: slot.max_capacity || 1,
+        is_group_visit: slot.is_group_visit || false,
+        current_bookings: slot.current_bookings || 0,
+        is_available: slot.is_available !== false,
+      }))
 
-        // Validation des champs requis
-        if (!slot.date || !slot.start_time || !slot.end_time) {
-          throw new Error(`Créneau ${index + 1}: date, start_time et end_time sont requis`)
-        }
-
-        // Validation du format de date
-        const dateRegex = /^\d{4}-\d{2}-\d{2}$/
-        if (!dateRegex.test(slot.date)) {
-          throw new Error(`Créneau ${index + 1}: format de date invalide (attendu: YYYY-MM-DD)`)
-        }
-
-        // Validation du format d'heure
-        const timeRegex = /^\d{2}:\d{2}$/
-        if (!timeRegex.test(slot.start_time) || !timeRegex.test(slot.end_time)) {
-          throw new Error(`Créneau ${index + 1}: format d'heure invalide (attendu: HH:MM)`)
-        }
-
-        const cleanSlot = {
-          property_id: params.id,
-          date: slot.date,
-          start_time: slot.start_time,
-          end_time: slot.end_time,
-          max_capacity: Number(slot.max_capacity) || 1,
-          is_group_visit: Boolean(slot.is_group_visit),
-          current_bookings: Number(slot.current_bookings) || 0,
-          is_available: slot.is_available !== false,
-        }
-
-        console.log(`✅ Créneau ${index + 1} validé:`, cleanSlot)
-        return cleanSlot
-      })
-
-      console.log("📋 Données préparées pour insertion:", slotsToInsert.length, "créneaux")
-      console.log("📋 Premier créneau à insérer:", slotsToInsert[0])
-
-      // Test d'insertion d'un seul créneau d'abord
-      console.log("🧪 Test d'insertion du premier créneau...")
-      const { data: testData, error: testError } = await supabase
-        .from("visit_availabilities")
-        .insert(slotsToInsert[0])
-        .select()
-
-      if (testError) {
-        console.error("❌ Erreur test insertion:", testError)
-        return NextResponse.json(
-          {
-            error: "Erreur lors du test d'insertion",
-            details: testError.message,
-            hint: testError.hint,
-            code: testError.code,
-            testSlot: slotsToInsert[0],
-          },
-          { status: 500 },
-        )
-      }
-
-      console.log("✅ Test d'insertion réussi:", testData)
-
-      // Si le test réussit, supprimer le test et insérer tous les créneaux
-      if (testData && testData[0]?.id) {
-        await supabase.from("visit_availabilities").delete().eq("id", testData[0].id)
-        console.log("🧹 Données de test nettoyées")
-      }
-
-      // Insérer tous les créneaux
-      console.log("💾 Insertion de tous les créneaux...")
-      const { data, error: insertError } = await supabase.from("visit_availabilities").insert(slotsToInsert).select()
+      const { error: insertError } = await supabase.from("visit_slots").insert(slotsToInsert)
 
       if (insertError) {
-        console.error("❌ Erreur insertion créneaux:", insertError)
-        return NextResponse.json(
-          {
-            error: "Erreur lors de l'insertion des créneaux",
-            details: insertError.message,
-            hint: insertError.hint,
-            code: insertError.code,
-            slotsCount: slotsToInsert.length,
-          },
-          { status: 500 },
-        )
+        console.error("❌ Erreur insertion:", insertError)
+        return NextResponse.json({ error: insertError.message }, { status: 500 })
       }
-
-      console.log("✅ Créneaux sauvegardés:", data?.length || 0)
-      return NextResponse.json({
-        success: true,
-        slots: data,
-        message: `${data?.length || 0} créneaux sauvegardés`,
-      })
-    } else {
-      console.log("✅ Tous les créneaux supprimés")
-      return NextResponse.json({
-        success: true,
-        slots: [],
-        message: "Tous les créneaux ont été supprimés",
-      })
     }
+
+    console.log("✅ Créneaux sauvegardés avec succès")
+
+    return NextResponse.json({
+      message: `${slots.length} créneaux sauvegardés avec succès`,
+      count: slots.length,
+    })
   } catch (error) {
-    console.error("❌ Erreur API sauvegarde créneaux:", error)
-    const errorMessage = error instanceof Error ? error.message : "Erreur interne"
-    return NextResponse.json(
-      {
-        error: errorMessage,
-        stack: error instanceof Error ? error.stack : undefined,
-        timestamp: new Date().toISOString(),
-      },
-      { status: 500 },
-    )
-  }
-}
-
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    console.log("🔄 PUT visit-slots pour propriété:", params.id)
-
-    const body = await request.json()
-    const { slotId, updates } = body
-
-    if (!slotId) {
-      return NextResponse.json({ error: "ID du créneau manquant" }, { status: 400 })
-    }
-
-    const { data, error } = await supabase
-      .from("visit_availabilities")
-      .update(updates)
-      .eq("id", slotId)
-      .eq("property_id", params.id)
-      .select()
-      .single()
-
-    if (error) {
-      console.error("❌ Erreur mise à jour créneau:", error)
-      throw error
-    }
-
-    console.log("✅ Créneau mis à jour:", data)
-    return NextResponse.json({ success: true, slot: data })
-  } catch (error) {
-    console.error("❌ Erreur API mise à jour créneau:", error)
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur interne" }, { status: 500 })
-  }
-}
-
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    console.log("🗑️ DELETE visit-slots pour propriété:", params.id)
-
-    const { searchParams } = new URL(request.url)
-    const slotId = searchParams.get("slotId")
-
-    if (slotId) {
-      // Supprimer un créneau spécifique
-      const { error } = await supabase
-        .from("visit_availabilities")
-        .delete()
-        .eq("id", slotId)
-        .eq("property_id", params.id)
-
-      if (error) {
-        console.error("❌ Erreur suppression créneau:", error)
-        throw error
-      }
-
-      console.log("✅ Créneau supprimé:", slotId)
-      return NextResponse.json({ success: true, message: "Créneau supprimé" })
-    } else {
-      // Supprimer tous les créneaux de la propriété
-      const { error } = await supabase.from("visit_availabilities").delete().eq("property_id", params.id)
-
-      if (error) {
-        console.error("❌ Erreur suppression tous créneaux:", error)
-        throw error
-      }
-
-      console.log("✅ Tous les créneaux supprimés pour la propriété:", params.id)
-      return NextResponse.json({ success: true, message: "Tous les créneaux supprimés" })
-    }
-  } catch (error) {
-    console.error("❌ Erreur API suppression créneaux:", error)
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur interne" }, { status: 500 })
+    console.error("❌ Erreur serveur:", error)
+    return NextResponse.json({ error: "Erreur lors de la sauvegarde des créneaux" }, { status: 500 })
   }
 }
