@@ -31,6 +31,7 @@ export default function PropertyDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [isUploadingImages, setIsUploadingImages] = useState(false)
   const [activeTab, setActiveTab] = useState(initialTab)
+  const [slotsLoaded, setSlotsLoaded] = useState(false)
 
   // Gestionnaire de changement de créneaux - MÉMORISÉ
   const handleSlotsChange = useCallback((newSlots: any[]) => {
@@ -81,6 +82,7 @@ export default function PropertyDetailPage() {
 
         // Initialiser les créneaux vides - le VisitScheduler se chargera du loading
         setVisitSlots([])
+        setSlotsLoaded(true)
       } catch (error: any) {
         console.error("❌ Erreur lors du chargement:", error)
         setError(error.message || "Erreur lors du chargement du bien")
@@ -188,6 +190,17 @@ export default function PropertyDetailPage() {
 
   // Composant de gestion des visites - SIMPLIFIÉ
   const VisitManagement = () => {
+    if (!slotsLoaded) {
+      return (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center space-y-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="text-gray-600">Chargement des créneaux...</p>
+          </div>
+        </div>
+      )
+    }
+
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">

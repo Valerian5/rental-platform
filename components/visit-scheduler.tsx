@@ -111,10 +111,12 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
   const [customDuration, setCustomDuration] = useState(45)
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [initialLoadDone, setInitialLoadDone] = useState(false)
 
   // Référence pour éviter les chargements multiples - CORRIGÉE
   const hasLoadedRef = useRef(false)
   const isLoadingRef = useRef(false)
+  const initialSlotsRef = useRef<VisitSlot[]>([])
 
   // Fonction pour récupérer le token d'authentification
   const getAuthToken = useCallback(async () => {
@@ -166,8 +168,15 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
           end_time: formatTimeString(slot.end_time),
         }))
 
+        // Stocker les créneaux initiaux dans la référence
+        initialSlotsRef.current = cleanedSlots
+
+        // Mettre à jour l'état local
         onSlotsChange(cleanedSlots)
+
+        // Marquer comme chargé
         hasLoadedRef.current = true
+        setInitialLoadDone(true)
       } else {
         const errorData = await response.json()
         console.error("❌ Erreur chargement créneaux:", response.status, errorData)
@@ -187,69 +196,49 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
     // Utiliser une variable locale pour éviter les problèmes de fermeture
     let isMounted = true
 
-    if (mode === "management" && propertyId && !hasLoadedRef.current && !isLoadingRef.current) {
-      console.log("🔄 Premier chargement des créneaux...")
+    // Vérifier si nous avons déjà des créneaux dans les props
+    const hasExistingSlots = visitSlots && visitSlots.length > 0
 
+    if (mode === "management" && propertyId && !hasLoadedRef.current && !isLoadingRef.current && !hasExistingSlots) {
       // Marquer comme en cours de chargement immédiatement
       isLoadingRef.current = true
       setIsLoading(true)
 
-      // Fonction asynchrone auto-exécutée
-      ;(async () => {
-        try {
-          const token = await getAuthToken()
-          if (!token) {
-            console.error("❌ Pas de token d'authentification")
-            if (isMounted) toast.error("Vous devez être connecté")
-            return
-          }
-
-          const response = await fetch(`/api/properties/${propertyId}/visit-slots`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          })
-
-          if (!isMounted) return // Ne pas continuer si le composant est démonté
-
-          if (response.ok) {
-            const data = await response.json()
-            console.log("✅ Créneaux chargés:", data.slots?.length || 0)
-
-            const cleanedSlots = (data.slots || []).map((slot: any) => ({
-              ...slot,
-              start_time: formatTimeString(slot.start_time),
-              end_time: formatTimeString(slot.end_time),
-            }))
-
-            // Marquer comme chargé AVANT de mettre à jour l'état
-            hasLoadedRef.current = true
-
-            // Mettre à jour l'état
-            onSlotsChange(cleanedSlots)
-          } else {
-            const errorData = await response.json()
-            console.error("❌ Erreur chargement créneaux:", response.status, errorData)
-            if (isMounted) toast.error(errorData.error || "Erreur lors du chargement des créneaux")
-          }
-        } catch (error) {
-          console.error("❌ Erreur chargement créneaux:", error)
-          if (isMounted) toast.error("Erreur lors du chargement des créneaux")
-        } finally {
-          if (isMounted) {
-            setIsLoading(false)
-            isLoadingRef.current = false
-          }
+      // Charger les créneaux
+      loadSlotsFromDatabase().finally(() => {
+        if (isMounted) {
+          setIsLoading(false)
+          isLoadingRef.current = false
         }
-      })()
+      })
+    } else if (hasExistingSlots && !initialLoadDone) {
+      // Si nous avons déjà des créneaux dans les props, les considérer comme chargés
+      console.log("✅ Utilisation des créneaux existants:", visitSlots.length)
+      hasLoadedRef.current = true
+      initialSlotsRef.current = visitSlots
+      setInitialLoadDone(true)
     }
 
     // Nettoyage
     return () => {
       isMounted = false
     }
-  }, [mode, propertyId]) // Dépendances minimales
+  }, []) // Dépendances vides pour n'exécuter qu'une seule fois
+
+  // Effet pour surveiller les changements de visitSlots
+  useEffect(() => {
+    // Ne rien faire lors du premier rendu ou si nous sommes en train de charger
+    if (!initialLoadDone || isLoadingRef.current) return
+
+    // Comparer avec les créneaux initiaux
+    const initialSlotsJSON = JSON.stringify(initialSlotsRef.current)
+    const currentSlotsJSON = JSON.stringify(visitSlots)
+
+    if (initialSlotsJSON !== currentSlotsJSON) {
+      console.log("📊 Mise à jour des créneaux détectée:", visitSlots.length)
+      initialSlotsRef.current = visitSlots
+    }
+  }, [visitSlots, initialLoadDone])
 
   const saveSlotsToDatabase = async (slots: VisitSlot[]) => {
     if (!propertyId || mode !== "management") return
@@ -284,6 +273,9 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
       if (response.ok) {
         const data = await response.json()
         toast.success(data.message || "Créneaux sauvegardés avec succès")
+
+        // Mettre à jour la référence des créneaux initiaux
+        initialSlotsRef.current = validatedSlots
       } else {
         const errorData = await response.json()
         toast.error(errorData.error || `Erreur ${response.status}`)
