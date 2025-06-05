@@ -1,22 +1,28 @@
 import { NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase-server"
+import { supabase } from "@/lib/supabase"
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
     console.log("🔍 GET visit-slots pour propriété:", params.id)
 
-    // Créer le client Supabase côté serveur
-    const supabase = createServerSupabaseClient()
+    // Récupérer le token d'autorisation depuis les headers
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      console.log("❌ Pas de token d'autorisation")
+      return NextResponse.json({ error: "Vous devez être connecté" }, { status: 401 })
+    }
 
-    // Vérifier l'authentification
+    const token = authHeader.substring(7) // Enlever "Bearer "
+
+    // Vérifier le token avec Supabase
     const {
       data: { user },
       error: authError,
-    } = await supabase.auth.getUser()
+    } = await supabase.auth.getUser(token)
 
     if (authError || !user) {
-      console.log("❌ Pas d'utilisateur authentifié")
-      return NextResponse.json({ error: "Vous devez être connecté" }, { status: 401 })
+      console.log("❌ Token invalide:", authError)
+      return NextResponse.json({ error: "Token d'authentification invalide" }, { status: 401 })
     }
 
     console.log("✅ Utilisateur authentifié:", user.id)
@@ -88,18 +94,24 @@ export async function POST(request: Request, { params }: { params: { id: string 
   try {
     console.log("💾 POST visit-slots pour propriété:", params.id)
 
-    // Créer le client Supabase côté serveur
-    const supabase = createServerSupabaseClient()
+    // Récupérer le token d'autorisation depuis les headers
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      console.log("❌ Pas de token d'autorisation")
+      return NextResponse.json({ error: "Vous devez être connecté" }, { status: 401 })
+    }
 
-    // Vérifier l'authentification
+    const token = authHeader.substring(7) // Enlever "Bearer "
+
+    // Vérifier le token avec Supabase
     const {
       data: { user },
       error: authError,
-    } = await supabase.auth.getUser()
+    } = await supabase.auth.getUser(token)
 
     if (authError || !user) {
-      console.log("❌ Pas d'utilisateur authentifié")
-      return NextResponse.json({ error: "Vous devez être connecté" }, { status: 401 })
+      console.log("❌ Token invalide:", authError)
+      return NextResponse.json({ error: "Token d'authentification invalide" }, { status: 401 })
     }
 
     // Récupérer le profil utilisateur
