@@ -182,12 +182,19 @@ export const applicationService = {
     console.log("📋 ApplicationService.getTenantApplications", tenantId)
 
     try {
-      const { data, error } = await supabase
+      // Récupérer les candidatures sans JOIN sur visits
+      const { data: applications, error } = await supabase
         .from("applications")
         .select(`
           *,
-          property:properties(*),
-          visits(*)
+          property:properties(
+            id,
+            title,
+            address,
+            city,
+            price,
+            property_images(id, url, is_primary)
+          )
         `)
         .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false })
@@ -197,8 +204,32 @@ export const applicationService = {
         throw new Error(error.message)
       }
 
-      console.log("✅ Candidatures récupérées:", data?.length || 0)
-      return data || []
+      // Récupérer les visites séparément pour chaque candidature
+      const enrichedApplications = await Promise.all(
+        (applications || []).map(async (app) => {
+          try {
+            const { data: visits } = await supabase
+              .from("visits")
+              .select("*")
+              .eq("tenant_id", tenantId)
+              .eq("property_id", app.property_id)
+
+            return {
+              ...app,
+              visits: visits || [],
+            }
+          } catch (visitError) {
+            console.error("❌ Erreur récupération visites:", visitError)
+            return {
+              ...app,
+              visits: [],
+            }
+          }
+        }),
+      )
+
+      console.log("✅ Candidatures récupérées:", enrichedApplications?.length || 0)
+      return enrichedApplications || []
     } catch (error) {
       console.error("❌ Erreur dans getTenantApplications:", error)
       throw error
@@ -229,13 +260,12 @@ export const applicationService = {
       const propertyIds = properties.map((p) => p.id)
 
       // Ensuite récupérer les candidatures pour ces propriétés
-      const { data, error } = await supabase
+      const { data: applications, error } = await supabase
         .from("applications")
         .select(`
           *,
           property:properties(*),
-          tenant:users(*),
-          visits(*)
+          tenant:users(*)
         `)
         .in("property_id", propertyIds)
         .order("created_at", { ascending: false })
@@ -245,8 +275,24 @@ export const applicationService = {
         throw new Error(error.message)
       }
 
-      console.log("✅ Candidatures propriétaire récupérées:", data?.length || 0)
-      return data || []
+      // Enrichir avec les visites
+      const enrichedApplications = await Promise.all(
+        (applications || []).map(async (app) => {
+          const { data: visits } = await supabase
+            .from("visits")
+            .select("*")
+            .eq("tenant_id", app.tenant_id)
+            .eq("property_id", app.property_id)
+
+          return {
+            ...app,
+            visits: visits || [],
+          }
+        }),
+      )
+
+      console.log("✅ Candidatures propriétaire récupérées:", enrichedApplications?.length || 0)
+      return enrichedApplications || []
     } catch (error) {
       console.error("❌ Erreur dans getOwnerApplications:", error)
       throw error
@@ -263,8 +309,7 @@ export const applicationService = {
         .select(`
           *,
           property:properties(*),
-          tenant:users(*),
-          visits(*)
+          tenant:users(*)
         `)
         .eq("id", applicationId)
         .single()
@@ -274,8 +319,18 @@ export const applicationService = {
         throw new Error(error.message)
       }
 
+      // Récupérer les visites séparément
+      const { data: visits } = await supabase
+        .from("visits")
+        .select("*")
+        .eq("tenant_id", data.tenant_id)
+        .eq("property_id", data.property_id)
+
       console.log("✅ Candidature récupérée:", data)
-      return data
+      return {
+        ...data,
+        visits: visits || [],
+      }
     } catch (error) {
       console.error("❌ Erreur dans getApplicationById:", error)
       throw error

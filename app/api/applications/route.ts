@@ -22,13 +22,6 @@ export async function GET(request: NextRequest) {
             city,
             price,
             property_images(id, url, is_primary)
-          ),
-          visits(
-            id,
-            visit_date,
-            start_time,
-            end_time,
-            status
           )
         `)
         .eq("tenant_id", tenantId)
@@ -41,40 +34,40 @@ export async function GET(request: NextRequest) {
 
       console.log(`📊 ${applications?.length || 0} candidatures trouvées`)
 
-      // Pour chaque candidature avec des créneaux proposés, récupérer les détails
+      // Récupérer les visites séparément pour chaque candidature
       const enrichedApplications = await Promise.all(
         (applications || []).map(async (app) => {
           try {
-            if (app.proposed_slot_ids && Array.isArray(app.proposed_slot_ids) && app.proposed_slot_ids.length > 0) {
-              console.log(`🔍 Récupération créneaux pour candidature ${app.id}:`, app.proposed_slot_ids)
+            // Récupérer les visites pour cette candidature
+            const { data: visits } = await supabase
+              .from("visits")
+              .select("*")
+              .eq("tenant_id", tenantId)
+              .eq("property_id", app.property_id)
+              .order("visit_date", { ascending: true })
 
-              const { data: proposedSlots, error: slotsError } = await supabase
+            // Récupérer les créneaux proposés si ils existent
+            let proposedSlots = []
+            if (app.proposed_slot_ids && Array.isArray(app.proposed_slot_ids) && app.proposed_slot_ids.length > 0) {
+              const { data: slots } = await supabase
                 .from("property_visit_slots")
                 .select("*")
                 .in("id", app.proposed_slot_ids)
                 .order("date", { ascending: true })
 
-              if (slotsError) {
-                console.error("❌ Erreur récupération créneaux:", slotsError)
-                return {
-                  ...app,
-                  proposed_visit_slots: [],
-                }
-              }
-
-              return {
-                ...app,
-                proposed_visit_slots: proposedSlots || [],
-              }
+              proposedSlots = slots || []
             }
+
             return {
               ...app,
-              proposed_visit_slots: [],
+              visits: visits || [],
+              proposed_visit_slots: proposedSlots,
             }
           } catch (enrichError) {
             console.error("❌ Erreur enrichissement candidature:", enrichError)
             return {
               ...app,
+              visits: [],
               proposed_visit_slots: [],
             }
           }
@@ -108,8 +101,7 @@ export async function GET(request: NextRequest) {
         .select(`
           *,
           property:properties(*),
-          tenant:users(*),
-          visits(*)
+          tenant:users(*)
         `)
         .in("property_id", propertyIds)
         .order("created_at", { ascending: false })
@@ -119,8 +111,24 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 })
       }
 
-      console.log(`✅ ${applications?.length || 0} candidatures récupérées pour le propriétaire`)
-      return NextResponse.json({ applications: applications || [] })
+      // Enrichir avec les visites pour chaque candidature
+      const enrichedApplications = await Promise.all(
+        (applications || []).map(async (app) => {
+          const { data: visits } = await supabase
+            .from("visits")
+            .select("*")
+            .eq("tenant_id", app.tenant_id)
+            .eq("property_id", app.property_id)
+
+          return {
+            ...app,
+            visits: visits || [],
+          }
+        }),
+      )
+
+      console.log(`✅ ${enrichedApplications.length} candidatures récupérées pour le propriétaire`)
+      return NextResponse.json({ applications: enrichedApplications })
     }
 
     return NextResponse.json({ error: "tenant_id ou owner_id requis" }, { status: 400 })
@@ -184,7 +192,7 @@ export async function DELETE(request: NextRequest) {
     // Vérifier que la candidature appartient au locataire
     const { data: application, error: checkError } = await supabase
       .from("applications")
-      .select("id, tenant_id, status")
+      .select("id, tenant_id, status, property_id")
       .eq("id", applicationId)
       .eq("tenant_id", tenantId)
       .single()
@@ -204,6 +212,7 @@ export async function DELETE(request: NextRequest) {
       .from("visits")
       .delete()
       .eq("tenant_id", tenantId)
+      .eq("property_id", application.property_id)
       .in("status", ["scheduled", "proposed"])
 
     if (visitError) {
