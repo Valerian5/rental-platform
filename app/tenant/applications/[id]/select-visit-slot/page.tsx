@@ -1,11 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { Calendar, Clock, MapPin, User, ArrowLeft, CheckCircle } from "lucide-react"
+import { Calendar, Clock, MapPin, User, ArrowLeft, CheckCircle, Filter, ChevronDown, ChevronUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 
@@ -47,6 +49,12 @@ export default function SelectVisitSlotPage() {
   const [selectedSlot, setSelectedSlot] = useState<string>("")
   const [loading, setLoading] = useState(true)
   const [confirming, setConfirming] = useState(false)
+
+  // Filtres et affichage
+  const [timeFilter, setTimeFilter] = useState<string>("all")
+  const [visitTypeFilter, setVisitTypeFilter] = useState<string>("all")
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set())
+  const [showAllDates, setShowAllDates] = useState(false)
 
   useEffect(() => {
     loadApplicationAndSlots()
@@ -91,6 +99,10 @@ export default function SelectVisitSlotPage() {
       if (slotsResponse.ok) {
         const slotsData = await slotsResponse.json()
         setAvailableSlots(slotsData.slots || [])
+
+        // Ouvrir automatiquement les 3 premières dates
+        const dates = [...new Set(slotsData.slots?.map((slot: VisitSlot) => slot.date) || [])]
+        setExpandedDates(new Set(dates.slice(0, 3)))
       } else {
         throw new Error("Erreur lors du chargement des créneaux")
       }
@@ -123,6 +135,7 @@ export default function SelectVisitSlotPage() {
         router.push("/tenant/applications")
       } else {
         const errorData = await response.json()
+        console.error("❌ Erreur API:", errorData)
         throw new Error(errorData.error || "Erreur lors de la confirmation")
       }
     } catch (error) {
@@ -133,17 +146,43 @@ export default function SelectVisitSlotPage() {
     }
   }
 
-  // Grouper les créneaux par date
-  const slotsByDate = availableSlots.reduce(
-    (acc, slot) => {
-      if (!acc[slot.date]) {
-        acc[slot.date] = []
+  // Filtrer les créneaux
+  const filteredSlots = useMemo(() => {
+    return availableSlots.filter((slot) => {
+      // Filtre par heure
+      if (timeFilter !== "all") {
+        const hour = Number.parseInt(slot.start_time.split(":")[0])
+        if (timeFilter === "morning" && (hour < 8 || hour >= 12)) return false
+        if (timeFilter === "afternoon" && (hour < 12 || hour >= 17)) return false
+        if (timeFilter === "evening" && (hour < 17 || hour >= 21)) return false
       }
-      acc[slot.date].push(slot)
-      return acc
-    },
-    {} as Record<string, VisitSlot[]>,
-  )
+
+      // Filtre par type de visite
+      if (visitTypeFilter !== "all") {
+        if (visitTypeFilter === "individual" && slot.is_group_visit) return false
+        if (visitTypeFilter === "group" && !slot.is_group_visit) return false
+      }
+
+      return true
+    })
+  }, [availableSlots, timeFilter, visitTypeFilter])
+
+  // Grouper les créneaux par date
+  const slotsByDate = useMemo(() => {
+    return filteredSlots.reduce(
+      (acc, slot) => {
+        if (!acc[slot.date]) {
+          acc[slot.date] = []
+        }
+        acc[slot.date].push(slot)
+        return acc
+      },
+      {} as Record<string, VisitSlot[]>,
+    )
+  }, [filteredSlots])
+
+  const sortedDates = Object.keys(slotsByDate).sort()
+  const displayedDates = showAllDates ? sortedDates : sortedDates.slice(0, 7)
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString("fr-FR", {
@@ -166,6 +205,16 @@ export default function SelectVisitSlotPage() {
       return mins > 0 ? `${hours}h${mins}` : `${hours}h`
     }
     return `${diffMins}min`
+  }
+
+  const toggleDateExpansion = (date: string) => {
+    const newExpanded = new Set(expandedDates)
+    if (newExpanded.has(date)) {
+      newExpanded.delete(date)
+    } else {
+      newExpanded.add(date)
+    }
+    setExpandedDates(newExpanded)
   }
 
   if (loading) {
@@ -250,6 +299,18 @@ export default function SelectVisitSlotPage() {
                   Propriétaire : {application.owner.first_name} {application.owner.last_name}
                 </span>
               </div>
+
+              {/* Statistiques */}
+              <div className="pt-4 border-t space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Créneaux disponibles</span>
+                  <span className="font-medium">{filteredSlots.length}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>Dates proposées</span>
+                  <span className="font-medium">{Object.keys(slotsByDate).length}</span>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -258,10 +319,39 @@ export default function SelectVisitSlotPage() {
         <div className="lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
-                Créneaux disponibles ({availableSlots.length})
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5" />
+                  Créneaux disponibles ({filteredSlots.length})
+                </CardTitle>
+                <Filter className="h-4 w-4 text-muted-foreground" />
+              </div>
+
+              {/* Filtres */}
+              <div className="flex gap-4 mt-4">
+                <Select value={timeFilter} onValueChange={setTimeFilter}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Filtrer par heure" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Toute la journée</SelectItem>
+                    <SelectItem value="morning">Matin (8h-12h)</SelectItem>
+                    <SelectItem value="afternoon">Après-midi (12h-17h)</SelectItem>
+                    <SelectItem value="evening">Soirée (17h-21h)</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={visitTypeFilter} onValueChange={setVisitTypeFilter}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Type de visite" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous types</SelectItem>
+                    <SelectItem value="individual">Visite individuelle</SelectItem>
+                    <SelectItem value="group">Visite groupée</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </CardHeader>
             <CardContent>
               {Object.keys(slotsByDate).length === 0 ? (
@@ -269,20 +359,31 @@ export default function SelectVisitSlotPage() {
                   <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                   <h3 className="text-lg font-semibold mb-2">Aucun créneau disponible</h3>
                   <p className="text-muted-foreground">
-                    Le propriétaire n'a pas encore configuré de créneaux ou tous sont réservés.
+                    Aucun créneau ne correspond à vos filtres ou tous sont réservés.
                   </p>
                 </div>
               ) : (
-                <div className="space-y-6">
-                  {Object.entries(slotsByDate)
-                    .sort(([a], [b]) => a.localeCompare(b))
-                    .map(([date, slots]) => (
-                      <div key={date}>
-                        <h4 className="font-semibold text-lg mb-3 text-blue-800">{formatDate(date)}</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {slots
-                            .sort((a, b) => a.start_time.localeCompare(b.start_time))
-                            .map((slot) => (
+                <div className="space-y-4">
+                  {displayedDates.map((date) => {
+                    const slots = slotsByDate[date].sort((a, b) => a.start_time.localeCompare(b.start_time))
+                    const isExpanded = expandedDates.has(date)
+                    const displayedSlots = isExpanded ? slots : slots.slice(0, 3)
+
+                    return (
+                      <Collapsible key={date} open={isExpanded} onOpenChange={() => toggleDateExpansion(date)}>
+                        <CollapsibleTrigger asChild>
+                          <Button variant="ghost" className="w-full justify-between p-0 h-auto">
+                            <h4 className="font-semibold text-lg text-blue-800">{formatDate(date)}</h4>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline">{slots.length} créneaux</Badge>
+                              {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                            </div>
+                          </Button>
+                        </CollapsibleTrigger>
+
+                        <CollapsibleContent className="mt-3">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {displayedSlots.map((slot) => (
                               <div
                                 key={slot.id}
                                 className={`p-4 border rounded-lg cursor-pointer transition-all ${
@@ -308,7 +409,7 @@ export default function SelectVisitSlotPage() {
                                   <div className="flex items-center gap-2">
                                     {slot.is_group_visit && (
                                       <Badge variant="secondary" className="text-xs">
-                                        Visite groupée
+                                        Groupée
                                       </Badge>
                                     )}
                                     <Badge variant="outline" className="text-xs">
@@ -325,16 +426,35 @@ export default function SelectVisitSlotPage() {
                                 )}
                               </div>
                             ))}
-                        </div>
-                      </div>
-                    ))}
+                          </div>
+
+                          {!isExpanded && slots.length > 3 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="w-full mt-2"
+                              onClick={() => toggleDateExpansion(date)}
+                            >
+                              Voir {slots.length - 3} créneaux de plus
+                            </Button>
+                          )}
+                        </CollapsibleContent>
+                      </Collapsible>
+                    )
+                  })}
+
+                  {!showAllDates && sortedDates.length > 7 && (
+                    <Button variant="outline" className="w-full" onClick={() => setShowAllDates(true)}>
+                      Voir {sortedDates.length - 7} dates supplémentaires
+                    </Button>
+                  )}
                 </div>
               )}
             </CardContent>
           </Card>
 
           {/* Bouton de confirmation */}
-          {availableSlots.length > 0 && (
+          {filteredSlots.length > 0 && (
             <div className="mt-6 flex justify-end">
               <Button
                 onClick={handleConfirmSlot}
