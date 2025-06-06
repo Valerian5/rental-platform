@@ -96,8 +96,10 @@ export function VisitProposalManager({
     setIsLoading(true)
     try {
       console.log("🔄 Chargement des créneaux pour proposition...")
+
+      const headers = await getAuthHeaders()
       const response = await fetch(`/api/properties/${propertyId}/visit-slots`, {
-        headers: getAuthHeaders(),
+        headers,
       })
 
       if (response.ok) {
@@ -118,7 +120,11 @@ export function VisitProposalManager({
         await checkForConflicts(futureSlots)
       } else {
         console.error("❌ Erreur chargement créneaux:", response.status)
-        toast.error("Erreur lors du chargement des créneaux")
+        if (response.status === 401) {
+          toast.error("Erreur d'authentification. Veuillez vous reconnecter.")
+        } else {
+          toast.error("Erreur lors du chargement des créneaux")
+        }
       }
     } catch (error) {
       console.error("❌ Erreur chargement créneaux:", error)
@@ -154,9 +160,10 @@ export function VisitProposalManager({
   const saveSlots = async (slots: VisitSlot[]) => {
     setIsSaving(true)
     try {
+      const headers = await getAuthHeaders()
       const response = await fetch(`/api/properties/${propertyId}/visit-slots`, {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers,
         body: JSON.stringify({ slots }),
       })
 
@@ -164,7 +171,11 @@ export function VisitProposalManager({
         await loadAvailableSlots()
         toast.success("Créneaux mis à jour")
       } else {
-        throw new Error("Erreur lors de la sauvegarde")
+        if (response.status === 401) {
+          toast.error("Erreur d'authentification. Veuillez vous reconnecter.")
+        } else {
+          throw new Error("Erreur lors de la sauvegarde")
+        }
       }
     } catch (error) {
       console.error("❌ Erreur sauvegarde:", error)

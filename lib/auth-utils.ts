@@ -1,19 +1,26 @@
-export function getSupabaseToken(): string | null {
-  if (typeof window === "undefined") return null
+import { supabase } from "@/lib/supabase"
 
-  // Essayer de récupérer le token depuis localStorage ou sessionStorage
-  const localToken = localStorage.getItem("supabase.auth.token")
-  const sessionToken = sessionStorage.getItem("supabase.auth.token")
+export async function getSupabaseToken(): Promise<string | null> {
+  try {
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession()
 
-  // Essayer aussi les clés alternatives
-  const altLocalToken = localStorage.getItem("sb-ttetnxacihuszvcscbtl-auth-token")
-  const altSessionToken = sessionStorage.getItem("sb-ttetnxacihuszvcscbtl-auth-token")
+    if (error) {
+      console.error("Erreur récupération session:", error)
+      return null
+    }
 
-  return localToken || sessionToken || altLocalToken || altSessionToken
+    return session?.access_token || null
+  } catch (error) {
+    console.error("Erreur getSupabaseToken:", error)
+    return null
+  }
 }
 
-export function getAuthHeaders(): HeadersInit {
-  const token = getSupabaseToken()
+export async function getAuthHeaders(): Promise<HeadersInit> {
+  const token = await getSupabaseToken()
   const headers: HeadersInit = {
     "Content-Type": "application/json",
   }

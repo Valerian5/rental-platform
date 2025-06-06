@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Calendar, ChevronLeft, ChevronRight, Plus, Minus, Save, RefreshCw, CheckCircle, Clock } from "lucide-react"
 import { toast } from "sonner"
-import { supabase } from "@/lib/supabase"
+import { getAuthHeaders } from "@/lib/auth-utils"
 
 interface VisitSlot {
   id?: string
@@ -118,19 +118,6 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
   const isLoadingRef = useRef(false)
   const initialSlotsRef = useRef<VisitSlot[]>([])
 
-  // Fonction pour récupérer le token d'authentification
-  const getAuthToken = useCallback(async () => {
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      return session?.access_token || null
-    } catch (error) {
-      console.error("Erreur récupération token:", error)
-      return null
-    }
-  }, [])
-
   // Fonction de chargement des créneaux - CORRIGÉE
   const loadSlotsFromDatabase = useCallback(async () => {
     // Éviter les chargements multiples
@@ -144,18 +131,9 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
     isLoadingRef.current = true
 
     try {
-      const token = await getAuthToken()
-      if (!token) {
-        console.error("❌ Pas de token d'authentification")
-        toast.error("Vous devez être connecté")
-        return
-      }
-
+      const headers = await getAuthHeaders()
       const response = await fetch(`/api/properties/${propertyId}/visit-slots`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+        headers,
       })
 
       if (response.ok) {
@@ -180,7 +158,11 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
       } else {
         const errorData = await response.json()
         console.error("❌ Erreur chargement créneaux:", response.status, errorData)
-        toast.error(errorData.error || "Erreur lors du chargement des créneaux")
+        if (response.status === 401) {
+          toast.error("Erreur d'authentification. Veuillez vous reconnecter.")
+        } else {
+          toast.error(errorData.error || "Erreur lors du chargement des créneaux")
+        }
       }
     } catch (error) {
       console.error("❌ Erreur chargement créneaux:", error)
@@ -189,7 +171,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
       setIsLoading(false)
       isLoadingRef.current = false
     }
-  }, [propertyId, getAuthToken, onSlotsChange])
+  }, [propertyId, onSlotsChange])
 
   // Charger les créneaux UNE SEULE FOIS au montage
   useEffect(() => {
@@ -245,12 +227,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
 
     setIsSaving(true)
     try {
-      const token = await getAuthToken()
-      if (!token) {
-        toast.error("Vous devez être connecté")
-        return
-      }
-
+      const headers = await getAuthHeaders()
       const validatedSlots = slots.map((slot) => ({
         date: slot.date,
         start_time: formatTimeString(slot.start_time),
@@ -263,10 +240,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
 
       const response = await fetch(`/api/properties/${propertyId}/visit-slots`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify({ slots: validatedSlots }),
       })
 
@@ -278,7 +252,11 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
         initialSlotsRef.current = validatedSlots
       } else {
         const errorData = await response.json()
-        toast.error(errorData.error || `Erreur ${response.status}`)
+        if (response.status === 401) {
+          toast.error("Erreur d'authentification. Veuillez vous reconnecter.")
+        } else {
+          toast.error(errorData.error || `Erreur ${response.status}`)
+        }
       }
     } catch (error) {
       console.error("❌ Erreur sauvegarde créneaux:", error)
