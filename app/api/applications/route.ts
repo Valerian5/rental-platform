@@ -1,91 +1,114 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { applicationService } from "@/lib/application-service"
-import { authService } from "@/lib/auth-service"
+import { supabase } from "@/lib/supabase"
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const ownerId = searchParams.get("owner_id")
     const tenantId = searchParams.get("tenant_id")
+    const ownerId = searchParams.get("owner_id")
 
-    console.log("📋 API Applications GET - ownerId:", ownerId, "tenantId:", tenantId)
+    console.log("📋 API Applications GET", { tenantId, ownerId })
+
+    if (tenantId) {
+      // Récupérer les candidatures pour un locataire
+      const { data: applications, error } = await supabase
+        .from("applications")
+        .select(`
+          *,
+          property:properties(*),
+          visits(*)
+        `)
+        .eq("tenant_id", tenantId)
+        .order("created_at", { ascending: false })
+
+      if (error) {
+        console.error("❌ Erreur récupération candidatures locataire:", error)
+        return NextResponse.json({ error: error.message }, { status: 400 })
+      }
+
+      // Pour chaque candidature avec des créneaux proposés, récupérer les détails
+      const enrichedApplications = await Promise.all(
+        applications.map(async (app) => {
+          if (app.proposed_slot_ids && app.proposed_slot_ids.length > 0) {
+            const { data: proposedSlots } = await supabase
+              .from("property_visit_slots")
+              .select("*")
+              .in("id", app.proposed_slot_ids)
+              .order("date", { ascending: true })
+
+            return {
+              ...app,
+              proposed_visit_slots: proposedSlots || [],
+            }
+          }
+          return app
+        }),
+      )
+
+      console.log(`✅ ${enrichedApplications.length} candidatures récupérées pour le locataire`)
+      return NextResponse.json({ applications: enrichedApplications })
+    }
 
     if (ownerId) {
       // Récupérer les candidatures pour un propriétaire
-      const applications = await applicationService.getOwnerApplications(ownerId)
-      console.log("✅ Candidatures propriétaire récupérées:", applications.length)
+      const { data: properties, error: propError } = await supabase
+        .from("properties")
+        .select("id")
+        .eq("owner_id", ownerId)
 
-      return NextResponse.json({
-        success: true,
-        applications,
-      })
-    } else if (tenantId) {
-      // Récupérer les candidatures pour un locataire
-      const applications = await applicationService.getTenantApplications(tenantId)
-      console.log("✅ Candidatures locataire récupérées:", applications.length)
+      if (propError) {
+        console.error("❌ Erreur récupération propriétés:", propError)
+        return NextResponse.json({ error: propError.message }, { status: 400 })
+      }
 
-      return NextResponse.json({
-        success: true,
-        applications,
-      })
-    } else {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "owner_id ou tenant_id requis",
-        },
-        { status: 400 },
-      )
+      if (!properties || properties.length === 0) {
+        return NextResponse.json({ applications: [] })
+      }
+
+      const propertyIds = properties.map((p) => p.id)
+
+      const { data: applications, error } = await supabase
+        .from("applications")
+        .select(`
+          *,
+          property:properties(*),
+          tenant:users(*),
+          visits(*)
+        `)
+        .in("property_id", propertyIds)
+        .order("created_at", { ascending: false })
+
+      if (error) {
+        console.error("❌ Erreur récupération candidatures propriétaire:", error)
+        return NextResponse.json({ error: error.message }, { status: 400 })
+      }
+
+      console.log(`✅ ${applications.length} candidatures récupérées pour le propriétaire`)
+      return NextResponse.json({ applications })
     }
+
+    return NextResponse.json({ error: "tenant_id ou owner_id requis" }, { status: 400 })
   } catch (error) {
     console.error("❌ Erreur API applications:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message || "Erreur lors de la récupération des candidatures",
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    console.log("📝 API Applications POST:", body)
+    console.log("📋 API Applications POST", body)
 
-    // Vérifier l'authentification
-    const user = await authService.getCurrentUser()
-    if (!user) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Authentification requise",
-        },
-        { status: 401 },
-      )
+    const { data, error } = await supabase.from("applications").insert(body).select().single()
+
+    if (error) {
+      console.error("❌ Erreur création candidature:", error)
+      return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
-    // Créer la candidature
-    const application = await applicationService.createApplication({
-      ...body,
-      tenant_id: user.id,
-    })
-
-    console.log("✅ Candidature créée:", application)
-
-    return NextResponse.json({
-      success: true,
-      application,
-    })
+    return NextResponse.json({ application: data })
   } catch (error) {
-    console.error("❌ Erreur création candidature:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message || "Erreur lors de la création de la candidature",
-      },
-      { status: 500 },
-    )
+    console.error("❌ Erreur API applications POST:", error)
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }
