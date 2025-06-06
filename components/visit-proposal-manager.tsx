@@ -90,13 +90,14 @@ export function VisitProposalManager({
         return
       }
 
-      // Utiliser l'API pour proposer les créneaux
+      // Utiliser l'API pour proposer les créneaux avec le bon statut
       const response = await fetch(`/api/applications/${applicationId}/propose-visit-slots`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           slot_ids: slotIds,
           message: proposalMessage,
+          status: "visit_proposed", // Nouveau statut correct
         }),
       })
 

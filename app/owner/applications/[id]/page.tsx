@@ -167,7 +167,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   }
 
   const handleVisitProposed = async (slots: any[]) => {
-    const success = await updateApplicationStatus("visit_scheduled")
+    const success = await updateApplicationStatus("visit_proposed")
     if (success) {
       setShowVisitDialog(false)
     }
