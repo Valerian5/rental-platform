@@ -111,24 +111,21 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
   const [customDuration, setCustomDuration] = useState(45)
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [initialLoadDone, setInitialLoadDone] = useState(false)
+  const [hasInitialLoad, setHasInitialLoad] = useState(false)
 
-  // Référence pour éviter les chargements multiples - CORRIGÉE
-  const hasLoadedRef = useRef(false)
-  const isLoadingRef = useRef(false)
-  const initialSlotsRef = useRef<VisitSlot[]>([])
+  // Référence pour éviter les chargements multiples
+  const loadingRef = useRef(false)
 
-  // Fonction de chargement des créneaux - CORRIGÉE
+  // Fonction de chargement des créneaux - SIMPLIFIÉE
   const loadSlotsFromDatabase = useCallback(async () => {
-    // Éviter les chargements multiples
-    if (!propertyId || hasLoadedRef.current || isLoadingRef.current) {
-      console.log("🚫 Chargement évité - déjà fait ou en cours")
+    if (!propertyId || loadingRef.current) {
+      console.log("🚫 Chargement évité - pas de propertyId ou déjà en cours")
       return
     }
 
-    console.log("🔄 Chargement des créneaux depuis la DB...")
+    console.log("🔄 Chargement des créneaux depuis la DB pour:", propertyId)
     setIsLoading(true)
-    isLoadingRef.current = true
+    loadingRef.current = true
 
     try {
       const headers = await getAuthHeaders()
@@ -138,7 +135,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
 
       if (response.ok) {
         const data = await response.json()
-        console.log("✅ Créneaux chargés:", data.slots?.length || 0)
+        console.log("✅ Créneaux chargés depuis la DB:", data.slots?.length || 0)
 
         const cleanedSlots = (data.slots || []).map((slot: any) => ({
           ...slot,
@@ -146,15 +143,9 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
           end_time: formatTimeString(slot.end_time),
         }))
 
-        // Stocker les créneaux initiaux dans la référence
-        initialSlotsRef.current = cleanedSlots
-
         // Mettre à jour l'état local
         onSlotsChange(cleanedSlots)
-
-        // Marquer comme chargé
-        hasLoadedRef.current = true
-        setInitialLoadDone(true)
+        setHasInitialLoad(true)
       } else {
         const errorData = await response.json()
         console.error("❌ Erreur chargement créneaux:", response.status, errorData)
@@ -169,64 +160,28 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
       toast.error("Erreur lors du chargement des créneaux")
     } finally {
       setIsLoading(false)
-      isLoadingRef.current = false
+      loadingRef.current = false
     }
   }, [propertyId, onSlotsChange])
 
-  // Charger les créneaux UNE SEULE FOIS au montage
+  // Charger les créneaux au montage SEULEMENT si mode management et pas de créneaux existants
   useEffect(() => {
-    // Utiliser une variable locale pour éviter les problèmes de fermeture
-    let isMounted = true
-
-    // Vérifier si nous avons déjà des créneaux dans les props
-    const hasExistingSlots = visitSlots && visitSlots.length > 0
-
-    if (mode === "management" && propertyId && !hasLoadedRef.current && !isLoadingRef.current && !hasExistingSlots) {
-      // Marquer comme en cours de chargement immédiatement
-      isLoadingRef.current = true
-      setIsLoading(true)
-
-      // Charger les créneaux
-      loadSlotsFromDatabase().finally(() => {
-        if (isMounted) {
-          setIsLoading(false)
-          isLoadingRef.current = false
-        }
-      })
-    } else if (hasExistingSlots && !initialLoadDone) {
-      // Si nous avons déjà des créneaux dans les props, les considérer comme chargés
+    if (mode === "management" && propertyId && !hasInitialLoad && visitSlots.length === 0) {
+      console.log("🔄 Chargement initial des créneaux...")
+      loadSlotsFromDatabase()
+    } else if (visitSlots.length > 0 && !hasInitialLoad) {
       console.log("✅ Utilisation des créneaux existants:", visitSlots.length)
-      hasLoadedRef.current = true
-      initialSlotsRef.current = visitSlots
-      setInitialLoadDone(true)
+      setHasInitialLoad(true)
     }
-
-    // Nettoyage
-    return () => {
-      isMounted = false
-    }
-  }, []) // Dépendances vides pour n'exécuter qu'une seule fois
-
-  // Effet pour surveiller les changements de visitSlots
-  useEffect(() => {
-    // Ne rien faire lors du premier rendu ou si nous sommes en train de charger
-    if (!initialLoadDone || isLoadingRef.current) return
-
-    // Comparer avec les créneaux initiaux
-    const initialSlotsJSON = JSON.stringify(initialSlotsRef.current)
-    const currentSlotsJSON = JSON.stringify(visitSlots)
-
-    if (initialSlotsJSON !== currentSlotsJSON) {
-      console.log("📊 Mise à jour des créneaux détectée:", visitSlots.length)
-      initialSlotsRef.current = visitSlots
-    }
-  }, [visitSlots, initialLoadDone])
+  }, [mode, propertyId, hasInitialLoad, visitSlots.length, loadSlotsFromDatabase])
 
   const saveSlotsToDatabase = async (slots: VisitSlot[]) => {
     if (!propertyId || mode !== "management") return
 
     setIsSaving(true)
     try {
+      console.log("💾 Sauvegarde de", slots.length, "créneaux...")
+
       const headers = await getAuthHeaders()
       const validatedSlots = slots.map((slot) => ({
         date: slot.date,
@@ -246,12 +201,11 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
 
       if (response.ok) {
         const data = await response.json()
+        console.log("✅ Créneaux sauvegardés:", data.message)
         toast.success(data.message || "Créneaux sauvegardés avec succès")
-
-        // Mettre à jour la référence des créneaux initiaux
-        initialSlotsRef.current = validatedSlots
       } else {
         const errorData = await response.json()
+        console.error("❌ Erreur sauvegarde:", errorData)
         if (response.status === 401) {
           toast.error("Erreur d'authentification. Veuillez vous reconnecter.")
         } else {
@@ -295,6 +249,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
       const isToday = date.getTime() === today.getTime()
       const isPast = date < today
       const hasSlots = visitSlots.some((slot) => slot.date === dateStr)
+      const bookedSlots = visitSlots.filter((slot) => slot.date === dateStr && slot.current_bookings > 0).length
 
       days.push({
         date: dateStr,
@@ -303,6 +258,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
         isToday,
         isPast,
         hasSlots,
+        bookedSlots,
       })
     }
 
@@ -481,7 +437,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
   const timeSlots = generateTimeSlots(dayConfig)
   const totalSlots = visitSlots.length
 
-  if (isLoading) {
+  if (isLoading && !hasInitialLoad) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="text-center space-y-4">
@@ -543,8 +499,9 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                 >
                   <span>{day.day}</span>
                   {day.hasSlots && (
-                    <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2">
+                    <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2 flex gap-1">
                       <div className="w-1 h-1 bg-green-600 rounded-full"></div>
+                      {day.bookedSlots > 0 && <div className="w-1 h-1 bg-orange-600 rounded-full"></div>}
                     </div>
                   )}
                 </Button>
@@ -560,6 +517,13 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                 <div className="w-3 h-3 bg-blue-600 rounded"></div>
                 <span>Jour sélectionné</span>
               </div>
+              <div className="flex items-center gap-2">
+                <div className="flex gap-1">
+                  <div className="w-1.5 h-1.5 bg-green-600 rounded-full"></div>
+                  <div className="w-1.5 h-1.5 bg-orange-600 rounded-full"></div>
+                </div>
+                <span>Créneaux disponibles et réservés</span>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -574,6 +538,31 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
           <CardContent className="space-y-6">
             {selectedDate ? (
               <>
+                {/* Affichage des créneaux existants pour ce jour */}
+                {visitSlots.filter((slot) => slot.date === selectedDate).length > 0 && (
+                  <div className="space-y-3">
+                    <Label className="text-base font-medium">Créneaux existants</Label>
+                    <div className="space-y-2">
+                      {visitSlots
+                        .filter((slot) => slot.date === selectedDate)
+                        .map((slot, index) => (
+                          <div key={index} className="flex items-center justify-between p-2 border rounded">
+                            <span className="text-sm">
+                              {slot.start_time} - {slot.end_time}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <Badge variant={slot.current_bookings > 0 ? "default" : "outline"}>
+                                {slot.current_bookings}/{slot.max_capacity}
+                              </Badge>
+                              {slot.is_group_visit && <Badge variant="secondary">Groupe</Badge>}
+                              {slot.current_bookings > 0 && <Badge variant="destructive">Réservé</Badge>}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Durée des créneaux */}
                 <div className="space-y-3">
                   <Label className="text-base font-medium">Durée des créneaux</Label>
@@ -783,18 +772,18 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
               </div>
               <div>
                 <div className="text-2xl font-bold text-green-600">
-                  {visitSlots.filter((slot) => slot.is_available).length}
+                  {visitSlots.filter((slot) => slot.is_available && slot.current_bookings < slot.max_capacity).length}
                 </div>
                 <div className="text-sm text-muted-foreground">Disponibles</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-purple-600">
-                  {visitSlots.reduce((sum, slot) => sum + slot.max_capacity, 0)}
+                <div className="text-2xl font-bold text-orange-600">
+                  {visitSlots.filter((slot) => slot.current_bookings > 0).length}
                 </div>
-                <div className="text-sm text-muted-foreground">Capacité totale</div>
+                <div className="text-sm text-muted-foreground">Réservés</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-orange-600">
+                <div className="text-2xl font-bold text-purple-600">
                   {new Set(visitSlots.map((slot) => slot.date)).size}
                 </div>
                 <div className="text-sm text-muted-foreground">Jours configurés</div>
