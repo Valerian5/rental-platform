@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Calendar, Check, X, Plus, Trash2, AlertTriangle, Edit, Save, RefreshCw, Send } from "lucide-react"
 import { toast } from "sonner"
+import { getAuthHeaders } from "@/lib/auth-utils"
 
 interface VisitSlot {
   id?: string
@@ -95,7 +96,9 @@ export function VisitProposalManager({
     setIsLoading(true)
     try {
       console.log("🔄 Chargement des créneaux pour proposition...")
-      const response = await fetch(`/api/properties/${propertyId}/visit-slots`)
+      const response = await fetch(`/api/properties/${propertyId}/visit-slots`, {
+        headers: getAuthHeaders(),
+      })
 
       if (response.ok) {
         const data = await response.json()
@@ -153,7 +156,7 @@ export function VisitProposalManager({
     try {
       const response = await fetch(`/api/properties/${propertyId}/visit-slots`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ slots }),
       })
 
@@ -260,15 +263,15 @@ export function VisitProposalManager({
     try {
       setIsSaving(true)
 
-      // Simuler l'envoi de la proposition
-      const response = await fetch("/api/visits", {
+      // Extraire les IDs des créneaux sélectionnés
+      const slotIds = slotsToPropose.map((slot) => slot.id).filter(Boolean)
+
+      // Utiliser la nouvelle API pour proposer les créneaux
+      const response = await fetch(`/api/applications/${applicationId}/propose-visit-slots`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type: "propose_slots",
-          application_id: applicationId,
-          property_id: propertyId,
-          slots: slotsToPropose,
+          slot_ids: slotIds,
           message: proposalMessage,
         }),
       })
@@ -278,7 +281,8 @@ export function VisitProposalManager({
         toast.success(`${slotsToPropose.length} créneau(x) proposé(s) à ${tenantName}`)
         onClose()
       } else {
-        throw new Error("Erreur lors de l'envoi de la proposition")
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Erreur lors de l'envoi de la proposition")
       }
     } catch (error) {
       console.error("❌ Erreur envoi proposition:", error)

@@ -11,8 +11,8 @@ import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { CircularScore } from "@/components/circular-score"
-import { VisitProposalDialog } from "@/components/visit-proposal-dialog"
 import { RefusalDialog } from "@/components/refusal-dialog"
+import { VisitProposalManager } from "@/components/visit-proposal-manager"
 import {
   ArrowLeft,
   User,
@@ -1176,12 +1176,15 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
         </Tabs>
       </div>
 
-      {/* Dialogues */}
-      <VisitProposalDialog
-        open={showVisitDialog}
+      {/* Dialogue de proposition de visite */}
+      <VisitProposalManager
+        isOpen={showVisitDialog}
         onClose={() => setShowVisitDialog(false)}
-        onConfirm={handleVisitProposed}
         propertyId={application?.property_id || ""}
+        propertyTitle={application?.property?.title || ""}
+        applicationId={application?.id || ""}
+        tenantName={`${application?.tenant?.first_name || ""} ${application?.tenant?.last_name || ""}`}
+        onSlotsProposed={handleVisitProposed}
       />
 
       <RefusalDialog
