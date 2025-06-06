@@ -26,12 +26,18 @@ export const applicationService = {
 
     try {
       // Vérifier si une candidature existe déjà
-      const { data: existing } = await supabase
+      const { data: existing, error: checkError } = await supabase
         .from("applications")
-        .select("id")
+        .select("id, status")
         .eq("property_id", applicationData.property_id)
         .eq("tenant_id", applicationData.tenant_id)
         .single()
+
+      if (checkError && checkError.code !== "PGRST116") {
+        // PGRST116 = no rows found
+        console.error("❌ Erreur vérification candidature existante:", checkError)
+        throw new Error("Erreur lors de la vérification")
+      }
 
       if (existing) {
         throw new Error("Vous avez déjà postulé pour ce bien")
@@ -90,6 +96,87 @@ export const applicationService = {
     }
   },
 
+  // Vérifier si une candidature existe déjà
+  async checkExistingApplication(propertyId: string, tenantId: string) {
+    console.log("🔍 ApplicationService.checkExistingApplication", { propertyId, tenantId })
+
+    try {
+      const { data, error } = await supabase
+        .from("applications")
+        .select("id, status")
+        .eq("property_id", propertyId)
+        .eq("tenant_id", tenantId)
+        .single()
+
+      if (error && error.code !== "PGRST116") {
+        // PGRST116 = no rows found
+        console.error("❌ Erreur vérification candidature:", error)
+        throw new Error(error.message)
+      }
+
+      return data || null
+    } catch (error) {
+      console.error("❌ Erreur dans checkExistingApplication:", error)
+      throw error
+    }
+  },
+
+  // Supprimer une candidature
+  async withdrawApplication(applicationId: string, tenantId: string) {
+    console.log("🗑️ ApplicationService.withdrawApplication", { applicationId, tenantId })
+
+    try {
+      // Vérifier que la candidature appartient au locataire
+      const { data: application, error: checkError } = await supabase
+        .from("applications")
+        .select("id, tenant_id, status, property_id")
+        .eq("id", applicationId)
+        .eq("tenant_id", tenantId)
+        .single()
+
+      if (checkError) {
+        console.error("❌ Candidature non trouvée:", checkError)
+        throw new Error("Candidature non trouvée")
+      }
+
+      // Vérifier que la candidature peut être supprimée
+      if (application.status === "accepted") {
+        throw new Error("Impossible de retirer une candidature acceptée")
+      }
+
+      // Supprimer les visites associées si elles existent
+      const { error: visitError } = await supabase
+        .from("visits")
+        .delete()
+        .eq("tenant_id", tenantId)
+        .eq("property_id", application.property_id)
+        .in("status", ["scheduled", "proposed"])
+
+      if (visitError) {
+        console.error("❌ Erreur suppression visites:", visitError)
+        // On continue même si la suppression des visites échoue
+      }
+
+      // Supprimer la candidature
+      const { error: deleteError } = await supabase
+        .from("applications")
+        .delete()
+        .eq("id", applicationId)
+        .eq("tenant_id", tenantId)
+
+      if (deleteError) {
+        console.error("❌ Erreur suppression candidature:", deleteError)
+        throw new Error(deleteError.message)
+      }
+
+      console.log("✅ Candidature supprimée")
+      return true
+    } catch (error) {
+      console.error("❌ Erreur dans withdrawApplication:", error)
+      throw error
+    }
+  },
+
   // Récupérer les candidatures d'un locataire
   async getTenantApplications(tenantId: string) {
     console.log("📋 ApplicationService.getTenantApplications", tenantId)
@@ -99,7 +186,8 @@ export const applicationService = {
         .from("applications")
         .select(`
           *,
-          property:properties(*)
+          property:properties(*),
+          visits(*)
         `)
         .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false })
@@ -141,13 +229,13 @@ export const applicationService = {
       const propertyIds = properties.map((p) => p.id)
 
       // Ensuite récupérer les candidatures pour ces propriétés
-      // Utiliser une jointure LEFT JOIN pour récupérer les candidatures même si le tenant n'existe pas
       const { data, error } = await supabase
         .from("applications")
         .select(`
           *,
           property:properties(*),
-          tenant:users(*)
+          tenant:users(*),
+          visits(*)
         `)
         .in("property_id", propertyIds)
         .order("created_at", { ascending: false })
@@ -175,7 +263,8 @@ export const applicationService = {
         .select(`
           *,
           property:properties(*),
-          tenant:users(*)
+          tenant:users(*),
+          visits(*)
         `)
         .eq("id", applicationId)
         .single()
@@ -238,12 +327,15 @@ export const applicationService = {
           let notificationTitle = ""
           let notificationContent = ""
 
-          if (status === "approved") {
+          if (status === "accepted") {
             notificationTitle = "Candidature acceptée"
             notificationContent = `Votre candidature pour ${propertyTitle} a été acceptée !`
           } else if (status === "rejected") {
             notificationTitle = "Candidature refusée"
             notificationContent = `Votre candidature pour ${propertyTitle} n'a pas été retenue.`
+          } else if (status === "visit_proposed") {
+            notificationTitle = "Créneaux de visite proposés"
+            notificationContent = `Des créneaux de visite ont été proposés pour ${propertyTitle}`
           }
 
           if (notificationTitle) {
