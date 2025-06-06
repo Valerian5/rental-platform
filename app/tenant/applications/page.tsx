@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
+import { authService } from "@/services/auth-service"
 
 interface Application {
   id: string
@@ -48,15 +49,22 @@ export default function TenantApplicationsPage() {
   const loadApplications = async () => {
     try {
       setLoading(true)
-      const user = JSON.parse(localStorage.getItem("user") || "{}")
-      if (!user.id) {
-        toast.error("Vous devez être connecté")
+      const user = await authService.getCurrentUser()
+      if (!user || user.user_type !== "tenant") {
+        toast.error("Vous devez être connecté en tant que locataire")
         return
       }
 
-      const response = await fetch(`/api/applications?tenant_id=${user.id}`)
+      console.log("🔍 Chargement candidatures pour:", user.id)
+
+      const response = await fetch(`/api/applications?tenant_id=${user.id}`, {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
       if (response.ok) {
         const data = await response.json()
+        console.log("📊 Réponse API:", response.status, data)
         setApplications(data.applications || [])
       }
     } catch (error) {

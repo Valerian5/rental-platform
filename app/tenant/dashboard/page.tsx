@@ -23,6 +23,7 @@ import { authService } from "@/lib/auth-service"
 import { rentalFileService } from "@/lib/rental-file-service"
 import { applicationService } from "@/lib/application-service"
 import { toast } from "sonner"
+import { visitService } from "@/lib/visit-service"
 
 export default function TenantDashboardPage() {
   const [activeTab, setActiveTab] = useState("overview")
@@ -84,7 +85,20 @@ export default function TenantDashboardPage() {
         // Initialiser les autres données avec des valeurs par défaut
         setSavedSearches([])
         setFavoriteProperties([])
-        setVisits([])
+
+        // Récupérer les visites avec gestion d'erreur
+        try {
+          const visitsData = await visitService.getTenantVisits(user.id)
+          const upcomingVisits = visitsData.filter((visit) => {
+            const visitDate = new Date(`${visit.visit_date}T${visit.start_time || visit.visit_time}`)
+            return visitDate > new Date() && ["scheduled", "confirmed", "proposed"].includes(visit.status)
+          })
+          setVisits(upcomingVisits)
+          console.log("📅 Visites à venir:", upcomingVisits.length)
+        } catch (visitError) {
+          console.warn("⚠️ Erreur visites:", visitError)
+          setVisits([])
+        }
 
         console.log("✅ Dashboard chargé avec succès")
       } catch (error) {

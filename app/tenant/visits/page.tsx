@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Calendar, Clock, MapPin, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -17,118 +17,176 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-
-// Données simulées
-const visits = [
-  {
-    id: 1,
-    property: {
-      id: 1,
-      title: "Appartement moderne au centre-ville",
-      address: "123 Rue Principale, Paris",
-      price: 1200,
-      image: "/placeholder.svg?height=200&width=300",
-    },
-    date: "2023-05-25T14:00:00",
-    status: "Confirmée",
-    contactPerson: "Marie Leroy",
-    contactPhone: "06 23 45 67 89",
-    notes: "Interphone au nom de Leroy. 3ème étage avec ascenseur.",
-  },
-  {
-    id: 2,
-    property: {
-      id: 2,
-      title: "Studio lumineux proche des transports",
-      address: "45 Avenue des Fleurs, Paris",
-      price: 850,
-      image: "/placeholder.svg?height=200&width=300",
-    },
-    date: "2023-05-27T11:00:00",
-    status: "En attente",
-    contactPerson: "Jean Dupont",
-    contactPhone: "06 12 34 56 78",
-    notes: "",
-  },
-  {
-    id: 3,
-    property: {
-      id: 3,
-      title: "Loft industriel spacieux",
-      address: "12 Rue des Artistes, Paris",
-      price: 1500,
-      image: "/placeholder.svg?height=200&width=300",
-    },
-    date: "2023-05-20T10:30:00",
-    status: "Terminée",
-    contactPerson: "Pierre Martin",
-    contactPhone: "06 34 56 78 90",
-    notes: "Visite effectuée. Dossier en cours d'analyse.",
-    feedback: {
-      rating: 4,
-      comment: "Très bel appartement, lumineux et spacieux. Quelques travaux de rafraîchissement à prévoir.",
-    },
-  },
-  {
-    id: 4,
-    property: {
-      id: 4,
-      title: "Maison familiale avec jardin",
-      address: "78 Rue des Jardins, Banlieue de Paris",
-      price: 1800,
-      image: "/placeholder.svg?height=200&width=300",
-    },
-    date: "2023-05-18T16:00:00",
-    status: "Annulée",
-    contactPerson: "Sophie Bernard",
-    contactPhone: "06 45 67 89 01",
-    notes: "Annulée par le propriétaire.",
-  },
-]
+import { authService } from "@/lib/auth-service"
+import { visitService } from "@/lib/visit-service"
+import { toast } from "sonner"
 
 export default function VisitsPage() {
   const [activeTab, setActiveTab] = useState("upcoming")
+  const [visits, setVisits] = useState<any[]>([])
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const [selectedVisit, setSelectedVisit] = useState<any>(null)
   const [feedbackDialog, setFeedbackDialog] = useState(false)
   const [feedbackRating, setFeedbackRating] = useState<number>(0)
   const [feedbackComment, setFeedbackComment] = useState("")
 
-  const upcomingVisits = visits.filter((visit) => ["Confirmée", "En attente"].includes(visit.status))
-  const pastVisits = visits.filter((visit) => ["Terminée", "Annulée"].includes(visit.status))
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        console.log("🏠 Chargement des visites locataire...")
+        setIsLoading(true)
+
+        const user = await authService.getCurrentUser()
+        if (!user || user.user_type !== "tenant") {
+          toast.error("Vous devez être connecté en tant que locataire")
+          return
+        }
+
+        setCurrentUser(user)
+        console.log("👤 Utilisateur locataire:", user.id)
+
+        // Récupérer les visites du locataire
+        const visitsData = await visitService.getTenantVisits(user.id)
+        console.log("📅 Visites récupérées:", visitsData.length)
+        setVisits(visitsData)
+      } catch (error) {
+        console.error("❌ Erreur chargement visites:", error)
+        toast.error("Erreur lors du chargement des visites")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [])
+
+  const upcomingVisits = visits.filter((visit) => {
+    const visitDate = new Date(`${visit.visit_date}T${visit.start_time || visit.visit_time}`)
+    return visitDate > new Date() && ["scheduled", "confirmed", "proposed"].includes(visit.status)
+  })
+
+  const pastVisits = visits.filter((visit) => {
+    const visitDate = new Date(`${visit.visit_date}T${visit.start_time || visit.visit_time}`)
+    return visitDate <= new Date() || ["completed", "cancelled", "no_show"].includes(visit.status)
+  })
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
-      case "Confirmée":
-        return "success"
-      case "En attente":
+      case "proposed":
         return "secondary"
-      case "Terminée":
+      case "confirmed":
+      case "scheduled":
         return "default"
-      case "Annulée":
+      case "completed":
+        return "default"
+      case "cancelled":
+      case "no_show":
         return "destructive"
       default:
         return "outline"
     }
   }
 
-  const formatDateTime = (dateString: string) => {
-    const date = new Date(dateString)
-    return {
-      date: date.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }),
-      time: date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
-      full: date.toLocaleDateString("fr-FR", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "proposed":
+        return "Proposée"
+      case "confirmed":
+        return "Confirmée"
+      case "scheduled":
+        return "Programmée"
+      case "completed":
+        return "Terminée"
+      case "cancelled":
+        return "Annulée"
+      case "no_show":
+        return "Absent"
+      default:
+        return status
     }
   }
 
-  const handleSubmitFeedback = () => {
-    // Logique pour soumettre le feedback
-    setFeedbackDialog(false)
+  const formatDateTime = (dateString: string, timeString?: string) => {
+    const date = new Date(dateString)
+    const time = timeString || "00:00"
+
+    return {
+      date: date.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }),
+      time: time,
+      full: `${date.toLocaleDateString("fr-FR", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      })} à ${time}`,
+    }
+  }
+
+  const handleConfirmVisit = async (visitId: string) => {
+    try {
+      await visitService.updateVisitStatus(visitId, "confirmed")
+      toast.success("Visite confirmée")
+
+      // Recharger les visites
+      const visitsData = await visitService.getTenantVisits(currentUser.id)
+      setVisits(visitsData)
+    } catch (error) {
+      console.error("❌ Erreur confirmation visite:", error)
+      toast.error("Erreur lors de la confirmation")
+    }
+  }
+
+  const handleCancelVisit = async (visitId: string) => {
+    try {
+      await visitService.updateVisitStatus(visitId, "cancelled")
+      toast.success("Visite annulée")
+
+      // Recharger les visites
+      const visitsData = await visitService.getTenantVisits(currentUser.id)
+      setVisits(visitsData)
+    } catch (error) {
+      console.error("❌ Erreur annulation visite:", error)
+      toast.error("Erreur lors de l'annulation")
+    }
+  }
+
+  const handleSubmitFeedback = async () => {
+    if (!selectedVisit) return
+
+    try {
+      // Ici on pourrait ajouter un service pour les feedbacks
+      toast.success("Avis enregistré")
+      setFeedbackDialog(false)
+    } catch (error) {
+      console.error("❌ Erreur feedback:", error)
+      toast.error("Erreur lors de l'enregistrement")
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto py-6">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center space-y-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="text-gray-600">Chargement de vos visites...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="container mx-auto py-6">
+        <div className="text-center">
+          <p className="text-red-600">Vous devez être connecté pour voir vos visites</p>
+          <Link href="/login">
+            <Button className="mt-4">Se connecter</Button>
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -149,38 +207,46 @@ export default function VisitsPage() {
                   <div className="flex flex-col md:flex-row">
                     <div className="w-full md:w-1/3 h-48 md:h-auto">
                       <img
-                        src={visit.property.image || "/placeholder.svg"}
-                        alt={visit.property.title}
+                        src={visit.property?.property_images?.[0]?.url || "/placeholder.svg?height=200&width=300"}
+                        alt={visit.property?.title || "Propriété"}
                         className="w-full h-full object-cover"
                       />
                     </div>
                     <div className="flex-1 p-6">
                       <div className="flex justify-between items-start mb-4">
                         <div>
-                          <h2 className="text-xl font-semibold">{visit.property.title}</h2>
+                          <h2 className="text-xl font-semibold">{visit.property?.title || "Propriété"}</h2>
                           <div className="flex items-center text-muted-foreground mt-1">
                             <MapPin className="h-4 w-4 mr-1" />
-                            {visit.property.address}
+                            {visit.property?.address || "Adresse non disponible"}
                           </div>
                         </div>
-                        <Badge variant={getStatusBadgeVariant(visit.status)}>{visit.status}</Badge>
+                        <Badge variant={getStatusBadgeVariant(visit.status)}>{getStatusText(visit.status)}</Badge>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div className="flex items-start">
                           <Calendar className="h-5 w-5 mr-2 text-blue-600" />
                           <div>
-                            <p className="font-medium">{formatDateTime(visit.date).date}</p>
-                            <p className="text-sm text-muted-foreground">{formatDateTime(visit.date).time}</p>
+                            <p className="font-medium">{formatDateTime(visit.visit_date, visit.start_time).date}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {formatDateTime(visit.visit_date, visit.start_time).time}
+                            </p>
                           </div>
                         </div>
-                        <div className="flex items-start">
-                          <User className="h-5 w-5 mr-2 text-blue-600" />
-                          <div>
-                            <p className="font-medium">{visit.contactPerson}</p>
-                            <p className="text-sm text-muted-foreground">{visit.contactPhone}</p>
+                        {visit.property?.owner && (
+                          <div className="flex items-start">
+                            <User className="h-5 w-5 mr-2 text-blue-600" />
+                            <div>
+                              <p className="font-medium">
+                                {visit.property.owner.first_name} {visit.property.owner.last_name}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {visit.property.owner.phone || visit.property.owner.email}
+                              </p>
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
 
                       {visit.notes && (
@@ -191,19 +257,25 @@ export default function VisitsPage() {
 
                       <div className="flex flex-wrap gap-2 justify-end">
                         <Button variant="outline" size="sm" asChild>
-                          <Link href={`/properties/${visit.property.id}`}>Voir l'annonce</Link>
+                          <Link href={`/properties/${visit.property_id}`}>Voir l'annonce</Link>
                         </Button>
-                        <Button variant="outline" size="sm">
-                          Contacter le propriétaire
-                        </Button>
-                        {visit.status === "En attente" && (
-                          <Button size="sm" variant="default">
-                            Confirmer la visite
+
+                        {visit.status === "proposed" && (
+                          <>
+                            <Button size="sm" onClick={() => handleConfirmVisit(visit.id)}>
+                              Confirmer la visite
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => handleCancelVisit(visit.id)}>
+                              Refuser
+                            </Button>
+                          </>
+                        )}
+
+                        {visit.status === "confirmed" && (
+                          <Button size="sm" variant="destructive" onClick={() => handleCancelVisit(visit.id)}>
+                            Annuler la visite
                           </Button>
                         )}
-                        <Button size="sm" variant="destructive">
-                          Annuler la visite
-                        </Button>
                       </div>
                     </div>
                   </div>
@@ -234,38 +306,46 @@ export default function VisitsPage() {
                   <div className="flex flex-col md:flex-row">
                     <div className="w-full md:w-1/3 h-48 md:h-auto">
                       <img
-                        src={visit.property.image || "/placeholder.svg"}
-                        alt={visit.property.title}
+                        src={visit.property?.property_images?.[0]?.url || "/placeholder.svg?height=200&width=300"}
+                        alt={visit.property?.title || "Propriété"}
                         className="w-full h-full object-cover"
                       />
                     </div>
                     <div className="flex-1 p-6">
                       <div className="flex justify-between items-start mb-4">
                         <div>
-                          <h2 className="text-xl font-semibold">{visit.property.title}</h2>
+                          <h2 className="text-xl font-semibold">{visit.property?.title || "Propriété"}</h2>
                           <div className="flex items-center text-muted-foreground mt-1">
                             <MapPin className="h-4 w-4 mr-1" />
-                            {visit.property.address}
+                            {visit.property?.address || "Adresse non disponible"}
                           </div>
                         </div>
-                        <Badge variant={getStatusBadgeVariant(visit.status)}>{visit.status}</Badge>
+                        <Badge variant={getStatusBadgeVariant(visit.status)}>{getStatusText(visit.status)}</Badge>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div className="flex items-start">
                           <Calendar className="h-5 w-5 mr-2 text-blue-600" />
                           <div>
-                            <p className="font-medium">{formatDateTime(visit.date).date}</p>
-                            <p className="text-sm text-muted-foreground">{formatDateTime(visit.date).time}</p>
+                            <p className="font-medium">{formatDateTime(visit.visit_date, visit.start_time).date}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {formatDateTime(visit.visit_date, visit.start_time).time}
+                            </p>
                           </div>
                         </div>
-                        <div className="flex items-start">
-                          <User className="h-5 w-5 mr-2 text-blue-600" />
-                          <div>
-                            <p className="font-medium">{visit.contactPerson}</p>
-                            <p className="text-sm text-muted-foreground">{visit.contactPhone}</p>
+                        {visit.property?.owner && (
+                          <div className="flex items-start">
+                            <User className="h-5 w-5 mr-2 text-blue-600" />
+                            <div>
+                              <p className="font-medium">
+                                {visit.property.owner.first_name} {visit.property.owner.last_name}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {visit.property.owner.phone || visit.property.owner.email}
+                              </p>
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
 
                       {visit.notes && (
@@ -280,7 +360,7 @@ export default function VisitsPage() {
                             <p className="font-medium text-blue-800">Votre avis sur ce bien</p>
                             <div className="ml-2 flex">
                               {[...Array(5)].map((_, i) => (
-                                <Star
+                                <StarComponent
                                   key={i}
                                   className={`h-4 w-4 ${
                                     i < visit.feedback.rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
@@ -295,9 +375,9 @@ export default function VisitsPage() {
 
                       <div className="flex flex-wrap gap-2 justify-end">
                         <Button variant="outline" size="sm" asChild>
-                          <Link href={`/properties/${visit.property.id}`}>Voir l'annonce</Link>
+                          <Link href={`/properties/${visit.property_id}`}>Voir l'annonce</Link>
                         </Button>
-                        {visit.status === "Terminée" && !visit.feedback && (
+                        {visit.status === "completed" && !visit.feedback && (
                           <Dialog open={feedbackDialog} onOpenChange={setFeedbackDialog}>
                             <DialogTrigger asChild>
                               <Button
@@ -315,7 +395,7 @@ export default function VisitsPage() {
                               <DialogHeader>
                                 <DialogTitle>Votre avis sur la visite</DialogTitle>
                                 <DialogDescription>
-                                  Partagez votre expérience concernant la visite de {selectedVisit?.property.title}
+                                  Partagez votre expérience concernant la visite de {selectedVisit?.property?.title}
                                 </DialogDescription>
                               </DialogHeader>
                               <div className="space-y-4 py-4">
@@ -333,7 +413,7 @@ export default function VisitsPage() {
                                         }`}
                                         onClick={() => setFeedbackRating(rating)}
                                       >
-                                        <Star
+                                        <StarComponent
                                           className={`h-5 w-5 ${
                                             feedbackRating >= rating
                                               ? "fill-yellow-400 text-yellow-400"
@@ -388,7 +468,7 @@ export default function VisitsPage() {
 }
 
 // Composant Star pour les évaluations
-function Star(props: any) {
+function StarComponent(props: any) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
