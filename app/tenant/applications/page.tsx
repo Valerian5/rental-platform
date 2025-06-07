@@ -9,14 +9,6 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -29,6 +21,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
+import { useRouter } from "next/navigation"
 
 interface Application {
   id: string
@@ -70,6 +63,7 @@ export default function TenantApplicationsPage() {
   const [showSlotDialog, setShowSlotDialog] = useState(false)
   const [selectedSlot, setSelectedSlot] = useState<string>("")
   const [currentUser, setCurrentUser] = useState<any>(null)
+  const router = useRouter()
 
   useEffect(() => {
     loadApplications()
@@ -348,89 +342,27 @@ export default function TenantApplicationsPage() {
                         </div>
                       </div>
 
-                      {/* Créneaux proposés */}
-                      {application.status === "visit_proposed" && application.proposed_visit_slots && (
+                      {/* Créneaux proposés - nouveau statut */}
+                      {application.status === "visit_proposed" && (
                         <div className="bg-blue-50 p-4 rounded-md mb-4">
                           <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center">
                               <Calendar className="h-4 w-4 text-blue-600 mr-2" />
                               <span className="font-medium text-blue-800">Créneaux de visite proposés</span>
                             </div>
-                            <Dialog open={showSlotDialog} onOpenChange={setShowSlotDialog}>
-                              <DialogTrigger asChild>
-                                <Button
-                                  size="sm"
-                                  onClick={() => {
-                                    setSelectedApplication(application)
-                                    setSelectedSlot("")
-                                  }}
-                                >
-                                  Choisir un créneau
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent>
-                                <DialogHeader>
-                                  <DialogTitle>Choisir un créneau de visite</DialogTitle>
-                                  <DialogDescription>
-                                    Sélectionnez le créneau qui vous convient le mieux pour visiter{" "}
-                                    {selectedApplication?.property.title}
-                                  </DialogDescription>
-                                </DialogHeader>
-                                <div className="space-y-3">
-                                  {selectedApplication?.proposed_visit_slots?.map((slot) => (
-                                    <div
-                                      key={slot.id}
-                                      className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                                        selectedSlot === slot.id
-                                          ? "border-blue-500 bg-blue-50"
-                                          : "border-gray-200 hover:border-gray-300"
-                                      }`}
-                                      onClick={() => setSelectedSlot(slot.id)}
-                                    >
-                                      <div className="flex items-center justify-between">
-                                        <div>
-                                          <p className="font-medium">
-                                            {new Date(slot.date).toLocaleDateString("fr-FR", {
-                                              weekday: "long",
-                                              day: "numeric",
-                                              month: "long",
-                                              year: "numeric",
-                                            })}
-                                          </p>
-                                          <p className="text-sm text-gray-600">
-                                            {slot.start_time} - {slot.end_time}
-                                          </p>
-                                        </div>
-                                        <div
-                                          className={`w-4 h-4 rounded-full border-2 ${
-                                            selectedSlot === slot.id ? "border-blue-500 bg-blue-500" : "border-gray-300"
-                                          }`}
-                                        />
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                                <div className="flex justify-end gap-2 pt-4">
-                                  <Button variant="outline" onClick={() => setShowSlotDialog(false)}>
-                                    Annuler
-                                  </Button>
-                                  <Button
-                                    onClick={() =>
-                                      selectedApplication &&
-                                      selectedSlot &&
-                                      handleChooseVisitSlot(selectedApplication.id, selectedSlot)
-                                    }
-                                    disabled={!selectedSlot}
-                                  >
-                                    Confirmer ce créneau
-                                  </Button>
-                                </div>
-                              </DialogContent>
-                            </Dialog>
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                console.log("🔄 Redirection vers sélection créneau:", application.id)
+                                router.push(`/tenant/applications/${application.id}/select-visit-slot`)
+                              }}
+                            >
+                              Choisir un créneau
+                            </Button>
                           </div>
                           <div className="text-sm text-blue-700">
-                            Le propriétaire vous a proposé {application.proposed_visit_slots.length} créneau(x) de
-                            visite. Cliquez sur "Choisir un créneau" pour sélectionner celui qui vous convient.
+                            Le propriétaire vous a proposé des créneaux de visite. Cliquez sur "Choisir un créneau" pour
+                            sélectionner celui qui vous convient.
                           </div>
                         </div>
                       )}
