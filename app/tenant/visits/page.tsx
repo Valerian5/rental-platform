@@ -50,6 +50,20 @@ export default function VisitsPage() {
         const visitsData = await visitService.getTenantVisits(user.id)
         console.log("📅 Visites récupérées:", visitsData.length)
         console.log("📅 Structure première visite:", visitsData[0]) // Debug
+
+        // Logs détaillés pour diagnostic
+        console.log("📅 Structure première visite (complet):", JSON.stringify(visitsData[0], null, 2))
+        console.log(
+          "📅 Toutes les visites:",
+          visitsData.map((v) => ({
+            id: v.id,
+            visit_date: v.visit_date,
+            start_time: v.start_time,
+            visit_time: v.visit_time,
+            status: v.status,
+            property_title: v.property?.title,
+          })),
+        )
         setVisits(visitsData)
       } catch (error) {
         console.error("❌ Erreur chargement visites:", error)
@@ -63,9 +77,32 @@ export default function VisitsPage() {
   }, [])
 
   const upcomingVisits = visits.filter((visit) => {
+    console.log("🔍 Analyse visite:", {
+      id: visit.id,
+      visit_date: visit.visit_date,
+      start_time: visit.start_time,
+      visit_time: visit.visit_time,
+      status: visit.status,
+      dateTime: `${visit.visit_date}T${visit.start_time || visit.visit_time || "00:00"}`,
+    })
+
     const visitDateTime = new Date(`${visit.visit_date}T${visit.start_time || visit.visit_time || "00:00"}`)
-    return visitDateTime > new Date() && ["scheduled", "confirmed", "proposed"].includes(visit.status)
+    const now = new Date()
+    const isUpcoming = visitDateTime > now
+    const hasValidStatus = ["scheduled", "confirmed", "proposed"].includes(visit.status)
+
+    console.log("🔍 Conditions:", {
+      visitDateTime: visitDateTime.toISOString(),
+      now: now.toISOString(),
+      isUpcoming,
+      hasValidStatus,
+      willShow: isUpcoming && hasValidStatus,
+    })
+
+    return isUpcoming && hasValidStatus
   })
+
+  console.log("📅 Visites à venir filtrées:", upcomingVisits.length)
 
   const pastVisits = visits.filter((visit) => {
     const visitDateTime = new Date(`${visit.visit_date}T${visit.start_time || visit.visit_time || "00:00"}`)

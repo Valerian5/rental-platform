@@ -178,7 +178,20 @@ export default function VisitsPage() {
 
   const getVisitsForDay = (day: Date) => {
     const dayStr = format(day, "yyyy-MM-dd")
-    return filteredVisits.filter((visit) => visit.visit_date === dayStr)
+    const dayVisits = filteredVisits.filter((visit) => {
+      const matches = visit.visit_date === dayStr
+      if (matches) {
+        console.log("📅 Visite trouvée pour", dayStr, ":", {
+          id: visit.id,
+          visitor_name: visit.visitor_name,
+          visit_time: visit.visit_time,
+          start_time: visit.start_time,
+          status: visit.status,
+        })
+      }
+      return matches
+    })
+    return dayVisits
   }
 
   const navigateWeek = (direction: "prev" | "next") => {
@@ -385,9 +398,13 @@ export default function VisitsPage() {
                   <div key={timeSlot} className="contents">
                     <div className="p-2 text-xs text-muted-foreground border-r">{timeSlot}</div>
                     {weekDays.map((day) => {
-                      const dayVisits = getVisitsForDay(day).filter(
-                        (visit) => visit.visit_time === timeSlot || visit.start_time === timeSlot,
-                      )
+                      const dayVisits = getVisitsForDay(day).filter((visit) => {
+                        const timeMatches = visit.visit_time === timeSlot || visit.start_time === timeSlot
+                        if (timeMatches) {
+                          console.log("📅 Visite correspond au créneau", timeSlot, ":", visit)
+                        }
+                        return timeMatches
+                      })
                       return (
                         <div key={`${day.toISOString()}-${timeSlot}`} className="p-1 border-r border-b min-h-[60px]">
                           {dayVisits.map((visit) => (
