@@ -292,7 +292,7 @@ export default function VisitsPage() {
               </div>
               <h3 className="text-lg font-semibold mb-2">Aucune visite à venir</h3>
               <p className="text-muted-foreground mb-4">
-                Vous n'avez pas encore de visites programmées. Postulez à des annonces pour organiser des visites.
+                Vous n'avez pas encore de visites programmées! Postulez à des annonces pour organiser des visites.
               </p>
               <Button asChild>
                 <Link href="/properties">Voir les annonces</Link>
