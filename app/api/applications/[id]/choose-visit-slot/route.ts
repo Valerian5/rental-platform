@@ -8,6 +8,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     console.log("📅 Choix créneau:", { applicationId, slot_id })
 
+    // Vérifier que les paramètres sont valides
+    if (!applicationId || !slot_id) {
+      return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 })
+    }
+
     // Récupérer la candidature avec les détails
     const { data: application, error: appError } = await supabase
       .from("applications")
@@ -19,8 +24,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .eq("id", applicationId)
       .single()
 
-    if (appError || !application) {
-      console.error("❌ Candidature non trouvée:", appError)
+    if (appError) {
+      console.error("❌ Erreur candidature:", appError)
+      return NextResponse.json({ error: "Candidature non trouvée", details: appError.message }, { status: 404 })
+    }
+
+    if (!application) {
       return NextResponse.json({ error: "Candidature non trouvée" }, { status: 404 })
     }
 
@@ -28,7 +37,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     if (application.status !== "visit_proposed") {
       console.error("❌ Statut incorrect:", application.status)
       return NextResponse.json(
-        { error: "Cette candidature n'est pas au stade de sélection de créneaux" },
+        { error: `Statut incorrect: ${application.status}. Attendu: visit_proposed` },
         { status: 400 },
       )
     }
@@ -40,8 +49,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .eq("id", slot_id)
       .single()
 
-    if (slotError || !slot) {
-      console.error("❌ Créneau non trouvé:", slotError)
+    if (slotError) {
+      console.error("❌ Erreur créneau:", slotError)
+      return NextResponse.json({ error: "Créneau non trouvé", details: slotError.message }, { status: 404 })
+    }
+
+    if (!slot) {
       return NextResponse.json({ error: "Créneau non trouvé" }, { status: 404 })
     }
 
@@ -57,35 +70,98 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: "Créneau invalide pour cette propriété" }, { status: 400 })
     }
 
-    // Créer la visite réelle
+    // Préparer les données de la visite (compatible avec votre structure existante)
     const visitData = {
       property_id: application.property_id,
       tenant_id: application.tenant_id,
-      visitor_name:
-        `${application.tenant?.first_name || ""} ${application.tenant?.last_name || ""}`.trim() || "Visiteur",
-      visitor_email: application.tenant?.email || "",
-      visitor_phone: application.tenant?.phone || "",
-      visit_date: slot.date,
-      start_time: slot.start_time,
-      end_time: slot.end_time,
+      // Utiliser visite_date si visit_date n'existe pas encore
+      visite_date: slot.date,
+      visit_date: slot.date, // Au cas où la colonne existe déjà
       status: "scheduled",
-      notes: `Visite programmée suite à la candidature ${applicationId}`,
+      notes: `Visite programmée suite à la candidature ${applicationId}. Créneau: ${slot.start_time} - ${slot.end_time}`,
+      application_id: applicationId,
       created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     }
 
-    console.log("📅 Création visite:", visitData)
+    // Ajouter les nouvelles colonnes si elles existent
+    const visitorName = `${application.tenant?.first_name || ""} ${application.tenant?.last_name || ""}`.trim()
+    if (visitorName) {
+      visitData.visitor_name = visitorName
+    }
 
+    if (application.tenant?.email) {
+      visitData.visitor_email = application.tenant.email
+    }
+
+    if (application.tenant?.phone) {
+      visitData.visitor_phone = application.tenant.phone
+    }
+
+    if (slot.start_time) {
+      visitData.start_time = slot.start_time
+    }
+
+    if (slot.end_time) {
+      visitData.end_time = slot.end_time
+    }
+
+    console.log("📅 Données visite:", visitData)
+
+    // Créer la visite avec gestion d'erreur pour colonnes manquantes
     const { data: visit, error: visitError } = await supabase.from("visits").insert(visitData).select().single()
 
     if (visitError) {
       console.error("❌ Erreur création visite:", visitError)
-      return NextResponse.json(
-        {
-          error: "Erreur lors de la création de la visite",
-          details: visitError.message,
-        },
-        { status: 500 },
-      )
+
+      // Si erreur de colonne manquante, essayer avec structure minimale
+      if (visitError.message?.includes("does not exist")) {
+        console.log("🔄 Tentative avec structure minimale...")
+
+        const minimalVisitData = {
+          property_id: application.property_id,
+          tenant_id: application.tenant_id,
+          visite_date: slot.date,
+          status: "scheduled",
+          notes: `Visite programmée suite à la candidature ${applicationId}. Créneau: ${slot.start_time} - ${slot.end_time}`,
+          application_id: applicationId,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+
+        const { data: minimalVisit, error: minimalError } = await supabase
+          .from("visits")
+          .insert(minimalVisitData)
+          .select()
+          .single()
+
+        if (minimalError) {
+          console.error("❌ Erreur création visite minimale:", minimalError)
+          return NextResponse.json(
+            {
+              error: "Erreur lors de la création de la visite",
+              details: minimalError.message,
+              suggestion: "Veuillez exécuter le script de migration de la table visits",
+            },
+            { status: 500 },
+          )
+        }
+
+        const visit = minimalVisit
+      } else {
+        return NextResponse.json(
+          {
+            error: "Erreur lors de la création de la visite",
+            details: visitError.message,
+            code: visitError.code,
+          },
+          { status: 500 },
+        )
+      }
+    }
+
+    if (!visit) {
+      return NextResponse.json({ error: "Visite non créée" }, { status: 500 })
     }
 
     console.log("✅ Visite créée:", visit.id)
@@ -101,7 +177,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     if (updateError) {
       console.error("❌ Erreur mise à jour candidature:", updateError)
-      // On continue même si la mise à jour échoue
+      // On continue même si la mise à jour échoue car la visite est créée
     }
 
     // Mettre à jour le créneau pour indiquer qu'il est réservé
@@ -144,11 +220,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       message: "Créneau de visite confirmé avec succès",
     })
   } catch (error) {
-    console.error("❌ Erreur serveur:", error)
+    console.error("❌ Erreur serveur complète:", error)
     return NextResponse.json(
       {
         error: "Erreur serveur",
         details: error instanceof Error ? error.message : "Erreur inconnue",
+        stack: error instanceof Error ? error.stack : undefined,
       },
       { status: 500 },
     )
