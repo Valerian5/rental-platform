@@ -62,7 +62,7 @@ interface Application {
   }
   visits?: Array<{
     id: string
-    visite_date: string
+    visit_date: string
     start_time?: string
     end_time?: string
     status: string
@@ -750,7 +750,7 @@ export default function TenantApplicationsPage() {
                             {application.visits.map((visit) => (
                               <p key={visit.id} className="text-sm text-green-700 mt-1">
                                 Le{" "}
-                                {new Date(visit.visite_date).toLocaleDateString("fr-FR", {
+                                {new Date(visit.visit_date).toLocaleDateString("fr-FR", {
                                   day: "numeric",
                                   month: "long",
                                   year: "numeric",
