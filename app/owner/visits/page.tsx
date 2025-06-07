@@ -385,7 +385,9 @@ export default function VisitsPage() {
                   <div key={timeSlot} className="contents">
                     <div className="p-2 text-xs text-muted-foreground border-r">{timeSlot}</div>
                     {weekDays.map((day) => {
-                      const dayVisits = getVisitsForDay(day).filter((visit) => visit.visit_time === timeSlot)
+                      const dayVisits = getVisitsForDay(day).filter(
+                        (visit) => visit.visit_time === timeSlot || visit.start_time === timeSlot,
+                      )
                       return (
                         <div key={`${day.toISOString()}-${timeSlot}`} className="p-1 border-r border-b min-h-[60px]">
                           {dayVisits.map((visit) => (
@@ -393,7 +395,7 @@ export default function VisitsPage() {
                               key={visit.id}
                               className={`
                                 p-2 rounded text-xs cursor-pointer mb-1
-                                ${visit.status === "scheduled" ? "bg-blue-100 text-blue-800 border border-blue-200" : ""}
+                                ${visit.status === "scheduled" || visit.status === "confirmed" ? "bg-blue-100 text-blue-800 border border-blue-200" : ""}
                                 ${visit.status === "completed" ? "bg-green-100 text-green-800 border border-green-200" : ""}
                                 ${visit.status === "cancelled" ? "bg-gray-100 text-gray-800 border border-gray-200" : ""}
                                 ${visit.status === "no_show" ? "bg-red-100 text-red-800 border border-red-200" : ""}
@@ -477,7 +479,7 @@ export default function VisitsPage() {
                               </div>
                               <div className="flex items-center">
                                 <Clock className="h-4 w-4 mr-1" />
-                                {visit.visit_time}
+                                {visit.visit_time || visit.start_time}
                               </div>
                             </div>
                           </div>

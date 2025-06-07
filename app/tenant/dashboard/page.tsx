@@ -378,13 +378,12 @@ export default function TenantDashboardPage() {
                                   {new Date(visit.visit_date).toLocaleDateString("fr-FR", {
                                     day: "numeric",
                                     month: "short",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
+                                  })}{" "}
+                                  à {visit.start_time || visit.visit_time || "00:00"}
                                 </span>
                               </div>
                               <Badge variant="default" className="text-xs">
-                                {visit.status}
+                                {visit.status === "confirmed" ? "Confirmée" : visit.status}
                               </Badge>
                             </div>
                           </div>

@@ -49,6 +49,7 @@ export default function VisitsPage() {
         // Récupérer les visites du locataire
         const visitsData = await visitService.getTenantVisits(user.id)
         console.log("📅 Visites récupérées:", visitsData.length)
+        console.log("📅 Structure première visite:", visitsData[0]) // Debug
         setVisits(visitsData)
       } catch (error) {
         console.error("❌ Erreur chargement visites:", error)
@@ -62,13 +63,13 @@ export default function VisitsPage() {
   }, [])
 
   const upcomingVisits = visits.filter((visit) => {
-    const visitDate = new Date(`${visit.visit_date}T${visit.start_time || visit.visit_time}`)
-    return visitDate > new Date() && ["scheduled", "confirmed", "proposed"].includes(visit.status)
+    const visitDateTime = new Date(`${visit.visit_date}T${visit.start_time || visit.visit_time || "00:00"}`)
+    return visitDateTime > new Date() && ["scheduled", "confirmed", "proposed"].includes(visit.status)
   })
 
   const pastVisits = visits.filter((visit) => {
-    const visitDate = new Date(`${visit.visit_date}T${visit.start_time || visit.visit_time}`)
-    return visitDate <= new Date() || ["completed", "cancelled", "no_show"].includes(visit.status)
+    const visitDateTime = new Date(`${visit.visit_date}T${visit.start_time || visit.visit_time || "00:00"}`)
+    return visitDateTime <= new Date() || ["completed", "cancelled", "no_show"].includes(visit.status)
   })
 
   const getStatusBadgeVariant = (status: string) => {
@@ -228,9 +229,11 @@ export default function VisitsPage() {
                         <div className="flex items-start">
                           <Calendar className="h-5 w-5 mr-2 text-blue-600" />
                           <div>
-                            <p className="font-medium">{formatDateTime(visit.visit_date, visit.start_time).date}</p>
+                            <p className="font-medium">
+                              {formatDateTime(visit.visit_date, visit.start_time || visit.visit_time).date}
+                            </p>
                             <p className="text-sm text-muted-foreground">
-                              {formatDateTime(visit.visit_date, visit.start_time).time}
+                              {formatDateTime(visit.visit_date, visit.start_time || visit.visit_time).time}
                             </p>
                           </div>
                         </div>
@@ -327,9 +330,11 @@ export default function VisitsPage() {
                         <div className="flex items-start">
                           <Calendar className="h-5 w-5 mr-2 text-blue-600" />
                           <div>
-                            <p className="font-medium">{formatDateTime(visit.visit_date, visit.start_time).date}</p>
+                            <p className="font-medium">
+                              {formatDateTime(visit.visit_date, visit.start_time || visit.visit_time).date}
+                            </p>
                             <p className="text-sm text-muted-foreground">
-                              {formatDateTime(visit.visit_date, visit.start_time).time}
+                              {formatDateTime(visit.visit_date, visit.start_time || visit.visit_time).time}
                             </p>
                           </div>
                         </div>
