@@ -63,7 +63,7 @@ export default function VisitsPage() {
   }, [])
 
   const upcomingVisits = visits.filter((visit) => {
-    const visitDateTime = new Date(`${visits.visit_date}T${visits.start_time || visits.visit_time || "00:00"}`)
+    const visitDateTime = new Date(`${visit.visit_date}T${visit.start_time || visit.visit_time || "00:00"}`)
     return visitDateTime > new Date() && ["scheduled", "confirmed", "proposed"].includes(visit.status)
   })
 
@@ -208,7 +208,7 @@ export default function VisitsPage() {
                   <div className="flex flex-col md:flex-row">
                     <div className="w-full md:w-1/3 h-48 md:h-auto">
                       <img
-                        src={visits.property?.property_images?.[0]?.url || "/placeholder.svg?height=200&width=300"}
+                        src={visit.property?.property_images?.[0]?.url || "/placeholder.svg?height=200&width=300"}
                         alt={visit.property?.title || "Propriété"}
                         className="w-full h-full object-cover"
                       />
@@ -216,7 +216,7 @@ export default function VisitsPage() {
                     <div className="flex-1 p-6">
                       <div className="flex justify-between items-start mb-4">
                         <div>
-                          <h2 className="text-xl font-semibold">{visits.property?.title || "Propriété"}</h2>
+                          <h2 className="text-xl font-semibold">{visit.property?.title || "Propriété"}</h2>
                           <div className="flex items-center text-muted-foreground mt-1">
                             <MapPin className="h-4 w-4 mr-1" />
                             {visit.property?.address || "Adresse non disponible"}
@@ -292,7 +292,7 @@ export default function VisitsPage() {
               </div>
               <h3 className="text-lg font-semibold mb-2">Aucune visite à venir</h3>
               <p className="text-muted-foreground mb-4">
-                Vous n'avez pas encore de visites programmées! Postulez à des annonces pour organiser des visites.
+                Vous n'avez pas encore de visites programmées. Postulez à des annonces pour organiser des visites.
               </p>
               <Button asChild>
                 <Link href="/properties">Voir les annonces</Link>
