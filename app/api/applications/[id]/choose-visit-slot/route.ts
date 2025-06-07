@@ -74,8 +74,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const visitData = {
       property_id: application.property_id,
       tenant_id: application.tenant_id,
-      // Utiliser visite_date si visit_date n'existe pas encore
-      visite_date: slot.date,
       visit_date: slot.date, // Au cas où la colonne existe déjà
       status: "scheduled",
       notes: `Visite programmée suite à la candidature ${applicationId}. Créneau: ${slot.start_time} - ${slot.end_time}`,
@@ -121,7 +119,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         const minimalVisitData = {
           property_id: application.property_id,
           tenant_id: application.tenant_id,
-          visite_date: slot.date,
+          visit_date: slot.date,
           status: "scheduled",
           notes: `Visite programmée suite à la candidature ${applicationId}. Créneau: ${slot.start_time} - ${slot.end_time}`,
           application_id: applicationId,
