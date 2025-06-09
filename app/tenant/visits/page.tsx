@@ -62,13 +62,45 @@ export default function VisitsPage() {
     fetchData()
   }, [])
 
+  // Fonction utilitaire pour extraire la date au format YYYY-MM-DD
+  const extractDate = (dateString: string) => {
+    if (!dateString) return ""
+    // Si c'est déjà au bon format, on le retourne
+    if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) return dateString
+    // Sinon on extrait la partie date de l'ISO string
+    return dateString.split("T")[0]
+  }
+
   const upcomingVisits = visits.filter((visit) => {
-    const visitDateTime = new Date(`${visit.visit_date}T${visit.start_time || visit.visit_time || "00:00"}`)
-    return visitDateTime > new Date() && ["scheduled", "confirmed", "proposed"].includes(visit.status)
+    const visitDate = extractDate(visit.visit_date)
+    const visitTime = visit.start_time || visit.visit_time || "00:00"
+    const visitDateTime = new Date(`${visitDate}T${visitTime}`)
+    const now = new Date()
+    const isUpcoming = visitDateTime > now
+    const hasValidStatus = ["scheduled", "confirmed", "proposed"].includes(visit.status)
+
+    console.log("🔍 Analyse visite:", {
+      id: visit.id,
+      original_date: visit.visit_date,
+      extracted_date: visitDate,
+      time: visitTime,
+      status: visit.status,
+      dateTime: visitDateTime.toISOString(),
+      now: now.toISOString(),
+      isUpcoming,
+      hasValidStatus,
+      willShow: isUpcoming && hasValidStatus,
+    })
+
+    return isUpcoming && hasValidStatus
   })
 
+  console.log("📅 Visites à venir filtrées:", upcomingVisits.length)
+
   const pastVisits = visits.filter((visit) => {
-    const visitDateTime = new Date(`${visit.visit_date}T${visit.start_time || visit.visit_time || "00:00"}`)
+    const visitDate = extractDate(visit.visit_date)
+    const visitTime = visit.start_time || visit.visit_time || "00:00"
+    const visitDateTime = new Date(`${visitDate}T${visitTime}`)
     return visitDateTime <= new Date() || ["completed", "cancelled", "no_show"].includes(visit.status)
   })
 
@@ -109,7 +141,7 @@ export default function VisitsPage() {
   }
 
   const formatDateTime = (dateString: string, timeString?: string) => {
-    const date = new Date(dateString)
+    const date = new Date(extractDate(dateString))
     const time = timeString || "00:00"
 
     return {
