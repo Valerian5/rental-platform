@@ -62,7 +62,7 @@ interface Application {
   }
   visits?: Array<{
     id: string
-    visite_date: string
+    visit_date: string
     start_time?: string
     end_time?: string
     status: string
@@ -592,17 +592,6 @@ export default function TenantApplicationsPage() {
     )
   }
 
-  const extractDate = (dateString) => {
-    return dateString.split("T")[0]
-  }
-
-  const isVisitPassed = (visit) => {
-    const visitDate = extractDate(visit.visite_date)
-    const visitTime = visit.start_time || visit.end_time || "23:59"
-    const visitDateTime = new Date(`${visitDate}T${visitTime}`)
-    return visitDateTime < new Date()
-  }
-
   return (
     <div className="container mx-auto py-6">
       <h1 className="text-2xl font-bold mb-6">Mes candidatures</h1>
@@ -753,53 +742,22 @@ export default function TenantApplicationsPage() {
                       {application.status === "visit_scheduled" &&
                         application.visits &&
                         application.visits.length > 0 && (
-                          <div
-                            className={`p-3 rounded-md mb-4 ${
-                              application.visits.some((visit) => isVisitPassed(visit)) ? "bg-orange-50" : "bg-green-50"
-                            }`}
-                          >
+                          <div className="bg-green-50 p-3 rounded-md mb-4">
                             <div className="flex items-center">
-                              <Calendar
-                                className={`h-4 w-4 mr-2 ${
-                                  application.visits.some((visit) => isVisitPassed(visit))
-                                    ? "text-orange-600"
-                                    : "text-green-600"
-                                }`}
-                              />
-                              <span
-                                className={`font-medium ${
-                                  application.visits.some((visit) => isVisitPassed(visit))
-                                    ? "text-orange-800"
-                                    : "text-green-800"
-                                }`}
-                              >
-                                {application.visits.some((visit) => isVisitPassed(visit))
-                                  ? "Visite effectuée"
-                                  : "Visite confirmée"}
-                              </span>
+                              <Calendar className="h-4 w-4 text-green-600 mr-2" />
+                              <span className="font-medium text-green-800">Visite confirmée</span>
                             </div>
                             {application.visits.map((visit) => (
-                              <p
-                                key={visit.id}
-                                className={`text-sm mt-1 ${
-                                  isVisitPassed(visit) ? "text-orange-700" : "text-green-700"
-                                }`}
-                              >
+                              <p key={visit.id} className="text-sm text-green-700 mt-1">
                                 Le{" "}
-                                {new Date(visit.visite_date).toLocaleDateString("fr-FR", {
+                                {new Date(visit.visit_date).toLocaleDateString("fr-FR", {
                                   day: "numeric",
                                   month: "long",
                                   year: "numeric",
                                 })}{" "}
                                 {visit.start_time && visit.end_time && `de ${visit.start_time} à ${visit.end_time}`}
-                                {isVisitPassed(visit) && " - En attente de retour du propriétaire"}
                               </p>
                             ))}
-                            {application.visits.some((visit) => isVisitPassed(visit)) && (
-                              <Button size="sm" className="mt-2" variant="outline">
-                                Relancer le propriétaire
-                              </Button>
-                            )}
                           </div>
                         )}
 

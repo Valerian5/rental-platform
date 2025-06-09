@@ -4,557 +4,368 @@ import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Separator } from "@/components/ui/separator"
-import { toast } from "@/hooks/use-toast"
-import {
-  MapPin,
-  Calendar,
-  Clock,
-  Euro,
-  FileText,
-  MessageCircle,
-  Eye,
-  CalendarPlus,
-  Search,
-  Filter,
-  SortAsc,
-  CheckCircle,
-  XCircle,
-  AlertCircle,
-  Phone,
-  Mail,
-} from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
+import { toast } from "sonner"
+import { authService } from "@/lib/auth-service"
+import { PageHeader } from "@/components/page-header"
+import { ModernApplicationCard } from "@/components/modern-application-card"
+import { Filter, Download, Users } from "lucide-react"
 
-interface Application {
-  id: string
-  tenant_id: string
-  property_id: string
-  status: "pending" | "accepted" | "rejected" | "visit_scheduled" | "visit_completed"
-  created_at: string
-  updated_at: string
-  message?: string
-  tenant: {
-    id: string
-    email: string
-    first_name: string
-    last_name: string
-    phone?: string
-    avatar_url?: string
-  }
-  property: {
-    id: string
-    title: string
-    address: string
-    rent: number
-    images?: Array<{ url: string; is_primary?: boolean }>
-  }
-  rental_file?: {
-    id: string
-    monthly_income?: number
-    employment_status?: string
-    guarantor_income?: number
-  }
-  visits?: Array<{
-    id: string
-    visit_date: string
-    start_time: string
-    end_time: string
-    status: string
-  }>
-}
-
-const statusConfig = {
-  pending: { label: "En attente", color: "bg-yellow-100 text-yellow-800", icon: AlertCircle },
-  visit_scheduled: { label: "Visite programmée", color: "bg-blue-100 text-blue-800", icon: Calendar },
-  visit_completed: { label: "Visite effectuée", color: "bg-purple-100 text-purple-800", icon: CheckCircle },
-  accepted: { label: "Acceptée", color: "bg-green-100 text-green-800", icon: CheckCircle },
-  rejected: { label: "Refusée", color: "bg-red-100 text-red-800", icon: XCircle },
-}
-
-export default function OwnerApplicationsPage() {
+export default function ApplicationsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [applications, setApplications] = useState<Application[]>([])
-  const [filteredApplications, setFilteredApplications] = useState<Application[]>([])
+  const propertyIdFilter = searchParams.get("propertyId")
+
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [sortBy, setSortBy] = useState<string>("created_at")
+  const [applications, setApplications] = useState([])
   const [activeTab, setActiveTab] = useState("all")
+  const [user, setUser] = useState(null)
+  const [selectedApplications, setSelectedApplications] = useState(new Set())
 
   useEffect(() => {
-    fetchApplications()
+    checkAuthAndLoadData()
   }, [])
 
-  useEffect(() => {
-    filterAndSortApplications()
-  }, [applications, searchTerm, statusFilter, sortBy, activeTab])
-
-  const fetchApplications = async () => {
+  const checkAuthAndLoadData = async () => {
     try {
       setLoading(true)
-      console.log("🔄 Récupération des candidatures...")
+      const currentUser = await authService.getCurrentUser()
 
-      const response = await fetch("/api/applications")
-      if (!response.ok) {
-        throw new Error(`Erreur ${response.status}: ${response.statusText}`)
+      if (!currentUser) {
+        toast.error("Vous devez être connecté pour accéder à cette page")
+        router.push("/login")
+        return
       }
 
-      const data = await response.json()
-      console.log("✅ Candidatures récupérées:", data.length)
-      setApplications(data)
+      if (currentUser.user_type !== "owner") {
+        toast.error("Accès réservé aux propriétaires")
+        router.push("/")
+        return
+      }
+
+      setUser(currentUser)
+      await loadApplications(currentUser.id)
     } catch (error) {
-      console.error("❌ Erreur lors de la récupération des candidatures:", error)
-      toast({
-        title: "Erreur",
-        description: "Impossible de charger les candidatures",
-        variant: "destructive",
-      })
+      console.error("Erreur auth:", error)
+      toast.error("Erreur d'authentification")
     } finally {
       setLoading(false)
     }
   }
 
-  const filterAndSortApplications = () => {
-    let filtered = [...applications]
+  const loadApplications = async (ownerId) => {
+    try {
+      const response = await fetch(`/api/applications?owner_id=${ownerId}`)
+      if (response.ok) {
+        const data = await response.json()
+        console.log("Applications chargées:", data.applications)
 
-    // Filtre par onglet
-    if (activeTab !== "all") {
-      filtered = filtered.filter((app) => app.status === activeTab)
-    }
+        // Enrichir chaque candidature avec les données du dossier de location
+        const enrichedApplications = await Promise.all(
+          (data.applications || []).map(async (app) => {
+            try {
+              if (app.tenant_id) {
+                const rentalFileResponse = await fetch(`/api/rental-files?tenant_id=${app.tenant_id}`)
+                if (rentalFileResponse.ok) {
+                  const rentalFileData = await rentalFileResponse.json()
+                  const rentalFile = rentalFileData.rental_file
 
-    // Filtre par recherche
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase()
-      filtered = filtered.filter(
-        (app) =>
-          app.tenant.first_name.toLowerCase().includes(term) ||
-          app.tenant.last_name.toLowerCase().includes(term) ||
-          app.tenant.email.toLowerCase().includes(term) ||
-          app.property.title.toLowerCase().includes(term) ||
-          app.property.address.toLowerCase().includes(term),
-      )
-    }
+                  if (rentalFile && rentalFile.main_tenant) {
+                    console.log("📊 Enrichissement candidature avec dossier:", {
+                      application_id: app.id,
+                      tenant_name: `${rentalFile.main_tenant.first_name} ${rentalFile.main_tenant.last_name}`,
+                      income: rentalFile.main_tenant.income_sources?.work_income?.amount,
+                      guarantors_count: rentalFile.guarantors?.length || 0,
+                    })
 
-    // Filtre par statut
-    if (statusFilter !== "all") {
-      filtered = filtered.filter((app) => app.status === statusFilter)
-    }
+                    // Récupérer les revenus depuis main_tenant
+                    const income = rentalFile.main_tenant.income_sources?.work_income?.amount || app.income || 0
 
-    // Tri
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case "created_at":
-          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        case "tenant_name":
-          return `${a.tenant.first_name} ${a.tenant.last_name}`.localeCompare(
-            `${b.tenant.first_name} ${b.tenant.last_name}`,
-          )
-        case "property_title":
-          return a.property.title.localeCompare(b.property.title)
-        case "rent":
-          return b.property.rent - a.property.rent
-        default:
-          return 0
+                    // Vérifier la présence de garants
+                    const hasGuarantor =
+                      (rentalFile.guarantors && rentalFile.guarantors.length > 0) || app.has_guarantor || false
+
+                    // Récupérer la profession et l'entreprise depuis main_tenant
+                    const profession = rentalFile.main_tenant.profession || app.profession || "Non spécifié"
+                    const company = rentalFile.main_tenant.company || app.company || "Non spécifié"
+
+                    // Type de contrat depuis main_activity
+                    const contractType = rentalFile.main_tenant.main_activity || app.contract_type || "Non spécifié"
+
+                    return {
+                      ...app,
+                      income,
+                      has_guarantor: hasGuarantor,
+                      profession,
+                      company,
+                      contract_type: contractType,
+                      rental_file_id: rentalFile.id,
+                      // Ajouter les données complètes pour debug
+                      rental_file_main_tenant: rentalFile.main_tenant,
+                      rental_file_guarantors: rentalFile.guarantors,
+                    }
+                  }
+                }
+              }
+              return app
+            } catch (error) {
+              console.error("Erreur enrichissement candidature:", error)
+              return app
+            }
+          }),
+        )
+
+        setApplications(enrichedApplications)
+      } else {
+        console.error("Erreur chargement candidatures:", await response.text())
+        toast.error("Erreur lors du chargement des candidatures")
       }
-    })
-
-    setFilteredApplications(filtered)
+    } catch (error) {
+      console.error("Erreur:", error)
+      toast.error("Erreur lors du chargement des candidatures")
+    }
   }
 
-  const handleApplicationAction = async (applicationId: string, action: string) => {
-    const application = applications.find((app) => app.id === applicationId)
-    if (!application) return
+  const getFilteredApplications = () => {
+    let filtered = applications
 
-    console.log(`🎯 Action: ${action} pour candidature:`, applicationId)
+    if (activeTab !== "all") {
+      // Mapper les statuts de l'interface vers les statuts en base de données
+      const statusMap = {
+        pending: ["pending", "analyzing", "visit_scheduled", "waiting_tenant_confirmation"],
+        accepted: ["accepted", "approved"],
+        rejected: ["rejected"],
+      }
+      filtered = filtered.filter((app) => {
+        const status = app.status || "pending"
+        return statusMap[activeTab]?.includes(status)
+      })
+    }
+
+    // Filtrer par propriété si spécifié dans l'URL
+    if (propertyIdFilter) {
+      filtered = filtered.filter((app) => app.property_id === propertyIdFilter)
+    }
+
+    return filtered
+  }
+
+  const handleApplicationAction = async (action, applicationId) => {
+    console.log("Action:", action, "pour candidature:", applicationId)
+
+    const application = applications.find((app) => app.id === applicationId)
+    if (!application) {
+      toast.error("Candidature introuvable")
+      return
+    }
 
     switch (action) {
       case "view_details":
+        // Rediriger vers la visionneuse de dossier PDF
+        if (application.rental_file_id) {
+          router.push(`/rental-files/${application.rental_file_id}/view`)
+        } else {
+          toast.error("Dossier de location non disponible")
+        }
+        break
+      case "analyze":
+        // Rediriger vers la page de détails de la candidature
         router.push(`/owner/applications/${applicationId}`)
         break
-
-      case "view_analysis":
-        router.push(`/owner/applications/${applicationId}?tab=financial`)
-        break
-
-      case "view_rental_file":
-        router.push(`/owner/applications/${applicationId}?tab=rental-file`)
-        break
-
-      case "propose_visit":
-        router.push(`/owner/applications/${applicationId}?tab=visit`)
-        break
-
-      case "contact_tenant":
-        router.push(`/owner/messaging?conversation=${application.tenant_id}`)
-        break
-
       case "accept":
-        await updateApplicationStatus(applicationId, "accepted")
+        await handleStatusChange(applicationId, "accepted")
         break
-
-      case "reject":
-        await updateApplicationStatus(applicationId, "rejected")
+      case "refuse":
+        await handleStatusChange(applicationId, "rejected")
         break
-
+      case "contact":
+        // Rediriger vers la messagerie avec ce locataire
+        if (application.tenant_id) {
+          router.push(`/owner/messaging?tenant_id=${application.tenant_id}`)
+        } else {
+          toast.error("Impossible de contacter ce locataire")
+        }
+        break
+      case "generate_lease":
+        router.push(`/owner/leases/new?application=${applicationId}`)
+        break
       default:
-        console.warn("Action non reconnue:", action)
+        console.log("Action non reconnue:", action)
     }
   }
 
-  const updateApplicationStatus = async (applicationId: string, status: string) => {
+  const handleStatusChange = async (applicationId, newStatus) => {
     try {
       const response = await fetch(`/api/applications/${applicationId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status: newStatus,
+        }),
       })
 
-      if (!response.ok) throw new Error("Erreur lors de la mise à jour")
-
-      toast({
-        title: "Succès",
-        description: `Candidature ${status === "accepted" ? "acceptée" : "refusée"}`,
-      })
-
-      fetchApplications() // Recharger les données
+      if (response.ok) {
+        toast.success(`Candidature ${newStatus === "accepted" ? "acceptée" : "refusée"}`)
+        // Mettre à jour l'état local
+        setApplications(applications.map((app) => (app.id === applicationId ? { ...app, status: newStatus } : app)))
+      } else {
+        toast.error("Erreur lors de la mise à jour du statut")
+      }
     } catch (error) {
       console.error("Erreur:", error)
-      toast({
-        title: "Erreur",
-        description: "Impossible de mettre à jour la candidature",
-        variant: "destructive",
-      })
+      toast.error("Erreur lors de la mise à jour du statut")
     }
   }
 
-  const getApplicationCounts = () => {
-    return {
-      all: applications.length,
-      pending: applications.filter((app) => app.status === "pending").length,
-      visit_scheduled: applications.filter((app) => app.status === "visit_scheduled").length,
-      visit_completed: applications.filter((app) => app.status === "visit_completed").length,
-      accepted: applications.filter((app) => app.status === "accepted").length,
-      rejected: applications.filter((app) => app.status === "rejected").length,
+  const handleSelectApplication = (applicationId, selected) => {
+    const newSelected = new Set(selectedApplications)
+    if (selected) {
+      newSelected.add(applicationId)
+    } else {
+      newSelected.delete(applicationId)
     }
+    setSelectedApplications(newSelected)
   }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("fr-FR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
-  }
+  // Fonction pour calculer le score de matching de manière sécurisée
+  const calculateMatchScore = (application) => {
+    if (!application.property || !application.income) return 50 // Score par défaut
 
-  const getNextVisit = (application: Application) => {
-    if (!application.visits || application.visits.length === 0) return null
+    const property = application.property
+    let score = 0
 
-    const now = new Date()
-    const upcomingVisits = application.visits
-      .filter((visit) => {
-        const visitDateTime = new Date(`${visit.visit_date.split("T")[0]}T${visit.start_time}`)
-        return visitDateTime > now && visit.status === "scheduled"
-      })
-      .sort(
-        (a, b) =>
-          new Date(`${a.visit_date}T${a.start_time}`).getTime() - new Date(`${b.visit_date}T${b.start_time}`).getTime(),
-      )
+    // Ratio revenus/loyer (40 points max)
+    if (application.income && property.price) {
+      const rentRatio = application.income / property.price
+      if (rentRatio >= 3) score += 40
+      else if (rentRatio >= 2.5) score += 30
+      else if (rentRatio >= 2) score += 20
+      else score += 10
+    } else {
+      score += 10
+    }
 
-    return upcomingVisits[0] || null
+    // Stabilité professionnelle (20 points max)
+    if (application.contract_type === "CDI" || application.contract_type === "cdi") score += 20
+    else if (application.contract_type === "CDD" || application.contract_type === "cdd") score += 15
+    else score += 10
+
+    // Présence d'un garant (20 points max)
+    if (application.has_guarantor) score += 20
+
+    // Documents et présentation (20 points max)
+    if (application.presentation && application.presentation.length > 50) score += 10
+    if (application.profession && application.company) score += 10
+
+    return Math.min(score, 100)
   }
 
   if (loading) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Chargement des candidatures...</p>
-          </div>
+      <div className="space-y-6 p-6">
+        <div className="flex justify-between items-center">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-10 w-32" />
+        </div>
+        <Skeleton className="h-12 w-full" />
+        <div className="grid gap-4 md:grid-cols-2">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-64 w-full" />
+          ))}
         </div>
       </div>
     )
   }
 
-  const counts = getApplicationCounts()
-
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* En-tête */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Candidatures</h1>
-          <p className="text-gray-600 mt-1">Gérez les candidatures pour vos propriétés</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => fetchApplications()} disabled={loading}>
-            🔄 Actualiser
+    <>
+      <PageHeader title="Candidatures" description="Gérez les candidatures pour vos biens">
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm">
+            <Download className="h-4 w-4 mr-2" />
+            Exporter
+          </Button>
+          <Button variant="outline" size="sm">
+            <Filter className="h-4 w-4 mr-2" />
+            Filtres
           </Button>
         </div>
-      </div>
+      </PageHeader>
 
-      {/* Filtres et recherche */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <Input
-                  placeholder="Rechercher par nom, email, propriété..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
+      <div className="p-6 space-y-6">
+        <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid grid-cols-4 mb-4">
+            <TabsTrigger value="all">Toutes</TabsTrigger>
+            <TabsTrigger value="pending">En attente</TabsTrigger>
+            <TabsTrigger value="accepted">Acceptées</TabsTrigger>
+            <TabsTrigger value="rejected">Refusées</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value={activeTab} className="mt-0">
+            {getFilteredApplications().length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-10">
+                  <Users className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-medium">Aucune candidature</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {activeTab === "all"
+                      ? "Vous n'avez pas encore reçu de candidatures"
+                      : `Vous n'avez pas de candidatures ${
+                          activeTab === "pending" ? "en attente" : activeTab === "accepted" ? "acceptées" : "refusées"
+                        }`}
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-1">
+                {getFilteredApplications().map((application) => {
+                  // Gestion sécurisée des données du tenant
+                  const tenant = application.tenant || {}
+                  const property = application.property || {}
+
+                  // Calcul du score de matching
+                  const matchScore = calculateMatchScore(application)
+
+                  // Préparation des données pour le composant ModernApplicationCard
+                  const applicationData = {
+                    id: application.id,
+                    tenant: {
+                      first_name: tenant.first_name || "Prénom",
+                      last_name: tenant.last_name || "Nom",
+                      email: tenant.email || "email@example.com",
+                      phone: tenant.phone || "Non renseigné",
+                    },
+                    property: {
+                      title: property.title || "Propriété inconnue",
+                      address: property.address || "Adresse inconnue",
+                    },
+                    profession: application.profession || "Non spécifié",
+                    income: application.income || 0,
+                    has_guarantor: application.has_guarantor || false,
+                    documents_complete: true,
+                    status: application.status || "pending",
+                    match_score: matchScore,
+                    created_at: application.created_at || new Date().toISOString(),
+                  }
+
+                  return (
+                    <ModernApplicationCard
+                      key={application.id}
+                      application={applicationData}
+                      isSelected={selectedApplications.has(application.id)}
+                      onSelect={(selected) => handleSelectApplication(application.id, selected)}
+                      onAction={(action) => handleApplicationAction(action, application.id)}
+                    />
+                  )
+                })}
               </div>
-            </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-48">
-                <Filter className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Filtrer par statut" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les statuts</SelectItem>
-                <SelectItem value="pending">En attente</SelectItem>
-                <SelectItem value="visit_scheduled">Visite programmée</SelectItem>
-                <SelectItem value="visit_completed">Visite effectuée</SelectItem>
-                <SelectItem value="accepted">Acceptée</SelectItem>
-                <SelectItem value="rejected">Refusée</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger className="w-48">
-                <SortAsc className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Trier par" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="created_at">Date de candidature</SelectItem>
-                <SelectItem value="tenant_name">Nom du locataire</SelectItem>
-                <SelectItem value="property_title">Propriété</SelectItem>
-                <SelectItem value="rent">Loyer</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Onglets */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="all" className="flex items-center gap-2">
-            Toutes ({counts.all})
-          </TabsTrigger>
-          <TabsTrigger value="pending" className="flex items-center gap-2">
-            En attente ({counts.pending})
-          </TabsTrigger>
-          <TabsTrigger value="visit_scheduled" className="flex items-center gap-2">
-            Visites ({counts.visit_scheduled})
-          </TabsTrigger>
-          <TabsTrigger value="visit_completed" className="flex items-center gap-2">
-            Effectuées ({counts.visit_completed})
-          </TabsTrigger>
-          <TabsTrigger value="accepted" className="flex items-center gap-2">
-            Acceptées ({counts.accepted})
-          </TabsTrigger>
-          <TabsTrigger value="rejected" className="flex items-center gap-2">
-            Refusées ({counts.rejected})
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value={activeTab} className="mt-6">
-          {filteredApplications.length === 0 ? (
-            <Card>
-              <CardContent className="p-8 text-center">
-                <div className="text-gray-400 mb-4">
-                  <FileText className="h-12 w-12 mx-auto" />
-                </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Aucune candidature trouvée</h3>
-                <p className="text-gray-600">
-                  {searchTerm || statusFilter !== "all"
-                    ? "Essayez de modifier vos filtres de recherche"
-                    : "Les candidatures pour vos propriétés apparaîtront ici"}
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-6">
-              {filteredApplications.map((application) => {
-                const StatusIcon = statusConfig[application.status]?.icon || AlertCircle
-                const nextVisit = getNextVisit(application)
-
-                return (
-                  <Card key={application.id} className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-6">
-                      <div className="flex flex-col lg:flex-row gap-6">
-                        {/* Informations locataire */}
-                        <div className="flex-1">
-                          <div className="flex items-start gap-4">
-                            <Avatar className="h-12 w-12">
-                              <AvatarImage src={application.tenant.avatar_url || "/placeholder.svg"} />
-                              <AvatarFallback>
-                                {application.tenant.first_name[0]}
-                                {application.tenant.last_name[0]}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2">
-                                <h3 className="text-lg font-semibold">
-                                  {application.tenant.first_name} {application.tenant.last_name}
-                                </h3>
-                                <Badge className={statusConfig[application.status]?.color}>
-                                  <StatusIcon className="h-3 w-3 mr-1" />
-                                  {statusConfig[application.status]?.label}
-                                </Badge>
-                              </div>
-
-                              <div className="space-y-1 text-sm text-gray-600">
-                                <div className="flex items-center gap-2">
-                                  <Mail className="h-4 w-4" />
-                                  {application.tenant.email}
-                                </div>
-                                {application.tenant.phone && (
-                                  <div className="flex items-center gap-2">
-                                    <Phone className="h-4 w-4" />
-                                    {application.tenant.phone}
-                                  </div>
-                                )}
-                                <div className="flex items-center gap-2">
-                                  <Calendar className="h-4 w-4" />
-                                  Candidature du {formatDate(application.created_at)}
-                                </div>
-                              </div>
-
-                              {application.message && (
-                                <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-                                  <p className="text-sm text-gray-700">
-                                    <strong>Message :</strong> {application.message}
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Informations propriété */}
-                        <div className="lg:w-80">
-                          <div className="bg-gray-50 rounded-lg p-4">
-                            <h4 className="font-medium mb-2">{application.property.title}</h4>
-                            <div className="space-y-2 text-sm text-gray-600">
-                              <div className="flex items-center gap-2">
-                                <MapPin className="h-4 w-4" />
-                                {application.property.address}
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Euro className="h-4 w-4" />
-                                {application.property.rent}€/mois
-                              </div>
-                              {nextVisit && (
-                                <div className="flex items-center gap-2 text-blue-600">
-                                  <Clock className="h-4 w-4" />
-                                  Visite le {new Date(nextVisit.visit_date).toLocaleDateString("fr-FR")} à{" "}
-                                  {nextVisit.start_time}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Informations financières */}
-                          {application.rental_file && (
-                            <div className="mt-3 p-3 bg-blue-50 rounded-lg">
-                              <div className="text-sm">
-                                {application.rental_file.monthly_income && (
-                                  <div>Revenus : {application.rental_file.monthly_income}€/mois</div>
-                                )}
-                                {application.rental_file.employment_status && (
-                                  <div>Statut : {application.rental_file.employment_status}</div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <Separator className="my-4" />
-
-                      {/* Actions */}
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={() => handleApplicationAction(application.id, "view_details")}
-                        >
-                          <Eye className="h-4 w-4 mr-2" />
-                          Voir détails
-                        </Button>
-
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleApplicationAction(application.id, "view_analysis")}
-                        >
-                          <FileText className="h-4 w-4 mr-2" />
-                          Analyse
-                        </Button>
-
-                        {application.status === "pending" && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleApplicationAction(application.id, "propose_visit")}
-                          >
-                            <CalendarPlus className="h-4 w-4 mr-2" />
-                            Proposer visite
-                          </Button>
-                        )}
-
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleApplicationAction(application.id, "contact_tenant")}
-                        >
-                          <MessageCircle className="h-4 w-4 mr-2" />
-                          Contacter
-                        </Button>
-
-                        {application.status === "visit_completed" && (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-green-600 border-green-600 hover:bg-green-50"
-                              onClick={() => handleApplicationAction(application.id, "accept")}
-                            >
-                              <CheckCircle className="h-4 w-4 mr-2" />
-                              Accepter
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-red-600 border-red-600 hover:bg-red-50"
-                              onClick={() => handleApplicationAction(application.id, "reject")}
-                            >
-                              <XCircle className="h-4 w-4 mr-2" />
-                              Refuser
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )
-              })}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
-    </div>
+            )}
+          </TabsContent>
+        </Tabs>
+      </div>
+    </>
   )
 }
