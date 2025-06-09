@@ -372,7 +372,11 @@ export default function TenantDashboardPage() {
                         <div key={visit.id} className="flex items-start gap-3">
                           <div className="w-16 h-16 rounded overflow-hidden flex-shrink-0">
                             <img
-                              src={visit.property?.property_images?.[0]?.url || "/placeholder.svg"}
+                              src={
+                                visit.property?.property_images?.find((img) => img.is_primary)?.url ||
+                                visit.property?.property_images?.[0]?.url ||
+                                "/placeholder.svg"
+                              }
                               alt={visit.property?.title || "Propriété"}
                               className="w-full h-full object-cover"
                             />
@@ -409,7 +413,7 @@ export default function TenantDashboardPage() {
                   </CardContent>
                   <CardFooter>
                     <Button variant="outline" size="sm" className="w-full" asChild>
-                      <Link href="/tenant/visits">Gérer mes visites</Link>
+                      <Link href="/tenant/applications">Gérer mes candidatures</Link>
                     </Button>
                   </CardFooter>
                 </Card>

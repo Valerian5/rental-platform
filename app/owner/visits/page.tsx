@@ -196,6 +196,8 @@ export default function VisitsPage() {
           visitor_name: visit.visitor_name,
           visit_time: visit.visit_time || visit.start_time,
           status: visit.status,
+          visitDate,
+          dayStr,
         })
       }
       return matches
@@ -412,9 +414,6 @@ export default function VisitsPage() {
                       const dayVisits = getVisitsForDay(day).filter((visit) => {
                         const visitTime = visit.visit_time || visit.start_time
                         const timeMatches = visitTime === timeSlot
-                        if (timeMatches) {
-                          console.log("📅 Visite correspond au créneau", timeSlot, ":", visit)
-                        }
                         return timeMatches
                       })
                       return (

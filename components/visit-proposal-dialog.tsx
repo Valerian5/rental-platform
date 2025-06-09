@@ -34,6 +34,7 @@ export function VisitProposalDialog({ open, onClose, onConfirm, propertyId }: Vi
     "18:00",
   ])
   const [conflictingSlots, setConflictingSlots] = useState<{ [key: string]: string }>({})
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   useEffect(() => {
     if (open && propertyId) {
@@ -48,7 +49,10 @@ export function VisitProposalDialog({ open, onClose, onConfirm, propertyId }: Vi
   }, [selectedDate, existingSlots])
 
   const loadExistingSlots = async () => {
+    if (isRefreshing) return
+
     try {
+      setIsRefreshing(true)
       setLoading(true)
       const response = await fetch(`/api/properties/${propertyId}/visit-slots`)
       if (response.ok) {
@@ -59,6 +63,7 @@ export function VisitProposalDialog({ open, onClose, onConfirm, propertyId }: Vi
       console.error("Erreur lors du chargement des créneaux:", error)
     } finally {
       setLoading(false)
+      setIsRefreshing(false)
     }
   }
 
@@ -89,7 +94,7 @@ export function VisitProposalDialog({ open, onClose, onConfirm, propertyId }: Vi
     setSelectedTimeSlots((prev) => (prev.includes(time) ? prev.filter((t) => t !== time) : [...prev, time]))
   }
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!selectedDate || selectedTimeSlots.length === 0) {
       toast.error("Veuillez sélectionner au moins un créneau de visite")
       return
@@ -106,7 +111,12 @@ export function VisitProposalDialog({ open, onClose, onConfirm, propertyId }: Vi
       }
     })
 
-    onConfirm(slots)
+    await onConfirm(slots)
+
+    // Recharger les créneaux après confirmation
+    setTimeout(() => {
+      loadExistingSlots()
+    }, 1000)
   }
 
   return (
