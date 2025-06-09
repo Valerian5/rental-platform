@@ -16,34 +16,40 @@ interface Message {
   id: string
   sender_id: string
   content: string
-  timestamp: string
-  read: boolean
-  type: "text" | "image" | "document"
+  created_at: string
+  is_read: boolean
 }
 
 interface Conversation {
   id: string
+  subject: string
+  created_at: string
+  updated_at: string
+  tenant_id: string
+  owner_id: string
+  property_id?: string
   property?: {
     id: string
     title: string
     address: string
-    price: number
-    image: string
+    city: string
+    price?: number
+    images?: Array<{ url: string; is_primary: boolean }>
   }
   owner: {
     id: string
     first_name: string
     last_name: string
-    avatar?: string
-    last_seen?: string
-    online?: boolean
+    email: string
+    phone?: string
   }
-  last_message: {
-    content: string
-    timestamp: string
-    sender_id: string
+  tenant: {
+    id: string
+    first_name: string
+    last_name: string
+    email: string
+    phone?: string
   }
-  unread_count: number
   messages: Message[]
 }
 
@@ -54,223 +60,204 @@ export default function TenantMessagingPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [loading, setLoading] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Données simulées réalistes
+  // Récupérer l'ID utilisateur depuis le localStorage ou une autre source
   useEffect(() => {
-    setTimeout(() => {
-      setConversations([
-        {
-          id: "1",
-          property: {
-            id: "1",
-            title: "Appartement 2 pièces - Marais",
-            address: "15 Rue des Rosiers, Paris 4e",
-            price: 1450,
-            image: "/placeholder.svg?height=60&width=60&text=Apt",
-          },
-          owner: {
-            id: "owner1",
-            first_name: "Marie",
-            last_name: "Dubois",
-            avatar: "/placeholder.svg?height=40&width=40&text=MD",
-            last_seen: "2024-01-20T15:30:00Z",
-            online: true,
-          },
-          last_message: {
-            content: "Parfait ! Je confirme la visite pour demain à 14h. À bientôt !",
-            timestamp: "2024-01-20T15:30:00Z",
-            sender_id: "owner1",
-          },
-          unread_count: 1,
-          messages: [
-            {
-              id: "1",
-              sender_id: "tenant1",
-              content:
-                "Bonjour, je suis très intéressé par votre appartement dans le Marais. Serait-il possible d'organiser une visite cette semaine ?",
-              timestamp: "2024-01-20T10:00:00Z",
-              read: true,
-              type: "text",
-            },
-            {
-              id: "2",
-              sender_id: "owner1",
-              content:
-                "Bonjour ! Merci pour votre intérêt. Je serais ravi de vous faire visiter l'appartement. Êtes-vous disponible demain après-midi vers 14h ?",
-              timestamp: "2024-01-20T11:15:00Z",
-              read: true,
-              type: "text",
-            },
-            {
-              id: "3",
-              sender_id: "tenant1",
-              content:
-                "Oui, cela me convient parfaitement ! Demain 14h c'est parfait. Faut-il que je vous apporte des documents particuliers ?",
-              timestamp: "2024-01-20T11:30:00Z",
-              read: true,
-              type: "text",
-            },
-            {
-              id: "4",
-              sender_id: "owner1",
-              content: "Parfait ! Je confirme la visite pour demain à 14h. À bientôt !",
-              timestamp: "2024-01-20T15:30:00Z",
-              read: false,
-              type: "text",
-            },
-          ],
-        },
-        {
-          id: "2",
-          property: {
-            id: "2",
-            title: "Studio lumineux - Quartier Latin",
-            address: "8 Rue Saint-Jacques, Paris 5e",
-            price: 950,
-            image: "/placeholder.svg?height=60&width=60&text=Studio",
-          },
-          owner: {
-            id: "owner2",
-            first_name: "Jean",
-            last_name: "Martin",
-            avatar: "/placeholder.svg?height=40&width=40&text=JM",
-            last_seen: "2024-01-20T09:45:00Z",
-            online: false,
-          },
-          last_message: {
-            content: "D'accord, je vais réfléchir et vous recontacter rapidement. Merci pour les informations !",
-            timestamp: "2024-01-19T16:20:00Z",
-            sender_id: "tenant1",
-          },
-          unread_count: 0,
-          messages: [
-            {
-              id: "5",
-              sender_id: "tenant1",
-              content:
-                "Bonjour, pouvez-vous me donner plus d'informations sur les charges du studio ? Qu'est-ce qui est inclus exactement ?",
-              timestamp: "2024-01-19T14:00:00Z",
-              read: true,
-              type: "text",
-            },
-            {
-              id: "6",
-              sender_id: "owner2",
-              content:
-                "Bonjour ! Les charges de 80€/mois incluent l'eau, le chauffage et l'entretien des parties communes. L'électricité et internet sont à votre charge.",
-              timestamp: "2024-01-19T15:30:00Z",
-              read: true,
-              type: "text",
-            },
-            {
-              id: "7",
-              sender_id: "tenant1",
-              content: "D'accord, je vais réfléchir et vous recontacter rapidement. Merci pour les informations !",
-              timestamp: "2024-01-19T16:20:00Z",
-              read: true,
-              type: "text",
-            },
-          ],
-        },
-        {
-          id: "3",
-          owner: {
-            id: "owner3",
-            first_name: "Sophie",
-            last_name: "Laurent",
-            avatar: "/placeholder.svg?height=40&width=40&text=SL",
-            last_seen: "2024-01-18T20:15:00Z",
-            online: false,
-          },
-          last_message: {
-            content:
-              "Merci pour votre candidature. Malheureusement, nous avons sélectionné un autre profil. Bonne recherche !",
-            timestamp: "2024-01-18T20:15:00Z",
-            sender_id: "owner3",
-          },
-          unread_count: 0,
-          messages: [
-            {
-              id: "8",
-              sender_id: "tenant1",
-              content:
-                "Bonjour, j'aimerais soumettre ma candidature pour votre appartement familial. Mon dossier est complet et disponible.",
-              timestamp: "2024-01-17T18:00:00Z",
-              read: true,
-              type: "text",
-            },
-            {
-              id: "9",
-              sender_id: "owner3",
-              content:
-                "Merci pour votre candidature. Malheureusement, nous avons sélectionné un autre profil. Bonne recherche !",
-              timestamp: "2024-01-18T20:15:00Z",
-              read: true,
-              type: "text",
-            },
-          ],
-        },
-      ])
-      setLoading(false)
-    }, 1000)
-
-    // Détecter mobile
-    const checkMobile = () => setIsMobile(window.innerWidth < 768)
-    checkMobile()
-    window.addEventListener("resize", checkMobile)
-    return () => window.removeEventListener("resize", checkMobile)
+    const userId = localStorage.getItem("user_id") || "64504874-4a99-4da5-938b-0858caf27044" // ID par défaut pour test
+    setCurrentUserId(userId)
+    console.log("👤 ID utilisateur locataire:", userId)
   }, [])
+
+  // Charger les conversations
+  useEffect(() => {
+    if (!currentUserId) return
+
+    const loadConversations = async () => {
+      try {
+        console.log("🔍 Chargement conversations pour:", currentUserId)
+        setLoading(true)
+
+        const response = await fetch(`/api/conversations?user_id=${currentUserId}`)
+        console.log("📡 Réponse API conversations:", response.status)
+
+        if (!response.ok) {
+          throw new Error(`Erreur ${response.status}`)
+        }
+
+        const data = await response.json()
+        console.log("✅ Conversations chargées:", data.conversations?.length || 0)
+        console.log("📋 Détail conversations:", data.conversations)
+
+        setConversations(data.conversations || [])
+      } catch (error) {
+        console.error("❌ Erreur chargement conversations:", error)
+        toast.error("Erreur lors du chargement des conversations")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadConversations()
+  }, [currentUserId])
+
+  // Gérer les paramètres URL (conversation_id, owner_id)
+  useEffect(() => {
+    if (!currentUserId || conversations.length === 0) return
+
+    const urlParams = new URLSearchParams(window.location.search)
+    const conversationId = urlParams.get("conversation")
+    const ownerId = urlParams.get("owner_id")
+
+    console.log("🔗 Paramètres URL détectés:", { conversationId, ownerId })
+
+    if (conversationId) {
+      // Sélectionner une conversation spécifique
+      const conversation = conversations.find((c) => c.id === conversationId)
+      if (conversation) {
+        console.log("✅ Conversation trouvée et sélectionnée:", conversationId)
+        setSelectedConversation(conversation)
+        markAsRead(conversationId)
+      }
+    } else if (ownerId) {
+      // Créer ou trouver une conversation avec ce propriétaire
+      handleOwnerConversation(ownerId)
+    }
+  }, [conversations, currentUserId])
+
+  // Gérer la conversation avec un propriétaire spécifique
+  const handleOwnerConversation = async (ownerId: string) => {
+    if (!currentUserId) return
+
+    try {
+      console.log("🎯 Gestion conversation avec propriétaire:", ownerId)
+
+      // Chercher une conversation existante avec ce propriétaire
+      const existingConversation = conversations.find((c) => c.owner_id === ownerId)
+
+      if (existingConversation) {
+        console.log("✅ Conversation existante trouvée:", existingConversation.id)
+        setSelectedConversation(existingConversation)
+        markAsRead(existingConversation.id)
+        return
+      }
+
+      console.log("🆕 Aucune conversation trouvée, création en cours...")
+
+      // Créer une nouvelle conversation
+      const response = await fetch("/api/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenant_id: currentUserId,
+          owner_id: ownerId,
+          subject: "Nouvelle conversation",
+        }),
+      })
+
+      console.log("📡 Réponse création conversation:", response.status)
+
+      if (!response.ok) {
+        throw new Error(`Erreur ${response.status}`)
+      }
+
+      const data = await response.json()
+      console.log("✅ Conversation créée:", data.conversation)
+
+      // Recharger les conversations pour inclure la nouvelle
+      const refreshResponse = await fetch(`/api/conversations?user_id=${currentUserId}`)
+      if (refreshResponse.ok) {
+        const refreshData = await refreshResponse.json()
+        setConversations(refreshData.conversations || [])
+
+        // Sélectionner la nouvelle conversation
+        const newConversation = refreshData.conversations?.find((c: Conversation) => c.id === data.conversation.id)
+        if (newConversation) {
+          setSelectedConversation(newConversation)
+        }
+      }
+    } catch (error) {
+      console.error("❌ Erreur gestion conversation propriétaire:", error)
+      toast.error("Erreur lors de la création de la conversation")
+    }
+  }
 
   // Auto-scroll vers le bas des messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [selectedConversation?.messages])
 
-  const sendMessage = () => {
-    if (!newMessage.trim() || !selectedConversation) return
+  // Détecter mobile
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768)
+    checkMobile()
+    window.addEventListener("resize", checkMobile)
+    return () => window.removeEventListener("resize", checkMobile)
+  }, [])
 
-    const message: Message = {
-      id: Date.now().toString(),
-      sender_id: "tenant1",
-      content: newMessage.trim(),
-      timestamp: new Date().toISOString(),
-      read: true,
-      type: "text",
+  const sendMessage = async () => {
+    if (!newMessage.trim() || !selectedConversation || !currentUserId) return
+
+    try {
+      console.log("📤 Envoi message:", { conversation: selectedConversation.id, content: newMessage.trim() })
+
+      const response = await fetch("/api/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "send_message",
+          conversation_id: selectedConversation.id,
+          sender_id: currentUserId,
+          content: newMessage.trim(),
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Erreur ${response.status}`)
+      }
+
+      const data = await response.json()
+      console.log("✅ Message envoyé:", data.message.id)
+
+      // Ajouter le message à la conversation locale
+      const newMessageObj: Message = {
+        id: data.message.id,
+        sender_id: currentUserId,
+        content: newMessage.trim(),
+        created_at: new Date().toISOString(),
+        is_read: true,
+      }
+
+      setSelectedConversation((prev) =>
+        prev
+          ? {
+              ...prev,
+              messages: [...prev.messages, newMessageObj],
+            }
+          : null,
+      )
+
+      setNewMessage("")
+      toast.success("Message envoyé")
+    } catch (error) {
+      console.error("❌ Erreur envoi message:", error)
+      toast.error("Erreur lors de l'envoi du message")
     }
-
-    setConversations((prev) =>
-      prev.map((conv) => {
-        if (conv.id === selectedConversation.id) {
-          return {
-            ...conv,
-            messages: [...conv.messages, message],
-            last_message: {
-              content: message.content,
-              timestamp: message.timestamp,
-              sender_id: message.sender_id,
-            },
-          }
-        }
-        return conv
-      }),
-    )
-
-    setSelectedConversation((prev) =>
-      prev
-        ? {
-            ...prev,
-            messages: [...prev.messages, message],
-          }
-        : null,
-    )
-
-    setNewMessage("")
-    toast.success("Message envoyé")
   }
 
-  const markAsRead = (conversationId: string) => {
-    setConversations((prev) => prev.map((conv) => (conv.id === conversationId ? { ...conv, unread_count: 0 } : conv)))
+  const markAsRead = async (conversationId: string) => {
+    if (!currentUserId) return
+
+    try {
+      await fetch(`/api/conversations/${conversationId}/mark-read`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: currentUserId }),
+      })
+    } catch (error) {
+      console.error("❌ Erreur marquage lu:", error)
+    }
   }
 
   const formatTime = (timestamp: string) => {
@@ -284,6 +271,31 @@ export default function TenantMessagingPage() {
     } else {
       return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })
     }
+  }
+
+  const getUnreadCount = (conversation: Conversation) => {
+    return conversation.messages.filter((msg) => !msg.is_read && msg.sender_id !== currentUserId).length
+  }
+
+  const getLastMessage = (conversation: Conversation) => {
+    const lastMessage = conversation.messages[conversation.messages.length - 1]
+    if (!lastMessage) return null
+
+    return {
+      content: lastMessage.content,
+      timestamp: lastMessage.created_at,
+      sender_id: lastMessage.sender_id,
+      sender_name: lastMessage.sender_id === currentUserId ? "Vous" : conversation.owner.first_name,
+    }
+  }
+
+  const getPropertyImage = (conversation: Conversation) => {
+    if (!conversation.property?.images?.length) {
+      return "/placeholder.svg?height=60&width=60&text=Apt"
+    }
+
+    const primaryImage = conversation.property.images.find((img) => img.is_primary)
+    return primaryImage?.url || conversation.property.images[0]?.url || "/placeholder.svg?height=60&width=60&text=Apt"
   }
 
   const filteredConversations = conversations.filter(
@@ -316,7 +328,7 @@ export default function TenantMessagingPage() {
               <div className="flex justify-between items-center">
                 <h2 className="text-lg font-semibold">Messages</h2>
                 <Badge variant="secondary">
-                  {conversations.reduce((sum, conv) => sum + conv.unread_count, 0)} non lus
+                  {conversations.reduce((sum, conv) => sum + getUnreadCount(conv), 0)} non lus
                 </Badge>
               </div>
               <div className="relative">
@@ -332,63 +344,76 @@ export default function TenantMessagingPage() {
             <CardContent className="p-0">
               <ScrollArea className="h-[calc(100vh-12rem)]">
                 <div className="space-y-1 p-3">
-                  {filteredConversations.map((conversation) => (
-                    <div
-                      key={conversation.id}
-                      className={`p-3 rounded-lg cursor-pointer transition-colors hover:bg-gray-50 ${
-                        selectedConversation?.id === conversation.id ? "bg-blue-50 border border-blue-200" : ""
-                      }`}
-                      onClick={() => {
-                        setSelectedConversation(conversation)
-                        markAsRead(conversation.id)
-                      }}
-                    >
-                      <div className="flex gap-3">
-                        <div className="relative">
-                          <Avatar className="h-10 w-10">
-                            <AvatarImage src={conversation.owner.avatar || "/placeholder.svg"} />
-                            <AvatarFallback>
-                              {conversation.owner.first_name[0]}
-                              {conversation.owner.last_name[0]}
-                            </AvatarFallback>
-                          </Avatar>
-                          {conversation.owner.online && (
-                            <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 bg-green-500 rounded-full border-2 border-white"></div>
-                          )}
-                        </div>
+                  {filteredConversations.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500">Aucune conversation</p>
+                    </div>
+                  ) : (
+                    filteredConversations.map((conversation) => {
+                      const unreadCount = getUnreadCount(conversation)
+                      const lastMessage = getLastMessage(conversation)
 
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-sm truncate">
-                                {conversation.owner.first_name} {conversation.owner.last_name}
-                              </p>
-                              {conversation.property && (
-                                <p className="text-xs text-muted-foreground truncate">{conversation.property.title}</p>
-                              )}
+                      return (
+                        <div
+                          key={conversation.id}
+                          className={`p-3 rounded-lg cursor-pointer transition-colors hover:bg-gray-50 ${
+                            selectedConversation?.id === conversation.id ? "bg-blue-50 border border-blue-200" : ""
+                          }`}
+                          onClick={() => {
+                            setSelectedConversation(conversation)
+                            markAsRead(conversation.id)
+                          }}
+                        >
+                          <div className="flex gap-3">
+                            <div className="relative">
+                              <Avatar className="h-10 w-10">
+                                <AvatarImage src="/placeholder.svg?height=40&width=40&text=Owner" />
+                                <AvatarFallback>
+                                  {conversation.owner.first_name[0]}
+                                  {conversation.owner.last_name[0]}
+                                </AvatarFallback>
+                              </Avatar>
                             </div>
-                            <div className="flex flex-col items-end">
-                              <span className="text-xs text-muted-foreground">
-                                {formatTime(conversation.last_message.timestamp)}
-                              </span>
-                              {conversation.unread_count > 0 && (
-                                <Badge
-                                  variant="destructive"
-                                  className="text-xs h-4 w-4 p-0 flex items-center justify-center mt-1"
-                                >
-                                  {conversation.unread_count}
-                                </Badge>
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between items-start">
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-sm truncate">
+                                    {conversation.owner.first_name} {conversation.owner.last_name}
+                                  </p>
+                                  {conversation.property && (
+                                    <p className="text-xs text-muted-foreground truncate">
+                                      {conversation.property.title}
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="flex flex-col items-end">
+                                  {lastMessage && (
+                                    <span className="text-xs text-muted-foreground">
+                                      {formatTime(lastMessage.timestamp)}
+                                    </span>
+                                  )}
+                                  {unreadCount > 0 && (
+                                    <Badge
+                                      variant="destructive"
+                                      className="text-xs h-4 w-4 p-0 flex items-center justify-center mt-1"
+                                    >
+                                      {unreadCount}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                              {lastMessage && (
+                                <p className="text-sm text-muted-foreground truncate mt-1">
+                                  {lastMessage.sender_name}: {lastMessage.content}
+                                </p>
                               )}
                             </div>
                           </div>
-                          <p className="text-sm text-muted-foreground truncate mt-1">
-                            {conversation.last_message.sender_id === "tenant1" ? "Vous: " : ""}
-                            {conversation.last_message.content}
-                          </p>
                         </div>
-                      </div>
-                    </div>
-                  ))}
+                      )
+                    })
+                  )}
                 </div>
               </ScrollArea>
             </CardContent>
@@ -411,26 +436,19 @@ export default function TenantMessagingPage() {
 
                     <div className="relative">
                       <Avatar className="h-10 w-10">
-                        <AvatarImage src={selectedConversation.owner.avatar || "/placeholder.svg"} />
+                        <AvatarImage src="/placeholder.svg?height=40&width=40&text=Owner" />
                         <AvatarFallback>
                           {selectedConversation.owner.first_name[0]}
                           {selectedConversation.owner.last_name[0]}
                         </AvatarFallback>
                       </Avatar>
-                      {selectedConversation.owner.online && (
-                        <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 bg-green-500 rounded-full border-2 border-white"></div>
-                      )}
                     </div>
 
                     <div className="flex-1">
                       <h3 className="font-semibold">
                         {selectedConversation.owner.first_name} {selectedConversation.owner.last_name}
                       </h3>
-                      <p className="text-sm text-muted-foreground">
-                        {selectedConversation.owner.online
-                          ? "En ligne"
-                          : `Vu ${formatTime(selectedConversation.owner.last_seen || "")}`}
-                      </p>
+                      <p className="text-sm text-muted-foreground">Propriétaire</p>
                     </div>
                   </div>
 
@@ -452,16 +470,20 @@ export default function TenantMessagingPage() {
                   <div className="mt-3 p-3 bg-gray-50 rounded-lg">
                     <div className="flex gap-3">
                       <img
-                        src={selectedConversation.property.image || "/placeholder.svg"}
+                        src={getPropertyImage(selectedConversation) || "/placeholder.svg"}
                         alt={selectedConversation.property.title}
                         className="w-12 h-12 rounded object-cover"
                       />
                       <div className="flex-1">
                         <h4 className="font-medium text-sm">{selectedConversation.property.title}</h4>
-                        <p className="text-xs text-muted-foreground">{selectedConversation.property.address}</p>
-                        <p className="text-sm font-semibold text-blue-600">
-                          {selectedConversation.property.price} €/mois
+                        <p className="text-xs text-muted-foreground">
+                          {selectedConversation.property.address}, {selectedConversation.property.city}
                         </p>
+                        {selectedConversation.property.price && (
+                          <p className="text-sm font-semibold text-blue-600">
+                            {selectedConversation.property.price} €/mois
+                          </p>
+                        )}
                       </div>
                       <Button variant="outline" size="sm" asChild>
                         <Link href={`/properties/${selectedConversation.property.id}`}>Voir l'annonce</Link>
@@ -475,25 +497,32 @@ export default function TenantMessagingPage() {
               <CardContent className="flex-1 p-0">
                 <ScrollArea className="h-[calc(100vh-20rem)] p-4">
                   <div className="space-y-4">
-                    {selectedConversation.messages.map((message) => {
-                      const isOwn = message.sender_id === "tenant1"
-                      return (
-                        <div key={message.id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
-                          <div className={`max-w-[70%] ${isOwn ? "order-2" : ""}`}>
-                            <div
-                              className={`p-3 rounded-lg ${
-                                isOwn ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-900"
-                              }`}
-                            >
-                              <p className="text-sm">{message.content}</p>
-                              <p className={`text-xs mt-1 ${isOwn ? "text-blue-100" : "text-gray-500"}`}>
-                                {formatTime(message.timestamp)}
-                              </p>
+                    {selectedConversation.messages.length === 0 ? (
+                      <div className="text-center py-8">
+                        <p className="text-gray-500">Aucun message dans cette conversation</p>
+                        <p className="text-sm text-gray-400 mt-1">Envoyez le premier message !</p>
+                      </div>
+                    ) : (
+                      selectedConversation.messages.map((message) => {
+                        const isOwn = message.sender_id === currentUserId
+                        return (
+                          <div key={message.id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
+                            <div className={`max-w-[70%] ${isOwn ? "order-2" : ""}`}>
+                              <div
+                                className={`p-3 rounded-lg ${
+                                  isOwn ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-900"
+                                }`}
+                              >
+                                <p className="text-sm">{message.content}</p>
+                                <p className={`text-xs mt-1 ${isOwn ? "text-blue-100" : "text-gray-500"}`}>
+                                  {formatTime(message.created_at)}
+                                </p>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      )
-                    })}
+                        )
+                      })
+                    )}
                     <div ref={messagesEndRef} />
                   </div>
                 </ScrollArea>
