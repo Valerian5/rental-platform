@@ -71,6 +71,15 @@ export default function VisitsPage() {
     applyFilters()
   }, [visits, filters])
 
+  // Fonction utilitaire pour extraire la date au format YYYY-MM-DD
+  const extractDate = (dateString: string) => {
+    if (!dateString) return ""
+    // Si c'est déjà au bon format, on le retourne
+    if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) return dateString
+    // Sinon on extrait la partie date de l'ISO string
+    return dateString.split("T")[0]
+  }
+
   const checkAuthAndLoadData = async () => {
     try {
       const user = await authService.getCurrentUser()
@@ -179,13 +188,13 @@ export default function VisitsPage() {
   const getVisitsForDay = (day: Date) => {
     const dayStr = format(day, "yyyy-MM-dd")
     const dayVisits = filteredVisits.filter((visit) => {
-      const matches = visit.visit_date === dayStr
+      const visitDate = extractDate(visit.visit_date)
+      const matches = visitDate === dayStr
       if (matches) {
         console.log("📅 Visite trouvée pour", dayStr, ":", {
           id: visit.id,
           visitor_name: visit.visitor_name,
-          visit_time: visit.visit_time,
-          start_time: visit.start_time,
+          visit_time: visit.visit_time || visit.start_time,
           status: visit.status,
         })
       }
@@ -228,7 +237,9 @@ export default function VisitsPage() {
   const weekDays = getWeekDays()
   const timeSlots = getTimeSlots()
   const upcomingVisits = visits.filter((visit) => {
-    const visitDateTime = new Date(`${visit.visit_date}T${visit.visit_time}`)
+    const visitDate = extractDate(visit.visit_date)
+    const visitTime = visit.visit_time || visit.start_time || "00:00"
+    const visitDateTime = new Date(`${visitDate}T${visitTime}`)
     return visitDateTime > new Date() && visit.status === "scheduled"
   })
 
@@ -399,7 +410,8 @@ export default function VisitsPage() {
                     <div className="p-2 text-xs text-muted-foreground border-r">{timeSlot}</div>
                     {weekDays.map((day) => {
                       const dayVisits = getVisitsForDay(day).filter((visit) => {
-                        const timeMatches = visit.visit_time === timeSlot || visit.start_time === timeSlot
+                        const visitTime = visit.visit_time || visit.start_time
+                        const timeMatches = visitTime === timeSlot
                         if (timeMatches) {
                           console.log("📅 Visite correspond au créneau", timeSlot, ":", visit)
                         }
@@ -492,7 +504,7 @@ export default function VisitsPage() {
                             <div className="space-y-1 text-sm">
                               <div className="flex items-center">
                                 <CalendarIcon className="h-4 w-4 mr-1" />
-                                {format(new Date(visit.visit_date), "PPP", { locale: fr })}
+                                {format(new Date(extractDate(visit.visit_date)), "PPP", { locale: fr })}
                               </div>
                               <div className="flex items-center">
                                 <Clock className="h-4 w-4 mr-1" />

@@ -35,6 +35,15 @@ export default function TenantDashboardPage() {
   const [visits, setVisits] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
+  // Fonction utilitaire pour extraire la date au format YYYY-MM-DD
+  const extractDate = (dateString: string) => {
+    if (!dateString) return ""
+    // Si c'est déjà au bon format, on le retourne
+    if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) return dateString
+    // Sinon on extrait la partie date de l'ISO string
+    return dateString.split("T")[0]
+  }
+
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
@@ -90,8 +99,10 @@ export default function TenantDashboardPage() {
         try {
           const visitsData = await visitService.getTenantVisits(user.id)
           const upcomingVisits = visitsData.filter((visit) => {
-            const visitDate = new Date(`${visit.visit_date}T${visit.start_time || visit.visit_time}`)
-            return visitDate > new Date() && ["scheduled", "confirmed", "proposed"].includes(visit.status)
+            const visitDate = extractDate(visit.visit_date)
+            const visitTime = visit.start_time || visit.visit_time || "00:00"
+            const visitDateTime = new Date(`${visitDate}T${visitTime}`)
+            return visitDateTime > new Date() && ["scheduled", "confirmed", "proposed"].includes(visit.status)
           })
           setVisits(upcomingVisits)
           console.log("📅 Visites à venir:", upcomingVisits.length)
@@ -375,7 +386,7 @@ export default function TenantDashboardPage() {
                               <div className="flex items-center">
                                 <Calendar className="h-3 w-3 mr-1" />
                                 <span className="text-xs">
-                                  {new Date(visit.visit_date).toLocaleDateString("fr-FR", {
+                                  {new Date(extractDate(visit.visit_date)).toLocaleDateString("fr-FR", {
                                     day: "numeric",
                                     month: "short",
                                   })}{" "}
@@ -475,118 +486,6 @@ export default function TenantDashboardPage() {
               </Card>
             </div>
           )}
-
-          {activeTab === "applications" && (
-            <div className="space-y-6">
-              <h1 className="text-2xl font-bold">Mes candidatures</h1>
-
-              <div className="space-y-4">
-                {applications && applications.length > 0 ? (
-                  applications.map((application) => (
-                    <Card key={application.id}>
-                      <CardContent className="p-6">
-                        <div className="flex flex-col md:flex-row gap-4">
-                          <div className="w-full md:w-1/4">
-                            <div className="aspect-video rounded-md overflow-hidden">
-                              <img
-                                src={application.property?.property_images?.[0]?.url || "/placeholder.svg"}
-                                alt={application.property?.title || "Propriété"}
-                                className="h-full w-full object-cover"
-                              />
-                            </div>
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex justify-between items-start mb-2">
-                              <div>
-                                <h3 className="font-semibold">{application.property?.title || "Propriété"}</h3>
-                                <p className="text-sm text-muted-foreground">
-                                  {application.property?.address || "Adresse non disponible"}
-                                </p>
-                              </div>
-                              <Badge variant={getStatusBadgeVariant(application.status)}>
-                                {getStatusText(application.status)}
-                              </Badge>
-                            </div>
-
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 my-4">
-                              <div>
-                                <p className="text-sm text-muted-foreground">Loyer</p>
-                                <p className="font-medium">{application.property?.price || 0} €/mois</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-muted-foreground">Candidature</p>
-                                <p className="font-medium">
-                                  {new Date(application.created_at).toLocaleDateString("fr-FR")}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-muted-foreground">Dernière mise à jour</p>
-                                <p className="font-medium">
-                                  {new Date(application.updated_at).toLocaleDateString("fr-FR")}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-muted-foreground">Score de matching</p>
-                                <div className="flex items-center">
-                                  <span className="font-medium mr-2">
-                                    {applicationService.calculateMatchScore(application, application.property)}%
-                                  </span>
-                                  <Progress
-                                    value={applicationService.calculateMatchScore(application, application.property)}
-                                    className="h-2 w-16"
-                                  />
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex justify-end gap-2">
-                              <Button variant="outline" size="sm" asChild>
-                                <Link href={`/properties/${application.property?.id}`}>Voir l'annonce</Link>
-                              </Button>
-                              <Button variant="outline" size="sm">
-                                Contacter le propriétaire
-                              </Button>
-                              {application.status === "pending" && (
-                                <Button variant="destructive" size="sm">
-                                  Retirer ma candidature
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
-                ) : (
-                  <div className="text-center py-12">
-                    <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                    <h3 className="text-lg font-semibold mb-2">Aucune candidature envoyée</h3>
-                    <p className="text-muted-foreground mb-4">
-                      Vous n'avez pas encore postulé à des annonces. Explorez nos propriétés disponibles.
-                    </p>
-                    <Button asChild>
-                      <Link href="/properties">Voir les annonces</Link>
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {activeTab === "messaging" && (
-            <div className="space-y-6">
-              <h1 className="text-2xl font-bold">Messagerie</h1>
-              <div className="text-center py-12">
-                <MessageSquare className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="text-lg font-semibold mb-2">Messagerie en cours de développement</h3>
-                <p className="text-muted-foreground">
-                  Cette fonctionnalité sera bientôt disponible pour communiquer avec les propriétaires.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Autres onglets similaires... */}
         </div>
       </div>
     </div>
