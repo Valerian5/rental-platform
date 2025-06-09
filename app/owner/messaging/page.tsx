@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { authService } from "@/lib/auth-service"
 import { toast } from "sonner"
-import { MessageSquare, Send, ArrowLeft, Loader2 } from "lucide-react"
+import { MessageSquare, Send, ArrowLeft, Loader2, AlertCircle } from "lucide-react"
 import { PageHeader } from "@/components/page-header"
 
 interface Conversation {
@@ -55,30 +55,34 @@ export default function OwnerMessagingPage() {
   const [newMessage, setNewMessage] = useState("")
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     checkAuthAndLoadData()
   }, [])
 
   useEffect(() => {
-    // Gérer les paramètres URL après le chargement des conversations
-    if (conversations.length > 0 && currentUser) {
+    // Gérer les paramètres URL après le chargement des données
+    if (currentUser && !loading) {
       handleUrlParams()
     }
-  }, [conversations, currentUser, searchParams])
+  }, [currentUser, loading, searchParams])
 
   const checkAuthAndLoadData = async () => {
     try {
+      console.log("🔐 Vérification authentification...")
       const user = await authService.getCurrentUser()
       if (!user || user.user_type !== "owner") {
         router.push("/login")
         return
       }
 
+      console.log("✅ Utilisateur authentifié:", user.id)
       setCurrentUser(user)
       await loadConversations(user.id)
     } catch (error) {
-      console.error("Erreur auth:", error)
+      console.error("❌ Erreur auth:", error)
+      setError("Erreur d'authentification")
       router.push("/login")
     } finally {
       setLoading(false)
@@ -90,16 +94,22 @@ export default function OwnerMessagingPage() {
       console.log("🔍 Chargement conversations pour:", userId)
       const response = await fetch(`/api/conversations?user_id=${userId}`)
 
+      console.log("📡 Réponse API conversations:", response.status)
+
       if (response.ok) {
         const data = await response.json()
         console.log("✅ Conversations chargées:", data.conversations?.length || 0)
+        console.log("📋 Détail conversations:", data.conversations)
         setConversations(data.conversations || [])
       } else {
-        console.warn("⚠️ Erreur chargement conversations:", response.status)
+        const errorData = await response.text()
+        console.error("❌ Erreur API conversations:", response.status, errorData)
+        setError(`Erreur API: ${response.status}`)
         setConversations([])
       }
     } catch (error) {
       console.error("❌ Erreur chargement conversations:", error)
+      setError("Erreur de connexion")
       setConversations([])
     }
   }
@@ -108,7 +118,7 @@ export default function OwnerMessagingPage() {
     const conversationId = searchParams.get("conversation_id")
     const tenantId = searchParams.get("tenant_id")
 
-    console.log("🔗 Paramètres URL:", { conversationId, tenantId })
+    console.log("🔗 Paramètres URL détectés:", { conversationId, tenantId })
 
     if (conversationId) {
       // Sélectionner une conversation spécifique
@@ -116,17 +126,19 @@ export default function OwnerMessagingPage() {
       if (conversation) {
         console.log("✅ Conversation trouvée par ID:", conversation.id)
         setSelectedConversation(conversation)
-        await markMessagesAsRead(conversation.id)
+      } else {
+        console.warn("⚠️ Conversation non trouvée:", conversationId)
       }
     } else if (tenantId) {
       // Chercher ou créer une conversation avec ce locataire
+      console.log("🎯 Gestion conversation avec locataire:", tenantId)
       await handleTenantConversation(tenantId)
     }
   }
 
   const handleTenantConversation = async (tenantId: string) => {
     try {
-      console.log("🔍 Recherche conversation avec locataire:", tenantId)
+      console.log("🔍 Recherche conversation existante avec locataire:", tenantId)
 
       // Chercher une conversation existante avec ce locataire
       const existingConversation = conversations.find((c) => c.tenant_id === tenantId)
@@ -134,12 +146,11 @@ export default function OwnerMessagingPage() {
       if (existingConversation) {
         console.log("✅ Conversation existante trouvée:", existingConversation.id)
         setSelectedConversation(existingConversation)
-        await markMessagesAsRead(existingConversation.id)
         return
       }
 
       // Créer une nouvelle conversation
-      console.log("🆕 Création nouvelle conversation avec locataire:", tenantId)
+      console.log("🆕 Aucune conversation trouvée, création en cours...")
       setCreatingConversation(true)
 
       const response = await fetch("/api/conversations", {
@@ -154,48 +165,36 @@ export default function OwnerMessagingPage() {
         }),
       })
 
+      console.log("📡 Réponse création conversation:", response.status)
+
       if (response.ok) {
         const data = await response.json()
-        console.log("✅ Conversation créée:", data.conversation.id)
+        console.log("✅ Conversation créée:", data.conversation)
 
         // Recharger les conversations pour inclure la nouvelle
         await loadConversations(currentUser.id)
 
-        // La nouvelle conversation sera sélectionnée au prochain rendu
-        // grâce à l'effet qui surveille les conversations
+        toast.success("Conversation créée avec succès")
+
+        // Sélectionner la nouvelle conversation après rechargement
         setTimeout(() => {
           const newConversation = conversations.find((c) => c.id === data.conversation.id)
           if (newConversation) {
             setSelectedConversation(newConversation)
           }
-        }, 100)
-
-        toast.success("Conversation créée avec succès")
+        }, 500)
       } else {
-        console.error("❌ Erreur création conversation:", response.status)
+        const errorData = await response.text()
+        console.error("❌ Erreur création conversation:", response.status, errorData)
         toast.error("Erreur lors de la création de la conversation")
+        setError(`Erreur création: ${response.status}`)
       }
     } catch (error) {
       console.error("❌ Erreur handleTenantConversation:", error)
       toast.error("Erreur lors de la création de la conversation")
+      setError("Erreur de connexion")
     } finally {
       setCreatingConversation(false)
-    }
-  }
-
-  const markMessagesAsRead = async (conversationId: string) => {
-    try {
-      await fetch(`/api/conversations/${conversationId}/mark-read`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          user_id: currentUser.id,
-        }),
-      })
-    } catch (error) {
-      console.error("Erreur marquage messages lus:", error)
     }
   }
 
@@ -204,6 +203,12 @@ export default function OwnerMessagingPage() {
 
     try {
       setSending(true)
+      console.log("📤 Envoi message:", {
+        conversation_id: selectedConversation.id,
+        sender_id: currentUser.id,
+        content: newMessage.trim(),
+      })
+
       const response = await fetch("/api/conversations", {
         method: "POST",
         headers: {
@@ -218,58 +223,21 @@ export default function OwnerMessagingPage() {
       })
 
       if (response.ok) {
+        console.log("✅ Message envoyé avec succès")
         setNewMessage("")
         // Recharger les conversations pour voir le nouveau message
         await loadConversations(currentUser.id)
-        // Maintenir la conversation sélectionnée
-        const updatedConversation = conversations.find((c) => c.id === selectedConversation.id)
-        if (updatedConversation) {
-          setSelectedConversation(updatedConversation)
-        }
       } else {
+        const errorData = await response.text()
+        console.error("❌ Erreur envoi message:", response.status, errorData)
         toast.error("Erreur lors de l'envoi du message")
       }
     } catch (error) {
-      console.error("Erreur envoi message:", error)
+      console.error("❌ Erreur sendMessage:", error)
       toast.error("Erreur lors de l'envoi du message")
     } finally {
       setSending(false)
     }
-  }
-
-  const handleConversationSelect = async (conversation: Conversation) => {
-    setSelectedConversation(conversation)
-    await markMessagesAsRead(conversation.id)
-    // Mettre à jour l'URL sans recharger la page
-    const url = new URL(window.location.href)
-    url.searchParams.set("conversation_id", conversation.id)
-    url.searchParams.delete("tenant_id")
-    window.history.replaceState({}, "", url.toString())
-  }
-
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString)
-    const now = new Date()
-    const yesterday = new Date(now)
-    yesterday.setDate(yesterday.getDate() - 1)
-
-    if (date.toDateString() === now.toDateString()) {
-      return date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
-    } else if (date.toDateString() === yesterday.toDateString()) {
-      return "Hier"
-    } else {
-      return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })
-    }
-  }
-
-  const getUnreadCount = (conversation: Conversation) => {
-    if (!conversation.messages) return 0
-    return conversation.messages.filter((msg) => !msg.is_read && msg.sender_id !== currentUser?.id).length
-  }
-
-  const getLastMessage = (conversation: Conversation) => {
-    if (!conversation.messages || conversation.messages.length === 0) return null
-    return conversation.messages[conversation.messages.length - 1]
   }
 
   if (loading) {
@@ -279,6 +247,26 @@ export default function OwnerMessagingPage() {
         <div className="flex items-center justify-center h-96">
           <Loader2 className="h-8 w-8 animate-spin" />
         </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Messagerie" description="Erreur de chargement" />
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="flex items-center gap-3 py-6">
+            <AlertCircle className="h-5 w-5 text-red-600" />
+            <div>
+              <h3 className="font-semibold text-red-800">Erreur</h3>
+              <p className="text-red-600">{error}</p>
+              <Button variant="outline" size="sm" className="mt-2" onClick={() => window.location.reload()}>
+                Réessayer
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -315,60 +303,40 @@ export default function OwnerMessagingPage() {
               <div className="p-6 text-center">
                 <MessageSquare className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <h3 className="text-lg font-semibold mb-2">Aucune conversation</h3>
-                <p className="text-muted-foreground text-sm">Les conversations avec vos locataires apparaîtront ici</p>
+                <p className="text-muted-foreground text-sm">
+                  {creatingConversation
+                    ? "Création en cours..."
+                    : "Les conversations avec vos locataires apparaîtront ici"}
+                </p>
               </div>
             ) : (
               <ScrollArea className="h-[500px]">
                 <div className="space-y-1">
-                  {conversations.map((conversation) => {
-                    const unreadCount = getUnreadCount(conversation)
-                    const lastMessage = getLastMessage(conversation)
-
-                    return (
-                      <div
-                        key={conversation.id}
-                        className={`p-4 cursor-pointer hover:bg-gray-50 border-b transition-colors ${
-                          selectedConversation?.id === conversation.id ? "bg-blue-50 border-l-4 border-l-blue-500" : ""
-                        }`}
-                        onClick={() => handleConversationSelect(conversation)}
-                      >
-                        <div className="flex items-center space-x-3">
-                          <Avatar className="h-10 w-10">
-                            <AvatarImage src="/placeholder.svg" />
-                            <AvatarFallback>
-                              {conversation.tenant.first_name[0]}
-                              {conversation.tenant.last_name[0]}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between">
-                              <p className="text-sm font-medium truncate">
-                                {conversation.tenant.first_name} {conversation.tenant.last_name}
-                              </p>
-                              {unreadCount > 0 && (
-                                <Badge className="bg-red-500 text-white text-xs">{unreadCount}</Badge>
-                              )}
-                            </div>
-                            {conversation.property && (
-                              <p className="text-xs text-muted-foreground truncate mb-1">
-                                📍 {conversation.property.title}
-                              </p>
-                            )}
-                            {lastMessage ? (
-                              <div className="flex justify-between items-center">
-                                <p className="text-xs text-muted-foreground truncate">{lastMessage.content}</p>
-                                <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
-                                  {formatTime(lastMessage.created_at)}
-                                </span>
-                              </div>
-                            ) : (
-                              <p className="text-xs text-muted-foreground">Nouvelle conversation</p>
-                            )}
-                          </div>
+                  {conversations.map((conversation) => (
+                    <div
+                      key={conversation.id}
+                      className={`p-4 cursor-pointer hover:bg-gray-50 border-b transition-colors ${
+                        selectedConversation?.id === conversation.id ? "bg-blue-50 border-l-4 border-l-blue-500" : ""
+                      }`}
+                      onClick={() => setSelectedConversation(conversation)}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <Avatar className="h-10 w-10">
+                          <AvatarImage src="/placeholder.svg" />
+                          <AvatarFallback>
+                            {conversation.tenant.first_name[0]}
+                            {conversation.tenant.last_name[0]}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {conversation.tenant.first_name} {conversation.tenant.last_name}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">{conversation.subject}</p>
                         </div>
                       </div>
-                    )
-                  })}
+                    </div>
+                  ))}
                 </div>
               </ScrollArea>
             )}
@@ -380,16 +348,8 @@ export default function OwnerMessagingPage() {
           {selectedConversation ? (
             <>
               <CardHeader className="border-b">
-                <CardTitle className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-semibold">
-                      {selectedConversation.tenant.first_name} {selectedConversation.tenant.last_name}
-                    </h3>
-                    {selectedConversation.property && (
-                      <p className="text-sm text-muted-foreground">{selectedConversation.property.title}</p>
-                    )}
-                  </div>
-                  <Badge variant="outline">{selectedConversation.tenant.email}</Badge>
+                <CardTitle>
+                  {selectedConversation.tenant.first_name} {selectedConversation.tenant.last_name}
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0 flex flex-col h-[500px]">
@@ -419,7 +379,10 @@ export default function OwnerMessagingPage() {
                             <p
                               className={`text-xs mt-1 ${message.sender_id === currentUser?.id ? "text-blue-100" : "text-gray-500"}`}
                             >
-                              {formatTime(message.created_at)}
+                              {new Date(message.created_at).toLocaleTimeString("fr-FR", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
                             </p>
                           </div>
                         </div>
@@ -449,9 +412,13 @@ export default function OwnerMessagingPage() {
             <CardContent className="flex items-center justify-center h-full">
               <div className="text-center">
                 <MessageSquare className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="text-lg font-semibold mb-2">Sélectionnez une conversation</h3>
+                <h3 className="text-lg font-semibold mb-2">
+                  {creatingConversation ? "Création en cours..." : "Sélectionnez une conversation"}
+                </h3>
                 <p className="text-muted-foreground">
-                  Choisissez une conversation dans la liste pour commencer à échanger
+                  {creatingConversation
+                    ? "Veuillez patienter pendant la création de la conversation"
+                    : "Choisissez une conversation dans la liste pour commencer à échanger"}
                 </p>
               </div>
             </CardContent>
