@@ -449,7 +449,7 @@ export default function OwnerMessagingPage() {
             <CardContent className="flex items-center justify-center h-full">
               <div className="text-center">
                 <MessageSquare className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="text-lg font-semibold mb-2">Sélectionnez une conversation</h3>
+                <h3 className="text-lg font-semibold mb-2">Sélectionnez une conversation!</h3>
                 <p className="text-muted-foreground">
                   Choisissez une conversation dans la liste pour commencer à échanger
                 </p>
