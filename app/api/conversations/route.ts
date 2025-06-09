@@ -15,15 +15,7 @@ export async function GET(request: NextRequest) {
     // Récupérer les conversations où l'utilisateur est soit locataire soit propriétaire
     const { data: conversations, error } = await supabase
       .from("conversations")
-      .select(`
-        *,
-        tenant:users!conversations_tenant_id_fkey(id, first_name, last_name, email, phone),
-        owner:users!conversations_owner_id_fkey(id, first_name, last_name, email, phone),
-        property:properties(id, title, address, city),
-        messages(
-          id, content, sender_id, is_read, created_at
-        )
-      `)
+      .select("*")
       .or(`tenant_id.eq.${userId},owner_id.eq.${userId}`)
       .order("updated_at", { ascending: false })
 
@@ -32,16 +24,53 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ conversations: [] })
     }
 
-    // Trier les messages par date pour chaque conversation
-    const conversationsWithSortedMessages =
-      conversations?.map((conv) => ({
-        ...conv,
-        messages:
-          conv.messages?.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) || [],
-      })) || []
+    // Pour chaque conversation, récupérer les détails du tenant, owner et property
+    const enhancedConversations = await Promise.all(
+      conversations.map(async (conv) => {
+        // Récupérer les détails du tenant
+        const { data: tenant } = await supabase
+          .from("users")
+          .select("id, first_name, last_name, email, phone")
+          .eq("id", conv.tenant_id)
+          .single()
 
-    console.log("✅ Conversations récupérées:", conversationsWithSortedMessages.length)
-    return NextResponse.json({ conversations: conversationsWithSortedMessages })
+        // Récupérer les détails du propriétaire
+        const { data: owner } = await supabase
+          .from("users")
+          .select("id, first_name, last_name, email, phone")
+          .eq("id", conv.owner_id)
+          .single()
+
+        // Récupérer les détails de la propriété si elle existe
+        let property = null
+        if (conv.property_id) {
+          const { data: propertyData } = await supabase
+            .from("properties")
+            .select("id, title, address, city")
+            .eq("id", conv.property_id)
+            .single()
+          property = propertyData
+        }
+
+        // Récupérer les messages de la conversation
+        const { data: messages } = await supabase
+          .from("messages")
+          .select("*")
+          .eq("conversation_id", conv.id)
+          .order("created_at", { ascending: true })
+
+        return {
+          ...conv,
+          tenant,
+          owner,
+          property,
+          messages: messages || [],
+        }
+      }),
+    )
+
+    console.log("✅ Conversations récupérées:", enhancedConversations.length)
+    return NextResponse.json({ conversations: enhancedConversations })
   } catch (error) {
     console.error("❌ Erreur API conversations GET:", error)
     return NextResponse.json({ conversations: [] })
@@ -78,6 +107,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 })
       }
 
+      // Mettre à jour la date de la conversation
+      await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversation_id)
+
       console.log("✅ Message envoyé:", message.id)
       return NextResponse.json({ message }, { status: 201 })
     } else {
@@ -95,11 +127,9 @@ export async function POST(request: NextRequest) {
 
       if (property_id) {
         query = query.eq("property_id", property_id)
-      } else {
-        query = query.is("property_id", null)
       }
 
-      const { data: existing } = await query.single()
+      const { data: existing } = await query.maybeSingle()
 
       if (existing) {
         console.log("✅ Conversation existante trouvée:", existing.id)

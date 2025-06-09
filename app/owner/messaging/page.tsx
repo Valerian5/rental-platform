@@ -13,27 +13,19 @@ import { toast } from "sonner"
 import { MessageSquare, Send, ArrowLeft, Loader2, AlertCircle } from "lucide-react"
 import { PageHeader } from "@/components/page-header"
 
-interface Conversation {
+interface User {
   id: string
-  tenant_id: string
-  owner_id: string
-  property_id?: string
-  subject: string
-  created_at: string
-  updated_at: string
-  tenant: {
-    id: string
-    first_name: string
-    last_name: string
-    email: string
-    phone?: string
-  }
-  property?: {
-    id: string
-    title: string
-    address: string
-  }
-  messages: Message[]
+  first_name: string
+  last_name: string
+  email: string
+  phone?: string
+}
+
+interface Property {
+  id: string
+  title: string
+  address: string
+  city: string
 }
 
 interface Message {
@@ -45,6 +37,20 @@ interface Message {
   created_at: string
 }
 
+interface Conversation {
+  id: string
+  tenant_id: string
+  owner_id: string
+  property_id?: string
+  subject: string
+  created_at: string
+  updated_at: string
+  tenant?: User
+  owner?: User
+  property?: Property
+  messages: Message[]
+}
+
 export default function OwnerMessagingPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -52,6 +58,7 @@ export default function OwnerMessagingPage() {
   const [creatingConversation, setCreatingConversation] = useState(false)
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
+  const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState("")
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [sending, setSending] = useState(false)
@@ -114,6 +121,25 @@ export default function OwnerMessagingPage() {
     }
   }
 
+  const loadMessages = async (conversationId: string) => {
+    try {
+      console.log("🔍 Chargement messages pour conversation:", conversationId)
+      const response = await fetch(`/api/conversations/${conversationId}/messages`)
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log("✅ Messages chargés:", data.messages?.length || 0)
+        setMessages(data.messages || [])
+      } else {
+        console.error("❌ Erreur chargement messages:", response.status)
+        setMessages([])
+      }
+    } catch (error) {
+      console.error("❌ Erreur chargement messages:", error)
+      setMessages([])
+    }
+  }
+
   const handleUrlParams = async () => {
     const conversationId = searchParams.get("conversation_id")
     const tenantId = searchParams.get("tenant_id")
@@ -126,6 +152,7 @@ export default function OwnerMessagingPage() {
       if (conversation) {
         console.log("✅ Conversation trouvée par ID:", conversation.id)
         setSelectedConversation(conversation)
+        await loadMessages(conversation.id)
       } else {
         console.warn("⚠️ Conversation non trouvée:", conversationId)
       }
@@ -146,6 +173,7 @@ export default function OwnerMessagingPage() {
       if (existingConversation) {
         console.log("✅ Conversation existante trouvée:", existingConversation.id)
         setSelectedConversation(existingConversation)
+        await loadMessages(existingConversation.id)
         return
       }
 
@@ -176,13 +204,20 @@ export default function OwnerMessagingPage() {
 
         toast.success("Conversation créée avec succès")
 
-        // Sélectionner la nouvelle conversation après rechargement
-        setTimeout(() => {
-          const newConversation = conversations.find((c) => c.id === data.conversation.id)
-          if (newConversation) {
-            setSelectedConversation(newConversation)
-          }
-        }, 500)
+        // Chercher la nouvelle conversation dans la liste mise à jour
+        const newConversation = conversations.find((c) => c.id === data.conversation.id)
+        if (newConversation) {
+          console.log("✅ Nouvelle conversation trouvée dans la liste:", newConversation.id)
+          setSelectedConversation(newConversation)
+          setMessages([]) // Pas de messages dans une nouvelle conversation
+        } else {
+          console.log("⚠️ Nouvelle conversation non trouvée dans la liste, utilisation directe")
+          // Utiliser directement la conversation créée
+          setSelectedConversation({
+            ...data.conversation,
+            messages: [],
+          })
+        }
       } else {
         const errorData = await response.text()
         console.error("❌ Erreur création conversation:", response.status, errorData)
@@ -225,8 +260,8 @@ export default function OwnerMessagingPage() {
       if (response.ok) {
         console.log("✅ Message envoyé avec succès")
         setNewMessage("")
-        // Recharger les conversations pour voir le nouveau message
-        await loadConversations(currentUser.id)
+        // Recharger les messages pour voir le nouveau message
+        await loadMessages(selectedConversation.id)
       } else {
         const errorData = await response.text()
         console.error("❌ Erreur envoi message:", response.status, errorData)
@@ -237,6 +272,26 @@ export default function OwnerMessagingPage() {
       toast.error("Erreur lors de l'envoi du message")
     } finally {
       setSending(false)
+    }
+  }
+
+  const handleConversationSelect = async (conversation: Conversation) => {
+    setSelectedConversation(conversation)
+    await loadMessages(conversation.id)
+  }
+
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const yesterday = new Date(now)
+    yesterday.setDate(yesterday.getDate() - 1)
+
+    if (date.toDateString() === now.toDateString()) {
+      return date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      return "Hier"
+    } else {
+      return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })
     }
   }
 
@@ -318,19 +373,19 @@ export default function OwnerMessagingPage() {
                       className={`p-4 cursor-pointer hover:bg-gray-50 border-b transition-colors ${
                         selectedConversation?.id === conversation.id ? "bg-blue-50 border-l-4 border-l-blue-500" : ""
                       }`}
-                      onClick={() => setSelectedConversation(conversation)}
+                      onClick={() => handleConversationSelect(conversation)}
                     >
                       <div className="flex items-center space-x-3">
                         <Avatar className="h-10 w-10">
                           <AvatarImage src="/placeholder.svg" />
                           <AvatarFallback>
-                            {conversation.tenant.first_name[0]}
-                            {conversation.tenant.last_name[0]}
+                            {conversation.tenant?.first_name?.[0] || "?"}
+                            {conversation.tenant?.last_name?.[0] || "?"}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">
-                            {conversation.tenant.first_name} {conversation.tenant.last_name}
+                            {conversation.tenant?.first_name} {conversation.tenant?.last_name}
                           </p>
                           <p className="text-xs text-muted-foreground truncate">{conversation.subject}</p>
                         </div>
@@ -349,21 +404,21 @@ export default function OwnerMessagingPage() {
             <>
               <CardHeader className="border-b">
                 <CardTitle>
-                  {selectedConversation.tenant.first_name} {selectedConversation.tenant.last_name}
+                  {selectedConversation.tenant?.first_name} {selectedConversation.tenant?.last_name}
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0 flex flex-col h-[500px]">
                 {/* Messages */}
                 <ScrollArea className="flex-1 p-4">
                   <div className="space-y-4">
-                    {selectedConversation.messages.length === 0 ? (
+                    {messages.length === 0 ? (
                       <div className="text-center py-8">
                         <MessageSquare className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                         <p className="text-muted-foreground">Aucun message dans cette conversation</p>
                         <p className="text-sm text-muted-foreground mt-1">Envoyez le premier message !</p>
                       </div>
                     ) : (
-                      selectedConversation.messages.map((message) => (
+                      messages.map((message) => (
                         <div
                           key={message.id}
                           className={`flex ${message.sender_id === currentUser?.id ? "justify-end" : "justify-start"}`}
@@ -379,10 +434,7 @@ export default function OwnerMessagingPage() {
                             <p
                               className={`text-xs mt-1 ${message.sender_id === currentUser?.id ? "text-blue-100" : "text-gray-500"}`}
                             >
-                              {new Date(message.created_at).toLocaleTimeString("fr-FR", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
+                              {formatTime(message.created_at)}
                             </p>
                           </div>
                         </div>
