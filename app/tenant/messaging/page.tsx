@@ -35,6 +35,7 @@ interface Conversation {
     city: string
     price?: number
     images?: Array<{ url: string; is_primary: boolean }>
+    mainImage?: string
   }
   owner: {
     id: string
@@ -62,12 +63,38 @@ export default function TenantMessagingPage() {
   const [isMobile, setIsMobile] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [urlParams, setUrlParams] = useState<{
+    conversationId: string | null
+    ownerId: string | null
+    propertyId: string | null
+  }>({
+    conversationId: null,
+    ownerId: null,
+    propertyId: null,
+  })
 
   // Récupérer l'ID utilisateur depuis le localStorage ou une autre source
   useEffect(() => {
     const userId = localStorage.getItem("user_id") || "64504874-4a99-4da5-938b-0858caf27044" // ID par défaut pour test
     setCurrentUserId(userId)
     console.log("👤 ID utilisateur locataire:", userId)
+  }, [])
+
+  // Récupérer les paramètres URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const conversationId = params.get("conversation_id") || params.get("conversation")
+    const ownerId = params.get("owner_id")
+    const propertyId = params.get("property_id")
+
+    setUrlParams({
+      conversationId,
+      ownerId,
+      propertyId,
+    })
+
+    console.log("🔗 Paramètres URL détectés:", { conversationId, ownerId, propertyId })
+    console.log("🔗 URL complète:", window.location.search)
   }, [])
 
   // Charger les conversations
@@ -102,16 +129,11 @@ export default function TenantMessagingPage() {
     loadConversations()
   }, [currentUserId])
 
-  // Gérer les paramètres URL (conversation_id, owner_id)
+  // Gérer les paramètres URL
   useEffect(() => {
-    if (!currentUserId || conversations.length === 0) return
+    if (!currentUserId || conversations.length === 0 || !urlParams) return
 
-    const urlParams = new URLSearchParams(window.location.search)
-    const conversationId = urlParams.get("conversation_id") || urlParams.get("conversation")
-    const ownerId = urlParams.get("owner_id")
-
-    console.log("🔗 Paramètres URL détectés:", { conversationId, ownerId })
-    console.log("🔗 URL complète:", window.location.search)
+    const { conversationId, ownerId, propertyId } = urlParams
 
     if (conversationId) {
       // Sélectionner une conversation spécifique
@@ -129,19 +151,29 @@ export default function TenantMessagingPage() {
       }
     } else if (ownerId) {
       // Créer ou trouver une conversation avec ce propriétaire
-      handleOwnerConversation(ownerId)
+      handleOwnerConversation(ownerId, propertyId)
     }
-  }, [conversations, currentUserId])
+  }, [conversations, currentUserId, urlParams])
 
   // Gérer la conversation avec un propriétaire spécifique
-  const handleOwnerConversation = async (ownerId: string) => {
+  const handleOwnerConversation = async (ownerId: string, propertyId: string | null = null) => {
     if (!currentUserId) return
 
     try {
-      console.log("🎯 Gestion conversation avec propriétaire:", ownerId)
+      console.log("🎯 Gestion conversation avec propriétaire:", ownerId, "propriété:", propertyId)
 
-      // Chercher une conversation existante avec ce propriétaire
-      const existingConversation = conversations.find((c) => c.owner_id === ownerId)
+      // Chercher une conversation existante avec ce propriétaire et cette propriété
+      let existingConversation = null
+
+      if (propertyId) {
+        // Si on a un property_id, chercher une conversation avec ce propriétaire ET cette propriété
+        existingConversation = conversations.find((c) => c.owner_id === ownerId && c.property_id === propertyId)
+      }
+
+      // Si on n'a pas trouvé avec la propriété ou si on n'a pas de propriété, chercher juste avec le propriétaire
+      if (!existingConversation) {
+        existingConversation = conversations.find((c) => c.owner_id === ownerId)
+      }
 
       if (existingConversation) {
         console.log("✅ Conversation existante trouvée:", existingConversation.id)
@@ -160,6 +192,7 @@ export default function TenantMessagingPage() {
           tenant_id: currentUserId,
           owner_id: ownerId,
           subject: "Nouvelle conversation",
+          property_id: propertyId,
         }),
       })
 
@@ -297,19 +330,25 @@ export default function TenantMessagingPage() {
   }
 
   const getPropertyImage = (conversation: Conversation) => {
-    if (!conversation.property?.images?.length) {
-      return "/placeholder.svg?height=60&width=60&text=Apt"
+    // Si on a une image principale déjà extraite
+    if (conversation.property?.mainImage) {
+      return conversation.property.mainImage
     }
 
-    const primaryImage = conversation.property.images.find((img) => img.is_primary)
-    return primaryImage?.url || conversation.property.images[0]?.url || "/placeholder.svg?height=60&width=60&text=Apt"
+    // Sinon chercher dans les images
+    if (conversation.property?.images?.length) {
+      const primaryImage = conversation.property.images.find((img) => img.is_primary)
+      return primaryImage?.url || conversation.property.images[0]?.url
+    }
+
+    return "/placeholder.svg?height=60&width=60&text=Apt"
   }
 
   const filteredConversations = conversations.filter(
     (conv) =>
       conv.owner.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       conv.owner.last_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      conv.property?.title.toLowerCase().includes(searchQuery.toLowerCase()),
+      conv.property?.title?.toLowerCase().includes(searchQuery.toLowerCase()),
   )
 
   if (loading) {
@@ -472,7 +511,7 @@ export default function TenantMessagingPage() {
                     <div className="flex gap-3">
                       <img
                         src={getPropertyImage(selectedConversation) || "/placeholder.svg"}
-                        alt={selectedConversation.property.title}
+                        alt={selectedConversation.property.title || "Propriété"}
                         className="w-12 h-12 rounded object-cover"
                       />
                       <div className="flex-1">

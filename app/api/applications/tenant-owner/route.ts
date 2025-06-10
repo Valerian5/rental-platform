@@ -13,8 +13,6 @@ export async function GET(request: NextRequest) {
 
     console.log("🔍 Recherche candidatures:", { tenantId, ownerId })
 
-    // Utilisons exactement la même approche que l'API de débogage qui fonctionne
-
     // Étape 1: Récupérer les candidatures du tenant
     const { data: tenantApplications, error: tenantError } = await supabase
       .from("applications")
@@ -52,6 +50,13 @@ export async function GET(request: NextRequest) {
     const enrichedApplications = filteredApplications.map((app) => {
       const property = ownerProperties.find((p) => p.id === app.property_id)
 
+      // Extraire l'image principale
+      let mainImage = null
+      if (property?.images && Array.isArray(property.images)) {
+        const primaryImage = property.images.find((img) => img.is_primary === true)
+        mainImage = primaryImage?.url || (property.images.length > 0 ? property.images[0].url : null)
+      }
+
       // Extraire seulement les champs nécessaires de la propriété
       const simplifiedProperty = property
         ? {
@@ -61,6 +66,7 @@ export async function GET(request: NextRequest) {
             city: property.city,
             price: property.price,
             images: property.images,
+            mainImage: mainImage,
           }
         : null
 
