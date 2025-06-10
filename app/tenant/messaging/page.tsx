@@ -150,24 +150,28 @@ export default function TenantMessagingPage() {
 
   // Récupérer les paramètres URL
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const conversationId = params.get("conversation_id") || params.get("conversation")
-    const ownerId = params.get("owner_id")
-    const propertyId = params.get("property_id")
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search)
+      const conversationId = params.get("conversation_id") || params.get("conversation")
+      const ownerId = params.get("owner_id")
+      const propertyId = params.get("property_id")
 
-    setUrlParams({
-      conversationId,
-      ownerId,
-      propertyId,
-    })
+      console.log("🔗 URL complète:", window.location.href)
+      console.log("🔗 Search params:", window.location.search)
+      console.log("🔗 Paramètres détectés:", { conversationId, ownerId, propertyId })
 
-    console.log("🔗 Paramètres URL détectés:", { conversationId, ownerId, propertyId })
-    console.log("🔗 URL complète:", window.location.search)
+      setUrlParams({
+        conversationId,
+        ownerId,
+        propertyId,
+      })
 
-    // Ajouter à debugInfo
-    setDebugInfo(
-      (prev) => `${prev || ""}🔗 Paramètres URL: ${JSON.stringify({ conversationId, ownerId, propertyId })}\n`,
-    )
+      // Ajouter à debugInfo
+      setDebugInfo(
+        (prev) =>
+          `${prev || ""}🔗 URL: ${window.location.href}\n🔗 Paramètres: ${JSON.stringify({ conversationId, ownerId, propertyId })}\n`,
+      )
+    }
   }, [])
 
   // Charger les conversations

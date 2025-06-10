@@ -129,7 +129,7 @@ const Page = () => {
                     size="sm"
                     onClick={() => {
                       // Récupérer l'owner_id depuis la propriété
-                      const ownerId = application.property.owner?.id || application.property.owner_id
+                      const ownerId = application.property.owner?.id
                       if (ownerId && application.property.id) {
                         router.push(`/tenant/messaging?owner_id=${ownerId}&property_id=${application.property.id}`)
                       } else {
