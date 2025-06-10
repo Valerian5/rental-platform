@@ -41,43 +41,64 @@ export async function GET(request: NextRequest) {
 
     // Étape 3: Filtrer les candidatures pour ne garder que celles qui concernent les propriétés du propriétaire
     const propertyIds = ownerProperties.map((p) => p.id)
-
     const filteredApplications = tenantApplications.filter((app) => propertyIds.includes(app.property_id))
 
     console.log("📋 Candidatures filtrées:", filteredApplications.length)
 
-    // Étape 4: Enrichir les candidatures avec les informations des propriétés
-    const enrichedApplications = filteredApplications.map((app) => {
-      const property = ownerProperties.find((p) => p.id === app.property_id)
+    // Étape 4: Pour chaque candidature, enrichir avec les informations de la propriété et ses images
+    const enrichedApplications = await Promise.all(
+      filteredApplications.map(async (app) => {
+        const property = ownerProperties.find((p) => p.id === app.property_id)
 
-      // Extraire l'image principale
-      let mainImage = null
-      if (property?.images && Array.isArray(property.images)) {
-        const primaryImage = property.images.find((img) => img.is_primary === true)
-        mainImage = primaryImage?.url || (property.images.length > 0 ? property.images[0].url : null)
-      }
-
-      // Extraire seulement les champs nécessaires de la propriété
-      const simplifiedProperty = property
-        ? {
-            id: property.id,
-            title: property.title,
-            address: property.address,
-            city: property.city,
-            price: property.price,
-            images: property.images,
-            mainImage: mainImage,
+        if (!property) {
+          return {
+            id: app.id,
+            status: app.status,
+            created_at: app.created_at,
+            message: app.message,
+            property: null,
           }
-        : null
+        }
 
-      return {
-        id: app.id,
-        status: app.status,
-        created_at: app.created_at,
-        message: app.message,
-        property: simplifiedProperty,
-      }
-    })
+        // Récupérer les images de la propriété depuis property_images
+        const { data: images, error: imagesError } = await supabase
+          .from("property_images")
+          .select("url, is_primary")
+          .eq("property_id", property.id)
+          .order("is_primary", { ascending: false })
+
+        if (imagesError) {
+          console.error("❌ Erreur récupération images propriété:", property.id, imagesError)
+        }
+
+        // Extraire l'image principale
+        let mainImage = null
+        if (images && images.length > 0) {
+          const primaryImage = images.find((img) => img.is_primary === true)
+          mainImage = primaryImage?.url || images[0]?.url
+        }
+
+        const simplifiedProperty = {
+          id: property.id,
+          title: property.title,
+          address: property.address,
+          city: property.city,
+          price: property.price,
+          images: images || [],
+          mainImage: mainImage,
+        }
+
+        return {
+          id: app.id,
+          status: app.status,
+          created_at: app.created_at,
+          message: app.message,
+          property: simplifiedProperty,
+        }
+      }),
+    )
+
+    console.log("✅ Candidatures enrichies avec images:", enrichedApplications.length)
 
     return NextResponse.json({
       applications: enrichedApplications,
