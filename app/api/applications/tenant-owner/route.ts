@@ -13,10 +13,10 @@ export async function GET(request: NextRequest) {
 
     console.log("🔍 Recherche candidatures:", { tenantId, ownerId })
 
-    // D'abord récupérer les propriétés du propriétaire
+    // Étape 1: Récupérer les propriétés du propriétaire
     const { data: properties, error: propertiesError } = await supabase
       .from("properties")
-      .select("id")
+      .select("id, title, address, city, price, images")
       .eq("owner_id", ownerId)
 
     if (propertiesError) {
@@ -24,32 +24,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Erreur lors de la récupération des propriétés" }, { status: 500 })
     }
 
+    console.log("🏠 Propriétés trouvées:", properties?.length || 0)
+
     if (!properties || properties.length === 0) {
       console.log("ℹ️ Aucune propriété trouvée pour ce propriétaire")
       return NextResponse.json({ applications: [], count: 0 })
     }
 
     const propertyIds = properties.map((p) => p.id)
-    console.log("🏠 Propriétés du propriétaire:", propertyIds)
+    console.log("🏠 IDs des propriétés:", propertyIds)
 
-    // Ensuite récupérer les candidatures du locataire pour ces propriétés
+    // Étape 2: Récupérer les candidatures du locataire pour ces propriétés (SANS jointure)
     const { data: applications, error: applicationsError } = await supabase
       .from("applications")
-      .select(`
-        id,
-        status,
-        created_at,
-        message,
-        property_id,
-        properties(
-          id,
-          title,
-          address,
-          city,
-          price,
-          images
-        )
-      `)
+      .select("id, status, created_at, message, property_id")
       .eq("tenant_id", tenantId)
       .in("property_id", propertyIds)
       .order("created_at", { ascending: false })
@@ -60,24 +48,34 @@ export async function GET(request: NextRequest) {
     }
 
     console.log("✅ Candidatures trouvées:", applications?.length || 0)
-    console.log("📋 Détail candidatures:", JSON.stringify(applications, null, 2))
 
-    // Transformer les données pour avoir la structure attendue
-    const formattedApplications =
-      applications?.map((app) => ({
-        id: app.id,
-        status: app.status,
-        created_at: app.created_at,
-        message: app.message,
-        property: app.properties,
-      })) || []
+    // Étape 3: Enrichir les candidatures avec les informations des propriétés
+    const enrichedApplications =
+      applications?.map((app) => {
+        const property = properties.find((p) => p.id === app.property_id)
+        return {
+          id: app.id,
+          status: app.status,
+          created_at: app.created_at,
+          message: app.message,
+          property: property || null,
+        }
+      }) || []
+
+    console.log("📋 Candidatures enrichies:", enrichedApplications.length)
 
     return NextResponse.json({
-      applications: formattedApplications,
-      count: formattedApplications.length,
+      applications: enrichedApplications,
+      count: enrichedApplications.length,
     })
   } catch (error) {
     console.error("❌ Erreur API candidatures tenant-owner:", error)
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Erreur serveur",
+        details: error instanceof Error ? error.message : "Erreur inconnue",
+      },
+      { status: 500 },
+    )
   }
 }

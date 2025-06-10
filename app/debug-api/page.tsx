@@ -73,6 +73,7 @@ export default function DebugApiPage() {
           <TabsTrigger value="tenant-owner">API Tenant-Owner</TabsTrigger>
           <TabsTrigger value="conversations">API Conversations</TabsTrigger>
           <TabsTrigger value="table-structure">Structure Tables</TabsTrigger>
+          <TabsTrigger value="debug-applications">Debug Applications</TabsTrigger>
         </TabsList>
 
         <TabsContent value="tenant-owner">
@@ -145,8 +146,90 @@ export default function DebugApiPage() {
                     className="mt-1"
                   />
                 </div>
+                <div className="flex gap-2 mt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setTableName("applications")
+                      testTableStructure()
+                    }}
+                  >
+                    Applications
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setTableName("properties")
+                      testTableStructure()
+                    }}
+                  >
+                    Properties
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setTableName("users")
+                      testTableStructure()
+                    }}
+                  >
+                    Users
+                  </Button>
+                </div>
                 <Button onClick={testTableStructure} disabled={loading}>
                   {loading ? "Chargement..." : "Vérifier la structure"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="debug-applications">
+          <Card>
+            <CardHeader>
+              <CardTitle>Debug Applications</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="debug-tenant-id">ID Locataire</Label>
+                    <Input
+                      id="debug-tenant-id"
+                      value={tenantId}
+                      onChange={(e) => setTenantId(e.target.value)}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="debug-owner-id">ID Propriétaire</Label>
+                    <Input
+                      id="debug-owner-id"
+                      value={ownerId}
+                      onChange={(e) => setOwnerId(e.target.value)}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+                <Button
+                  onClick={async () => {
+                    setLoading(true)
+                    setError(null)
+                    try {
+                      const response = await fetch(`/api/debug/applications?tenant_id=${tenantId}&owner_id=${ownerId}`)
+                      const data = await response.json()
+                      setResult(data)
+                      console.log("Debug applications:", data)
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "Erreur inconnue")
+                    } finally {
+                      setLoading(false)
+                    }
+                  }}
+                  disabled={loading}
+                >
+                  {loading ? "Chargement..." : "Debug Applications"}
                 </Button>
               </div>
             </CardContent>
