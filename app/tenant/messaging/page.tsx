@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Send, Search, MoreVertical, Paperclip, Smile, ArrowLeft } from "lucide-react"
+import { Send, Search, MoreVertical, Paperclip, Smile, ArrowLeft, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -11,6 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
 import Link from "next/link"
 import { toast } from "sonner"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 interface Message {
   id: string
@@ -72,6 +73,7 @@ export default function TenantMessagingPage() {
     ownerId: null,
     propertyId: null,
   })
+  const [debugInfo, setDebugInfo] = useState<string | null>(null)
 
   // Récupérer l'ID utilisateur depuis le localStorage ou une autre source
   useEffect(() => {
@@ -95,11 +97,16 @@ export default function TenantMessagingPage() {
 
     console.log("🔗 Paramètres URL détectés:", { conversationId, ownerId, propertyId })
     console.log("🔗 URL complète:", window.location.search)
+
+    // Ajouter à debugInfo
+    setDebugInfo(
+      (prev) => `${prev || ""}🔗 Paramètres URL: ${JSON.stringify({ conversationId, ownerId, propertyId })}\n`,
+    )
   }, [])
 
   // Charger les conversations
   const loadConversations = async () => {
-    if (!currentUserId) return
+    if (!currentUserId) return []
 
     try {
       console.log("🔍 Chargement conversations pour:", currentUserId)
@@ -116,11 +123,23 @@ export default function TenantMessagingPage() {
       console.log("✅ Conversations chargées:", data.conversations?.length || 0)
       console.log("📋 Détail conversations:", data.conversations)
 
+      // Ajouter à debugInfo
+      setDebugInfo(
+        (prev) =>
+          `${prev || ""}✅ Conversations chargées: ${data.conversations?.length || 0}\n${
+            data.conversations?.map((c: any) => `- ${c.id} (property_id: ${c.property_id || "null"})`).join("\n") || ""
+          }\n`,
+      )
+
       setConversations(data.conversations || [])
       return data.conversations || []
     } catch (error) {
       console.error("❌ Erreur chargement conversations:", error)
       toast.error("Erreur lors du chargement des conversations")
+
+      // Ajouter à debugInfo
+      setDebugInfo((prev) => `${prev || ""}❌ Erreur chargement conversations: ${error}\n`)
+
       return []
     } finally {
       setLoading(false)
@@ -137,6 +156,12 @@ export default function TenantMessagingPage() {
 
     const { conversationId, ownerId, propertyId } = urlParams
 
+    // Ajouter à debugInfo
+    setDebugInfo(
+      (prev) =>
+        `${prev || ""}🔄 Traitement paramètres URL: ${JSON.stringify({ conversationId, ownerId, propertyId })}\n`,
+    )
+
     if (conversationId) {
       // Attendre que les conversations soient chargées
       if (conversations.length > 0) {
@@ -145,8 +170,14 @@ export default function TenantMessagingPage() {
           console.log("✅ Conversation trouvée et sélectionnée:", conversationId)
           setSelectedConversation(conversation)
           markAsRead(conversationId)
+
+          // Si on a aussi un property_id, mettre à jour la conversation
+          if (propertyId && !conversation.property_id) {
+            updateConversationProperty(conversationId, propertyId)
+          }
         } else {
           console.warn("⚠️ Conversation non trouvée dans la liste:", conversationId)
+          setDebugInfo((prev) => `${prev || ""}⚠️ Conversation non trouvée: ${conversationId}\n`)
         }
       }
     } else if (ownerId) {
@@ -155,19 +186,85 @@ export default function TenantMessagingPage() {
     }
   }, [conversations, currentUserId, urlParams])
 
+  // Mettre à jour une conversation avec un property_id
+  const updateConversationProperty = async (conversationId: string, propertyId: string) => {
+    try {
+      console.log("🔄 Mise à jour directe conversation", conversationId, "avec propriété", propertyId)
+      setDebugInfo(
+        (prev) => `${prev || ""}🔄 Mise à jour conversation ${conversationId} avec propriété ${propertyId}\n`,
+      )
+
+      const response = await fetch(`/api/conversations/${conversationId}/update-property`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ property_id: propertyId }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Erreur ${response.status}`)
+      }
+
+      const data = await response.json()
+      console.log("✅ Conversation mise à jour:", data)
+      setDebugInfo(
+        (prev) => `${prev || ""}✅ Conversation mise à jour avec propriété: ${data.property?.title || "?"}\n`,
+      )
+
+      // Recharger les conversations pour avoir les données à jour
+      await loadConversations()
+    } catch (error) {
+      console.error("❌ Erreur mise à jour conversation:", error)
+      setDebugInfo((prev) => `${prev || ""}❌ Erreur mise à jour conversation: ${error}\n`)
+    }
+  }
+
   // Gérer la conversation avec un propriétaire spécifique
   const handleOwnerConversation = async (ownerId: string, propertyId: string | null = null) => {
     if (!currentUserId) return
 
     try {
       console.log("🎯 Gestion conversation avec propriétaire:", ownerId, "propriété:", propertyId)
+      setDebugInfo(
+        (prev) =>
+          `${prev || ""}🎯 Gestion conversation avec propriétaire: ${ownerId}, propriété: ${propertyId || "aucune"}\n`,
+      )
 
-      // Utiliser la nouvelle API intelligente
+      // Chercher une conversation existante
+      let existingConversation = null
+
+      if (propertyId) {
+        // Chercher une conversation avec ce propriétaire et cette propriété
+        existingConversation = conversations.find((c) => c.owner_id === ownerId && c.property_id === propertyId)
+      }
+
+      // Si pas trouvé avec propriété, chercher une conversation générale
+      if (!existingConversation) {
+        existingConversation = conversations.find((c) => c.owner_id === ownerId)
+      }
+
+      if (existingConversation) {
+        console.log("✅ Conversation existante trouvée:", existingConversation.id)
+        setDebugInfo((prev) => `${prev || ""}✅ Conversation existante trouvée: ${existingConversation.id}\n`)
+
+        setSelectedConversation(existingConversation)
+        markAsRead(existingConversation.id)
+
+        // Si on a un property_id et que la conversation n'en a pas, mettre à jour
+        if (propertyId && !existingConversation.property_id) {
+          await updateConversationProperty(existingConversation.id, propertyId)
+        }
+
+        return
+      }
+
+      // Créer une nouvelle conversation
+      console.log("🆕 Aucune conversation trouvée, création en cours...")
+      setDebugInfo((prev) => `${prev || ""}🆕 Création nouvelle conversation\n`)
+
       const response = await fetch("/api/conversations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type: "find_or_create",
           tenant_id: currentUserId,
           owner_id: ownerId,
           property_id: propertyId,
@@ -175,27 +272,26 @@ export default function TenantMessagingPage() {
         }),
       })
 
-      console.log("📡 Réponse gestion conversation:", response.status)
-
       if (!response.ok) {
         throw new Error(`Erreur ${response.status}`)
       }
 
       const data = await response.json()
-      console.log("✅ Conversation gérée:", data.conversation.id)
+      console.log("✅ Conversation créée:", data.conversation)
+      setDebugInfo((prev) => `${prev || ""}✅ Conversation créée: ${data.conversation.id}\n`)
 
-      // Recharger les conversations pour avoir les données à jour
+      // Recharger les conversations
       const updatedConversations = await loadConversations()
 
-      // Sélectionner la conversation
-      const targetConversation = updatedConversations.find((c: Conversation) => c.id === data.conversation.id)
-      if (targetConversation) {
-        console.log("✅ Conversation sélectionnée avec propriété:", targetConversation.property?.title || "aucune")
-        setSelectedConversation(targetConversation)
-        markAsRead(targetConversation.id)
+      // Sélectionner la nouvelle conversation
+      const newConversation = updatedConversations.find((c) => c.id === data.conversation.id)
+      if (newConversation) {
+        setSelectedConversation(newConversation)
+        markAsRead(newConversation.id)
       }
     } catch (error) {
       console.error("❌ Erreur gestion conversation propriétaire:", error)
+      setDebugInfo((prev) => `${prev || ""}❌ Erreur gestion conversation: ${error}\n`)
       toast.error("Erreur lors de la gestion de la conversation")
     }
   }
@@ -343,6 +439,38 @@ export default function TenantMessagingPage() {
 
   return (
     <div className="container mx-auto py-6">
+      {/* Debug info */}
+      {debugInfo && (
+        <Alert className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Mode Debug</AlertTitle>
+          <AlertDescription>
+            <pre className="text-xs overflow-auto max-h-40 p-2 bg-gray-100 rounded">{debugInfo}</pre>
+            <div className="flex gap-2 mt-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  if (urlParams.propertyId && selectedConversation) {
+                    updateConversationProperty(selectedConversation.id, urlParams.propertyId)
+                  } else {
+                    toast.error("Pas de property_id dans l'URL ou pas de conversation sélectionnée")
+                  }
+                }}
+              >
+                Forcer mise à jour propriété
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => loadConversations()}>
+                Recharger conversations
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setDebugInfo(null)}>
+                Masquer debug
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-8rem)]">
         {/* Liste des conversations */}
         <div className={`${isMobile && selectedConversation ? "hidden" : ""} lg:block`}>
