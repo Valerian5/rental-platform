@@ -14,10 +14,10 @@ export async function GET(request: NextRequest) {
     console.log("🔍 Recherche candidatures:", { tenantId, ownerId })
 
     // Utiliser le client serveur pour avoir les permissions nécessaires
-    const supabaseServer = createServerClient()
+    const supabase = createServerClient()
 
     // D'abord récupérer les propriétés du propriétaire
-    const { data: properties, error: propertiesError } = await supabaseServer
+    const { data: properties, error: propertiesError } = await supabase
       .from("properties")
       .select("id")
       .eq("owner_id", ownerId)
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     console.log("🏠 Propriétés du propriétaire:", propertyIds)
 
     // Ensuite récupérer les candidatures du locataire pour ces propriétés
-    const { data: applications, error: applicationsError } = await supabaseServer
+    const { data: applications, error: applicationsError } = await supabase
       .from("applications")
       .select(`
         id,

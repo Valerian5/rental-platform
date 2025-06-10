@@ -13,10 +13,10 @@ export async function GET(request: NextRequest) {
     console.log("🔍 Récupération conversations pour utilisateur:", userId)
 
     // Utiliser le client serveur pour avoir les permissions nécessaires
-    const supabaseServer = createServerClient()
+    const supabase = createServerClient()
 
     // Récupérer les conversations où l'utilisateur est soit tenant soit owner
-    const { data: conversations, error } = await supabaseServer
+    const { data: conversations, error } = await supabase
       .from("conversations")
       .select("*")
       .or(`tenant_id.eq.${userId},owner_id.eq.${userId}`)
@@ -34,14 +34,14 @@ export async function GET(request: NextRequest) {
       (conversations || []).map(async (conv) => {
         try {
           // Récupérer les informations du tenant
-          const { data: tenant } = await supabaseServer
+          const { data: tenant } = await supabase
             .from("users")
             .select("id, first_name, last_name, email, phone")
             .eq("id", conv.tenant_id)
             .single()
 
           // Récupérer les informations du owner
-          const { data: owner } = await supabaseServer
+          const { data: owner } = await supabase
             .from("users")
             .select("id, first_name, last_name, email, phone")
             .eq("id", conv.owner_id)
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
           // Récupérer les informations de la propriété si property_id existe
           let property = null
           if (conv.property_id) {
-            const { data: propertyData } = await supabaseServer
+            const { data: propertyData } = await supabase
               .from("properties")
               .select("id, title, address, city, price, images")
               .eq("id", conv.property_id)
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
           }
 
           // Récupérer les messages de la conversation
-          const { data: messages } = await supabaseServer
+          const { data: messages } = await supabase
             .from("messages")
             .select("id, content, sender_id, is_read, created_at")
             .eq("conversation_id", conv.id)
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
     console.log("📥 Requête POST conversations:", body)
 
     // Utiliser le client serveur pour avoir les permissions nécessaires
-    const supabaseServer = createServerClient()
+    const supabase = createServerClient()
 
     if (body.type === "send_message") {
       // Envoyer un message
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 })
       }
 
-      const { data: message, error } = await supabaseServer
+      const { data: message, error } = await supabase
         .from("messages")
         .insert({
           conversation_id,
@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Mettre à jour la date de dernière modification de la conversation
-      await supabaseServer
+      await supabase
         .from("conversations")
         .update({ updated_at: new Date().toISOString() })
         .eq("id", conversation_id)
@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Vérifier si une conversation existe déjà entre ces utilisateurs
-      let query = supabaseServer.from("conversations").select("*").eq("tenant_id", tenant_id).eq("owner_id", owner_id)
+      let query = supabase.from("conversations").select("*").eq("tenant_id", tenant_id).eq("owner_id", owner_id)
 
       if (property_id) {
         query = query.eq("property_id", property_id)
@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ conversation: existingConversation })
       }
 
-      const { data: conversation, error } = await supabaseServer
+      const { data: conversation, error } = await supabase
         .from("conversations")
         .insert({
           tenant_id,
