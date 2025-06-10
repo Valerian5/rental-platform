@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
@@ -15,15 +15,35 @@ export async function GET(request: NextRequest) {
 
     console.log("🔍 Recherche candidatures:", { tenantId, ownerId })
 
-    // Récupérer les candidatures du locataire pour les propriétés de ce propriétaire
-    const { data: applications, error } = await supabase
+    // D'abord récupérer les propriétés du propriétaire
+    const { data: properties, error: propertiesError } = await supabase
+      .from("properties")
+      .select("id")
+      .eq("owner_id", ownerId)
+
+    if (propertiesError) {
+      console.error("❌ Erreur récupération propriétés:", propertiesError)
+      return NextResponse.json({ error: "Erreur lors de la récupération des propriétés" }, { status: 500 })
+    }
+
+    if (!properties || properties.length === 0) {
+      console.log("ℹ️ Aucune propriété trouvée pour ce propriétaire")
+      return NextResponse.json({ applications: [], count: 0 })
+    }
+
+    const propertyIds = properties.map((p) => p.id)
+    console.log("🏠 Propriétés du propriétaire:", propertyIds)
+
+    // Ensuite récupérer les candidatures du locataire pour ces propriétés
+    const { data: applications, error: applicationsError } = await supabase
       .from("applications")
       .select(`
         id,
         status,
         created_at,
         message,
-        property:properties(
+        property_id,
+        properties!inner(
           id,
           title,
           address,
@@ -33,18 +53,29 @@ export async function GET(request: NextRequest) {
         )
       `)
       .eq("tenant_id", tenantId)
-      .eq("properties.owner_id", ownerId)
+      .in("property_id", propertyIds)
+      .order("created_at", { ascending: false })
 
-    if (error) {
-      console.error("❌ Erreur récupération candidatures:", error)
+    if (applicationsError) {
+      console.error("❌ Erreur récupération candidatures:", applicationsError)
       return NextResponse.json({ error: "Erreur lors de la récupération des candidatures" }, { status: 500 })
     }
 
     console.log("✅ Candidatures trouvées:", applications?.length || 0)
 
+    // Transformer les données pour avoir la structure attendue
+    const formattedApplications =
+      applications?.map((app) => ({
+        id: app.id,
+        status: app.status,
+        created_at: app.created_at,
+        message: app.message,
+        property: app.properties,
+      })) || []
+
     return NextResponse.json({
-      applications: applications || [],
-      count: applications?.length || 0,
+      applications: formattedApplications,
+      count: formattedApplications.length,
     })
   } catch (error) {
     console.error("❌ Erreur API candidatures tenant-owner:", error)

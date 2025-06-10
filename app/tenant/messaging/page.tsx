@@ -107,10 +107,11 @@ export default function TenantMessagingPage() {
     if (!currentUserId || conversations.length === 0) return
 
     const urlParams = new URLSearchParams(window.location.search)
-    const conversationId = urlParams.get("conversation")
+    const conversationId = urlParams.get("conversation_id") || urlParams.get("conversation")
     const ownerId = urlParams.get("owner_id")
 
     console.log("🔗 Paramètres URL détectés:", { conversationId, ownerId })
+    console.log("🔗 URL complète:", window.location.search)
 
     if (conversationId) {
       // Sélectionner une conversation spécifique
@@ -119,6 +120,12 @@ export default function TenantMessagingPage() {
         console.log("✅ Conversation trouvée et sélectionnée:", conversationId)
         setSelectedConversation(conversation)
         markAsRead(conversationId)
+      } else {
+        console.warn("⚠️ Conversation non trouvée dans la liste:", conversationId)
+        console.log(
+          "📋 Conversations disponibles:",
+          conversations.map((c) => ({ id: c.id, subject: c.subject })),
+        )
       }
     } else if (ownerId) {
       // Créer ou trouver une conversation avec ce propriétaire
