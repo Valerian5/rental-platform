@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase"
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,9 +12,6 @@ export async function GET(request: NextRequest) {
     }
 
     console.log("🔍 Recherche candidatures:", { tenantId, ownerId })
-
-    // Utiliser le client serveur pour avoir les permissions nécessaires
-    const supabase = createServerClient()
 
     // D'abord récupérer les propriétés du propriétaire
     const { data: properties, error: propertiesError } = await supabase
@@ -63,7 +60,7 @@ export async function GET(request: NextRequest) {
     }
 
     console.log("✅ Candidatures trouvées:", applications?.length || 0)
-    console.log("📋 Détail candidatures:", JSON.stringify(applications))
+    console.log("📋 Détail candidatures:", JSON.stringify(applications, null, 2))
 
     // Transformer les données pour avoir la structure attendue
     const formattedApplications =

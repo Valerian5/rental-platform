@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase"
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,10 +10,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Le paramètre 'table' est requis" }, { status: 400 })
     }
 
-    const supabaseServer = createServerClient()
-
     // Récupérer la structure de la table
-    const { data, error } = await supabaseServer.from(table).select("*").limit(1)
+    const { data, error } = await supabase.from(table).select("*").limit(1)
 
     if (error) {
       console.error(`❌ Erreur récupération structure table ${table}:`, error)
@@ -21,7 +19,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Récupérer le nombre total d'enregistrements
-    const { count, error: countError } = await supabaseServer.from(table).select("*", { count: "exact", head: true })
+    const { count, error: countError } = await supabase.from(table).select("*", { count: "exact", head: true })
 
     if (countError) {
       console.error(`❌ Erreur comptage table ${table}:`, countError)

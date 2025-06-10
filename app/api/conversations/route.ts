@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase"
 
 export async function GET(request: NextRequest) {
   try {
@@ -7,15 +7,12 @@ export async function GET(request: NextRequest) {
     const userId = searchParams.get("user_id")
 
     if (!userId) {
-      return NextResponse.json({ error: "user_id est requis" }, { status: 400 })
+      return NextResponse.json({ error: "user_id requis" }, { status: 400 })
     }
 
     console.log("🔍 Récupération conversations pour utilisateur:", userId)
 
-    // Utiliser le client serveur pour avoir les permissions nécessaires
-    const supabase = createServerClient()
-
-    // Récupérer les conversations où l'utilisateur est soit tenant soit owner
+    // Récupérer les conversations où l'utilisateur est soit locataire soit propriétaire
     const { data: conversations, error } = await supabase
       .from("conversations")
       .select("*")
@@ -24,7 +21,7 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error("❌ Erreur récupération conversations:", error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ conversations: [] })
     }
 
     console.log("✅ Conversations trouvées:", conversations?.length || 0)
@@ -92,19 +89,18 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error("❌ Erreur API conversations:", error)
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur inconnue" }, { status: 500 })
+    return NextResponse.json({ conversations: [] })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    console.log("📥 Requête POST conversations:", body)
+    const { type } = body
 
-    // Utiliser le client serveur pour avoir les permissions nécessaires
-    const supabase = createServerClient()
+    console.log("📤 API conversations POST:", { type, body })
 
-    if (body.type === "send_message") {
+    if (type === "send_message") {
       // Envoyer un message
       const { conversation_id, sender_id, content } = body
 
@@ -117,55 +113,54 @@ export async function POST(request: NextRequest) {
         .insert({
           conversation_id,
           sender_id,
-          content,
-          is_read: false,
+          content: content.trim(),
         })
         .select()
         .single()
 
       if (error) {
-        console.error("❌ Erreur création message:", error)
+        console.error("❌ Erreur envoi message:", error)
         return NextResponse.json({ error: error.message }, { status: 500 })
       }
 
-      // Mettre à jour la date de dernière modification de la conversation
-      await supabase
-        .from("conversations")
-        .update({ updated_at: new Date().toISOString() })
-        .eq("id", conversation_id)
+      // Mettre à jour la date de la conversation
+      await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversation_id)
 
-      console.log("✅ Message créé:", message.id)
-
-      return NextResponse.json({ message })
+      console.log("✅ Message envoyé:", message.id)
+      return NextResponse.json({ message }, { status: 201 })
     } else {
-      // Créer une conversation
-      const { tenant_id, owner_id, subject, property_id } = body
+      // Créer ou récupérer une conversation
+      const { tenant_id, owner_id, property_id, subject } = body
 
       if (!tenant_id || !owner_id) {
-        return NextResponse.json({ error: "tenant_id et owner_id sont requis" }, { status: 400 })
+        return NextResponse.json({ error: "tenant_id et owner_id requis" }, { status: 400 })
       }
 
-      // Vérifier si une conversation existe déjà entre ces utilisateurs
+      console.log("🔍 Recherche conversation existante:", { tenant_id, owner_id, property_id })
+
+      // Chercher une conversation existante
       let query = supabase.from("conversations").select("*").eq("tenant_id", tenant_id).eq("owner_id", owner_id)
 
       if (property_id) {
         query = query.eq("property_id", property_id)
       }
 
-      const { data: existingConversation } = await query.maybeSingle()
+      const { data: existing } = await query.maybeSingle()
 
-      if (existingConversation) {
-        console.log("✅ Conversation existante trouvée:", existingConversation.id)
-        return NextResponse.json({ conversation: existingConversation })
+      if (existing) {
+        console.log("✅ Conversation existante trouvée:", existing.id)
+        return NextResponse.json({ conversation: existing })
       }
 
+      // Créer une nouvelle conversation
+      console.log("🆕 Création nouvelle conversation")
       const { data: conversation, error } = await supabase
         .from("conversations")
         .insert({
           tenant_id,
           owner_id,
-          subject: subject || "Nouvelle conversation",
           property_id: property_id || null,
+          subject: subject || "Nouvelle conversation",
         })
         .select()
         .single()
@@ -176,11 +171,10 @@ export async function POST(request: NextRequest) {
       }
 
       console.log("✅ Conversation créée:", conversation.id)
-
       return NextResponse.json({ conversation }, { status: 201 })
     }
   } catch (error) {
     console.error("❌ Erreur API conversations POST:", error)
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur inconnue" }, { status: 500 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur interne" }, { status: 500 })
   }
 }
