@@ -5,15 +5,31 @@ import { Progress } from "@/components/ui/progress"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Euro, Briefcase, Shield, FileText, AlertTriangle, CheckCircle2, Info } from "lucide-react"
+import { scoringPreferencesService, type ScoringPreferences } from "@/lib/scoring-preferences-service"
 
 interface MatchingScoreProps {
   application: any
   size?: "sm" | "md" | "lg"
   detailed?: boolean
+  customPreferences?: ScoringPreferences | null
 }
 
-export function MatchingScore({ application, size = "md", detailed = false }: MatchingScoreProps) {
+export function MatchingScore({ application, size = "md", detailed = false, customPreferences }: MatchingScoreProps) {
   const calculateDetailedScore = () => {
+    if (customPreferences) {
+      // Utiliser le scoring personnalisé
+      const result = scoringPreferencesService.calculateCustomScore(
+        application,
+        application.property,
+        customPreferences,
+      )
+      return {
+        breakdown: result.breakdown,
+        totalScore: result.totalScore,
+      }
+    }
+
+    // Garder l'ancien calcul comme fallback
     const property = application.property
     const breakdown = {
       income: { score: 0, max: 35, label: "Revenus", icon: Euro },

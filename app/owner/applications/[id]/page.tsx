@@ -34,6 +34,7 @@ import {
   CheckSquare,
   AlertCircle,
 } from "lucide-react"
+import { scoringPreferencesService, type ScoringPreferences } from "@/lib/scoring-preferences-service"
 
 export default function ApplicationDetailsPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -44,6 +45,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const [activeTab, setActiveTab] = useState("overview")
   const [showVisitDialog, setShowVisitDialog] = useState(false)
   const [showRefuseDialog, setShowRefuseDialog] = useState(false)
+  const [scoringPreferences, setScoringPreferences] = useState<ScoringPreferences | null>(null)
 
   useEffect(() => {
     checkAuthAndLoadData()
@@ -118,6 +120,23 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
           }
         } catch (error) {
           console.error("Erreur chargement dossier location:", error)
+        }
+      }
+
+      // Récupérer les préférences de scoring du propriétaire
+      if (data.application?.property?.owner_id) {
+        try {
+          const prefsResponse = await fetch(
+            `/api/scoring-preferences?owner_id=${data.application.property.owner_id}&default_only=true`,
+          )
+          if (prefsResponse.ok) {
+            const prefsData = await prefsResponse.json()
+            if (prefsData.preferences && prefsData.preferences.length > 0) {
+              setScoringPreferences(prefsData.preferences[0])
+            }
+          }
+        } catch (error) {
+          console.error("Erreur chargement préférences scoring:", error)
         }
       }
     } catch (error) {
@@ -271,6 +290,15 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
 
   const calculateMatchScore = () => {
     if (!application || !application.property) return 50
+
+    if (scoringPreferences) {
+      const result = scoringPreferencesService.calculateCustomScore(
+        application,
+        application.property,
+        scoringPreferences,
+      )
+      return result.totalScore
+    }
 
     let score = 0
     const property = application.property
@@ -523,7 +551,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
         {/* Score et actions */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex items-center gap-4">
-            <CircularScore score={matchScore} size="lg" />
+            <CircularScore score={matchScore} size="lg" customPreferences={scoringPreferences} />
             <div>
               <h2 className="text-xl font-semibold">Score de compatibilité</h2>
               <p className="text-sm text-muted-foreground">
