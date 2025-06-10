@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Send, Search, MoreVertical, Paperclip, Smile, ArrowLeft, AlertCircle } from "lucide-react"
+import { Send, Search, MoreVertical, Paperclip, Smile, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -11,7 +11,6 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
 import Link from "next/link"
 import { toast } from "sonner"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 interface Message {
   id: string
@@ -73,7 +72,6 @@ export default function TenantMessagingPage() {
     ownerId: null,
     propertyId: null,
   })
-  const [debugInfo, setDebugInfo] = useState<string | null>(null)
   const [tenantApplications, setTenantApplications] = useState<any[]>([])
   const [propertyOwnerMap, setPropertyOwnerMap] = useState<any>({})
 
@@ -96,15 +94,9 @@ export default function TenantMessagingPage() {
       setTenantApplications(data.applications || [])
       setPropertyOwnerMap(data.propertyOwnerMap || {})
 
-      setDebugInfo(
-        (prev) =>
-          `${prev || ""}✅ Candidatures chargées: ${data.count}\n📋 Propriétés avec propriétaires: ${Object.keys(data.propertyOwnerMap).length}\n`,
-      )
-
       return data
     } catch (error) {
       console.error("❌ Erreur chargement candidatures:", error)
-      setDebugInfo((prev) => `${prev || ""}❌ Erreur candidatures: ${error}\n`)
     }
   }
 
@@ -113,7 +105,6 @@ export default function TenantMessagingPage() {
     if (!propertyOwnerMap || Object.keys(propertyOwnerMap).length === 0) return
 
     console.log("🔄 Association automatique des propriétés...")
-    setDebugInfo((prev) => `${prev || ""}🔄 Association automatique des propriétés...\n`)
 
     for (const conversation of conversations) {
       // Si la conversation n'a pas de property_id mais qu'on a une candidature pour ce propriétaire
@@ -126,10 +117,6 @@ export default function TenantMessagingPage() {
         if (propertyForOwner) {
           const [propertyId, propertyData] = propertyForOwner
           console.log(`🔗 Association conversation ${conversation.id} avec propriété ${propertyId}`)
-          setDebugInfo(
-            (prev) =>
-              `${prev || ""}🔗 Association conversation ${conversation.id} avec propriété ${propertyData.property.title}\n`,
-          )
 
           try {
             await updateConversationProperty(conversation.id, propertyId)
@@ -165,12 +152,6 @@ export default function TenantMessagingPage() {
         ownerId,
         propertyId,
       })
-
-      // Ajouter à debugInfo
-      setDebugInfo(
-        (prev) =>
-          `${prev || ""}🔗 URL: ${window.location.href}\n🔗 Paramètres: ${JSON.stringify({ conversationId, ownerId, propertyId })}\n`,
-      )
     }
   }, [])
 
@@ -193,14 +174,6 @@ export default function TenantMessagingPage() {
       console.log("✅ Conversations chargées:", data.conversations?.length || 0)
       console.log("📋 Détail conversations:", data.conversations)
 
-      // Ajouter à debugInfo
-      setDebugInfo(
-        (prev) =>
-          `${prev || ""}✅ Conversations chargées: ${data.conversations?.length || 0}\n${
-            data.conversations?.map((c: any) => `- ${c.id} (property_id: ${c.property_id || "null"})`).join("\n") || ""
-          }\n`,
-      )
-
       setConversations(data.conversations || [])
 
       // Association automatique des propriétés
@@ -212,9 +185,6 @@ export default function TenantMessagingPage() {
     } catch (error) {
       console.error("❌ Erreur chargement conversations:", error)
       toast.error("Erreur lors du chargement des conversations")
-
-      // Ajouter à debugInfo
-      setDebugInfo((prev) => `${prev || ""}❌ Erreur chargement conversations: ${error}\n`)
 
       return []
     } finally {
@@ -236,12 +206,6 @@ export default function TenantMessagingPage() {
 
     const { conversationId, ownerId, propertyId } = urlParams
 
-    // Ajouter à debugInfo
-    setDebugInfo(
-      (prev) =>
-        `${prev || ""}🔄 Traitement paramètres URL: ${JSON.stringify({ conversationId, ownerId, propertyId })}\n`,
-    )
-
     if (conversationId) {
       // Attendre que les conversations soient chargées
       if (conversations.length > 0) {
@@ -257,7 +221,6 @@ export default function TenantMessagingPage() {
           }
         } else {
           console.warn("⚠️ Conversation non trouvée dans la liste:", conversationId)
-          setDebugInfo((prev) => `${prev || ""}⚠️ Conversation non trouvée: ${conversationId}\n`)
         }
       }
     } else if (ownerId) {
@@ -270,9 +233,6 @@ export default function TenantMessagingPage() {
   const updateConversationProperty = async (conversationId: string, propertyId: string) => {
     try {
       console.log("🔄 Mise à jour directe conversation", conversationId, "avec propriété", propertyId)
-      setDebugInfo(
-        (prev) => `${prev || ""}🔄 Mise à jour conversation ${conversationId} avec propriété ${propertyId}\n`,
-      )
 
       const response = await fetch(`/api/conversations/${conversationId}/update-property`, {
         method: "POST",
@@ -286,15 +246,11 @@ export default function TenantMessagingPage() {
 
       const data = await response.json()
       console.log("✅ Conversation mise à jour:", data)
-      setDebugInfo(
-        (prev) => `${prev || ""}✅ Conversation mise à jour avec propriété: ${data.property?.title || "?"}\n`,
-      )
 
       // Recharger les conversations pour avoir les données à jour
       await loadConversations()
     } catch (error) {
       console.error("❌ Erreur mise à jour conversation:", error)
-      setDebugInfo((prev) => `${prev || ""}❌ Erreur mise à jour conversation: ${error}\n`)
     }
   }
 
@@ -304,10 +260,6 @@ export default function TenantMessagingPage() {
 
     try {
       console.log("🎯 Gestion conversation avec propriétaire:", ownerId, "propriété:", propertyId)
-      setDebugInfo(
-        (prev) =>
-          `${prev || ""}🎯 Gestion conversation avec propriétaire: ${ownerId}, propriété: ${propertyId || "aucune"}\n`,
-      )
 
       // Chercher une conversation existante
       let existingConversation = null
@@ -324,7 +276,6 @@ export default function TenantMessagingPage() {
 
       if (existingConversation) {
         console.log("✅ Conversation existante trouvée:", existingConversation.id)
-        setDebugInfo((prev) => `${prev || ""}✅ Conversation existante trouvée: ${existingConversation.id}\n`)
 
         setSelectedConversation(existingConversation)
         markAsRead(existingConversation.id)
@@ -339,7 +290,6 @@ export default function TenantMessagingPage() {
 
       // Créer une nouvelle conversation
       console.log("🆕 Aucune conversation trouvée, création en cours...")
-      setDebugInfo((prev) => `${prev || ""}🆕 Création nouvelle conversation\n`)
 
       const response = await fetch("/api/conversations", {
         method: "POST",
@@ -358,7 +308,6 @@ export default function TenantMessagingPage() {
 
       const data = await response.json()
       console.log("✅ Conversation créée:", data.conversation)
-      setDebugInfo((prev) => `${prev || ""}✅ Conversation créée: ${data.conversation.id}\n`)
 
       // Recharger les conversations
       const updatedConversations = await loadConversations()
@@ -371,7 +320,6 @@ export default function TenantMessagingPage() {
       }
     } catch (error) {
       console.error("❌ Erreur gestion conversation propriétaire:", error)
-      setDebugInfo((prev) => `${prev || ""}❌ Erreur gestion conversation: ${error}\n`)
       toast.error("Erreur lors de la gestion de la conversation")
     }
   }
@@ -519,38 +467,6 @@ export default function TenantMessagingPage() {
 
   return (
     <div className="container mx-auto py-6">
-      {/* Debug info */}
-      {debugInfo && (
-        <Alert className="mb-4">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Mode Debug</AlertTitle>
-          <AlertDescription>
-            <pre className="text-xs overflow-auto max-h-40 p-2 bg-gray-100 rounded">{debugInfo}</pre>
-            <div className="flex gap-2 mt-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  if (urlParams.propertyId && selectedConversation) {
-                    updateConversationProperty(selectedConversation.id, urlParams.propertyId)
-                  } else {
-                    toast.error("Pas de property_id dans l'URL ou pas de conversation sélectionnée")
-                  }
-                }}
-              >
-                Forcer mise à jour propriété
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => loadConversations()}>
-                Recharger conversations
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setDebugInfo(null)}>
-                Masquer debug
-              </Button>
-            </div>
-          </AlertDescription>
-        </Alert>
-      )}
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-8rem)]">
         {/* Liste des conversations */}
         <div className={`${isMobile && selectedConversation ? "hidden" : ""} lg:block`}>

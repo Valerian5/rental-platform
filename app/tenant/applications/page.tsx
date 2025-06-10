@@ -1,504 +1,583 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { Send, Search, MoreVertical, Paperclip, Smile, ArrowLeft, AlertCircle } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Textarea } from "@/components/ui/textarea"
+import { useState, useEffect } from "react"
 import Link from "next/link"
+import { Calendar, Clock, FileText, Search, MapPin, Trash2, CheckCircle } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { toast } from "sonner"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { authService } from "@/lib/auth-service"
 
-interface Message {
+interface VisitSlot {
   id: string
-  sender_id: string
-  content: string
-  created_at: string
-  is_read: boolean
+  date: string
+  start_time: string
+  end_time: string
+  max_capacity: number
+  is_group_visit: boolean
+  current_bookings: number
+  is_available: boolean
 }
 
-interface Conversation {
+interface Application {
   id: string
-  subject: string
+  status: string
   created_at: string
   updated_at: string
-  tenant_id: string
-  owner_id: string
-  property_id?: string
-  property?: {
+  income: number
+  profession: string
+  property: {
     id: string
     title: string
     address: string
     city: string
-    price?: number
-    images?: Array<{ url: string; is_primary: boolean }>
-    mainImage?: string
+    price: number
+    property_images: Array<{ id: string; url: string; is_primary: boolean }>
+    owner: {
+      first_name: string
+      last_name: string
+    }
   }
-  owner: {
+  visits?: Array<{
     id: string
-    first_name: string
-    last_name: string
-    email: string
-    phone?: string
-  }
-  tenant: {
-    id: string
-    first_name: string
-    last_name: string
-    email: string
-    phone?: string
-  }
-  messages: Message[]
+    visit_date: string
+    start_time?: string
+    end_time?: string
+    status: string
+  }>
 }
 
-export default function TenantMessagingPage() {
-  const [conversations, setConversations] = useState<Conversation[]>([])
-  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
-  const [newMessage, setNewMessage] = useState("")
-  const [searchQuery, setSearchQuery] = useState("")
-  const [loading, setLoading] = useState(true)
-  const [isMobile, setIsMobile] = useState(false)
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const [urlParams, setUrlParams] = useState<{
-    conversationId: string | null
-    ownerId: string | null
-    propertyId: string | null
-  }>({
-    conversationId: null,
-    ownerId: null,
-    propertyId: null,
-  })
-  const [debugInfo, setDebugInfo] = useState<string | null>(null)
-  const [tenantApplications, setTenantApplications] = useState<any[]>([])
-  const [propertyOwnerMap, setPropertyOwnerMap] = useState<any>({})
+// Composant popup pour la sélection de créneaux
+function VisitSlotSelectionDialog({
+  application,
+  open,
+  onOpenChange,
+  onSlotConfirmed,
+}: {
+  application: Application
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onSlotConfirmed: () => void
+}) {
+  const [availableSlots, setAvailableSlots] = useState<VisitSlot[]>([])
+  const [selectedSlot, setSelectedSlot] = useState<string>("")
+  const [loading, setLoading] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [currentDate, setCurrentDate] = useState(new Date())
 
-  // Charger les candidatures du locataire
-  const loadTenantApplications = async () => {
-    if (!currentUserId) return
-
-    try {
-      console.log("🔍 Chargement candidatures locataire:", currentUserId)
-
-      const response = await fetch(`/api/applications/tenant?tenant_id=${currentUserId}`)
-      if (!response.ok) {
-        throw new Error(`Erreur ${response.status}`)
-      }
-
-      const data = await response.json()
-      console.log("✅ Candidatures locataire chargées:", data.count)
-      console.log("📋 Mapping propriété-propriétaire:", Object.keys(data.propertyOwnerMap).length)
-
-      setTenantApplications(data.applications || [])
-      setPropertyOwnerMap(data.propertyOwnerMap || {})
-
-      setDebugInfo(
-        (prev) =>
-          `${prev || ""}✅ Candidatures chargées: ${data.count}\n📋 Propriétés avec propriétaires: ${Object.keys(data.propertyOwnerMap).length}\n`,
-      )
-
-      return data
-    } catch (error) {
-      console.error("❌ Erreur chargement candidatures:", error)
-      setDebugInfo((prev) => `${prev || ""}❌ Erreur candidatures: ${error}\n`)
-    }
-  }
-
-  // Associer automatiquement les propriétés aux conversations
-  const autoAssociateProperties = async (conversations: Conversation[]) => {
-    if (!propertyOwnerMap || Object.keys(propertyOwnerMap).length === 0) return
-
-    console.log("🔄 Association automatique des propriétés...")
-    setDebugInfo((prev) => `${prev || ""}🔄 Association automatique des propriétés...\n`)
-
-    for (const conversation of conversations) {
-      // Si la conversation n'a pas de property_id mais qu'on a une candidature pour ce propriétaire
-      if (!conversation.property_id && conversation.owner_id) {
-        // Chercher une propriété de ce propriétaire dans nos candidatures
-        const propertyForOwner = Object.entries(propertyOwnerMap).find(
-          ([propertyId, data]: [string, any]) => data.owner_id === conversation.owner_id,
-        )
-
-        if (propertyForOwner) {
-          const [propertyId, propertyData] = propertyForOwner
-          console.log(`🔗 Association conversation ${conversation.id} avec propriété ${propertyId}`)
-          setDebugInfo(
-            (prev) =>
-              `${prev || ""}🔗 Association conversation ${conversation.id} avec propriété ${propertyData.property.title}\n`,
-          )
-
-          try {
-            await updateConversationProperty(conversation.id, propertyId)
-          } catch (error) {
-            console.error("❌ Erreur association automatique:", error)
-          }
-        }
-      }
-    }
-  }
-
-  // Récupérer l'ID utilisateur depuis le localStorage ou une autre source
   useEffect(() => {
-    const userId = localStorage.getItem("user_id") || "64504874-4a99-4da5-938b-0858caf27044" // ID par défaut pour test
-    setCurrentUserId(userId)
-    console.log("👤 ID utilisateur locataire:", userId)
-  }, [])
+    if (open && application) {
+      loadAvailableSlots()
+    }
+  }, [open, application])
 
-  // Récupérer les paramètres URL
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const conversationId = params.get("conversation_id") || params.get("conversation")
-    const ownerId = params.get("owner_id")
-    const propertyId = params.get("property_id")
-
-    setUrlParams({
-      conversationId,
-      ownerId,
-      propertyId,
-    })
-
-    console.log("🔗 Paramètres URL détectés:", { conversationId, ownerId, propertyId })
-    console.log("🔗 URL complète:", window.location.search)
-
-    // Ajouter à debugInfo
-    setDebugInfo(
-      (prev) => `${prev || ""}🔗 Paramètres URL: ${JSON.stringify({ conversationId, ownerId, propertyId })}\n`,
-    )
-  }, [])
-
-  // Charger les conversations
-  const loadConversations = async () => {
-    if (!currentUserId) return []
-
+  const loadAvailableSlots = async () => {
     try {
-      console.log("🔍 Chargement conversations pour:", currentUserId)
       setLoading(true)
+      console.log("🔍 Chargement créneaux pour candidature:", application.id)
 
-      const response = await fetch(`/api/conversations?user_id=${currentUserId}`)
-      console.log("📡 Réponse API conversations:", response.status)
-
-      if (!response.ok) {
-        throw new Error(`Erreur ${response.status}`)
+      const response = await fetch(`/api/applications/${application.id}/available-slots`)
+      if (response.ok) {
+        const data = await response.json()
+        console.log("✅ Créneaux disponibles:", data.slots?.length || 0)
+        setAvailableSlots(data.slots || [])
+      } else {
+        const errorData = await response.json()
+        console.error("❌ Erreur chargement créneaux:", errorData)
+        toast.error("Erreur lors du chargement des créneaux")
       }
-
-      const data = await response.json()
-      console.log("✅ Conversations chargées:", data.conversations?.length || 0)
-      console.log("📋 Détail conversations:", data.conversations)
-
-      // Ajouter à debugInfo
-      setDebugInfo(
-        (prev) =>
-          `${prev || ""}✅ Conversations chargées: ${data.conversations?.length || 0}\n${
-            data.conversations?.map((c: any) => `- ${c.id} (property_id: ${c.property_id || "null"})`).join("\n") || ""
-          }\n`,
-      )
-
-      setConversations(data.conversations || [])
-
-      // Association automatique des propriétés
-      if (data.conversations && data.conversations.length > 0) {
-        setTimeout(() => autoAssociateProperties(data.conversations), 1000)
-      }
-
-      return data.conversations || []
     } catch (error) {
-      console.error("❌ Erreur chargement conversations:", error)
-      toast.error("Erreur lors du chargement des conversations")
-
-      // Ajouter à debugInfo
-      setDebugInfo((prev) => `${prev || ""}❌ Erreur chargement conversations: ${error}\n`)
-
-      return []
+      console.error("❌ Erreur:", error)
+      toast.error("Erreur lors du chargement")
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => {
-    if (currentUserId) {
-      loadTenantApplications().then(() => {
-        loadConversations()
-      })
+  const handleConfirmSlot = async () => {
+    if (!selectedSlot) {
+      toast.error("Veuillez sélectionner un créneau")
+      return
     }
-  }, [currentUserId])
 
-  // Gérer les paramètres URL
-  useEffect(() => {
-    if (!currentUserId || !urlParams) return
-
-    const { conversationId, ownerId, propertyId } = urlParams
-
-    // Ajouter à debugInfo
-    setDebugInfo(
-      (prev) =>
-        `${prev || ""}🔄 Traitement paramètres URL: ${JSON.stringify({ conversationId, ownerId, propertyId })}\n`,
-    )
-
-    if (conversationId) {
-      // Attendre que les conversations soient chargées
-      if (conversations.length > 0) {
-        const conversation = conversations.find((c) => c.id === conversationId)
-        if (conversation) {
-          console.log("✅ Conversation trouvée et sélectionnée:", conversationId)
-          setSelectedConversation(conversation)
-          markAsRead(conversationId)
-
-          // Si on a aussi un property_id, mettre à jour la conversation
-          if (propertyId && !conversation.property_id) {
-            updateConversationProperty(conversationId, propertyId)
-          }
-        } else {
-          console.warn("⚠️ Conversation non trouvée dans la liste:", conversationId)
-          setDebugInfo((prev) => `${prev || ""}⚠️ Conversation non trouvée: ${conversationId}\n`)
-        }
-      }
-    } else if (ownerId) {
-      // Créer ou trouver une conversation avec ce propriétaire
-      handleOwnerConversation(ownerId, propertyId)
-    }
-  }, [conversations, currentUserId, urlParams])
-
-  // Mettre à jour une conversation avec un property_id
-  const updateConversationProperty = async (conversationId: string, propertyId: string) => {
     try {
-      console.log("🔄 Mise à jour directe conversation", conversationId, "avec propriété", propertyId)
-      setDebugInfo(
-        (prev) => `${prev || ""}🔄 Mise à jour conversation ${conversationId} avec propriété ${propertyId}\n`,
-      )
+      setConfirming(true)
+      console.log("✅ Confirmation créneau:", { applicationId: application.id, selectedSlot })
 
-      const response = await fetch(`/api/conversations/${conversationId}/update-property`, {
+      const response = await fetch(`/api/applications/${application.id}/choose-visit-slot`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ property_id: propertyId }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ slot_id: selectedSlot }),
       })
 
-      if (!response.ok) {
-        throw new Error(`Erreur ${response.status}`)
+      if (response.ok) {
+        toast.success("Créneau de visite confirmé !")
+        onSlotConfirmed()
+        onOpenChange(false)
+        setSelectedSlot("")
+        setSelectedDate(null)
+      } else {
+        const errorData = await response.json()
+        console.error("❌ Erreur API:", errorData)
+        toast.error(errorData.error || "Erreur lors de la confirmation")
       }
-
-      const data = await response.json()
-      console.log("✅ Conversation mise à jour:", data)
-      setDebugInfo(
-        (prev) => `${prev || ""}✅ Conversation mise à jour avec propriété: ${data.property?.title || "?"}\n`,
-      )
-
-      // Recharger les conversations pour avoir les données à jour
-      await loadConversations()
     } catch (error) {
-      console.error("❌ Erreur mise à jour conversation:", error)
-      setDebugInfo((prev) => `${prev || ""}❌ Erreur mise à jour conversation: ${error}\n`)
+      console.error("❌ Erreur confirmation:", error)
+      toast.error("Erreur lors de la confirmation du créneau")
+    } finally {
+      setConfirming(false)
     }
   }
 
-  // Gérer la conversation avec un propriétaire spécifique
-  const handleOwnerConversation = async (ownerId: string, propertyId: string | null = null) => {
-    if (!currentUserId) return
+  // Générer les jours du calendrier
+  const generateCalendarDays = () => {
+    const year = currentDate.getFullYear()
+    const month = currentDate.getMonth()
+    const firstDay = new Date(year, month, 1)
+    const startDate = new Date(firstDay)
 
+    const dayOfWeek = firstDay.getDay()
+    const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1
+    startDate.setDate(firstDay.getDate() - daysToSubtract)
+
+    const days = []
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    for (let i = 0; i < 42; i++) {
+      const date = new Date(startDate)
+      date.setDate(startDate.getDate() + i)
+
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, "0")
+      const day = String(date.getDate()).padStart(2, "0")
+      const dateStr = `${year}-${month}-${day}`
+
+      const isCurrentMonth = date.getMonth() === currentDate.getMonth()
+      const isToday = date.getTime() === today.getTime()
+      const isPast = date < today
+      const hasSlots = availableSlots.some((slot) => slot.date === dateStr)
+
+      days.push({
+        date: dateStr,
+        day: date.getDate(),
+        isCurrentMonth,
+        isToday,
+        isPast,
+        hasSlots,
+      })
+    }
+
+    return days
+  }
+
+  const navigateMonth = (direction: "prev" | "next") => {
+    const newDate = new Date(currentDate)
+    if (direction === "prev") {
+      newDate.setMonth(newDate.getMonth() - 1)
+    } else {
+      newDate.setMonth(newDate.getMonth() + 1)
+    }
+    setCurrentDate(newDate)
+  }
+
+  const selectDate = (dateStr: string) => {
+    console.log("📅 Date sélectionnée:", dateStr)
+    setSelectedDate(dateStr)
+    setSelectedSlot("") // Reset slot selection when changing date
+  }
+
+  const formatDateForDisplay = (dateStr: string): string => {
     try {
-      console.log("🎯 Gestion conversation avec propriétaire:", ownerId, "propriété:", propertyId)
-      setDebugInfo(
-        (prev) =>
-          `${prev || ""}🎯 Gestion conversation avec propriétaire: ${ownerId}, propriété: ${propertyId || "aucune"}\n`,
-      )
+      const [year, month, day] = dateStr.split("-").map(Number)
+      const date = new Date(year, month - 1, day)
+      return date.toLocaleDateString("fr-FR", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+      })
+    } catch (error) {
+      return "Date invalide"
+    }
+  }
 
-      // Chercher une conversation existante
-      let existingConversation = null
+  const calculateDuration = (startTime: string, endTime: string) => {
+    const start = new Date(`2000-01-01T${startTime}`)
+    const end = new Date(`2000-01-01T${endTime}`)
+    const diffMs = end.getTime() - start.getTime()
+    const diffMins = Math.floor(diffMs / (1000 * 60))
 
-      if (propertyId) {
-        // Chercher une conversation avec ce propriétaire et cette propriété
-        existingConversation = conversations.find((c) => c.owner_id === ownerId && c.property_id === propertyId)
-      }
+    if (diffMins >= 60) {
+      const hours = Math.floor(diffMins / 60)
+      const mins = diffMins % 60
+      return mins > 0 ? `${hours}h${mins}` : `${hours}h`
+    }
+    return `${diffMins}min`
+  }
 
-      // Si pas trouvé avec propriété, chercher une conversation générale
-      if (!existingConversation) {
-        existingConversation = conversations.find((c) => c.owner_id === ownerId)
-      }
+  const calendarDays = generateCalendarDays()
+  const selectedDateSlots = selectedDate
+    ? availableSlots
+        .filter((slot) => slot.date === selectedDate)
+        .sort((a, b) => a.start_time.localeCompare(b.start_time))
+    : []
 
-      if (existingConversation) {
-        console.log("✅ Conversation existante trouvée:", existingConversation.id)
-        setDebugInfo((prev) => `${prev || ""}✅ Conversation existante trouvée: ${existingConversation.id}\n`)
+  const MONTHS = [
+    "Janvier",
+    "Février",
+    "Mars",
+    "Avril",
+    "Mai",
+    "Juin",
+    "Juillet",
+    "Août",
+    "Septembre",
+    "Octobre",
+    "Novembre",
+    "Décembre",
+  ]
 
-        setSelectedConversation(existingConversation)
-        markAsRead(existingConversation.id)
+  const DAYS_SHORT = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
 
-        // Si on a un property_id et que la conversation n'en a pas, mettre à jour
-        if (propertyId && !existingConversation.property_id) {
-          await updateConversationProperty(existingConversation.id, propertyId)
-        }
+  return (
+    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogHeader>
+        <DialogTitle>Choisir un créneau de visite</DialogTitle>
+        <DialogDescription>
+          Sélectionnez le créneau qui vous convient le mieux pour visiter {application.property.title}
+        </DialogDescription>
+      </DialogHeader>
 
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <span className="ml-2">Chargement des créneaux...</span>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Calendrier */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Calendar className="h-5 w-5" />
+                Dates disponibles
+              </h3>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => navigateMonth("prev")}>
+                  ←
+                </Button>
+                <span className="font-medium min-w-[120px] text-center">
+                  {MONTHS[currentDate.getMonth()]} {currentDate.getFullYear()}
+                </span>
+                <Button variant="outline" size="sm" onClick={() => navigateMonth("next")}>
+                  →
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-7 gap-1 mb-2">
+              {DAYS_SHORT.map((day) => (
+                <div key={day} className="text-center text-sm font-medium text-muted-foreground p-2">
+                  {day}
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-7 gap-1">
+              {calendarDays.map((day, index) => (
+                <Button
+                  key={index}
+                  variant={selectedDate === day.date ? "default" : day.hasSlots ? "secondary" : "ghost"}
+                  className={`
+                    h-12 p-1 text-sm relative
+                    ${!day.isCurrentMonth ? "text-muted-foreground opacity-50" : ""}
+                    ${day.isToday ? "ring-2 ring-blue-500" : ""}
+                    ${day.isPast ? "opacity-50 cursor-not-allowed" : ""}
+                    ${day.hasSlots ? "bg-green-100 hover:bg-green-200 border-green-300" : ""}
+                    ${selectedDate === day.date ? "bg-blue-600 text-white hover:bg-blue-700" : ""}
+                  `}
+                  onClick={() => day.hasSlots && !day.isPast && selectDate(day.date)}
+                  disabled={day.isPast || !day.hasSlots}
+                >
+                  <span>{day.day}</span>
+                  {day.hasSlots && (
+                    <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2">
+                      <div className="w-1 h-1 bg-green-600 rounded-full"></div>
+                    </div>
+                  )}
+                </Button>
+              ))}
+            </div>
+
+            <div className="mt-4 text-xs text-muted-foreground space-y-1">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-green-100 border border-green-300 rounded"></div>
+                <span>Dates avec créneaux disponibles</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-blue-600 rounded"></div>
+                <span>Date sélectionnée</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Créneaux du jour sélectionné */}
+          <div>
+            <h3 className="text-lg font-semibold mb-4">
+              {selectedDate ? `Créneaux du ${formatDateForDisplay(selectedDate)}` : "Sélectionnez une date"}
+            </h3>
+
+            {selectedDate ? (
+              selectedDateSlots.length > 0 ? (
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {selectedDateSlots.map((slot) => (
+                    <div
+                      key={slot.id}
+                      className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                        selectedSlot === slot.id
+                          ? "border-blue-500 bg-blue-50 shadow-md"
+                          : "border-gray-200 hover:border-gray-300 hover:shadow-sm"
+                      }`}
+                      onClick={() => {
+                        console.log("🎯 Créneau sélectionné:", slot.id)
+                        setSelectedSlot(slot.id)
+                      }}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                          <span className="font-medium text-lg">
+                            {slot.start_time} - {slot.end_time}
+                          </span>
+                          <Badge variant="outline">{calculateDuration(slot.start_time, slot.end_time)}</Badge>
+                        </div>
+                        {selectedSlot === slot.id && <CheckCircle className="h-5 w-5 text-blue-600" />}
+                      </div>
+
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        {slot.is_group_visit ? (
+                          <div className="flex items-center gap-1">
+                            <span>Visite groupée</span>
+                            <Badge variant="secondary" className="ml-2">
+                              {slot.max_capacity - slot.current_bookings} place(s) disponible(s)
+                            </Badge>
+                          </div>
+                        ) : (
+                          <span>Visite individuelle</span>
+                        )}
+                      </div>
+
+                      {slot.is_group_visit && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Cette visite peut être partagée avec d'autres candidats
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Calendar className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p>Aucun créneau disponible pour cette date</p>
+                </div>
+              )
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <Calendar className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p>Sélectionnez une date dans le calendrier pour voir les créneaux disponibles</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Bouton de confirmation */}
+      {!loading && availableSlots.length > 0 && (
+        <div className="flex justify-end gap-2 pt-4 border-t">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Annuler
+          </Button>
+          <Button onClick={handleConfirmSlot} disabled={!selectedSlot || confirming}>
+            {confirming ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                Confirmation...
+              </>
+            ) : selectedSlot ? (
+              <>
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Confirmer ce créneau
+              </>
+            ) : (
+              "Sélectionnez un créneau"
+            )}
+          </Button>
+        </div>
+      )}
+    </DialogContent>
+  )
+}
+
+export default function TenantApplicationsPage() {
+  const [applications, setApplications] = useState<Application[]>([])
+  const [loading, setLoading] = useState(true)
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [sortOrder, setSortOrder] = useState("date-desc")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedApplication, setSelectedApplication] = useState<Application | null>(null)
+  const [showSlotDialog, setShowSlotDialog] = useState(false)
+  const [currentUser, setCurrentUser] = useState<any>(null)
+
+  useEffect(() => {
+    loadApplications()
+  }, [])
+
+  const loadApplications = async () => {
+    try {
+      setLoading(true)
+      const user = await authService.getCurrentUser()
+      if (!user || user.user_type !== "tenant") {
+        toast.error("Vous devez être connecté en tant que locataire")
         return
       }
 
-      // Créer une nouvelle conversation
-      console.log("🆕 Aucune conversation trouvée, création en cours...")
-      setDebugInfo((prev) => `${prev || ""}🆕 Création nouvelle conversation\n`)
+      setCurrentUser(user)
+      console.log("🔍 Chargement candidatures pour:", user.id)
 
-      const response = await fetch("/api/conversations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tenant_id: currentUserId,
-          owner_id: ownerId,
-          property_id: propertyId,
-          subject: propertyId ? "Conversation sur une propriété" : "Nouvelle conversation",
-        }),
+      const response = await fetch(`/api/applications?tenant_id=${user.id}`, {
+        headers: {
+          "Content-Type": "application/json",
+        },
       })
 
-      if (!response.ok) {
-        throw new Error(`Erreur ${response.status}`)
-      }
-
-      const data = await response.json()
-      console.log("✅ Conversation créée:", data.conversation)
-      setDebugInfo((prev) => `${prev || ""}✅ Conversation créée: ${data.conversation.id}\n`)
-
-      // Recharger les conversations
-      const updatedConversations = await loadConversations()
-
-      // Sélectionner la nouvelle conversation
-      const newConversation = updatedConversations.find((c) => c.id === data.conversation.id)
-      if (newConversation) {
-        setSelectedConversation(newConversation)
-        markAsRead(newConversation.id)
+      if (response.ok) {
+        const data = await response.json()
+        console.log("📊 Réponse API:", response.status, data)
+        setApplications(data.applications || [])
+      } else {
+        const errorData = await response.json()
+        console.error("❌ Erreur API:", response.status, errorData)
+        toast.error(errorData.error || "Erreur lors du chargement")
       }
     } catch (error) {
-      console.error("❌ Erreur gestion conversation propriétaire:", error)
-      setDebugInfo((prev) => `${prev || ""}❌ Erreur gestion conversation: ${error}\n`)
-      toast.error("Erreur lors de la gestion de la conversation")
+      console.error("❌ Erreur chargement candidatures:", error)
+      toast.error("Erreur lors du chargement")
+    } finally {
+      setLoading(false)
     }
   }
 
-  // Auto-scroll vers le bas des messages
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [selectedConversation?.messages])
-
-  // Détecter mobile
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768)
-    checkMobile()
-    window.addEventListener("resize", checkMobile)
-    return () => window.removeEventListener("resize", checkMobile)
-  }, [])
-
-  const sendMessage = async () => {
-    if (!newMessage.trim() || !selectedConversation || !currentUserId) return
-
+  const handleWithdrawApplication = async (applicationId: string) => {
     try {
-      console.log("📤 Envoi message:", { conversation: selectedConversation.id, content: newMessage.trim() })
+      console.log("🗑️ Retrait candidature:", applicationId)
 
-      const response = await fetch("/api/conversations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "send_message",
-          conversation_id: selectedConversation.id,
-          sender_id: currentUserId,
-          content: newMessage.trim(),
-        }),
+      const response = await fetch(`/api/applications?id=${applicationId}&tenant_id=${currentUser.id}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
       })
 
-      if (!response.ok) {
-        throw new Error(`Erreur ${response.status}`)
+      if (response.ok) {
+        toast.success("Candidature retirée avec succès")
+        // Recharger les candidatures
+        await loadApplications()
+      } else {
+        const errorData = await response.json()
+        toast.error(errorData.error || "Erreur lors du retrait")
       }
-
-      const data = await response.json()
-      console.log("✅ Message envoyé:", data.message.id)
-
-      // Ajouter le message à la conversation locale
-      const newMessageObj: Message = {
-        id: data.message.id,
-        sender_id: currentUserId,
-        content: newMessage.trim(),
-        created_at: new Date().toISOString(),
-        is_read: true,
-      }
-
-      setSelectedConversation((prev) =>
-        prev
-          ? {
-              ...prev,
-              messages: [...prev.messages, newMessageObj],
-            }
-          : null,
-      )
-
-      setNewMessage("")
-      toast.success("Message envoyé")
     } catch (error) {
-      console.error("❌ Erreur envoi message:", error)
-      toast.error("Erreur lors de l'envoi du message")
+      console.error("❌ Erreur retrait candidature:", error)
+      toast.error("Erreur lors du retrait de la candidature")
     }
   }
 
-  const markAsRead = async (conversationId: string) => {
-    if (!currentUserId) return
-
-    try {
-      await fetch(`/api/conversations/${conversationId}/mark-read`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: currentUserId }),
-      })
-    } catch (error) {
-      console.error("❌ Erreur marquage lu:", error)
+  const getStatusBadgeVariant = (status: string) => {
+    switch (status) {
+      case "pending":
+        return "secondary"
+      case "under_review":
+        return "secondary"
+      case "visit_proposed":
+        return "default"
+      case "visit_scheduled":
+        return "default"
+      case "accepted":
+        return "default"
+      case "rejected":
+        return "destructive"
+      default:
+        return "outline"
     }
   }
 
-  const formatTime = (timestamp: string) => {
-    const date = new Date(timestamp)
-    const now = new Date()
-    const diff = now.getTime() - date.getTime()
-    const hours = diff / (1000 * 60 * 60)
-
-    if (hours < 24) {
-      return date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
-    } else {
-      return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "pending":
+        return "En attente"
+      case "under_review":
+        return "En cours d'analyse"
+      case "visit_proposed":
+        return "Créneaux proposés"
+      case "visit_scheduled":
+        return "Visite programmée"
+      case "accepted":
+        return "Dossier accepté"
+      case "rejected":
+        return "Refusé"
+      default:
+        return status
     }
   }
 
-  const getUnreadCount = (conversation: Conversation) => {
-    return conversation.messages.filter((msg) => !msg.is_read && msg.sender_id !== currentUserId).length
+  const canWithdrawApplication = (status: string) => {
+    return ["pending", "under_review", "visit_proposed"].includes(status)
   }
 
-  const getLastMessage = (conversation: Conversation) => {
-    const lastMessage = conversation.messages[conversation.messages.length - 1]
-    if (!lastMessage) return null
-
-    return {
-      content: lastMessage.content,
-      timestamp: lastMessage.created_at,
-      sender_id: lastMessage.sender_id,
-      sender_name: lastMessage.sender_id === currentUserId ? "Vous" : conversation.owner.first_name,
+  // Filtrer les candidatures
+  const filteredApplications = applications.filter((application) => {
+    if (statusFilter !== "all" && application.status !== statusFilter) {
+      return false
     }
-  }
-
-  const getPropertyImage = (conversation: Conversation) => {
-    // Si on a une image principale déjà extraite
-    if (conversation.property?.mainImage) {
-      return conversation.property.mainImage
+    if (searchQuery && !application.property.title.toLowerCase().includes(searchQuery.toLowerCase())) {
+      return false
     }
+    return true
+  })
 
-    // Sinon chercher dans les images
-    if (conversation.property?.images?.length) {
-      const primaryImage = conversation.property.images.find((img) => img.is_primary)
-      return primaryImage?.url || conversation.property.images[0]?.url
+  // Trier les candidatures
+  const sortedApplications = [...filteredApplications].sort((a, b) => {
+    if (sortOrder === "date-desc") {
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    } else if (sortOrder === "date-asc") {
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     }
-
-    return "/placeholder.svg?height=60&width=60&text=Apt"
-  }
-
-  const filteredConversations = conversations.filter(
-    (conv) =>
-      conv.owner.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      conv.owner.last_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      conv.property?.title?.toLowerCase().includes(searchQuery.toLowerCase()),
-  )
+    return 0
+  })
 
   if (loading) {
     return (
@@ -506,7 +585,7 @@ export default function TenantMessagingPage() {
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center space-y-4">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="text-gray-600">Chargement de vos conversations...</p>
+            <p className="text-gray-600">Chargement de vos candidatures...</p>
           </div>
         </div>
       </div>
@@ -515,251 +594,277 @@ export default function TenantMessagingPage() {
 
   return (
     <div className="container mx-auto py-6">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-8rem)]">
-        {/* Liste des conversations */}
-        <div className={`${isMobile && selectedConversation ? "hidden" : ""} lg:block`}>
-          <Card className="h-full">
-            <CardHeader className="pb-3">
-              <div className="flex justify-between items-center">
-                <h2 className="text-lg font-semibold">Messages</h2>
-                <Badge variant="secondary">
-                  {conversations.reduce((sum, conv) => sum + getUnreadCount(conv), 0)} non lus
-                </Badge>
-              </div>
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Rechercher une conversation..."
-                  className="pl-8"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <ScrollArea className="h-[calc(100vh-12rem)]">
-                <div className="space-y-1 p-3">
-                  {filteredConversations.length === 0 ? (
-                    <div className="text-center py-8">
-                      <p className="text-gray-500">Aucune conversation</p>
+      <h1 className="text-2xl font-bold mb-6">Mes candidatures</h1>
+
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+        <div className="w-full md:w-1/2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Rechercher par nom de bien..."
+              className="pl-8"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="flex gap-2 w-full md:w-auto">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Tous les statuts" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous les statuts</SelectItem>
+              <SelectItem value="pending">En attente</SelectItem>
+              <SelectItem value="under_review">En cours d'analyse</SelectItem>
+              <SelectItem value="visit_proposed">Créneaux proposés</SelectItem>
+              <SelectItem value="visit_scheduled">Visite programmée</SelectItem>
+              <SelectItem value="accepted">Dossier accepté</SelectItem>
+              <SelectItem value="rejected">Refusé</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={sortOrder} onValueChange={setSortOrder}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Trier par" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="date-desc">Date (plus récent)</SelectItem>
+              <SelectItem value="date-asc">Date (plus ancien)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="space-y-6">
+        {sortedApplications.length > 0 ? (
+          sortedApplications.map((application) => {
+            const primaryImage =
+              application.property.property_images?.find((img) => img.is_primary) ||
+              application.property.property_images?.[0]
+
+            return (
+              <Card key={application.id} className="overflow-hidden">
+                <CardContent className="p-0">
+                  <div className="flex flex-col md:flex-row">
+                    <div className="w-full md:w-1/3 h-48 md:h-auto">
+                      <img
+                        src={primaryImage?.url || "/placeholder.svg?height=200&width=300&text=Pas d'image"}
+                        alt={application.property.title}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement
+                          target.src = "/placeholder.svg?height=200&width=300&text=Image non disponible"
+                        }}
+                      />
                     </div>
-                  ) : (
-                    filteredConversations.map((conversation) => {
-                      const unreadCount = getUnreadCount(conversation)
-                      const lastMessage = getLastMessage(conversation)
-
-                      return (
-                        <div
-                          key={conversation.id}
-                          className={`p-3 rounded-lg cursor-pointer transition-colors hover:bg-gray-50 ${
-                            selectedConversation?.id === conversation.id ? "bg-blue-50 border border-blue-200" : ""
-                          }`}
-                          onClick={() => {
-                            setSelectedConversation(conversation)
-                            markAsRead(conversation.id)
-                          }}
-                        >
-                          <div className="flex gap-3">
-                            <div className="relative">
-                              <Avatar className="h-10 w-10">
-                                <AvatarImage src="/placeholder.svg?height=40&width=40&text=Owner" />
-                                <AvatarFallback>
-                                  {conversation.owner.first_name[0]}
-                                  {conversation.owner.last_name[0]}
-                                </AvatarFallback>
-                              </Avatar>
-                            </div>
-
-                            <div className="flex-1 min-w-0">
-                              <div className="flex justify-between items-start">
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-medium text-sm truncate">
-                                    {conversation.owner.first_name} {conversation.owner.last_name}
-                                  </p>
-                                  {conversation.property && (
-                                    <p className="text-xs text-muted-foreground truncate">
-                                      {conversation.property.title}
-                                    </p>
-                                  )}
-                                </div>
-                                <div className="flex flex-col items-end">
-                                  {lastMessage && (
-                                    <span className="text-xs text-muted-foreground">
-                                      {formatTime(lastMessage.timestamp)}
-                                    </span>
-                                  )}
-                                  {unreadCount > 0 && (
-                                    <Badge
-                                      variant="destructive"
-                                      className="text-xs h-4 w-4 p-0 flex items-center justify-center mt-1"
-                                    >
-                                      {unreadCount}
-                                    </Badge>
-                                  )}
-                                </div>
-                              </div>
-                              {lastMessage && (
-                                <p className="text-sm text-muted-foreground truncate mt-1">
-                                  {lastMessage.sender_name}: {lastMessage.content}
-                                </p>
-                              )}
-                            </div>
+                    <div className="flex-1 p-6">
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <h2 className="text-xl font-semibold">{application.property.title}</h2>
+                          <div className="flex items-center text-muted-foreground mt-1">
+                            <MapPin className="h-4 w-4 mr-1" />
+                            <span>
+                              {application.property.address}, {application.property.city}
+                            </span>
                           </div>
                         </div>
-                      )
-                    })
-                  )}
-                </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        </div>
+                        <Badge variant={getStatusBadgeVariant(application.status)}>
+                          {getStatusLabel(application.status)}
+                        </Badge>
+                      </div>
 
-        {/* Zone de conversation */}
-        <div className={`lg:col-span-2 ${isMobile && !selectedConversation ? "hidden" : ""}`}>
-          {selectedConversation ? (
-            <Card className="h-full flex flex-col">
-              {/* En-tête de conversation */}
-              <CardHeader className="pb-3 border-b">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    {isMobile && (
-                      <Button variant="ghost" size="icon" onClick={() => setSelectedConversation(null)}>
-                        <ArrowLeft className="h-4 w-4" />
-                      </Button>
-                    )}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div className="flex items-start">
+                          <FileText className="h-5 w-5 mr-2 text-blue-600" />
+                          <div>
+                            <p className="font-medium">Candidature</p>
+                            <p className="text-sm text-muted-foreground">
+                              {new Date(application.created_at).toLocaleDateString("fr-FR")}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-start">
+                          <Clock className="h-5 w-5 mr-2 text-blue-600" />
+                          <div>
+                            <p className="font-medium">Dernière mise à jour</p>
+                            <p className="text-sm text-muted-foreground">
+                              {new Date(application.updated_at).toLocaleDateString("fr-FR")}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-start">
+                          <div className="mr-2 flex items-center">
+                            <span className="font-medium mr-2">Loyer</span>
+                            <span className="text-lg font-bold">{application.property.price} €/mois</span>
+                          </div>
+                        </div>
+                      </div>
 
-                    <div className="relative">
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src="/placeholder.svg?height=40&width=40&text=Owner" />
-                        <AvatarFallback>
-                          {selectedConversation.owner.first_name[0]}
-                          {selectedConversation.owner.last_name[0]}
-                        </AvatarFallback>
-                      </Avatar>
-                    </div>
+                      {/* Créneaux proposés - nouveau statut */}
+                      {application.status === "visit_proposed" && (
+                        <div className="bg-blue-50 p-4 rounded-md mb-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center">
+                              <Calendar className="h-4 w-4 text-blue-600 mr-2" />
+                              <span className="font-medium text-blue-800">Créneaux de visite proposés</span>
+                            </div>
+                            <Dialog open={showSlotDialog} onOpenChange={setShowSlotDialog}>
+                              <DialogTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  onClick={() => {
+                                    console.log("🔄 Ouverture popup sélection créneau:", application.id)
+                                    setSelectedApplication(application)
+                                  }}
+                                >
+                                  Choisir un créneau
+                                </Button>
+                              </DialogTrigger>
+                              {selectedApplication && (
+                                <VisitSlotSelectionDialog
+                                  application={selectedApplication}
+                                  open={showSlotDialog}
+                                  onOpenChange={setShowSlotDialog}
+                                  onSlotConfirmed={loadApplications}
+                                />
+                              )}
+                            </Dialog>
+                          </div>
+                          <div className="text-sm text-blue-700">
+                            Le propriétaire vous a proposé des créneaux de visite. Cliquez sur "Choisir un créneau" pour
+                            sélectionner celui qui vous convient.
+                          </div>
+                        </div>
+                      )}
 
-                    <div className="flex-1">
-                      <h3 className="font-semibold">
-                        {selectedConversation.owner.first_name} {selectedConversation.owner.last_name}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">Propriétaire</p>
-                    </div>
-                  </div>
+                      {/* Visite programmée */}
+                      {application.status === "visit_scheduled" &&
+                        application.visits &&
+                        application.visits.length > 0 && (
+                          <div className="bg-green-50 p-3 rounded-md mb-4">
+                            <div className="flex items-center">
+                              <Calendar className="h-4 w-4 text-green-600 mr-2" />
+                              <span className="font-medium text-green-800">Visite confirmée</span>
+                            </div>
+                            {application.visits.map((visit) => (
+                              <p key={visit.id} className="text-sm text-green-700 mt-1">
+                                Le{" "}
+                                {new Date(visit.visit_date).toLocaleDateString("fr-FR", {
+                                  day: "numeric",
+                                  month: "long",
+                                  year: "numeric",
+                                })}{" "}
+                                {visit.start_time && visit.end_time && `de ${visit.start_time} à ${visit.end_time}`}
+                              </p>
+                            ))}
+                          </div>
+                        )}
 
-                  <div className="flex gap-2">
-                    <Button variant="ghost" size="icon">
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
+                      {/* Statut visit_scheduled sans visite */}
+                      {application.status === "visit_scheduled" &&
+                        (!application.visits || application.visits.length === 0) && (
+                          <div className="bg-orange-50 p-3 rounded-md mb-4">
+                            <div className="flex items-center">
+                              <Calendar className="h-4 w-4 text-orange-600 mr-2" />
+                              <span className="font-medium text-orange-800">Problème de synchronisation</span>
+                            </div>
+                            <p className="text-sm text-orange-700 mt-1">
+                              Votre candidature indique qu'une visite est programmée mais aucune visite n'est trouvée.
+                              Contactez le propriétaire pour clarifier.
+                            </p>
+                          </div>
+                        )}
 
-                {/* Informations sur la propriété */}
-                {selectedConversation.property && (
-                  <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-                    <div className="flex gap-3">
-                      <img
-                        src={getPropertyImage(selectedConversation) || "/placeholder.svg"}
-                        alt={selectedConversation.property.title || "Propriété"}
-                        className="w-12 h-12 rounded object-cover"
-                      />
-                      <div className="flex-1">
-                        <h4 className="font-medium text-sm">{selectedConversation.property.title}</h4>
-                        <p className="text-xs text-muted-foreground">
-                          {selectedConversation.property.address}, {selectedConversation.property.city}
-                        </p>
-                        {selectedConversation.property.price && (
-                          <p className="text-sm font-semibold text-blue-600">
-                            {selectedConversation.property.price} €/mois
+                      {application.status === "accepted" && (
+                        <div className="bg-green-50 p-3 rounded-md mb-4">
+                          <div className="flex items-center">
+                            <FileText className="h-4 w-4 text-green-600 mr-2" />
+                            <span className="font-medium text-green-800">
+                              Félicitations ! Votre dossier a été accepté
+                            </span>
+                          </div>
+                          <p className="text-sm text-green-700 mt-1">
+                            Le propriétaire a accepté votre candidature. Vous allez bientôt recevoir le bail à signer.
                           </p>
+                        </div>
+                      )}
+
+                      {application.status === "rejected" && (
+                        <div className="bg-red-50 p-3 rounded-md mb-4">
+                          <div className="flex items-center">
+                            <FileText className="h-4 w-4 text-red-600 mr-2" />
+                            <span className="font-medium text-red-800">Candidature refusée</span>
+                          </div>
+                          <p className="text-sm text-red-700 mt-1">
+                            Votre candidature n'a pas été retenue pour ce bien.
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap gap-2 justify-end">
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/properties/${application.property.id}`}>Voir l'annonce</Link>
+                        </Button>
+                        <Button variant="outline" size="sm">
+							<Link href={`/tenant/messaging?owner_id=${application.property_id}`}>Contacter le propriétaire</Link>
+                        </Button>
+                        {canWithdrawApplication(application.status) && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="destructive" size="sm">
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Retirer ma candidature
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Retirer votre candidature</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Êtes-vous sûr de vouloir retirer votre candidature pour "{application.property.title}"
+                                  ? Cette action est irréversible.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleWithdrawApplication(application.id)}
+                                  className="bg-red-600 hover:bg-red-700"
+                                >
+                                  Retirer ma candidature
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
+                        {application.status === "visit_scheduled" && (
+                          <Button size="sm" asChild>
+                            <Link href="/tenant/visits">Voir mes visites</Link>
+                          </Button>
                         )}
                       </div>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link href={`/properties/${selectedConversation.property.id}`}>Voir l'annonce</Link>
-                      </Button>
                     </div>
                   </div>
-                )}
-              </CardHeader>
-
-              {/* Messages */}
-              <CardContent className="flex-1 p-0">
-                <ScrollArea className="h-[calc(100vh-20rem)] p-4">
-                  <div className="space-y-4">
-                    {selectedConversation.messages.length === 0 ? (
-                      <div className="text-center py-8">
-                        <p className="text-gray-500">Aucun message dans cette conversation</p>
-                        <p className="text-sm text-gray-400 mt-1">Envoyez le premier message !</p>
-                      </div>
-                    ) : (
-                      selectedConversation.messages.map((message) => {
-                        const isOwn = message.sender_id === currentUserId
-                        return (
-                          <div key={message.id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
-                            <div className={`max-w-[70%] ${isOwn ? "order-2" : ""}`}>
-                              <div
-                                className={`p-3 rounded-lg ${
-                                  isOwn ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-900"
-                                }`}
-                              >
-                                <p className="text-sm">{message.content}</p>
-                                <p className={`text-xs mt-1 ${isOwn ? "text-blue-100" : "text-gray-500"}`}>
-                                  {formatTime(message.created_at)}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })
-                    )}
-                    <div ref={messagesEndRef} />
-                  </div>
-                </ScrollArea>
-              </CardContent>
-
-              {/* Zone de saisie */}
-              <div className="border-t p-4">
-                <div className="flex gap-2">
-                  <Button variant="ghost" size="icon">
-                    <Paperclip className="h-4 w-4" />
-                  </Button>
-                  <div className="flex-1 relative">
-                    <Textarea
-                      placeholder="Tapez votre message..."
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      className="min-h-[40px] max-h-32 resize-none pr-12"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault()
-                          sendMessage()
-                        }
-                      }}
-                    />
-                    <Button variant="ghost" size="icon" className="absolute right-1 top-1">
-                      <Smile className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <Button onClick={sendMessage} disabled={!newMessage.trim()} size="icon">
-                    <Send className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          ) : (
-            <Card className="h-full flex items-center justify-center">
-              <div className="text-center">
-                <div className="h-12 w-12 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                  <Send className="h-6 w-6 text-gray-400" />
-                </div>
-                <h3 className="text-lg font-semibold mb-2">Sélectionnez une conversation</h3>
-                <p className="text-muted-foreground">
-                  Choisissez une conversation dans la liste pour commencer à échanger
-                </p>
-              </div>
-            </Card>
-          )}
-        </div>
+                </CardContent>
+              </Card>
+            )
+          })
+        ) : (
+          <div className="text-center py-12">
+            <div className="bg-gray-100 p-6 rounded-full inline-block mb-4">
+              <FileText className="h-8 w-8 text-gray-400" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">Aucune candidature trouvée</h3>
+            <p className="text-muted-foreground mb-4">
+              {searchQuery || statusFilter !== "all"
+                ? "Aucune candidature ne correspond à vos critères de recherche."
+                : "Vous n'avez pas encore postulé à des annonces."}
+            </p>
+            <Button asChild>
+              <Link href="/tenant/search">Rechercher des biens</Link>
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   )
