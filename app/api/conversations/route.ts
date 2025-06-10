@@ -1,7 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
-
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+import { createServerClient } from "@/lib/supabase"
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,8 +12,11 @@ export async function GET(request: NextRequest) {
 
     console.log("🔍 Récupération conversations pour utilisateur:", userId)
 
+    // Utiliser le client serveur pour avoir les permissions nécessaires
+    const supabaseServer = createServerClient()
+
     // Récupérer les conversations où l'utilisateur est soit tenant soit owner
-    const { data: conversations, error } = await supabase
+    const { data: conversations, error } = await supabaseServer
       .from("conversations")
       .select("*")
       .or(`tenant_id.eq.${userId},owner_id.eq.${userId}`)
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error("❌ Erreur récupération conversations:", error)
-      return NextResponse.json({ conversations: [] })
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
     console.log("✅ Conversations trouvées:", conversations?.length || 0)
@@ -33,14 +34,14 @@ export async function GET(request: NextRequest) {
       (conversations || []).map(async (conv) => {
         try {
           // Récupérer les informations du tenant
-          const { data: tenant } = await supabase
+          const { data: tenant } = await supabaseServer
             .from("users")
             .select("id, first_name, last_name, email, phone")
             .eq("id", conv.tenant_id)
             .single()
 
           // Récupérer les informations du owner
-          const { data: owner } = await supabase
+          const { data: owner } = await supabaseServer
             .from("users")
             .select("id, first_name, last_name, email, phone")
             .eq("id", conv.owner_id)
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
           // Récupérer les informations de la propriété si property_id existe
           let property = null
           if (conv.property_id) {
-            const { data: propertyData } = await supabase
+            const { data: propertyData } = await supabaseServer
               .from("properties")
               .select("id, title, address, city, price, images")
               .eq("id", conv.property_id)
@@ -58,7 +59,7 @@ export async function GET(request: NextRequest) {
           }
 
           // Récupérer les messages de la conversation
-          const { data: messages } = await supabase
+          const { data: messages } = await supabaseServer
             .from("messages")
             .select("id, content, sender_id, is_read, created_at")
             .eq("conversation_id", conv.id)
@@ -91,7 +92,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error("❌ Erreur API conversations:", error)
-    return NextResponse.json({ conversations: [] })
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur inconnue" }, { status: 500 })
   }
 }
 
@@ -99,6 +100,9 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     console.log("📥 Requête POST conversations:", body)
+
+    // Utiliser le client serveur pour avoir les permissions nécessaires
+    const supabaseServer = createServerClient()
 
     if (body.type === "send_message") {
       // Envoyer un message
@@ -108,7 +112,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 })
       }
 
-      const { data: message, error } = await supabase
+      const { data: message, error } = await supabaseServer
         .from("messages")
         .insert({
           conversation_id,
@@ -121,11 +125,14 @@ export async function POST(request: NextRequest) {
 
       if (error) {
         console.error("❌ Erreur création message:", error)
-        return NextResponse.json({ error: "Erreur lors de la création du message" }, { status: 500 })
+        return NextResponse.json({ error: error.message }, { status: 500 })
       }
 
       // Mettre à jour la date de dernière modification de la conversation
-      await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversation_id)
+      await supabaseServer
+        .from("conversations")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", conversation_id)
 
       console.log("✅ Message créé:", message.id)
 
@@ -134,16 +141,30 @@ export async function POST(request: NextRequest) {
       // Créer une conversation
       const { tenant_id, owner_id, subject, property_id } = body
 
-      if (!tenant_id || !owner_id || !subject) {
-        return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 })
+      if (!tenant_id || !owner_id) {
+        return NextResponse.json({ error: "tenant_id et owner_id sont requis" }, { status: 400 })
       }
 
-      const { data: conversation, error } = await supabase
+      // Vérifier si une conversation existe déjà entre ces utilisateurs
+      let query = supabaseServer.from("conversations").select("*").eq("tenant_id", tenant_id).eq("owner_id", owner_id)
+
+      if (property_id) {
+        query = query.eq("property_id", property_id)
+      }
+
+      const { data: existingConversation } = await query.maybeSingle()
+
+      if (existingConversation) {
+        console.log("✅ Conversation existante trouvée:", existingConversation.id)
+        return NextResponse.json({ conversation: existingConversation })
+      }
+
+      const { data: conversation, error } = await supabaseServer
         .from("conversations")
         .insert({
           tenant_id,
           owner_id,
-          subject,
+          subject: subject || "Nouvelle conversation",
           property_id: property_id || null,
         })
         .select()
@@ -151,7 +172,7 @@ export async function POST(request: NextRequest) {
 
       if (error) {
         console.error("❌ Erreur création conversation:", error)
-        return NextResponse.json({ error: "Erreur lors de la création de la conversation" }, { status: 500 })
+        return NextResponse.json({ error: error.message }, { status: 500 })
       }
 
       console.log("✅ Conversation créée:", conversation.id)
@@ -160,6 +181,6 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error("❌ Erreur API conversations POST:", error)
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur inconnue" }, { status: 500 })
   }
 }

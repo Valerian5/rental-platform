@@ -1,7 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
-
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+import { createServerClient } from "@/lib/supabase"
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,8 +13,11 @@ export async function GET(request: NextRequest) {
 
     console.log("🔍 Recherche candidatures:", { tenantId, ownerId })
 
+    // Utiliser le client serveur pour avoir les permissions nécessaires
+    const supabaseServer = createServerClient()
+
     // D'abord récupérer les propriétés du propriétaire
-    const { data: properties, error: propertiesError } = await supabase
+    const { data: properties, error: propertiesError } = await supabaseServer
       .from("properties")
       .select("id")
       .eq("owner_id", ownerId)
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
     console.log("🏠 Propriétés du propriétaire:", propertyIds)
 
     // Ensuite récupérer les candidatures du locataire pour ces propriétés
-    const { data: applications, error: applicationsError } = await supabase
+    const { data: applications, error: applicationsError } = await supabaseServer
       .from("applications")
       .select(`
         id,
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
         created_at,
         message,
         property_id,
-        properties!inner(
+        properties(
           id,
           title,
           address,
@@ -62,6 +63,7 @@ export async function GET(request: NextRequest) {
     }
 
     console.log("✅ Candidatures trouvées:", applications?.length || 0)
+    console.log("📋 Détail candidatures:", JSON.stringify(applications))
 
     // Transformer les données pour avoir la structure attendue
     const formattedApplications =
