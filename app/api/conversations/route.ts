@@ -162,8 +162,96 @@ export async function POST(request: NextRequest) {
 
       console.log("✅ Message envoyé:", message.id)
       return NextResponse.json({ message }, { status: 201 })
+    } else if (type === "find_or_create") {
+      // Trouver ou créer une conversation avec gestion intelligente des propriétés
+      const { tenant_id, owner_id, property_id, subject } = body
+
+      if (!tenant_id || !owner_id) {
+        return NextResponse.json({ error: "tenant_id et owner_id requis" }, { status: 400 })
+      }
+
+      console.log("🔍 Recherche conversation intelligente:", { tenant_id, owner_id, property_id })
+
+      const existingConversation = null
+
+      if (property_id) {
+        // Si on a un property_id, chercher d'abord une conversation avec cette propriété spécifique
+        const { data: specificConv } = await supabase
+          .from("conversations")
+          .select("*")
+          .eq("tenant_id", tenant_id)
+          .eq("owner_id", owner_id)
+          .eq("property_id", property_id)
+          .maybeSingle()
+
+        if (specificConv) {
+          console.log("✅ Conversation trouvée avec propriété spécifique:", specificConv.id)
+          return NextResponse.json({ conversation: specificConv })
+        }
+
+        // Si pas trouvé avec propriété spécifique, chercher une conversation générale (sans propriété)
+        const { data: generalConv } = await supabase
+          .from("conversations")
+          .select("*")
+          .eq("tenant_id", tenant_id)
+          .eq("owner_id", owner_id)
+          .is("property_id", null)
+          .maybeSingle()
+
+        if (generalConv) {
+          console.log("✅ Conversation générale trouvée, mise à jour avec propriété:", generalConv.id)
+          // Mettre à jour la conversation existante avec le property_id
+          const { data: updatedConv, error: updateError } = await supabase
+            .from("conversations")
+            .update({ property_id: property_id })
+            .eq("id", generalConv.id)
+            .select()
+            .single()
+
+          if (updateError) {
+            console.error("❌ Erreur mise à jour conversation:", updateError)
+          } else {
+            return NextResponse.json({ conversation: updatedConv })
+          }
+        }
+      } else {
+        // Si pas de property_id, chercher une conversation générale
+        const { data: generalConv } = await supabase
+          .from("conversations")
+          .select("*")
+          .eq("tenant_id", tenant_id)
+          .eq("owner_id", owner_id)
+          .is("property_id", null)
+          .maybeSingle()
+
+        if (generalConv) {
+          console.log("✅ Conversation générale trouvée:", generalConv.id)
+          return NextResponse.json({ conversation: generalConv })
+        }
+      }
+
+      // Créer une nouvelle conversation
+      console.log("🆕 Création nouvelle conversation")
+      const { data: conversation, error } = await supabase
+        .from("conversations")
+        .insert({
+          tenant_id,
+          owner_id,
+          property_id: property_id || null,
+          subject: subject || "Nouvelle conversation",
+        })
+        .select()
+        .single()
+
+      if (error) {
+        console.error("❌ Erreur création conversation:", error)
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+
+      console.log("✅ Conversation créée:", conversation.id)
+      return NextResponse.json({ conversation }, { status: 201 })
     } else {
-      // Créer ou récupérer une conversation
+      // Ancienne méthode pour compatibilité
       const { tenant_id, owner_id, property_id, subject } = body
 
       if (!tenant_id || !owner_id) {

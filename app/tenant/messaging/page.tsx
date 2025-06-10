@@ -98,56 +98,56 @@ export default function TenantMessagingPage() {
   }, [])
 
   // Charger les conversations
-  useEffect(() => {
+  const loadConversations = async () => {
     if (!currentUserId) return
 
-    const loadConversations = async () => {
-      try {
-        console.log("🔍 Chargement conversations pour:", currentUserId)
-        setLoading(true)
+    try {
+      console.log("🔍 Chargement conversations pour:", currentUserId)
+      setLoading(true)
 
-        const response = await fetch(`/api/conversations?user_id=${currentUserId}`)
-        console.log("📡 Réponse API conversations:", response.status)
+      const response = await fetch(`/api/conversations?user_id=${currentUserId}`)
+      console.log("📡 Réponse API conversations:", response.status)
 
-        if (!response.ok) {
-          throw new Error(`Erreur ${response.status}`)
-        }
-
-        const data = await response.json()
-        console.log("✅ Conversations chargées:", data.conversations?.length || 0)
-        console.log("📋 Détail conversations:", data.conversations)
-
-        setConversations(data.conversations || [])
-      } catch (error) {
-        console.error("❌ Erreur chargement conversations:", error)
-        toast.error("Erreur lors du chargement des conversations")
-      } finally {
-        setLoading(false)
+      if (!response.ok) {
+        throw new Error(`Erreur ${response.status}`)
       }
-    }
 
+      const data = await response.json()
+      console.log("✅ Conversations chargées:", data.conversations?.length || 0)
+      console.log("📋 Détail conversations:", data.conversations)
+
+      setConversations(data.conversations || [])
+      return data.conversations || []
+    } catch (error) {
+      console.error("❌ Erreur chargement conversations:", error)
+      toast.error("Erreur lors du chargement des conversations")
+      return []
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
     loadConversations()
   }, [currentUserId])
 
   // Gérer les paramètres URL
   useEffect(() => {
-    if (!currentUserId || conversations.length === 0 || !urlParams) return
+    if (!currentUserId || !urlParams) return
 
     const { conversationId, ownerId, propertyId } = urlParams
 
     if (conversationId) {
-      // Sélectionner une conversation spécifique
-      const conversation = conversations.find((c) => c.id === conversationId)
-      if (conversation) {
-        console.log("✅ Conversation trouvée et sélectionnée:", conversationId)
-        setSelectedConversation(conversation)
-        markAsRead(conversationId)
-      } else {
-        console.warn("⚠️ Conversation non trouvée dans la liste:", conversationId)
-        console.log(
-          "📋 Conversations disponibles:",
-          conversations.map((c) => ({ id: c.id, subject: c.subject })),
-        )
+      // Attendre que les conversations soient chargées
+      if (conversations.length > 0) {
+        const conversation = conversations.find((c) => c.id === conversationId)
+        if (conversation) {
+          console.log("✅ Conversation trouvée et sélectionnée:", conversationId)
+          setSelectedConversation(conversation)
+          markAsRead(conversationId)
+        } else {
+          console.warn("⚠️ Conversation non trouvée dans la liste:", conversationId)
+        }
       }
     } else if (ownerId) {
       // Créer ou trouver une conversation avec ce propriétaire
@@ -162,64 +162,41 @@ export default function TenantMessagingPage() {
     try {
       console.log("🎯 Gestion conversation avec propriétaire:", ownerId, "propriété:", propertyId)
 
-      // Chercher une conversation existante avec ce propriétaire et cette propriété
-      let existingConversation = null
-
-      if (propertyId) {
-        // Si on a un property_id, chercher une conversation avec ce propriétaire ET cette propriété
-        existingConversation = conversations.find((c) => c.owner_id === ownerId && c.property_id === propertyId)
-      }
-
-      // Si on n'a pas trouvé avec la propriété ou si on n'a pas de propriété, chercher juste avec le propriétaire
-      if (!existingConversation) {
-        existingConversation = conversations.find((c) => c.owner_id === ownerId)
-      }
-
-      if (existingConversation) {
-        console.log("✅ Conversation existante trouvée:", existingConversation.id)
-        setSelectedConversation(existingConversation)
-        markAsRead(existingConversation.id)
-        return
-      }
-
-      console.log("🆕 Aucune conversation trouvée, création en cours...")
-
-      // Créer une nouvelle conversation
+      // Utiliser la nouvelle API intelligente
       const response = await fetch("/api/conversations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          type: "find_or_create",
           tenant_id: currentUserId,
           owner_id: ownerId,
-          subject: "Nouvelle conversation",
           property_id: propertyId,
+          subject: propertyId ? "Conversation sur une propriété" : "Nouvelle conversation",
         }),
       })
 
-      console.log("📡 Réponse création conversation:", response.status)
+      console.log("📡 Réponse gestion conversation:", response.status)
 
       if (!response.ok) {
         throw new Error(`Erreur ${response.status}`)
       }
 
       const data = await response.json()
-      console.log("✅ Conversation créée:", data.conversation)
+      console.log("✅ Conversation gérée:", data.conversation.id)
 
-      // Recharger les conversations pour inclure la nouvelle
-      const refreshResponse = await fetch(`/api/conversations?user_id=${currentUserId}`)
-      if (refreshResponse.ok) {
-        const refreshData = await refreshResponse.json()
-        setConversations(refreshData.conversations || [])
+      // Recharger les conversations pour avoir les données à jour
+      const updatedConversations = await loadConversations()
 
-        // Sélectionner la nouvelle conversation
-        const newConversation = refreshData.conversations?.find((c: Conversation) => c.id === data.conversation.id)
-        if (newConversation) {
-          setSelectedConversation(newConversation)
-        }
+      // Sélectionner la conversation
+      const targetConversation = updatedConversations.find((c: Conversation) => c.id === data.conversation.id)
+      if (targetConversation) {
+        console.log("✅ Conversation sélectionnée avec propriété:", targetConversation.property?.title || "aucune")
+        setSelectedConversation(targetConversation)
+        markAsRead(targetConversation.id)
       }
     } catch (error) {
       console.error("❌ Erreur gestion conversation propriétaire:", error)
-      toast.error("Erreur lors de la création de la conversation")
+      toast.error("Erreur lors de la gestion de la conversation")
     }
   }
 
