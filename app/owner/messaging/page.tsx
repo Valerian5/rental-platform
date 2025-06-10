@@ -10,8 +10,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { authService } from "@/lib/auth-service"
 import { toast } from "sonner"
-import { MessageSquare, Send, ArrowLeft, Loader2, AlertCircle } from "lucide-react"
+import { MessageSquare, Send, ArrowLeft, Loader2, AlertCircle, Calendar } from "lucide-react"
 import { PageHeader } from "@/components/page-header"
+import Link from "next/link"
 
 interface User {
   id: string
@@ -26,6 +27,16 @@ interface Property {
   title: string
   address: string
   city: string
+  price?: number
+  images?: Array<{ url: string; is_primary: boolean }>
+}
+
+interface Application {
+  id: string
+  status: string
+  created_at: string
+  message?: string
+  property: Property
 }
 
 interface Message {
@@ -58,6 +69,8 @@ export default function OwnerMessagingPage() {
   const [creatingConversation, setCreatingConversation] = useState(false)
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
+  const [tenantApplications, setTenantApplications] = useState<Application[]>([])
+  const [loadingApplications, setLoadingApplications] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState("")
   const [currentUser, setCurrentUser] = useState<any>(null)
@@ -74,6 +87,13 @@ export default function OwnerMessagingPage() {
       handleUrlParams()
     }
   }, [currentUser, loading, searchParams])
+
+  useEffect(() => {
+    // Charger les candidatures du locataire quand une conversation est sélectionnée
+    if (selectedConversation && currentUser) {
+      loadTenantApplications(selectedConversation.tenant_id, currentUser.id)
+    }
+  }, [selectedConversation, currentUser])
 
   const checkAuthAndLoadData = async () => {
     try {
@@ -106,7 +126,6 @@ export default function OwnerMessagingPage() {
       if (response.ok) {
         const data = await response.json()
         console.log("✅ Conversations chargées:", data.conversations?.length || 0)
-        console.log("📋 Détail conversations:", data.conversations)
         setConversations(data.conversations || [])
       } else {
         const errorData = await response.text()
@@ -137,6 +156,29 @@ export default function OwnerMessagingPage() {
     } catch (error) {
       console.error("❌ Erreur chargement messages:", error)
       setMessages([])
+    }
+  }
+
+  const loadTenantApplications = async (tenantId: string, ownerId: string) => {
+    try {
+      setLoadingApplications(true)
+      console.log("🔍 Chargement candidatures locataire:", { tenantId, ownerId })
+
+      const response = await fetch(`/api/applications/tenant-owner?tenant_id=${tenantId}&owner_id=${ownerId}`)
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log("✅ Candidatures chargées:", data.applications?.length || 0)
+        setTenantApplications(data.applications || [])
+      } else {
+        console.error("❌ Erreur chargement candidatures:", response.status)
+        setTenantApplications([])
+      }
+    } catch (error) {
+      console.error("❌ Erreur chargement candidatures:", error)
+      setTenantApplications([])
+    } finally {
+      setLoadingApplications(false)
     }
   }
 
@@ -295,6 +337,27 @@ export default function OwnerMessagingPage() {
     }
   }
 
+  const getPropertyImage = (property: Property) => {
+    if (!property.images?.length) {
+      return "/placeholder.svg?height=60&width=60&text=Apt"
+    }
+
+    const primaryImage = property.images.find((img) => img.is_primary)
+    return primaryImage?.url || property.images[0]?.url || "/placeholder.svg?height=60&width=60&text=Apt"
+  }
+
+  const getStatusBadge = (status: string) => {
+    const statusConfig = {
+      pending: { label: "En attente", variant: "secondary" as const },
+      accepted: { label: "Acceptée", variant: "default" as const },
+      rejected: { label: "Refusée", variant: "destructive" as const },
+      visit_scheduled: { label: "Visite programmée", variant: "outline" as const },
+    }
+
+    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending
+    return <Badge variant={config.variant}>{config.label}</Badge>
+  }
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -406,8 +469,61 @@ export default function OwnerMessagingPage() {
                 <CardTitle>
                   {selectedConversation.tenant?.first_name} {selectedConversation.tenant?.last_name}
                 </CardTitle>
+
+                {/* Section candidatures du locataire */}
+                {loadingApplications ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Chargement des candidatures...
+                  </div>
+                ) : tenantApplications.length > 0 ? (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium text-muted-foreground">
+                      Candidature{tenantApplications.length > 1 ? "s" : ""} de ce locataire :
+                    </h4>
+                    <div className="space-y-2">
+                      {tenantApplications.map((application) => (
+                        <div key={application.id} className="p-3 bg-gray-50 rounded-lg">
+                          <div className="flex gap-3">
+                            <img
+                              src={getPropertyImage(application.property) || "/placeholder.svg"}
+                              alt={application.property.title}
+                              className="w-12 h-12 rounded object-cover"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between">
+                                <h5 className="font-medium text-sm truncate">{application.property.title}</h5>
+                                {getStatusBadge(application.status)}
+                              </div>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {application.property.address}, {application.property.city}
+                              </p>
+                              {application.property.price && (
+                                <p className="text-sm font-semibold text-blue-600">
+                                  {application.property.price} €/mois
+                                </p>
+                              )}
+                              <div className="flex items-center gap-4 mt-1">
+                                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <Calendar className="h-3 w-3" />
+                                  {new Date(application.created_at).toLocaleDateString("fr-FR")}
+                                </span>
+                                <Button variant="outline" size="sm" asChild>
+                                  <Link href={`/owner/applications/${application.id}`}>Voir candidature</Link>
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Aucune candidature trouvée pour ce locataire</p>
+                )}
               </CardHeader>
-              <CardContent className="p-0 flex flex-col h-[500px]">
+
+              <CardContent className="p-0 flex flex-col h-[400px]">
                 {/* Messages */}
                 <ScrollArea className="flex-1 p-4">
                   <div className="space-y-4">
