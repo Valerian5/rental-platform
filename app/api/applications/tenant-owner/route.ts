@@ -13,56 +13,65 @@ export async function GET(request: NextRequest) {
 
     console.log("🔍 Recherche candidatures:", { tenantId, ownerId })
 
-    // Étape 1: Récupérer les propriétés du propriétaire
-    const { data: properties, error: propertiesError } = await supabase
-      .from("properties")
-      .select("id, title, address, city, price, images")
-      .eq("owner_id", ownerId)
+    // Utilisons exactement la même approche que l'API de débogage qui fonctionne
 
-    if (propertiesError) {
-      console.error("❌ Erreur récupération propriétés:", propertiesError)
-      return NextResponse.json({ error: "Erreur lors de la récupération des propriétés" }, { status: 500 })
-    }
-
-    console.log("🏠 Propriétés trouvées:", properties?.length || 0)
-
-    if (!properties || properties.length === 0) {
-      console.log("ℹ️ Aucune propriété trouvée pour ce propriétaire")
-      return NextResponse.json({ applications: [], count: 0 })
-    }
-
-    const propertyIds = properties.map((p) => p.id)
-    console.log("🏠 IDs des propriétés:", propertyIds)
-
-    // Étape 2: Récupérer les candidatures du locataire pour ces propriétés (SANS jointure)
-    const { data: applications, error: applicationsError } = await supabase
+    // Étape 1: Récupérer les candidatures du tenant
+    const { data: tenantApplications, error: tenantError } = await supabase
       .from("applications")
-      .select("id, status, created_at, message, property_id")
+      .select("*")
       .eq("tenant_id", tenantId)
-      .in("property_id", propertyIds)
-      .order("created_at", { ascending: false })
 
-    if (applicationsError) {
-      console.error("❌ Erreur récupération candidatures:", applicationsError)
+    if (tenantError) {
+      console.error("❌ Erreur récupération candidatures tenant:", tenantError)
       return NextResponse.json({ error: "Erreur lors de la récupération des candidatures" }, { status: 500 })
     }
 
-    console.log("✅ Candidatures trouvées:", applications?.length || 0)
+    console.log("📋 Candidatures du tenant:", tenantApplications?.length || 0)
 
-    // Étape 3: Enrichir les candidatures avec les informations des propriétés
-    const enrichedApplications =
-      applications?.map((app) => {
-        const property = properties.find((p) => p.id === app.property_id)
-        return {
-          id: app.id,
-          status: app.status,
-          created_at: app.created_at,
-          message: app.message,
-          property: property || null,
-        }
-      }) || []
+    // Étape 2: Récupérer les propriétés du propriétaire
+    const { data: ownerProperties, error: ownerError } = await supabase
+      .from("properties")
+      .select("*")
+      .eq("owner_id", ownerId)
 
-    console.log("📋 Candidatures enrichies:", enrichedApplications.length)
+    if (ownerError) {
+      console.error("❌ Erreur récupération propriétés owner:", ownerError)
+      return NextResponse.json({ error: "Erreur lors de la récupération des propriétés" }, { status: 500 })
+    }
+
+    console.log("🏠 Propriétés du propriétaire:", ownerProperties?.length || 0)
+
+    // Étape 3: Filtrer les candidatures pour ne garder que celles qui concernent les propriétés du propriétaire
+    const propertyIds = ownerProperties.map((p) => p.id)
+
+    const filteredApplications = tenantApplications.filter((app) => propertyIds.includes(app.property_id))
+
+    console.log("📋 Candidatures filtrées:", filteredApplications.length)
+
+    // Étape 4: Enrichir les candidatures avec les informations des propriétés
+    const enrichedApplications = filteredApplications.map((app) => {
+      const property = ownerProperties.find((p) => p.id === app.property_id)
+
+      // Extraire seulement les champs nécessaires de la propriété
+      const simplifiedProperty = property
+        ? {
+            id: property.id,
+            title: property.title,
+            address: property.address,
+            city: property.city,
+            price: property.price,
+            images: property.images,
+          }
+        : null
+
+      return {
+        id: app.id,
+        status: app.status,
+        created_at: app.created_at,
+        message: app.message,
+        property: simplifiedProperty,
+      }
+    })
 
     return NextResponse.json({
       applications: enrichedApplications,
