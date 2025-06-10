@@ -806,18 +806,9 @@ export default function TenantApplicationsPage() {
                         <Button variant="outline" size="sm" asChild>
                           <Link href={`/properties/${application.property.id}`}>Voir l'annonce</Link>
                         </Button>
-                  <Button variant="outline" size="sm" onClick={() => {
-                      // Récupérer l'owner_id depuis la propriété
-                      const ownerId = application.property.owner?.id
-                      if (ownerId && application.property.id) {
-                        router.push(`/tenant/messaging?owner_id=${ownerId}&property_id=${application.property.id}`)
-                      } else {
-                        toast.error("Impossible de contacter le propriétaire - informations manquantes")
-                      }
-                    }}
-                  >
-                    Contacter le propriétaire
-                  </Button>
+						<Button variant="outline" size="sm" asChild>
+                          <Link href={`/tenant/messaging?owner_id=${ownerId}&property_id=${application.property.id}`}>Contacter</Link>
+                        </Button>
                         {canWithdrawApplication(application.status) && (
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
