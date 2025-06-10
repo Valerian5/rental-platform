@@ -74,6 +74,72 @@ export default function TenantMessagingPage() {
     propertyId: null,
   })
   const [debugInfo, setDebugInfo] = useState<string | null>(null)
+  const [tenantApplications, setTenantApplications] = useState<any[]>([])
+  const [propertyOwnerMap, setPropertyOwnerMap] = useState<any>({})
+
+  // Charger les candidatures du locataire
+  const loadTenantApplications = async () => {
+    if (!currentUserId) return
+
+    try {
+      console.log("🔍 Chargement candidatures locataire:", currentUserId)
+
+      const response = await fetch(`/api/applications/tenant?tenant_id=${currentUserId}`)
+      if (!response.ok) {
+        throw new Error(`Erreur ${response.status}`)
+      }
+
+      const data = await response.json()
+      console.log("✅ Candidatures locataire chargées:", data.count)
+      console.log("📋 Mapping propriété-propriétaire:", Object.keys(data.propertyOwnerMap).length)
+
+      setTenantApplications(data.applications || [])
+      setPropertyOwnerMap(data.propertyOwnerMap || {})
+
+      setDebugInfo(
+        (prev) =>
+          `${prev || ""}✅ Candidatures chargées: ${data.count}\n📋 Propriétés avec propriétaires: ${Object.keys(data.propertyOwnerMap).length}\n`,
+      )
+
+      return data
+    } catch (error) {
+      console.error("❌ Erreur chargement candidatures:", error)
+      setDebugInfo((prev) => `${prev || ""}❌ Erreur candidatures: ${error}\n`)
+    }
+  }
+
+  // Associer automatiquement les propriétés aux conversations
+  const autoAssociateProperties = async (conversations: Conversation[]) => {
+    if (!propertyOwnerMap || Object.keys(propertyOwnerMap).length === 0) return
+
+    console.log("🔄 Association automatique des propriétés...")
+    setDebugInfo((prev) => `${prev || ""}🔄 Association automatique des propriétés...\n`)
+
+    for (const conversation of conversations) {
+      // Si la conversation n'a pas de property_id mais qu'on a une candidature pour ce propriétaire
+      if (!conversation.property_id && conversation.owner_id) {
+        // Chercher une propriété de ce propriétaire dans nos candidatures
+        const propertyForOwner = Object.entries(propertyOwnerMap).find(
+          ([propertyId, data]: [string, any]) => data.owner_id === conversation.owner_id,
+        )
+
+        if (propertyForOwner) {
+          const [propertyId, propertyData] = propertyForOwner
+          console.log(`🔗 Association conversation ${conversation.id} avec propriété ${propertyId}`)
+          setDebugInfo(
+            (prev) =>
+              `${prev || ""}🔗 Association conversation ${conversation.id} avec propriété ${propertyData.property.title}\n`,
+          )
+
+          try {
+            await updateConversationProperty(conversation.id, propertyId)
+          } catch (error) {
+            console.error("❌ Erreur association automatique:", error)
+          }
+        }
+      }
+    }
+  }
 
   // Récupérer l'ID utilisateur depuis le localStorage ou une autre source
   useEffect(() => {
@@ -132,6 +198,12 @@ export default function TenantMessagingPage() {
       )
 
       setConversations(data.conversations || [])
+
+      // Association automatique des propriétés
+      if (data.conversations && data.conversations.length > 0) {
+        setTimeout(() => autoAssociateProperties(data.conversations), 1000)
+      }
+
       return data.conversations || []
     } catch (error) {
       console.error("❌ Erreur chargement conversations:", error)
@@ -147,7 +219,11 @@ export default function TenantMessagingPage() {
   }
 
   useEffect(() => {
-    loadConversations()
+    if (currentUserId) {
+      loadTenantApplications().then(() => {
+        loadConversations()
+      })
+    }
   }, [currentUserId])
 
   // Gérer les paramètres URL
