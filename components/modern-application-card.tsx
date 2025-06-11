@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -20,6 +20,8 @@ import {
   Eye,
   BarChart3,
 } from "lucide-react"
+import { scoringPreferencesService, type ScoringPreferences } from "@/lib/scoring-preferences-service"
+import { useRouter } from "next/navigation"
 
 interface ApplicationCardProps {
   application: {
@@ -33,6 +35,7 @@ interface ApplicationCardProps {
     property: {
       title: string
       address: string
+      owner_id?: string
     }
     profession: string
     income: number
@@ -57,6 +60,40 @@ export function ModernApplicationCard({
   rentalFile,
 }: ApplicationCardProps) {
   const [expanded, setExpanded] = useState(false)
+  const [scoringPreferences, setScoringPreferences] = useState<ScoringPreferences | null>(null)
+  const [calculatedScore, setCalculatedScore] = useState<number>(application.match_score)
+  const router = useRouter()
+
+  useEffect(() => {
+    // Charger les préférences de scoring du propriétaire si disponible
+    const loadScoringPreferences = async () => {
+      if (application.property?.owner_id) {
+        try {
+          const response = await fetch(
+            `/api/scoring-preferences?owner_id=${application.property.owner_id}&default_only=true`,
+          )
+          if (response.ok) {
+            const data = await response.json()
+            if (data.preferences && data.preferences.length > 0) {
+              setScoringPreferences(data.preferences[0])
+
+              // Recalculer le score avec les préférences personnalisées
+              const customScore = scoringPreferencesService.calculateCustomScore(
+                application,
+                application.property,
+                data.preferences[0],
+              )
+              setCalculatedScore(customScore.totalScore)
+            }
+          }
+        } catch (error) {
+          console.error("Erreur chargement préférences scoring:", error)
+        }
+      }
+    }
+
+    loadScoringPreferences()
+  }, [application])
 
   const formatDate = (dateString: string) => {
     try {
@@ -125,7 +162,13 @@ export function ModernApplicationCard({
 
     // Bouton "Voir analyse" - disponible pour certains statuts
     const viewAnalysisButton = ["visit_scheduled", "accepted", "approved", "rejected"].includes(application.status) ? (
-      <Button size="sm" variant="outline" onClick={() => onAction("view_analysis")}>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => {
+          router.push(`/owner/applications/${application.id}`)
+        }}
+      >
         <BarChart3 className="h-4 w-4 mr-1" />
         Voir analyse
       </Button>
@@ -270,7 +313,7 @@ export function ModernApplicationCard({
           </div>
           <div className="flex items-center gap-2">
             {getStatusBadge()}
-            <CircularScore score={application.match_score} />
+            <CircularScore score={calculatedScore} customPreferences={scoringPreferences} />
           </div>
         </div>
 
