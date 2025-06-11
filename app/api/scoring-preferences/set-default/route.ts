@@ -1,4 +1,4 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 import { supabase } from "@/lib/supabase"
 
 export async function POST(request: NextRequest) {
@@ -7,33 +7,27 @@ export async function POST(request: NextRequest) {
     const { owner_id, profile_id } = body
 
     if (!owner_id || !profile_id) {
-      return NextResponse.json({ error: "Données manquantes" }, { status: 400 })
+      return NextResponse.json({ error: "owner_id et profile_id requis" }, { status: 400 })
     }
 
-    // Désactiver tous les profils par défaut du propriétaire
-    const { error: updateError } = await supabase
-      .from("scoring_preferences")
-      .update({ is_default: false })
-      .eq("owner_id", owner_id)
+    // Désactiver tous les profils par défaut pour ce propriétaire
+    await supabase.from("scoring_preferences").update({ is_default: false }).eq("owner_id", owner_id)
 
-    if (updateError) {
-      console.error("Erreur désactivation profils par défaut:", updateError)
-      return NextResponse.json({ error: updateError.message }, { status: 500 })
-    }
-
-    // Définir le profil sélectionné comme défaut
-    const { error: setDefaultError } = await supabase
+    // Activer le profil sélectionné comme défaut
+    const { data, error } = await supabase
       .from("scoring_preferences")
       .update({ is_default: true })
       .eq("id", profile_id)
       .eq("owner_id", owner_id)
+      .select()
+      .single()
 
-    if (setDefaultError) {
-      console.error("Erreur définition profil par défaut:", setDefaultError)
-      return NextResponse.json({ error: setDefaultError.message }, { status: 500 })
+    if (error) {
+      console.error("Erreur mise à jour profil par défaut:", error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, profile: data })
   } catch (error) {
     console.error("Erreur serveur:", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })

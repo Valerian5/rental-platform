@@ -17,7 +17,20 @@ import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { scoringPreferencesService, type ScoringPreferences } from "@/lib/scoring-preferences-service"
 import { PageHeader } from "@/components/page-header"
-import { Save, FileText, Shield, Briefcase, Euro, Star, Eye, RefreshCw, Settings, Home, Plus } from "lucide-react"
+import {
+  Save,
+  FileText,
+  Shield,
+  Briefcase,
+  Euro,
+  Star,
+  Eye,
+  RefreshCw,
+  Settings,
+  Home,
+  Plus,
+  Trash2,
+} from "lucide-react"
 
 export default function ScoringPreferencesPage() {
   const router = useRouter()
@@ -122,6 +135,38 @@ export default function ScoringPreferencesPage() {
     setSelectedProfileId(profile.id || null)
   }
 
+  const deleteProfile = async (profileId: string) => {
+    if (!user) return
+
+    try {
+      setSaving(true)
+
+      const response = await fetch(`/api/scoring-preferences/${profileId}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        toast.success("Profil supprimé")
+
+        // Si on supprime le profil actuellement sélectionné, sélectionner le profil par défaut
+        if (selectedProfileId === profileId) {
+          setSelectedProfileId(null)
+          const defaultPrefs = scoringPreferencesService.getDefaultPreferences(user.id)
+          setCurrentPreferences(defaultPrefs)
+        }
+
+        await loadPreferences(user.id)
+      } else {
+        toast.error("Erreur lors de la suppression")
+      }
+    } catch (error) {
+      console.error("Erreur suppression:", error)
+      toast.error("Erreur lors de la suppression")
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const detectProfileChanges = () => {
     if (!currentPreferences || !selectedProfileId) return
 
@@ -162,6 +207,8 @@ export default function ScoringPreferencesPage() {
           toast.success("Préférences mises à jour")
           await loadPreferences(user.id, true) // Garder le profil sélectionné
         } else {
+          const errorData = await response.json()
+          console.error("Erreur API:", errorData)
           toast.error("Erreur lors de la mise à jour")
         }
       } else {
@@ -181,8 +228,11 @@ export default function ScoringPreferencesPage() {
           const data = await response.json()
           toast.success("Préférences sauvegardées")
           setSelectedProfileId(data.preferences.id)
+          setCurrentPreferences(data.preferences)
           await loadPreferences(user.id, true) // Garder le profil sélectionné
         } else {
+          const errorData = await response.json()
+          console.error("Erreur API:", errorData)
           toast.error("Erreur lors de la sauvegarde")
         }
       }
@@ -322,77 +372,110 @@ export default function ScoringPreferencesPage() {
   }
 
   // Convertir les préférences du mode simple vers le mode avancé
-  const updateFromSimpleMode = () => {
-    if (!currentPreferences) return
+  const updateFromSimpleMode = async () => {
+    if (!currentPreferences || !user) return
 
-    // Créer une copie profonde pour éviter les problèmes de référence
-    const newPreferences = JSON.parse(JSON.stringify(currentPreferences))
-    const criteria = newPreferences.criteria
+    try {
+      // Créer une copie profonde pour éviter les problèmes de référence
+      const newPreferences = JSON.parse(JSON.stringify(currentPreferences))
+      const criteria = newPreferences.criteria
 
-    console.log("Mise à jour depuis le mode simple", {
-      sampleProperty,
-      sampleProfiles,
-      currentName: currentPreferences.name,
-    })
+      console.log("Mise à jour depuis le mode simple", {
+        sampleProperty,
+        sampleProfiles,
+        currentName: currentPreferences.name,
+      })
 
-    // Calculer les seuils de revenus basés sur les exemples
-    const excellentRatio = sampleProfiles.excellent.income / sampleProperty.price
-    const goodRatio = sampleProfiles.good.income / sampleProperty.price
-    const acceptableRatio = sampleProfiles.acceptable.income / sampleProperty.price
+      // Calculer les seuils de revenus basés sur les exemples
+      const excellentRatio = sampleProfiles.excellent.income / sampleProperty.price
+      const goodRatio = sampleProfiles.good.income / sampleProperty.price
+      const acceptableRatio = sampleProfiles.acceptable.income / sampleProperty.price
 
-    // Mettre à jour les seuils
-    criteria.income_ratio.thresholds = {
-      excellent: Number(excellentRatio.toFixed(1)),
-      good: Number(goodRatio.toFixed(1)),
-      acceptable: Number(acceptableRatio.toFixed(1)),
-      minimum: Number((acceptableRatio * 0.9).toFixed(1)),
+      // Mettre à jour les seuils
+      criteria.income_ratio.thresholds = {
+        excellent: Number(excellentRatio.toFixed(1)),
+        good: Number(goodRatio.toFixed(1)),
+        acceptable: Number(acceptableRatio.toFixed(1)),
+        minimum: Number((acceptableRatio * 0.9).toFixed(1)),
+      }
+
+      // Mettre à jour les types de contrat
+      const contractMapping: any = {
+        CDI: "cdi",
+        CDD: "cdd",
+        Freelance: "freelance",
+        Étudiant: "student",
+        Retraité: "retired",
+      }
+
+      // Définir les points pour les types de contrat
+      Object.keys(criteria.professional_stability.contract_types).forEach((key) => {
+        criteria.professional_stability.contract_types[key] = 50 // Valeur par défaut
+      })
+
+      // Donner 100 points au contrat "excellent"
+      const excellentContractKey = contractMapping[sampleProfiles.excellent.contract] || "cdi"
+      criteria.professional_stability.contract_types[excellentContractKey] = 100
+
+      // Donner 75 points au contrat "good"
+      const goodContractKey = contractMapping[sampleProfiles.good.contract] || "cdd"
+      criteria.professional_stability.contract_types[goodContractKey] = 75
+
+      // Donner 50 points au contrat "acceptable"
+      const acceptableContractKey = contractMapping[sampleProfiles.acceptable.contract] || "freelance"
+      criteria.professional_stability.contract_types[acceptableContractKey] = 50
+
+      // Mettre à jour les préférences de présentation
+      const presentationMapping: any = {
+        complète: 200,
+        bonne: 100,
+        basique: 50,
+        minimale: 20,
+      }
+
+      criteria.application_quality.presentation_length = {
+        excellent: presentationMapping[sampleProfiles.excellent.presentation] || 200,
+        good: presentationMapping[sampleProfiles.good.presentation] || 100,
+        basic: presentationMapping[sampleProfiles.acceptable.presentation] || 50,
+      }
+
+      // Donner un nom unique au profil
+      newPreferences.name = `Profil personnalisé ${new Date().toLocaleTimeString()}`
+      newPreferences.owner_id = user.id
+      newPreferences.is_default = false
+
+      // Mettre à jour l'état avec les nouvelles préférences
+      setCurrentPreferences(newPreferences)
+      setSelectedProfileId(null) // Nouveau profil
+
+      // Sauvegarder automatiquement le profil
+      setSaving(true)
+      const response = await fetch("/api/scoring-preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          owner_id: user.id,
+          name: newPreferences.name,
+          is_default: false,
+          criteria: newPreferences.criteria,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setSelectedProfileId(data.preferences.id)
+        setCurrentPreferences(data.preferences)
+        await loadPreferences(user.id, true)
+        toast.success("Critères appliqués et profil sauvegardé")
+      } else {
+        toast.error("Critères appliqués mais erreur lors de la sauvegarde")
+      }
+    } catch (error) {
+      console.error("Erreur:", error)
+      toast.error("Erreur lors de l'application des critères")
+    } finally {
+      setSaving(false)
     }
-
-    // Mettre à jour les types de contrat
-    const contractMapping: any = {
-      CDI: "cdi",
-      CDD: "cdd",
-      Freelance: "freelance",
-      Étudiant: "student",
-      Retraité: "retired",
-    }
-
-    // Définir les points pour les types de contrat
-    Object.keys(criteria.professional_stability.contract_types).forEach((key) => {
-      criteria.professional_stability.contract_types[key] = 50 // Valeur par défaut
-    })
-
-    // Donner 100 points au contrat "excellent"
-    const excellentContractKey = contractMapping[sampleProfiles.excellent.contract] || "cdi"
-    criteria.professional_stability.contract_types[excellentContractKey] = 100
-
-    // Donner 75 points au contrat "good"
-    const goodContractKey = contractMapping[sampleProfiles.good.contract] || "cdd"
-    criteria.professional_stability.contract_types[goodContractKey] = 75
-
-    // Donner 50 points au contrat "acceptable"
-    const acceptableContractKey = contractMapping[sampleProfiles.acceptable.contract] || "freelance"
-    criteria.professional_stability.contract_types[acceptableContractKey] = 50
-
-    // Mettre à jour les préférences de présentation
-    const presentationMapping: any = {
-      complète: 200,
-      bonne: 100,
-      basique: 50,
-      minimale: 20,
-    }
-
-    criteria.application_quality.presentation_length = {
-      excellent: presentationMapping[sampleProfiles.excellent.presentation] || 200,
-      good: presentationMapping[sampleProfiles.good.presentation] || 100,
-      basic: presentationMapping[sampleProfiles.acceptable.presentation] || 50,
-    }
-
-    // Mettre à jour l'état avec les nouvelles préférences
-    setCurrentPreferences(newPreferences)
-
-    // Afficher un toast pour confirmer l'application des critères
-    toast.success("Critères appliqués avec succès")
   }
 
   const setAsDefault = async (profileId: string) => {
@@ -926,7 +1009,16 @@ export default function ScoringPreferencesPage() {
               </div>
 
               <div className="flex justify-end">
-                <Button onClick={updateFromSimpleMode}>Appliquer ces critères</Button>
+                <Button onClick={updateFromSimpleMode} disabled={saving}>
+                  {saving ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Application...
+                    </>
+                  ) : (
+                    "Appliquer ces critères"
+                  )}
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -1017,17 +1109,29 @@ export default function ScoringPreferencesPage() {
                       {pref.name}
                       {pref.is_default && <Star className="h-3 w-3 ml-auto" />}
                     </Button>
-                    {!pref.is_default && (
+                    <div className="flex gap-1">
+                      {!pref.is_default && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setAsDefault(pref.id)}
+                          disabled={saving}
+                          title="Définir comme défaut"
+                        >
+                          <Star className="h-3 w-3" />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => setAsDefault(pref.id)}
-                        disabled={saving}
-                        title="Définir comme défaut"
+                        onClick={() => deleteProfile(pref.id)}
+                        disabled={saving || pref.is_default}
+                        title="Supprimer le profil"
+                        className="text-red-600 hover:text-red-700"
                       >
-                        <Star className="h-3 w-3" />
+                        <Trash2 className="h-3 w-3" />
                       </Button>
-                    )}
+                    </div>
                   </div>
                 ))}
               </CardContent>
