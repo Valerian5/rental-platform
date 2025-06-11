@@ -203,10 +203,9 @@ export default function OwnerApplicationsPage() {
       }
     })
 
-    // Filtre par score (ajouter après les autres filtres)
+    // Filtre par score
     if (scoreFilter !== "all") {
       filtered = filtered.filter((app) => {
-        // Calculer le score pour chaque candidature
         const score = calculateScore(app)
         switch (scoreFilter) {
           case "excellent":
