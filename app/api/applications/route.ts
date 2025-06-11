@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     console.log("📋 API Applications GET", { tenantId, ownerId })
 
     if (tenantId) {
-      // Récupérer les candidatures pour un locataire
+      // Mode locataire - récupérer les candidatures du locataire
       const { data: applications, error } = await supabase
         .from("applications")
         .select(`
@@ -78,77 +78,75 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ applications: enrichedApplications })
     }
 
-    if (ownerId) {
-      // Récupérer les candidatures pour un propriétaire
-      const { data: properties, error: propError } = await supabase
-        .from("properties")
-        .select("id")
-        .eq("owner_id", ownerId)
+    // Mode propriétaire par défaut - récupérer toutes les candidatures avec enrichissement
+    console.log("🏠 Mode propriétaire - récupération de toutes les candidatures")
 
-      if (propError) {
-        console.error("❌ Erreur récupération propriétés:", propError)
-        return NextResponse.json({ error: propError.message }, { status: 500 })
-      }
+    const { data: applications, error } = await supabase
+      .from("applications")
+      .select(`
+        *,
+        property:properties(
+          id,
+          title,
+          address,
+          city,
+          price,
+          rent,
+          property_images(id, url, is_primary)
+        ),
+        tenant:users(
+          id,
+          email,
+          first_name,
+          last_name,
+          phone,
+          avatar_url
+        )
+      `)
+      .order("created_at", { ascending: false })
 
-      if (!properties || properties.length === 0) {
-        return NextResponse.json({ applications: [] })
-      }
-
-      const propertyIds = properties.map((p) => p.id)
-
-      const { data: applications, error } = await supabase
-        .from("applications")
-        .select(`
-          *,
-          property:properties(*),
-          tenant:users(*)
-        `)
-        .in("property_id", propertyIds)
-        .order("created_at", { ascending: false })
-
-      if (error) {
-        console.error("❌ Erreur récupération candidatures propriétaire:", error)
-        return NextResponse.json({ error: error.message }, { status: 500 })
-      }
-
-      // Enrichir avec les visites pour chaque candidature
-      const enrichedApplications = await Promise.all(
-        (applications || []).map(async (app) => {
-          try {
-            const { data: visits } = await supabase
-              .from("visits")
-              .select("*")
-              .eq("tenant_id", app.tenant_id)
-              .eq("property_id", app.property_id)
-
-            // Récupérer le dossier de location
-            const { data: rentalFile } = await supabase
-              .from("rental_files")
-              .select("*")
-              .eq("user_id", app.tenant_id)
-              .single()
-
-            return {
-              ...app,
-              visits: visits || [],
-              rental_file: rentalFile || null,
-            }
-          } catch (enrichError) {
-            console.error("❌ Erreur enrichissement candidature:", enrichError)
-            return {
-              ...app,
-              visits: [],
-              rental_file: null,
-            }
-          }
-        }),
-      )
-
-      console.log(`✅ ${enrichedApplications.length} candidatures récupérées pour le propriétaire`)
-      return NextResponse.json({ applications: enrichedApplications })
+    if (error) {
+      console.error("❌ Erreur récupération candidatures:", error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ error: "tenant_id ou owner_id requis" }, { status: 400 })
+    // Enrichir avec les dossiers de location et visites
+    const enrichedApplications = await Promise.all(
+      (applications || []).map(async (app) => {
+        try {
+          // Récupérer le dossier de location
+          const { data: rentalFile } = await supabase
+            .from("rental_files")
+            .select("*")
+            .eq("user_id", app.tenant_id)
+            .single()
+
+          // Récupérer les visites
+          const { data: visits } = await supabase
+            .from("visits")
+            .select("*")
+            .eq("tenant_id", app.tenant_id)
+            .eq("property_id", app.property_id)
+            .order("visit_date", { ascending: true })
+
+          return {
+            ...app,
+            rental_file: rentalFile || null,
+            visits: visits || [],
+          }
+        } catch (enrichError) {
+          console.error("❌ Erreur enrichissement candidature:", enrichError)
+          return {
+            ...app,
+            rental_file: null,
+            visits: [],
+          }
+        }
+      }),
+    )
+
+    console.log(`✅ ${enrichedApplications.length} candidatures récupérées`)
+    return NextResponse.json(enrichedApplications)
   } catch (error) {
     console.error("❌ Erreur API applications:", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
