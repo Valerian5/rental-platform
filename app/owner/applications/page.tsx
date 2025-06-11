@@ -29,6 +29,7 @@ import {
   Phone,
   Mail,
   Settings,
+  Star,
 } from "lucide-react"
 
 interface Application {
@@ -87,28 +88,32 @@ export default function OwnerApplicationsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [sortBy, setSortBy] = useState<string>("created_at")
   const [activeTab, setActiveTab] = useState("all")
+  const [propertyFilter, setPropertyFilter] = useState<string>("all")
+  const [scoreFilter, setScoreFilter] = useState<string>("all")
+  const [properties, setProperties] = useState<Array<{ id: string; title: string }>>([])
 
   useEffect(() => {
     fetchApplications()
+    fetchProperties()
   }, [])
 
   useEffect(() => {
     filterAndSortApplications()
-  }, [applications, searchTerm, statusFilter, sortBy, activeTab])
+  }, [applications, searchTerm, statusFilter, sortBy, activeTab, propertyFilter, scoreFilter])
 
   const fetchApplications = async () => {
     try {
       setLoading(true)
       console.log("🔄 Récupération des candidatures...")
 
-      const response = await fetch("/api/applications")
+      const response = await fetch("/api/applications/owner")
       if (!response.ok) {
         throw new Error(`Erreur ${response.status}: ${response.statusText}`)
       }
 
       const data = await response.json()
-      console.log("✅ Candidatures récupérées:", data.length)
-      setApplications(data)
+      console.log("✅ Candidatures récupérées:", data.applications?.length || 0)
+      setApplications(data.applications || [])
     } catch (error) {
       console.error("❌ Erreur lors de la récupération des candidatures:", error)
       toast({
@@ -118,6 +123,18 @@ export default function OwnerApplicationsPage() {
       })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchProperties = async () => {
+    try {
+      const response = await fetch("/api/properties/owner")
+      if (response.ok) {
+        const data = await response.json()
+        setProperties(data.properties || [])
+      }
+    } catch (error) {
+      console.error("Erreur récupération propriétés:", error)
     }
   }
 
@@ -147,6 +164,11 @@ export default function OwnerApplicationsPage() {
       filtered = filtered.filter((app) => app.status === statusFilter)
     }
 
+    // Filtre par propriété
+    if (propertyFilter !== "all") {
+      filtered = filtered.filter((app) => app.property_id === propertyFilter)
+    }
+
     // Tri
     filtered.sort((a, b) => {
       switch (sortBy) {
@@ -164,6 +186,26 @@ export default function OwnerApplicationsPage() {
           return 0
       }
     })
+
+    // Filtre par score (ajouter après les autres filtres)
+    if (scoreFilter !== "all") {
+      filtered = filtered.filter((app) => {
+        // Calculer le score pour chaque candidature
+        const score = calculateScore(app)
+        switch (scoreFilter) {
+          case "excellent":
+            return score >= 80
+          case "good":
+            return score >= 60 && score < 80
+          case "average":
+            return score >= 40 && score < 60
+          case "poor":
+            return score < 40
+          default:
+            return true
+        }
+      })
+    }
 
     setFilteredApplications(filtered)
   }
@@ -272,6 +314,38 @@ export default function OwnerApplicationsPage() {
     return upcomingVisits[0] || null
   }
 
+  const calculateScore = (application: Application) => {
+    let score = 0
+
+    // Score basé sur les revenus (40 points max)
+    if (application.rental_file?.monthly_income && application.property.rent) {
+      const ratio = application.rental_file.monthly_income / application.property.rent
+      if (ratio >= 3) score += 40
+      else if (ratio >= 2.5) score += 30
+      else if (ratio >= 2) score += 20
+      else score += 10
+    }
+
+    // Score basé sur l'emploi (30 points max)
+    if (application.rental_file?.employment_status) {
+      if (application.rental_file.employment_status === "CDI") score += 30
+      else if (application.rental_file.employment_status === "CDD") score += 20
+      else score += 10
+    }
+
+    // Score basé sur le garant (20 points max)
+    if (application.rental_file?.guarantor_income) {
+      score += 20
+    }
+
+    // Score basé sur le message (10 points max)
+    if (application.message && application.message.length > 50) {
+      score += 10
+    }
+
+    return Math.min(score, 100)
+  }
+
   if (loading) {
     return (
       <div className="container mx-auto p-6">
@@ -345,6 +419,34 @@ export default function OwnerApplicationsPage() {
                 <SelectItem value="tenant_name">Nom du locataire</SelectItem>
                 <SelectItem value="property_title">Propriété</SelectItem>
                 <SelectItem value="rent">Loyer</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={propertyFilter} onValueChange={setPropertyFilter}>
+              <SelectTrigger className="w-48">
+                <MapPin className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Filtrer par bien" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les biens</SelectItem>
+                {properties.map((property) => (
+                  <SelectItem key={property.id} value={property.id}>
+                    {property.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={scoreFilter} onValueChange={setScoreFilter}>
+              <SelectTrigger className="w-48">
+                <Star className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Filtrer par score" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les scores</SelectItem>
+                <SelectItem value="excellent">Excellent (80-100)</SelectItem>
+                <SelectItem value="good">Bon (60-79)</SelectItem>
+                <SelectItem value="average">Moyen (40-59)</SelectItem>
+                <SelectItem value="poor">Faible (&lt;40)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -484,6 +586,26 @@ export default function OwnerApplicationsPage() {
                               </div>
                             </div>
                           )}
+                          <div className="mt-3 p-3 bg-green-50 rounded-lg">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium">Score de compatibilité</span>
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold ${
+                                    calculateScore(application) >= 80
+                                      ? "bg-green-500 text-white"
+                                      : calculateScore(application) >= 60
+                                        ? "bg-yellow-500 text-white"
+                                        : calculateScore(application) >= 40
+                                          ? "bg-orange-500 text-white"
+                                          : "bg-red-500 text-white"
+                                  }`}
+                                >
+                                  {calculateScore(application)}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
 

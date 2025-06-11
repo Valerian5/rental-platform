@@ -1,13 +1,36 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
+import { cookies } from "next/headers"
 
 export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url)
-    const tenantId = searchParams.get("tenant_id")
-    const ownerId = searchParams.get("owner_id")
+  // Récupérer l'utilisateur depuis les cookies/session
+  const cookieStore = cookies()
+  const userCookie = cookieStore.get("user")
+  let currentUserId = null
 
-    console.log("📋 API Applications GET", { tenantId, ownerId })
+  if (userCookie) {
+    try {
+      const userData = JSON.parse(userCookie.value)
+      currentUserId = userData.id
+    } catch (e) {
+      console.error("Erreur parsing user cookie:", e)
+    }
+  }
+
+  // Si pas d'utilisateur dans les cookies, essayer de récupérer depuis les paramètres
+  const { searchParams } = new URL(request.url)
+  const tenantId = searchParams.get("tenant_id")
+  const ownerId = searchParams.get("owner_id")
+
+  if (!currentUserId && !tenantId && !ownerId) {
+    return NextResponse.json({ error: "Utilisateur non authentifié" }, { status: 401 })
+  }
+
+  // Utiliser l'ID de l'utilisateur connecté si pas d'owner_id spécifique
+  const effectiveOwnerId = ownerId || currentUserId
+
+  try {
+    console.log("📋 API Applications GET", { tenantId, ownerId: effectiveOwnerId })
 
     if (tenantId) {
       // Récupérer les candidatures pour un locataire
@@ -78,12 +101,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ applications: enrichedApplications })
     }
 
-    if (ownerId) {
+    if (effectiveOwnerId) {
       // Récupérer les candidatures pour un propriétaire
       const { data: properties, error: propError } = await supabase
         .from("properties")
         .select("id")
-        .eq("owner_id", ownerId)
+        .eq("owner_id", effectiveOwnerId)
 
       if (propError) {
         console.error("❌ Erreur récupération propriétés:", propError)
