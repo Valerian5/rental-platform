@@ -91,29 +91,68 @@ export default function OwnerApplicationsPage() {
   const [propertyFilter, setPropertyFilter] = useState<string>("all")
   const [scoreFilter, setScoreFilter] = useState<string>("all")
   const [properties, setProperties] = useState<Array<{ id: string; title: string }>>([])
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchApplications()
-    fetchProperties()
+    // Récupérer l'ID utilisateur depuis le localStorage ou les cookies
+    const getUserId = () => {
+      try {
+        // Essayer de récupérer depuis localStorage
+        const userData = localStorage.getItem("user")
+        if (userData) {
+          const user = JSON.parse(userData)
+          return user.id
+        }
+
+        // Essayer de récupérer depuis les cookies
+        const cookies = document.cookie.split(";")
+        const userCookie = cookies.find((cookie) => cookie.trim().startsWith("user="))
+        if (userCookie) {
+          const userValue = userCookie.split("=")[1]
+          const user = JSON.parse(decodeURIComponent(userValue))
+          return user.id
+        }
+
+        return null
+      } catch (error) {
+        console.error("Erreur récupération user ID:", error)
+        return null
+      }
+    }
+
+    const userId = getUserId()
+    setCurrentUserId(userId)
+
+    if (userId) {
+      fetchApplications(userId)
+    } else {
+      console.error("❌ Utilisateur non authentifié")
+      toast({
+        title: "Erreur",
+        description: "Vous devez être connecté pour voir les candidatures",
+        variant: "destructive",
+      })
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
     filterAndSortApplications()
   }, [applications, searchTerm, statusFilter, sortBy, activeTab, propertyFilter, scoreFilter])
 
-  const fetchApplications = async () => {
+  const fetchApplications = async (ownerId: string) => {
     try {
       setLoading(true)
-      console.log("🔄 Récupération des candidatures...")
+      console.log("🔄 Récupération des candidatures pour owner:", ownerId)
 
-      const response = await fetch("/api/applications")
+      const response = await fetch(`/api/applications?owner_id=${ownerId}`)
       if (!response.ok) {
         throw new Error(`Erreur ${response.status}: ${response.statusText}`)
       }
 
       const data = await response.json()
-      console.log("✅ Candidatures récupérées:", data?.length || 0)
-      setApplications(data || [])
+      console.log("✅ Candidatures récupérées:", data.applications?.length || 0)
+      setApplications(data.applications || [])
     } catch (error) {
       console.error("❌ Erreur lors de la récupération des candidatures:", error)
       toast({
@@ -282,7 +321,9 @@ export default function OwnerApplicationsPage() {
         description: `Candidature ${status === "accepted" ? "acceptée" : "refusée"}`,
       })
 
-      fetchApplications() // Recharger les données
+      if (currentUserId) {
+        fetchApplications(currentUserId) // Recharger les données
+      }
     } catch (error) {
       console.error("Erreur:", error)
       toast({
@@ -391,7 +432,12 @@ export default function OwnerApplicationsPage() {
             <Settings className="h-4 w-4 mr-2" />
             Préférences de scoring
           </Button>
-          <Button variant="outline" size="sm" onClick={() => fetchApplications()} disabled={loading}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => currentUserId && fetchApplications(currentUserId)}
+            disabled={loading}
+          >
             🔄 Actualiser
           </Button>
         </div>
