@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { supabase } from "@/lib/supabaseClient"
+import { supabase } from "@/lib/supabase"
 
 // Ajouter un paramètre pour récupérer uniquement le profil par défaut
 // Modifier la fonction GET pour prendre en compte le paramètre default_only

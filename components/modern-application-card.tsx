@@ -21,7 +21,7 @@ import {
   BarChart3,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { scoringPreferencesService } from "@/services/scoring-preferences-service"
+// import { scoringPreferencesService } from "@/services/scoring-preferences-service"
 
 interface ApplicationCardProps {
   application: {
@@ -106,9 +106,50 @@ export function ModernApplicationCard({
           console.log("Préférences de scoring récupérées:", preferences.name)
 
           // Utiliser le service pour calculer le score
-          const result = scoringPreferencesService.calculateCustomScore(application, application.property, preferences)
+          // const result = scoringPreferencesService.calculateCustomScore(application, application.property, preferences)
+          const criteria = preferences.criteria
+          let score = 0
+          const totalWeight =
+            criteria.income_ratio.weight +
+            criteria.professional_stability.weight +
+            criteria.guarantor.weight +
+            criteria.application_quality.weight
 
-          setCalculatedScore(Math.min(100, Math.max(0, result.totalScore)))
+          // Score revenus
+          if (application.income && application.property.price) {
+            const incomeRatio = application.income / application.property.price
+            let incomePoints = 0
+
+            if (incomeRatio >= criteria.income_ratio.thresholds.excellent) {
+              incomePoints = criteria.income_ratio.points.excellent
+            } else if (incomeRatio >= criteria.income_ratio.thresholds.good) {
+              incomePoints = criteria.income_ratio.points.good
+            } else if (incomeRatio >= criteria.income_ratio.thresholds.acceptable) {
+              incomePoints = criteria.income_ratio.points.acceptable
+            } else {
+              incomePoints = criteria.income_ratio.points.insufficient
+            }
+
+            score += (incomePoints / 100) * criteria.income_ratio.weight
+          }
+
+          // Score stabilité professionnelle
+          const professionKey = application.profession?.toLowerCase().replace(/\s+/g, "_") || "unknown"
+          const professionScore = criteria.professional_stability.contract_types[professionKey] || 50
+          score += (professionScore / 100) * criteria.professional_stability.weight
+
+          // Score garant
+          const guarantorScore = application.has_guarantor ? criteria.guarantor.presence_points : 30
+          score += (guarantorScore / 100) * criteria.guarantor.weight
+
+          // Score qualité dossier
+          const documentsScore = application.documents_complete ? 100 : 50
+          score += (documentsScore / 100) * criteria.application_quality.weight
+
+          // Normaliser sur 100
+          const finalScore = totalWeight > 0 ? Math.round((score / totalWeight) * 100) : application.match_score
+
+          setCalculatedScore(Math.min(100, Math.max(0, finalScore)))
         } else {
           console.log("Aucune préférence par défaut trouvée, utilisation du score par défaut")
           setCalculatedScore(application.match_score)
