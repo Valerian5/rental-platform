@@ -9,31 +9,8 @@ export async function GET(request: NextRequest) {
 
     console.log("📋 API Applications GET", { tenantId, ownerId })
 
-    // Récupérer l'utilisateur authentifié
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      console.error("❌ Utilisateur non authentifié:", authError)
-      return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
-    }
-
-    // Récupérer le profil utilisateur pour connaître son rôle
-    const { data: profile, error: profileError } = await supabase.from("users").select("*").eq("id", user.id).single()
-
-    if (profileError) {
-      console.error("❌ Erreur récupération profil:", profileError)
-      return NextResponse.json({ error: "Profil non trouvé" }, { status: 404 })
-    }
-
-    console.log("👤 Utilisateur authentifié:", profile.user_type, profile.id)
-
-    if (tenantId || profile.user_type === "tenant") {
-      // Mode locataire - récupérer les candidatures du locataire
-      const targetTenantId = tenantId || user.id
-
+    if (tenantId) {
+      // Récupérer les candidatures pour un locataire
       const { data: applications, error } = await supabase
         .from("applications")
         .select(`
@@ -44,11 +21,10 @@ export async function GET(request: NextRequest) {
             address,
             city,
             price,
-            rent,
             property_images(id, url, is_primary)
           )
         `)
-        .eq("tenant_id", targetTenantId)
+        .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false })
 
       if (error) {
@@ -56,19 +32,21 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 })
       }
 
-      console.log(`📊 ${applications?.length || 0} candidatures trouvées pour le locataire`)
+      console.log(`📊 ${applications?.length || 0} candidatures trouvées`)
 
-      // Enrichir avec les visites
+      // Récupérer les visites séparément pour chaque candidature
       const enrichedApplications = await Promise.all(
         (applications || []).map(async (app) => {
           try {
+            // Récupérer les visites pour cette candidature
             const { data: visits } = await supabase
               .from("visits")
               .select("*")
-              .eq("tenant_id", targetTenantId)
+              .eq("tenant_id", tenantId)
               .eq("property_id", app.property_id)
               .order("visit_date", { ascending: true })
 
+            // Récupérer les créneaux proposés si ils existent
             let proposedSlots = []
             if (app.proposed_slot_ids && Array.isArray(app.proposed_slot_ids) && app.proposed_slot_ids.length > 0) {
               const { data: slots } = await supabase
@@ -96,18 +74,16 @@ export async function GET(request: NextRequest) {
         }),
       )
 
+      console.log(`✅ ${enrichedApplications.length} candidatures enrichies pour le locataire`)
       return NextResponse.json({ applications: enrichedApplications })
     }
 
-    if (ownerId || profile.user_type === "owner") {
-      // Mode propriétaire - récupérer les candidatures pour les propriétés du propriétaire
-      const targetOwnerId = ownerId || user.id
-
-      // D'abord récupérer les propriétés du propriétaire
+    if (ownerId) {
+      // Récupérer les candidatures pour un propriétaire
       const { data: properties, error: propError } = await supabase
         .from("properties")
         .select("id")
-        .eq("owner_id", targetOwnerId)
+        .eq("owner_id", ownerId)
 
       if (propError) {
         console.error("❌ Erreur récupération propriétés:", propError)
@@ -115,35 +91,17 @@ export async function GET(request: NextRequest) {
       }
 
       if (!properties || properties.length === 0) {
-        console.log("📊 Aucune propriété trouvée pour ce propriétaire")
-        return NextResponse.json([])
+        return NextResponse.json({ applications: [] })
       }
 
       const propertyIds = properties.map((p) => p.id)
-      console.log(`🏠 ${propertyIds.length} propriétés trouvées`)
 
-      // Récupérer les candidatures pour ces propriétés
       const { data: applications, error } = await supabase
         .from("applications")
         .select(`
           *,
-          property:properties(
-            id,
-            title,
-            address,
-            city,
-            price,
-            rent,
-            property_images(id, url, is_primary)
-          ),
-          tenant:users(
-            id,
-            email,
-            first_name,
-            last_name,
-            phone,
-            avatar_url
-          )
+          property:properties(*),
+          tenant:users(*)
         `)
         .in("property_id", propertyIds)
         .order("created_at", { ascending: false })
@@ -153,48 +111,27 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 })
       }
 
-      console.log(`📊 ${applications?.length || 0} candidatures trouvées pour le propriétaire`)
-
-      // Enrichir avec les dossiers de location et visites
+      // Enrichir avec les visites pour chaque candidature
       const enrichedApplications = await Promise.all(
         (applications || []).map(async (app) => {
-          try {
-            // Récupérer le dossier de location
-            const { data: rentalFile } = await supabase
-              .from("rental_files")
-              .select("*")
-              .eq("user_id", app.tenant_id)
-              .single()
+          const { data: visits } = await supabase
+            .from("visits")
+            .select("*")
+            .eq("tenant_id", app.tenant_id)
+            .eq("property_id", app.property_id)
 
-            // Récupérer les visites
-            const { data: visits } = await supabase
-              .from("visits")
-              .select("*")
-              .eq("tenant_id", app.tenant_id)
-              .eq("property_id", app.property_id)
-              .order("visit_date", { ascending: true })
-
-            return {
-              ...app,
-              rental_file: rentalFile || null,
-              visits: visits || [],
-            }
-          } catch (enrichError) {
-            console.error("❌ Erreur enrichissement candidature:", enrichError)
-            return {
-              ...app,
-              rental_file: null,
-              visits: [],
-            }
+          return {
+            ...app,
+            visits: visits || [],
           }
         }),
       )
 
-      return NextResponse.json(enrichedApplications)
+      console.log(`✅ ${enrichedApplications.length} candidatures récupérées pour le propriétaire`)
+      return NextResponse.json({ applications: enrichedApplications })
     }
 
-    // Si ni locataire ni propriétaire
-    return NextResponse.json({ error: "Type d'utilisateur non supporté" }, { status: 400 })
+    return NextResponse.json({ error: "tenant_id ou owner_id requis" }, { status: 400 })
   } catch (error) {
     console.error("❌ Erreur API applications:", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
@@ -206,16 +143,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     console.log("📋 API Applications POST", body)
 
-    // Vérifier l'authentification
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
-    }
-
     // Vérifier si une candidature existe déjà
     if (body.property_id && body.tenant_id) {
       const { data: existing, error: checkError } = await supabase
@@ -226,6 +153,7 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (checkError && checkError.code !== "PGRST116") {
+        // PGRST116 = no rows found
         console.error("❌ Erreur vérification candidature existante:", checkError)
         return NextResponse.json({ error: "Erreur lors de la vérification" }, { status: 500 })
       }
@@ -259,16 +187,6 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "ID candidature et tenant_id requis" }, { status: 400 })
     }
 
-    // Vérifier l'authentification
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
-    }
-
     console.log("🗑️ Suppression candidature:", { applicationId, tenantId })
 
     // Vérifier que la candidature appartient au locataire
@@ -299,6 +217,7 @@ export async function DELETE(request: NextRequest) {
 
     if (visitError) {
       console.error("❌ Erreur suppression visites:", visitError)
+      // On continue même si la suppression des visites échoue
     }
 
     // Supprimer la candidature
