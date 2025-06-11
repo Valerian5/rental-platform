@@ -106,14 +106,14 @@ export default function OwnerApplicationsPage() {
       setLoading(true)
       console.log("🔄 Récupération des candidatures...")
 
-      const response = await fetch("/api/applications/owner")
+      const response = await fetch("/api/applications")
       if (!response.ok) {
         throw new Error(`Erreur ${response.status}: ${response.statusText}`)
       }
 
       const data = await response.json()
-      console.log("✅ Candidatures récupérées:", data.applications?.length || 0)
-      setApplications(data.applications || [])
+      console.log("✅ Candidatures récupérées:", data?.length || 0)
+      setApplications(data || [])
     } catch (error) {
       console.error("❌ Erreur lors de la récupération des candidatures:", error)
       toast({
@@ -128,15 +128,32 @@ export default function OwnerApplicationsPage() {
 
   const fetchProperties = async () => {
     try {
-      const response = await fetch("/api/properties/owner")
-      if (response.ok) {
-        const data = await response.json()
-        setProperties(data.properties || [])
-      }
+      // Extraire les propriétés uniques des candidatures
+      const uniqueProperties = applications.reduce(
+        (acc, app) => {
+          if (!acc.find((p) => p.id === app.property_id)) {
+            acc.push({
+              id: app.property_id,
+              title: app.property.title,
+            })
+          }
+          return acc
+        },
+        [] as Array<{ id: string; title: string }>,
+      )
+
+      setProperties(uniqueProperties)
     } catch (error) {
       console.error("Erreur récupération propriétés:", error)
     }
   }
+
+  // Mettre à jour les propriétés quand les candidatures changent
+  useEffect(() => {
+    if (applications.length > 0) {
+      fetchProperties()
+    }
+  }, [applications])
 
   const filterAndSortApplications = () => {
     let filtered = [...applications]

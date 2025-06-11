@@ -1,27 +1,25 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
-import { cookies } from "next/headers"
+import { createServerSupabaseClient } from "@/lib/supabase-server"
 
 export async function GET(request: NextRequest) {
   try {
     console.log("🏠 API Properties Owner GET")
 
-    // Récupérer l'utilisateur depuis les cookies
-    const cookieStore = cookies()
-    const userCookie = cookieStore.get("user")
+    const supabase = createServerSupabaseClient()
 
-    if (!userCookie) {
+    // Récupérer l'utilisateur authentifié
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      console.error("❌ Erreur authentification:", authError)
       return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
     }
 
-    let userData
-    try {
-      userData = JSON.parse(userCookie.value)
-    } catch (e) {
-      return NextResponse.json({ error: "Cookie invalide" }, { status: 401 })
-    }
-
-    const ownerId = userData.id
+    const ownerId = user.id
+    console.log("👤 Owner ID:", ownerId)
 
     // Récupérer les propriétés du propriétaire
     const { data: properties, error } = await supabase
