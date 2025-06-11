@@ -1,57 +1,58 @@
+import { cn } from "@/lib/utils"
+
 interface CircularScoreProps {
   score: number
   size?: "sm" | "md" | "lg"
+  className?: string
+  loading?: boolean
 }
 
-export function CircularScore({ score, size = "md" }: CircularScoreProps) {
+export function CircularScore({ score, size = "md", className, loading = false }: CircularScoreProps) {
+  const sizeClasses = {
+    sm: "w-8 h-8 text-xs",
+    md: "w-12 h-12 text-sm",
+    lg: "w-16 h-16 text-base",
+  }
+
   const getScoreColor = (score: number) => {
-    if (score >= 80) return "#10b981" // green
-    if (score >= 60) return "#f59e0b" // yellow
-    return "#ef4444" // red
+    if (score >= 80) return "text-green-600 border-green-600"
+    if (score >= 60) return "text-yellow-600 border-yellow-600"
+    if (score >= 40) return "text-orange-600 border-orange-600"
+    return "text-red-600 border-red-600"
   }
 
-  const getSizeConfig = (size: string) => {
-    switch (size) {
-      case "sm":
-        return { width: "40px", height: "40px", fontSize: "12px", strokeWidth: "3" }
-      case "lg":
-        return { width: "80px", height: "80px", fontSize: "20px", strokeWidth: "3" }
-      case "md":
-      default:
-        return { width: "60px", height: "60px", fontSize: "16px", strokeWidth: "3" }
-    }
+  const getBackgroundColor = (score: number) => {
+    if (score >= 80) return "bg-green-50"
+    if (score >= 60) return "bg-yellow-50"
+    if (score >= 40) return "bg-orange-50"
+    return "bg-red-50"
   }
 
-  const sizeConfig = getSizeConfig(size)
-  const color = getScoreColor(score)
+  if (loading) {
+    return (
+      <div
+        className={cn(
+          "rounded-full border-2 border-gray-200 bg-gray-50 flex items-center justify-center animate-pulse",
+          sizeClasses[size],
+          className,
+        )}
+      >
+        <span className="text-gray-400 font-medium">...</span>
+      </div>
+    )
+  }
 
   return (
-    <div className="relative" style={{ width: sizeConfig.width, height: sizeConfig.height }}>
-      <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-        <path
-          d="M18 2.0845
-          a 15.9155 15.9155 0 0 1 0 31.831
-          a 15.9155 15.9155 0 0 1 0 -31.831"
-          fill="none"
-          stroke="#e5e7eb"
-          strokeWidth={sizeConfig.strokeWidth}
-        />
-        <path
-          d="M18 2.0845
-          a 15.9155 15.9155 0 0 1 0 31.831
-          a 15.9155 15.9155 0 0 1 0 -31.831"
-          fill="none"
-          stroke={color}
-          strokeWidth={sizeConfig.strokeWidth}
-          strokeDasharray={`${score}, 100`}
-          strokeLinecap="round"
-        />
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="font-bold" style={{ color: color, fontSize: sizeConfig.fontSize }}>
-          {score}%
-        </span>
-      </div>
+    <div
+      className={cn(
+        "rounded-full border-2 flex items-center justify-center font-medium",
+        sizeClasses[size],
+        getScoreColor(score),
+        getBackgroundColor(score),
+        className,
+      )}
+    >
+      {score}
     </div>
   )
 }
