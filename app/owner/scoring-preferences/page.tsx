@@ -1,5 +1,7 @@
 "use client"
 
+import { Badge } from "@/components/ui/badge"
+
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -16,7 +18,6 @@ import { authService } from "@/lib/auth-service"
 import { scoringPreferencesService, type ScoringPreferences } from "@/lib/scoring-preferences-service"
 import { PageHeader } from "@/components/page-header"
 import { Save, FileText, Shield, Briefcase, Euro, Star, Eye, RefreshCw, Settings, Home, Plus } from "lucide-react"
-import { supabase } from "@/lib/supabase"
 
 export default function ScoringPreferencesPage() {
   const router = useRouter()
@@ -25,6 +26,7 @@ export default function ScoringPreferencesPage() {
   const [user, setUser] = useState<any>(null)
   const [preferences, setPreferences] = useState<ScoringPreferences[]>([])
   const [currentPreferences, setCurrentPreferences] = useState<ScoringPreferences | null>(null)
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null)
   const [previewApplication, setPreviewApplication] = useState<any>(null)
   const [showPreview, setShowPreview] = useState(false)
   const [interfaceMode, setInterfaceMode] = useState<"simple" | "advanced">("simple")
@@ -79,21 +81,32 @@ export default function ScoringPreferencesPage() {
     }
   }
 
-  const loadPreferences = async (ownerId: string) => {
+  const loadPreferences = async (ownerId: string, keepSelectedProfile = false) => {
     try {
       const response = await fetch(`/api/scoring-preferences?owner_id=${ownerId}`)
       if (response.ok) {
         const data = await response.json()
         setPreferences(data.preferences || [])
 
-        // Sélectionner le profil par défaut ou créer un nouveau
+        // Si on veut garder le profil sélectionné et qu'il existe
+        if (keepSelectedProfile && selectedProfileId) {
+          const selectedProfile = data.preferences?.find((p: ScoringPreferences) => p.id === selectedProfileId)
+          if (selectedProfile) {
+            setCurrentPreferences(selectedProfile)
+            return
+          }
+        }
+
+        // Sinon, sélectionner le profil par défaut ou créer un nouveau
         const defaultPref = data.preferences?.find((p: ScoringPreferences) => p.is_default)
         if (defaultPref) {
           setCurrentPreferences(defaultPref)
+          setSelectedProfileId(defaultPref.id)
         } else {
           // Créer des préférences par défaut
           const defaultPrefs = scoringPreferencesService.getDefaultPreferences(ownerId)
           setCurrentPreferences(defaultPrefs)
+          setSelectedProfileId(null)
         }
       }
     } catch (error) {
@@ -102,22 +115,26 @@ export default function ScoringPreferencesPage() {
     }
   }
 
+  const selectProfile = (profile: ScoringPreferences) => {
+    console.log("Sélection du profil:", profile.name, profile.id)
+    setCurrentPreferences({ ...profile }) // Créer une copie pour éviter les références
+    setSelectedProfileId(profile.id || null)
+  }
+
   const detectProfileChanges = () => {
-    if (!currentPreferences) return
+    if (!currentPreferences || !selectedProfileId) return
 
     // Si c'est un profil existant et qu'il a été modifié
-    if (currentPreferences.id) {
-      const originalProfile = preferences.find((p) => p.id === currentPreferences.id)
-      if (originalProfile) {
-        const hasChanged = JSON.stringify(originalProfile.criteria) !== JSON.stringify(currentPreferences.criteria)
-        if (hasChanged && !currentPreferences.name.includes("(modifié)")) {
-          setCurrentPreferences({
-            ...currentPreferences,
-            name: currentPreferences.name.includes("Profil")
-              ? "Profil personnalisé"
-              : currentPreferences.name + " (modifié)",
-          })
-        }
+    const originalProfile = preferences.find((p) => p.id === selectedProfileId)
+    if (originalProfile) {
+      const hasChanged = JSON.stringify(originalProfile.criteria) !== JSON.stringify(currentPreferences.criteria)
+      if (hasChanged && !currentPreferences.name.includes("(modifié)")) {
+        setCurrentPreferences({
+          ...currentPreferences,
+          name: currentPreferences.name.includes("Profil")
+            ? "Profil personnalisé"
+            : currentPreferences.name + " (modifié)",
+        })
       }
     }
   }
@@ -142,7 +159,7 @@ export default function ScoringPreferencesPage() {
 
         if (response.ok) {
           toast.success("Préférences mises à jour")
-          await loadPreferences(user.id)
+          await loadPreferences(user.id, true) // Garder le profil sélectionné
         } else {
           toast.error("Erreur lors de la mise à jour")
         }
@@ -162,9 +179,8 @@ export default function ScoringPreferencesPage() {
         if (response.ok) {
           const data = await response.json()
           toast.success("Préférences sauvegardées")
-          await loadPreferences(user.id)
-          // Mettre à jour l'ID du profil actuel
-          setCurrentPreferences(data.preferences)
+          setSelectedProfileId(data.preferences.id)
+          await loadPreferences(user.id, true) // Garder le profil sélectionné
         } else {
           toast.error("Erreur lors de la sauvegarde")
         }
@@ -258,11 +274,11 @@ export default function ScoringPreferencesPage() {
             },
             guarantor: {
               ...scoringPreferencesService.getDefaultPreferences(user.id).criteria.guarantor,
-              weight: 15, // Réduit pour que le total soit 100%
+              weight: 15,
             },
             application_quality: {
               ...scoringPreferencesService.getDefaultPreferences(user.id).criteria.application_quality,
-              weight: 10, // Réduit pour que le total soit 100%
+              weight: 10,
             },
           },
         }
@@ -301,6 +317,7 @@ export default function ScoringPreferencesPage() {
     // Retirer l'ID pour créer un nouveau profil
     const { id, created_at, updated_at, ...newPreset } = preset as any
     setCurrentPreferences(newPreset)
+    setSelectedProfileId(null) // Nouveau profil, pas d'ID
   }
 
   // Convertir les préférences du mode simple vers le mode avancé
@@ -372,19 +389,22 @@ export default function ScoringPreferencesPage() {
     try {
       setSaving(true)
 
-      // Désactiver tous les profils par défaut du propriétaire
-      await supabase.from("scoring_preferences").update({ is_default: false }).eq("owner_id", user.id)
+      const response = await fetch("/api/scoring-preferences/set-default", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          owner_id: user.id,
+          profile_id: profileId,
+        }),
+      })
 
-      // Définir le profil sélectionné comme défaut
-      const { error } = await supabase.from("scoring_preferences").update({ is_default: true }).eq("id", profileId)
-
-      if (error) {
+      if (!response.ok) {
         toast.error("Erreur lors de la mise à jour")
         return
       }
 
       toast.success("Profil défini comme défaut")
-      await loadPreferences(user.id)
+      await loadPreferences(user.id, true) // Garder le profil sélectionné
     } catch (error) {
       console.error("Erreur:", error)
       toast.error("Erreur lors de la mise à jour")
@@ -433,6 +453,7 @@ export default function ScoringPreferencesPage() {
                 name: "Nouveau profil",
                 is_default: false,
               })
+              setSelectedProfileId(null)
             }}
           >
             <Plus className="h-4 w-4 mr-2" />
@@ -457,6 +478,22 @@ export default function ScoringPreferencesPage() {
           </Button>
         </div>
       </PageHeader>
+
+      {/* Affichage du profil actuel */}
+      <div className="bg-blue-50 p-4 rounded-lg">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-medium text-blue-900">Profil actuel</h3>
+            <p className="text-sm text-blue-700">{currentPreferences.name}</p>
+          </div>
+          {currentPreferences.is_default && (
+            <Badge variant="default" className="bg-blue-600">
+              <Star className="h-3 w-3 mr-1" />
+              Par défaut
+            </Badge>
+          )}
+        </div>
+      </div>
 
       {/* Sélecteur de mode */}
       <div className="flex justify-center mb-6">
@@ -946,10 +983,10 @@ export default function ScoringPreferencesPage() {
                 {preferences.map((pref) => (
                   <div key={pref.id} className="flex items-center gap-2">
                     <Button
-                      variant={currentPreferences?.id === pref.id ? "default" : "outline"}
+                      variant={selectedProfileId === pref.id ? "default" : "outline"}
                       size="sm"
                       className="flex-1 justify-start"
-                      onClick={() => setCurrentPreferences(pref)}
+                      onClick={() => selectProfile(pref)}
                     >
                       {pref.name}
                       {pref.is_default && <Star className="h-3 w-3 ml-auto" />}
