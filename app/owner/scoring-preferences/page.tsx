@@ -15,7 +15,7 @@ import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { scoringPreferencesService, type ScoringPreferences } from "@/lib/scoring-preferences-service"
 import { PageHeader } from "@/components/page-header"
-import { Save, FileText, Shield, Briefcase, Euro, Star, Eye, RefreshCw, Settings, Home } from "lucide-react"
+import { Save, FileText, Shield, Briefcase, Euro, Star, Eye, RefreshCw, Settings, Home, Plus } from "lucide-react"
 
 export default function ScoringPreferencesPage() {
   const router = useRouter()
@@ -101,18 +101,42 @@ export default function ScoringPreferencesPage() {
     }
   }
 
+  const detectProfileChanges = () => {
+    if (!currentPreferences) return
+
+    // Si c'est un profil existant et qu'il a été modifié
+    if (currentPreferences.id) {
+      const originalProfile = preferences.find((p) => p.id === currentPreferences.id)
+      if (originalProfile) {
+        const hasChanged = JSON.stringify(originalProfile.criteria) !== JSON.stringify(currentPreferences.criteria)
+        if (hasChanged && !currentPreferences.name.includes("(modifié)")) {
+          setCurrentPreferences({
+            ...currentPreferences,
+            name: currentPreferences.name.includes("Profil")
+              ? "Profil personnalisé"
+              : currentPreferences.name + " (modifié)",
+          })
+        }
+      }
+    }
+  }
+
   const savePreferences = async () => {
     if (!currentPreferences || !user) return
 
     try {
       setSaving(true)
 
+      // Si le profil a un ID, c'est une mise à jour
       if (currentPreferences.id) {
-        // Mise à jour
         const response = await fetch(`/api/scoring-preferences/${currentPreferences.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(currentPreferences),
+          body: JSON.stringify({
+            name: currentPreferences.name,
+            is_default: currentPreferences.is_default,
+            criteria: currentPreferences.criteria,
+          }),
         })
 
         if (response.ok) {
@@ -122,11 +146,16 @@ export default function ScoringPreferencesPage() {
           toast.error("Erreur lors de la mise à jour")
         }
       } else {
-        // Création
+        // Sinon c'est une création
         const response = await fetch("/api/scoring-preferences", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(currentPreferences),
+          body: JSON.stringify({
+            owner_id: user.id,
+            name: currentPreferences.name,
+            is_default: currentPreferences.is_default || false,
+            criteria: currentPreferences.criteria,
+          }),
         })
 
         if (response.ok) {
@@ -157,6 +186,9 @@ export default function ScoringPreferencesPage() {
     current[pathArray[pathArray.length - 1]] = value
 
     setCurrentPreferences(newPreferences)
+
+    // Détecter les changements après un court délai
+    setTimeout(detectProfileChanges, 100)
   }
 
   const getTotalWeight = () => {
@@ -205,8 +237,9 @@ export default function ScoringPreferencesPage() {
     switch (presetName) {
       case "strict":
         preset = {
-          ...scoringPreferencesService.getDefaultPreferences(user.id),
+          owner_id: user.id,
           name: "Profil strict",
+          is_default: false,
           criteria: {
             ...scoringPreferencesService.getDefaultPreferences(user.id).criteria,
             income_ratio: {
@@ -232,8 +265,9 @@ export default function ScoringPreferencesPage() {
         break
       case "flexible":
         preset = {
-          ...scoringPreferencesService.getDefaultPreferences(user.id),
+          owner_id: user.id,
           name: "Profil flexible",
+          is_default: false,
           criteria: {
             ...scoringPreferencesService.getDefaultPreferences(user.id).criteria,
             income_ratio: {
@@ -260,7 +294,9 @@ export default function ScoringPreferencesPage() {
         preset = scoringPreferencesService.getDefaultPreferences(user.id)
     }
 
-    setCurrentPreferences(preset)
+    // Retirer l'ID pour créer un nouveau profil
+    const { id, created_at, updated_at, ...newPreset } = preset as any
+    setCurrentPreferences(newPreset)
   }
 
   // Convertir les préférences du mode simple vers le mode avancé
@@ -356,6 +392,21 @@ export default function ScoringPreferencesPage() {
     <div className="space-y-6">
       <PageHeader title="Critères de sélection" description="Personnalisez vos critères d'évaluation des candidatures">
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              const newProfile = scoringPreferencesService.getDefaultPreferences(user.id)
+              const { id, created_at, updated_at, ...cleanProfile } = newProfile as any
+              setCurrentPreferences({
+                ...cleanProfile,
+                name: "Nouveau profil",
+                is_default: false,
+              })
+            }}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Nouveau profil
+          </Button>
           <Button variant="outline" onClick={generatePreviewScore}>
             <Eye className="h-4 w-4 mr-2" />
             Aperçu

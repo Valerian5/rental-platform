@@ -7,6 +7,10 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const body = await request.json()
     const { name, is_default, criteria } = body
 
+    if (!name || !criteria) {
+      return NextResponse.json({ error: "Nom et critères requis" }, { status: 400 })
+    }
+
     // Si on définit comme défaut, désactiver les autres
     if (is_default) {
       const { data: current } = await supabase.from("scoring_preferences").select("owner_id").eq("id", id).single()

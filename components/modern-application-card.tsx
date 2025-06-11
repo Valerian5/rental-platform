@@ -69,7 +69,18 @@ export function ModernApplicationCard({
     if (application.property?.owner_id) {
       calculateCustomScore()
     }
-  }, [application])
+  }, [application, application.property?.owner_id])
+
+  // Ajouter un interval pour vérifier les changements de préférences
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (application.property?.owner_id) {
+        calculateCustomScore()
+      }
+    }, 30000) // Vérifier toutes les 30 secondes
+
+    return () => clearInterval(interval)
+  }, [application.property?.owner_id])
 
   const calculateCustomScore = async () => {
     try {
@@ -84,67 +95,59 @@ export function ModernApplicationCard({
         const data = await response.json()
         if (data.preferences && data.preferences.length > 0) {
           const preferences = data.preferences[0]
+          const criteria = preferences.criteria
 
-          // Calculer le score personnalisé
+          // Calculer le score avec les critères personnalisés
           let score = 0
-          let totalWeight = 0
+          const totalWeight =
+            criteria.income_ratio.weight +
+            criteria.professional_stability.weight +
+            criteria.guarantor.weight +
+            criteria.application_quality.weight
 
-          // Score basé sur les revenus
+          // Score revenus
           if (application.income && application.property.price) {
             const incomeRatio = application.income / application.property.price
-            let incomeScore = 0
+            let incomePoints = 0
 
-            if (incomeRatio >= 3) incomeScore = 100
-            else if (incomeRatio >= 2.5) incomeScore = 80
-            else if (incomeRatio >= 2) incomeScore = 60
-            else if (incomeRatio >= 1.5) incomeScore = 40
-            else incomeScore = 20
-
-            score += (incomeScore * preferences.income_weight) / 100
-            totalWeight += preferences.income_weight
-          }
-
-          // Score basé sur la profession
-          if (application.profession) {
-            let professionScore = 0
-
-            // Mapping des professions vers des scores
-            const professionScores: { [key: string]: number } = {
-              cadre: 90,
-              employé: 80,
-              fonctionnaire: 95,
-              "profession libérale": 85,
-              étudiant: 50,
-              retraité: 75,
-              artisan: 70,
-              commerçant: 65,
-              "sans emploi": 20,
+            if (incomeRatio >= criteria.income_ratio.thresholds.excellent) {
+              incomePoints = criteria.income_ratio.points.excellent
+            } else if (incomeRatio >= criteria.income_ratio.thresholds.good) {
+              incomePoints = criteria.income_ratio.points.good
+            } else if (incomeRatio >= criteria.income_ratio.thresholds.acceptable) {
+              incomePoints = criteria.income_ratio.points.acceptable
+            } else {
+              incomePoints = criteria.income_ratio.points.insufficient
             }
 
-            professionScore = professionScores[application.profession.toLowerCase()] || 60
-
-            score += (professionScore * preferences.employment_weight) / 100
-            totalWeight += preferences.employment_weight
+            score += (incomePoints / 100) * criteria.income_ratio.weight
           }
 
-          // Score basé sur le garant
-          const guarantorScore = application.has_guarantor ? 90 : 30
-          score += (guarantorScore * preferences.guarantor_weight) / 100
-          totalWeight += preferences.guarantor_weight
+          // Score stabilité professionnelle
+          const professionKey = application.profession?.toLowerCase().replace(/\s+/g, "_") || "unknown"
+          const professionScore = criteria.professional_stability.contract_types[professionKey] || 50
+          score += (professionScore / 100) * criteria.professional_stability.weight
 
-          // Score basé sur la complétude des documents
+          // Score garant
+          const guarantorScore = application.has_guarantor ? criteria.guarantor.presence_points : 30
+          score += (guarantorScore / 100) * criteria.guarantor.weight
+
+          // Score qualité dossier
           const documentsScore = application.documents_complete ? 100 : 50
-          score += (documentsScore * preferences.completion_weight) / 100
-          totalWeight += preferences.completion_weight
+          score += (documentsScore / 100) * criteria.application_quality.weight
 
-          // Normaliser le score sur 100
+          // Normaliser sur 100
           const finalScore = totalWeight > 0 ? Math.round((score / totalWeight) * 100) : application.match_score
           setCalculatedScore(Math.min(100, Math.max(0, finalScore)))
+        } else {
+          // Pas de préférences personnalisées, utiliser le score par défaut
+          setCalculatedScore(application.match_score)
         }
+      } else {
+        setCalculatedScore(application.match_score)
       }
     } catch (error) {
       console.error("Erreur calcul score personnalisé:", error)
-      // Garder le score original en cas d'erreur
       setCalculatedScore(application.match_score)
     } finally {
       setScoreLoading(false)
