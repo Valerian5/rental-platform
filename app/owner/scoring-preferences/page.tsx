@@ -16,7 +16,7 @@ import { authService } from "@/lib/auth-service"
 import { scoringPreferencesService, type ScoringPreferences } from "@/lib/scoring-preferences-service"
 import { PageHeader } from "@/components/page-header"
 import { Save, FileText, Shield, Briefcase, Euro, Star, Eye, RefreshCw, Settings, Home, Plus } from "lucide-react"
-import { supabase } from "@/lib/supabase-client"
+import { supabase } from "@/lib/supabase"
 
 export default function ScoringPreferencesPage() {
   const router = useRouter()
