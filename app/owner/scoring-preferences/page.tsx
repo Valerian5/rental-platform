@@ -16,6 +16,7 @@ import { authService } from "@/lib/auth-service"
 import { scoringPreferencesService, type ScoringPreferences } from "@/lib/scoring-preferences-service"
 import { PageHeader } from "@/components/page-header"
 import { Save, FileText, Shield, Briefcase, Euro, Star, Eye, RefreshCw, Settings, Home, Plus } from "lucide-react"
+import { supabase } from "@/lib/supabase-client"
 
 export default function ScoringPreferencesPage() {
   const router = useRouter()
@@ -153,14 +154,17 @@ export default function ScoringPreferencesPage() {
           body: JSON.stringify({
             owner_id: user.id,
             name: currentPreferences.name,
-            is_default: currentPreferences.is_default || false,
+            is_default: false, // Les nouveaux profils ne sont jamais par défaut automatiquement
             criteria: currentPreferences.criteria,
           }),
         })
 
         if (response.ok) {
+          const data = await response.json()
           toast.success("Préférences sauvegardées")
           await loadPreferences(user.id)
+          // Mettre à jour l'ID du profil actuel
+          setCurrentPreferences(data.preferences)
         } else {
           toast.error("Erreur lors de la sauvegarde")
         }
@@ -360,6 +364,33 @@ export default function ScoringPreferencesPage() {
     }
 
     setCurrentPreferences(newPreferences)
+  }
+
+  const setAsDefault = async (profileId: string) => {
+    if (!user) return
+
+    try {
+      setSaving(true)
+
+      // Désactiver tous les profils par défaut du propriétaire
+      await supabase.from("scoring_preferences").update({ is_default: false }).eq("owner_id", user.id)
+
+      // Définir le profil sélectionné comme défaut
+      const { error } = await supabase.from("scoring_preferences").update({ is_default: true }).eq("id", profileId)
+
+      if (error) {
+        toast.error("Erreur lors de la mise à jour")
+        return
+      }
+
+      toast.success("Profil défini comme défaut")
+      await loadPreferences(user.id)
+    } catch (error) {
+      console.error("Erreur:", error)
+      toast.error("Erreur lors de la mise à jour")
+    } finally {
+      setSaving(false)
+    }
   }
 
   if (loading) {
@@ -913,16 +944,28 @@ export default function ScoringPreferencesPage() {
               </CardHeader>
               <CardContent className="space-y-2">
                 {preferences.map((pref) => (
-                  <Button
-                    key={pref.id}
-                    variant={currentPreferences?.id === pref.id ? "default" : "outline"}
-                    size="sm"
-                    className="w-full justify-start"
-                    onClick={() => setCurrentPreferences(pref)}
-                  >
-                    {pref.name}
-                    {pref.is_default && <Star className="h-3 w-3 ml-auto" />}
-                  </Button>
+                  <div key={pref.id} className="flex items-center gap-2">
+                    <Button
+                      variant={currentPreferences?.id === pref.id ? "default" : "outline"}
+                      size="sm"
+                      className="flex-1 justify-start"
+                      onClick={() => setCurrentPreferences(pref)}
+                    >
+                      {pref.name}
+                      {pref.is_default && <Star className="h-3 w-3 ml-auto" />}
+                    </Button>
+                    {!pref.is_default && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setAsDefault(pref.id)}
+                        disabled={saving}
+                        title="Définir comme défaut"
+                      >
+                        <Star className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
                 ))}
               </CardContent>
             </Card>

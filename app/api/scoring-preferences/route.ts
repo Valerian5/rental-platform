@@ -5,21 +5,17 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const ownerId = searchParams.get("owner_id")
-    const defaultOnly = searchParams.get("default_only") === "true"
 
     if (!ownerId) {
       return NextResponse.json({ error: "owner_id requis" }, { status: 400 })
     }
 
-    let query = supabase.from("scoring_preferences").select("*").eq("owner_id", ownerId)
-
-    if (defaultOnly) {
-      query = query.eq("is_default", true)
-    } else {
-      query = query.order("is_default", { ascending: false }).order("created_at", { ascending: false })
-    }
-
-    const { data, error } = await query
+    const { data, error } = await supabase
+      .from("scoring_preferences")
+      .select("*")
+      .eq("owner_id", ownerId)
+      .order("is_default", { ascending: false })
+      .order("created_at", { ascending: false })
 
     if (error) {
       console.error("Erreur récupération préférences:", error)
@@ -59,7 +55,7 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (error) {
-      console.error("Erreur sauvegarde préférences:", error)
+      console.error("Erreur création préférences:", error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
