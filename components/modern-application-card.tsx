@@ -21,6 +21,7 @@ import {
   BarChart3,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { scoringPreferencesService } from "@/services/scoring-preferences-service"
 
 interface ApplicationCardProps {
   application: {
@@ -86,64 +87,34 @@ export function ModernApplicationCard({
     try {
       setScoreLoading(true)
 
-      // Récupérer les préférences de scoring du propriétaire
+      // Récupérer les préférences de scoring du propriétaire (uniquement le profil par défaut)
       const response = await fetch(
         `/api/scoring-preferences?owner_id=${application.property.owner_id}&default_only=true`,
+        {
+          // Ajouter un cache: 'no-store' pour forcer le rechargement des données
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache",
+          },
+        },
       )
 
       if (response.ok) {
         const data = await response.json()
         if (data.preferences && data.preferences.length > 0) {
           const preferences = data.preferences[0]
-          const criteria = preferences.criteria
+          console.log("Préférences de scoring récupérées:", preferences.name)
 
-          // Calculer le score avec les critères personnalisés
-          let score = 0
-          const totalWeight =
-            criteria.income_ratio.weight +
-            criteria.professional_stability.weight +
-            criteria.guarantor.weight +
-            criteria.application_quality.weight
+          // Utiliser le service pour calculer le score
+          const result = scoringPreferencesService.calculateCustomScore(application, application.property, preferences)
 
-          // Score revenus
-          if (application.income && application.property.price) {
-            const incomeRatio = application.income / application.property.price
-            let incomePoints = 0
-
-            if (incomeRatio >= criteria.income_ratio.thresholds.excellent) {
-              incomePoints = criteria.income_ratio.points.excellent
-            } else if (incomeRatio >= criteria.income_ratio.thresholds.good) {
-              incomePoints = criteria.income_ratio.points.good
-            } else if (incomeRatio >= criteria.income_ratio.thresholds.acceptable) {
-              incomePoints = criteria.income_ratio.points.acceptable
-            } else {
-              incomePoints = criteria.income_ratio.points.insufficient
-            }
-
-            score += (incomePoints / 100) * criteria.income_ratio.weight
-          }
-
-          // Score stabilité professionnelle
-          const professionKey = application.profession?.toLowerCase().replace(/\s+/g, "_") || "unknown"
-          const professionScore = criteria.professional_stability.contract_types[professionKey] || 50
-          score += (professionScore / 100) * criteria.professional_stability.weight
-
-          // Score garant
-          const guarantorScore = application.has_guarantor ? criteria.guarantor.presence_points : 30
-          score += (guarantorScore / 100) * criteria.guarantor.weight
-
-          // Score qualité dossier
-          const documentsScore = application.documents_complete ? 100 : 50
-          score += (documentsScore / 100) * criteria.application_quality.weight
-
-          // Normaliser sur 100
-          const finalScore = totalWeight > 0 ? Math.round((score / totalWeight) * 100) : application.match_score
-          setCalculatedScore(Math.min(100, Math.max(0, finalScore)))
+          setCalculatedScore(Math.min(100, Math.max(0, result.totalScore)))
         } else {
-          // Pas de préférences personnalisées, utiliser le score par défaut
+          console.log("Aucune préférence par défaut trouvée, utilisation du score par défaut")
           setCalculatedScore(application.match_score)
         }
       } else {
+        console.error("Erreur lors de la récupération des préférences")
         setCalculatedScore(application.match_score)
       }
     } catch (error) {

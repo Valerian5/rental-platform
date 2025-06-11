@@ -128,10 +128,18 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
         try {
           const prefsResponse = await fetch(
             `/api/scoring-preferences?owner_id=${data.application.property.owner_id}&default_only=true`,
+            {
+              // Ajouter un cache: 'no-store' pour forcer le rechargement des données
+              cache: "no-store",
+              headers: {
+                "Cache-Control": "no-cache",
+              },
+            },
           )
           if (prefsResponse.ok) {
             const prefsData = await prefsResponse.json()
             if (prefsData.preferences && prefsData.preferences.length > 0) {
+              console.log("Préférences de scoring récupérées:", prefsData.preferences[0].name)
               setScoringPreferences(prefsData.preferences[0])
             }
           }

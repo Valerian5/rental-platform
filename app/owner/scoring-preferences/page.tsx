@@ -117,7 +117,8 @@ export default function ScoringPreferencesPage() {
 
   const selectProfile = (profile: ScoringPreferences) => {
     console.log("Sélection du profil:", profile.name, profile.id)
-    setCurrentPreferences({ ...profile }) // Créer une copie pour éviter les références
+    // Créer une copie profonde pour éviter les problèmes de référence
+    setCurrentPreferences(JSON.parse(JSON.stringify(profile)))
     setSelectedProfileId(profile.id || null)
   }
 
@@ -324,8 +325,15 @@ export default function ScoringPreferencesPage() {
   const updateFromSimpleMode = () => {
     if (!currentPreferences) return
 
-    const newPreferences = { ...currentPreferences }
+    // Créer une copie profonde pour éviter les problèmes de référence
+    const newPreferences = JSON.parse(JSON.stringify(currentPreferences))
     const criteria = newPreferences.criteria
+
+    console.log("Mise à jour depuis le mode simple", {
+      sampleProperty,
+      sampleProfiles,
+      currentName: currentPreferences.name,
+    })
 
     // Calculer les seuils de revenus basés sur les exemples
     const excellentRatio = sampleProfiles.excellent.income / sampleProperty.price
@@ -334,10 +342,10 @@ export default function ScoringPreferencesPage() {
 
     // Mettre à jour les seuils
     criteria.income_ratio.thresholds = {
-      excellent: Number.parseFloat(excellentRatio.toFixed(1)),
-      good: Number.parseFloat(goodRatio.toFixed(1)),
-      acceptable: Number.parseFloat(acceptableRatio.toFixed(1)),
-      minimum: Number.parseFloat((acceptableRatio * 0.9).toFixed(1)),
+      excellent: Number(excellentRatio.toFixed(1)),
+      good: Number(goodRatio.toFixed(1)),
+      acceptable: Number(acceptableRatio.toFixed(1)),
+      minimum: Number((acceptableRatio * 0.9).toFixed(1)),
     }
 
     // Mettre à jour les types de contrat
@@ -380,7 +388,11 @@ export default function ScoringPreferencesPage() {
       basic: presentationMapping[sampleProfiles.acceptable.presentation] || 50,
     }
 
+    // Mettre à jour l'état avec les nouvelles préférences
     setCurrentPreferences(newPreferences)
+
+    // Afficher un toast pour confirmer l'application des critères
+    toast.success("Critères appliqués avec succès")
   }
 
   const setAsDefault = async (profileId: string) => {
@@ -485,13 +497,27 @@ export default function ScoringPreferencesPage() {
           <div>
             <h3 className="font-medium text-blue-900">Profil actuel</h3>
             <p className="text-sm text-blue-700">{currentPreferences.name}</p>
+            <p className="text-xs text-blue-600 mt-1">
+              {currentPreferences.is_default
+                ? "Ce profil est utilisé par défaut pour évaluer les candidatures"
+                : "Ce profil n'est pas défini comme profil par défaut"}
+            </p>
           </div>
-          {currentPreferences.is_default && (
-            <Badge variant="default" className="bg-blue-600">
-              <Star className="h-3 w-3 mr-1" />
-              Par défaut
-            </Badge>
-          )}
+          <div className="flex flex-col items-end gap-2">
+            {currentPreferences.is_default ? (
+              <Badge variant="default" className="bg-blue-600">
+                <Star className="h-3 w-3 mr-1 fill-current" />
+                Profil par défaut
+              </Badge>
+            ) : selectedProfileId ? (
+              <Button variant="outline" size="sm" onClick={() => setAsDefault(selectedProfileId)} disabled={saving}>
+                <Star className="h-3 w-3 mr-1" />
+                Définir comme profil par défaut
+              </Button>
+            ) : (
+              <Badge variant="outline">Nouveau profil non sauvegardé</Badge>
+            )}
+          </div>
         </div>
       </div>
 
