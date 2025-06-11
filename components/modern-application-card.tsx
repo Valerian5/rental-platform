@@ -64,6 +64,11 @@ export function ModernApplicationCard({
   const [scoreLoading, setScoreLoading] = useState(false)
   const router = useRouter()
 
+  const [scoreBreakdown, setScoreBreakdown] = useState<any>(null)
+  const [scoreRecommendations, setScoreRecommendations] = useState<string[]>([])
+  const [scoreWarnings, setScoreWarnings] = useState<string[]>([])
+  const [scoreCompatible, setScoreCompatible] = useState<boolean | undefined>(undefined)
+
   useEffect(() => {
     // Calculer le score personnalisé si on a un owner_id
     if (application.property?.owner_id) {
@@ -86,7 +91,30 @@ export function ModernApplicationCard({
     try {
       setScoreLoading(true)
 
-      // Utiliser la nouvelle API dédiée au calcul de score
+      // Préparer les données de l'application avec plus de détails
+      const applicationData = {
+        // Données financières
+        income: application.income,
+        guarantor_income: rentalFile?.guarantor_income,
+        has_guarantor: application.has_guarantor || rentalFile?.has_guarantor,
+        guarantor_type: rentalFile?.guarantor_type || "individual",
+
+        // Données professionnelles
+        profession: application.profession,
+        contract_type: rentalFile?.contract_type || "cdi",
+        professional_experience_months: rentalFile?.professional_experience_months || 0,
+        trial_period: rentalFile?.trial_period || false,
+
+        // Qualité du dossier
+        file_completion: rentalFile?.completion_percentage || 70,
+        has_verified_documents: rentalFile?.has_verified_documents || false,
+        documents_complete: application.documents_complete,
+
+        // Autres données
+        presentation: rentalFile?.presentation || "",
+        message: application.message || "",
+      }
+
       const response = await fetch("/api/calculate-score", {
         method: "POST",
         headers: {
@@ -94,12 +122,7 @@ export function ModernApplicationCard({
           "Cache-Control": "no-cache",
         },
         body: JSON.stringify({
-          application: {
-            income: application.income,
-            profession: application.profession,
-            has_guarantor: application.has_guarantor,
-            documents_complete: application.documents_complete,
-          },
+          application: applicationData,
           property: {
             price: application.property.price,
           },
@@ -109,8 +132,14 @@ export function ModernApplicationCard({
 
       if (response.ok) {
         const data = await response.json()
-        console.log("Score calculé:", data.score)
+        console.log("Score calculé:", data)
         setCalculatedScore(Math.min(100, Math.max(0, Math.round(data.score))))
+
+        // Stocker les détails pour l'affichage
+        setScoreBreakdown(data.breakdown)
+        setScoreRecommendations(data.recommendations || [])
+        setScoreWarnings(data.warnings || [])
+        setScoreCompatible(data.compatible)
       } else {
         console.error("Erreur lors du calcul du score")
         setCalculatedScore(application.match_score)
@@ -341,7 +370,15 @@ export function ModernApplicationCard({
           </div>
           <div className="flex items-center gap-2">
             {getStatusBadge()}
-            <CircularScore score={calculatedScore} loading={scoreLoading} />
+            <CircularScore
+              score={calculatedScore}
+              loading={scoreLoading}
+              showDetails={true}
+              breakdown={scoreBreakdown}
+              recommendations={scoreRecommendations}
+              warnings={scoreWarnings}
+              compatible={scoreCompatible}
+            />
           </div>
         </div>
 

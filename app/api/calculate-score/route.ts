@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { supabase } from "@/lib/supabase"
 import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
 
 export async function POST(request: NextRequest) {
@@ -11,27 +10,52 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Données manquantes" }, { status: 400 })
     }
 
-    // Récupérer les préférences par défaut du propriétaire
-    const { data: preferences, error } = await supabase
-      .from("scoring_preferences")
-      .select("*")
-      .eq("owner_id", owner_id)
-      .eq("is_default", true)
-      .single()
+    console.log("🎯 Calcul de score pour:", { owner_id, application: application.id || "nouveau" })
 
-    if (error || !preferences) {
-      // Si pas de préférences personnalisées, utiliser les préférences par défaut
-      const defaultPrefs = scoringPreferencesService.getDefaultPreferences(owner_id)
-      const result = scoringPreferencesService.calculateCustomScore(application, property, defaultPrefs)
-      return NextResponse.json({ score: result.totalScore, breakdown: result.breakdown })
+    // Récupérer les préférences du propriétaire
+    const preferences = await scoringPreferencesService.getOwnerDefaultPreference(owner_id)
+
+    if (!preferences) {
+      console.error("❌ Aucune préférence trouvée pour le propriétaire:", owner_id)
+      return NextResponse.json({ error: "Préférences de scoring non trouvées" }, { status: 404 })
     }
 
-    // Calculer le score avec les préférences personnalisées
-    const result = scoringPreferencesService.calculateCustomScore(application, property, preferences)
+    console.log("✅ Préférences trouvées:", preferences.name)
 
-    return NextResponse.json({ score: result.totalScore, breakdown: result.breakdown })
+    // Calculer le score avec les nouvelles préférences
+    const result = scoringPreferencesService.calculateScore(application, property, preferences)
+
+    console.log("📊 Score calculé:", {
+      totalScore: result.totalScore,
+      compatible: result.compatible,
+      breakdown: Object.entries(result.breakdown).map(([key, value]) => ({
+        criterion: key,
+        score: value.score,
+        max: value.max,
+        compatible: value.compatible,
+      })),
+    })
+
+    return NextResponse.json({
+      score: result.totalScore,
+      compatible: result.compatible,
+      breakdown: result.breakdown,
+      recommendations: result.recommendations,
+      warnings: result.warnings,
+      preferences_used: {
+        id: preferences.id,
+        name: preferences.name,
+        is_system: preferences.is_system,
+      },
+    })
   } catch (error) {
-    console.error("Erreur calcul score:", error)
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+    console.error("❌ Erreur calcul score:", error)
+    return NextResponse.json(
+      {
+        error: "Erreur serveur lors du calcul du score",
+        details: error instanceof Error ? error.message : "Erreur inconnue",
+      },
+      { status: 500 },
+    )
   }
 }
