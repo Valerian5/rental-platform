@@ -1,393 +1,406 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { CircularScore } from "@/components/circular-score"
-import {
-  User,
-  Building,
-  Calendar,
-  CheckCircle,
-  XCircle,
-  FileText,
-  MessageSquare,
-  ChevronDown,
-  ChevronUp,
-  Clock,
-  AlertCircle,
-  Eye,
-  BarChart3,
-} from "lucide-react"
-import { scoringPreferencesService, type ScoringPreferences } from "@/lib/scoring-preferences-service"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Progress } from "@/components/ui/progress"
+import { User, MapPin, Calendar, Euro, FileText, Eye, Check, X, TrendingUp } from "lucide-react"
+import { format } from "date-fns"
+import { fr } from "date-fns/locale"
 import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 
-interface ApplicationCardProps {
+interface ModernApplicationCardProps {
   application: {
     id: string
+    status: string
+    created_at: string
     tenant: {
+      id: string
       first_name: string
       last_name: string
       email: string
-      phone: string
+      phone?: string
+      avatar_url?: string
     }
     property: {
+      id: string
       title: string
       address: string
-      owner_id?: string
+      price: number
+      type: string
     }
-    profession: string
-    income: number
-    has_guarantor: boolean
-    documents_complete: boolean
-    status: string
-    match_score: number
-    created_at: string
-    tenant_id?: string
+    rental_file?: {
+      id: string
+      completion_percentage: number
+      monthly_income?: number
+      employment_type?: string
+      guarantor_type?: string
+    }
+    matching_score?: number
   }
-  isSelected?: boolean
-  onSelect?: (selected: boolean) => void
-  onAction: (action: string) => void
-  rentalFile?: any // Dossier de location associé
+  onStatusChange?: (applicationId: string, newStatus: string) => void
+  showActions?: boolean
 }
 
-export function ModernApplicationCard({
-  application,
-  isSelected,
-  onSelect,
-  onAction,
-  rentalFile,
-}: ApplicationCardProps) {
-  const [expanded, setExpanded] = useState(false)
-  const [scoringPreferences, setScoringPreferences] = useState<ScoringPreferences | null>(null)
-  const [calculatedScore, setCalculatedScore] = useState<number>(application.match_score)
+export function ModernApplicationCard({ application, onStatusChange, showActions = true }: ModernApplicationCardProps) {
   const router = useRouter()
+  const [loading, setLoading] = useState(false)
+  const [matchingScore, setMatchingScore] = useState<number | null>(null)
+  const [scoreLoading, setScoreLoading] = useState(true)
 
   useEffect(() => {
-    // Charger les préférences de scoring du propriétaire si disponible
-    const loadScoringPreferences = async () => {
-      if (application.property?.owner_id) {
-        try {
-          const response = await fetch(
-            `/api/scoring-preferences?owner_id=${application.property.owner_id}&default_only=true`,
-          )
-          if (response.ok) {
-            const data = await response.json()
-            if (data.preferences && data.preferences.length > 0) {
-              setScoringPreferences(data.preferences[0])
-
-              // Recalculer le score avec les préférences personnalisées
-              const customScore = scoringPreferencesService.calculateCustomScore(
-                application,
-                application.property,
-                data.preferences[0],
-              )
-              setCalculatedScore(customScore.totalScore)
-            }
-          }
-        } catch (error) {
-          console.error("Erreur chargement préférences scoring:", error)
-        }
-      }
+    if (application.matching_score !== undefined) {
+      setMatchingScore(application.matching_score)
+      setScoreLoading(false)
+    } else {
+      calculateMatchingScore()
     }
-
-    loadScoringPreferences()
   }, [application])
 
-  const formatDate = (dateString: string) => {
+  const calculateMatchingScore = async () => {
     try {
-      return new Date(dateString).toLocaleDateString("fr-FR", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
+      setScoreLoading(true)
+
+      // Récupérer les préférences de scoring du propriétaire
+      const preferencesResponse = await fetch(`/api/scoring-preferences/${application.property.id}`)
+      let preferences = null
+
+      if (preferencesResponse.ok) {
+        const preferencesData = await preferencesResponse.json()
+        preferences = preferencesData.preferences
+      }
+
+      // Calculer le score avec les préférences personnalisées ou les critères par défaut
+      let score = 0
+      let totalWeight = 0
+
+      if (application.rental_file) {
+        const file = application.rental_file
+
+        // Critères de base avec poids par défaut ou personnalisés
+        const criteria = preferences
+          ? {
+              income: preferences.income_weight || 30,
+              employment: preferences.employment_weight || 25,
+              guarantor: preferences.guarantor_weight || 20,
+              completion: preferences.completion_weight || 25,
+            }
+          : {
+              income: 30,
+              employment: 25,
+              guarantor: 20,
+              completion: 25,
+            }
+
+        // Score basé sur les revenus
+        if (file.monthly_income && application.property.price) {
+          const incomeRatio = file.monthly_income / application.property.price
+          let incomeScore = 0
+
+          if (incomeRatio >= 3) incomeScore = 100
+          else if (incomeRatio >= 2.5) incomeScore = 80
+          else if (incomeRatio >= 2) incomeScore = 60
+          else if (incomeRatio >= 1.5) incomeScore = 40
+          else incomeScore = 20
+
+          score += (incomeScore * criteria.income) / 100
+          totalWeight += criteria.income
+        }
+
+        // Score basé sur le type d'emploi
+        if (file.employment_type) {
+          let employmentScore = 0
+
+          switch (file.employment_type) {
+            case "cdi":
+              employmentScore = 100
+              break
+            case "cdd":
+              employmentScore = 70
+              break
+            case "freelance":
+              employmentScore = 60
+              break
+            case "student":
+              employmentScore = 50
+              break
+            case "unemployed":
+              employmentScore = 20
+              break
+            default:
+              employmentScore = 40
+          }
+
+          score += (employmentScore * criteria.employment) / 100
+          totalWeight += criteria.employment
+        }
+
+        // Score basé sur le garant
+        if (file.guarantor_type) {
+          let guarantorScore = 0
+
+          switch (file.guarantor_type) {
+            case "family":
+              guarantorScore = 90
+              break
+            case "professional":
+              guarantorScore = 100
+              break
+            case "insurance":
+              guarantorScore = 80
+              break
+            case "none":
+              guarantorScore = 30
+              break
+            default:
+              guarantorScore = 50
+          }
+
+          score += (guarantorScore * criteria.guarantor) / 100
+          totalWeight += criteria.guarantor
+        }
+
+        // Score basé sur la complétude du dossier
+        const completionScore = file.completion_percentage || 0
+        score += (completionScore * criteria.completion) / 100
+        totalWeight += criteria.completion
+      }
+
+      // Normaliser le score sur 100
+      const finalScore = totalWeight > 0 ? Math.round((score / totalWeight) * 100) : 0
+      setMatchingScore(Math.min(100, Math.max(0, finalScore)))
+    } catch (error) {
+      console.error("Erreur calcul score:", error)
+      setMatchingScore(0)
+    } finally {
+      setScoreLoading(false)
+    }
+  }
+
+  const handleStatusChange = async (newStatus: string) => {
+    try {
+      setLoading(true)
+
+      const response = await fetch(`/api/applications/${application.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status: newStatus }),
       })
-    } catch (e) {
-      return "Date inconnue"
+
+      if (!response.ok) {
+        throw new Error("Erreur lors de la mise à jour")
+      }
+
+      toast.success(
+        newStatus === "accepted"
+          ? "Candidature acceptée"
+          : newStatus === "rejected"
+            ? "Candidature refusée"
+            : "Statut mis à jour",
+      )
+
+      if (onStatusChange) {
+        onStatusChange(application.id, newStatus)
+      }
+    } catch (error) {
+      console.error("Erreur:", error)
+      toast.error("Erreur lors de la mise à jour")
+    } finally {
+      setLoading(false)
     }
   }
 
-  const formatAmount = (amount: number) => {
-    try {
-      return new Intl.NumberFormat("fr-FR", {
-        style: "currency",
-        currency: "EUR",
-        maximumFractionDigits: 0,
-      }).format(amount)
-    } catch (e) {
-      return "Montant inconnu"
-    }
+  const handleViewAnalysis = () => {
+    router.push(`/owner/applications/${application.id}`)
   }
 
-  const getStatusBadge = () => {
-    switch (application.status) {
+  const getStatusColor = (status: string) => {
+    switch (status) {
       case "pending":
-        return <Badge variant="outline">En attente</Badge>
-      case "analyzing":
-        return <Badge variant="secondary">En analyse</Badge>
-      case "visit_scheduled":
-        return (
-          <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200">
-            Visite planifiée
-          </Badge>
-        )
+        return "bg-yellow-100 text-yellow-800"
       case "accepted":
-      case "approved":
-        return (
-          <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-200">
-            Acceptée
-          </Badge>
-        )
+        return "bg-green-100 text-green-800"
       case "rejected":
-        return <Badge variant="destructive">Refusée</Badge>
-      case "waiting_tenant_confirmation":
-        return (
-          <Badge variant="outline" className="bg-amber-100 text-amber-800 hover:bg-amber-200">
-            En attente de confirmation
-          </Badge>
-        )
+        return "bg-red-100 text-red-800"
+      case "under_review":
+        return "bg-blue-100 text-blue-800"
       default:
-        return <Badge variant="outline">Statut inconnu</Badge>
+        return "bg-gray-100 text-gray-800"
     }
   }
 
-  const getActionButtons = () => {
-    // Bouton "Voir dossier complet" - toujours disponible si un dossier de location existe
-    const viewRentalFileButton = rentalFile ? (
-      <Button size="sm" variant="outline" onClick={() => onAction("view_rental_file")}>
-        <FileText className="h-4 w-4 mr-1" />
-        Voir dossier complet
-      </Button>
-    ) : null
-
-    // Bouton "Voir analyse" - disponible pour certains statuts
-    const viewAnalysisButton = ["visit_scheduled", "accepted", "approved", "rejected"].includes(application.status) ? (
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={() => {
-          router.push(`/owner/applications/${application.id}`)
-        }}
-      >
-        <BarChart3 className="h-4 w-4 mr-1" />
-        Voir analyse
-      </Button>
-    ) : null
-
-    // Définir les actions disponibles en fonction du statut
-    switch (application.status) {
+  const getStatusLabel = (status: string) => {
+    switch (status) {
       case "pending":
-        return (
-          <>
-            <Button size="sm" variant="default" onClick={() => onAction("analyze")}>
-              <Eye className="h-4 w-4 mr-1" />
-              Analyser le dossier
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-            {viewRentalFileButton}
-          </>
-        )
-      case "analyzing":
-        return (
-          <>
-            <Button size="sm" variant="default" onClick={() => onAction("propose_visit")}>
-              <Calendar className="h-4 w-4 mr-1" />
-              Proposer une visite
-            </Button>
-            <Button size="sm" variant="destructive" onClick={() => onAction("refuse")}>
-              <XCircle className="h-4 w-4 mr-1" />
-              Refuser
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-            {viewRentalFileButton}
-          </>
-        )
-      case "visit_scheduled":
-        return (
-          <>
-            <Button size="sm" variant="default" onClick={() => onAction("accept")}>
-              <CheckCircle className="h-4 w-4 mr-1" />
-              Accepter le dossier
-            </Button>
-            <Button size="sm" variant="destructive" onClick={() => onAction("refuse")}>
-              <XCircle className="h-4 w-4 mr-1" />
-              Refuser
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-            {viewRentalFileButton}
-            {viewAnalysisButton}
-          </>
-        )
-      case "waiting_tenant_confirmation":
-        return (
-          <>
-            <Button size="sm" variant="outline" disabled>
-              <Clock className="h-4 w-4 mr-1" />
-              En attente du locataire
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-            {viewRentalFileButton}
-            {viewAnalysisButton}
-          </>
-        )
+        return "En attente"
       case "accepted":
-      case "approved":
-        return (
-          <>
-            <Button size="sm" variant="default" onClick={() => onAction("generate_lease")}>
-              <FileText className="h-4 w-4 mr-1" />
-              Générer le bail
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-            {viewRentalFileButton}
-            {viewAnalysisButton}
-          </>
-        )
+        return "Acceptée"
       case "rejected":
-        return (
-          <>
-            <Button size="sm" variant="outline" onClick={() => onAction("view_details")}>
-              <Eye className="h-4 w-4 mr-1" />
-              Voir détails
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-            {viewRentalFileButton}
-            {viewAnalysisButton}
-          </>
-        )
+        return "Refusée"
+      case "under_review":
+        return "En cours d'examen"
       default:
-        return (
-          <>
-            <Button size="sm" variant="outline" onClick={() => onAction("view_details")}>
-              <Eye className="h-4 w-4 mr-1" />
-              Voir détails
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-            {viewRentalFileButton}
-            {viewAnalysisButton}
-          </>
-        )
+        return status
     }
+  }
+
+  const getScoreColor = (score: number) => {
+    if (score >= 80) return "text-green-600"
+    if (score >= 60) return "text-yellow-600"
+    return "text-red-600"
+  }
+
+  const getScoreLabel = (score: number) => {
+    if (score >= 80) return "Excellent"
+    if (score >= 60) return "Bon"
+    if (score >= 40) return "Moyen"
+    return "Faible"
   }
 
   return (
-    <Card className={`overflow-hidden transition-all ${isSelected ? "border-blue-500 shadow-md" : ""}`}>
-      <CardContent className="p-0">
-        <div className="p-4 flex justify-between items-start">
-          <div className="flex items-center gap-3">
-            {onSelect && (
-              <input
-                type="checkbox"
-                checked={isSelected}
-                onChange={(e) => onSelect(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300"
-              />
-            )}
+    <Card className="hover:shadow-lg transition-shadow duration-200">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center space-x-3">
+            <Avatar className="h-12 w-12">
+              <AvatarImage src={application.tenant.avatar_url || "/placeholder.svg"} />
+              <AvatarFallback>
+                {application.tenant.first_name[0]}
+                {application.tenant.last_name[0]}
+              </AvatarFallback>
+            </Avatar>
             <div>
-              <h3 className="font-medium">
+              <CardTitle className="text-lg">
                 {application.tenant.first_name} {application.tenant.last_name}
-              </h3>
-              <p className="text-sm text-muted-foreground">{application.tenant.email}</p>
+              </CardTitle>
+              <p className="text-sm text-muted-foreground flex items-center">
+                <User className="h-4 w-4 mr-1" />
+                {application.tenant.email}
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {getStatusBadge()}
-            <CircularScore score={calculatedScore} customPreferences={scoringPreferences} />
+          <Badge className={getStatusColor(application.status)}>{getStatusLabel(application.status)}</Badge>
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        {/* Informations sur le bien */}
+        <div className="bg-gray-50 p-3 rounded-lg">
+          <h4 className="font-medium text-sm mb-2">{application.property.title}</h4>
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <span className="flex items-center">
+              <MapPin className="h-4 w-4 mr-1" />
+              {application.property.address}
+            </span>
+            <span className="flex items-center font-medium">
+              <Euro className="h-4 w-4 mr-1" />
+              {application.property.price}€/mois
+            </span>
           </div>
         </div>
 
-        <div className="px-4 pb-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-          <div className="flex items-center gap-1">
-            <Building className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="truncate">{application.property.title}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <User className="h-3.5 w-3.5 text-muted-foreground" />
-            <span>{application.profession}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-            <span>{formatDate(application.created_at)}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            {application.has_guarantor ? (
-              <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+        {/* Score de matching */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium flex items-center">
+              <TrendingUp className="h-4 w-4 mr-1" />
+              Score de compatibilité
+            </span>
+            {scoreLoading ? (
+              <div className="animate-pulse bg-gray-200 h-4 w-12 rounded"></div>
             ) : (
-              <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+              <span className={`text-sm font-bold ${getScoreColor(matchingScore || 0)}`}>
+                {matchingScore || 0}% - {getScoreLabel(matchingScore || 0)}
+              </span>
             )}
-            <span>{application.has_guarantor ? "Avec garant" : "Sans garant"}</span>
           </div>
+          {!scoreLoading && <Progress value={matchingScore || 0} className="h-2" />}
         </div>
 
-        {expanded && (
-          <div className="px-4 py-2 bg-gray-50 border-t text-sm">
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-              <div>
-                <p className="text-muted-foreground">Revenus</p>
-                <p className="font-medium">{formatAmount(application.income)}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Téléphone</p>
-                <p>{application.tenant.phone || "Non renseigné"}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Adresse du bien</p>
-                <p className="truncate">{application.property.address}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Documents</p>
-                <p>
-                  {application.documents_complete ? (
-                    <span className="flex items-center">
-                      <CheckCircle className="h-3.5 w-3.5 text-green-500 mr-1" /> Complets
-                    </span>
-                  ) : (
-                    <span className="flex items-center">
-                      <AlertCircle className="h-3.5 w-3.5 text-amber-500 mr-1" /> Incomplets
+        {/* Informations sur le dossier */}
+        {application.rental_file && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium flex items-center">
+                <FileText className="h-4 w-4 mr-1" />
+                Dossier locataire
+              </span>
+              <span className="text-sm text-muted-foreground">
+                {application.rental_file.completion_percentage}% complété
+              </span>
+            </div>
+            <Progress value={application.rental_file.completion_percentage} className="h-2" />
+
+            {application.rental_file.monthly_income && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Revenus mensuels:</span>
+                <span className="font-medium">
+                  {application.rental_file.monthly_income}€
+                  {application.property.price && (
+                    <span className="text-muted-foreground ml-1">
+                      ({(application.rental_file.monthly_income / application.property.price).toFixed(1)}x)
                     </span>
                   )}
-                </p>
+                </span>
               </div>
-            </div>
+            )}
           </div>
         )}
 
-        <div className="px-4 py-3 border-t flex items-center justify-between">
-          <Button variant="ghost" size="sm" onClick={() => setExpanded(!expanded)} className="text-muted-foreground">
-            {expanded ? (
+        {/* Date de candidature */}
+        <div className="flex items-center text-sm text-muted-foreground">
+          <Calendar className="h-4 w-4 mr-1" />
+          Candidature du {format(new Date(application.created_at), "dd MMMM yyyy", { locale: fr })}
+        </div>
+
+        {/* Actions */}
+        {showActions && (
+          <div className="flex items-center space-x-2 pt-2">
+            <Button variant="outline" size="sm" onClick={handleViewAnalysis} className="flex-1">
+              <Eye className="h-4 w-4 mr-1" />
+              Voir analyse
+            </Button>
+
+            {application.status === "pending" && (
               <>
-                <ChevronUp className="h-4 w-4 mr-1" /> Moins de détails
-              </>
-            ) : (
-              <>
-                <ChevronDown className="h-4 w-4 mr-1" /> Plus de détails
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleStatusChange("accepted")}
+                  disabled={loading}
+                  className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                >
+                  <Check className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleStatusChange("rejected")}
+                  disabled={loading}
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
               </>
             )}
-          </Button>
 
-          <div className="flex gap-2">{getActionButtons()}</div>
-        </div>
+            {application.status === "accepted" && (
+              <Button
+                size="sm"
+                onClick={() => router.push(`/owner/leases/new?application=${application.id}`)}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                <FileText className="h-4 w-4 mr-1" />
+                Générer bail
+              </Button>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   )
