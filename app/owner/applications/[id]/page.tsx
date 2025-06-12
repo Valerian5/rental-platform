@@ -29,6 +29,73 @@ import {
   AlertCircle,
 } from "lucide-react"
 
+const DocumentPreview = ({ doc, type, index }: { doc: any; type: string; index: number }) => {
+  const getDocTypeColor = (type: string) => {
+    switch (type) {
+      case 'identity': return 'text-blue-500';
+      case 'professional': return 'text-green-500';
+      case 'financial': return 'text-purple-500';
+      case 'tax': return 'text-orange-500';
+      case 'housing': return 'text-red-500';
+      default: return 'text-gray-500';
+    }
+  };
+
+  const getDocTypeLabel = (type: string) => {
+    switch (type) {
+      case 'identity': return 'Pièce d\'identité';
+      case 'professional': return 'Document pro';
+      case 'financial': return 'Document financier';
+      case 'tax': return 'Document fiscal';
+      case 'housing': return 'Justificatif de domicile';
+      default: return 'Document';
+    }
+  };
+
+  const colorClass = getDocTypeColor(type);
+  const docType = getDocTypeLabel(type);
+
+  return (
+    <div className="border rounded-lg p-3">
+      <div className={`flex items-center gap-2 mb-2 ${colorClass}`}>
+        <FileText className={`h-4 w-4 ${colorClass}`} />
+        <span className="text-sm font-medium">{docType} {index + 1}</span>
+      </div>
+      {doc.file_type?.startsWith('image/') ? (
+        <img
+          src={doc.url}
+          alt={`${docType} ${index + 1}`}
+          className="w-full h-32 object-contain rounded border bg-gray-50"
+          onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            target.style.display = 'none';
+            const fallback = target.nextElementSibling as HTMLElement;
+            if (fallback) fallback.style.display = 'flex';
+          }}
+        />
+      ) : (
+        <div className="w-full h-32 flex items-center justify-center bg-gray-100 rounded border">
+          <FileText className="h-8 w-8 text-gray-400" />
+        </div>
+      )}
+      <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
+        <div className="text-center">
+          <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
+          <p className="text-xs text-gray-500">{doc.name || 'Document'}</p>
+        </div>
+      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        className="w-full mt-2"
+        onClick={() => window.open(doc.url, '_blank')}
+      >
+        Voir le document
+      </Button>
+    </div>
+  );
+};
+
 export default function ApplicationDetailsPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -70,26 +137,11 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       setLoading(false)
     }
   }
-  
-	  // Fonction helper pour vérifier si un tableau existe et a des éléments
-	const hasDocuments = (docs: any) => {
-	  return docs && Array.isArray(docs) && docs.length > 0
-	}
-
-	// Fonction pour convertir les URLs blob en URLs API si nécessaire
-	const convertBlobUrlToApiUrl = (url: string) => {
-	  if (!url) return null
-	  // Si c'est déjà une URL HTTP, on la retourne telle quelle
-	  if (url.startsWith('http')) return url
-	  // Sinon, on essaie de la convertir (ajuster selon votre implémentation)
-	  return url
-	}
 
   const loadApplicationDetails = async () => {
     try {
       console.log("🔍 Chargement détails candidature:", params.id)
 
-      // Récupérer les détails de la candidature
       const response = await fetch(`/api/applications/${params.id}`)
       if (!response.ok) {
         toast.error("Erreur lors du chargement de la candidature")
@@ -99,7 +151,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       const data = await response.json()
       console.log("✅ Candidature chargée:", data.application)
 
-      // Mettre à jour le statut en "analyzing" si nécessaire
       if (data.application.status === "pending") {
         await updateApplicationStatus("analyzing")
         data.application.status = "analyzing"
@@ -107,7 +158,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
 
       setApplication(data.application)
 
-      // Récupérer le dossier de location si disponible
       if (data.application?.tenant_id) {
         try {
           const rentalFileResponse = await fetch(`/api/rental-files?tenant_id=${data.application.tenant_id}`)
@@ -130,13 +180,11 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
         }
       }
 
-      // Récupérer les préférences de scoring du propriétaire
       if (data.application?.property?.owner_id) {
         try {
           const prefsResponse = await fetch(
             `/api/scoring-preferences?owner_id=${data.application.property.owner_id}&default_only=true`,
             {
-              // Ajouter un cache: 'no-store' pour forcer le rechargement des données
               cache: "no-store",
               headers: {
                 "Cache-Control": "no-cache",
@@ -149,7 +197,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               console.log("Préférences de scoring récupérées:", prefsData.preferences[0].name)
               setScoringPreferences(prefsData.preferences[0])
             } else {
-              // Utiliser les préférences par défaut
               setScoringPreferences({
                 min_income_ratio: 2.5,
                 good_income_ratio: 3,
@@ -165,7 +212,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
           }
         } catch (error) {
           console.error("Erreur chargement préférences scoring:", error)
-          // Utiliser les préférences par défaut en cas d'erreur
           setScoringPreferences({
             min_income_ratio: 2.5,
             good_income_ratio: 3,
@@ -237,7 +283,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   }
 
   const handleRefuseConfirm = async (reason: string, type: string) => {
-    // Préparer le message de refus
     let notes = ""
 
     const refusalReasons: { [key: string]: string } = {
@@ -267,7 +312,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
     }
 
     try {
-      // Créer ou récupérer une conversation
       const response = await fetch("/api/conversations", {
         method: "POST",
         headers: {
@@ -283,22 +327,18 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
 
       if (response.ok) {
         const data = await response.json()
-        // Rediriger vers la messagerie avec l'ID de la conversation
         router.push(`/owner/messaging?conversation_id=${data.conversation.id}`)
       } else {
-        // Fallback vers l'ancienne méthode
         router.push(`/owner/messaging?tenant_id=${application.tenant_id}`)
       }
     } catch (error) {
       console.error("Erreur création conversation:", error)
-      // Fallback vers l'ancienne méthode
       router.push(`/owner/messaging?tenant_id=${application.tenant_id}`)
     }
   }
 
   const handleViewAnalysis = () => {
     setActiveTab("financial")
-    // Scroll vers le haut pour voir l'analyse
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
@@ -332,8 +372,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
     if (!application || !application.property || !scoringPreferences) return 50
 
     const property = application.property
-
-    // Utiliser les données du dossier de location en priorité
     const mainTenant = rentalFile?.main_tenant || {}
     const income = mainTenant.income_sources?.work_income?.amount || application.income || 0
     const hasGuarantor =
@@ -342,7 +380,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
 
     let score = 0
 
-    // 1. Score revenus (selon les préférences)
     if (income && property.price) {
       const rentRatio = income / property.price
 
@@ -360,7 +397,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       }
     }
 
-    // 2. Score stabilité professionnelle
     if (contractType === "cdi" || contractType === "fonctionnaire") {
       score += scoringPreferences.weights.stability
     } else if (contractType === "cdd") {
@@ -371,12 +407,10 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       score += points
     }
 
-    // 3. Score garant
     if (hasGuarantor) {
       score += scoringPreferences.weights.guarantor
     }
 
-    // 4. Score qualité du dossier
     let fileQualityScore = 0
     const profession = mainTenant.profession || application.profession
     const company = mainTenant.company || application.company
@@ -429,7 +463,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const getActionButtons = () => {
     if (!application) return null
 
-    // Bouton "Voir analyse" - disponible pour tous les statuts sauf "analyzing"
     const viewAnalysisButton =
       application.status !== "analyzing" ? (
         <Button variant="outline" onClick={handleViewAnalysis}>
@@ -438,7 +471,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
         </Button>
       ) : null
 
-    // Définir les actions disponibles en fonction du statut
     switch (application.status) {
       case "analyzing":
         return (
@@ -527,6 +559,10 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
     }
   }
 
+  const hasDocuments = (docs: any) => {
+    return docs && Array.isArray(docs) && docs.length > 0 && docs[0].url
+  }
+
   if (loading) {
     return (
       <div className="container mx-auto py-6 space-y-6">
@@ -563,7 +599,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const property = application.property || {}
   const mainTenant = rentalFile?.main_tenant || {}
 
-  // Utiliser les données du dossier de location en priorité
   const income = mainTenant.income_sources?.work_income?.amount || application.income || 0
   const hasGuarantor =
     (rentalFile?.guarantors && rentalFile.guarantors.length > 0) || application.has_guarantor || false
@@ -590,7 +625,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       </PageHeader>
 
       <div className="p-6 space-y-6">
-        {/* Score et actions */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex items-center gap-4">
             <CircularScore score={matchScore} size="lg" customPreferences={scoringPreferences} />
@@ -604,7 +638,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
           <div className="flex flex-wrap gap-2">{getActionButtons()}</div>
         </div>
 
-        {/* Onglets */}
         <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid grid-cols-3 mb-4">
             <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
@@ -612,7 +645,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             <TabsTrigger value="documents">Documents</TabsTrigger>
           </TabsList>
 
-          {/* Vue d'ensemble */}
+		{/* Vue d'ensemble */}
           <TabsContent value="overview" className="space-y-6">
             <div className="grid gap-6 md:grid-cols-2">
               {/* Informations du candidat */}
@@ -796,7 +829,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             )}
           </TabsContent>
 
-          {/* Analyse financière */}
+		{/* Analyse financière */}
           <TabsContent value="financial" className="space-y-6">
             <div className="grid gap-6 md:grid-cols-2">
               <Card>
@@ -1174,281 +1207,135 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             </Card>
           </TabsContent>
 
-          {/* Documents */}
-<TabsContent value="documents" className="space-y-6">
-  <Card>
-    <CardHeader>
-      <CardTitle className="flex items-center gap-2">
-        <FileText className="h-5 w-5" />
-        Documents fournis
-      </CardTitle>
-    </CardHeader>
-    <CardContent>
-      {rentalFile ? (
-        <div className="space-y-6">
-          {/* Documents du locataire principal */}
-          {hasDocuments(mainTenant.identity_documents) && (
-            <div>
-              <h4 className="font-medium mb-3">Pièces d'identité du locataire</h4>
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {mainTenant.identity_documents.map((doc: any, index: number) => (
-                  <div key={index} className="border rounded-lg p-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <FileText className="h-4 w-4 text-blue-500" />
-                      <span className="text-sm font-medium">Pièce d'identité {index + 1}</span>
-                    </div>
-                    <img
-                      src={convertBlobUrlToApiUrl(doc.url) || "/placeholder.svg"}
-                      alt={`Pièce d'identité ${index + 1}`}
-                      className="w-full h-32 object-cover rounded border"
-                      onError={(e: any) => {
-                        e.target.style.display = "none"
-                        e.target.nextSibling.style.display = "flex"
-                      }}
-                    />
-                    <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
-                      <div className="text-center">
-                        <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
-                        <p className="text-xs text-gray-500">Document</p>
-                      </div>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full mt-2"
-                      onClick={() => window.open(doc.url, "_blank")}
-                    >
-                      Voir le document
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Documents d'activité */}
-          {hasDocuments(mainTenant.activity_documents) && (
-            <div>
-              <h4 className="font-medium mb-3">Justificatifs d'activité</h4>
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {mainTenant.activity_documents.map((doc: any, index: number) => (
-                  <div key={index} className="border rounded-lg p-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <FileText className="h-4 w-4 text-green-500" />
-                      <span className="text-sm font-medium">Justificatif {index + 1}</span>
-                    </div>
-                    <img
-                      src={convertBlobUrlToApiUrl(doc.url) || "/placeholder.svg"}
-                      alt={`Justificatif d'activité ${index + 1}`}
-                      className="w-full h-32 object-cover rounded border"
-                      onError={(e: any) => {
-                        e.target.style.display = "none"
-                        e.target.nextSibling.style.display = "flex"
-                      }}
-                    />
-                    <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
-                      <div className="text-center">
-                        <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
-                        <p className="text-xs text-gray-500">Document</p>
-                      </div>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full mt-2"
-                      onClick={() => window.open(doc.url, "_blank")}
-                    >
-                      Voir le document
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Documents de revenus */}
-          {hasDocuments(mainTenant.income_sources?.work_income?.documents) && (
-            <div>
-              <h4 className="font-medium mb-3">Justificatifs de revenus</h4>
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {mainTenant.income_sources.work_income.documents.map((doc: any, index: number) => (
-                  <div key={index} className="border rounded-lg p-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <FileText className="h-4 w-4 text-purple-500" />
-                      <span className="text-sm font-medium">Justificatif revenus {index + 1}</span>
-                    </div>
-                    <img
-                      src={convertBlobUrlToApiUrl(doc.url) || "/placeholder.svg"}
-                      alt={`Justificatif de revenus ${index + 1}`}
-                      className="w-full h-32 object-cover rounded border"
-                      onError={(e: any) => {
-                        e.target.style.display = "none"
-                        e.target.nextSibling.style.display = "flex"
-                      }}
-                    />
-                    <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
-                      <div className="text-center">
-                        <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
-                        <p className="text-xs text-gray-500">Document</p>
-                      </div>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full mt-2"
-                      onClick={() => window.open(doc.url, "_blank")}
-                    >
-                      Voir le document
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Documents fiscaux */}
-          {hasDocuments(mainTenant.tax_situation?.documents) && (
-            <div>
-              <h4 className="font-medium mb-3">Documents fiscaux</h4>
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {mainTenant.tax_situation.documents.map((doc: any, index: number) => (
-                  <div key={index} className="border rounded-lg p-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <FileText className="h-4 w-4 text-orange-500" />
-                      <span className="text-sm font-medium">Document fiscal {index + 1}</span>
-                    </div>
-                    <img
-                      src={convertBlobUrlToApiUrl(doc.url) || "/placeholder.svg"}
-                      alt={`Document fiscal ${index + 1}`}
-                      className="w-full h-32 object-cover rounded border"
-                      onError={(e: any) => {
-                        e.target.style.display = "none"
-                        e.target.nextSibling.style.display = "flex"
-                      }}
-                    />
-                    <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
-                      <div className="text-center">
-                        <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
-                        <p className="text-xs text-gray-500">Document</p>
-                      </div>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full mt-2"
-                      onClick={() => window.open(doc.url, "_blank")}
-                    >
-                      Voir le document
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Quittances de loyer */}
-          {hasDocuments(mainTenant.current_housing_documents?.quittances_loyer) && (
-            <div>
-              <h4 className="font-medium mb-3">Quittances de loyer</h4>
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {mainTenant.current_housing_documents.quittances_loyer.map((doc: any, index: number) => (
-                  <div key={index} className="border rounded-lg p-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <FileText className="h-4 w-4 text-red-500" />
-                      <span className="text-sm font-medium">Quittance {index + 1}</span>
-                    </div>
-                    <img
-                      src={convertBlobUrlToApiUrl(doc.url) || "/placeholder.svg"}
-                      alt={`Quittance de loyer ${index + 1}`}
-                      className="w-full h-32 object-cover rounded border"
-                      onError={(e: any) => {
-                        e.target.style.display = "none"
-                        e.target.nextSibling.style.display = "flex"
-                      }}
-                    />
-                    <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
-                      <div className="text-center">
-                        <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
-                        <p className="text-xs text-gray-500">Document</p>
-                      </div>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full mt-2"
-                      onClick={() => window.open(doc.url, "_blank")}
-                    >
-                      Voir le document
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Documents des garants */}
-          {rentalFile.guarantors?.length > 0 &&
-            rentalFile.guarantors.some((g: any) => hasDocuments(g.personal_info?.identity_documents)) && (
-              <div>
-                <h4 className="font-medium mb-3">Documents des garants</h4>
-                {rentalFile.guarantors.map(
-                  (guarantor: any, gIndex: number) =>
-                    hasDocuments(guarantor.personal_info?.identity_documents) && (
-                      <div key={gIndex} className="mb-4">
-                        <h5 className="text-sm font-medium text-muted-foreground mb-2">
-                          Garant {gIndex + 1} - {guarantor.personal_info.first_name} {guarantor.personal_info.last_name}
-                        </h5>
+          <TabsContent value="documents" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Documents fournis
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {rentalFile ? (
+                  <div className="space-y-6">
+                    {/* Documents d'identité */}
+                    {hasDocuments(rentalFile.main_tenant?.identity_documents) && (
+                      <div>
+                        <h4 className="font-medium mb-3">Pièces d'identité du locataire</h4>
                         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                          {guarantor.personal_info.identity_documents.map((doc: any, index: number) => (
-                            <div key={index} className="border rounded-lg p-3">
-                              <div className="flex items-center gap-2 mb-2">
-                                <FileText className="h-4 w-4 text-indigo-500" />
-                                <span className="text-sm font-medium">Pièce d'identité {index + 1}</span>
-                              </div>
-                              <img
-                                src={convertBlobUrlToApiUrl(doc.url) || "/placeholder.svg"}
-                                alt={`Pièce d'identité garant ${gIndex + 1}`}
-                                className="w-full h-32 object-cover rounded border"
-                                onError={(e: any) => {
-                                  e.target.style.display = "none"
-                                  e.target.nextSibling.style.display = "flex"
-                                }}
-                              />
-                              <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
-                                <div className="text-center">
-                                  <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
-                                  <p className="text-xs text-gray-500">Document</p>
-                                </div>
-                              </div>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="w-full mt-2"
-                                onClick={() => window.open(doc.url, "_blank")}
-                              >
-                                Voir le document
-                              </Button>
-                            </div>
+                          {rentalFile.main_tenant.identity_documents.map((doc: any, index: number) => (
+                            <DocumentPreview 
+                              key={index}
+                              doc={doc}
+                              type="identity"
+                              index={index}
+                            />
                           ))}
                         </div>
                       </div>
-                    )
+                    )}
+
+                    {/* Documents professionnels */}
+                    {hasDocuments(rentalFile.main_tenant?.professional_documents) && (
+                      <div>
+                        <h4 className="font-medium mb-3">Documents professionnels</h4>
+                        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                          {rentalFile.main_tenant.professional_documents.map((doc: any, index: number) => (
+                            <DocumentPreview
+                              key={index}
+                              doc={doc}
+                              type="professional"
+                              index={index}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Documents financiers */}
+                    {hasDocuments(rentalFile.main_tenant?.financial_documents) && (
+                      <div>
+                        <h4 className="font-medium mb-3">Documents financiers</h4>
+                        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                          {rentalFile.main_tenant.financial_documents.map((doc: any, index: number) => (
+                            <DocumentPreview
+                              key={index}
+                              doc={doc}
+                              type="financial"
+                              index={index}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Documents fiscaux */}
+                    {hasDocuments(rentalFile.main_tenant?.tax_documents) && (
+                      <div>
+                        <h4 className="font-medium mb-3">Documents fiscaux</h4>
+                        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                          {rentalFile.main_tenant.tax_documents.map((doc: any, index: number) => (
+                            <DocumentPreview
+                              key={index}
+                              doc={doc}
+                              type="tax"
+                              index={index}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Documents de logement */}
+                    {hasDocuments(rentalFile.main_tenant?.housing_documents) && (
+                      <div>
+                        <h4 className="font-medium mb-3">Justificatifs de domicile</h4>
+                        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                          {rentalFile.main_tenant.housing_documents.map((doc: any, index: number) => (
+                            <DocumentPreview
+                              key={index}
+                              doc={doc}
+                              type="housing"
+                              index={index}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Documents des garants */}
+                    {rentalFile.guarantors?.map((guarantor: any, gIndex: number) => (
+                      hasDocuments(guarantor.documents) && (
+                        <div key={gIndex}>
+                          <h4 className="font-medium mb-3">
+                            Documents du garant {gIndex + 1}: {guarantor.first_name} {guarantor.last_name}
+                          </h4>
+                          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                            {guarantor.documents.map((doc: any, index: number) => (
+                              <DocumentPreview
+                                key={index}
+                                doc={doc}
+                                type={`guarantor-${gIndex}`}
+                                index={index}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                    <h3 className="text-lg font-semibold mb-2">Aucun document disponible</h3>
+                    <p className="text-muted-foreground">
+                      Le candidat n'a pas encore fourni de documents ou le dossier n'est pas accessible.
+                    </p>
+                  </div>
                 )}
-              </div>
-            )}
-        </div>
-      ) : (
-        <div className="text-center py-8">
-          <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-          <h3 className="text-lg font-semibold mb-2">Aucun document disponible</h3>
-          <p className="text-muted-foreground">
-            Le candidat n'a pas encore fourni de documents ou le dossier n'est pas accessible.
-          </p>
-        </div>
-      )}
-    </CardContent>
-  </Card>
-</TabsContent>
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
       </div>
     </>
