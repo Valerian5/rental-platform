@@ -284,7 +284,7 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
         {/* Score et actions */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex items-center gap-4">
-            <CircularScore score={matchScore.totalScore || 0} size={80} />
+            <CircularScore score={matchScore.totalScore || 0} compatible={matchScore.totalScore >= 60} />
             <div>
               <h2 className="text-xl font-bold">Score de compatibilité</h2>
               <p className="text-sm text-muted-foreground">
