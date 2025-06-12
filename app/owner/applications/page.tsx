@@ -52,7 +52,8 @@ interface Application {
     id: string
     title: string
     address: string
-    rent: number
+    rent?: number
+    price?: number
     images?: Array<{ url: string; is_primary?: boolean }>
   }
   rental_file?: {
@@ -105,17 +106,18 @@ export default function OwnerApplicationsPage() {
       setLoading(true)
       console.log("🔄 Récupération des candidatures...")
 
-      const response = await fetch("/api/applications/owner")
+      // L'API /api/applications détecte automatiquement qu'on est un propriétaire
+      const response = await fetch("/api/applications")
       if (!response.ok) {
         throw new Error(`Erreur ${response.status}: ${response.statusText}`)
       }
 
       const data = await response.json()
-      console.log("✅ Candidatures récupérées:", data?.applications?.length || 0)
+      console.log("✅ Candidatures récupérées:", data?.length || 0)
 
-      // Vérifier que les données sont dans le bon format
-      if (data && Array.isArray(data.applications)) {
-        setApplications(data.applications)
+      // L'API retourne directement un tableau pour les propriétaires
+      if (Array.isArray(data)) {
+        setApplications(data)
       } else {
         console.error("❌ Format de données incorrect:", data)
         setApplications([])
@@ -205,7 +207,9 @@ export default function OwnerApplicationsPage() {
         case "property_title":
           return a.property.title.localeCompare(b.property.title)
         case "rent":
-          return b.property.rent - a.property.rent
+          const rentA = a.property.rent || a.property.price || 0
+          const rentB = b.property.rent || b.property.price || 0
+          return rentB - rentA
         default:
           return 0
       }
@@ -339,10 +343,11 @@ export default function OwnerApplicationsPage() {
 
   const calculateScore = (application: Application) => {
     let score = 0
+    const rent = application.property.rent || application.property.price || 0
 
     // Score basé sur les revenus (40 points max)
-    if (application.rental_file?.monthly_income && application.property.rent) {
-      const ratio = application.rental_file.monthly_income / application.property.rent
+    if (application.rental_file?.monthly_income && rent) {
+      const ratio = application.rental_file.monthly_income / rent
       if (ratio >= 3) score += 40
       else if (ratio >= 2.5) score += 30
       else if (ratio >= 2) score += 20
@@ -519,6 +524,7 @@ export default function OwnerApplicationsPage() {
               {filteredApplications.map((application) => {
                 const StatusIcon = statusConfig[application.status]?.icon || AlertCircle
                 const nextVisit = getNextVisit(application)
+                const rent = application.property.rent || application.property.price || 0
 
                 return (
                   <Card key={application.id} className="hover:shadow-md transition-shadow">
@@ -584,7 +590,7 @@ export default function OwnerApplicationsPage() {
                               </div>
                               <div className="flex items-center gap-2">
                                 <Euro className="h-4 w-4" />
-                                {application.property.rent}€/mois
+                                {rent}€/mois
                               </div>
                               {nextVisit && (
                                 <div className="flex items-center gap-2 text-blue-600">
