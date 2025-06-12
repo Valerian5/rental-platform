@@ -105,14 +105,21 @@ export default function OwnerApplicationsPage() {
       setLoading(true)
       console.log("🔄 Récupération des candidatures...")
 
-      const response = await fetch("/api/applications")
+      const response = await fetch("/api/applications/owner")
       if (!response.ok) {
         throw new Error(`Erreur ${response.status}: ${response.statusText}`)
       }
 
       const data = await response.json()
-      console.log("✅ Candidatures récupérées:", data?.length || 0)
-      setApplications(data || [])
+      console.log("✅ Candidatures récupérées:", data?.applications?.length || 0)
+
+      // Vérifier que les données sont dans le bon format
+      if (data && Array.isArray(data.applications)) {
+        setApplications(data.applications)
+      } else {
+        console.error("❌ Format de données incorrect:", data)
+        setApplications([])
+      }
     } catch (error) {
       console.error("❌ Erreur lors de la récupération des candidatures:", error)
       toast({
@@ -120,6 +127,7 @@ export default function OwnerApplicationsPage() {
         description: "Impossible de charger les candidatures",
         variant: "destructive",
       })
+      setApplications([])
     } finally {
       setLoading(false)
     }
