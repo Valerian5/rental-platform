@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase"
+import { createServerSupabaseClient } from "@/lib/supabase-server"
 
 export async function GET(request: NextRequest) {
   try {
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
           address,
           city,
           price,
-          rent,
+          price,
           property_images(id, url, is_primary)
         ),
         tenant:users(
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
           const { data: rentalFile } = await supabase
             .from("rental_files")
             .select("*")
-            .eq("user_id", app.tenant_id)
+            .eq("tenant_id", app.tenant_id)
             .single()
 
           // Récupérer les visites
