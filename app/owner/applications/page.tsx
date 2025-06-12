@@ -12,7 +12,8 @@ import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { ModernApplicationCard } from "@/components/modern-application-card"
-import { Filter, Download, Users, Search, SortAsc, Settings, RefreshCw, MapPin, Star } from "lucide-react"
+import { VisitProposalManager } from "@/components/visit-proposal-manager"
+import { Filter, Download, Users, Search, SortAsc, Settings, RefreshCw, MapPin, Star } from 'lucide-react'
 
 export default function ApplicationsPage() {
   const router = useRouter()
@@ -34,6 +35,10 @@ export default function ApplicationsPage() {
   const [scoreFilter, setScoreFilter] = useState("all")
   const [properties, setProperties] = useState([])
   const [scoringPreferences, setScoringPreferences] = useState(null)
+
+  // États pour la gestion des visites
+  const [showVisitDialog, setShowVisitDialog] = useState(false)
+  const [currentApplicationForVisit, setCurrentApplicationForVisit] = useState(null)
 
   useEffect(() => {
     checkAuthAndLoadData()
@@ -336,8 +341,9 @@ export default function ApplicationsPage() {
         router.push(`/owner/leases/new?application=${applicationId}`)
         break
       case "propose_visit":
-        // Rediriger vers la page de gestion des visites pour cette candidature
-        router.push(`/owner/applications/${applicationId}?tab=visit`)
+        // Ouvrir le popup de proposition de visite
+        setCurrentApplicationForVisit(application)
+        setShowVisitDialog(true)
         break
       default:
         console.log("Action non reconnue:", action)
@@ -377,6 +383,25 @@ export default function ApplicationsPage() {
       newSelected.delete(applicationId)
     }
     setSelectedApplications(newSelected)
+  }
+
+  // Gestionnaire pour la proposition de visite
+  const handleVisitProposed = async (slots) => {
+    if (!currentApplicationForVisit) return
+
+    try {
+      // Mettre à jour le statut de la candidature
+      await handleStatusChange(currentApplicationForVisit.id, "visit_proposed")
+      
+      // Fermer le dialogue
+      setShowVisitDialog(false)
+      setCurrentApplicationForVisit(null)
+      
+      toast.success("Créneaux de visite proposés avec succès")
+    } catch (error) {
+      console.error("Erreur lors de la proposition de visite:", error)
+      toast.error("Erreur lors de la proposition de visite")
+    }
   }
 
   // Fonction pour calculer le score de matching avec les préférences du propriétaire
@@ -634,6 +659,22 @@ export default function ApplicationsPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Dialogue de proposition de visite */}
+      {showVisitDialog && currentApplicationForVisit && (
+        <VisitProposalManager
+          isOpen={showVisitDialog}
+          onClose={() => {
+            setShowVisitDialog(false)
+            setCurrentApplicationForVisit(null)
+          }}
+          propertyId={currentApplicationForVisit.property_id}
+          propertyTitle={currentApplicationForVisit.property?.title || "Propriété"}
+          applicationId={currentApplicationForVisit.id}
+          tenantName={`${currentApplicationForVisit.tenant?.first_name || ""} ${currentApplicationForVisit.tenant?.last_name || ""}`.trim() || "Candidat"}
+          onSlotsProposed={handleVisitProposed}
+        />
+      )}
     </>
   )
 }

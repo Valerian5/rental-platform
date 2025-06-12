@@ -10,20 +10,7 @@ import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/page-header"
 import { CircularScore } from "@/components/circular-score"
-import {
-  FileText,
-  Download,
-  ArrowLeft,
-  User,
-  Briefcase,
-  Euro,
-  Shield,
-  CheckCircle,
-  Home,
-  Phone,
-  Mail,
-  MapPin,
-} from "lucide-react"
+import { FileText, Download, ArrowLeft, User, Briefcase, Euro, Shield, CheckCircle, Home, Phone, Mail, MapPin } from 'lucide-react'
 import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
 import { convertBlobUrlToApiUrl, openDocument } from "@/lib/document-utils"
 
@@ -57,7 +44,15 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
   const [application, setApplication] = useState<any>(null)
   const [property, setProperty] = useState<any>(null)
   const [scoringPreferences, setScoringPreferences] = useState<any>(null)
-  const [matchScore, setMatchScore] = useState<any>({ score: 0, breakdown: {} })
+  const [matchScore, setMatchScore] = useState<any>({ 
+    totalScore: 0, 
+    breakdown: {
+      income_ratio: { score: 0, max: 100, details: "", compatible: false },
+      professional_stability: { score: 0, max: 100, details: "", compatible: false },
+      guarantor: { score: 0, max: 100, details: "", compatible: false },
+      application_quality: { score: 0, max: 100, details: "", compatible: false }
+    }
+  })
   const [rentalFile, setRentalFile] = useState<any>(null)
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
 
@@ -284,7 +279,13 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
         {/* Score et actions */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex items-center gap-4">
-            <CircularScore score={matchScore.totalScore || 0} size={80} />
+            <CircularScore 
+              score={matchScore?.totalScore || 0} 
+              size="lg"
+              showDetails={true}
+              breakdown={matchScore?.breakdown}
+              compatible={matchScore?.totalScore >= 60}
+            />
             <div>
               <h2 className="text-xl font-bold">Score de compatibilité</h2>
               <p className="text-sm text-muted-foreground">
