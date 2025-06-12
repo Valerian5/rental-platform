@@ -1,11 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase"
+import { createServerClient } from "@/lib/supabase"
 
 export async function GET(request: NextRequest) {
   try {
     console.log("📋 API Applications Owner GET")
 
-    const supabase = createServerSupabaseClient()
+    const supabase = createServerClient()
 
     // Récupérer l'utilisateur authentifié
     const {
@@ -50,7 +50,6 @@ export async function GET(request: NextRequest) {
           title,
           address,
           city,
-          price,
           price,
           property_images(id, url, is_primary)
         ),
@@ -110,6 +109,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ applications: enrichedApplications })
   } catch (error) {
     console.error("❌ Erreur API applications owner:", error)
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Erreur serveur",
+        details: error instanceof Error ? error.message : "Erreur inconnue",
+      },
+      { status: 500 },
+    )
   }
 }
