@@ -24,9 +24,32 @@ import {
   Mail,
   MapPin,
 } from "lucide-react"
-import { formatCurrency, formatDate } from "@/lib/utils"
 import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
 import { convertBlobUrlToApiUrl, openDocument } from "@/lib/document-utils"
+
+// Fonction formatCurrency définie localement pour éviter l'erreur d'importation
+const formatCurrency = (amount: number): string => {
+  return new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount)
+}
+
+// Fonction formatDate définie localement
+const formatDate = (dateString?: string): string => {
+  if (!dateString) return "Non spécifié"
+  try {
+    return new Date(dateString).toLocaleDateString("fr-FR", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    })
+  } catch (e) {
+    return "Date invalide"
+  }
+}
 
 export default function ApplicationDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter()
