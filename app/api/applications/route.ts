@@ -111,18 +111,36 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 })
       }
 
-      // Enrichir avec les visites pour chaque candidature
+      // Enrichir avec les visites et dossiers de location pour chaque candidature
       const enrichedApplications = await Promise.all(
         (applications || []).map(async (app) => {
-          const { data: visits } = await supabase
-            .from("visits")
-            .select("*")
-            .eq("tenant_id", app.tenant_id)
-            .eq("property_id", app.property_id)
+          try {
+            // Récupérer les visites
+            const { data: visits } = await supabase
+              .from("visits")
+              .select("*")
+              .eq("tenant_id", app.tenant_id)
+              .eq("property_id", app.property_id)
 
-          return {
-            ...app,
-            visits: visits || [],
+            // Récupérer le dossier de location
+            const { data: rentalFile } = await supabase
+              .from("rental_files")
+              .select("*")
+              .eq("tenant_id", app.tenant_id)
+              .single()
+
+            return {
+              ...app,
+              visits: visits || [],
+              rental_file: rentalFile || null,
+            }
+          } catch (enrichError) {
+            console.error("❌ Erreur enrichissement candidature:", enrichError)
+            return {
+              ...app,
+              visits: [],
+              rental_file: null,
+            }
           }
         }),
       )
