@@ -1,20 +1,24 @@
 /**
- * Convertit une URL blob en URL d'API accessible (si possible)
+ * Convertit une URL de blob en URL d'API pour récupérer le document
+ * @param blobUrl URL du blob (ex: https://blob.vercel-storage.com/...)
+ * @returns URL de l'API pour récupérer le document
  */
 export function convertBlobUrlToApiUrl(blobUrl: string): string {
-  if (!blobUrl) {
+  if (!blobUrl) return ""
+
+  // Si c'est déjà une URL relative, la retourner telle quelle
+  if (blobUrl.startsWith("/")) {
     return blobUrl
   }
 
-  // Si c'est déjà une URL blob, on ne peut pas la convertir côté serveur
-  if (blobUrl.includes("blob:")) {
-    console.log("⚠️ URL blob détectée - utilisation directe côté client")
-    return blobUrl
+  try {
+    // Encoder l'URL du blob pour la passer en paramètre
+    const encodedUrl = encodeURIComponent(blobUrl)
+    return `/api/documents/${encodedUrl}`
+  } catch (error) {
+    console.error("Erreur lors de la conversion de l'URL du blob:", error)
+    return ""
   }
-
-  // Pour les autres URLs, on peut utiliser l'API
-  const encodedUrl = encodeURIComponent(blobUrl)
-  return `/api/documents/${encodedUrl}`
 }
 
 /**
@@ -100,18 +104,24 @@ export async function fetchDocumentAsBase64(blobUrl: string): Promise<string | n
 }
 
 /**
- * Ouvre un document dans une nouvelle fenêtre
+ * Ouvre un document dans un nouvel onglet
+ * @param blobUrl URL du blob ou URL relative
  */
 export function openDocument(blobUrl: string): void {
-  if (blobUrl.includes("blob:")) {
-    // Pour les URLs blob, ouvrir directement
-    console.log("🔗 Ouverture URL blob:", blobUrl)
-    window.open(blobUrl, "_blank")
-  } else {
-    // Pour les autres URLs, utiliser l'API
+  if (!blobUrl) return
+
+  try {
+    // Si c'est une URL relative, l'ouvrir directement
+    if (blobUrl.startsWith("/")) {
+      window.open(blobUrl, "_blank")
+      return
+    }
+
+    // Sinon, convertir en URL d'API et ouvrir
     const apiUrl = convertBlobUrlToApiUrl(blobUrl)
-    console.log("🔗 Ouverture document via API:", apiUrl)
     window.open(apiUrl, "_blank")
+  } catch (error) {
+    console.error("Erreur lors de l'ouverture du document:", error)
   }
 }
 
