@@ -70,6 +70,20 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       setLoading(false)
     }
   }
+  
+	  // Fonction helper pour vérifier si un tableau existe et a des éléments
+	const hasDocuments = (docs: any) => {
+	  return docs && Array.isArray(docs) && docs.length > 0
+	}
+
+	// Fonction pour convertir les URLs blob en URLs API si nécessaire
+	const convertBlobUrlToApiUrl = (url: string) => {
+	  if (!url) return null
+	  // Si c'est déjà une URL HTTP, on la retourne telle quelle
+	  if (url.startsWith('http')) return url
+	  // Sinon, on essaie de la convertir (ajuster selon votre implémentation)
+	  return url
+	}
 
   const loadApplicationDetails = async () => {
     try {
