@@ -136,7 +136,16 @@ export default function ScoringPreferencesSimplePage() {
       const preference = scoringPreferencesService.createPreferenceFromProfiles(user.id, propertyRent, profiles)
 
       // Sauvegarder la préférence
-      await scoringPreferencesService.savePreference(preference)
+      const response = await fetch("/api/scoring-preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(preference),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Erreur lors de la sauvegarde")
+      }
 
       toast.success("Préférences sauvegardées avec succès")
       await checkAuthAndLoadData() // Recharger les données
@@ -163,16 +172,29 @@ export default function ScoringPreferencesSimplePage() {
       }
 
       // Créer une copie personnalisée de la préférence système
-      const userPreference: Omit<ScoringPreference, "id" | "created_at" | "updated_at"> = {
+      const userPreference = {
         ...systemPref,
         owner_id: user.id,
         name: `${systemPref.name} (personnalisé)`,
         is_default: true,
         is_system: false,
+        // Supprimer l'ID pour créer une nouvelle entrée
+        id: undefined,
+        created_at: undefined,
+        updated_at: undefined,
       }
 
       // Sauvegarder la préférence
-      await scoringPreferencesService.savePreference(userPreference)
+      const response = await fetch("/api/scoring-preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(userPreference),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Erreur lors de l'application du modèle")
+      }
 
       toast.success("Modèle appliqué avec succès")
       await checkAuthAndLoadData() // Recharger les données
@@ -195,7 +217,16 @@ export default function ScoringPreferencesSimplePage() {
         await scoringPreferencesService.updatePreference(customPreference.id, customPreference)
       } else {
         // Création
-        await scoringPreferencesService.savePreference(customPreference)
+        const response = await fetch("/api/scoring-preferences", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(customPreference),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || "Erreur lors de la sauvegarde")
+        }
       }
 
       toast.success("Préférences sauvegardées avec succès")
