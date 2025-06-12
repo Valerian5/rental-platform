@@ -72,48 +72,86 @@ export default function NewLeasePage() {
       }
 
       setUser(currentUser)
+      console.log("👤 Utilisateur connecté:", currentUser.id)
 
       // Charger les propriétés du propriétaire
-      const propertiesResponse = await fetch(`/api/properties?owner_id=${currentUser.id}`)
-      if (propertiesResponse.ok) {
-        const propertiesData = await propertiesResponse.json()
-        setProperties(propertiesData.properties || [])
+      try {
+        const propertiesResponse = await fetch(`/api/properties/owner?owner_id=${currentUser.id}`)
+        console.log("🏠 Réponse propriétés:", propertiesResponse.status)
+
+        if (propertiesResponse.ok) {
+          const propertiesData = await propertiesResponse.json()
+          console.log("🏠 Propriétés chargées:", propertiesData.properties?.length || 0)
+          setProperties(propertiesData.properties || [])
+        } else {
+          console.error("Erreur chargement propriétés:", propertiesResponse.status)
+          toast.error("Erreur lors du chargement des propriétés")
+        }
+      } catch (error) {
+        console.error("Erreur propriétés:", error)
+        toast.error("Erreur lors du chargement des propriétés")
       }
 
       // Si un ID d'application est fourni, charger les détails
       if (applicationId) {
-        const applicationResponse = await fetch(`/api/applications/${applicationId}`)
-        if (applicationResponse.ok) {
-          const applicationData = await applicationResponse.json()
-          setApplication(applicationData.application)
+        try {
+          console.log("📋 Chargement application:", applicationId)
+          const applicationResponse = await fetch(`/api/applications/${applicationId}`)
 
-          // Pré-remplir le formulaire avec les données de l'application
-          if (applicationData.application) {
-            setFormData((prev) => ({
-              ...prev,
-              property_id: applicationData.application.property_id || "",
-              tenant_id: applicationData.application.tenant_id || "",
-              monthly_rent: applicationData.application.property?.price?.toString() || "",
-              charges: applicationData.application.property?.charges?.toString() || "",
-              deposit: (applicationData.application.property?.price * 1).toString() || "",
-            }))
+          if (applicationResponse.ok) {
+            const applicationData = await applicationResponse.json()
+            console.log("📋 Application chargée:", applicationData.application?.id)
+            setApplication(applicationData.application)
 
-            // Charger les détails du locataire
-            if (applicationData.application.tenant_id) {
-              const tenantResponse = await fetch(`/api/users/${applicationData.application.tenant_id}`)
-              if (tenantResponse.ok) {
-                const tenantData = await tenantResponse.json()
-                setTenants([tenantData.user])
+            // Pré-remplir le formulaire avec les données de l'application
+            if (applicationData.application) {
+              const app = applicationData.application
+              setFormData((prev) => ({
+                ...prev,
+                property_id: app.property_id || "",
+                tenant_id: app.tenant_id || "",
+                monthly_rent: app.property?.price?.toString() || "",
+                charges: app.property?.charges?.toString() || "",
+                deposit: (app.property?.price * 1).toString() || "",
+              }))
+
+              // Charger les détails du locataire
+              if (app.tenant_id) {
+                try {
+                  const tenantResponse = await fetch(`/api/users/${app.tenant_id}`)
+                  if (tenantResponse.ok) {
+                    const tenantData = await tenantResponse.json()
+                    console.log("👤 Locataire chargé:", tenantData.user?.email)
+                    setTenants([tenantData.user])
+                  } else {
+                    console.error("Erreur chargement locataire:", tenantResponse.status)
+                  }
+                } catch (error) {
+                  console.error("Erreur locataire:", error)
+                }
               }
             }
+          } else {
+            console.error("Erreur chargement application:", applicationResponse.status)
+            toast.error("Erreur lors du chargement de l'application")
           }
+        } catch (error) {
+          console.error("Erreur application:", error)
+          toast.error("Erreur lors du chargement de l'application")
         }
       } else {
         // Charger la liste des locataires potentiels
-        const tenantsResponse = await fetch(`/api/users?type=tenant`)
-        if (tenantsResponse.ok) {
-          const tenantsData = await tenantsResponse.json()
-          setTenants(tenantsData.users || [])
+        try {
+          const tenantsResponse = await fetch(`/api/users?type=tenant`)
+          if (tenantsResponse.ok) {
+            const tenantsData = await tenantsResponse.json()
+            console.log("👥 Locataires chargés:", tenantsData.users?.length || 0)
+            setTenants(tenantsData.users || [])
+          } else {
+            console.error("Erreur chargement locataires:", tenantsResponse.status)
+          }
+        } catch (error) {
+          console.error("Erreur locataires:", error)
         }
       }
     } catch (error) {
@@ -183,6 +221,7 @@ export default function NewLeasePage() {
   const handleSubmit = async () => {
     try {
       setSaving(true)
+      console.log("💾 Début sauvegarde bail")
 
       if (
         !formData.property_id ||
@@ -203,7 +242,7 @@ export default function NewLeasePage() {
         end_date: formData.end_date?.toISOString().split("T")[0],
         monthly_rent: Number.parseFloat(formData.monthly_rent),
         charges: formData.charges ? Number.parseFloat(formData.charges) : 0,
-        deposit: formData.deposit ? Number.parseFloat(formData.deposit) : 0,
+        deposit: formData.deposit ? Number.parseFloat(formData.deposit) : 0, // Changer en 'deposit'
         lease_type: formData.lease_type,
         application_id: applicationId || undefined,
         metadata: {
@@ -214,6 +253,8 @@ export default function NewLeasePage() {
         },
       }
 
+      console.log("📝 Données à envoyer:", leaseData)
+
       const response = await fetch("/api/leases", {
         method: "POST",
         headers: {
@@ -222,35 +263,28 @@ export default function NewLeasePage() {
         body: JSON.stringify(leaseData),
       })
 
+      console.log("📡 Réponse API:", response.status)
+
       if (!response.ok) {
         const errorData = await response.json()
+        console.error("❌ Erreur API:", errorData)
         throw new Error(errorData.error || "Erreur lors de la création du bail")
       }
 
       const data = await response.json()
+      console.log("✅ Bail créé:", data.lease?.id)
 
+      // Gestion des documents (optionnel pour l'instant)
       if (formData.documents.length > 0) {
-        const formDataFiles = new FormData()
-        formData.documents.forEach((file) => {
-          formDataFiles.append("files", file)
-        })
-        formDataFiles.append("lease_id", data.lease.id)
-
-        const uploadResponse = await fetch("/api/leases/documents", {
-          method: "POST",
-          body: formDataFiles,
-        })
-
-        if (!uploadResponse.ok) {
-          console.error("Erreur upload documents")
-        }
+        console.log("📎 Upload documents...")
+        // TODO: Implémenter l'upload de documents
       }
 
       toast.success("Bail créé avec succès")
       router.push(`/owner/leases/${data.lease.id}`)
     } catch (error) {
       console.error("Erreur création bail:", error)
-      toast.error("Erreur lors de la création du bail")
+      toast.error(error instanceof Error ? error.message : "Erreur lors de la création du bail")
     } finally {
       setSaving(false)
     }

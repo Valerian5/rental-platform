@@ -6,21 +6,35 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env
 
 export async function POST(request: NextRequest) {
   try {
+    console.log("🔍 Début création bail")
+
     // Vérifier l'authentification
     const user = await authService.getCurrentUserFromRequest(request)
+    console.log("👤 Utilisateur:", user?.id, user?.user_type)
+
     if (!user) {
+      console.log("❌ Utilisateur non authentifié")
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
     }
 
     // Vérifier que l'utilisateur est un propriétaire
     if (user.user_type !== "owner") {
+      console.log("❌ Utilisateur pas propriétaire:", user.user_type)
       return NextResponse.json({ error: "Accès réservé aux propriétaires" }, { status: 403 })
     }
 
     const data = await request.json()
+    console.log("📝 Données reçues:", data)
 
     // Validation des données
     if (!data.property_id || !data.tenant_id || !data.start_date || !data.end_date || !data.monthly_rent) {
+      console.log("❌ Données incomplètes:", {
+        property_id: !!data.property_id,
+        tenant_id: !!data.tenant_id,
+        start_date: !!data.start_date,
+        end_date: !!data.end_date,
+        monthly_rent: !!data.monthly_rent,
+      })
       return NextResponse.json({ error: "Données incomplètes" }, { status: 400 })
     }
 
@@ -35,9 +49,10 @@ export async function POST(request: NextRequest) {
         end_date: data.end_date,
         monthly_rent: data.monthly_rent,
         charges: data.charges || 0,
-        deposit: data.deposit || 0,
+        security_deposit: data.deposit || 0, // Changer 'deposit' en 'security_deposit'
         lease_type: data.lease_type || "unfurnished",
         status: "draft",
+        metadata: data.metadata || {},
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
