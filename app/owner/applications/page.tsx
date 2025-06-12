@@ -310,12 +310,8 @@ export default function ApplicationsPage() {
 
     switch (action) {
       case "view_details":
-        // Rediriger vers la visionneuse de dossier PDF
-        if (application.rental_file_id) {
-          router.push(`/rental-files/${application.rental_file_id}/view`)
-        } else {
-          toast.error("Dossier de location non disponible")
-        }
+        // Rediriger vers la page de détails de la candidature
+        router.push(`/owner/applications/${applicationId}`)
         break
       case "analyze":
         // Rediriger vers la page de détails de la candidature
@@ -380,16 +376,7 @@ export default function ApplicationsPage() {
 
   // Fonction pour calculer le score de matching avec les préférences du propriétaire
   const calculateMatchScore = (application) => {
-    console.log("🎯 Calcul score pour candidature:", application.id, {
-      income: application.income,
-      property_price: application.property?.price,
-      contract_type: application.contract_type,
-      has_guarantor: application.has_guarantor,
-      preferences: scoringPreferences,
-    })
-
     if (!application.property?.price || !application.income || !scoringPreferences) {
-      console.log("⚠️ Données manquantes pour le calcul de score, retour score par défaut")
       return 50 // Score par défaut
     }
 
@@ -398,46 +385,35 @@ export default function ApplicationsPage() {
 
     // 1. Score revenus (selon les préférences)
     const rentRatio = application.income / property.price
-    console.log("💰 Ratio revenus/loyer:", rentRatio)
 
     if (rentRatio >= scoringPreferences.excellent_income_ratio) {
       score += scoringPreferences.weights.income
-      console.log("✅ Excellent ratio revenus:", scoringPreferences.weights.income, "points")
     } else if (rentRatio >= scoringPreferences.good_income_ratio) {
       const points = Math.round(scoringPreferences.weights.income * 0.8)
       score += points
-      console.log("✅ Bon ratio revenus:", points, "points")
     } else if (rentRatio >= scoringPreferences.min_income_ratio) {
       const points = Math.round(scoringPreferences.weights.income * 0.6)
       score += points
-      console.log("⚠️ Ratio revenus acceptable:", points, "points")
     } else {
       const points = Math.round(scoringPreferences.weights.income * 0.3)
       score += points
-      console.log("❌ Ratio revenus insuffisant:", points, "points")
     }
 
     // 2. Score stabilité professionnelle
     const contractType = (application.contract_type || "").toLowerCase()
     if (contractType === "cdi" || contractType === "fonctionnaire") {
       score += scoringPreferences.weights.stability
-      console.log("✅ Contrat stable:", scoringPreferences.weights.stability, "points")
     } else if (contractType === "cdd") {
       const points = Math.round(scoringPreferences.weights.stability * 0.7)
       score += points
-      console.log("⚠️ Contrat temporaire:", points, "points")
     } else {
       const points = Math.round(scoringPreferences.weights.stability * 0.5)
       score += points
-      console.log("❌ Contrat précaire:", points, "points")
     }
 
     // 3. Score garant
     if (application.has_guarantor) {
       score += scoringPreferences.weights.guarantor
-      console.log("✅ Avec garant:", scoringPreferences.weights.guarantor, "points")
-    } else {
-      console.log("❌ Sans garant: 0 points")
     }
 
     // 4. Score qualité du dossier
@@ -449,11 +425,8 @@ export default function ApplicationsPage() {
       fileQualityScore += Math.round(scoringPreferences.weights.file_quality * 0.5)
     }
     score += fileQualityScore
-    console.log("📄 Qualité dossier:", fileQualityScore, "points")
 
     const finalScore = Math.min(Math.round(score), 100)
-    console.log("🎯 Score final:", finalScore)
-
     return finalScore
   }
 
@@ -628,7 +601,6 @@ export default function ApplicationsPage() {
                     property: {
                       title: property.title || "Propriété inconnue",
                       address: property.address || "Adresse inconnue",
-                      owner_id: user?.id, // Ajouter l'ID du propriétaire pour le calcul de score
                       price: property.price || 0,
                     },
                     profession: application.profession || "Non spécifié",
@@ -648,20 +620,7 @@ export default function ApplicationsPage() {
                       isSelected={selectedApplications.has(application.id)}
                       onSelect={(selected) => handleSelectApplication(application.id, selected)}
                       onAction={(action) => handleApplicationAction(action, application.id)}
-                      rentalFile={
-                        application.rental_file_main_tenant
-                          ? {
-                              id: application.rental_file_id,
-                              main_tenant: application.rental_file_main_tenant,
-                              guarantors: application.rental_file_guarantors,
-                              completion_percentage: 85, // Valeur par défaut
-                              has_verified_documents: false, // Valeur par défaut
-                              contract_type: application.contract_type,
-                              guarantor_income: application.rental_file_guarantors?.[0]?.income || 0,
-                              professional_experience_months: 24, // Valeur par défaut
-                            }
-                          : null
-                      }
+                      scoringPreferences={scoringPreferences}
                     />
                   )
                 })}
