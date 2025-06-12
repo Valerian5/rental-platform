@@ -318,7 +318,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
     if (!application || !application.property || !scoringPreferences) return 50
 
     const property = application.property
-    
+
     // Utiliser les données du dossier de location en priorité
     const mainTenant = rentalFile?.main_tenant || {}
     const income = mainTenant.income_sources?.work_income?.amount || application.income || 0
@@ -331,7 +331,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
     // 1. Score revenus (selon les préférences)
     if (income && property.price) {
       const rentRatio = income / property.price
-      
+
       if (rentRatio >= scoringPreferences.excellent_income_ratio) {
         score += scoringPreferences.weights.income
       } else if (rentRatio >= scoringPreferences.good_income_ratio) {
@@ -366,7 +366,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
     let fileQualityScore = 0
     const profession = mainTenant.profession || application.profession
     const company = mainTenant.company || application.company
-    
+
     if (profession && profession !== "Non spécifié") {
       fileQualityScore += Math.round(scoringPreferences.weights.file_quality * 0.5)
     }
@@ -851,4 +851,353 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                             <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
                             <div>
                               <p className="font-medium text-red-700">Ratio insuffisant ({"<"} 2)</p>
-                              <p className="text-sm text-muted-foreground\">
+                              <p className="text-sm text-muted-foreground">
+                                Le candidat risque d'avoir des difficultés à assumer le loyer sur la durée.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Impossible de calculer le ratio (revenus ou loyer non spécifiés).
+                      </p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Shield className="h-5 w-5" />
+                    Stabilité financière
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Type de contrat</span>
+                      <span className="font-medium">{contractType}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Ancienneté professionnelle</span>
+                      <span className="font-medium">{mainTenant.professional_info?.seniority || "Non spécifié"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Période d'essai</span>
+                      <span className="font-medium">{mainTenant.professional_info?.trial_period ? "Oui" : "Non"}</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-4">
+                    <h4 className="font-medium mb-2">Analyse de la stabilité</h4>
+                    <div className="space-y-2">
+                      {contractType?.toLowerCase() === "cdi" ? (
+                        <div className="flex items-start gap-2">
+                          <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+                          <div>
+                            <p className="font-medium text-green-700">Contrat stable (CDI)</p>
+                            <p className="text-sm text-muted-foreground">
+                              Le candidat bénéficie d'une stabilité professionnelle optimale.
+                            </p>
+                          </div>
+                        </div>
+                      ) : contractType?.toLowerCase() === "cdd" ? (
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
+                          <div>
+                            <p className="font-medium text-amber-700">Contrat à durée déterminée (CDD)</p>
+                            <p className="text-sm text-muted-foreground">
+                              Stabilité limitée dans le temps. Vérifier la durée restante du contrat.
+                            </p>
+                          </div>
+                        </div>
+                      ) : contractType?.toLowerCase() === "freelance" ||
+                        contractType?.toLowerCase() === "indépendant" ? (
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
+                          <div>
+                            <p className="font-medium text-amber-700">Travailleur indépendant</p>
+                            <p className="text-sm text-muted-foreground">
+                              Revenus potentiellement variables. Vérifier l'historique des revenus.
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
+                          <div>
+                            <p className="font-medium text-red-700">Situation à clarifier</p>
+                            <p className="text-sm text-muted-foreground">
+                              Le type de contrat n'est pas clairement identifié ou présente des risques
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {mainTenant.professional_info?.trial_period && (
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
+                          <div>
+                            <p className="font-medium text-red-700">Période d'essai en cours</p>
+                            <p className="text-sm text-muted-foreground">
+                              Le candidat est encore en période d'essai, ce qui représente un risque.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="h-5 w-5" />
+                  Garanties
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {hasGuarantor ? (
+                  <div className="space-y-4">
+                    <div className="flex items-start gap-2">
+                      <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+                      <div>
+                        <p className="font-medium text-green-700">
+                          {rentalFile?.guarantors?.length || 1} garant(s) disponible(s)
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          La présence de garant(s) renforce considérablement la sécurité financière du dossier.
+                        </p>
+                      </div>
+                    </div>
+
+                    {rentalFile?.guarantors?.map((guarantor: any, index: number) => {
+                      const guarantorIncome = guarantor.personal_info?.income_sources?.work_income?.amount || 0
+                      const guarantorRatio =
+                        guarantorIncome && property.price ? (guarantorIncome / property.price).toFixed(1) : "N/A"
+
+                      return (
+                        <div key={index} className="border rounded-lg p-4">
+                          <h4 className="font-medium mb-2">Garant {index + 1}</h4>
+                          <div className="space-y-2">
+                            <div className="flex justify-between">
+                              <span className="text-sm text-muted-foreground">Revenus mensuels</span>
+                              <span className="font-medium">{formatAmount(guarantorIncome)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm text-muted-foreground">Ratio revenus/loyer</span>
+                              <span className="font-medium">
+                                {guarantorRatio !== "N/A" ? `${guarantorRatio}x` : "N/A"}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm text-muted-foreground">Type de contrat</span>
+                              <span className="font-medium">
+                                {guarantor.personal_info?.main_activity || "Non spécifié"}
+                              </span>
+                            </div>
+                          </div>
+
+                          {guarantorRatio !== "N/A" && (
+                            <div className="mt-2 pt-2 border-t">
+                              {Number(guarantorRatio) >= 3 ? (
+                                <Badge className="bg-green-100 text-green-800">Excellent garant</Badge>
+                              ) : Number(guarantorRatio) >= 2 ? (
+                                <Badge className="bg-green-100 text-green-800">Bon garant</Badge>
+                              ) : (
+                                <Badge className="bg-amber-100 text-amber-800">Garant limité</Badge>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-red-700">Aucun garant</p>
+                      <p className="text-sm text-muted-foreground">
+                        L'absence de garant augmente le risque financier, surtout si le ratio revenus/loyer est faible.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Synthèse et recommandation
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <CircularScore score={matchScore} size="md" />
+                    <div>
+                      <h3 className="font-medium">Score global: {matchScore}/100</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Évaluation basée sur les revenus, la stabilité professionnelle et les garanties
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h4 className="font-medium">Points forts</h4>
+                    <ul className="space-y-1">
+                      {Number(rentRatio) >= 2.5 && (
+                        <li className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span>Ratio revenus/loyer favorable ({rentRatio}x)</span>
+                        </li>
+                      )}
+                      {contractType?.toLowerCase() === "cdi" && (
+                        <li className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span>Stabilité professionnelle (CDI)</span>
+                        </li>
+                      )}
+                      {hasGuarantor && (
+                        <li className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span>Présence de {rentalFile?.guarantors?.length || 1} garant(s)</span>
+                        </li>
+                      )}
+                      {mainTenant.professional_info?.seniority && (
+                        <li className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span>Ancienneté professionnelle: {mainTenant.professional_info.seniority}</span>
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h4 className="font-medium">Points d'attention</h4>
+                    <ul className="space-y-1">
+                      {Number(rentRatio) < 2.5 && (
+                        <li className="flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4 text-amber-500" />
+                          <span>Ratio revenus/loyer limité ({rentRatio}x)</span>
+                        </li>
+                      )}
+                      {contractType?.toLowerCase() !== "cdi" && (
+                        <li className="flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4 text-amber-500" />
+                          <span>Type de contrat: {contractType}</span>
+                        </li>
+                      )}
+                      {!hasGuarantor && (
+                        <li className="flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4 text-amber-500" />
+                          <span>Absence de garant</span>
+                        </li>
+                      )}
+                      {mainTenant.professional_info?.trial_period && (
+                        <li className="flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4 text-amber-500" />
+                          <span>Période d'essai en cours</span>
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+
+                  <div className="pt-4 border-t">
+                    <h4 className="font-medium mb-2">Recommandation</h4>
+                    {matchScore >= 80 ? (
+                      <div className="flex items-start gap-2">
+                        <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-green-700">Dossier solide</p>
+                          <p className="text-sm text-muted-foreground">
+                            Ce dossier présente d'excellentes garanties financières. Candidature à privilégier.
+                          </p>
+                        </div>
+                      </div>
+                    ) : matchScore >= 60 ? (
+                      <div className="flex items-start gap-2">
+                        <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-green-700">Dossier satisfaisant</p>
+                          <p className="text-sm text-muted-foreground">
+                            Ce dossier présente des garanties financières satisfaisantes. Candidature recommandée.
+                          </p>
+                        </div>
+                      </div>
+                    ) : matchScore >= 40 ? (
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-amber-700">Dossier à surveiller</p>
+                          <p className="text-sm text-muted-foreground">
+                            Ce dossier présente quelques fragilités. Une garantie complémentaire pourrait être demandée.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-red-700">Dossier fragile</p>
+                          <p className="text-sm text-muted-foreground">
+                            Ce dossier présente des risques financiers importants. Candidature à considérer avec
+                            prudence.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Documents */}
+          <TabsContent value="documents" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Documents fournis
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {rentalFile?.documents && rentalFile.documents.length > 0 ? (
+                  <div className="space-y-4">
+                    {rentalFile.documents.map((doc: any, index: number) => (
+                      <div key={index} className="flex items-center justify-between border-b pb-2">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-muted-foreground" />
+                          <span>{doc.name || `Document ${index + 1}`}</span>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => window.open(doc.url, "_blank")}>
+                          Voir
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                    <h3 className="text-lg font-semibold mb-2">Aucun document disponible</h3>
+                    <p className="text-muted-foreground">
+                      Le candidat n'a pas encore fourni de documents ou le dossier n'est pas accessible.
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </>
+  )
+}
