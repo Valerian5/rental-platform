@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
-import { authService } from "@/lib/auth-service"
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
@@ -8,18 +7,37 @@ export async function POST(request: NextRequest) {
   try {
     console.log("🔍 Début création bail")
 
-    // Vérifier l'authentification
-    const user = await authService.getCurrentUserFromRequest(request)
-    console.log("👤 Utilisateur:", user?.id, user?.user_type)
+    // Vérifier l'authentification en utilisant le client Supabase côté serveur
+    const { createServerSupabaseClient } = await import("@/lib/supabase-server")
+    const supabaseServer = createServerSupabaseClient()
+
+    const {
+      data: { user },
+    } = await supabaseServer.auth.getUser()
+    console.log("👤 Utilisateur auth:", user?.id)
 
     if (!user) {
       console.log("❌ Utilisateur non authentifié")
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
     }
 
+    // Récupérer le profil utilisateur
+    const { data: userProfile, error: profileError } = await supabaseServer
+      .from("users")
+      .select("*")
+      .eq("id", user.id)
+      .single()
+
+    if (profileError || !userProfile) {
+      console.log("❌ Profil utilisateur non trouvé:", profileError)
+      return NextResponse.json({ error: "Profil utilisateur non trouvé" }, { status: 401 })
+    }
+
+    console.log("👤 Profil utilisateur:", userProfile.id, userProfile.user_type)
+
     // Vérifier que l'utilisateur est un propriétaire
-    if (user.user_type !== "owner") {
-      console.log("❌ Utilisateur pas propriétaire:", user.user_type)
+    if (userProfile.user_type !== "owner") {
+      console.log("❌ Utilisateur pas propriétaire:", userProfile.user_type)
       return NextResponse.json({ error: "Accès réservé aux propriétaires" }, { status: 403 })
     }
 
@@ -42,7 +60,7 @@ export async function POST(request: NextRequest) {
     const leaseData = {
       property_id: data.property_id,
       tenant_id: data.tenant_id,
-      owner_id: user.id,
+      owner_id: userProfile.id,
       start_date: data.start_date,
       end_date: data.end_date,
       monthly_rent: data.monthly_rent,
@@ -91,10 +109,27 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    // Vérifier l'authentification
-    const user = await authService.getCurrentUserFromRequest(request)
+    // Vérifier l'authentification en utilisant le client Supabase côté serveur
+    const { createServerSupabaseClient } = await import("@/lib/supabase-server")
+    const supabaseServer = createServerSupabaseClient()
+
+    const {
+      data: { user },
+    } = await supabaseServer.auth.getUser()
+
     if (!user) {
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
+    }
+
+    // Récupérer le profil utilisateur
+    const { data: userProfile, error: profileError } = await supabaseServer
+      .from("users")
+      .select("*")
+      .eq("id", user.id)
+      .single()
+
+    if (profileError || !userProfile) {
+      return NextResponse.json({ error: "Profil utilisateur non trouvé" }, { status: 401 })
     }
 
     const { searchParams } = new URL(request.url)
@@ -120,10 +155,10 @@ export async function GET(request: NextRequest) {
     if (status) query = query.eq("status", status)
 
     // Vérifier les permissions
-    if (user.user_type === "tenant") {
-      query = query.eq("tenant_id", user.id)
-    } else if (user.user_type === "owner") {
-      query = query.eq("owner_id", user.id)
+    if (userProfile.user_type === "tenant") {
+      query = query.eq("tenant_id", userProfile.id)
+    } else if (userProfile.user_type === "owner") {
+      query = query.eq("owner_id", userProfile.id)
     }
 
     const { data: leases, error } = await query
