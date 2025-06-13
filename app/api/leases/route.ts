@@ -38,26 +38,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Données incomplètes" }, { status: 400 })
     }
 
+// Ajoutez ceci avant l'insertion dans route.ts
+console.log("Données avant insertion:", {
+  property_id: data.property_id,
+  tenant_id: data.tenant_id,
+  owner_id: user.id,
+  start_date: data.start_date,
+  end_date: data.end_date,
+  monthly_rent: data.monthly_rent,
+  charges: data.charges,
+  deposit_amount: data.deposit,
+  lease_type: data.lease_type,
+  metadata: data.metadata
+})
+
     // Créer le bail
-    const { data: lease, error } = await supabase
-      .from("leases")
-      .insert({
-        property_id: data.property_id,
-        tenant_id: data.tenant_id,
-        owner_id: user.id,
-        start_date: data.start_date,
-        end_date: data.end_date,
-        monthly_rent: data.monthly_rent,
-        charges: data.charges || 0,
-        deposit: data.deposit || 0,
-        lease_type: data.lease_type || "unfurnished",
-        status: "draft",
-        metadata: data.metadata || {},
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .select()
-      .single()
+const { data: lease, error } = await supabase
+  .from("leases")
+  .insert({
+    property_id: data.property_id,
+    tenant_id: data.tenant_id,
+    owner_id: user.id,
+    start_date: data.start_date,
+    end_date: data.end_date,
+    monthly_rent: data.monthly_rent,
+    charges: data.charges || 0,
+    deposit_amount: data.deposit || 0,  // Changé de 'deposit' à 'deposit_amount'
+    security_deposit: data.deposit || 0, // Ajouté pour correspondre au schéma
+    lease_type: data.lease_type || "unfurnished",
+    status: "draft",
+    metadata: data.metadata || {},
+  })
+  .select()
+  .single()
 
     if (error) {
       console.error("Erreur création bail:", error)
@@ -77,10 +90,18 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, lease })
-  } catch (error) {
-    console.error("Erreur serveur:", error)
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
-  }
+} catch (error) {
+  console.error("Erreur serveur détaillée:", {
+    error: error instanceof Error ? error.message : error,
+    stack: error instanceof Error ? error.stack : null,
+    requestData: data,
+    user: user?.id
+  })
+  return NextResponse.json(
+    { error: "Erreur serveur", details: error instanceof Error ? error.message : String(error) },
+    { status: 500 }
+  )
+}
 }
 
 export async function GET(request: NextRequest) {

@@ -242,9 +242,9 @@ export default function NewLeasePage() {
         tenant_id: formData.tenant_id,
         start_date: formData.start_date?.toISOString().split("T")[0],
         end_date: formData.end_date?.toISOString().split("T")[0],
-        monthly_rent: Number.parseFloat(formData.monthly_rent),
-        charges: formData.charges ? Number.parseFloat(formData.charges) : 0,
-        deposit: formData.deposit ? Number.parseFloat(formData.deposit) : 0,
+		  monthly_rent: Number(formData.monthly_rent).toFixed(2),
+		  charges: formData.charges ? Number(formData.charges).toFixed(2) : "0.00",
+		  deposit: formData.deposit ? Number(formData.deposit).toFixed(2) : "0.00",
         lease_type: formData.lease_type,
         application_id: applicationId || undefined,
         metadata: {
