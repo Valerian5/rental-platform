@@ -90,18 +90,10 @@ const { data: lease, error } = await supabase
     }
 
     return NextResponse.json({ success: true, lease })
-} catch (error) {
-  console.error("Erreur serveur détaillée:", {
-    error: error instanceof Error ? error.message : error,
-    stack: error instanceof Error ? error.stack : null,
-    requestData: data,
-    user: user?.id
-  })
-  return NextResponse.json(
-    { error: "Erreur serveur", details: error instanceof Error ? error.message : String(error) },
-    { status: 500 }
-  )
-}
+  } catch (error) {
+    console.error("Erreur serveur:", error)
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -149,8 +141,16 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, leases })
-  } catch (error) {
-    console.error("Erreur serveur:", error)
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
-  }
+} catch (error) {
+  console.error("Erreur serveur détaillée:", {
+    error: error instanceof Error ? error.message : error,
+    stack: error instanceof Error ? error.stack : null,
+    requestData: data,
+    user: user?.id
+  })
+  return NextResponse.json(
+    { error: "Erreur serveur", details: error instanceof Error ? error.message : String(error) },
+    { status: 500 }
+  )
+}
 }
