@@ -394,7 +394,7 @@ export default function NewLeasePage() {
                       </div>
                       <div>
                         <span className="text-muted-foreground">Type:</span>
-                        <p>{selectedProperty.type}</p>
+                        <p>{selectedProperty.property_type}</p>
                       </div>
                       <div>
                         <span className="text-muted-foreground">Surface:</span>
@@ -739,7 +739,7 @@ export default function NewLeasePage() {
                       <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
                         <div>
                           <span className="text-muted-foreground">Type:</span>
-                          <p>{selectedProperty.type}</p>
+                          <p>{selectedProperty.property_type}</p>
                         </div>
                         <div>
                           <span className="text-muted-foreground">Surface:</span>
