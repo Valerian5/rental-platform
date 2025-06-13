@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { createClient } from "@supabase/supabase"
 import { authService } from "@/lib/auth-service"
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
         end_date: data.end_date,
         monthly_rent: data.monthly_rent,
         charges: data.charges || 0,
-        security_deposit: data.deposit || 0, // Changer 'deposit' en 'security_deposit'
+        deposit_amount: data.deposit || 0,
         lease_type: data.lease_type || "unfurnished",
         status: "draft",
         metadata: data.metadata || {},

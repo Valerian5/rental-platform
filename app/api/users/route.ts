@@ -1,11 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { createClient } from "@supabase/supabase"
 import { authService } from "@/lib/auth-service"
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
 export async function GET(request: NextRequest) {
   try {
+    console.log("👥 API Users GET")
+
     // Vérifier l'authentification
     const user = await authService.getCurrentUserFromRequest(request)
     if (!user) {
@@ -14,33 +16,24 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const type = searchParams.get("type")
-    const id = searchParams.get("id")
 
     let query = supabase.from("users").select("*")
 
-    // Filtrer par type si spécifié
     if (type) {
       query = query.eq("user_type", type)
     }
 
-    // Filtrer par ID si spécifié
-    if (id) {
-      query = query.eq("id", id)
-    }
-
-    // Limiter les résultats pour éviter de surcharger
-    query = query.limit(100)
-
     const { data: users, error } = await query
 
     if (error) {
-      console.error("Erreur récupération utilisateurs:", error)
-      return NextResponse.json({ error: "Erreur lors de la récupération des utilisateurs" }, { status: 500 })
+      console.error("❌ Erreur récupération utilisateurs:", error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true, users })
+    console.log(`✅ ${users?.length || 0} utilisateurs récupérés`)
+    return NextResponse.json({ success: true, users: users || [] })
   } catch (error) {
-    console.error("Erreur serveur:", error)
+    console.error("❌ Erreur serveur:", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }

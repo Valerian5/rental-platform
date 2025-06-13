@@ -17,9 +17,12 @@ import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 import { CalendarIcon, ChevronLeft, ChevronRight, Upload, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
+import { authService } from "@/services/auth-service"
+
+// Client Supabase côté client
+// const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 
 export default function NewLeasePage() {
   const router = useRouter()
@@ -242,7 +245,7 @@ export default function NewLeasePage() {
         end_date: formData.end_date?.toISOString().split("T")[0],
         monthly_rent: Number.parseFloat(formData.monthly_rent),
         charges: formData.charges ? Number.parseFloat(formData.charges) : 0,
-        deposit: formData.deposit ? Number.parseFloat(formData.deposit) : 0, // Changer en 'deposit'
+        deposit: formData.deposit ? Number.parseFloat(formData.deposit) : 0,
         lease_type: formData.lease_type,
         application_id: applicationId || undefined,
         metadata: {
