@@ -1,153 +1,157 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { authService } from "@/lib/auth-service"
+import { getAuthHeaders } from "@/lib/auth-utils"
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
+    }
+  }
+)
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔍 Début création bail")
+    console.log("🔍 [POST] /api/leases - Début")
 
-    // Vérifier l'authentification
-    const user = await authService.getCurrentUserFromRequest(request)
-    console.log("👤 Utilisateur:", {
-      id: user?.id,
-      type: user?.user_type,
-      email: user?.email
+    // 1. Authentification via authService
+    const user = await authService.getServerUser()
+    if (!user) {
+      console.error("❌ Aucun utilisateur authentifié")
+      return NextResponse.json(
+        { error: "Non autorisé - Veuillez vous connecter" },
+        { status: 401 }
+      )
+    }
+
+    // 2. Vérification des permissions
+    if (user.user_type !== "owner") {
+      console.error("❌ Permission refusée - Rôle:", user.user_type)
+      return NextResponse.json(
+        { error: "Accès réservé aux propriétaires" },
+        { status: 403 }
+      )
+    }
+
+    console.log("👤 Utilisateur autorisé:", {
+      id: user.id,
+      email: user.email,
+      type: user.user_type
     })
 
-    if (!user) {
-      console.log("❌ Utilisateur non authentifié")
-      return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
+    // 3. Récupération des données
+    let requestData
+    try {
+      requestData = await request.json()
+    } catch (error) {
+      console.error("❌ Erreur de parsing JSON:", error)
+      return NextResponse.json(
+        { error: "Format de données invalide" },
+        { status: 400 }
+      )
     }
 
-    // Vérifier que l'utilisateur est un propriétaire
-    if (user.user_type !== "owner") {
-      console.log("❌ Utilisateur pas propriétaire:", user.user_type)
-      return NextResponse.json({ error: "Accès réservé aux propriétaires" }, { status: 403 })
-    }
-
-    const data = await request.json()
-    console.log("📝 Données reçues:", JSON.stringify(data, null, 2))
-
-    // Validation des données
-    const requiredFields = ['property_id', 'tenant_id', 'start_date', 'end_date', 'monthly_rent']
-    const missingFields = requiredFields.filter(field => !data[field])
+    // 4. Validation des données
+    const requiredFields = [
+      'property_id', 
+      'tenant_id',
+      'start_date',
+      'end_date',
+      'monthly_rent'
+    ]
+    const missingFields = requiredFields.filter(field => !requestData[field])
     
     if (missingFields.length > 0) {
-      console.log("❌ Données incomplètes - Champs manquants:", missingFields)
+      console.error("❌ Champs manquants:", missingFields)
       return NextResponse.json(
-        { error: "Données incomplètes", missingFields }, 
+        { error: "Données incomplètes", missingFields },
         { status: 400 }
       )
     }
 
-    // Validation du type de bail
-    const validLeaseTypes = ['unfurnished', 'furnished', 'commercial']
-    if (data.lease_type && !validLeaseTypes.includes(data.lease_type)) {
-      console.log("❌ Type de bail invalide:", data.lease_type)
-      return NextResponse.json(
-        { error: "Type de bail invalide", validTypes: validLeaseTypes },
-        { status: 400 }
-      )
-    }
-
-    // Validation du format des UUID
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(data.property_id) || !uuidRegex.test(data.tenant_id)) {
-      console.log("❌ Format ID invalide", {
-        property_id: data.property_id,
-        tenant_id: data.tenant_id
-      })
-      return NextResponse.json(
-        { error: "Format d'ID invalide" },
-        { status: 400 }
-      )
-    }
-
-    // Préparation des données pour l'insertion
+    // 5. Préparation des données
     const leaseData = {
-      property_id: data.property_id,
-      tenant_id: data.tenant_id,
+      property_id: requestData.property_id,
+      tenant_id: requestData.tenant_id,
       owner_id: user.id,
-      start_date: data.start_date,
-      end_date: data.end_date,
-      monthly_rent: Number(data.monthly_rent),
-      charges: Number(data.charges || 0),
-      deposit_amount: Number(data.deposit || 0),
-      security_deposit: Number(data.deposit || 0),
-      lease_type: data.lease_type || "unfurnished",
+      start_date: requestData.start_date,
+      end_date: requestData.end_date,
+      monthly_rent: Number(requestData.monthly_rent),
+      charges: Number(requestData.charges || 0),
+      deposit_amount: Number(requestData.deposit || 0),
+      security_deposit: Number(requestData.deposit || 0),
+      lease_type: requestData.lease_type || "unfurnished",
       status: "draft",
       signed_by_tenant: false,
       signed_by_owner: false,
-      metadata: data.metadata || {},
+      metadata: requestData.metadata || {},
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }
 
-    console.log("📦 Données prêtes pour insertion:", JSON.stringify(leaseData, null, 2))
+    console.log("📦 Données prêtes pour insertion:", leaseData)
 
-    // Créer le bail
-    const { data: lease, error, status, statusText } = await supabase
+    // 6. Insertion dans Supabase
+    const { data: lease, error: supabaseError } = await supabaseAdmin
       .from("leases")
       .insert(leaseData)
-      .select()
+      .select(`
+        id,
+        property_id,
+        tenant_id,
+        start_date,
+        end_date,
+        monthly_rent,
+        status
+      `)
       .single()
 
-    if (error) {
-      console.error("❌ Erreur Supabase détaillée:", {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint,
-        status,
-        statusText
+    if (supabaseError) {
+      console.error("❌ Erreur Supabase:", {
+        message: supabaseError.message,
+        code: supabaseError.code,
+        details: supabaseError.details
       })
       return NextResponse.json(
-        { 
-          error: "Erreur lors de la création du bail",
-          supabaseError: error 
-        }, 
+        { error: "Erreur de base de données", details: supabaseError.message },
         { status: 500 }
       )
     }
 
-    console.log("✅ Bail créé avec succès:", lease.id)
+    console.log("✅ Bail créé avec succès - ID:", lease.id)
 
-    // Si une application_id est fournie, mettre à jour son statut
-    if (data.application_id) {
-      console.log("🔄 Mise à jour de l'application:", data.application_id)
-      const { error: updateError } = await supabase
+    // 7. Mise à jour de l'application si nécessaire
+    if (requestData.application_id) {
+      console.log("🔄 Mise à jour application:", requestData.application_id)
+      const { error: updateError } = await supabaseAdmin
         .from("applications")
         .update({ 
           status: "lease_created",
           updated_at: new Date().toISOString()
         })
-        .eq("id", data.application_id)
+        .eq("id", requestData.application_id)
 
       if (updateError) {
-        console.error("⚠️ Erreur mise à jour candidature:", updateError)
-        // Ne pas échouer toute la requête pour cette erreur
+        console.error("⚠️ Erreur mise à jour application:", updateError)
       }
     }
 
-    return NextResponse.json({ 
-      success: true, 
-      lease,
-      applicationUpdated: !!data.application_id
-    })
+    return NextResponse.json({
+      success: true,
+      lease
+    }, { status: 201 })
 
   } catch (error) {
-    console.error("🔥 Erreur serveur critique:", {
-      message: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : null,
-      rawError: error
+    console.error("🔥 Erreur serveur:", {
+      message: error instanceof Error ? error.message : "Erreur inconnue",
+      stack: error instanceof Error ? error.stack : null
     })
     return NextResponse.json(
-      { 
-        error: "Erreur serveur interne",
-        details: error instanceof Error ? error.message : String(error)
-      }, 
+      { error: "Erreur serveur interne" },
       { status: 500 }
     )
   }
@@ -155,82 +159,97 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    // Vérifier l'authentification
-    const user = await authService.getCurrentUserFromRequest(request)
-    console.log("👤 GET - Utilisateur:", user?.id)
+    console.log("🔍 [GET] /api/leases - Début")
 
+    // 1. Authentification via authService
+    const user = await authService.getServerUser()
     if (!user) {
-      console.log("❌ GET - Utilisateur non authentifié")
-      return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
+      console.error("❌ Aucun utilisateur authentifié")
+      return NextResponse.json(
+        { error: "Non autorisé" },
+        { status: 401 }
+      )
     }
 
+    console.log("👤 Utilisateur:", {
+      id: user.id,
+      email: user.email,
+      type: user.user_type
+    })
+
+    // 2. Récupération des paramètres
     const { searchParams } = new URL(request.url)
     const params = {
       id: searchParams.get("id"),
       property_id: searchParams.get("property_id"),
       tenant_id: searchParams.get("tenant_id"),
-      owner_id: searchParams.get("owner_id"),
-      status: searchParams.get("status")
+      status: searchParams.get("status"),
+      limit: Math.min(parseInt(searchParams.get("limit") || "20"), 100),
+      offset: parseInt(searchParams.get("offset") || "0")
     }
 
-    console.log("🔍 Paramètres de requête GET:", params)
+    // 3. Construction de la requête
+    let query = supabaseAdmin
+      .from("leases")
+      .select(`
+        id,
+        property_id,
+        tenant_id,
+        start_date,
+        end_date,
+        monthly_rent,
+        charges,
+        status,
+        lease_type,
+        created_at,
+        property:properties(
+          id,
+          title,
+          address
+        ),
+        tenant:users(
+          id,
+          first_name,
+          last_name
+        )
+      `)
+      .range(params.offset, params.offset + params.limit - 1)
 
-    // Construire la requête
-    let query = supabase.from("leases").select(`
-      *,
-      property:properties(*),
-      tenant:users!tenant_id(*),
-      owner:users!owner_id(*)
-    `)
-
-    // Filtrer selon les paramètres
-    if (params.id) query = query.eq("id", params.id)
-    if (params.property_id) query = query.eq("property_id", params.property_id)
-    if (params.tenant_id) query = query.eq("tenant_id", params.tenant_id)
-    if (params.owner_id) query = query.eq("owner_id", params.owner_id)
-    if (params.status) query = query.eq("status", params.status)
-
-    // Vérifier les permissions
+    // Filtres selon le rôle
     if (user.user_type === "tenant") {
       query = query.eq("tenant_id", user.id)
     } else if (user.user_type === "owner") {
       query = query.eq("owner_id", user.id)
     }
 
-    const { data: leases, error, status } = await query
+    // Filtres supplémentaires
+    if (params.id) query = query.eq("id", params.id)
+    if (params.property_id) query = query.eq("property_id", params.property_id)
+    if (params.tenant_id) query = query.eq("tenant_id", params.tenant_id)
+    if (params.status) query = query.eq("status", params.status)
+
+    // 4. Exécution
+    const { data: leases, error } = await query
 
     if (error) {
-      console.error("❌ Erreur récupération baux:", {
-        error: error.message,
-        code: error.code,
-        status
-      })
+      console.error("❌ Erreur Supabase:", error)
       return NextResponse.json(
-        { 
-          error: "Erreur lors de la récupération des baux",
-          supabaseError: error 
-        }, 
+        { error: "Erreur de base de données" },
         { status: 500 }
       )
     }
 
-    console.log(`✅ ${leases?.length || 0} baux récupérés`)
-    return NextResponse.json({ 
-      success: true, 
-      count: leases?.length,
-      leases 
+    console.log(`✅ ${leases?.length || 0} baux trouvés`)
+    return NextResponse.json({
+      success: true,
+      data: leases,
+      count: leases?.length
     })
 
   } catch (error) {
-    console.error("🔥 Erreur serveur GET:", {
-      message: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : null
-    })
+    console.error("🔥 Erreur serveur:", error)
     return NextResponse.json(
-      { 
-        error: "Erreur serveur interne",
-        details: error instanceof Error ? error.message : String(error)
-      }, 
+      { error: "Erreur serveur interne" },
       { status: 500 }
     )
   }
