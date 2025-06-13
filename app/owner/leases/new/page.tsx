@@ -19,7 +19,7 @@ import { CalendarIcon, ChevronLeft, ChevronRight, Upload, Check } from "lucide-r
 import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/page-header"
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
-import { authService } from "@/services/auth-service"
+import { authService } from "@/lib/auth-service"
 
 // Client Supabase côté client
 // const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
