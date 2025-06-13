@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase"
+import { supabase } from "./supabase"
 
 export interface UserProfile {
   id: string
@@ -271,50 +271,6 @@ export const authService = {
       return profile
     } catch (error) {
       console.error("❌ Erreur dans getServerUser:", error)
-      return null
-    }
-  },
-
-  // Récupérer l'utilisateur à partir d'une requête HTTP
-  async getCurrentUserFromRequest(request: Request): Promise<UserProfile | null> {
-    try {
-      console.log("🔍 AuthService.getCurrentUserFromRequest - Début")
-
-      // Pour les API routes, on utilise les cookies de la requête
-      const cookieHeader = request.headers.get("cookie")
-      if (!cookieHeader) {
-        console.log("❌ Pas de cookies dans la requête")
-        return null
-      }
-
-      // Utiliser le client Supabase côté serveur
-      const { supabase } = await import("./supabase-server")
-      const client = supabase()
-
-      const {
-        data: { user },
-        error,
-      } = await client.auth.getUser()
-
-      if (error || !user) {
-        console.log("❌ Pas d'utilisateur authentifié dans la requête")
-        return null
-      }
-
-      console.log("👤 Utilisateur trouvé dans la requête:", user.id)
-
-      // Récupérer le profil
-      const { data: profile, error: profileError } = await client.from("users").select("*").eq("id", user.id).single()
-
-      if (profileError) {
-        console.error("❌ Erreur profil:", profileError)
-        return null
-      }
-
-      console.log("✅ Profil récupéré:", profile)
-      return profile
-    } catch (error) {
-      console.error("❌ Erreur dans getCurrentUserFromRequest:", error)
       return null
     }
   },
