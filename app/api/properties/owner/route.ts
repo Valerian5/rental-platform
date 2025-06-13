@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     // Récupérer les propriétés du propriétaire directement avec Supabase
     const { data: properties, error } = await supabase
       .from("properties")
-      .select("id, title, address, city, type, surface, price")
+      .select("id, title, address, city, property_type, surface, price")
       .eq("owner_id", ownerId)
       .order("title", { ascending: true })
 
