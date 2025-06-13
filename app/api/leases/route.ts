@@ -63,14 +63,16 @@ const { data: lease, error } = await supabase
     end_date: data.end_date,
     monthly_rent: data.monthly_rent,
     charges: data.charges || 0,
-    deposit_amount: data.deposit || 0,  // Changé de 'deposit' à 'deposit_amount'
-    security_deposit: data.deposit || 0, // Ajouté pour correspondre au schéma
+    deposit_amount: data.deposit || 0,
+    security_deposit: data.deposit || 0,
     lease_type: data.lease_type || "unfurnished",
     status: "draft",
+    signed_by_tenant: false, // Ajouté
+    signed_by_owner: false, // Ajouté
     metadata: data.metadata || {},
   })
   .select()
-  .single()
+  .single();
 
     if (error) {
       console.error("Erreur création bail:", error)
