@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await request.json()
-    console.log("📝 Données reçues:", data)
+    console.log("📝 Données reçues:", JSON.stringify(data, null, 2))
 
     // Validation des données
     if (!data.property_id || !data.tenant_id || !data.start_date || !data.end_date || !data.monthly_rent) {
@@ -38,31 +38,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Données incomplètes" }, { status: 400 })
     }
 
+    // Préparer les données pour l'insertion
+    const leaseData = {
+      property_id: data.property_id,
+      tenant_id: data.tenant_id,
+      owner_id: user.id,
+      start_date: data.start_date,
+      end_date: data.end_date,
+      monthly_rent: data.monthly_rent,
+      charges: data.charges || 0,
+      deposit_amount: data.deposit || 0,
+      lease_type: data.lease_type || "unfurnished",
+      status: "draft",
+      metadata: data.metadata || {},
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }
+
+    console.log("📝 Données formatées pour insertion:", JSON.stringify(leaseData, null, 2))
+
     // Créer le bail
-    const { data: lease, error } = await supabase
-      .from("leases")
-      .insert({
-        property_id: data.property_id,
-        tenant_id: data.tenant_id,
-        owner_id: user.id,
-        start_date: data.start_date,
-        end_date: data.end_date,
-        monthly_rent: data.monthly_rent,
-        charges: data.charges || 0,
-        deposit_amount: data.deposit || 0,
-        lease_type: data.lease_type || "unfurnished",
-        status: "draft",
-        metadata: data.metadata || {},
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .select()
-      .single()
+    const { data: lease, error } = await supabase.from("leases").insert(leaseData).select().single()
 
     if (error) {
-      console.error("Erreur création bail:", error)
-      return NextResponse.json({ error: "Erreur lors de la création du bail" }, { status: 500 })
+      console.error("❌ Erreur création bail:", error)
+      return NextResponse.json({ error: `Erreur lors de la création du bail: ${error.message}` }, { status: 500 })
     }
+
+    console.log("✅ Bail créé avec succès:", lease?.id)
 
     // Si une application_id est fournie, mettre à jour son statut
     if (data.application_id) {
@@ -79,7 +82,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, lease })
   } catch (error) {
     console.error("Erreur serveur:", error)
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+    return NextResponse.json(
+      { error: `Erreur serveur: ${error instanceof Error ? error.message : String(error)}` },
+      { status: 500 },
+    )
   }
 }
 

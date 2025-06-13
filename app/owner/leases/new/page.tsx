@@ -11,18 +11,14 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { toast } from "sonner"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 import { CalendarIcon, ChevronLeft, ChevronRight, Upload, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
-import { authService } from "@/lib/auth-service"
-
-// Client Supabase côté client
-// const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 
 export default function NewLeasePage() {
   const router = useRouter()
@@ -79,7 +75,7 @@ export default function NewLeasePage() {
 
       // Charger les propriétés du propriétaire
       try {
-        const propertiesResponse = await fetch(`/api/properties/owner?owner_id=${currentUser.id}`)
+        const propertiesResponse = await fetch(`/api/properties?owner_id=${currentUser.id}`)
         console.log("🏠 Réponse propriétés:", propertiesResponse.status)
 
         if (propertiesResponse.ok) {
@@ -121,11 +117,13 @@ export default function NewLeasePage() {
               // Charger les détails du locataire
               if (app.tenant_id) {
                 try {
-                  const tenantResponse = await fetch(`/api/users/${app.tenant_id}`)
+                  const tenantResponse = await fetch(`/api/applications/${applicationId}/tenant`)
                   if (tenantResponse.ok) {
                     const tenantData = await tenantResponse.json()
-                    console.log("👤 Locataire chargé:", tenantData.user?.email)
-                    setTenants([tenantData.user])
+                    console.log("👤 Locataire chargé:", tenantData.tenant?.email)
+                    if (tenantData.tenant) {
+                      setTenants([tenantData.tenant])
+                    }
                   } else {
                     console.error("Erreur chargement locataire:", tenantResponse.status)
                   }
@@ -145,11 +143,11 @@ export default function NewLeasePage() {
       } else {
         // Charger la liste des locataires potentiels
         try {
-          const tenantsResponse = await fetch(`/api/users?type=tenant`)
+          const tenantsResponse = await fetch(`/api/applications/tenant-owner?owner_id=${currentUser.id}`)
           if (tenantsResponse.ok) {
             const tenantsData = await tenantsResponse.json()
-            console.log("👥 Locataires chargés:", tenantsData.users?.length || 0)
-            setTenants(tenantsData.users || [])
+            console.log("👥 Locataires chargés:", tenantsData.tenants?.length || 0)
+            setTenants(tenantsData.tenants || [])
           } else {
             console.error("Erreur chargement locataires:", tenantsResponse.status)
           }
@@ -467,42 +465,41 @@ export default function NewLeasePage() {
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="lease_type">Type de bail</Label>
-                  <RadioGroup
-                    value={formData.lease_type}
-                    onValueChange={(value) => handleSelectChange("lease_type", value)}
-                    className="grid grid-cols-3 gap-4 pt-2"
-                  >
-                    <div>
-                      <RadioGroupItem value="unfurnished" id="unfurnished" className="peer sr-only" />
-                      <Label
-                        htmlFor="unfurnished"
-                        className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
-                      >
-                        <span className="mb-2">Non meublé</span>
-                        <span className="text-xs text-muted-foreground">Bail de 3 ans</span>
-                      </Label>
+                  <div className="grid grid-cols-3 gap-4 pt-2">
+                    <div
+                      className={`flex flex-col items-center justify-between rounded-md border-2 ${
+                        formData.lease_type === "unfurnished"
+                          ? "border-blue-600 bg-blue-50"
+                          : "border-muted bg-popover hover:bg-accent hover:text-accent-foreground"
+                      } p-4 cursor-pointer`}
+                      onClick={() => handleSelectChange("lease_type", "unfurnished")}
+                    >
+                      <span className="mb-2">Non meublé</span>
+                      <span className="text-xs text-muted-foreground">Bail de 3 ans</span>
                     </div>
-                    <div>
-                      <RadioGroupItem value="furnished" id="furnished" className="peer sr-only" />
-                      <Label
-                        htmlFor="furnished"
-                        className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
-                      >
-                        <span className="mb-2">Meublé</span>
-                        <span className="text-xs text-muted-foreground">Bail de 1 an</span>
-                      </Label>
+                    <div
+                      className={`flex flex-col items-center justify-between rounded-md border-2 ${
+                        formData.lease_type === "furnished"
+                          ? "border-blue-600 bg-blue-50"
+                          : "border-muted bg-popover hover:bg-accent hover:text-accent-foreground"
+                      } p-4 cursor-pointer`}
+                      onClick={() => handleSelectChange("lease_type", "furnished")}
+                    >
+                      <span className="mb-2">Meublé</span>
+                      <span className="text-xs text-muted-foreground">Bail de 1 an</span>
                     </div>
-                    <div>
-                      <RadioGroupItem value="commercial" id="commercial" className="peer sr-only" />
-                      <Label
-                        htmlFor="commercial"
-                        className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
-                      >
-                        <span className="mb-2">Commercial</span>
-                        <span className="text-xs text-muted-foreground">Bail commercial</span>
-                      </Label>
+                    <div
+                      className={`flex flex-col items-center justify-between rounded-md border-2 ${
+                        formData.lease_type === "commercial"
+                          ? "border-blue-600 bg-blue-50"
+                          : "border-muted bg-popover hover:bg-accent hover:text-accent-foreground"
+                      } p-4 cursor-pointer`}
+                      onClick={() => handleSelectChange("lease_type", "commercial")}
+                    >
+                      <span className="mb-2">Commercial</span>
+                      <span className="text-xs text-muted-foreground">Bail commercial</span>
                     </div>
-                  </RadioGroup>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
