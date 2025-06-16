@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
+import { supabase } from "@/lib/supabase"
 
 export default function NewLeasePage() {
   const router = useRouter()
@@ -256,9 +257,7 @@ export default function NewLeasePage() {
 
       console.log("📝 Données à envoyer:", leaseData)
 
-      // Récupérer le token de session
-      const { createClientComponentClient } = await import("@supabase/auth-helpers-nextjs")
-      const supabase = createClientComponentClient()
+      // Récupérer le token de session depuis Supabase
       const { data: sessionData } = await supabase.auth.getSession()
 
       if (!sessionData.session?.access_token) {

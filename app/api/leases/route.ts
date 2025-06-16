@@ -7,13 +7,8 @@ export async function POST(request: NextRequest) {
   try {
     console.log("🔍 [POST] /api/leases - Début")
 
-    // 1. Récupération du token d'authentification
+    // Récupération du token d'authentification
     const authHeader = request.headers.get("Authorization")
-
-    // Utiliser le client Supabase côté serveur si pas de token explicite
-    const { createServerSupabaseClient } = await import("@/lib/supabase-server")
-    const supabaseServer = createServerSupabaseClient()
-
     let user
 
     if (authHeader && authHeader.startsWith("Bearer ")) {
@@ -28,23 +23,14 @@ export async function POST(request: NextRequest) {
 
       user = userData.user
     } else {
-      // Authentification via cookie de session
-      const {
-        data: { session },
-      } = await supabaseServer.auth.getSession()
-
-      if (!session) {
-        console.error("❌ Aucune session trouvée")
-        return NextResponse.json({ error: "Non autorisé - Veuillez vous connecter" }, { status: 401 })
-      }
-
-      user = session.user
+      console.error("❌ Aucun token d'authentification trouvé")
+      return NextResponse.json({ error: "Non autorisé - Token manquant" }, { status: 401 })
     }
 
     console.log("👤 Utilisateur authentifié:", user.id)
 
     // Récupérer le profil utilisateur
-    const { data: userProfile, error: profileError } = await supabaseServer
+    const { data: userProfile, error: profileError } = await supabase
       .from("users")
       .select("*")
       .eq("id", user.id)
@@ -90,6 +76,8 @@ export async function POST(request: NextRequest) {
       deposit_amount: data.deposit || 0,
       lease_type: data.lease_type || "unfurnished",
       status: "draft",
+      signed_by_tenant: false,
+      signed_by_owner: false,
       metadata: data.metadata || {},
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -131,20 +119,25 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    // Vérifier l'authentification en utilisant le client Supabase côté serveur
-    const { createServerSupabaseClient } = await import("@/lib/supabase-server")
-    const supabaseServer = createServerSupabaseClient()
+    // Récupération du token d'authentification
+    const authHeader = request.headers.get("Authorization")
+    let user
 
-    const {
-      data: { user },
-    } = await supabaseServer.auth.getUser()
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.split(" ")[1]
+      const { data: userData, error: authError } = await supabase.auth.getUser(token)
 
-    if (!user) {
-      return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
+      if (authError || !userData.user) {
+        return NextResponse.json({ error: "Token d'authentification invalide" }, { status: 401 })
+      }
+
+      user = userData.user
+    } else {
+      return NextResponse.json({ error: "Non autorisé - Token manquant" }, { status: 401 })
     }
 
     // Récupérer le profil utilisateur
-    const { data: userProfile, error: profileError } = await supabaseServer
+    const { data: userProfile, error: profileError } = await supabase
       .from("users")
       .select("*")
       .eq("id", user.id)
