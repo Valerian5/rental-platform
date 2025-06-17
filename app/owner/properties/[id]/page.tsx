@@ -188,36 +188,25 @@ export default function PropertyDetailPage() {
   }
 
   // Composant de gestion des visites - SIMPLIFIÉ
-  const VisitManagement = () => {
-    if (!slotsLoaded) {
-      return (
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center space-y-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="text-gray-600">Chargement des créneaux...</p>
-          </div>
+const VisitManagement = () => {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">Gestion des visites</h3>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline">{visitSlots.length} créneaux disponibles</Badge>
         </div>
-      )
-    }
-
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Gestion des visites</h3>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline">{visitSlots.length} créneaux disponibles</Badge>
-          </div>
-        </div>
-
-        <VisitScheduler
-          propertyId={property.id}
-          visitSlots={visitSlots}
-          onSlotsChange={handleSlotsChange}
-          mode="management"
-        />
       </div>
-    )
-  }
+
+      <VisitScheduler
+        propertyId={property.id}
+        visitSlots={visitSlots}
+        onSlotsChange={handleSlotsChange}
+        mode="management"
+      />
+    </div>
+  );
+};
 
   // États de chargement et d'erreur
   if (isLoading) {

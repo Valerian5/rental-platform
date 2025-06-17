@@ -118,10 +118,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
 
   // Fonction de chargement des créneaux - SIMPLIFIÉE
 const loadSlotsFromDatabase = useCallback(async () => {
-  if (!propertyId || loadingRef.current) {
-    console.log("🚫 Chargement évité - pas de propertyId ou déjà en cours");
-    return;
-  }
+  if (!propertyId || loadingRef.current) return;
 
   console.log("🔄 Chargement des créneaux depuis la DB pour:", propertyId);
   setIsLoading(true);
@@ -133,26 +130,21 @@ const loadSlotsFromDatabase = useCallback(async () => {
       headers,
     });
 
-    if (response.ok) {
-      const data = await response.json();
-      console.log("✅ Créneaux chargés depuis la DB:", data.slots?.length || 0);
+    if (!response.ok) throw new Error("Erreur de chargement");
 
-      const cleanedSlots = (data.slots || []).map((slot: any) => ({
-        ...slot,
-        start_time: formatTimeString(slot.start_time),
-        end_time: formatTimeString(slot.end_time),
-      }));
+    const data = await response.json();
+    const cleanedSlots = (data.slots || []).map((slot: any) => ({
+      ...slot,
+      start_time: formatTimeString(slot.start_time),
+      end_time: formatTimeString(slot.end_time),
+    }));
 
-      onSlotsChange(cleanedSlots);
-      setHasInitialLoad(true); // Déplacez ceci ici
-    } else {
-      const errorData = await response.json();
-      console.error("❌ Erreur chargement créneaux:", response.status, errorData);
-      toast.error(errorData.error || "Erreur lors du chargement des créneaux");
-    }
+    onSlotsChange(cleanedSlots);
+    setHasInitialLoad(true);
   } catch (error) {
-    console.error("❌ Erreur chargement créneaux:", error);
+    console.error("Erreur chargement créneaux:", error);
     toast.error("Erreur lors du chargement des créneaux");
+    setHasInitialLoad(true); // Même en cas d'erreur, on marque comme chargé
   } finally {
     setIsLoading(false);
     loadingRef.current = false;
@@ -161,11 +153,11 @@ const loadSlotsFromDatabase = useCallback(async () => {
 
   // Charger les créneaux au montage SEULEMENT si mode management et pas de créneaux existants
 useEffect(() => {
-  if (mode === "management" && propertyId && !hasInitialLoad) {
+  if (mode === "management" && propertyId && visitSlots.length === 0 && !hasInitialLoad) {
     console.log("🔄 Chargement initial des créneaux...");
     loadSlotsFromDatabase();
   }
-}, [mode, propertyId]); // Retirez hasInitialLoad et loadSlotsFromDatabase des dépendances
+}, [mode, propertyId]); // Seulement ces dépendances
 
   const saveSlotsToDatabase = async (slots: VisitSlot[]) => {
     if (!propertyId || mode !== "management") return
