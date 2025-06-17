@@ -1,292 +1,173 @@
 import { supabase } from "./supabase"
 
-export interface LeaseDataField {
-  label: string
-  value: any
-  source: "auto" | "manual" | "missing"
-  required: boolean
-  type: "text" | "number" | "date" | "email" | "select" | "textarea" | "boolean"
-  options?: string[]
-  description?: string
-}
-
 export interface LeaseDataMapping {
-  [key: string]: LeaseDataField
+  [key: string]: {
+    value: any
+    source: "auto" | "manual" | "missing"
+    required: boolean
+    label: string
+    type: string
+  }
 }
 
-export const leaseDataMapper = {
+export class LeaseDataMapper {
   async mapLeaseData(leaseId: string): Promise<LeaseDataMapping> {
-    try {
-      console.log("🔄 Mapping données pour bail:", leaseId)
+    // Récupérer toutes les données du bail
+    const { data: lease, error } = await supabase
+      .from("leases")
+      .select(`
+        *,
+        property:properties(*),
+        tenant:users!tenant_id(*),
+        owner:users!owner_id(*)
+      `)
+      .eq("id", leaseId)
+      .single()
 
-      // Récupérer toutes les données nécessaires
-      const { data: lease, error: leaseError } = await supabase
-        .from("leases")
-        .select(`
-          *,
-          property:properties(*),
-          tenant:users!tenant_id(*),
-          owner:users!owner_id(*)
-        `)
-        .eq("id", leaseId)
-        .single()
+    if (error) throw error
 
-      if (leaseError) throw leaseError
+    // Récupérer le template approprié
+    const { data: template } = await supabase
+      .from("lease_templates")
+      .select("field_mapping")
+      .eq("lease_type", lease.lease_type)
+      .eq("is_default", true)
+      .single()
 
-      console.log("📋 Données bail récupérées:", lease.id)
+    if (!template) throw new Error("Template non trouvé")
 
-      // Initialiser le mapping avec les champs obligatoires
-      const mapping: LeaseDataMapping = {}
+    const fieldMapping = template.field_mapping
+    const mappedData: LeaseDataMapping = {}
 
-      // === PARTIES ===
-      mapping.bailleur_nom_prenom = {
-        label: "Nom et prénom du bailleur",
-        value: lease.owner ? `${lease.owner.first_name || ""} ${lease.owner.last_name || ""}`.trim() : "",
-        source: lease.owner?.first_name ? "auto" : "missing",
-        required: true,
-        type: "text",
+    // Mapper chaque champ du template
+    for (const [fieldName, fieldConfig] of Object.entries(fieldMapping)) {
+      const config = fieldConfig as any
+      let value: any = null
+      let source: "auto" | "manual" | "missing" = "missing"
+
+      // Mapping automatique selon la source
+      switch (config.source) {
+        case "owner":
+          value = this.mapOwnerData(fieldName, lease.owner)
+          break
+        case "tenant":
+          value = this.mapTenantData(fieldName, lease.tenant)
+          break
+        case "property":
+          value = this.mapPropertyData(fieldName, lease.property)
+          break
+        case "lease":
+          value = this.mapLeaseData(fieldName, lease)
+          break
+        default:
+          // Essayer de mapper automatiquement
+          value = this.autoMapField(fieldName, lease, config)
+          break
       }
 
-      mapping.bailleur_domicile = {
-        label: "Domicile du bailleur",
-        value: lease.owner?.address || "",
-        source: lease.owner?.address ? "auto" : "missing",
-        required: true,
-        type: "text",
+      if (value !== null && value !== undefined && value !== "") {
+        source = "auto"
       }
 
-      mapping.bailleur_qualite = {
-        label: "Qualité du bailleur",
-        value: "personne physique",
-        source: "auto",
-        required: true,
-        type: "select",
-        options: ["personne physique", "personne morale"],
+      // Utiliser la valeur par défaut si disponible
+      if ((value === null || value === undefined || value === "") && config.default) {
+        value = config.default
+        source = "auto"
       }
 
-      mapping.bailleur_email = {
-        label: "Email du bailleur",
-        value: lease.owner?.email || "",
-        source: lease.owner?.email ? "auto" : "missing",
-        required: false,
-        type: "email",
+      mappedData[fieldName] = {
+        value,
+        source,
+        required: config.required || false,
+        label: config.label || fieldName,
+        type: config.type || "string",
       }
-
-      mapping.locataire_nom_prenom = {
-        label: "Nom et prénom du locataire",
-        value: lease.tenant ? `${lease.tenant.first_name || ""} ${lease.tenant.last_name || ""}`.trim() : "",
-        source: lease.tenant?.first_name ? "auto" : "missing",
-        required: true,
-        type: "text",
-      }
-
-      mapping.locataire_email = {
-        label: "Email du locataire",
-        value: lease.tenant?.email || "",
-        source: lease.tenant?.email ? "auto" : "missing",
-        required: false,
-        type: "email",
-      }
-
-      // === LOGEMENT ===
-      mapping.localisation_logement = {
-        label: "Localisation du logement",
-        value: lease.property ? `${lease.property.address || ""}, ${lease.property.city || ""}`.trim() : "",
-        source: lease.property?.address ? "auto" : "missing",
-        required: true,
-        type: "text",
-      }
-
-      mapping.identifiant_fiscal = {
-        label: "Identifiant fiscal du logement",
-        value: "",
-        source: "missing",
-        required: false,
-        type: "text",
-      }
-
-      mapping.type_habitat = {
-        label: "Type d'habitat",
-        value: "immeuble collectif",
-        source: "auto",
-        required: true,
-        type: "select",
-        options: ["immeuble collectif", "immeuble individuel"],
-      }
-
-      mapping.regime_juridique = {
-        label: "Régime juridique de l'immeuble",
-        value: "copropriété",
-        source: "auto",
-        required: true,
-        type: "select",
-        options: ["mono propriété", "copropriété"],
-      }
-
-      mapping.periode_construction = {
-        label: "Période de construction",
-        value: "",
-        source: "missing",
-        required: false,
-        type: "select",
-        options: ["avant 1949", "de 1949 à 1974", "de 1975 à 1989", "de 1989 à 2005", "depuis 2005"],
-      }
-
-      mapping.surface_habitable = {
-        label: "Surface habitable (m²)",
-        value: lease.property?.surface || "",
-        source: lease.property?.surface ? "auto" : "missing",
-        required: true,
-        type: "number",
-      }
-
-      mapping.nombre_pieces = {
-        label: "Nombre de pièces principales",
-        value: lease.property?.rooms || "",
-        source: lease.property?.rooms ? "auto" : "missing",
-        required: true,
-        type: "number",
-      }
-
-      mapping.niveau_performance_dpe = {
-        label: "Classe DPE",
-        value: "",
-        source: "missing",
-        required: true,
-        type: "select",
-        options: ["A", "B", "C", "D", "E", "F", "G"],
-      }
-
-      // === CONDITIONS FINANCIÈRES ===
-      mapping.montant_loyer_mensuel = {
-        label: "Montant du loyer mensuel (€)",
-        value: lease.monthly_rent || "",
-        source: lease.monthly_rent ? "auto" : "missing",
-        required: true,
-        type: "number",
-      }
-
-      mapping.montant_provisions_charges = {
-        label: "Montant des provisions sur charges (€)",
-        value: lease.charges || "",
-        source: lease.charges ? "auto" : "missing",
-        required: false,
-        type: "number",
-      }
-
-      mapping.montant_depot_garantie = {
-        label: "Montant du dépôt de garantie (€)",
-        value: lease.deposit || "",
-        source: lease.deposit ? "auto" : "missing",
-        required: false,
-        type: "number",
-      }
-
-      mapping.periodicite_paiement = {
-        label: "Périodicité du paiement",
-        value: "mensuel",
-        source: "auto",
-        required: true,
-        type: "select",
-        options: ["mensuel", "trimestriel"],
-      }
-
-      mapping.date_paiement = {
-        label: "Date de paiement",
-        value: "le 1er de chaque mois",
-        source: "auto",
-        required: true,
-        type: "text",
-      }
-
-      // === DURÉE ===
-      mapping.date_prise_effet = {
-        label: "Date de prise d'effet",
-        value: lease.start_date ? lease.start_date.split("T")[0] : "",
-        source: lease.start_date ? "auto" : "missing",
-        required: true,
-        type: "date",
-      }
-
-      mapping.duree_contrat = {
-        label: "Durée du contrat",
-        value: lease.lease_type === "furnished" ? "durée minimale d'un an" : "durée minimale de trois ans",
-        source: "auto",
-        required: true,
-        type: "text",
-      }
-
-      mapping.evenement_duree_reduite = {
-        label: "Événement justifiant une durée réduite",
-        value: "",
-        source: "missing",
-        required: false,
-        type: "textarea",
-      }
-
-      // === ANNEXES ===
-      mapping.annexe_dpe = {
-        label: "Diagnostic de performance énergétique",
-        value: true,
-        source: "auto",
-        required: true,
-        type: "boolean",
-      }
-
-      mapping.annexe_risques = {
-        label: "État des risques naturels et technologiques",
-        value: true,
-        source: "auto",
-        required: true,
-        type: "boolean",
-      }
-
-      mapping.annexe_notice = {
-        label: "Notice d'information",
-        value: true,
-        source: "auto",
-        required: true,
-        type: "boolean",
-      }
-
-      mapping.annexe_etat_lieux = {
-        label: "État des lieux",
-        value: true,
-        source: "auto",
-        required: true,
-        type: "boolean",
-      }
-
-      mapping.annexe_reglement = {
-        label: "Règlement de copropriété",
-        value: false,
-        source: "auto",
-        required: false,
-        type: "boolean",
-      }
-
-      // Charger les données complétées précédemment si elles existent
-      if (lease.completed_data) {
-        try {
-          const completedData =
-            typeof lease.completed_data === "string" ? JSON.parse(lease.completed_data) : lease.completed_data
-
-          for (const [key, value] of Object.entries(completedData)) {
-            if (mapping[key]) {
-              mapping[key].value = value
-              mapping[key].source = "manual"
-            }
-          }
-        } catch (e) {
-          console.error("Erreur parsing completed_data:", e)
-        }
-      }
-
-      console.log("✅ Mapping terminé:", Object.keys(mapping).length, "champs")
-      return mapping
-    } catch (error) {
-      console.error("❌ Erreur mapping:", error)
-      throw error
     }
-  },
+
+    return mappedData
+  }
+
+  private mapOwnerData(fieldName: string, owner: any): any {
+    const mapping: { [key: string]: string } = {
+      bailleur_nom_prenom: `${owner.first_name} ${owner.last_name}`,
+      bailleur_domicile: owner.address,
+      bailleur_email: owner.email,
+      nom_bailleur: `${owner.first_name} ${owner.last_name}`,
+    }
+    return mapping[fieldName] || null
+  }
+
+  private mapTenantData(fieldName: string, tenant: any): any {
+    const mapping: { [key: string]: string } = {
+      locataire_nom_prenom: `${tenant.first_name} ${tenant.last_name}`,
+      locataire_email: tenant.email,
+      nom_locataire: `${tenant.first_name} ${tenant.last_name}`,
+    }
+    return mapping[fieldName] || null
+  }
+
+  private mapPropertyData(fieldName: string, property: any): any {
+    const mapping: { [key: string]: any } = {
+      localisation_logement: `${property.address}, ${property.city}`,
+      surface_habitable: property.surface,
+      nombre_pieces: property.rooms,
+    }
+    return mapping[fieldName] || null
+  }
+
+  private mapLeaseData(fieldName: string, lease: any): any {
+    const mapping: { [key: string]: any } = {
+      date_prise_effet: lease.start_date,
+      montant_loyer_mensuel: lease.monthly_rent,
+      montant_provisions_charges: lease.charges,
+      montant_depot_garantie: lease.deposit,
+    }
+    return mapping[fieldName] || null
+  }
+
+  private autoMapField(fieldName: string, lease: any, config: any): any {
+    // Mapping automatique intelligent
+    const autoMappings: { [key: string]: any } = {
+      bailleur_qualite: "Personne physique",
+      destination_locaux: "Usage d'habitation",
+      duree_contrat: lease.lease_type === "furnished" ? "1 an" : "3 ans",
+      periodicite_paiement: "Mensuel",
+      paiement_echeance: "À échoir",
+      date_paiement: "Le 1er de chaque mois",
+      montant_premiere_echeance: lease.monthly_rent + (lease.charges || 0),
+      modalite_reglement_charges: "Provisions sur charges avec régularisation annuelle",
+      soumis_decret_evolution: "Non",
+      soumis_loyer_reference: "Non",
+      annexe_dpe: true,
+      annexe_risques: true,
+      annexe_notice: true,
+      annexe_etat_lieux: true,
+      date_signature: new Date().toISOString().split("T")[0],
+      lieu_signature: lease.property?.city || "",
+    }
+
+    return autoMappings[fieldName] || null
+  }
+
+  getRequiredMissingFields(mappedData: LeaseDataMapping): string[] {
+    return Object.entries(mappedData)
+      .filter(([_, field]) => field.required && field.source === "missing")
+      .map(([fieldName, _]) => fieldName)
+  }
+
+  getFieldsBySource(mappedData: LeaseDataMapping): {
+    auto: string[]
+    manual: string[]
+    missing: string[]
+  } {
+    const result = { auto: [], manual: [], missing: [] }
+
+    for (const [fieldName, field] of Object.entries(mappedData)) {
+      result[field.source].push(fieldName)
+    }
+
+    return result
+  }
 }
+
+export const leaseDataMapper = new LeaseDataMapper()
