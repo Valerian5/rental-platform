@@ -162,7 +162,19 @@ export default function NewLeasePage() {
   }
 
   const handleDateChange = (name: string, date: Date | null) => {
-    setFormData((prev) => ({ ...prev, [name]: date }))
+    setFormData((prev) => {
+      const newData = { ...prev, [name]: date }
+
+      // Auto-calculer la date de fin selon le type de bail
+      if (name === "start_date" && date) {
+        const yearsToAdd = prev.lease_type === "furnished" ? 1 : 3
+        const endDate = new Date(date)
+        endDate.setFullYear(endDate.getFullYear() + yearsToAdd)
+        newData.end_date = endDate
+      }
+
+      return newData
+    })
   }
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -274,14 +286,20 @@ export default function NewLeasePage() {
       const data = await response.json()
       console.log("✅ Bail créé:", data.lease?.id)
 
+      toast.success("Bail créé avec succès")
+
+      // Rediriger vers la page de completion
+      if (data.redirect) {
+        router.push(data.redirect)
+      } else {
+        router.push(`/owner/leases/${data.lease.id}`)
+      }
+
       // Gestion des documents (optionnel pour l'instant)
       if (formData.documents.length > 0) {
         console.log("📎 Upload documents...")
         // TODO: Implémenter l'upload de documents
       }
-
-      toast.success("Bail créé avec succès")
-      router.push(`/owner/leases/${data.lease.id}`)
     } catch (error) {
       console.error("Erreur création bail:", error)
       toast.error(error instanceof Error ? error.message : "Erreur lors de la création du bail")
@@ -387,7 +405,9 @@ export default function NewLeasePage() {
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div>
                         <span className="text-muted-foreground">Adresse:</span>
-                        <p>{selectedProperty.address}</p>
+                        <p>
+                          {selectedProperty.address}, {selectedProperty.city}
+                        </p>
                       </div>
                       <div>
                         <span className="text-muted-foreground">Type:</span>
