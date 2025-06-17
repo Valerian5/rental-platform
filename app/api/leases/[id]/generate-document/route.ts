@@ -1,25 +1,37 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
-import Handlebars from "handlebars"
 
-// Helpers Handlebars personnalisés
-Handlebars.registerHelper("if", function (conditional, options) {
-  if (conditional) {
-    return options.fn(this)
-  } else {
-    return options.inverse(this)
-  }
-})
+// Simple template engine pour remplacer Handlebars
+function compileTemplate(template: string, data: any): string {
+  let result = template
 
-Handlebars.registerHelper("each", (context, options) => {
-  let ret = ""
-  if (context && context.length > 0) {
-    for (let i = 0; i < context.length; i++) {
-      ret += options.fn(context[i])
-    }
-  }
-  return ret
-})
+  // Remplacer les variables simples {{variable}}
+  result = result.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+    return data[key] !== undefined ? String(data[key]) : match
+  })
+
+  // Remplacer les conditions {{#if variable}}...{{/if}}
+  result = result.replace(/\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (match, key, content) => {
+    return data[key] ? content : ""
+  })
+
+  // Remplacer les boucles {{#each array}}...{{/each}}
+  result = result.replace(/\{\{#each\s+(\w+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (match, key, content) => {
+    const array = data[key]
+    if (!Array.isArray(array)) return ""
+
+    return array
+      .map((item) => {
+        let itemContent = content
+        // Remplacer {{this}} par l'élément actuel
+        itemContent = itemContent.replace(/\{\{this\}\}/g, String(item))
+        return itemContent
+      })
+      .join("")
+  })
+
+  return result
+}
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -118,9 +130,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     console.log("📊 Données template préparées")
 
-    // Compiler le template
-    const compiledTemplate = Handlebars.compile(template.template_content)
-    const generatedDocument = compiledTemplate(templateData)
+    // Compiler le template avec notre moteur simple
+    const generatedDocument = compileTemplate(template.template_content, templateData)
 
     console.log("✅ Document généré")
 
