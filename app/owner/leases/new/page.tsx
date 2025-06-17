@@ -16,10 +16,12 @@ import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 import { CalendarIcon, ChevronLeft, ChevronRight, Upload, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
-import { supabase } from "@/lib/supabase"
+import { authService } from "@/lib/auth-service"
+
+// Client Supabase côté client
+// const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 
 export default function NewLeasePage() {
   const router = useRouter()
@@ -50,10 +52,6 @@ export default function NewLeasePage() {
     documents: [] as File[],
   })
 
-  useEffect(() => {
-    checkAuthAndLoadData()
-  }, [applicationId])
-
   const checkAuthAndLoadData = async () => {
     try {
       setLoading(true)
@@ -72,11 +70,18 @@ export default function NewLeasePage() {
       }
 
       setUser(currentUser)
-      console.log("👤 Utilisateur connecté:", currentUser.id)
+      await Promise.all([loadApplications(currentUser.id), loadScoringPreferences(currentUser.id)])
+    } catch (error) {
+      console.error("Erreur auth:", error)
+      toast.error("Erreur d'authentification")
+    } finally {
+      setLoading(false)
+    }
+  }
 
       // Charger les propriétés du propriétaire
       try {
-        const propertiesResponse = await fetch(`/api/properties?owner_id=${currentUser.id}`)
+        const propertiesResponse = await fetch(`/api/properties/owner?owner_id=${currentUser.id}`)
         console.log("🏠 Réponse propriétés:", propertiesResponse.status)
 
         if (propertiesResponse.ok) {
@@ -118,13 +123,11 @@ export default function NewLeasePage() {
               // Charger les détails du locataire
               if (app.tenant_id) {
                 try {
-                  const tenantResponse = await fetch(`/api/applications/${applicationId}/tenant`)
+                  const tenantResponse = await fetch(`/api/users/${app.tenant_id}`)
                   if (tenantResponse.ok) {
                     const tenantData = await tenantResponse.json()
-                    console.log("👤 Locataire chargé:", tenantData.tenant?.email)
-                    if (tenantData.tenant) {
-                      setTenants([tenantData.tenant])
-                    }
+                    console.log("👤 Locataire chargé:", tenantData.user?.email)
+                    setTenants([tenantData.user])
                   } else {
                     console.error("Erreur chargement locataire:", tenantResponse.status)
                   }
@@ -144,11 +147,11 @@ export default function NewLeasePage() {
       } else {
         // Charger la liste des locataires potentiels
         try {
-          const tenantsResponse = await fetch(`/api/applications/tenant-owner?owner_id=${currentUser.id}`)
+          const tenantsResponse = await fetch(`/api/users?type=tenant`)
           if (tenantsResponse.ok) {
             const tenantsData = await tenantsResponse.json()
-            console.log("👥 Locataires chargés:", tenantsData.tenants?.length || 0)
-            setTenants(tenantsData.tenants || [])
+            console.log("👥 Locataires chargés:", tenantsData.users?.length || 0)
+            setTenants(tenantsData.users || [])
           } else {
             console.error("Erreur chargement locataires:", tenantsResponse.status)
           }
@@ -242,9 +245,9 @@ export default function NewLeasePage() {
         tenant_id: formData.tenant_id,
         start_date: formData.start_date?.toISOString().split("T")[0],
         end_date: formData.end_date?.toISOString().split("T")[0],
-        monthly_rent: Number.parseFloat(formData.monthly_rent),
-        charges: formData.charges ? Number.parseFloat(formData.charges) : 0,
-        deposit: formData.deposit ? Number.parseFloat(formData.deposit) : 0,
+		  monthly_rent: Number(formData.monthly_rent).toFixed(2),
+		  charges: formData.charges ? Number(formData.charges).toFixed(2) : "0.00",
+		  deposit: formData.deposit ? Number(formData.deposit).toFixed(2) : "0.00",
         lease_type: formData.lease_type,
         application_id: applicationId || undefined,
         metadata: {
@@ -257,20 +260,10 @@ export default function NewLeasePage() {
 
       console.log("📝 Données à envoyer:", leaseData)
 
-      // Récupérer le token de session depuis Supabase
-      const { data: sessionData } = await supabase.auth.getSession()
-
-      if (!sessionData.session?.access_token) {
-        toast.error("Vous n'êtes pas connecté ou votre session a expiré")
-        setSaving(false)
-        return
-      }
-
       const response = await fetch("/api/leases", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${sessionData.session.access_token}`,
         },
         body: JSON.stringify(leaseData),
       })
@@ -403,7 +396,7 @@ export default function NewLeasePage() {
                       </div>
                       <div>
                         <span className="text-muted-foreground">Type:</span>
-                        <p>{selectedProperty.type}</p>
+                        <p>{selectedProperty.property_type}</p>
                       </div>
                       <div>
                         <span className="text-muted-foreground">Surface:</span>
@@ -476,7 +469,7 @@ export default function NewLeasePage() {
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="lease_type">Type de bail</Label>
-                  <div className="grid grid-cols-3 gap-4 pt-2">
+                   <div className="grid grid-cols-3 gap-4 pt-2">
                     <div
                       className={`flex flex-col items-center justify-between rounded-md border-2 ${
                         formData.lease_type === "unfurnished"
@@ -747,7 +740,7 @@ export default function NewLeasePage() {
                       <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
                         <div>
                           <span className="text-muted-foreground">Type:</span>
-                          <p>{selectedProperty.type}</p>
+                          <p>{selectedProperty.property_type}</p>
                         </div>
                         <div>
                           <span className="text-muted-foreground">Surface:</span>
