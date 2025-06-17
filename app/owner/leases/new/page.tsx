@@ -115,22 +115,10 @@ export default function NewLeasePage() {
                 deposit: (app.property?.price * 1).toString() || "",
               }))
 
-              // Charger les détails du locataire
-              if (app.tenant_id) {
-                try {
-                  const tenantResponse = await fetch(`/api/applications/${applicationId}/tenant`)
-                  if (tenantResponse.ok) {
-                    const tenantData = await tenantResponse.json()
-                    console.log("👤 Locataire chargé:", tenantData.tenant?.email)
-                    if (tenantData.tenant) {
-                      setTenants([tenantData.tenant])
-                    }
-                  } else {
-                    console.error("Erreur chargement locataire:", tenantResponse.status)
-                  }
-                } catch (error) {
-                  console.error("Erreur locataire:", error)
-                }
+              // Utiliser directement les données du tenant depuis l'application
+              if (app.tenant) {
+                console.log("👤 Locataire chargé depuis l'application:", app.tenant.email)
+                setTenants([app.tenant])
               }
             }
           } else {
