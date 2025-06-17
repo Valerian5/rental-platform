@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import { FileText, Download, Printer, Send, CheckCircle, RefreshCw } from "lucide-react"
+import { FileText, Download, Printer, Send, CheckCircle, RefreshCw, Edit } from "lucide-react"
 import { PageHeader } from "@/components/page-header"
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
 import { authService } from "@/lib/auth-service"
@@ -92,6 +92,11 @@ export default function LeaseDetailPage() {
       if (data.success) {
         toast.success("Document généré avec succès")
         await loadLease() // Recharger pour avoir le document
+
+        // Afficher un message informatif
+        toast.info("Vous pouvez maintenant vérifier et compléter les données si nécessaire", {
+          duration: 5000,
+        })
       } else {
         toast.error(data.error || "Erreur lors de la génération")
       }
@@ -321,18 +326,27 @@ export default function LeaseDetailPage() {
             </CardHeader>
             <CardContent>
               {lease.generated_document ? (
-                <div className="bg-white border rounded-lg p-8 print:shadow-none print:border-none">
-                  <div
-                    className="prose prose-sm max-w-none"
-                    dangerouslySetInnerHTML={{
-                      __html: lease.generated_document
-                        .replace(/\n/g, "<br>")
-                        .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-                        .replace(/^# (.*$)/gim, "<h1>$1</h1>")
-                        .replace(/^## (.*$)/gim, "<h2>$1</h2>")
-                        .replace(/^### (.*$)/gim, "<h3>$1</h3>"),
-                    }}
-                  />
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-medium">Document généré</h3>
+                    <Button variant="outline" onClick={() => router.push(`/owner/leases/${lease.id}/complete`)}>
+                      <Edit className="h-4 w-4 mr-2" />
+                      Compléter les données
+                    </Button>
+                  </div>
+                  <div className="bg-white border rounded-lg p-8 print:shadow-none print:border-none">
+                    <div
+                      className="prose prose-sm max-w-none"
+                      dangerouslySetInnerHTML={{
+                        __html: lease.generated_document
+                          .replace(/\n/g, "<br>")
+                          .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+                          .replace(/^# (.*$)/gim, "<h1>$1</h1>")
+                          .replace(/^## (.*$)/gim, "<h2>$1</h2>")
+                          .replace(/^### (.*$)/gim, "<h3>$1</h3>"),
+                      }}
+                    />
+                  </div>
                 </div>
               ) : (
                 <div className="text-center py-12">
@@ -342,14 +356,20 @@ export default function LeaseDetailPage() {
                     Le document de bail n'a pas encore été généré. Cliquez sur "Générer le document" pour créer le
                     contrat.
                   </p>
-                  <Button onClick={generateDocument} disabled={generating}>
-                    {generating ? (
-                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <FileText className="h-4 w-4 mr-2" />
-                    )}
-                    {generating ? "Génération..." : "Générer le document"}
-                  </Button>
+                  <div className="space-x-2">
+                    <Button onClick={generateDocument} disabled={generating}>
+                      {generating ? (
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <FileText className="h-4 w-4 mr-2" />
+                      )}
+                      {generating ? "Génération..." : "Générer le document"}
+                    </Button>
+                    <Button variant="outline" onClick={() => router.push(`/owner/leases/${lease.id}/complete`)}>
+                      <Edit className="h-4 w-4 mr-2" />
+                      Compléter les données d'abord
+                    </Button>
+                  </div>
                 </div>
               )}
             </CardContent>

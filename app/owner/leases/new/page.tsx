@@ -16,12 +16,10 @@ import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 import { CalendarIcon, ChevronLeft, ChevronRight, Upload, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
-import { authService } from "@/lib/auth-service"
-
-// Client Supabase côté client
-// const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+import { supabase } from "@/lib/supabase"
 
 export default function NewLeasePage() {
   const router = useRouter()
@@ -78,7 +76,7 @@ export default function NewLeasePage() {
 
       // Charger les propriétés du propriétaire
       try {
-        const propertiesResponse = await fetch(`/api/properties/owner?owner_id=${currentUser.id}`)
+        const propertiesResponse = await fetch(`/api/properties?owner_id=${currentUser.id}`)
         console.log("🏠 Réponse propriétés:", propertiesResponse.status)
 
         if (propertiesResponse.ok) {
@@ -117,20 +115,10 @@ export default function NewLeasePage() {
                 deposit: (app.property?.price * 1).toString() || "",
               }))
 
-              // Charger les détails du locataire
-              if (app.tenant_id) {
-                try {
-                  const tenantResponse = await fetch(`/api/users/${app.tenant_id}`)
-                  if (tenantResponse.ok) {
-                    const tenantData = await tenantResponse.json()
-                    console.log("👤 Locataire chargé:", tenantData.user?.email)
-                    setTenants([tenantData.user])
-                  } else {
-                    console.error("Erreur chargement locataire:", tenantResponse.status)
-                  }
-                } catch (error) {
-                  console.error("Erreur locataire:", error)
-                }
+              // Utiliser directement les données du tenant depuis l'application
+              if (app.tenant) {
+                console.log("👤 Locataire chargé depuis l'application:", app.tenant.email)
+                setTenants([app.tenant])
               }
             }
           } else {
@@ -144,11 +132,11 @@ export default function NewLeasePage() {
       } else {
         // Charger la liste des locataires potentiels
         try {
-          const tenantsResponse = await fetch(`/api/users?type=tenant`)
+          const tenantsResponse = await fetch(`/api/applications/tenant-owner?owner_id=${currentUser.id}`)
           if (tenantsResponse.ok) {
             const tenantsData = await tenantsResponse.json()
-            console.log("👥 Locataires chargés:", tenantsData.users?.length || 0)
-            setTenants(tenantsData.users || [])
+            console.log("👥 Locataires chargés:", tenantsData.tenants?.length || 0)
+            setTenants(tenantsData.tenants || [])
           } else {
             console.error("Erreur chargement locataires:", tenantsResponse.status)
           }
@@ -170,11 +158,35 @@ export default function NewLeasePage() {
   }
 
   const handleSelectChange = (name: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [name]: value }))
+    setFormData((prev) => {
+      const newData = { ...prev, [name]: value }
+
+      // Recalculer la date de fin si on change le type de bail et qu'on a une date de début
+      if (name === "lease_type" && prev.start_date) {
+        const yearsToAdd = value === "furnished" ? 1 : 3
+        const endDate = new Date(prev.start_date)
+        endDate.setFullYear(endDate.getFullYear() + yearsToAdd)
+        newData.end_date = endDate
+      }
+
+      return newData
+    })
   }
 
   const handleDateChange = (name: string, date: Date | null) => {
-    setFormData((prev) => ({ ...prev, [name]: date }))
+    setFormData((prev) => {
+      const newData = { ...prev, [name]: date }
+
+      // Auto-calculer la date de fin selon le type de bail
+      if (name === "start_date" && date) {
+        const yearsToAdd = prev.lease_type === "furnished" ? 1 : 3
+        const endDate = new Date(date)
+        endDate.setFullYear(endDate.getFullYear() + yearsToAdd)
+        newData.end_date = endDate
+      }
+
+      return newData
+    })
   }
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -242,9 +254,9 @@ export default function NewLeasePage() {
         tenant_id: formData.tenant_id,
         start_date: formData.start_date?.toISOString().split("T")[0],
         end_date: formData.end_date?.toISOString().split("T")[0],
-		  monthly_rent: Number(formData.monthly_rent).toFixed(2),
-		  charges: formData.charges ? Number(formData.charges).toFixed(2) : "0.00",
-		  deposit: formData.deposit ? Number(formData.deposit).toFixed(2) : "0.00",
+        monthly_rent: Number.parseFloat(formData.monthly_rent),
+        charges: formData.charges ? Number.parseFloat(formData.charges) : 0,
+        deposit: formData.deposit ? Number.parseFloat(formData.deposit) : 0,
         lease_type: formData.lease_type,
         application_id: applicationId || undefined,
         metadata: {
@@ -257,10 +269,20 @@ export default function NewLeasePage() {
 
       console.log("📝 Données à envoyer:", leaseData)
 
+      // Récupérer le token de session depuis Supabase
+      const { data: sessionData } = await supabase.auth.getSession()
+
+      if (!sessionData.session?.access_token) {
+        toast.error("Vous n'êtes pas connecté ou votre session a expiré")
+        setSaving(false)
+        return
+      }
+
       const response = await fetch("/api/leases", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionData.session.access_token}`,
         },
         body: JSON.stringify(leaseData),
       })
@@ -276,14 +298,20 @@ export default function NewLeasePage() {
       const data = await response.json()
       console.log("✅ Bail créé:", data.lease?.id)
 
+      toast.success("Bail créé avec succès")
+
+      // Rediriger vers la page de completion
+      if (data.redirect) {
+        router.push(data.redirect)
+      } else {
+        router.push(`/owner/leases/${data.lease.id}`)
+      }
+
       // Gestion des documents (optionnel pour l'instant)
       if (formData.documents.length > 0) {
         console.log("📎 Upload documents...")
         // TODO: Implémenter l'upload de documents
       }
-
-      toast.success("Bail créé avec succès")
-      router.push(`/owner/leases/${data.lease.id}`)
     } catch (error) {
       console.error("Erreur création bail:", error)
       toast.error(error instanceof Error ? error.message : "Erreur lors de la création du bail")
@@ -389,11 +417,14 @@ export default function NewLeasePage() {
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div>
                         <span className="text-muted-foreground">Adresse:</span>
-                        <p>{selectedProperty.address}</p>
+                        <p>
+                          {selectedProperty.address}
+                          {selectedProperty.city && `, ${selectedProperty.city}`}
+                        </p>
                       </div>
                       <div>
                         <span className="text-muted-foreground">Type:</span>
-                        <p>{selectedProperty.property_type}</p>
+                        <p>{selectedProperty.type}</p>
                       </div>
                       <div>
                         <span className="text-muted-foreground">Surface:</span>
@@ -403,6 +434,12 @@ export default function NewLeasePage() {
                         <span className="text-muted-foreground">Loyer:</span>
                         <p>{selectedProperty.price} €/mois</p>
                       </div>
+                      {selectedProperty.charges && (
+                        <div>
+                          <span className="text-muted-foreground">Charges:</span>
+                          <p>{selectedProperty.charges} €/mois</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -466,7 +503,7 @@ export default function NewLeasePage() {
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="lease_type">Type de bail</Label>
-                   <div className="grid grid-cols-3 gap-4 pt-2">
+                  <div className="grid grid-cols-3 gap-4 pt-2">
                     <div
                       className={`flex flex-col items-center justify-between rounded-md border-2 ${
                         formData.lease_type === "unfurnished"
@@ -737,7 +774,7 @@ export default function NewLeasePage() {
                       <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
                         <div>
                           <span className="text-muted-foreground">Type:</span>
-                          <p>{selectedProperty.property_type}</p>
+                          <p>{selectedProperty.type}</p>
                         </div>
                         <div>
                           <span className="text-muted-foreground">Surface:</span>
