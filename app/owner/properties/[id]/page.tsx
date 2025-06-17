@@ -33,7 +33,7 @@ export default function PropertyDetailPage() {
   const [activeTab, setActiveTab] = useState(initialTab)
   const [slotsLoaded, setSlotsLoaded] = useState(false)
 
-  // Gestionnaire de changement de créneaux - MÉMORISÉ
+  // Gestionnaire de changement de créneaux - MÉMORISÉ et STABLE
   const handleSlotsChange = useCallback((newSlots: any[]) => {
     console.log("🔄 Mise à jour des créneaux:", newSlots.length)
     setVisitSlots(newSlots)
@@ -80,8 +80,7 @@ export default function PropertyDetailPage() {
         setProperty(propertyData)
         console.log("✅ Propriété chargée:", propertyData)
 
-        // Initialiser les créneaux vides - le VisitScheduler se chargera du loading
-        setVisitSlots([])
+        // Marquer comme chargé
         setSlotsLoaded(true)
       } catch (error: any) {
         console.error("❌ Erreur lors du chargement:", error)
