@@ -46,57 +46,96 @@ export function VisitScheduler({
 
   // Ref pour éviter les appels multiples
   const loadingRef = useRef(false)
-  const initialLoadRef = useRef(false)
+  const [hasInitialLoad, setHasInitialLoad] = useState(false)
 
   // Fonction de chargement des créneaux - STABLE
-  const loadSlots = useCallback(async () => {
-    if (loadingRef.current || !propertyId) return
+  const loadSlotsFromDatabase = useCallback(async () => {
+    if (!propertyId || loadingRef.current) {
+      console.log("🚫 Chargement évité - pas de propertyId ou déjà en cours")
+      return
+    }
 
-    loadingRef.current = true
+    console.log("🔄 Chargement des créneaux depuis la DB pour:", propertyId)
     setIsLoading(true)
+    loadingRef.current = true
 
     try {
-      console.log("🔄 Chargement des créneaux depuis la DB pour:", propertyId)
-
-      const response = await fetch(`/api/properties/${propertyId}/visit-slots`)
-      if (!response.ok) {
-        throw new Error(`Erreur ${response.status}: ${response.statusText}`)
-      }
-
-      const data = await response.json()
-      const loadedSlots = data.slots || []
-
-      console.log("✅ Créneaux chargés depuis la DB:", loadedSlots.length)
-
-      setSlots(loadedSlots)
-      onSlotsChange(loadedSlots)
-    } catch (error: any) {
-      console.error("❌ Erreur lors du chargement des créneaux:", error)
-      toast("Erreur lors du chargement des créneaux", {
-        description: error.message,
-        type: "error",
+      // const headers = await getAuthHeaders() // Assuming getAuthHeaders is defined elsewhere
+      const response = await fetch(`/api/properties/${propertyId}/visit-slots`, {
+        // headers, // Uncomment when getAuthHeaders is available
       })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log("✅ Créneaux chargés depuis la DB:", data.slots?.length || 0)
+
+        // const cleanedSlots = (data.slots || []).map((slot: any) => ({
+        //   ...slot,
+        //   start_time: formatTimeString(slot.start_time), // Assuming formatTimeString is defined elsewhere
+        //   end_time: formatTimeString(slot.end_time), // Assuming formatTimeString is defined elsewhere
+        // }))
+
+        const loadedSlots = data.slots || []
+
+        // Filtrer les créneaux pour s'assurer qu'ils ont tous les champs requis
+        const cleanedSlots = loadedSlots.filter(
+          (slot: VisitSlot) =>
+            slot.id &&
+            slot.property_id &&
+            slot.date &&
+            slot.start_time &&
+            slot.end_time &&
+            slot.max_visitors !== undefined &&
+            slot.current_bookings !== undefined &&
+            slot.is_available !== undefined &&
+            slot.created_at,
+        )
+
+        // Mettre à jour l'état local
+        onSlotsChange(cleanedSlots)
+        setSlots(cleanedSlots)
+        setHasInitialLoad(true) // CORRECTION: Toujours marquer comme chargé
+      } else {
+        const errorData = await response.json()
+        console.error("❌ Erreur chargement créneaux:", response.status, errorData)
+        if (response.status === 401) {
+          toast.error("Erreur d'authentification. Veuillez vous reconnecter.")
+        } else {
+          toast.error(errorData.error || "Erreur lors du chargement des créneaux")
+        }
+        setHasInitialLoad(true) // CORRECTION: Marquer comme chargé même en cas d'erreur
+      }
+    } catch (error) {
+      console.error("❌ Erreur chargement créneaux:", error)
+      toast.error("Erreur lors du chargement des créneaux")
+      setHasInitialLoad(true) // CORRECTION: Marquer comme chargé même en cas d'erreur
     } finally {
       setIsLoading(false)
       loadingRef.current = false
     }
   }, [propertyId, onSlotsChange])
 
-  // Chargement initial - UNE SEULE FOIS
+  // Charger les créneaux au montage SEULEMENT si mode management et pas de créneaux existants
   useEffect(() => {
-    if (!initialLoadRef.current && propertyId) {
+    if (mode === "management" && propertyId && !hasInitialLoad && initialSlots.length === 0) {
       console.log("🔄 Chargement initial des créneaux...")
-      initialLoadRef.current = true
-      loadSlots()
+      loadSlotsFromDatabase()
+    } else if (initialSlots.length > 0 && !hasInitialLoad) {
+      console.log("✅ Utilisation des créneaux existants:", initialSlots.length)
+      setHasInitialLoad(true)
+    } else if (!hasInitialLoad) {
+      // CORRECTION: Marquer comme chargé même si 0 créneaux pour éviter la boucle
+      console.log("✅ Marquage comme chargé (0 créneaux)")
+      setHasInitialLoad(true)
     }
-  }, [propertyId, loadSlots])
+  }, [mode, propertyId, hasInitialLoad, initialSlots.length, loadSlotsFromDatabase])
 
   // Synchronisation avec les props - SANS RECHARGEMENT
   useEffect(() => {
     if (initialSlots.length !== slots.length) {
       setSlots(initialSlots)
     }
-  }, [initialSlots.length]) // Seulement si la longueur change
+  }, [initialSlots]) // Seulement si la longueur change
 
   const createSlot = async () => {
     if (!newSlot.date || !newSlot.start_time || !newSlot.end_time) {
