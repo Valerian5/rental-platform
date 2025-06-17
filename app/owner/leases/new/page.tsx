@@ -52,6 +52,10 @@ export default function NewLeasePage() {
     documents: [] as File[],
   })
 
+  useEffect(() => {
+    checkAuthAndLoadData()
+  }, [applicationId])
+
   const checkAuthAndLoadData = async () => {
     try {
       setLoading(true)
@@ -70,14 +74,7 @@ export default function NewLeasePage() {
       }
 
       setUser(currentUser)
-      await Promise.all([loadApplications(currentUser.id), loadScoringPreferences(currentUser.id)])
-    } catch (error) {
-      console.error("Erreur auth:", error)
-      toast.error("Erreur d'authentification")
-    } finally {
-      setLoading(false)
-    }
-  }
+      console.log("👤 Utilisateur connecté:", currentUser.id)
 
       // Charger les propriétés du propriétaire
       try {
