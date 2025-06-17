@@ -144,14 +144,11 @@ const loadSlotsFromDatabase = useCallback(async () => {
       }));
 
       onSlotsChange(cleanedSlots);
+      setHasInitialLoad(true); // Déplacez ceci ici
     } else {
       const errorData = await response.json();
       console.error("❌ Erreur chargement créneaux:", response.status, errorData);
-      if (response.status === 401) {
-        toast.error("Erreur d'authentification. Veuillez vous reconnecter.");
-      } else {
-        toast.error(errorData.error || "Erreur lors du chargement des créneaux");
-      }
+      toast.error(errorData.error || "Erreur lors du chargement des créneaux");
     }
   } catch (error) {
     console.error("❌ Erreur chargement créneaux:", error);
@@ -159,7 +156,6 @@ const loadSlotsFromDatabase = useCallback(async () => {
   } finally {
     setIsLoading(false);
     loadingRef.current = false;
-    setHasInitialLoad(true); // Toujours marquer comme chargé, même en cas d'erreur
   }
 }, [propertyId, onSlotsChange]);
 
@@ -169,7 +165,7 @@ useEffect(() => {
     console.log("🔄 Chargement initial des créneaux...");
     loadSlotsFromDatabase();
   }
-}, [mode, propertyId, hasInitialLoad, loadSlotsFromDatabase]);
+}, [mode, propertyId]); // Retirez hasInitialLoad et loadSlotsFromDatabase des dépendances
 
   const saveSlotsToDatabase = async (slots: VisitSlot[]) => {
     if (!propertyId || mode !== "management") return
