@@ -263,8 +263,8 @@ export default function NewPropertyPage() {
         postal_code: formData.postal_code,
         hide_exact_address: formData.hide_exact_address,
         surface: Number.parseInt(formData.surface),
-        rent_excluding_charges: Number.parseFloat(formData.rent_excluding_charges),
-        charges_amount: Number.parseFloat(formData.charges_amount),
+        price: Number.parseFloat(formData.rent_excluding_charges), // Utiliser price au lieu de rent_excluding_charges
+        charges: Number.parseFloat(formData.charges_amount), // Utiliser charges au lieu de charges_amount
         property_type: formData.property_type as "apartment" | "house" | "studio" | "loft",
         rental_type: formData.rental_type as "unfurnished" | "furnished" | "shared",
         construction_year: formData.construction_year ? Number.parseInt(formData.construction_year) : null,
@@ -284,6 +284,9 @@ export default function NewPropertyPage() {
         move_in_date: formData.move_in_date || null,
         rent_payment_day: formData.rent_payment_day ? Number.parseInt(formData.rent_payment_day) : null,
         owner_id: currentUser.id,
+        available: true,
+        furnished: formData.rental_type === "furnished",
+        // Nouveaux champs
         income_multiplier: formData.income_multiplier || "3.0",
         accepted_professional_situations: formData.accepted_professional_situations || [],
         min_guarantor_income: formData.min_guarantor_income ? Number.parseFloat(formData.min_guarantor_income) : null,

@@ -171,7 +171,18 @@ export const propertyService = {
     console.log("🏠 PropertyService.createProperty")
 
     try {
-      const { data, error } = await supabase.from("properties").insert(propertyData).select().single()
+      // Mapper rent_excluding_charges vers price si nécessaire
+      const mappedData = {
+        ...propertyData,
+        price: propertyData.price || propertyData.rent_excluding_charges || 0,
+        // S'assurer que les champs obligatoires sont présents
+        surface: propertyData.surface || 0,
+        rooms: propertyData.rooms || 1,
+        bedrooms: propertyData.bedrooms || 0,
+        bathrooms: propertyData.bathrooms || 0,
+      }
+
+      const { data, error } = await supabase.from("properties").insert(mappedData).select().single()
 
       if (error) {
         console.error("❌ Erreur création propriété:", error)
