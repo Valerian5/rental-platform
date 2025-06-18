@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -84,17 +84,17 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
   })
   const [customDuration, setCustomDuration] = useState(45)
   const [isSaving, setIsSaving] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const [hasInitialLoad, setHasInitialLoad] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
   const loadingRef = useRef(false)
 
-  // Chargement initial : fetch une seule fois puis setHasInitialLoad(true) même si la liste est vide
+  // Chargement initial : fetch une seule fois puis setIsLoading(false) même si la liste est vide
   useEffect(() => {
     let cancelled = false
-    async function fetchSlots() {
-      if (mode === "management" && propertyId && !hasInitialLoad) {
-        setIsLoading(true)
-        loadingRef.current = true
+    if (mode === "management" && propertyId && !hasLoadedOnce) {
+      loadingRef.current = true
+      setIsLoading(true)
+      ;(async () => {
         try {
           const headers = await getAuthHeaders()
           const response = await fetch(`/api/properties/${propertyId}/visit-slots`, { headers })
@@ -116,18 +116,22 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
         } finally {
           if (!cancelled) {
             setIsLoading(false)
-            setHasInitialLoad(true)
             loadingRef.current = false
+            setHasLoadedOnce(true)
           }
         }
-      } else {
-        setHasInitialLoad(true)
-      }
+      })()
+    } else if (!hasLoadedOnce) {
+      // mode création ou déjà chargé
+      setIsLoading(false)
+      setHasLoadedOnce(true)
     }
-    fetchSlots()
     return () => { cancelled = true }
     // eslint-disable-next-line
-  }, [mode, propertyId, hasInitialLoad, onSlotsChange])
+  }, [mode, propertyId, hasLoadedOnce])
+
+  // --- LE RESTE DU CODE EST STRICTEMENT IDENTIQUE À AVANT ---
+  // ... handlers, calendar, config, rendering, etc (ne pas toucher)
 
   const saveSlotsToDatabase = async (slots: VisitSlot[]) => {
     if (!propertyId || mode !== "management") return
@@ -334,7 +338,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
   const timeSlots = generateTimeSlots(dayConfig)
   const totalSlots = visitSlots.length
 
-  if (isLoading && !hasInitialLoad) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="text-center space-y-4">
@@ -345,7 +349,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
     )
   }
 
-  if (!isLoading && hasInitialLoad && visitSlots.length === 0 && !selectedDate) {
+  if (!isLoading && hasLoadedOnce && visitSlots.length === 0 && !selectedDate) {
     return (
       <div className="flex flex-col items-center justify-center py-12 gap-4">
         <Calendar className="h-10 w-10 text-muted-foreground" />
