@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect, useCallback } from "react"
 import { useRouter, useParams, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -35,68 +34,48 @@ export default function PropertyDetailPage() {
 
   // Gestionnaire de changement de créneaux - MÉMORISÉ
   const handleSlotsChange = useCallback((newSlots: any[]) => {
-    console.log("🔄 Mise à jour des créneaux:", newSlots.length)
     setVisitSlots(newSlots)
   }, [])
 
-useEffect(() => {
-  const fetchData = async () => {
-    console.log("🔄 Chargement des données de la propriété...")
-    setIsLoading(true)
-    setError(null)
+  useEffect(() => {
+    let isMounted = true
+    const fetchData = async () => {
+      setIsLoading(true)
+      setError(null)
+      try {
+        const user = await authService.getCurrentUser()
+        if (!user || user.user_type !== "owner") {
+          toast("Vous devez être connecté en tant que propriétaire", { description: "Erreur", type: "error" })
+          router.push("/login")
+          return
+        }
+        setCurrentUser(user)
 
-    try {
-      // Vérifier l'authentification
-      const user = await authService.getCurrentUser()
-      if (!user || user.user_type !== "owner") {
-        toast("Vous devez être connecté en tant que propriétaire", {
-          description: "Erreur",
-          type: "error",
-        })
-        router.push("/login")
-        return
+        if (!params.id) throw new Error("ID de propriété manquant")
+        const propertyData = await propertyService.getPropertyById(params.id as string)
+        if (propertyData.owner_id !== user.id) {
+          toast("Vous n'avez pas accès à ce bien", { description: "Erreur", type: "error" })
+          router.push("/owner/dashboard")
+          return
+        }
+
+        if (isMounted) {
+          setProperty(propertyData)
+          setVisitSlots([]) // Réinitialise UNIQUEMENT au changement de bien
+          setSlotsLoaded(true)
+        }
+      } catch (error: any) {
+        if (isMounted) {
+          setError(error.message || "Erreur lors du chargement du bien")
+          toast("Erreur lors du chargement du bien", { description: "Erreur", type: "error" })
+        }
+      } finally {
+        if (isMounted) setIsLoading(false)
       }
-      setCurrentUser(user)
-      console.log("✅ Utilisateur connecté:", user.id)
-
-      if (!params.id) {
-        throw new Error("ID de propriété manquant")
-      }
-
-      // Récupérer la propriété
-      console.log("📋 Récupération de la propriété:", params.id)
-      const propertyData = await propertyService.getPropertyById(params.id as string)
-
-      // Vérifier que le bien appartient au propriétaire connecté
-      if (propertyData.owner_id !== user.id) {
-        toast("Vous n'avez pas accès à ce bien", {
-          description: "Erreur",
-          type: "error",
-        })
-        router.push("/owner/dashboard")
-        return
-      }
-
-      setProperty(propertyData)
-      console.log("✅ Propriété chargée:", propertyData)
-
-      // Réinitialiser les créneaux UNIQUEMENT au premier chargement du bien (quand params.id change)
-      setVisitSlots([])
-      setSlotsLoaded(true)
-    } catch (error: any) {
-      console.error("❌ Erreur lors du chargement:", error)
-      setError(error.message || "Erreur lors du chargement du bien")
-      toast("Erreur lors du chargement du bien", {
-        description: "Erreur",
-        type: "error",
-      })
-    } finally {
-      setIsLoading(false)
     }
-  }
-
-  fetchData()
-}, [params.id, router])
+    fetchData()
+    return () => { isMounted = false }
+  }, [params.id, router])
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files

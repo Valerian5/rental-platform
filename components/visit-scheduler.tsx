@@ -46,52 +46,26 @@ const DURATION_OPTIONS = [
 ]
 
 const MONTHS = [
-  "Janvier",
-  "Février",
-  "Mars",
-  "Avril",
-  "Mai",
-  "Juin",
-  "Juillet",
-  "Août",
-  "Septembre",
-  "Octobre",
-  "Novembre",
-  "Décembre",
+  "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+  "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre",
 ]
 
 const DAYS_SHORT = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
 
-// Fonction pour formater l'heure
 const formatTimeString = (timeStr: string): string => {
   if (!timeStr) return "00:00"
-  if (/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(timeStr)) {
-    return timeStr
-  }
-  if (/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/.test(timeStr)) {
-    return timeStr.substring(0, 5)
-  }
+  if (/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(timeStr)) return timeStr
+  if (/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/.test(timeStr)) return timeStr.substring(0, 5)
   return "00:00"
 }
 
-// Fonction pour formater une date CORRECTEMENT
 const formatDateForDisplay = (dateStr: string): string => {
   try {
     const [year, month, day] = dateStr.split("-").map(Number)
     const date = new Date(year, month - 1, day)
-
-    if (isNaN(date.getTime())) {
-      console.error("Date invalide:", dateStr)
-      return "Date invalide"
-    }
-
-    return date.toLocaleDateString("fr-FR", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-    })
-  } catch (error) {
-    console.error("Erreur formatage date:", error, "pour:", dateStr)
+    if (isNaN(date.getTime())) return "Date invalide"
+    return date.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })
+  } catch {
     return "Date invalide"
   }
 }
@@ -113,72 +87,47 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
   const [isLoading, setIsLoading] = useState(false)
   const [hasInitialLoad, setHasInitialLoad] = useState(false)
 
-  // Référence pour éviter les chargements multiples
   const loadingRef = useRef(false)
 
-  // Fonction de chargement des créneaux - SIMPLIFIÉE
-  const loadSlotsFromDatabase = useCallback(async () => {
-    if (!propertyId || loadingRef.current) {
-      console.log("🚫 Chargement évité - pas de propertyId ou déjà en cours")
-      return
-    }
-
-    console.log("🔄 Chargement des créneaux depuis la DB pour:", propertyId)
-    setIsLoading(true)
-    loadingRef.current = true
-
-    try {
-      const headers = await getAuthHeaders()
-      const response = await fetch(`/api/properties/${propertyId}/visit-slots`, {
-        headers,
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        console.log("✅ Créneaux chargés depuis la DB:", data.slots?.length || 0)
-
-        const cleanedSlots = (data.slots || []).map((slot: any) => ({
-          ...slot,
-          start_time: formatTimeString(slot.start_time),
-          end_time: formatTimeString(slot.end_time),
-        }))
-
-        // Mettre à jour l'état local
-        onSlotsChange(cleanedSlots)
-      } else {
-        const errorData = await response.json()
-        console.error("❌ Erreur chargement créneaux:", response.status, errorData)
-        if (response.status === 401) {
-          toast.error("Erreur d'authentification. Veuillez vous reconnecter.")
-        } else {
-          toast.error(errorData.error || "Erreur lors du chargement des créneaux")
+  // Chargement initial, une seule fois au montage ou changement de bien
+  useEffect(() => {
+    if (mode === "management" && propertyId && !hasInitialLoad) {
+      const loadSlotsFromDatabase = async () => {
+        if (loadingRef.current) return
+        loadingRef.current = true
+        setIsLoading(true)
+        try {
+          const headers = await getAuthHeaders()
+          const response = await fetch(`/api/properties/${propertyId}/visit-slots`, { headers })
+          if (response.ok) {
+            const data = await response.json()
+            const cleanedSlots = (data.slots || []).map((slot: any) => ({
+              ...slot,
+              start_time: formatTimeString(slot.start_time),
+              end_time: formatTimeString(slot.end_time),
+            }))
+            onSlotsChange(cleanedSlots)
+          } else {
+            const errorData = await response.json()
+            toast.error(errorData.error || "Erreur lors du chargement des créneaux")
+          }
+        } catch (error) {
+          toast.error("Erreur lors du chargement des créneaux")
+        } finally {
+          setIsLoading(false)
+          setHasInitialLoad(true)
+          loadingRef.current = false
         }
       }
-    } catch (error) {
-      console.error("❌ Erreur chargement créneaux:", error)
-      toast.error("Erreur lors du chargement des créneaux")
-    } finally {
-      setIsLoading(false)
-      loadingRef.current = false
-      setHasInitialLoad(true) // <<<<<<<<<<<<<<<<<<<<<< CORRECTION
+      loadSlotsFromDatabase()
     }
-  }, [propertyId, onSlotsChange])
-
-  // Charger les créneaux au montage SEULEMENT si mode management et pas d'initialisation faite
-useEffect(() => {
-  if (mode === "management" && propertyId && !hasInitialLoad) {
-    loadSlotsFromDatabase()
-  }
-  // Supprime complètement le else if
-}, [mode, propertyId, hasInitialLoad, loadSlotsFromDatabase])
+  }, [mode, propertyId, hasInitialLoad, onSlotsChange])
 
   const saveSlotsToDatabase = async (slots: VisitSlot[]) => {
     if (!propertyId || mode !== "management") return
 
     setIsSaving(true)
     try {
-      console.log("💾 Sauvegarde de", slots.length, "créneaux...")
-
       const headers = await getAuthHeaders()
       const validatedSlots = slots.map((slot) => ({
         date: slot.date,
@@ -198,19 +147,12 @@ useEffect(() => {
 
       if (response.ok) {
         const data = await response.json()
-        console.log("✅ Créneaux sauvegardés:", data.message)
         toast.success(data.message || "Créneaux sauvegardés avec succès")
       } else {
         const errorData = await response.json()
-        console.error("❌ Erreur sauvegarde:", errorData)
-        if (response.status === 401) {
-          toast.error("Erreur d'authentification. Veuillez vous reconnecter.")
-        } else {
-          toast.error(errorData.error || `Erreur ${response.status}`)
-        }
+        toast.error(errorData.error || `Erreur ${response.status}`)
       }
     } catch (error) {
-      console.error("❌ Erreur sauvegarde créneaux:", error)
       toast.error("Erreur lors de la sauvegarde des créneaux")
     } finally {
       setIsSaving(false)
@@ -223,31 +165,24 @@ useEffect(() => {
     const month = currentDate.getMonth()
     const firstDay = new Date(year, month, 1)
     const startDate = new Date(firstDay)
-
     const dayOfWeek = firstDay.getDay()
     const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1
     startDate.setDate(firstDay.getDate() - daysToSubtract)
-
     const days = []
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-
     for (let i = 0; i < 42; i++) {
       const date = new Date(startDate)
       date.setDate(startDate.getDate() + i)
-
-      // Formatage explicite de la date pour éviter les problèmes de timezone
       const year = date.getFullYear()
       const month = String(date.getMonth() + 1).padStart(2, "0")
       const day = String(date.getDate()).padStart(2, "0")
       const dateStr = `${year}-${month}-${day}`
-
       const isCurrentMonth = date.getMonth() === currentDate.getMonth()
       const isToday = date.getTime() === today.getTime()
       const isPast = date < today
       const hasSlots = visitSlots.some((slot) => slot.date === dateStr)
       const bookedSlots = visitSlots.filter((slot) => slot.date === dateStr && slot.current_bookings > 0).length
-
       days.push({
         date: dateStr,
         day: date.getDate(),
@@ -258,35 +193,25 @@ useEffect(() => {
         bookedSlots,
       })
     }
-
     return days
   }
 
-  // Générer TOUS les créneaux possibles
+  // Générer TOUS les créneaux possibles pour la config du jour
   const generateTimeSlots = (config: DayConfiguration) => {
     const slots = []
     const duration = config.slotDuration === 0 ? customDuration : config.slotDuration
-
     if (!duration || duration <= 0) return slots
-
     try {
       const startTime = new Date(`2000-01-01T${config.startTime}:00`)
       const endTime = new Date(`2000-01-01T${config.endTime}:00`)
-
-      if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
-        return slots
-      }
-
+      if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) return slots
       let currentTime = new Date(startTime)
-
       while (currentTime < endTime) {
         const nextTime = new Date(currentTime.getTime() + duration * 60000)
-
         if (nextTime <= endTime) {
           const startTimeStr = currentTime.toTimeString().slice(0, 5)
           const endTimeStr = nextTime.toTimeString().slice(0, 5)
           const slotKey = `${startTimeStr}-${endTimeStr}`
-
           slots.push({
             key: slotKey,
             startTime: startTimeStr,
@@ -294,50 +219,34 @@ useEffect(() => {
             label: `${startTimeStr} - ${endTimeStr}`,
           })
         }
-
         currentTime = nextTime
       }
-    } catch (error) {
-      console.error("Erreur génération créneaux:", error)
-    }
-
+    } catch {}
     return slots
   }
 
   const navigateMonth = (direction: "prev" | "next") => {
     const newDate = new Date(currentDate)
-    if (direction === "prev") {
-      newDate.setMonth(newDate.getMonth() - 1)
-    } else {
-      newDate.setMonth(newDate.getMonth() + 1)
-    }
+    if (direction === "prev") newDate.setMonth(newDate.getMonth() - 1)
+    else newDate.setMonth(newDate.getMonth() + 1)
     setCurrentDate(newDate)
   }
 
-  // Sélectionner un jour
+  // Sélection d'un jour
   const selectDate = (dateStr: string) => {
-    console.log("📅 Date sélectionnée:", dateStr)
     setSelectedDate(dateStr)
-
-    // Récupérer les créneaux existants pour ce jour
     const existingSlots = visitSlots.filter((slot) => slot.date === dateStr)
-    console.log("🔍 Créneaux existants pour", dateStr, ":", existingSlots.length)
-
     if (existingSlots.length > 0) {
-      // Il y a des créneaux existants
       const firstSlot = existingSlots[0]
-
       try {
         const startTime = new Date(`2000-01-01T${formatTimeString(firstSlot.start_time)}:00`)
         const endTime = new Date(`2000-01-01T${formatTimeString(firstSlot.end_time)}:00`)
         const duration = (endTime.getTime() - startTime.getTime()) / 60000
-
         let commonDuration = duration
         if (!DURATION_OPTIONS.some((opt) => opt.value === duration)) {
           commonDuration = 0
           setCustomDuration(duration)
         }
-
         setDayConfig({
           date: dateStr,
           slotDuration: commonDuration,
@@ -349,8 +258,7 @@ useEffect(() => {
             (slot) => `${formatTimeString(slot.start_time)}-${formatTimeString(slot.end_time)}`,
           ),
         })
-      } catch (error) {
-        console.error("Erreur parsing créneaux existants:", error)
+      } catch {
         setDayConfig({
           date: dateStr,
           slotDuration: 30,
@@ -362,7 +270,6 @@ useEffect(() => {
         })
       }
     } else {
-      // Pas de créneaux existants
       setDayConfig({
         date: dateStr,
         slotDuration: 30,
@@ -389,9 +296,7 @@ useEffect(() => {
       toast.error("Veuillez sélectionner au moins un créneau")
       return
     }
-
     const otherDaysSlots = visitSlots.filter((slot) => slot.date !== selectedDate)
-
     const newSlots: VisitSlot[] = dayConfig.selectedSlots.map((slotKey) => {
       const [startTime, endTime] = slotKey.split("-")
       return {
@@ -404,25 +309,20 @@ useEffect(() => {
         is_available: true,
       }
     })
-
     const allSlots = [...otherDaysSlots, ...newSlots]
     onSlotsChange(allSlots)
-
     if (mode === "management") {
       await saveSlotsToDatabase(allSlots)
     } else {
-      toast.success(`${newSlots.length} créneaux configurés pour le ${formatDateForDisplay(selectedDate)}`)
+      toast.success(`${newSlots.length} créneau(x) configuré(s) pour le ${formatDateForDisplay(selectedDate)}`)
     }
   }
 
   const clearDaySlots = async () => {
     if (!selectedDate) return
-
     const otherDaysSlots = visitSlots.filter((slot) => slot.date !== selectedDate)
     onSlotsChange(otherDaysSlots)
-
     setDayConfig((prev) => ({ ...prev, selectedSlots: [] }))
-
     if (mode === "management") {
       await saveSlotsToDatabase(otherDaysSlots)
     } else {
@@ -477,7 +377,6 @@ useEffect(() => {
                 </div>
               ))}
             </div>
-
             <div className="grid grid-cols-7 gap-1">
               {calendarDays.map((day, index) => (
                 <Button
@@ -504,7 +403,6 @@ useEffect(() => {
                 </Button>
               ))}
             </div>
-
             <div className="mt-4 text-xs text-muted-foreground space-y-1">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-green-100 border border-green-300 rounded"></div>
@@ -575,7 +473,6 @@ useEffect(() => {
                       </Button>
                     ))}
                   </div>
-
                   {dayConfig.slotDuration === 0 && (
                     <div className="flex items-center gap-2">
                       <Label>Durée personnalisée :</Label>
@@ -699,7 +596,6 @@ useEffect(() => {
                           )
                         })}
                       </div>
-
                       <div className="mt-3 pt-3 border-t flex gap-2">
                         <Button
                           variant="outline"
