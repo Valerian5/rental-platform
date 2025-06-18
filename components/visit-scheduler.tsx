@@ -145,7 +145,6 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
 
         // Mettre à jour l'état local
         onSlotsChange(cleanedSlots)
-        setHasInitialLoad(true)
       } else {
         const errorData = await response.json()
         console.error("❌ Erreur chargement créneaux:", response.status, errorData)
@@ -161,19 +160,18 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
     } finally {
       setIsLoading(false)
       loadingRef.current = false
+      setHasInitialLoad(true) // <<<<<<<<<<<<<<<<<<<<<< CORRECTION
     }
   }, [propertyId, onSlotsChange])
 
-  // Charger les créneaux au montage SEULEMENT si mode management et pas de créneaux existants
+  // Charger les créneaux au montage SEULEMENT si mode management et pas d'initialisation faite
   useEffect(() => {
-    if (mode === "management" && propertyId && !hasInitialLoad && visitSlots.length === 0) {
+    if (mode === "management" && propertyId && !hasInitialLoad) {
       console.log("🔄 Chargement initial des créneaux...")
       loadSlotsFromDatabase()
-    } else if (visitSlots.length > 0 && !hasInitialLoad) {
-      console.log("✅ Utilisation des créneaux existants:", visitSlots.length)
-      setHasInitialLoad(true)
     }
-  }, [mode, propertyId, hasInitialLoad, visitSlots.length, loadSlotsFromDatabase])
+    // Plus besoin de else if lié à visitSlots.length
+  }, [mode, propertyId, hasInitialLoad, loadSlotsFromDatabase])
 
   const saveSlotsToDatabase = async (slots: VisitSlot[]) => {
     if (!propertyId || mode !== "management") return
