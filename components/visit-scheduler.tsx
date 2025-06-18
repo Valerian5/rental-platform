@@ -115,6 +115,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
 
   // Référence pour éviter les chargements multiples
   const loadingRef = useRef(false)
+  
 
   // Fonction de chargement des créneaux - SIMPLIFIÉE
 const loadSlotsFromDatabase = useCallback(async () => {
@@ -153,11 +154,11 @@ const loadSlotsFromDatabase = useCallback(async () => {
 
   // Charger les créneaux au montage SEULEMENT si mode management et pas de créneaux existants
 useEffect(() => {
-  if (mode === "management" && propertyId && visitSlots.length === 0 && !hasInitialLoad) {
+  if (mode === "management" && propertyId && initialSlots.length === 0 && !hasInitialLoad) {
     console.log("🔄 Chargement initial des créneaux...");
     loadSlotsFromDatabase();
   }
-}, [mode, propertyId]); // Seulement ces dépendances
+}, [mode, propertyId, initialSlots.length, hasInitialLoad, loadSlotsFromDatabase])
 
   const saveSlotsToDatabase = async (slots: VisitSlot[]) => {
     if (!propertyId || mode !== "management") return
