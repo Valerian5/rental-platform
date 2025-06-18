@@ -264,6 +264,18 @@ export default function NewPropertyPage() {
       const newProperty = await propertyService.createProperty(propertyData)
       console.log("✅ Propriété créée:", newProperty)
 
+      // Ajouter les images si elles existent
+      if (selectedImages.length > 0) {
+        console.log("📸 Upload des images:", selectedImages.length)
+        try {
+          await propertyService.uploadPropertyImages(newProperty.id, selectedImages)
+          console.log("✅ Toutes les images ont été uploadées")
+        } catch (imageError) {
+          console.error("❌ Erreur lors de l'upload des images:", imageError)
+          toast.warning("Annonce créée mais certaines images n'ont pas pu être uploadées")
+        }
+      }
+
       // Ajouter les créneaux de visite dans property_visit_slots
       if (visitSlots.length > 0) {
         console.log("📅 Ajout des créneaux personnalisés:", visitSlots)

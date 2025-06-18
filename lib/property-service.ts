@@ -434,9 +434,10 @@ export const propertyService = {
         date: slot.date,
         start_time: slot.start_time,
         end_time: slot.end_time,
-        max_visitors: Number(slot.max_visitors) || Number(slot.max_capacity) || 1,
-        is_available: slot.is_available !== false,
+        max_capacity: Number(slot.max_capacity) || Number(slot.max_visitors) || 1, // Utiliser max_capacity
+        is_group_visit: Boolean(slot.is_group_visit) || false,
         current_bookings: Number(slot.current_bookings) || 0,
+        is_available: slot.is_available !== false,
       }))
 
       // Insérer les nouveaux créneaux
@@ -451,6 +452,38 @@ export const propertyService = {
       return { success: true, slots: data, message: `${data?.length || 0} créneaux sauvegardés` }
     } catch (error) {
       console.error("❌ Erreur service savePropertyVisitSlots:", error)
+      throw error
+    }
+  },
+
+  // Méthode pour uploader plusieurs images
+  uploadPropertyImages: async (propertyId: string, images: File[]): Promise<any[]> => {
+    try {
+      console.log(`📸 Upload de ${images.length} images pour la propriété:`, propertyId)
+
+      const uploadPromises = images.map(async (image, index) => {
+        const formData = new FormData()
+        formData.append("file", image)
+        formData.append("propertyId", propertyId)
+        formData.append("isPrimary", index === 0 ? "true" : "false")
+
+        const response = await fetch("/api/upload-supabase", {
+          method: "POST",
+          body: formData,
+        })
+
+        if (!response.ok) {
+          throw new Error(`Erreur upload image ${index + 1}: ${response.statusText}`)
+        }
+
+        return await response.json()
+      })
+
+      const results = await Promise.all(uploadPromises)
+      console.log(`✅ ${results.length} images uploadées`)
+      return results
+    } catch (error) {
+      console.error("❌ Erreur uploadPropertyImages:", error)
       throw error
     }
   },
