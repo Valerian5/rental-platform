@@ -8,7 +8,7 @@ export interface Property {
   city: string
   postal_code: string
   price: number
-  charges?: number
+  charges_amount: number
   surface: number
   rooms: number
   bedrooms: number
