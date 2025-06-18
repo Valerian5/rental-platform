@@ -81,22 +81,11 @@ export default function PropertyDetailPage() {
         console.log("✅ Propriété chargée:", propertyData)
 
         // Initialiser les créneaux vides - le VisitScheduler se chargera du loading
-        setVisitSlots([])
-        setSlotsLoaded(true)
-      } catch (error: any) {
-        console.error("❌ Erreur lors du chargement:", error)
-        setError(error.message || "Erreur lors du chargement du bien")
-        toast("Erreur lors du chargement du bien", {
-          description: "Erreur",
-          type: "error",
-        })
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [params.id, router])
+    setVisitSlots([])
+    setSlotsLoaded(true)
+  }
+  fetchData()
+}, [params.id])
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files

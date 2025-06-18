@@ -165,13 +165,12 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
   }, [propertyId, onSlotsChange])
 
   // Charger les créneaux au montage SEULEMENT si mode management et pas d'initialisation faite
-  useEffect(() => {
-    if (mode === "management" && propertyId && !hasInitialLoad) {
-      console.log("🔄 Chargement initial des créneaux...")
-      loadSlotsFromDatabase()
-    }
-    // Plus besoin de else if lié à visitSlots.length
-  }, [mode, propertyId, hasInitialLoad, loadSlotsFromDatabase])
+useEffect(() => {
+  if (mode === "management" && propertyId && !hasInitialLoad) {
+    loadSlotsFromDatabase()
+  }
+  // Supprime complètement le else if
+}, [mode, propertyId, hasInitialLoad, loadSlotsFromDatabase])
 
   const saveSlotsToDatabase = async (slots: VisitSlot[]) => {
     if (!propertyId || mode !== "management") return
