@@ -34,6 +34,30 @@ interface PropertyFormData {
   furnished: boolean
   available: boolean
   owner_id: string
+  // Champs restaurés
+  hide_exact_address: boolean
+  floor: number | null
+  total_floors: number | null
+  elevator: boolean
+  parking: boolean
+  balcony: boolean
+  terrace: boolean
+  garden: boolean
+  cellar: boolean
+  heating_type: string
+  energy_class: string
+  ges_class: string
+  internet: boolean
+  tv: boolean
+  washing_machine: boolean
+  dishwasher: boolean
+  oven: boolean
+  microwave: boolean
+  fridge: boolean
+  charges: number
+  deposit: number
+  fees: number
+  availability_date: string
 }
 
 const PROPERTY_TYPES = [
@@ -67,6 +91,30 @@ export default function NewPropertyPage() {
     furnished: false,
     available: true,
     owner_id: "",
+    // Champs restaurés
+    hide_exact_address: false,
+    floor: null,
+    total_floors: null,
+    elevator: false,
+    parking: false,
+    balcony: false,
+    terrace: false,
+    garden: false,
+    cellar: false,
+    heating_type: "",
+    energy_class: "",
+    ges_class: "",
+    internet: false,
+    tv: false,
+    washing_machine: false,
+    dishwasher: false,
+    oven: false,
+    microwave: false,
+    fridge: false,
+    charges: 0,
+    deposit: 0,
+    fees: 0,
+    availability_date: "",
   })
 
   useEffect(() => {
@@ -114,8 +162,31 @@ export default function NewPropertyPage() {
     }
   }
 
-  const nextStep = () => {
+  const nextStep = async () => {
     if (validateStep(currentStep)) {
+      // Si on passe de l'étape 2 à 3, créer la propriété
+      if (currentStep === 2 && !createdPropertyId) {
+        setIsSubmitting(true)
+        try {
+          const property = await propertyService.createProperty(formData)
+          setCreatedPropertyId(property.id)
+
+          // Uploader les images si présentes
+          if (uploadedImages.length > 0) {
+            await propertyService.uploadPropertyImages(property.id, uploadedImages as any)
+          }
+
+          toast.success("Propriété créée, vous pouvez maintenant ajouter les documents")
+        } catch (error: any) {
+          console.error("Erreur création propriété:", error)
+          toast.error("Erreur lors de la création de la propriété")
+          setIsSubmitting(false)
+          return
+        } finally {
+          setIsSubmitting(false)
+        }
+      }
+
       setCurrentStep((prev) => prev + 1)
     } else {
       toast.error("Veuillez remplir tous les champs obligatoires")
@@ -385,6 +456,289 @@ export default function NewPropertyPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Section Localisation et étage */}
+              <div className="md:col-span-2 border-t pt-6">
+                <h4 className="font-semibold mb-4">Localisation</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="floor">Étage</Label>
+                    <Input
+                      id="floor"
+                      type="number"
+                      value={formData.floor || ""}
+                      onChange={(e) => handleInputChange("floor", e.target.value ? Number(e.target.value) : null)}
+                      placeholder="3"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="total_floors">Nombre d'étages</Label>
+                    <Input
+                      id="total_floors"
+                      type="number"
+                      value={formData.total_floors || ""}
+                      onChange={(e) =>
+                        handleInputChange("total_floors", e.target.value ? Number(e.target.value) : null)
+                      }
+                      placeholder="5"
+                    />
+                  </div>
+                  <div className="flex items-center space-x-2 pt-6">
+                    <Checkbox
+                      id="elevator"
+                      checked={formData.elevator}
+                      onCheckedChange={(checked) => handleInputChange("elevator", checked)}
+                    />
+                    <Label htmlFor="elevator">Ascenseur</Label>
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="hide_exact_address"
+                      checked={formData.hide_exact_address}
+                      onCheckedChange={(checked) => handleInputChange("hide_exact_address", checked)}
+                    />
+                    <Label htmlFor="hide_exact_address">Masquer l'adresse exacte dans l'annonce</Label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section Extérieur */}
+              <div className="md:col-span-2 border-t pt-6">
+                <h4 className="font-semibold mb-4">Extérieur</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="parking"
+                      checked={formData.parking}
+                      onCheckedChange={(checked) => handleInputChange("parking", checked)}
+                    />
+                    <Label htmlFor="parking">Parking</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="balcony"
+                      checked={formData.balcony}
+                      onCheckedChange={(checked) => handleInputChange("balcony", checked)}
+                    />
+                    <Label htmlFor="balcony">Balcon</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="terrace"
+                      checked={formData.terrace}
+                      onCheckedChange={(checked) => handleInputChange("terrace", checked)}
+                    />
+                    <Label htmlFor="terrace">Terrasse</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="garden"
+                      checked={formData.garden}
+                      onCheckedChange={(checked) => handleInputChange("garden", checked)}
+                    />
+                    <Label htmlFor="garden">Jardin</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="cellar"
+                      checked={formData.cellar}
+                      onCheckedChange={(checked) => handleInputChange("cellar", checked)}
+                    />
+                    <Label htmlFor="cellar">Cave</Label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section Chauffage et énergie */}
+              <div className="md:col-span-2 border-t pt-6">
+                <h4 className="font-semibold mb-4">Chauffage et énergie</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="heating_type">Type de chauffage</Label>
+                    <Select
+                      value={formData.heating_type}
+                      onValueChange={(value) => handleInputChange("heating_type", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionner" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="individual_gas">Gaz individuel</SelectItem>
+                        <SelectItem value="collective_gas">Gaz collectif</SelectItem>
+                        <SelectItem value="individual_electric">Électrique individuel</SelectItem>
+                        <SelectItem value="collective_electric">Électrique collectif</SelectItem>
+                        <SelectItem value="fuel">Fioul</SelectItem>
+                        <SelectItem value="wood">Bois</SelectItem>
+                        <SelectItem value="heat_pump">Pompe à chaleur</SelectItem>
+                        <SelectItem value="district_heating">Chauffage urbain</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="energy_class">Classe énergétique</Label>
+                    <Select
+                      value={formData.energy_class}
+                      onValueChange={(value) => handleInputChange("energy_class", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="A à G" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="A">A</SelectItem>
+                        <SelectItem value="B">B</SelectItem>
+                        <SelectItem value="C">C</SelectItem>
+                        <SelectItem value="D">D</SelectItem>
+                        <SelectItem value="E">E</SelectItem>
+                        <SelectItem value="F">F</SelectItem>
+                        <SelectItem value="G">G</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="ges_class">Classe GES</Label>
+                    <Select value={formData.ges_class} onValueChange={(value) => handleInputChange("ges_class", value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="A à G" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="A">A</SelectItem>
+                        <SelectItem value="B">B</SelectItem>
+                        <SelectItem value="C">C</SelectItem>
+                        <SelectItem value="D">D</SelectItem>
+                        <SelectItem value="E">E</SelectItem>
+                        <SelectItem value="F">F</SelectItem>
+                        <SelectItem value="G">G</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section Équipements */}
+              <div className="md:col-span-2 border-t pt-6">
+                <h4 className="font-semibold mb-4">Équipements</h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="internet"
+                      checked={formData.internet}
+                      onCheckedChange={(checked) => handleInputChange("internet", checked)}
+                    />
+                    <Label htmlFor="internet">Internet</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="tv"
+                      checked={formData.tv}
+                      onCheckedChange={(checked) => handleInputChange("tv", checked)}
+                    />
+                    <Label htmlFor="tv">Télévision</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="washing_machine"
+                      checked={formData.washing_machine}
+                      onCheckedChange={(checked) => handleInputChange("washing_machine", checked)}
+                    />
+                    <Label htmlFor="washing_machine">Lave-linge</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="dishwasher"
+                      checked={formData.dishwasher}
+                      onCheckedChange={(checked) => handleInputChange("dishwasher", checked)}
+                    />
+                    <Label htmlFor="dishwasher">Lave-vaisselle</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="oven"
+                      checked={formData.oven}
+                      onCheckedChange={(checked) => handleInputChange("oven", checked)}
+                    />
+                    <Label htmlFor="oven">Four</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="microwave"
+                      checked={formData.microwave}
+                      onCheckedChange={(checked) => handleInputChange("microwave", checked)}
+                    />
+                    <Label htmlFor="microwave">Micro-ondes</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="fridge"
+                      checked={formData.fridge}
+                      onCheckedChange={(checked) => handleInputChange("fridge", checked)}
+                    />
+                    <Label htmlFor="fridge">Réfrigérateur</Label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section Financier */}
+              <div className="md:col-span-2 border-t pt-6">
+                <h4 className="font-semibold mb-4">Informations financières</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="charges">Charges (€/mois)</Label>
+                    <Input
+                      id="charges"
+                      type="number"
+                      value={formData.charges || ""}
+                      onChange={(e) => handleInputChange("charges", Number(e.target.value))}
+                      placeholder="150"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="deposit">Dépôt de garantie (€)</Label>
+                    <Input
+                      id="deposit"
+                      type="number"
+                      value={formData.deposit || ""}
+                      onChange={(e) => handleInputChange("deposit", Number(e.target.value))}
+                      placeholder="1200"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="fees">Frais d'agence (€)</Label>
+                    <Input
+                      id="fees"
+                      type="number"
+                      value={formData.fees || ""}
+                      onChange={(e) => handleInputChange("fees", Number(e.target.value))}
+                      placeholder="500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Section Disponibilité */}
+              <div className="md:col-span-2 border-t pt-6">
+                <h4 className="font-semibold mb-4">Disponibilité</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="availability_date">Date de disponibilité</Label>
+                    <Input
+                      id="availability_date"
+                      type="date"
+                      value={formData.availability_date}
+                      onChange={(e) => handleInputChange("availability_date", e.target.value)}
+                    />
+                  </div>
+                  <div className="flex items-center space-x-2 pt-6">
+                    <Checkbox
+                      id="available"
+                      checked={formData.available}
+                      onCheckedChange={(checked) => handleInputChange("available", checked)}
+                    />
+                    <Label htmlFor="available">Bien disponible à la location</Label>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
         )}
@@ -411,7 +765,7 @@ export default function NewPropertyPage() {
         )}
 
         {/* Étape 3: Documents */}
-        {currentStep === 3 && createdPropertyId && (
+        {currentStep === 3 && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
@@ -420,11 +774,18 @@ export default function NewPropertyPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <PropertyDocumentsUpload
-                propertyId={createdPropertyId}
-                onDocumentsChange={setUploadedDocuments}
-                showRequiredOnly={true}
-              />
+              {!createdPropertyId ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-600">Création de la propriété en cours...</p>
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mt-2"></div>
+                </div>
+              ) : (
+                <PropertyDocumentsUpload
+                  propertyId={createdPropertyId}
+                  onDocumentsChange={setUploadedDocuments}
+                  showRequiredOnly={true}
+                />
+              )}
             </CardContent>
           </Card>
         )}

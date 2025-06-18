@@ -1,875 +1,573 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import type React from "react"
+
+import { useState, useEffect, useCallback } from "react"
+import { useRouter, useParams, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { ArrowLeft, ArrowRight, Home, Upload, FileText, Check } from "lucide-react"
+import { ArrowLeft, Edit, Trash2, Eye, Calendar, MapPin, Home, Bed, Bath, Square, Upload, X } from "lucide-react"
 import Link from "next/link"
 import { propertyService } from "@/lib/property-service"
 import { authService } from "@/lib/auth-service"
-import { FileUpload } from "@/components/file-upload"
-import { PropertyDocumentsUpload } from "@/components/property-documents-upload"
+import { imageService } from "@/lib/image-service"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { VisitScheduler } from "@/components/visit-scheduler"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
+import { PropertyDocumentsManager } from "@/components/property-documents-manager"
 
-interface PropertyFormData {
-  title: string
-  description: string
-  address: string
-  city: string
-  postal_code: string
-  price: number
-  surface: number
-  rooms: number
-  bedrooms: number
-  bathrooms: number
-  property_type: string
-  furnished: boolean
-  available: boolean
-  owner_id: string
-  // Champs restaurés
-  hide_exact_address: boolean
-  floor: number | null
-  total_floors: number | null
-  elevator: boolean
-  parking: boolean
-  balcony: boolean
-  terrace: boolean
-  garden: boolean
-  cellar: boolean
-  heating_type: string
-  energy_class: string
-  ges_class: string
-  internet: boolean
-  tv: boolean
-  washing_machine: boolean
-  dishwasher: boolean
-  oven: boolean
-  microwave: boolean
-  fridge: boolean
-  charges: number
-  deposit: number
-  fees: number
-  availability_date: string
-}
-
-const PROPERTY_TYPES = [
-  { value: "apartment", label: "Appartement" },
-  { value: "house", label: "Maison" },
-  { value: "studio", label: "Studio" },
-  { value: "loft", label: "Loft" },
-]
-
-export default function NewPropertyPage() {
+export default function PropertyDetailPage() {
   const router = useRouter()
-  const [currentStep, setCurrentStep] = useState(1)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [currentUser, setCurrentUser] = useState<any>(null)
-  const [uploadedImages, setUploadedImages] = useState<string[]>([])
-  const [uploadedDocuments, setUploadedDocuments] = useState<any[]>([])
-  const [createdPropertyId, setCreatedPropertyId] = useState<string | null>(null)
+  const params = useParams()
+  const searchParams = useSearchParams()
+  const initialTab = searchParams.get("tab") || "overview"
 
-  const [formData, setFormData] = useState<PropertyFormData>({
-    title: "",
-    description: "",
-    address: "",
-    city: "",
-    postal_code: "",
-    price: 0,
-    surface: 0,
-    rooms: 1,
-    bedrooms: 0,
-    bathrooms: 0,
-    property_type: "apartment",
-    furnished: false,
-    available: true,
-    owner_id: "",
-    // Champs restaurés
-    hide_exact_address: false,
-    floor: null,
-    total_floors: null,
-    elevator: false,
-    parking: false,
-    balcony: false,
-    terrace: false,
-    garden: false,
-    cellar: false,
-    heating_type: "",
-    energy_class: "",
-    ges_class: "",
-    internet: false,
-    tv: false,
-    washing_machine: false,
-    dishwasher: false,
-    oven: false,
-    microwave: false,
-    fridge: false,
-    charges: 0,
-    deposit: 0,
-    fees: 0,
-    availability_date: "",
-  })
+  const [property, setProperty] = useState<any>(null)
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [visitSlots, setVisitSlots] = useState<any[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const [isUploadingImages, setIsUploadingImages] = useState(false)
+  const [activeTab, setActiveTab] = useState(initialTab)
+  const [slotsLoaded, setSlotsLoaded] = useState(false)
+
+  // Gestionnaire de changement de créneaux - MÉMORISÉ et STABLE
+  const handleSlotsChange = useCallback((newSlots: any[]) => {
+    console.log("🔄 Mise à jour des créneaux:", newSlots.length)
+    setVisitSlots(newSlots)
+  }, [])
 
   useEffect(() => {
-    const checkAuth = async () => {
+    const fetchData = async () => {
+      console.log("🔄 Chargement des données de la propriété...")
+      setIsLoading(true)
+      setError(null)
+
       try {
+        // Vérifier l'authentification
         const user = await authService.getCurrentUser()
         if (!user || user.user_type !== "owner") {
-          toast.error("Vous devez être connecté en tant que propriétaire")
+          toast("Vous devez être connecté en tant que propriétaire", {
+            description: "Erreur",
+            type: "error",
+          })
           router.push("/login")
           return
         }
         setCurrentUser(user)
-        setFormData((prev) => ({ ...prev, owner_id: user.id }))
-      } catch (error) {
-        console.error("Erreur authentification:", error)
-        router.push("/login")
-      }
-    }
+        console.log("✅ Utilisateur connecté:", user.id)
 
-    checkAuth()
-  }, [router])
-
-  const handleInputChange = (field: keyof PropertyFormData, value: any) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
-  }
-
-  const validateStep = (step: number): boolean => {
-    switch (step) {
-      case 1:
-        return !!(
-          formData.title &&
-          formData.description &&
-          formData.address &&
-          formData.city &&
-          formData.postal_code &&
-          formData.price > 0 &&
-          formData.surface > 0
-        )
-      case 2:
-        return uploadedImages.length > 0
-      case 3:
-        return true // Documents optionnels pour l'instant
-      default:
-        return true
-    }
-  }
-
-  const nextStep = async () => {
-    if (validateStep(currentStep)) {
-      // Si on passe de l'étape 2 à 3, créer la propriété
-      if (currentStep === 2 && !createdPropertyId) {
-        setIsSubmitting(true)
-        try {
-          const property = await propertyService.createProperty(formData)
-          setCreatedPropertyId(property.id)
-
-          // Uploader les images si présentes
-          if (uploadedImages.length > 0) {
-            await propertyService.uploadPropertyImages(property.id, uploadedImages as any)
-          }
-
-          toast.success("Propriété créée, vous pouvez maintenant ajouter les documents")
-        } catch (error: any) {
-          console.error("Erreur création propriété:", error)
-          toast.error("Erreur lors de la création de la propriété")
-          setIsSubmitting(false)
-          return
-        } finally {
-          setIsSubmitting(false)
+        if (!params.id) {
+          throw new Error("ID de propriété manquant")
         }
-      }
 
-      setCurrentStep((prev) => prev + 1)
-    } else {
-      toast.error("Veuillez remplir tous les champs obligatoires")
+        // Récupérer la propriété
+        console.log("📋 Récupération de la propriété:", params.id)
+        const propertyData = await propertyService.getPropertyById(params.id as string)
+
+        // Vérifier que le bien appartient au propriétaire connecté
+        if (propertyData.owner_id !== user.id) {
+          toast("Vous n'avez pas accès à ce bien", {
+            description: "Erreur",
+            type: "error",
+          })
+          router.push("/owner/dashboard")
+          return
+        }
+
+        setProperty(propertyData)
+        console.log("✅ Propriété chargée:", propertyData)
+
+        // Marquer comme chargé
+        setSlotsLoaded(true)
+      } catch (error: any) {
+        console.error("❌ Erreur lors du chargement:", error)
+        setError(error.message || "Erreur lors du chargement du bien")
+        toast("Erreur lors du chargement du bien", {
+          description: "Erreur",
+          type: "error",
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [params.id, router])
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0 || !property) return
+
+    setIsUploadingImages(true)
+    toast("Upload des images en cours...", {
+      description: "Info",
+    })
+
+    try {
+      const uploadPromises = Array.from(files).map(async (file, index) => {
+        const url = await imageService.uploadPropertyImage(file, property.id)
+        return await imageService.savePropertyImageMetadata(
+          property.id,
+          url,
+          index === 0 && (!property.property_images || property.property_images.length === 0),
+        )
+      })
+
+      const newImages = await Promise.all(uploadPromises)
+
+      // Mettre à jour la propriété avec les nouvelles images
+      const updatedProperty = {
+        ...property,
+        property_images: [...(property.property_images || []), ...newImages],
+      }
+      setProperty(updatedProperty)
+
+      toast(`${files.length} image(s) ajoutée(s) avec succès`, {
+        description: "Succès",
+      })
+
+      // Reset l'input
+      e.target.value = ""
+    } catch (error: any) {
+      console.error("Erreur lors de l'upload:", error)
+      toast("Erreur lors de l'upload des images", {
+        description: "Erreur",
+        type: "error",
+      })
+    } finally {
+      setIsUploadingImages(false)
     }
   }
 
-  const prevStep = () => {
-    setCurrentStep((prev) => prev - 1)
+  const handleDeleteImage = async (imageId: string, imageUrl: string) => {
+    if (!confirm("Êtes-vous sûr de vouloir supprimer cette image ?")) return
+
+    try {
+      await imageService.deletePropertyImage(imageId, imageUrl)
+
+      // Mettre à jour la propriété
+      const updatedProperty = {
+        ...property,
+        property_images: property.property_images.filter((img: any) => img.id !== imageId),
+      }
+      setProperty(updatedProperty)
+
+      toast("Image supprimée avec succès", {
+        description: "Succès",
+      })
+    } catch (error: any) {
+      console.error("Erreur lors de la suppression:", error)
+      toast("Erreur lors de la suppression de l'image", {
+        description: "Erreur",
+        type: "error",
+      })
+    }
   }
 
-  const handleSubmit = async () => {
-    if (!validateStep(1)) {
-      toast.error("Veuillez remplir tous les champs obligatoires")
+  const handleDelete = async () => {
+    if (!property || !confirm("Êtes-vous sûr de vouloir supprimer ce bien ?")) {
       return
     }
 
-    setIsSubmitting(true)
-
     try {
-      // Créer la propriété
-      const property = await propertyService.createProperty(formData)
-      setCreatedPropertyId(property.id)
-
-      // Uploader les images si présentes
-      if (uploadedImages.length > 0) {
-        await propertyService.uploadPropertyImages(property.id, uploadedImages as any)
-      }
-
-      toast.success("Annonce créée avec succès !")
-      router.push(`/owner/properties/${property.id}/success`)
-    } catch (error: any) {
-      console.error("Erreur création propriété:", error)
-      toast.error("Erreur lors de la création de l'annonce")
-    } finally {
-      setIsSubmitting(false)
+      await propertyService.deleteProperty(property.id)
+      toast("Bien supprimé avec succès", {
+        description: "Succès",
+      })
+      router.push("/owner/dashboard")
+    } catch (error) {
+      console.error("Erreur lors de la suppression:", error)
+      toast("Erreur lors de la suppression du bien", {
+        description: "Erreur",
+        type: "error",
+      })
     }
   }
 
-  const getStepProgress = () => {
-    return (currentStep / 4) * 100
+  // Composant de gestion des visites - SIMPLIFIÉ
+  const VisitManagement = () => {
+    if (!slotsLoaded) {
+      return (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center space-y-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="text-gray-600">Chargement des créneaux...</p>
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">Gestion des visites</h3>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline">{visitSlots.length} créneaux disponibles</Badge>
+          </div>
+        </div>
+
+        <VisitScheduler
+          propertyId={property.id}
+          visitSlots={visitSlots}
+          onSlotsChange={handleSlotsChange}
+          mode="management"
+        />
+      </div>
+    )
   }
 
-  const isStepCompleted = (step: number) => {
-    if (step < currentStep) return true
-    if (step === currentStep) return validateStep(step)
-    return false
-  }
-
-  if (!currentUser) {
+  // États de chargement et d'erreur
+  if (isLoading) {
     return (
       <div className="container mx-auto py-8">
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center space-y-4">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="text-gray-600">Vérification des permissions...</p>
+            <p className="text-gray-600">Chargement du bien...</p>
           </div>
         </div>
       </div>
     )
   }
 
+  if (error || !property) {
+    return (
+      <div className="container mx-auto py-8">
+        <div className="text-center space-y-4">
+          <div className="text-red-600 text-lg font-medium">{error || "Bien non trouvé"}</div>
+          <Button onClick={() => router.push("/owner/dashboard")} variant="outline">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Retour au tableau de bord
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="container mx-auto py-8 max-w-4xl">
-      {/* En-tête */}
-      <div className="mb-8">
+    <div className="container mx-auto py-8 max-w-6xl">
+      {/* En-tête avec navigation */}
+      <div className="mb-6">
         <Link href="/owner/properties" className="text-blue-600 hover:underline flex items-center mb-4">
           <ArrowLeft className="h-4 w-4 mr-1" />
           Retour à mes annonces
         </Link>
 
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Créer une nouvelle annonce</h1>
-            <p className="text-gray-600 mt-2">Étape {currentStep} sur 4</p>
-          </div>
-          <div className="text-right">
-            <Progress value={getStepProgress()} className="w-32 mb-2" />
-            <p className="text-sm text-gray-500">{Math.round(getStepProgress())}% complété</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Indicateur d'étapes */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
-          {[
-            { step: 1, title: "Informations", icon: Home },
-            { step: 2, title: "Photos", icon: Upload },
-            { step: 3, title: "Documents", icon: FileText },
-            { step: 4, title: "Publication", icon: Check },
-          ].map(({ step, title, icon: Icon }) => (
-            <div key={step} className="flex items-center">
-              <div
-                className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
-                  isStepCompleted(step)
-                    ? "bg-blue-600 border-blue-600 text-white"
-                    : currentStep === step
-                      ? "border-blue-600 text-blue-600"
-                      : "border-gray-300 text-gray-400"
-                }`}
-              >
-                {isStepCompleted(step) && step < currentStep ? (
-                  <Check className="h-5 w-5" />
-                ) : (
-                  <Icon className="h-5 w-5" />
-                )}
-              </div>
-              <div className="ml-3">
-                <p className={`text-sm font-medium ${currentStep === step ? "text-blue-600" : "text-gray-500"}`}>
-                  {title}
-                </p>
-              </div>
-              {step < 4 && (
-                <div className={`w-16 h-0.5 ml-4 ${isStepCompleted(step) ? "bg-blue-600" : "bg-gray-300"}`} />
-              )}
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-bold text-gray-900">{property.title}</h1>
+            <div className="flex items-center text-gray-600">
+              <MapPin className="h-4 w-4 mr-1" />
+              <span>
+                {property.address}, {property.city} {property.postal_code}
+              </span>
             </div>
-          ))}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Badge variant={property.available ? "default" : "secondary"} className="text-sm">
+              {property.available ? "Disponible" : "Loué"}
+            </Badge>
+            <div className="text-right">
+              <div className="text-2xl font-bold text-blue-600">{property.price} €</div>
+              <div className="text-sm text-gray-500">par mois</div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Contenu des étapes */}
-      <div className="space-y-6">
-        {/* Étape 1: Informations de base */}
-        {currentStep === 1 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Home className="h-5 w-5 mr-2" />
-                Informations de base
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="md:col-span-2">
-                  <Label htmlFor="title">Titre de l'annonce *</Label>
-                  <Input
-                    id="title"
-                    value={formData.title}
-                    onChange={(e) => handleInputChange("title", e.target.value)}
-                    placeholder="Ex: Appartement 3 pièces centre ville"
-                  />
-                </div>
+      {/* Onglets principaux */}
+      <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
+          <TabsTrigger value="visits">Gestion des visites</TabsTrigger>
+          <TabsTrigger value="applications">Candidatures</TabsTrigger>
+          <TabsTrigger value="documents">Documents</TabsTrigger>
+        </TabsList>
 
-                <div className="md:col-span-2">
-                  <Label htmlFor="description">Description *</Label>
-                  <Textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => handleInputChange("description", e.target.value)}
-                    placeholder="Décrivez votre bien..."
-                    rows={4}
-                  />
-                </div>
+        <TabsContent value="overview" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Contenu principal */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Caractéristiques principales */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Home className="h-5 w-5 mr-2" />
+                    Caractéristiques
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="flex items-center space-x-2">
+                      <Square className="h-4 w-4 text-gray-500" />
+                      <div>
+                        <p className="text-sm text-gray-500">Surface</p>
+                        <p className="font-medium">{property.surface} m²</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Home className="h-4 w-4 text-gray-500" />
+                      <div>
+                        <p className="text-sm text-gray-500">Pièces</p>
+                        <p className="font-medium">{property.rooms}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Bed className="h-4 w-4 text-gray-500" />
+                      <div>
+                        <p className="text-sm text-gray-500">Chambres</p>
+                        <p className="font-medium">{property.bedrooms || "Non spécifié"}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Bath className="h-4 w-4 text-gray-500" />
+                      <div>
+                        <p className="text-sm text-gray-500">Salles de bain</p>
+                        <p className="font-medium">{property.bathrooms || "Non spécifié"}</p>
+                      </div>
+                    </div>
+                  </div>
 
-                <div className="md:col-span-2">
-                  <Label htmlFor="address">Adresse *</Label>
-                  <Input
-                    id="address"
-                    value={formData.address}
-                    onChange={(e) => handleInputChange("address", e.target.value)}
-                    placeholder="15 rue de la République"
-                  />
-                </div>
+                  <div className="mt-6 grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-500">Type</p>
+                      <p className="font-medium">
+                        {property.property_type === "apartment" && "Appartement"}
+                        {property.property_type === "house" && "Maison"}
+                        {property.property_type === "studio" && "Studio"}
+                        {property.property_type === "loft" && "Loft"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Meublé</p>
+                      <p className="font-medium">{property.furnished ? "Oui" : "Non"}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-                <div>
-                  <Label htmlFor="city">Ville *</Label>
-                  <Input
-                    id="city"
-                    value={formData.city}
-                    onChange={(e) => handleInputChange("city", e.target.value)}
-                    placeholder="Lyon"
-                  />
-                </div>
+              {/* Description */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Description</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-gray-700 leading-relaxed">{property.description}</p>
+                </CardContent>
+              </Card>
 
-                <div>
-                  <Label htmlFor="postal_code">Code postal *</Label>
-                  <Input
-                    id="postal_code"
-                    value={formData.postal_code}
-                    onChange={(e) => handleInputChange("postal_code", e.target.value)}
-                    placeholder="69001"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="price">Loyer mensuel (€) *</Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    value={formData.price || ""}
-                    onChange={(e) => handleInputChange("price", Number(e.target.value))}
-                    placeholder="1200"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="surface">Surface (m²) *</Label>
-                  <Input
-                    id="surface"
-                    type="number"
-                    value={formData.surface || ""}
-                    onChange={(e) => handleInputChange("surface", Number(e.target.value))}
-                    placeholder="75"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="rooms">Nombre de pièces</Label>
-                  <Input
-                    id="rooms"
-                    type="number"
-                    value={formData.rooms}
-                    onChange={(e) => handleInputChange("rooms", Number(e.target.value))}
-                    min="1"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="bedrooms">Chambres</Label>
-                  <Input
-                    id="bedrooms"
-                    type="number"
-                    value={formData.bedrooms}
-                    onChange={(e) => handleInputChange("bedrooms", Number(e.target.value))}
-                    min="0"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="bathrooms">Salles de bain</Label>
-                  <Input
-                    id="bathrooms"
-                    type="number"
-                    value={formData.bathrooms}
-                    onChange={(e) => handleInputChange("bathrooms", Number(e.target.value))}
-                    min="0"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="property_type">Type de bien</Label>
-                  <Select
-                    value={formData.property_type}
-                    onValueChange={(value) => handleInputChange("property_type", value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PROPERTY_TYPES.map((type) => (
-                        <SelectItem key={type.value} value={type.value}>
-                          {type.label}
-                        </SelectItem>
+              {/* Photos du bien */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Photos du bien</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="image-upload" className="cursor-pointer">
+                        <Button variant="outline" size="sm" disabled={isUploadingImages} asChild>
+                          <span>
+                            <Upload className="h-4 w-4 mr-2" />
+                            {isUploadingImages ? "Upload..." : "Ajouter"}
+                          </span>
+                        </Button>
+                      </Label>
+                      <Input
+                        id="image-upload"
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                      />
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {property.property_images && property.property_images.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {property.property_images.map((image: any, index: number) => (
+                        <div
+                          key={image.id}
+                          className="relative group aspect-video rounded-lg overflow-hidden bg-gray-100"
+                        >
+                          <img
+                            src={image.url || "/placeholder.svg"}
+                            alt={`Photo ${index + 1} du bien`}
+                            className="w-full h-full object-cover hover:scale-105 transition-transform duration-200"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement
+                              target.src = `/placeholder.svg?height=200&width=300&text=Erreur de chargement`
+                            }}
+                          />
+                          {image.is_primary && (
+                            <Badge className="absolute top-2 left-2 text-xs">Photo principale</Badge>
+                          )}
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => handleDeleteImage(image.id, image.url)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
                       ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-lg">
+                      <div className="space-y-3">
+                        <div className="w-16 h-16 mx-auto bg-gray-200 rounded-full flex items-center justify-center">
+                          <Home className="h-8 w-8 text-gray-400" />
+                        </div>
+                        <p className="text-lg font-medium">Aucune photo ajoutée</p>
+                        <p className="text-sm">Ajoutez des photos pour rendre votre annonce plus attractive</p>
+                        <Label htmlFor="image-upload-empty" className="cursor-pointer">
+                          <Button variant="outline" className="mt-4" asChild>
+                            <span>
+                              <Upload className="h-4 w-4 mr-2" />
+                              Ajouter des photos
+                            </span>
+                          </Button>
+                        </Label>
+                        <Input
+                          id="image-upload-empty"
+                          type="file"
+                          multiple
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          className="hidden"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
 
-                <div className="md:col-span-2">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="furnished"
-                      checked={formData.furnished}
-                      onCheckedChange={(checked) => handleInputChange("furnished", checked)}
-                    />
-                    <Label htmlFor="furnished">Logement meublé</Label>
-                  </div>
-                </div>
-              </div>
+            {/* Sidebar */}
+            <div className="space-y-6">
+              {/* Actions rapides */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Actions</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Button className="w-full" asChild>
+                    <Link href={`/properties/${property.id}`}>
+                      <Eye className="h-4 w-4 mr-2" />
+                      Voir l'annonce publique
+                    </Link>
+                  </Button>
 
-              {/* Section Localisation et étage */}
-              <div className="md:col-span-2 border-t pt-6">
-                <h4 className="font-semibold mb-4">Localisation</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="floor">Étage</Label>
-                    <Input
-                      id="floor"
-                      type="number"
-                      value={formData.floor || ""}
-                      onChange={(e) => handleInputChange("floor", e.target.value ? Number(e.target.value) : null)}
-                      placeholder="3"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="total_floors">Nombre d'étages</Label>
-                    <Input
-                      id="total_floors"
-                      type="number"
-                      value={formData.total_floors || ""}
-                      onChange={(e) =>
-                        handleInputChange("total_floors", e.target.value ? Number(e.target.value) : null)
-                      }
-                      placeholder="5"
-                    />
-                  </div>
-                  <div className="flex items-center space-x-2 pt-6">
-                    <Checkbox
-                      id="elevator"
-                      checked={formData.elevator}
-                      onCheckedChange={(checked) => handleInputChange("elevator", checked)}
-                    />
-                    <Label htmlFor="elevator">Ascenseur</Label>
-                  </div>
-                </div>
-                <div className="mt-4">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="hide_exact_address"
-                      checked={formData.hide_exact_address}
-                      onCheckedChange={(checked) => handleInputChange("hide_exact_address", checked)}
-                    />
-                    <Label htmlFor="hide_exact_address">Masquer l'adresse exacte dans l'annonce</Label>
-                  </div>
-                </div>
-              </div>
+                  <Button variant="outline" className="w-full" asChild>
+                    <Link href={`/owner/properties/${property.id}/edit`}>
+                      <Edit className="h-4 w-4 mr-2" />
+                      Modifier le bien
+                    </Link>
+                  </Button>
 
-              {/* Section Extérieur */}
-              <div className="md:col-span-2 border-t pt-6">
-                <h4 className="font-semibold mb-4">Extérieur</h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="parking"
-                      checked={formData.parking}
-                      onCheckedChange={(checked) => handleInputChange("parking", checked)}
-                    />
-                    <Label htmlFor="parking">Parking</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="balcony"
-                      checked={formData.balcony}
-                      onCheckedChange={(checked) => handleInputChange("balcony", checked)}
-                    />
-                    <Label htmlFor="balcony">Balcon</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="terrace"
-                      checked={formData.terrace}
-                      onCheckedChange={(checked) => handleInputChange("terrace", checked)}
-                    />
-                    <Label htmlFor="terrace">Terrasse</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="garden"
-                      checked={formData.garden}
-                      onCheckedChange={(checked) => handleInputChange("garden", checked)}
-                    />
-                    <Label htmlFor="garden">Jardin</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="cellar"
-                      checked={formData.cellar}
-                      onCheckedChange={(checked) => handleInputChange("cellar", checked)}
-                    />
-                    <Label htmlFor="cellar">Cave</Label>
-                  </div>
-                </div>
-              </div>
+                  <Button variant="destructive" className="w-full" onClick={handleDelete}>
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Supprimer le bien
+                  </Button>
+                </CardContent>
+              </Card>
 
-              {/* Section Chauffage et énergie */}
-              <div className="md:col-span-2 border-t pt-6">
-                <h4 className="font-semibold mb-4">Chauffage et énergie</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="heating_type">Type de chauffage</Label>
-                    <Select
-                      value={formData.heating_type}
-                      onValueChange={(value) => handleInputChange("heating_type", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="individual_gas">Gaz individuel</SelectItem>
-                        <SelectItem value="collective_gas">Gaz collectif</SelectItem>
-                        <SelectItem value="individual_electric">Électrique individuel</SelectItem>
-                        <SelectItem value="collective_electric">Électrique collectif</SelectItem>
-                        <SelectItem value="fuel">Fioul</SelectItem>
-                        <SelectItem value="wood">Bois</SelectItem>
-                        <SelectItem value="heat_pump">Pompe à chaleur</SelectItem>
-                        <SelectItem value="district_heating">Chauffage urbain</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="energy_class">Classe énergétique</Label>
-                    <Select
-                      value={formData.energy_class}
-                      onValueChange={(value) => handleInputChange("energy_class", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="A à G" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="A">A</SelectItem>
-                        <SelectItem value="B">B</SelectItem>
-                        <SelectItem value="C">C</SelectItem>
-                        <SelectItem value="D">D</SelectItem>
-                        <SelectItem value="E">E</SelectItem>
-                        <SelectItem value="F">F</SelectItem>
-                        <SelectItem value="G">G</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="ges_class">Classe GES</Label>
-                    <Select value={formData.ges_class} onValueChange={(value) => handleInputChange("ges_class", value)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="A à G" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="A">A</SelectItem>
-                        <SelectItem value="B">B</SelectItem>
-                        <SelectItem value="C">C</SelectItem>
-                        <SelectItem value="D">D</SelectItem>
-                        <SelectItem value="E">E</SelectItem>
-                        <SelectItem value="F">F</SelectItem>
-                        <SelectItem value="G">G</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Section Équipements */}
-              <div className="md:col-span-2 border-t pt-6">
-                <h4 className="font-semibold mb-4">Équipements</h4>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="internet"
-                      checked={formData.internet}
-                      onCheckedChange={(checked) => handleInputChange("internet", checked)}
-                    />
-                    <Label htmlFor="internet">Internet</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="tv"
-                      checked={formData.tv}
-                      onCheckedChange={(checked) => handleInputChange("tv", checked)}
-                    />
-                    <Label htmlFor="tv">Télévision</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="washing_machine"
-                      checked={formData.washing_machine}
-                      onCheckedChange={(checked) => handleInputChange("washing_machine", checked)}
-                    />
-                    <Label htmlFor="washing_machine">Lave-linge</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="dishwasher"
-                      checked={formData.dishwasher}
-                      onCheckedChange={(checked) => handleInputChange("dishwasher", checked)}
-                    />
-                    <Label htmlFor="dishwasher">Lave-vaisselle</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="oven"
-                      checked={formData.oven}
-                      onCheckedChange={(checked) => handleInputChange("oven", checked)}
-                    />
-                    <Label htmlFor="oven">Four</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="microwave"
-                      checked={formData.microwave}
-                      onCheckedChange={(checked) => handleInputChange("microwave", checked)}
-                    />
-                    <Label htmlFor="microwave">Micro-ondes</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="fridge"
-                      checked={formData.fridge}
-                      onCheckedChange={(checked) => handleInputChange("fridge", checked)}
-                    />
-                    <Label htmlFor="fridge">Réfrigérateur</Label>
-                  </div>
-                </div>
-              </div>
-
-              {/* Section Financier */}
-              <div className="md:col-span-2 border-t pt-6">
-                <h4 className="font-semibold mb-4">Informations financières</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="charges">Charges (€/mois)</Label>
-                    <Input
-                      id="charges"
-                      type="number"
-                      value={formData.charges || ""}
-                      onChange={(e) => handleInputChange("charges", Number(e.target.value))}
-                      placeholder="150"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="deposit">Dépôt de garantie (€)</Label>
-                    <Input
-                      id="deposit"
-                      type="number"
-                      value={formData.deposit || ""}
-                      onChange={(e) => handleInputChange("deposit", Number(e.target.value))}
-                      placeholder="1200"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="fees">Frais d'agence (€)</Label>
-                    <Input
-                      id="fees"
-                      type="number"
-                      value={formData.fees || ""}
-                      onChange={(e) => handleInputChange("fees", Number(e.target.value))}
-                      placeholder="500"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Section Disponibilité */}
-              <div className="md:col-span-2 border-t pt-6">
-                <h4 className="font-semibold mb-4">Disponibilité</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="availability_date">Date de disponibilité</Label>
-                    <Input
-                      id="availability_date"
-                      type="date"
-                      value={formData.availability_date}
-                      onChange={(e) => handleInputChange("availability_date", e.target.value)}
-                    />
-                  </div>
-                  <div className="flex items-center space-x-2 pt-6">
-                    <Checkbox
-                      id="available"
-                      checked={formData.available}
-                      onCheckedChange={(checked) => handleInputChange("available", checked)}
-                    />
-                    <Label htmlFor="available">Bien disponible à la location</Label>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Étape 2: Photos */}
-        {currentStep === 2 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Upload className="h-5 w-5 mr-2" />
-                Photos du bien
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <FileUpload
-                onFilesUploaded={setUploadedImages}
-                maxFiles={10}
-                acceptedTypes={["image/*"]}
-                folder="properties"
-                existingFiles={uploadedImages}
-              />
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Étape 3: Documents */}
-        {currentStep === 3 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <FileText className="h-5 w-5 mr-2" />
-                Documents obligatoires
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {!createdPropertyId ? (
-                <div className="text-center py-8">
-                  <p className="text-gray-600">Création de la propriété en cours...</p>
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mt-2"></div>
-                </div>
-              ) : (
-                <PropertyDocumentsUpload
-                  propertyId={createdPropertyId}
-                  onDocumentsChange={setUploadedDocuments}
-                  showRequiredOnly={true}
-                />
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Étape 4: Publication */}
-        {currentStep === 4 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Check className="h-5 w-5 mr-2" />
-                Récapitulatif et publication
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <h3 className="font-semibold text-green-800 mb-2">Votre annonce est prête !</h3>
-                <p className="text-green-700 text-sm">
-                  Vérifiez les informations ci-dessous avant de publier votre annonce.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h4 className="font-semibold mb-2">Informations principales</h4>
-                  <div className="space-y-2 text-sm">
-                    <p>
-                      <strong>Titre:</strong> {formData.title}
-                    </p>
-                    <p>
-                      <strong>Adresse:</strong> {formData.address}, {formData.city}
-                    </p>
-                    <p>
-                      <strong>Loyer:</strong> {formData.price} €/mois
-                    </p>
-                    <p>
-                      <strong>Surface:</strong> {formData.surface} m²
-                    </p>
-                    <p>
-                      <strong>Type:</strong> {PROPERTY_TYPES.find((t) => t.value === formData.property_type)?.label}
-                    </p>
-                  </div>
-                </div>
-
-                <div>
-                  <h4 className="font-semibold mb-2">Statut</h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Badge variant={uploadedImages.length > 0 ? "default" : "secondary"}>
-                        {uploadedImages.length > 0 ? "✓" : "○"} Photos ({uploadedImages.length})
+              {/* Statistiques des visites */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Calendar className="h-5 w-5 mr-2" />
+                    Visites
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Créneaux disponibles</span>
+                      <Badge variant="outline">{visitSlots.length}</Badge>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Réservations</span>
+                      <Badge variant="outline">
+                        {visitSlots.reduce((sum, slot) => sum + (slot.current_bookings || 0), 0)}
                       </Badge>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={uploadedDocuments.length > 0 ? "default" : "secondary"}>
-                        {uploadedDocuments.length > 0 ? "✓" : "○"} Documents ({uploadedDocuments.length})
-                      </Badge>
+                    <Button
+                      variant="outline"
+                      className="w-full mt-4"
+                      onClick={() => {
+                        setActiveTab("visits")
+                      }}
+                    >
+                      <Calendar className="h-4 w-4 mr-2" />
+                      Gérer les visites
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Informations générales */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Informations</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Créé le</span>
+                      <span className="text-sm font-medium">
+                        {new Date(property.created_at).toLocaleDateString("fr-FR")}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Modifié le</span>
+                      <span className="text-sm font-medium">
+                        {new Date(property.updated_at).toLocaleDateString("fr-FR")}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">ID du bien</span>
+                      <span className="text-sm font-mono text-gray-500">{property.id}</span>
                     </div>
                   </div>
-                </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="visits">
+          <VisitManagement />
+        </TabsContent>
+
+        <TabsContent value="applications">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Candidatures reçues</CardTitle>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/owner/applications?propertyId=${property.id}`}>Voir toutes les candidatures</Link>
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center py-8 text-gray-500">
+                <p>Chargement des candidatures...</p>
+                <p className="text-sm mt-2">Les candidatures pour ce bien apparaîtront ici</p>
               </div>
             </CardContent>
           </Card>
-        )}
-      </div>
+        </TabsContent>
 
-      {/* Navigation */}
-      <div className="flex justify-between mt-8">
-        <Button variant="outline" onClick={prevStep} disabled={currentStep === 1}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Précédent
-        </Button>
-
-        <div className="flex gap-2">
-          {currentStep < 4 ? (
-            <Button onClick={nextStep} disabled={!validateStep(currentStep)}>
-              Suivant
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </Button>
-          ) : (
-            <Button onClick={handleSubmit} disabled={isSubmitting}>
-              {isSubmitting ? "Publication..." : "Publier l'annonce"}
-            </Button>
-          )}
-        </div>
-      </div>
+        <TabsContent value="documents">
+          <PropertyDocumentsManager propertyId={property.id} />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
