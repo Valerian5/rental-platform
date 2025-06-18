@@ -1,70 +1,68 @@
 import { supabase } from "./supabase"
+import { v4 as uuidv4 } from "uuid"
 
-export interface UploadResult {
-  url: string
-  path: string
-  size: number
-  uploadedAt: Date
-}
-
-export class SupabaseStorageService {
-  /**
-   * Upload un fichier vers Supabase Storage
-   */
-  static async uploadFile(file: File, bucket = "documents", folder = "general"): Promise<UploadResult> {
+export const SupabaseStorageService = {
+  async uploadFile(file: File, bucket: string, folder = "general"): Promise<{ url: string }> {
     try {
-      console.log("📤 Upload fichier:", file.name, "vers", bucket, "/", folder)
-
       // Générer un nom de fichier unique
-      const timestamp = Date.now()
-      const extension = file.name.split(".").pop()?.toLowerCase()
-      const filename = `${folder}/${timestamp}-${Math.random().toString(36).substring(7)}.${extension}`
+      const fileExt = file.name.split(".").pop()
+      const fileName = `${uuidv4()}.${fileExt}`
+      const filePath = `${folder}/${fileName}`
 
-      console.log("📝 Chemin généré:", filename)
-
-      // Upload vers Supabase Storage
-      const { data, error } = await supabase.storage.from(bucket).upload(filename, file, {
-        cacheControl: "3600",
-        upsert: false,
-      })
+      // Upload du fichier
+      const { data, error } = await supabase.storage.from(bucket).upload(filePath, file)
 
       if (error) {
         console.error("❌ Erreur upload Supabase:", error)
-        throw new Error(`Erreur upload: ${error.message}`)
+        throw new Error(`Erreur upload: ${JSON.stringify(error)}`)
       }
 
-      console.log("✅ Fichier uploadé:", data.path)
+      // Récupérer l'URL publique
+      const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(filePath)
 
-      // Obtenir l'URL publique
-      const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(filename)
+      return { url: urlData.publicUrl }
+    } catch (error) {
+      console.error("❌ Erreur service upload:", error)
+      throw error
+    }
+  },
 
-      if (!urlData.publicUrl) {
-        throw new Error("Impossible d'obtenir l'URL publique")
+  async deleteFile(fileUrl: string): Promise<void> {
+    try {
+      // Extraire le bucket et le chemin de l'URL
+      const url = new URL(fileUrl)
+      const pathParts = url.pathname.split("/")
+      
+      // Format attendu: /storage/v1/object/public/bucket-name/path/to/file.ext
+      const bucket = pathParts[5]
+      const filePath = pathParts.slice(6).join("/")
+
+      if (!bucket || !filePath) {
+        throw new Error("Format d'URL invalide")
       }
 
-      console.log("🔗 URL publique:", urlData.publicUrl)
+      const { error } = await supabase.storage.from(bucket).remove([filePath])
 
-      return {
-        url: urlData.publicUrl,
-        path: data.path,
-        size: file.size,
-        uploadedAt: new Date(),
+      if (error) {
+        console.error("❌ Erreur suppression fichier:", error)
+        throw new Error(`Erreur suppression: ${JSON.stringify(error)}`)
       }
     } catch (error) {
-      console.error("❌ Erreur upload:", error)
-      throw new Error(`Erreur lors de l'upload: ${error.message}`)
+      console.error("❌ Erreur service deleteFile:", error)
+      throw error
     }
-  }
+  },
 
   /**
    * Upload multiple fichiers
    */
-  static async uploadFiles(files: File[], bucket = "documents", folder = "general"): Promise<UploadResult[]> {
+  static async uploadFiles(files: File[], bucket = "documents", folder = "general"): Promise<any[]> {
     console.log("📤 Upload multiple:", files.length, "fichiers")
 
     const results = []
     for (const file of files) {
       try {
+        // @ts-ignore
         const result = await this.uploadFile(file, bucket, folder)
         results.push(result)
       } catch (error) {
@@ -75,28 +73,6 @@ export class SupabaseStorageService {
 
     console.log("✅ Upload terminé:", results.length, "fichiers uploadés")
     return results
-  }
-
-  /**
-   * Supprimer un fichier
-   */
-  static async deleteFile(path: string, bucket = "documents"): Promise<boolean> {
-    try {
-      console.log("🗑️ Suppression fichier:", path)
-
-      const { error } = await supabase.storage.from(bucket).remove([path])
-
-      if (error) {
-        console.error("❌ Erreur suppression:", error)
-        return false
-      }
-
-      console.log("✅ Fichier supprimé")
-      return true
-    } catch (error) {
-      console.error("❌ Erreur suppression:", error)
-      return false
-    }
   }
 
   /**
