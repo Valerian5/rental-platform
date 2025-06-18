@@ -82,6 +82,26 @@ export function PropertyDocumentsManager({ propertyId }: PropertyDocumentsManage
     link.click()
   }
 
+  const handleUploadNewDocument = async (file: File, documentType: string) => {
+    try {
+      toast.loading("Upload du document en cours...")
+
+      const newDoc = await propertyDocumentsService.uploadDocument(propertyId, file, documentType)
+
+      setDocuments((prev) => [...prev, newDoc])
+      setSelectedType("")
+
+      // Reset l'input
+      const input = document.getElementById("global-document-file") as HTMLInputElement
+      if (input) input.value = ""
+
+      toast.success("Document ajouté avec succès")
+    } catch (error: any) {
+      console.error("Erreur upload:", error)
+      toast.error("Erreur lors de l'upload du document")
+    }
+  }
+
   // Grouper les documents par type
   const documentsByType = documents.reduce(
     (acc, doc) => {
@@ -172,6 +192,69 @@ export function PropertyDocumentsManager({ propertyId }: PropertyDocumentsManage
           </CardContent>
         </Card>
       </div>
+
+      {/* Bouton d'upload global */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center">
+              <Upload className="h-5 w-5 mr-2" />
+              Ajouter un document
+            </CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="global-document-type">Type de document</Label>
+              <Select value={selectedType} onValueChange={setSelectedType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionner un type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(REQUIRED_DOCUMENTS).map(([key, info]) => (
+                    <SelectItem key={key} value={key}>
+                      <div className="flex items-center gap-2">
+                        {info.name}
+                        {info.required && (
+                          <Badge variant="destructive" className="text-xs">
+                            Obligatoire
+                          </Badge>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="global-document-file">Fichier</Label>
+              <Input
+                id="global-document-file"
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file && selectedType) {
+                    handleUploadNewDocument(file, selectedType)
+                  }
+                }}
+                disabled={!selectedType}
+              />
+            </div>
+          </div>
+          {selectedType && (
+            <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>{REQUIRED_DOCUMENTS[selectedType as keyof typeof REQUIRED_DOCUMENTS]?.name}</strong>
+              </p>
+              <p className="text-xs text-blue-600 mt-1">
+                {REQUIRED_DOCUMENTS[selectedType as keyof typeof REQUIRED_DOCUMENTS]?.description}
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Documents par catégorie */}
       <div className="space-y-6">
