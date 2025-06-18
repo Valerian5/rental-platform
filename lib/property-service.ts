@@ -8,7 +8,7 @@ export interface Property {
   city: string
   postal_code: string
   price: number
-  charges_amount?: number // Utiliser le vrai nom de colonne
+  charges_amount?: number
   surface: number
   rooms: number
   bedrooms: number
@@ -162,8 +162,6 @@ export const propertyService = {
   },
 
   async getPublicPropertyById(id: string): Promise<Property> {
-    // Pour les propriétés publiques, on utilise la même fonction
-    // mais on pourrait ajouter des restrictions si nécessaire
     return this.getPropertyById(id)
   },
 
@@ -387,13 +385,13 @@ export const propertyService = {
     }
   },
 
-  // Ajout ou correction de la méthode getPropertyVisitAvailabilities
-  getPropertyVisitAvailabilities: async (propertyId: string) => {
+  // CORRECTION : Utiliser property_visit_slots au lieu de visit_availabilities
+  getPropertyVisitSlots: async (propertyId: string) => {
     try {
       console.log("🔍 Récupération des créneaux de visite pour la propriété:", propertyId)
 
       const { data, error } = await supabase
-        .from("visit_availabilities")
+        .from("property_visit_slots")
         .select("*")
         .eq("property_id", propertyId)
         .order("date", { ascending: true })
@@ -407,18 +405,18 @@ export const propertyService = {
       console.log(`✅ ${data?.length || 0} créneaux récupérés`)
       return data || []
     } catch (error) {
-      console.error("❌ Erreur service getPropertyVisitAvailabilities:", error)
+      console.error("❌ Erreur service getPropertyVisitSlots:", error)
       throw error
     }
   },
 
-  // Méthode pour sauvegarder les créneaux de visite
-  savePropertyVisitAvailabilities: async (propertyId: string, slots: any[]) => {
+  // CORRECTION : Sauvegarder dans property_visit_slots
+  savePropertyVisitSlots: async (propertyId: string, slots: any[]) => {
     try {
       console.log("💾 Sauvegarde des créneaux pour la propriété:", propertyId)
 
       // D'abord supprimer les créneaux existants
-      const { error: deleteError } = await supabase.from("visit_availabilities").delete().eq("property_id", propertyId)
+      const { error: deleteError } = await supabase.from("property_visit_slots").delete().eq("property_id", propertyId)
 
       if (deleteError) {
         console.error("❌ Erreur lors de la suppression des anciens créneaux:", deleteError)
@@ -436,14 +434,13 @@ export const propertyService = {
         date: slot.date,
         start_time: slot.start_time,
         end_time: slot.end_time,
-        max_capacity: Number(slot.max_capacity) || 1,
-        is_group_visit: Boolean(slot.is_group_visit),
-        current_bookings: Number(slot.current_bookings) || 0,
+        max_visitors: Number(slot.max_visitors) || Number(slot.max_capacity) || 1,
         is_available: slot.is_available !== false,
+        current_bookings: Number(slot.current_bookings) || 0,
       }))
 
       // Insérer les nouveaux créneaux
-      const { data, error } = await supabase.from("visit_availabilities").insert(slotsToInsert).select()
+      const { data, error } = await supabase.from("property_visit_slots").insert(slotsToInsert).select()
 
       if (error) {
         console.error("❌ Erreur lors de l'insertion des créneaux:", error)
@@ -453,95 +450,7 @@ export const propertyService = {
       console.log(`✅ ${data?.length || 0} créneaux sauvegardés`)
       return { success: true, slots: data, message: `${data?.length || 0} créneaux sauvegardés` }
     } catch (error) {
-      console.error("❌ Erreur service savePropertyVisitAvailabilities:", error)
-      throw error
-    }
-  },
-
-  // Méthodes manquantes pour les créneaux de visite
-  addVisitAvailability: async (
-    propertyId: string,
-    date: string,
-    startTime: string,
-    endTime: string,
-    maxCapacity: number,
-    isGroupVisit: boolean,
-  ) => {
-    try {
-      const { data, error } = await supabase
-        .from("visit_availabilities")
-        .insert({
-          property_id: propertyId,
-          date,
-          start_time: startTime,
-          end_time: endTime,
-          max_capacity: maxCapacity,
-          is_group_visit: isGroupVisit,
-          current_bookings: 0,
-          is_available: true,
-        })
-        .select()
-        .single()
-
-      if (error) throw error
-      return data
-    } catch (error) {
-      console.error("❌ Erreur addVisitAvailability:", error)
-      throw error
-    }
-  },
-
-  generateDefaultVisitSlots: async (propertyId: string, days: number) => {
-    try {
-      console.log(`🔄 Génération de créneaux par défaut pour ${days} jours`)
-
-      const slots = []
-      const today = new Date()
-
-      for (let i = 1; i <= days; i++) {
-        const date = new Date(today)
-        date.setDate(today.getDate() + i)
-
-        // Éviter les dimanches
-        if (date.getDay() === 0) continue
-
-        const dateStr = date.toISOString().split("T")[0]
-
-        // Créneaux du matin (9h-12h)
-        const morningSlots = ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30"]
-        // Créneaux de l'après-midi (14h-18h)
-        const afternoonSlots = ["14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30"]
-
-        const allSlots = [...morningSlots, ...afternoonSlots]
-
-        for (const startTime of allSlots) {
-          const [hours, minutes] = startTime.split(":").map(Number)
-          const endTime = `${String(hours).padStart(2, "0")}:${String(minutes + 30).padStart(2, "0")}`
-
-          slots.push({
-            property_id: propertyId,
-            date: dateStr,
-            start_time: startTime,
-            end_time: endTime,
-            max_capacity: 1,
-            is_group_visit: false,
-            current_bookings: 0,
-            is_available: true,
-          })
-        }
-      }
-
-      if (slots.length > 0) {
-        const { data, error } = await supabase.from("visit_availabilities").insert(slots).select()
-
-        if (error) throw error
-        console.log(`✅ ${data.length} créneaux par défaut générés`)
-        return data
-      }
-
-      return []
-    } catch (error) {
-      console.error("❌ Erreur generateDefaultVisitSlots:", error)
+      console.error("❌ Erreur service savePropertyVisitSlots:", error)
       throw error
     }
   },

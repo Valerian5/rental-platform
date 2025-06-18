@@ -47,29 +47,12 @@ interface FormData {
   ges_class: string
   heating_type: string
 
-  // Critères locataire
-  required_income: string
-  professional_situation: string
-  guarantor_required: boolean
-  lease_duration: string
-  move_in_date: string
-  rent_payment_day: string
-
   // Documents et disponibilités
   documents: File[]
   visit_availabilities: Array<{
     date: Date
     timeSlots: Array<{ start: string; end: string }>
   }>
-  income_multiplier?: string
-  accepted_professional_situations?: string[]
-  min_guarantor_income?: string
-  max_occupants?: string
-  student_accepted?: boolean
-  retired_accepted?: boolean
-  unemployed_accepted?: boolean
-  pets_allowed?: boolean
-  smoking_allowed?: boolean
 }
 
 const EQUIPMENT_OPTIONS = [
@@ -92,14 +75,6 @@ const EQUIPMENT_OPTIONS = [
 ]
 
 const ENERGY_CLASSES = ["A", "B", "C", "D", "E", "F", "G"]
-
-const MAIN_ACTIVITIES = [
-  { value: "employee", label: "Salarié", description: "CDI, CDD, Intérimaire" },
-  { value: "self_employed", label: "Indépendant", description: "Profession libérale, Auto-entrepreneur" },
-  { value: "student", label: "Étudiant", description: "Avec ou sans bourse" },
-  { value: "retired", label: "Retraité", description: "Pension de retraite" },
-  { value: "unemployed", label: "Demandeur d'emploi", description: "Avec ou sans allocations" },
-]
 
 export default function NewPropertyPage() {
   const router = useRouter()
@@ -131,12 +106,6 @@ export default function NewPropertyPage() {
     energy_class: "",
     ges_class: "",
     heating_type: "",
-    required_income: "",
-    professional_situation: "",
-    guarantor_required: false,
-    lease_duration: "",
-    move_in_date: "",
-    rent_payment_day: "",
     documents: [],
     visit_availabilities: [],
   })
@@ -186,7 +155,8 @@ export default function NewPropertyPage() {
   }
 
   const nextStep = () => {
-    if (currentStep < 6) {
+    if (currentStep < 5) {
+      // Maintenant 5 étapes au lieu de 6
       setCurrentStep(currentStep + 1)
     }
   }
@@ -234,6 +204,13 @@ export default function NewPropertyPage() {
       toast.error("Le nombre de pièces doit être supérieur à 0", { title: "Erreur" })
       return false
     }
+
+    // VALIDATION OBLIGATOIRE DES CRÉNEAUX
+    if (visitSlots.length === 0) {
+      toast.error("Vous devez ajouter au moins un créneau de visite", { title: "Erreur" })
+      return false
+    }
+
     return true
   }
 
@@ -263,8 +240,8 @@ export default function NewPropertyPage() {
         postal_code: formData.postal_code,
         hide_exact_address: formData.hide_exact_address,
         surface: Number.parseInt(formData.surface),
-        price: Number.parseFloat(formData.rent_excluding_charges), // Utiliser price au lieu de rent_excluding_charges
-        charges: Number.parseFloat(formData.charges_amount), // Utiliser charges au lieu de charges_amount
+        price: Number.parseFloat(formData.rent_excluding_charges),
+        charges_amount: Number.parseFloat(formData.charges_amount),
         property_type: formData.property_type as "apartment" | "house" | "studio" | "loft",
         rental_type: formData.rental_type as "unfurnished" | "furnished" | "shared",
         construction_year: formData.construction_year ? Number.parseInt(formData.construction_year) : null,
@@ -277,20 +254,9 @@ export default function NewPropertyPage() {
         energy_class: formData.energy_class || null,
         ges_class: formData.ges_class || null,
         heating_type: formData.heating_type || null,
-        required_income: formData.required_income ? Number.parseFloat(formData.required_income) : null,
-        professional_situation: formData.professional_situation || null,
-        guarantor_required: formData.guarantor_required,
-        lease_duration: formData.lease_duration ? Number.parseInt(formData.lease_duration) : null,
-        move_in_date: formData.move_in_date || null,
-        rent_payment_day: formData.rent_payment_day ? Number.parseInt(formData.rent_payment_day) : null,
         owner_id: currentUser.id,
         available: true,
         furnished: formData.rental_type === "furnished",
-        // Nouveaux champs
-        income_multiplier: formData.income_multiplier || "3.0",
-        accepted_professional_situations: formData.accepted_professional_situations || [],
-        min_guarantor_income: formData.min_guarantor_income ? Number.parseFloat(formData.min_guarantor_income) : null,
-        max_occupants: formData.max_occupants ? Number.parseInt(formData.max_occupants) : null,
       }
 
       console.log("🏠 Données de la propriété:", propertyData)
@@ -298,22 +264,10 @@ export default function NewPropertyPage() {
       const newProperty = await propertyService.createProperty(propertyData)
       console.log("✅ Propriété créée:", newProperty)
 
-      // Ajouter les créneaux de visite personnalisés
+      // Ajouter les créneaux de visite dans property_visit_slots
       if (visitSlots.length > 0) {
         console.log("📅 Ajout des créneaux personnalisés:", visitSlots)
-        for (const slot of visitSlots) {
-          await propertyService.addVisitAvailability(
-            newProperty.id,
-            slot.date,
-            slot.start_time,
-            slot.end_time,
-            slot.max_capacity || 1,
-            slot.is_group_visit || false,
-          )
-        }
-      } else {
-        console.log("🔄 Génération automatique des créneaux")
-        await propertyService.generateDefaultVisitSlots(newProperty.id, 14)
+        await propertyService.savePropertyVisitSlots(newProperty.id, visitSlots)
       }
 
       toast.success("Annonce créée avec succès !", { duration: 2000 })
@@ -686,262 +640,28 @@ export default function NewPropertyPage() {
       case 5:
         return (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold">Critères vis-à-vis du locataire</h2>
+            <h2 className="text-2xl font-bold">Configuration des visites *</h2>
 
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <h3 className="font-semibold text-blue-800 mb-2">Critères de sélection</h3>
-              <p className="text-blue-700 text-sm">
-                Définissez vos critères de sélection pour filtrer automatiquement les candidatures et calculer la
-                compatibilité des dossiers.
+            <div className="bg-orange-50 p-4 rounded-lg mb-6 border border-orange-200">
+              <h3 className="font-semibold text-orange-800 mb-2">⚠️ Créneaux obligatoires</h3>
+              <p className="text-orange-700 text-sm mb-3">
+                Vous devez configurer au moins un créneau de visite pour publier votre annonce. Les locataires pourront
+                réserver ces créneaux pour visiter votre bien.
               </p>
-            </div>
-
-            {/* Critères de revenus */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Critères de revenus</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="required_income">Revenus minimum requis (€)</Label>
-                    <Input
-                      id="required_income"
-                      type="number"
-                      value={formData.required_income}
-                      onChange={(e) => handleChange("required_income", e.target.value)}
-                      placeholder="3000"
-                    />
-                    <p className="text-sm text-gray-500">Revenus nets mensuels minimum acceptés</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="income_multiplier">Multiplicateur de revenus</Label>
-                    <Select
-                      value={formData.income_multiplier || "3.0"}
-                      onValueChange={(value) => handleChange("income_multiplier", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionnez" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="2.5">2,5x le loyer</SelectItem>
-                        <SelectItem value="3.0">3x le loyer (recommandé)</SelectItem>
-                        <SelectItem value="3.5">3,5x le loyer</SelectItem>
-                        <SelectItem value="4.0">4x le loyer</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-sm text-gray-500">Alternative au montant fixe</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Situations professionnelles acceptées */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Situations professionnelles acceptées</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="cdi"
-                      checked={formData.accepted_professional_situations?.includes("cdi") || false}
-                      onCheckedChange={(checked) => {
-                        const current = formData.accepted_professional_situations || []
-                        const updated = checked ? [...current, "cdi"] : current.filter((s) => s !== "cdi")
-                        handleChange("accepted_professional_situations", updated)
-                      }}
-                    />
-                    <Label htmlFor="cdi" className="text-sm">
-                      CDI - Contrat à durée indéterminée
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="cdd"
-                      checked={formData.accepted_professional_situations?.includes("cdd") || false}
-                      onCheckedChange={(checked) => {
-                        const current = formData.accepted_professional_situations || []
-                        const updated = checked ? [...current, "cdd"] : current.filter((s) => s !== "cdd")
-                        handleChange("accepted_professional_situations", updated)
-                      }}
-                    />
-                    <Label htmlFor="cdd" className="text-sm">
-                      CDD - Contrat à durée déterminée
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="interim"
-                      checked={formData.accepted_professional_situations?.includes("interim") || false}
-                      onCheckedChange={(checked) => {
-                        const current = formData.accepted_professional_situations || []
-                        const updated = checked ? [...current, "interim"] : current.filter((s) => s !== "interim")
-                        handleChange("accepted_professional_situations", updated)
-                      }}
-                    />
-                    <Label htmlFor="interim" className="text-sm">
-                      Intérimaire - Travail temporaire
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="independant"
-                      checked={formData.accepted_professional_situations?.includes("independant") || false}
-                      onCheckedChange={(checked) => {
-                        const current = formData.accepted_professional_situations || []
-                        const updated = checked
-                          ? [...current, "independant"]
-                          : current.filter((s) => s !== "independant")
-                        handleChange("accepted_professional_situations", updated)
-                      }}
-                    />
-                    <Label htmlFor="independant" className="text-sm">
-                      Indépendant - Travailleur indépendant
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="retraite"
-                      checked={formData.accepted_professional_situations?.includes("retraite") || false}
-                      onCheckedChange={(checked) => {
-                        const current = formData.accepted_professional_situations || []
-                        const updated = checked ? [...current, "retraite"] : current.filter((s) => s !== "retraite")
-                        handleChange("accepted_professional_situations", updated)
-                      }}
-                    />
-                    <Label htmlFor="retraite" className="text-sm">
-                      Retraité - Pension de retraite
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="etudes"
-                      checked={formData.accepted_professional_situations?.includes("etudes") || false}
-                      onCheckedChange={(checked) => {
-                        const current = formData.accepted_professional_situations || []
-                        const updated = checked ? [...current, "etudes"] : current.filter((s) => s !== "etudes")
-                        handleChange("accepted_professional_situations", updated)
-                      }}
-                    />
-                    <Label htmlFor="etudes" className="text-sm">
-                      Étudiant - Avec ou sans bourse
-                    </Label>
-                  </div>
-                </div>
-                <p className="text-sm text-gray-500">Si aucune situation n'est sélectionnée, toutes seront acceptées</p>
-              </CardContent>
-            </Card>
-
-            {/* Critères de garant */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Critères de garant</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="guarantor_required"
-                    checked={formData.guarantor_required}
-                    onCheckedChange={(checked) => handleChange("guarantor_required", checked)}
-                  />
-                  <Label htmlFor="guarantor_required">Garant obligatoire</Label>
-                </div>
-
-                {formData.guarantor_required && (
-                  <div className="space-y-2">
-                    <Label htmlFor="min_guarantor_income">Revenus minimum du garant (€)</Label>
-                    <Input
-                      id="min_guarantor_income"
-                      type="number"
-                      value={formData.min_guarantor_income || ""}
-                      onChange={(e) => handleChange("min_guarantor_income", e.target.value)}
-                      placeholder="4000"
-                    />
-                    <p className="text-sm text-gray-500">Revenus nets mensuels minimum du garant</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Autres critères */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Autres critères</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="max_occupants">Nombre maximum d'occupants</Label>
-                    <Input
-                      id="max_occupants"
-                      type="number"
-                      value={formData.max_occupants || ""}
-                      onChange={(e) => handleChange("max_occupants", e.target.value)}
-                      placeholder="2"
-                    />
-                    <p className="text-sm text-gray-500">Informatif uniquement</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lease_duration">Durée de location souhaitée (mois)</Label>
-                    <Input
-                      id="lease_duration"
-                      type="number"
-                      value={formData.lease_duration}
-                      onChange={(e) => handleChange("lease_duration", e.target.value)}
-                      placeholder="12"
-                    />
-                    <p className="text-sm text-gray-500">Informatif uniquement</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="move_in_date">Date d'emménagement souhaitée</Label>
-                    <Input
-                      id="move_in_date"
-                      type="date"
-                      value={formData.move_in_date}
-                      onChange={(e) => handleChange("move_in_date", e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="rent_payment_day">Jour de paiement du loyer</Label>
-                  <Input
-                    id="rent_payment_day"
-                    type="number"
-                    min="1"
-                    max="31"
-                    value={formData.rent_payment_day}
-                    onChange={(e) => handleChange("rent_payment_day", e.target.value)}
-                    placeholder="5"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )
-
-      case 6:
-        return (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold">Configuration des visites</h2>
-
-            <div className="bg-blue-50 p-4 rounded-lg mb-6">
-              <h3 className="font-semibold text-blue-800 mb-2">Configuration recommandée</h3>
-              <p className="text-blue-700 text-sm mb-3">
-                Pour commencer rapidement, nous recommandons de créer l'annonce avec la génération automatique de
-                créneaux. Vous pourrez ensuite personnaliser vos disponibilités depuis la page de gestion du bien.
-              </p>
-              <div className="text-sm text-blue-600">
-                ✓ Créneaux de 30 minutes automatiques
-                <br />✓ Lundi-Vendredi : 9h-12h et 14h-18h
-                <br />✓ Samedi : 10h-17h
-                <br />✓ Personnalisation complète après création
+              <div className="text-sm text-orange-600">
+                💡 Conseil : Ajoutez plusieurs créneaux sur différents jours pour maximiser vos chances de location
               </div>
             </div>
 
             <VisitScheduler visitSlots={visitSlots} onSlotsChange={setVisitSlots} mode="creation" />
+
+            {visitSlots.length === 0 && (
+              <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                <p className="text-red-700 text-sm font-medium">
+                  ❌ Aucun créneau configuré. Vous devez ajouter au moins un créneau pour continuer.
+                </p>
+              </div>
+            )}
           </div>
         )
 
@@ -958,7 +678,7 @@ export default function NewPropertyPage() {
     )
   }
 
-  const progress = (currentStep / 6) * 100
+  const progress = (currentStep / 5) * 100 // Maintenant sur 5 étapes
 
   return (
     <div className="container mx-auto py-8 max-w-4xl">
@@ -972,7 +692,7 @@ export default function NewPropertyPage() {
           <CardTitle>Créer une nouvelle annonce</CardTitle>
           <div className="space-y-2">
             <div className="flex justify-between text-sm text-gray-600">
-              <span>Étape {currentStep} sur 6</span>
+              <span>Étape {currentStep} sur 5</span>
               <span>{Math.round(progress)}% complété</span>
             </div>
             <Progress value={progress} className="w-full" />
@@ -987,13 +707,13 @@ export default function NewPropertyPage() {
               Précédent
             </Button>
 
-            {currentStep < 6 ? (
+            {currentStep < 5 ? (
               <Button type="button" onClick={nextStep}>
                 Suivant
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
             ) : (
-              <Button type="button" onClick={handleSubmit} disabled={isLoading}>
+              <Button type="button" onClick={handleSubmit} disabled={isLoading || visitSlots.length === 0}>
                 {isLoading ? "Création en cours..." : "Créer l'annonce"}
               </Button>
             )}
