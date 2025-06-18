@@ -17,6 +17,7 @@ import { VisitScheduler } from "@/components/visit-scheduler"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
+import { PropertyDocumentsManager } from "@/components/property-documents-manager"
 
 export default function PropertyDetailPage() {
   const router = useRouter()
@@ -33,7 +34,7 @@ export default function PropertyDetailPage() {
   const [activeTab, setActiveTab] = useState(initialTab)
   const [slotsLoaded, setSlotsLoaded] = useState(false)
 
-  // Gestionnaire de changement de créneaux - MÉMORISÉ
+  // Gestionnaire de changement de créneaux - MÉMORISÉ et STABLE
   const handleSlotsChange = useCallback((newSlots: any[]) => {
     console.log("🔄 Mise à jour des créneaux:", newSlots.length)
     setVisitSlots(newSlots)
@@ -80,8 +81,7 @@ export default function PropertyDetailPage() {
         setProperty(propertyData)
         console.log("✅ Propriété chargée:", propertyData)
 
-        // Initialiser les créneaux vides - le VisitScheduler se chargera du loading
-        setVisitSlots([])
+        // Marquer comme chargé
         setSlotsLoaded(true)
       } catch (error: any) {
         console.error("❌ Erreur lors du chargement:", error)
@@ -565,17 +565,7 @@ export default function PropertyDetailPage() {
         </TabsContent>
 
         <TabsContent value="documents">
-          <Card>
-            <CardHeader>
-              <CardTitle>Documents du bien</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8 text-gray-500">
-                <p>Fonctionnalité en cours de développement</p>
-                <p className="text-sm mt-2">Vous pourrez bientôt gérer les documents liés à ce bien</p>
-              </div>
-            </CardContent>
-          </Card>
+          <PropertyDocumentsManager propertyId={property.id} />
         </TabsContent>
       </Tabs>
     </div>
