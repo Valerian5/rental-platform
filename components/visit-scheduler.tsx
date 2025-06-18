@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -46,26 +46,52 @@ const DURATION_OPTIONS = [
 ]
 
 const MONTHS = [
-  "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
-  "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+  "Janvier",
+  "Février",
+  "Mars",
+  "Avril",
+  "Mai",
+  "Juin",
+  "Juillet",
+  "Août",
+  "Septembre",
+  "Octobre",
+  "Novembre",
+  "Décembre",
 ]
 
 const DAYS_SHORT = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
 
+// Fonction pour formater l'heure
 const formatTimeString = (timeStr: string): string => {
   if (!timeStr) return "00:00"
-  if (/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(timeStr)) return timeStr
-  if (/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/.test(timeStr)) return timeStr.substring(0, 5)
+  if (/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(timeStr)) {
+    return timeStr
+  }
+  if (/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/.test(timeStr)) {
+    return timeStr.substring(0, 5)
+  }
   return "00:00"
 }
 
+// Fonction pour formater une date CORRECTEMENT
 const formatDateForDisplay = (dateStr: string): string => {
   try {
     const [year, month, day] = dateStr.split("-").map(Number)
     const date = new Date(year, month - 1, day)
-    if (isNaN(date.getTime())) return "Date invalide"
-    return date.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })
-  } catch {
+
+    if (isNaN(date.getTime())) {
+      console.error("Date invalide:", dateStr)
+      return "Date invalide"
+    }
+
+    return date.toLocaleDateString("fr-FR", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    })
+  } catch (error) {
+    console.error("Erreur formatage date:", error, "pour:", dateStr)
     return "Date invalide"
   }
 }
@@ -84,59 +110,78 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
   })
   const [customDuration, setCustomDuration] = useState(45)
   const [isSaving, setIsSaving] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [hasInitialLoad, setHasInitialLoad] = useState(false)
+
+  // Référence pour éviter les chargements multiples
   const loadingRef = useRef(false)
 
-  // Chargement initial : fetch une seule fois puis setIsLoading(false) même si la liste est vide
-  useEffect(() => {
-    let cancelled = false
-    if (mode === "management" && propertyId && !hasLoadedOnce) {
-      loadingRef.current = true
-      setIsLoading(true)
-      ;(async () => {
-        try {
-          const headers = await getAuthHeaders()
-          const response = await fetch(`/api/properties/${propertyId}/visit-slots`, { headers })
-          if (cancelled) return
-          if (response.ok) {
-            const data = await response.json()
-            const cleanedSlots = (data.slots || []).map((slot: any) => ({
-              ...slot,
-              start_time: formatTimeString(slot.start_time),
-              end_time: formatTimeString(slot.end_time),
-            }))
-            onSlotsChange(cleanedSlots)
-          } else {
-            const errorData = await response.json()
-            toast.error(errorData.error || "Erreur lors du chargement des créneaux")
-          }
-        } catch (error) {
-          if (!cancelled) toast.error("Erreur lors du chargement des créneaux")
-        } finally {
-          if (!cancelled) {
-            setIsLoading(false)
-            loadingRef.current = false
-            setHasLoadedOnce(true)
-          }
-        }
-      })()
-    } else if (!hasLoadedOnce) {
-      // mode création ou déjà chargé
-      setIsLoading(false)
-      setHasLoadedOnce(true)
+  // Fonction de chargement des créneaux - SIMPLIFIÉE
+  const loadSlotsFromDatabase = useCallback(async () => {
+    if (!propertyId || loadingRef.current) {
+      console.log("🚫 Chargement évité - pas de propertyId ou déjà en cours")
+      return
     }
-    return () => { cancelled = true }
-    // eslint-disable-next-line
-  }, [mode, propertyId, hasLoadedOnce])
 
-  // --- LE RESTE DU CODE EST STRICTEMENT IDENTIQUE À AVANT ---
-  // ... handlers, calendar, config, rendering, etc (ne pas toucher)
+    console.log("🔄 Chargement des créneaux depuis la DB pour:", propertyId)
+    setIsLoading(true)
+    loadingRef.current = true
+
+    try {
+      const headers = await getAuthHeaders()
+      const response = await fetch(`/api/properties/${propertyId}/visit-slots`, {
+        headers,
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log("✅ Créneaux chargés depuis la DB:", data.slots?.length || 0)
+
+        const cleanedSlots = (data.slots || []).map((slot: any) => ({
+          ...slot,
+          start_time: formatTimeString(slot.start_time),
+          end_time: formatTimeString(slot.end_time),
+        }))
+
+        // Mettre à jour l'état local
+        onSlotsChange(cleanedSlots)
+        setHasInitialLoad(true)
+      } else {
+        const errorData = await response.json()
+        console.error("❌ Erreur chargement créneaux:", response.status, errorData)
+        if (response.status === 401) {
+          toast.error("Erreur d'authentification. Veuillez vous reconnecter.")
+        } else {
+          toast.error(errorData.error || "Erreur lors du chargement des créneaux")
+        }
+      }
+    } catch (error) {
+      console.error("❌ Erreur chargement créneaux:", error)
+      toast.error("Erreur lors du chargement des créneaux")
+    } finally {
+      setIsLoading(false)
+      loadingRef.current = false
+    }
+  }, [propertyId, onSlotsChange])
+
+  // Charger les créneaux au montage SEULEMENT si mode management et pas de créneaux existants
+  useEffect(() => {
+    if (mode === "management" && propertyId && !hasInitialLoad && visitSlots.length === 0) {
+      console.log("🔄 Chargement initial des créneaux...")
+      loadSlotsFromDatabase()
+    } else if (visitSlots.length > 0 && !hasInitialLoad) {
+      console.log("✅ Utilisation des créneaux existants:", visitSlots.length)
+      setHasInitialLoad(true)
+    }
+  }, [mode, propertyId, hasInitialLoad, visitSlots.length, loadSlotsFromDatabase])
 
   const saveSlotsToDatabase = async (slots: VisitSlot[]) => {
     if (!propertyId || mode !== "management") return
+
     setIsSaving(true)
     try {
+      console.log("💾 Sauvegarde de", slots.length, "créneaux...")
+
       const headers = await getAuthHeaders()
       const validatedSlots = slots.map((slot) => ({
         date: slot.date,
@@ -147,48 +192,65 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
         current_bookings: slot.current_bookings || 0,
         is_available: slot.is_available !== false,
       }))
+
       const response = await fetch(`/api/properties/${propertyId}/visit-slots`, {
         method: "POST",
         headers,
         body: JSON.stringify({ slots: validatedSlots }),
       })
+
       if (response.ok) {
         const data = await response.json()
+        console.log("✅ Créneaux sauvegardés:", data.message)
         toast.success(data.message || "Créneaux sauvegardés avec succès")
       } else {
         const errorData = await response.json()
-        toast.error(errorData.error || `Erreur ${response.status}`)
+        console.error("❌ Erreur sauvegarde:", errorData)
+        if (response.status === 401) {
+          toast.error("Erreur d'authentification. Veuillez vous reconnecter.")
+        } else {
+          toast.error(errorData.error || `Erreur ${response.status}`)
+        }
       }
     } catch (error) {
+      console.error("❌ Erreur sauvegarde créneaux:", error)
       toast.error("Erreur lors de la sauvegarde des créneaux")
     } finally {
       setIsSaving(false)
     }
   }
 
+  // Générer les jours du calendrier
   const generateCalendarDays = () => {
     const year = currentDate.getFullYear()
     const month = currentDate.getMonth()
     const firstDay = new Date(year, month, 1)
     const startDate = new Date(firstDay)
+
     const dayOfWeek = firstDay.getDay()
     const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1
     startDate.setDate(firstDay.getDate() - daysToSubtract)
+
     const days = []
     const today = new Date()
     today.setHours(0, 0, 0, 0)
+
     for (let i = 0; i < 42; i++) {
       const date = new Date(startDate)
       date.setDate(startDate.getDate() + i)
+
+      // Formatage explicite de la date pour éviter les problèmes de timezone
       const year = date.getFullYear()
       const month = String(date.getMonth() + 1).padStart(2, "0")
       const day = String(date.getDate()).padStart(2, "0")
       const dateStr = `${year}-${month}-${day}`
+
       const isCurrentMonth = date.getMonth() === currentDate.getMonth()
       const isToday = date.getTime() === today.getTime()
       const isPast = date < today
       const hasSlots = visitSlots.some((slot) => slot.date === dateStr)
       const bookedSlots = visitSlots.filter((slot) => slot.date === dateStr && slot.current_bookings > 0).length
+
       days.push({
         date: dateStr,
         day: date.getDate(),
@@ -199,24 +261,35 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
         bookedSlots,
       })
     }
+
     return days
   }
 
+  // Générer TOUS les créneaux possibles
   const generateTimeSlots = (config: DayConfiguration) => {
     const slots = []
     const duration = config.slotDuration === 0 ? customDuration : config.slotDuration
+
     if (!duration || duration <= 0) return slots
+
     try {
       const startTime = new Date(`2000-01-01T${config.startTime}:00`)
       const endTime = new Date(`2000-01-01T${config.endTime}:00`)
-      if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) return slots
+
+      if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+        return slots
+      }
+
       let currentTime = new Date(startTime)
+
       while (currentTime < endTime) {
         const nextTime = new Date(currentTime.getTime() + duration * 60000)
+
         if (nextTime <= endTime) {
           const startTimeStr = currentTime.toTimeString().slice(0, 5)
           const endTimeStr = nextTime.toTimeString().slice(0, 5)
           const slotKey = `${startTimeStr}-${endTimeStr}`
+
           slots.push({
             key: slotKey,
             startTime: startTimeStr,
@@ -224,33 +297,50 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
             label: `${startTimeStr} - ${endTimeStr}`,
           })
         }
+
         currentTime = nextTime
       }
-    } catch {}
+    } catch (error) {
+      console.error("Erreur génération créneaux:", error)
+    }
+
     return slots
   }
 
   const navigateMonth = (direction: "prev" | "next") => {
     const newDate = new Date(currentDate)
-    if (direction === "prev") newDate.setMonth(newDate.getMonth() - 1)
-    else newDate.setMonth(newDate.getMonth() + 1)
+    if (direction === "prev") {
+      newDate.setMonth(newDate.getMonth() - 1)
+    } else {
+      newDate.setMonth(newDate.getMonth() + 1)
+    }
     setCurrentDate(newDate)
   }
 
+  // Sélectionner un jour
   const selectDate = (dateStr: string) => {
+    console.log("📅 Date sélectionnée:", dateStr)
     setSelectedDate(dateStr)
+
+    // Récupérer les créneaux existants pour ce jour
     const existingSlots = visitSlots.filter((slot) => slot.date === dateStr)
+    console.log("🔍 Créneaux existants pour", dateStr, ":", existingSlots.length)
+
     if (existingSlots.length > 0) {
+      // Il y a des créneaux existants
       const firstSlot = existingSlots[0]
+
       try {
         const startTime = new Date(`2000-01-01T${formatTimeString(firstSlot.start_time)}:00`)
         const endTime = new Date(`2000-01-01T${formatTimeString(firstSlot.end_time)}:00`)
         const duration = (endTime.getTime() - startTime.getTime()) / 60000
+
         let commonDuration = duration
         if (!DURATION_OPTIONS.some((opt) => opt.value === duration)) {
           commonDuration = 0
           setCustomDuration(duration)
         }
+
         setDayConfig({
           date: dateStr,
           slotDuration: commonDuration,
@@ -259,10 +349,11 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
           isGroupVisit: firstSlot.is_group_visit,
           capacity: firstSlot.max_capacity,
           selectedSlots: existingSlots.map(
-            (slot) => `${formatTimeString(slot.start_time)}-${formatTimeString(slot.end_time)}`
+            (slot) => `${formatTimeString(slot.start_time)}-${formatTimeString(slot.end_time)}`,
           ),
         })
-      } catch {
+      } catch (error) {
+        console.error("Erreur parsing créneaux existants:", error)
         setDayConfig({
           date: dateStr,
           slotDuration: 30,
@@ -274,6 +365,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
         })
       }
     } else {
+      // Pas de créneaux existants
       setDayConfig({
         date: dateStr,
         slotDuration: 30,
@@ -300,7 +392,9 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
       toast.error("Veuillez sélectionner au moins un créneau")
       return
     }
+
     const otherDaysSlots = visitSlots.filter((slot) => slot.date !== selectedDate)
+
     const newSlots: VisitSlot[] = dayConfig.selectedSlots.map((slotKey) => {
       const [startTime, endTime] = slotKey.split("-")
       return {
@@ -313,20 +407,25 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
         is_available: true,
       }
     })
+
     const allSlots = [...otherDaysSlots, ...newSlots]
     onSlotsChange(allSlots)
+
     if (mode === "management") {
       await saveSlotsToDatabase(allSlots)
     } else {
-      toast.success(`${newSlots.length} créneau(x) configuré(s) pour le ${formatDateForDisplay(selectedDate)}`)
+      toast.success(`${newSlots.length} créneaux configurés pour le ${formatDateForDisplay(selectedDate)}`)
     }
   }
 
   const clearDaySlots = async () => {
     if (!selectedDate) return
+
     const otherDaysSlots = visitSlots.filter((slot) => slot.date !== selectedDate)
     onSlotsChange(otherDaysSlots)
+
     setDayConfig((prev) => ({ ...prev, selectedSlots: [] }))
+
     if (mode === "management") {
       await saveSlotsToDatabase(otherDaysSlots)
     } else {
@@ -338,25 +437,13 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
   const timeSlots = generateTimeSlots(dayConfig)
   const totalSlots = visitSlots.length
 
-  if (isLoading) {
+  if (isLoading && !hasInitialLoad) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="text-center space-y-4">
           <RefreshCw className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
           <p className="text-muted-foreground">Chargement des créneaux...</p>
         </div>
-      </div>
-    )
-  }
-
-  if (!isLoading && hasLoadedOnce && visitSlots.length === 0 && !selectedDate) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 gap-4">
-        <Calendar className="h-10 w-10 text-muted-foreground" />
-        <p className="text-lg text-muted-foreground">Aucun créneau configuré pour cette propriété.</p>
-        <Button onClick={() => selectDate(new Date().toISOString().slice(0, 10))}>
-          Ajouter un créneau
-        </Button>
       </div>
     )
   }
@@ -393,6 +480,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                 </div>
               ))}
             </div>
+
             <div className="grid grid-cols-7 gap-1">
               {calendarDays.map((day, index) => (
                 <Button
@@ -419,6 +507,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                 </Button>
               ))}
             </div>
+
             <div className="mt-4 text-xs text-muted-foreground space-y-1">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-green-100 border border-green-300 rounded"></div>
