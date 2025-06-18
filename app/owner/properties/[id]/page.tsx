@@ -39,55 +39,64 @@ export default function PropertyDetailPage() {
     setVisitSlots(newSlots)
   }, [])
 
-  useEffect(() => {
-    const fetchData = async () => {
-      console.log("🔄 Chargement des données de la propriété...")
-      setIsLoading(true)
-      setError(null)
+useEffect(() => {
+  const fetchData = async () => {
+    console.log("🔄 Chargement des données de la propriété...")
+    setIsLoading(true)
+    setError(null)
 
-      try {
-        // Vérifier l'authentification
-        const user = await authService.getCurrentUser()
-        if (!user || user.user_type !== "owner") {
-          toast("Vous devez être connecté en tant que propriétaire", {
-            description: "Erreur",
-            type: "error",
-          })
-          router.push("/login")
-          return
-        }
-        setCurrentUser(user)
-        console.log("✅ Utilisateur connecté:", user.id)
-
-        if (!params.id) {
-          throw new Error("ID de propriété manquant")
-        }
-
-        // Récupérer la propriété
-        console.log("📋 Récupération de la propriété:", params.id)
-        const propertyData = await propertyService.getPropertyById(params.id as string)
-
-        // Vérifier que le bien appartient au propriétaire connecté
-        if (propertyData.owner_id !== user.id) {
-          toast("Vous n'avez pas accès à ce bien", {
-            description: "Erreur",
-            type: "error",
-          })
-          router.push("/owner/dashboard")
-          return
-        }
-
-        setProperty(propertyData)
-        console.log("✅ Propriété chargée:", propertyData)
-
-        // Initialiser les créneaux vides - le VisitScheduler se chargera du loading
-        setVisitSlots([])
-        setSlotsLoaded(true)
+    try {
+      // Vérifier l'authentification
+      const user = await authService.getCurrentUser()
+      if (!user || user.user_type !== "owner") {
+        toast("Vous devez être connecté en tant que propriétaire", {
+          description: "Erreur",
+          type: "error",
+        })
+        router.push("/login")
+        return
       }
-    }
+      setCurrentUser(user)
+      console.log("✅ Utilisateur connecté:", user.id)
 
-    fetchData()
-  }, [params.id])
+      if (!params.id) {
+        throw new Error("ID de propriété manquant")
+      }
+
+      // Récupérer la propriété
+      console.log("📋 Récupération de la propriété:", params.id)
+      const propertyData = await propertyService.getPropertyById(params.id as string)
+
+      // Vérifier que le bien appartient au propriétaire connecté
+      if (propertyData.owner_id !== user.id) {
+        toast("Vous n'avez pas accès à ce bien", {
+          description: "Erreur",
+          type: "error",
+        })
+        router.push("/owner/dashboard")
+        return
+      }
+
+      setProperty(propertyData)
+      console.log("✅ Propriété chargée:", propertyData)
+
+      // Réinitialiser les créneaux UNIQUEMENT au premier chargement du bien (quand params.id change)
+      setVisitSlots([])
+      setSlotsLoaded(true)
+    } catch (error: any) {
+      console.error("❌ Erreur lors du chargement:", error)
+      setError(error.message || "Erreur lors du chargement du bien")
+      toast("Erreur lors du chargement du bien", {
+        description: "Erreur",
+        type: "error",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  fetchData()
+}, [params.id, router])
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
