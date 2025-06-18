@@ -8,7 +8,7 @@ export interface Property {
   city: string
   postal_code: string
   price: number
-  charges_amount: number
+  charges_amount?: number // Utiliser le vrai nom de colonne
   surface: number
   rooms: number
   bedrooms: number
@@ -167,22 +167,37 @@ export const propertyService = {
     return this.getPropertyById(id)
   },
 
-  async createProperty(propertyData: Partial<Property>): Promise<Property> {
-    console.log("🏠 PropertyService.createProperty")
+  async createProperty(propertyData: any): Promise<Property> {
+    console.log("🏠 PropertyService.createProperty", propertyData)
 
     try {
-      // Mapper rent_excluding_charges vers price si nécessaire
-      const mappedData = {
-        ...propertyData,
-        price: propertyData.price || propertyData.rent_excluding_charges || 0,
-        // S'assurer que les champs obligatoires sont présents
+      // Nettoyer les données en ne gardant que les champs qui existent vraiment
+      const cleanData = {
+        title: propertyData.title,
+        description: propertyData.description,
+        address: propertyData.address,
+        city: propertyData.city,
+        postal_code: propertyData.postal_code,
+        price: propertyData.price || 0,
         surface: propertyData.surface || 0,
         rooms: propertyData.rooms || 1,
         bedrooms: propertyData.bedrooms || 0,
         bathrooms: propertyData.bathrooms || 0,
+        property_type: propertyData.property_type || "apartment",
+        furnished: propertyData.furnished || false,
+        available: propertyData.available !== false,
+        owner_id: propertyData.owner_id,
+        // Ajouter seulement les champs qui existent dans la table
+        ...(propertyData.charges_amount && { charges_amount: propertyData.charges_amount }),
+        ...(propertyData.security_deposit && { security_deposit: propertyData.security_deposit }),
+        ...(propertyData.energy_class && { energy_class: propertyData.energy_class }),
+        ...(propertyData.ges_class && { ges_class: propertyData.ges_class }),
+        ...(propertyData.equipment && { equipment: propertyData.equipment }),
       }
 
-      const { data, error } = await supabase.from("properties").insert(mappedData).select().single()
+      console.log("🧹 Données nettoyées:", cleanData)
+
+      const { data, error } = await supabase.from("properties").insert(cleanData).select().single()
 
       if (error) {
         console.error("❌ Erreur création propriété:", error)
@@ -439,6 +454,94 @@ export const propertyService = {
       return { success: true, slots: data, message: `${data?.length || 0} créneaux sauvegardés` }
     } catch (error) {
       console.error("❌ Erreur service savePropertyVisitAvailabilities:", error)
+      throw error
+    }
+  },
+
+  // Méthodes manquantes pour les créneaux de visite
+  addVisitAvailability: async (
+    propertyId: string,
+    date: string,
+    startTime: string,
+    endTime: string,
+    maxCapacity: number,
+    isGroupVisit: boolean,
+  ) => {
+    try {
+      const { data, error } = await supabase
+        .from("visit_availabilities")
+        .insert({
+          property_id: propertyId,
+          date,
+          start_time: startTime,
+          end_time: endTime,
+          max_capacity: maxCapacity,
+          is_group_visit: isGroupVisit,
+          current_bookings: 0,
+          is_available: true,
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+      return data
+    } catch (error) {
+      console.error("❌ Erreur addVisitAvailability:", error)
+      throw error
+    }
+  },
+
+  generateDefaultVisitSlots: async (propertyId: string, days: number) => {
+    try {
+      console.log(`🔄 Génération de créneaux par défaut pour ${days} jours`)
+
+      const slots = []
+      const today = new Date()
+
+      for (let i = 1; i <= days; i++) {
+        const date = new Date(today)
+        date.setDate(today.getDate() + i)
+
+        // Éviter les dimanches
+        if (date.getDay() === 0) continue
+
+        const dateStr = date.toISOString().split("T")[0]
+
+        // Créneaux du matin (9h-12h)
+        const morningSlots = ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30"]
+        // Créneaux de l'après-midi (14h-18h)
+        const afternoonSlots = ["14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30"]
+
+        const allSlots = [...morningSlots, ...afternoonSlots]
+
+        for (const startTime of allSlots) {
+          const [hours, minutes] = startTime.split(":").map(Number)
+          const endTime = `${String(hours).padStart(2, "0")}:${String(minutes + 30).padStart(2, "0")}`
+
+          slots.push({
+            property_id: propertyId,
+            date: dateStr,
+            start_time: startTime,
+            end_time: endTime,
+            max_capacity: 1,
+            is_group_visit: false,
+            current_bookings: 0,
+            is_available: true,
+          })
+        }
+      }
+
+      if (slots.length > 0) {
+        const { data, error } = await supabase.from("visit_availabilities").insert(slots).select()
+
+        if (error) throw error
+        console.log(`✅ ${data.length} créneaux par défaut générés`)
+        return data
+      }
+
+      return []
+    } catch (error) {
+      console.error("❌ Erreur generateDefaultVisitSlots:", error)
       throw error
     }
   },
