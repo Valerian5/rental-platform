@@ -88,7 +88,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
   const [hasInitialLoad, setHasInitialLoad] = useState(false)
   const loadingRef = useRef(false)
 
-  // Chargement initial fiable, sans boucle infinie
+  // Chargement initial fiable, sans boucle infinie et SANS reset selectedDate
   const loadSlotsFromDatabase = useCallback(async () => {
     if (!propertyId || loadingRef.current) return
     setIsLoading(true)
@@ -113,13 +113,14 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
     } finally {
       setIsLoading(false)
       loadingRef.current = false
+      setHasInitialLoad(true)
     }
   }, [propertyId, onSlotsChange])
 
+  // Chargement slots uniquement au premier montage/changement de propertyId
   useEffect(() => {
     if (mode === "management" && propertyId && !hasInitialLoad) {
       loadSlotsFromDatabase()
-      setHasInitialLoad(true)
     }
   }, [mode, propertyId, hasInitialLoad, loadSlotsFromDatabase])
 
@@ -229,7 +230,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
     setCurrentDate(newDate)
   }
 
-  // Sélection d'un jour
+  // Sélection d'un jour (jamais reset ici)
   const selectDate = (dateStr: string) => {
     setSelectedDate(dateStr)
     const existingSlots = visitSlots.filter((slot) => slot.date === dateStr)
@@ -331,6 +332,20 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
   const timeSlots = generateTimeSlots(dayConfig)
   const totalSlots = visitSlots.length
 
+  // Affichage "aucun créneau" : le bouton permet d'ouvrir la config sur aujourd'hui
+  if (!isLoading && hasInitialLoad && visitSlots.length === 0 && !selectedDate) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 gap-4">
+        <Calendar className="h-10 w-10 text-muted-foreground" />
+        <p className="text-lg text-muted-foreground">Aucun créneau configuré pour cette propriété.</p>
+        <Button onClick={() => selectDate(new Date().toISOString().slice(0, 10))}>
+          Ajouter un créneau
+        </Button>
+      </div>
+    )
+  }
+
+  // Affichage loader
   if (isLoading && !hasInitialLoad) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -338,19 +353,6 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
           <RefreshCw className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
           <p className="text-muted-foreground">Chargement des créneaux...</p>
         </div>
-      </div>
-    )
-  }
-
-  // Cas aucun créneau
-  if (!isLoading && hasInitialLoad && totalSlots === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 gap-4">
-        <Calendar className="h-10 w-10 text-muted-foreground" />
-        <p className="text-lg text-muted-foreground">Aucun créneau configuré pour cette propriété.</p>
-        <Button onClick={() => setSelectedDate(new Date().toISOString().slice(0, 10))}>
-          Ajouter un créneau
-        </Button>
       </div>
     )
   }
@@ -483,6 +485,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                       </Button>
                     ))}
                   </div>
+
                   {dayConfig.slotDuration === 0 && (
                     <div className="flex items-center gap-2">
                       <Label>Durée personnalisée :</Label>
@@ -606,6 +609,7 @@ export function VisitScheduler({ visitSlots, onSlotsChange, mode, propertyId }: 
                           )
                         })}
                       </div>
+
                       <div className="mt-3 pt-3 border-t flex gap-2">
                         <Button
                           variant="outline"
