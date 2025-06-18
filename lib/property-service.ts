@@ -1,4 +1,5 @@
 import { supabase } from "./supabase"
+import { imageService } from "./image-service"
 
 export interface Property {
   id: string
@@ -462,21 +463,15 @@ export const propertyService = {
       console.log(`📸 Upload de ${images.length} images pour la propriété:`, propertyId)
 
       const uploadPromises = images.map(async (image, index) => {
-        const formData = new FormData()
-        formData.append("file", image)
-        formData.append("propertyId", propertyId)
-        formData.append("isPrimary", index === 0 ? "true" : "false")
+        // Utiliser le service d'images existant
+        const imageUrl = await imageService.uploadPropertyImage(image, propertyId)
 
-        const response = await fetch("/api/upload-supabase", {
-          method: "POST",
-          body: formData,
-        })
-
-        if (!response.ok) {
-          throw new Error(`Erreur upload image ${index + 1}: ${response.statusText}`)
-        }
-
-        return await response.json()
+        // Sauvegarder les métadonnées
+        return await imageService.savePropertyImageMetadata(
+          propertyId,
+          imageUrl,
+          index === 0, // La première image est principale
+        )
       })
 
       const results = await Promise.all(uploadPromises)

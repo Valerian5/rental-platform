@@ -9,14 +9,13 @@ import { CheckCircle, ArrowRight, Upload, Edit } from "lucide-react"
 import Link from "next/link"
 import { propertyService } from "@/lib/property-service"
 import { authService } from "@/lib/auth-service"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 
 export default function PropertySuccessPage() {
   const router = useRouter()
   const params = useParams()
   const [property, setProperty] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const { toast } = useToast()
 
   useEffect(() => {
     const fetchProperty = async () => {
@@ -33,7 +32,7 @@ export default function PropertySuccessPage() {
         }
       } catch (error) {
         console.error("Erreur lors du chargement du bien:", error)
-        toast({ title: "Erreur", description: "Erreur lors du chargement du bien", variant: "destructive" })
+        toast.error("Erreur lors du chargement du bien")
         router.push("/owner/dashboard")
       } finally {
         setIsLoading(false)
@@ -86,11 +85,11 @@ export default function PropertySuccessPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-gray-500">Loyer hors charges</p>
-                  <p className="font-medium">{property.rent_excluding_charges} €/mois</p>
+                  <p className="font-medium">{property.price || 0} €/mois</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Charges</p>
-                  <p className="font-medium">{property.charges_amount} €/mois</p>
+                  <p className="font-medium">{property.charges_amount || 0} €/mois</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Surface</p>
@@ -114,21 +113,15 @@ export default function PropertySuccessPage() {
 
               <div>
                 <p className="text-sm text-gray-500">Type de location</p>
-                <Badge variant="outline">
-                  {property.rental_type === "unfurnished" && "Non meublé"}
-                  {property.rental_type === "furnished" && "Meublé"}
-                  {property.rental_type === "shared" && "Colocation"}
-                </Badge>
+                <Badge variant="outline">{property.furnished ? "Meublé" : "Non meublé"}</Badge>
               </div>
             </div>
 
             <div className="space-y-4">
               <div>
                 <p className="text-sm text-gray-500">Statut</p>
-                <Badge variant="default">Brouillon</Badge>
-                <p className="text-xs text-gray-500 mt-1">
-                  Votre annonce est en mode brouillon. Complétez-la pour la publier.
-                </p>
+                <Badge variant="default">En diffusion</Badge>
+                <p className="text-xs text-gray-500 mt-1">Votre annonce est maintenant visible par les locataires.</p>
               </div>
 
               <div>
@@ -138,17 +131,24 @@ export default function PropertySuccessPage() {
                     <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
                     Informations de base ajoutées
                   </li>
-                  <li className="flex items-center text-gray-500">
-                    <div className="h-4 w-4 border-2 border-gray-300 rounded-full mr-2"></div>
-                    Ajouter des photos
+                  <li className="flex items-center">
+                    {property.property_images && property.property_images.length > 0 ? (
+                      <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                    ) : (
+                      <div className="h-4 w-4 border-2 border-gray-300 rounded-full mr-2"></div>
+                    )}
+                    Ajouter des photos{" "}
+                    {property.property_images && property.property_images.length > 0
+                      ? `(${property.property_images.length} ajoutées)`
+                      : ""}
                   </li>
                   <li className="flex items-center text-gray-500">
                     <div className="h-4 w-4 border-2 border-gray-300 rounded-full mr-2"></div>
                     Ajouter les documents obligatoires
                   </li>
-                  <li className="flex items-center text-gray-500">
-                    <div className="h-4 w-4 border-2 border-gray-300 rounded-full mr-2"></div>
-                    Publier l'annonce
+                  <li className="flex items-center">
+                    <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                    Annonce publiée
                   </li>
                 </ul>
               </div>
@@ -157,25 +157,22 @@ export default function PropertySuccessPage() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
         <Card>
           <CardContent className="p-6 text-center">
             <Upload className="h-8 w-8 mx-auto mb-3 text-blue-600" />
             <h3 className="font-semibold mb-2">Ajouter des photos</h3>
-            <p className="text-sm text-gray-600 mb-4">Ajoutez des photos pour rendre votre annonce plus attractive</p>
+            <p className="text-sm text-gray-600 mb-4">
+              {property.property_images && property.property_images.length > 0
+                ? `${property.property_images.length} photo(s) ajoutée(s)`
+                : "Ajoutez des photos pour rendre votre annonce plus attractive"}
+            </p>
             <Button variant="outline" size="sm" asChild>
-              <Link href={`/owner/properties/${property.id}/photos`}>Ajouter des photos</Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6 text-center">
-            <Upload className="h-8 w-8 mx-auto mb-3 text-green-600" />
-            <h3 className="font-semibold mb-2">Documents obligatoires</h3>
-            <p className="text-sm text-gray-600 mb-4">Ajoutez le DPE, CREP et autres documents requis</p>
-            <Button variant="outline" size="sm" asChild>
-              <Link href={`/owner/properties/${property.id}/documents`}>Ajouter des documents</Link>
+              <Link href={`/owner/properties/${property.id}?tab=overview`}>
+                {property.property_images && property.property_images.length > 0
+                  ? "Gérer les photos"
+                  : "Ajouter des photos"}
+              </Link>
             </Button>
           </CardContent>
         </Card>
@@ -183,10 +180,10 @@ export default function PropertySuccessPage() {
         <Card>
           <CardContent className="p-6 text-center">
             <Edit className="h-8 w-8 mx-auto mb-3 text-purple-600" />
-            <h3 className="font-semibold mb-2">Modifier l'annonce</h3>
-            <p className="text-sm text-gray-600 mb-4">Modifiez les informations de votre bien</p>
+            <h3 className="font-semibold mb-2">Ajouter des documents</h3>
+            <p className="text-sm text-gray-600 mb-4">Ajoutez les documents obligatoires</p>
             <Button variant="outline" size="sm" asChild>
-              <Link href={`/owner/properties/${property.id}/edit`}>Modifier</Link>
+              <Link href={`/owner/properties/${property.id}?tab=documents`}>Ajouter des documents</Link>
             </Button>
           </CardContent>
         </Card>
