@@ -81,11 +81,13 @@ export default function PropertyDetailPage() {
         console.log("✅ Propriété chargée:", propertyData)
 
         // Initialiser les créneaux vides - le VisitScheduler se chargera du loading
-    setVisitSlots([])
-    setSlotsLoaded(true)
-  }
-  fetchData()
-}, [params.id])
+        setVisitSlots([])
+        setSlotsLoaded(true)
+      }
+    }
+
+    fetchData()
+  }, [params.id])
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
