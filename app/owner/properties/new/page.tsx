@@ -20,44 +20,66 @@ import { PropertyDocumentsUpload } from "@/components/property-documents-upload"
 import { toast } from "sonner"
 
 interface PropertyFormData {
+  // Informations de base
   title: string
   description: string
   address: string
   city: string
   postal_code: string
-  price: number
+  hide_exact_address: boolean
+
+  // Caractéristiques du bien
   surface: number
+  construction_year: number | null
+  price: number // loyer hors charges
+  charges: number
+  deposit: number
+  property_type: string
+  furnished: boolean // type de location (meublé/non meublé)
   rooms: number
   bedrooms: number
   bathrooms: number
-  property_type: string
-  furnished: boolean
-  available: boolean
-  owner_id: string
-  // Champs restaurés
-  hide_exact_address: boolean
   floor: number | null
   total_floors: number | null
-  elevator: boolean
-  parking: boolean
+
+  // Extérieur
   balcony: boolean
   terrace: boolean
   garden: boolean
-  cellar: boolean
-  heating_type: string
-  energy_class: string
-  ges_class: string
-  internet: boolean
-  tv: boolean
-  washing_machine: boolean
+  loggia: boolean
+
+  // Équipements
+  equipped_kitchen: boolean
+  bathtub: boolean
+  shower: boolean
   dishwasher: boolean
+  washing_machine: boolean
+  dryer: boolean
+  fridge: boolean
   oven: boolean
   microwave: boolean
-  fridge: boolean
-  charges: number
-  deposit: number
+  air_conditioning: boolean
+  fireplace: boolean
+  parking: boolean
+  cellar: boolean
+  elevator: boolean
+  intercom: boolean
+  digicode: boolean
+
+  // Informations financières
   fees: number
+
+  // Disponibilité
+  available: boolean
   availability_date: string
+
+  // Autres informations
+  energy_class: string
+  ges_class: string
+  heating_type: string
+
+  // Champ technique
+  owner_id: string
 }
 
 const PROPERTY_TYPES = [
@@ -65,6 +87,21 @@ const PROPERTY_TYPES = [
   { value: "house", label: "Maison" },
   { value: "studio", label: "Studio" },
   { value: "loft", label: "Loft" },
+  { value: "duplex", label: "Duplex" },
+  { value: "townhouse", label: "Maison de ville" },
+]
+
+const ENERGY_CLASSES = ["A", "B", "C", "D", "E", "F", "G"]
+
+const HEATING_TYPES = [
+  { value: "individual_gas", label: "Gaz individuel" },
+  { value: "collective_gas", label: "Gaz collectif" },
+  { value: "individual_electric", label: "Électrique individuel" },
+  { value: "collective_electric", label: "Électrique collectif" },
+  { value: "fuel", label: "Fioul" },
+  { value: "wood", label: "Bois" },
+  { value: "heat_pump", label: "Pompe à chaleur" },
+  { value: "district_heating", label: "Chauffage urbain" },
 ]
 
 export default function NewPropertyPage() {
@@ -77,44 +114,66 @@ export default function NewPropertyPage() {
   const [createdPropertyId, setCreatedPropertyId] = useState<string | null>(null)
 
   const [formData, setFormData] = useState<PropertyFormData>({
+    // Informations de base
     title: "",
     description: "",
     address: "",
     city: "",
     postal_code: "",
-    price: 0,
+    hide_exact_address: false,
+
+    // Caractéristiques du bien
     surface: 0,
+    construction_year: null,
+    price: 0,
+    charges: 0,
+    deposit: 0,
+    property_type: "apartment",
+    furnished: false,
     rooms: 1,
     bedrooms: 0,
     bathrooms: 0,
-    property_type: "apartment",
-    furnished: false,
-    available: true,
-    owner_id: "",
-    // Champs restaurés
-    hide_exact_address: false,
     floor: null,
     total_floors: null,
-    elevator: false,
-    parking: false,
+
+    // Extérieur
     balcony: false,
     terrace: false,
     garden: false,
-    cellar: false,
-    heating_type: "",
-    energy_class: "",
-    ges_class: "",
-    internet: false,
-    tv: false,
-    washing_machine: false,
+    loggia: false,
+
+    // Équipements
+    equipped_kitchen: false,
+    bathtub: false,
+    shower: false,
     dishwasher: false,
+    washing_machine: false,
+    dryer: false,
+    fridge: false,
     oven: false,
     microwave: false,
-    fridge: false,
-    charges: 0,
-    deposit: 0,
+    air_conditioning: false,
+    fireplace: false,
+    parking: false,
+    cellar: false,
+    elevator: false,
+    intercom: false,
+    digicode: false,
+
+    // Informations financières
     fees: 0,
+
+    // Disponibilité
+    available: true,
     availability_date: "",
+
+    // Autres informations
+    energy_class: "",
+    ges_class: "",
+    heating_type: "",
+
+    // Champ technique
+    owner_id: "",
   })
 
   useEffect(() => {
@@ -315,152 +374,158 @@ export default function NewPropertyPage() {
             <CardHeader>
               <CardTitle className="flex items-center">
                 <Home className="h-5 w-5 mr-2" />
-                Informations de base
+                Informations du bien
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="md:col-span-2">
-                  <Label htmlFor="title">Titre de l'annonce *</Label>
-                  <Input
-                    id="title"
-                    value={formData.title}
-                    onChange={(e) => handleInputChange("title", e.target.value)}
-                    placeholder="Ex: Appartement 3 pièces centre ville"
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <Label htmlFor="description">Description *</Label>
-                  <Textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => handleInputChange("description", e.target.value)}
-                    placeholder="Décrivez votre bien..."
-                    rows={4}
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <Label htmlFor="address">Adresse *</Label>
-                  <Input
-                    id="address"
-                    value={formData.address}
-                    onChange={(e) => handleInputChange("address", e.target.value)}
-                    placeholder="15 rue de la République"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="city">Ville *</Label>
-                  <Input
-                    id="city"
-                    value={formData.city}
-                    onChange={(e) => handleInputChange("city", e.target.value)}
-                    placeholder="Lyon"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="postal_code">Code postal *</Label>
-                  <Input
-                    id="postal_code"
-                    value={formData.postal_code}
-                    onChange={(e) => handleInputChange("postal_code", e.target.value)}
-                    placeholder="69001"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="price">Loyer mensuel (€) *</Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    value={formData.price || ""}
-                    onChange={(e) => handleInputChange("price", Number(e.target.value))}
-                    placeholder="1200"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="surface">Surface (m²) *</Label>
-                  <Input
-                    id="surface"
-                    type="number"
-                    value={formData.surface || ""}
-                    onChange={(e) => handleInputChange("surface", Number(e.target.value))}
-                    placeholder="75"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="rooms">Nombre de pièces</Label>
-                  <Input
-                    id="rooms"
-                    type="number"
-                    value={formData.rooms}
-                    onChange={(e) => handleInputChange("rooms", Number(e.target.value))}
-                    min="1"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="bedrooms">Chambres</Label>
-                  <Input
-                    id="bedrooms"
-                    type="number"
-                    value={formData.bedrooms}
-                    onChange={(e) => handleInputChange("bedrooms", Number(e.target.value))}
-                    min="0"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="bathrooms">Salles de bain</Label>
-                  <Input
-                    id="bathrooms"
-                    type="number"
-                    value={formData.bathrooms}
-                    onChange={(e) => handleInputChange("bathrooms", Number(e.target.value))}
-                    min="0"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="property_type">Type de bien</Label>
-                  <Select
-                    value={formData.property_type}
-                    onValueChange={(value) => handleInputChange("property_type", value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PROPERTY_TYPES.map((type) => (
-                        <SelectItem key={type.value} value={type.value}>
-                          {type.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="md:col-span-2">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="furnished"
-                      checked={formData.furnished}
-                      onCheckedChange={(checked) => handleInputChange("furnished", checked)}
+              {/* Section 1: Informations de base */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4">Informations de base</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="md:col-span-2">
+                    <Label htmlFor="title">Titre de l'annonce *</Label>
+                    <Input
+                      id="title"
+                      value={formData.title}
+                      onChange={(e) => handleInputChange("title", e.target.value)}
+                      placeholder="Ex: Appartement 3 pièces centre ville"
                     />
-                    <Label htmlFor="furnished">Logement meublé</Label>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <Label htmlFor="description">Description *</Label>
+                    <Textarea
+                      id="description"
+                      value={formData.description}
+                      onChange={(e) => handleInputChange("description", e.target.value)}
+                      placeholder="Décrivez votre bien..."
+                      rows={4}
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <Label htmlFor="address">Adresse complète *</Label>
+                    <Input
+                      id="address"
+                      value={formData.address}
+                      onChange={(e) => handleInputChange("address", e.target.value)}
+                      placeholder="15 rue de la République"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="city">Ville *</Label>
+                    <Input
+                      id="city"
+                      value={formData.city}
+                      onChange={(e) => handleInputChange("city", e.target.value)}
+                      placeholder="Lyon"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="postal_code">Code postal *</Label>
+                    <Input
+                      id="postal_code"
+                      value={formData.postal_code}
+                      onChange={(e) => handleInputChange("postal_code", e.target.value)}
+                      placeholder="69001"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="hide_exact_address"
+                        checked={formData.hide_exact_address}
+                        onCheckedChange={(checked) => handleInputChange("hide_exact_address", checked)}
+                      />
+                      <Label htmlFor="hide_exact_address">Masquer l'adresse exacte sur l'annonce publique</Label>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Section Localisation et étage */}
-              <div className="md:col-span-2 border-t pt-6">
-                <h4 className="font-semibold mb-4">Localisation</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Section 2: Caractéristiques du bien */}
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-semibold mb-4">Caractéristiques du bien</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div>
+                    <Label htmlFor="surface">Surface (m²) *</Label>
+                    <Input
+                      id="surface"
+                      type="number"
+                      value={formData.surface || ""}
+                      onChange={(e) => handleInputChange("surface", Number(e.target.value))}
+                      placeholder="75"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="construction_year">Année de construction</Label>
+                    <Input
+                      id="construction_year"
+                      type="number"
+                      value={formData.construction_year || ""}
+                      onChange={(e) =>
+                        handleInputChange("construction_year", e.target.value ? Number(e.target.value) : null)
+                      }
+                      placeholder="2010"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="property_type">Type de bien</Label>
+                    <Select
+                      value={formData.property_type}
+                      onValueChange={(value) => handleInputChange("property_type", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PROPERTY_TYPES.map((type) => (
+                          <SelectItem key={type.value} value={type.value}>
+                            {type.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="rooms">Nombre de pièces *</Label>
+                    <Input
+                      id="rooms"
+                      type="number"
+                      value={formData.rooms}
+                      onChange={(e) => handleInputChange("rooms", Number(e.target.value))}
+                      min="1"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="bedrooms">Nombre de chambres</Label>
+                    <Input
+                      id="bedrooms"
+                      type="number"
+                      value={formData.bedrooms}
+                      onChange={(e) => handleInputChange("bedrooms", Number(e.target.value))}
+                      min="0"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="bathrooms">Nombre de salles de bain</Label>
+                    <Input
+                      id="bathrooms"
+                      type="number"
+                      value={formData.bathrooms}
+                      onChange={(e) => handleInputChange("bathrooms", Number(e.target.value))}
+                      min="0"
+                    />
+                  </div>
+
                   <div>
                     <Label htmlFor="floor">Étage</Label>
                     <Input
@@ -471,6 +536,7 @@ export default function NewPropertyPage() {
                       placeholder="3"
                     />
                   </div>
+
                   <div>
                     <Label htmlFor="total_floors">Nombre d'étages</Label>
                     <Input
@@ -483,39 +549,22 @@ export default function NewPropertyPage() {
                       placeholder="5"
                     />
                   </div>
-                  <div className="flex items-center space-x-2 pt-6">
+
+                  <div className="flex items-center space-x-2 pt-8">
                     <Checkbox
-                      id="elevator"
-                      checked={formData.elevator}
-                      onCheckedChange={(checked) => handleInputChange("elevator", checked)}
+                      id="furnished"
+                      checked={formData.furnished}
+                      onCheckedChange={(checked) => handleInputChange("furnished", checked)}
                     />
-                    <Label htmlFor="elevator">Ascenseur</Label>
-                  </div>
-                </div>
-                <div className="mt-4">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="hide_exact_address"
-                      checked={formData.hide_exact_address}
-                      onCheckedChange={(checked) => handleInputChange("hide_exact_address", checked)}
-                    />
-                    <Label htmlFor="hide_exact_address">Masquer l'adresse exacte dans l'annonce</Label>
+                    <Label htmlFor="furnished">Logement meublé</Label>
                   </div>
                 </div>
               </div>
 
-              {/* Section Extérieur */}
-              <div className="md:col-span-2 border-t pt-6">
-                <h4 className="font-semibold mb-4">Extérieur</h4>
+              {/* Section 3: Extérieur */}
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-semibold mb-4">Extérieur</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="parking"
-                      checked={formData.parking}
-                      onCheckedChange={(checked) => handleInputChange("parking", checked)}
-                    />
-                    <Label htmlFor="parking">Parking</Label>
-                  </div>
                   <div className="flex items-center space-x-2">
                     <Checkbox
                       id="balcony"
@@ -542,99 +591,50 @@ export default function NewPropertyPage() {
                   </div>
                   <div className="flex items-center space-x-2">
                     <Checkbox
-                      id="cellar"
-                      checked={formData.cellar}
-                      onCheckedChange={(checked) => handleInputChange("cellar", checked)}
+                      id="loggia"
+                      checked={formData.loggia}
+                      onCheckedChange={(checked) => handleInputChange("loggia", checked)}
                     />
-                    <Label htmlFor="cellar">Cave</Label>
+                    <Label htmlFor="loggia">Loggia</Label>
                   </div>
                 </div>
               </div>
 
-              {/* Section Chauffage et énergie */}
-              <div className="md:col-span-2 border-t pt-6">
-                <h4 className="font-semibold mb-4">Chauffage et énergie</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="heating_type">Type de chauffage</Label>
-                    <Select
-                      value={formData.heating_type}
-                      onValueChange={(value) => handleInputChange("heating_type", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="individual_gas">Gaz individuel</SelectItem>
-                        <SelectItem value="collective_gas">Gaz collectif</SelectItem>
-                        <SelectItem value="individual_electric">Électrique individuel</SelectItem>
-                        <SelectItem value="collective_electric">Électrique collectif</SelectItem>
-                        <SelectItem value="fuel">Fioul</SelectItem>
-                        <SelectItem value="wood">Bois</SelectItem>
-                        <SelectItem value="heat_pump">Pompe à chaleur</SelectItem>
-                        <SelectItem value="district_heating">Chauffage urbain</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="energy_class">Classe énergétique</Label>
-                    <Select
-                      value={formData.energy_class}
-                      onValueChange={(value) => handleInputChange("energy_class", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="A à G" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="A">A</SelectItem>
-                        <SelectItem value="B">B</SelectItem>
-                        <SelectItem value="C">C</SelectItem>
-                        <SelectItem value="D">D</SelectItem>
-                        <SelectItem value="E">E</SelectItem>
-                        <SelectItem value="F">F</SelectItem>
-                        <SelectItem value="G">G</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="ges_class">Classe GES</Label>
-                    <Select value={formData.ges_class} onValueChange={(value) => handleInputChange("ges_class", value)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="A à G" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="A">A</SelectItem>
-                        <SelectItem value="B">B</SelectItem>
-                        <SelectItem value="C">C</SelectItem>
-                        <SelectItem value="D">D</SelectItem>
-                        <SelectItem value="E">E</SelectItem>
-                        <SelectItem value="F">F</SelectItem>
-                        <SelectItem value="G">G</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Section Équipements */}
-              <div className="md:col-span-2 border-t pt-6">
-                <h4 className="font-semibold mb-4">Équipements</h4>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {/* Section 4: Équipements */}
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-semibold mb-4">Équipements</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="flex items-center space-x-2">
                     <Checkbox
-                      id="internet"
-                      checked={formData.internet}
-                      onCheckedChange={(checked) => handleInputChange("internet", checked)}
+                      id="equipped_kitchen"
+                      checked={formData.equipped_kitchen}
+                      onCheckedChange={(checked) => handleInputChange("equipped_kitchen", checked)}
                     />
-                    <Label htmlFor="internet">Internet</Label>
+                    <Label htmlFor="equipped_kitchen">Cuisine équipée</Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Checkbox
-                      id="tv"
-                      checked={formData.tv}
-                      onCheckedChange={(checked) => handleInputChange("tv", checked)}
+                      id="bathtub"
+                      checked={formData.bathtub}
+                      onCheckedChange={(checked) => handleInputChange("bathtub", checked)}
                     />
-                    <Label htmlFor="tv">Télévision</Label>
+                    <Label htmlFor="bathtub">Baignoire</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="shower"
+                      checked={formData.shower}
+                      onCheckedChange={(checked) => handleInputChange("shower", checked)}
+                    />
+                    <Label htmlFor="shower">Douche</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="dishwasher"
+                      checked={formData.dishwasher}
+                      onCheckedChange={(checked) => handleInputChange("dishwasher", checked)}
+                    />
+                    <Label htmlFor="dishwasher">Lave-vaisselle</Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Checkbox
@@ -646,11 +646,19 @@ export default function NewPropertyPage() {
                   </div>
                   <div className="flex items-center space-x-2">
                     <Checkbox
-                      id="dishwasher"
-                      checked={formData.dishwasher}
-                      onCheckedChange={(checked) => handleInputChange("dishwasher", checked)}
+                      id="dryer"
+                      checked={formData.dryer}
+                      onCheckedChange={(checked) => handleInputChange("dryer", checked)}
                     />
-                    <Label htmlFor="dishwasher">Lave-vaisselle</Label>
+                    <Label htmlFor="dryer">Sèche-linge</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="fridge"
+                      checked={formData.fridge}
+                      onCheckedChange={(checked) => handleInputChange("fridge", checked)}
+                    />
+                    <Label htmlFor="fridge">Réfrigérateur</Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Checkbox
@@ -670,21 +678,79 @@ export default function NewPropertyPage() {
                   </div>
                   <div className="flex items-center space-x-2">
                     <Checkbox
-                      id="fridge"
-                      checked={formData.fridge}
-                      onCheckedChange={(checked) => handleInputChange("fridge", checked)}
+                      id="air_conditioning"
+                      checked={formData.air_conditioning}
+                      onCheckedChange={(checked) => handleInputChange("air_conditioning", checked)}
                     />
-                    <Label htmlFor="fridge">Réfrigérateur</Label>
+                    <Label htmlFor="air_conditioning">Climatisation</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="fireplace"
+                      checked={formData.fireplace}
+                      onCheckedChange={(checked) => handleInputChange("fireplace", checked)}
+                    />
+                    <Label htmlFor="fireplace">Cheminée</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="parking"
+                      checked={formData.parking}
+                      onCheckedChange={(checked) => handleInputChange("parking", checked)}
+                    />
+                    <Label htmlFor="parking">Parking</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="cellar"
+                      checked={formData.cellar}
+                      onCheckedChange={(checked) => handleInputChange("cellar", checked)}
+                    />
+                    <Label htmlFor="cellar">Cave</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="elevator"
+                      checked={formData.elevator}
+                      onCheckedChange={(checked) => handleInputChange("elevator", checked)}
+                    />
+                    <Label htmlFor="elevator">Ascenseur</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="intercom"
+                      checked={formData.intercom}
+                      onCheckedChange={(checked) => handleInputChange("intercom", checked)}
+                    />
+                    <Label htmlFor="intercom">Interphone</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="digicode"
+                      checked={formData.digicode}
+                      onCheckedChange={(checked) => handleInputChange("digicode", checked)}
+                    />
+                    <Label htmlFor="digicode">Digicode</Label>
                   </div>
                 </div>
               </div>
 
-              {/* Section Financier */}
-              <div className="md:col-span-2 border-t pt-6">
-                <h4 className="font-semibold mb-4">Informations financières</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Section 5: Informations financières */}
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-semibold mb-4">Informations financières</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div>
-                    <Label htmlFor="charges">Charges (€/mois)</Label>
+                    <Label htmlFor="price">Loyer hors charges (€) *</Label>
+                    <Input
+                      id="price"
+                      type="number"
+                      value={formData.price || ""}
+                      onChange={(e) => handleInputChange("price", Number(e.target.value))}
+                      placeholder="1200"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="charges">Montant des charges (€)</Label>
                     <Input
                       id="charges"
                       type="number"
@@ -716,10 +782,10 @@ export default function NewPropertyPage() {
                 </div>
               </div>
 
-              {/* Section Disponibilité */}
-              <div className="md:col-span-2 border-t pt-6">
-                <h4 className="font-semibold mb-4">Disponibilité</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Section 6: Disponibilité */}
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-semibold mb-4">Disponibilité</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <Label htmlFor="availability_date">Date de disponibilité</Label>
                     <Input
@@ -729,13 +795,71 @@ export default function NewPropertyPage() {
                       onChange={(e) => handleInputChange("availability_date", e.target.value)}
                     />
                   </div>
-                  <div className="flex items-center space-x-2 pt-6">
+                  <div className="flex items-center space-x-2 pt-8">
                     <Checkbox
                       id="available"
                       checked={formData.available}
                       onCheckedChange={(checked) => handleInputChange("available", checked)}
                     />
                     <Label htmlFor="available">Bien disponible à la location</Label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 7: Informations énergétiques */}
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-semibold mb-4">Informations énergétiques</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div>
+                    <Label htmlFor="energy_class">Classe énergétique</Label>
+                    <Select
+                      value={formData.energy_class}
+                      onValueChange={(value) => handleInputChange("energy_class", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="A à G" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ENERGY_CLASSES.map((cls) => (
+                          <SelectItem key={cls} value={cls}>
+                            {cls}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="ges_class">Classe GES</Label>
+                    <Select value={formData.ges_class} onValueChange={(value) => handleInputChange("ges_class", value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="A à G" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ENERGY_CLASSES.map((cls) => (
+                          <SelectItem key={cls} value={cls}>
+                            {cls}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="heating_type">Type de chauffage</Label>
+                    <Select
+                      value={formData.heating_type}
+                      onValueChange={(value) => handleInputChange("heating_type", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionner" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {HEATING_TYPES.map((type) => (
+                          <SelectItem key={type.value} value={type.value}>
+                            {type.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </div>
@@ -818,13 +942,17 @@ export default function NewPropertyPage() {
                       <strong>Adresse:</strong> {formData.address}, {formData.city}
                     </p>
                     <p>
-                      <strong>Loyer:</strong> {formData.price} €/mois
+                      <strong>Loyer:</strong> {formData.price} €/mois{" "}
+                      {formData.charges > 0 ? `+ ${formData.charges}€ de charges` : ""}
                     </p>
                     <p>
                       <strong>Surface:</strong> {formData.surface} m²
                     </p>
                     <p>
                       <strong>Type:</strong> {PROPERTY_TYPES.find((t) => t.value === formData.property_type)?.label}
+                    </p>
+                    <p>
+                      <strong>Type de location:</strong> {formData.furnished ? "Meublé" : "Non meublé"}
                     </p>
                   </div>
                 </div>

@@ -1,4 +1,5 @@
 import { supabase } from "./supabase"
+import { SupabaseStorageService } from "./supabase-storage-service"
 
 export interface PropertyDocument {
   id: string
@@ -7,119 +8,72 @@ export interface PropertyDocument {
   document_name: string
   file_url: string
   file_size: number
-  mime_type: string
+  file_type: string
   uploaded_at: string
-  is_required: boolean
+  updated_at: string
 }
 
 export const REQUIRED_DOCUMENTS = {
-  "diagnostic-performance-energetique": {
+  dpe: {
     name: "Diagnostic de Performance Énergétique (DPE)",
-    description: "Obligatoire pour toute location",
+    description: "Document obligatoire indiquant la consommation énergétique du bien",
     required: true,
   },
-  "diagnostic-gaz": {
-    name: "Diagnostic Gaz",
-    description: "Si installation gaz de plus de 15 ans",
-    required: false,
-  },
-  "diagnostic-electricite": {
-    name: "Diagnostic Électricité",
-    description: "Si installation électrique de plus de 15 ans",
-    required: false,
-  },
-  "diagnostic-plomb": {
-    name: "Diagnostic Plomb (CREP)",
-    description: "Pour les logements construits avant 1949",
-    required: false,
-  },
-  "diagnostic-amiante": {
-    name: "Diagnostic Amiante",
-    description: "Pour les logements construits avant 1997",
-    required: false,
-  },
-  "etat-risques-pollutions": {
+  erp: {
     name: "État des Risques et Pollutions (ERP)",
-    description: "Obligatoire selon la zone géographique",
+    description: "Document obligatoire sur les risques naturels et technologiques",
     required: true,
   },
-  "attestation-assurance": {
-    name: "Attestation d'Assurance PNO",
-    description: "Assurance Propriétaire Non Occupant",
+  electricity: {
+    name: "Diagnostic électrique",
+    description: "État de l'installation électrique si plus de 15 ans",
+    required: false,
+  },
+  gas: {
+    name: "Diagnostic gaz",
+    description: "État de l'installation de gaz si plus de 15 ans",
+    required: false,
+  },
+  lead: {
+    name: "Diagnostic plomb",
+    description: "Constat de risque d'exposition au plomb pour les logements construits avant 1949",
+    required: false,
+  },
+  asbestos: {
+    name: "Diagnostic amiante",
+    description: "État de présence d'amiante pour les logements construits avant 1997",
+    required: false,
+  },
+  termites: {
+    name: "État parasitaire",
+    description: "Présence de termites et autres insectes xylophages",
+    required: false,
+  },
+  carrez: {
+    name: "Loi Carrez",
+    description: "Mesurage de la surface habitable pour les copropriétés",
+    required: false,
+  },
+  insurance: {
+    name: "Attestation d'assurance",
+    description: "Assurance propriétaire non occupant",
     required: true,
   },
-  "taxe-fonciere": {
-    name: "Avis de Taxe Foncière",
-    description: "Dernier avis de taxe foncière",
+  copropriety: {
+    name: "Documents de copropriété",
+    description: "Règlement de copropriété, PV d'assemblée générale, etc.",
     required: false,
   },
-  "reglement-copropriete": {
-    name: "Règlement de Copropriété",
-    description: "Si logement en copropriété",
-    required: false,
-  },
-  autres: {
-    name: "Autres Documents",
-    description: "Documents complémentaires",
+  other: {
+    name: "Autres documents",
+    description: "Tout autre document relatif au bien",
     required: false,
   },
 }
 
 export const propertyDocumentsService = {
-  async uploadDocument(propertyId: string, file: File, documentType: string): Promise<PropertyDocument> {
-    try {
-      console.log("📄 Upload document:", { propertyId, documentType, fileName: file.name })
-
-      // Upload du fichier vers Supabase Storage
-      const fileExt = file.name.split(".").pop()
-      const fileName = `${propertyId}/${documentType}/${Date.now()}.${fileExt}`
-
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from("property-documents")
-        .upload(fileName, file)
-
-      if (uploadError) {
-        console.error("❌ Erreur upload fichier:", uploadError)
-        throw new Error(uploadError.message)
-      }
-
-      // Obtenir l'URL publique
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("property-documents").getPublicUrl(fileName)
-
-      // Sauvegarder les métadonnées en base
-      const { data, error } = await supabase
-        .from("property_documents")
-        .insert({
-          property_id: propertyId,
-          document_type: documentType,
-          document_name: file.name,
-          file_url: publicUrl,
-          file_size: file.size,
-          mime_type: file.type,
-          is_required: REQUIRED_DOCUMENTS[documentType as keyof typeof REQUIRED_DOCUMENTS]?.required || false,
-        })
-        .select()
-        .single()
-
-      if (error) {
-        console.error("❌ Erreur sauvegarde métadonnées:", error)
-        throw new Error(error.message)
-      }
-
-      console.log("✅ Document uploadé:", data)
-      return data as PropertyDocument
-    } catch (error) {
-      console.error("❌ Erreur uploadDocument:", error)
-      throw error
-    }
-  },
-
   async getPropertyDocuments(propertyId: string): Promise<PropertyDocument[]> {
     try {
-      console.log("📄 Récupération documents propriété:", propertyId)
-
       const { data, error } = await supabase
         .from("property_documents")
         .select("*")
@@ -127,94 +81,124 @@ export const propertyDocumentsService = {
         .order("uploaded_at", { ascending: false })
 
       if (error) {
-        console.error("❌ Erreur récupération documents:", error)
+        console.error("Erreur récupération documents:", error)
         throw new Error(error.message)
       }
 
-      console.log(`✅ ${data?.length || 0} documents récupérés`)
       return data as PropertyDocument[]
     } catch (error) {
-      console.error("❌ Erreur getPropertyDocuments:", error)
+      console.error("Erreur getPropertyDocuments:", error)
       throw error
     }
   },
 
-  async deleteDocument(documentId: string): Promise<void> {
+  async uploadDocument(propertyId: string, file: File, documentType: string): Promise<PropertyDocument> {
     try {
-      console.log("🗑️ Suppression document:", documentId)
+      // 1. Upload du fichier
+      const result = await SupabaseStorageService.uploadFile(file, "property-documents", propertyId)
 
-      // Récupérer les infos du document
-      const { data: document, error: fetchError } = await supabase
+      // 2. Enregistrer les métadonnées
+      const { data, error } = await supabase
         .from("property_documents")
-        .select("file_url")
-        .eq("id", documentId)
+        .insert({
+          property_id: propertyId,
+          document_type: documentType,
+          document_name: file.name,
+          file_url: result.url,
+          file_size: file.size,
+          file_type: file.type,
+        })
+        .select()
         .single()
 
-      if (fetchError) {
-        console.error("❌ Erreur récupération document:", fetchError)
-        throw new Error(fetchError.message)
+      if (error) {
+        console.error("Erreur enregistrement document:", error)
+        throw new Error(error.message)
       }
 
-      // Extraire le chemin du fichier depuis l'URL
-      const url = new URL(document.file_url)
-      const filePath = url.pathname.split("/").slice(-3).join("/") // Récupère propertyId/documentType/filename
-
-      // Supprimer le fichier du storage
-      const { error: deleteFileError } = await supabase.storage.from("property-documents").remove([filePath])
-
-      if (deleteFileError) {
-        console.warn("⚠️ Erreur suppression fichier storage:", deleteFileError)
-        // On continue même si la suppression du fichier échoue
-      }
-
-      // Supprimer les métadonnées
-      const { error: deleteMetaError } = await supabase.from("property_documents").delete().eq("id", documentId)
-
-      if (deleteMetaError) {
-        console.error("❌ Erreur suppression métadonnées:", deleteMetaError)
-        throw new Error(deleteMetaError.message)
-      }
-
-      console.log("✅ Document supprimé")
+      return data as PropertyDocument
     } catch (error) {
-      console.error("❌ Erreur deleteDocument:", error)
+      console.error("Erreur uploadDocument:", error)
       throw error
     }
   },
 
   async updateDocument(documentId: string, file: File, documentType: string): Promise<PropertyDocument> {
     try {
-      console.log("🔄 Mise à jour document:", documentId)
-
-      // Récupérer l'ancien document
-      const { data: oldDocument, error: fetchError } = await supabase
+      // 1. Récupérer le document existant
+      const { data: existingDoc, error: fetchError } = await supabase
         .from("property_documents")
         .select("*")
         .eq("id", documentId)
         .single()
 
       if (fetchError) {
+        console.error("Erreur récupération document:", fetchError)
         throw new Error(fetchError.message)
       }
 
-      // Supprimer l'ancien fichier
-      await this.deleteDocument(documentId)
+      // 2. Upload du nouveau fichier
+      const result = await SupabaseStorageService.uploadFile(file, "property-documents", existingDoc.property_id)
 
-      // Uploader le nouveau
-      return await this.uploadDocument(oldDocument.property_id, file, documentType)
+      // 3. Mettre à jour les métadonnées
+      const { data, error } = await supabase
+        .from("property_documents")
+        .update({
+          document_type: documentType,
+          document_name: file.name,
+          file_url: result.url,
+          file_size: file.size,
+          file_type: file.type,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", documentId)
+        .select()
+        .single()
+
+      if (error) {
+        console.error("Erreur mise à jour document:", error)
+        throw new Error(error.message)
+      }
+
+      return data as PropertyDocument
     } catch (error) {
-      console.error("❌ Erreur updateDocument:", error)
+      console.error("Erreur updateDocument:", error)
       throw error
     }
   },
 
-  getDocumentTypeInfo(documentType: string) {
-    return (
-      REQUIRED_DOCUMENTS[documentType as keyof typeof REQUIRED_DOCUMENTS] || {
-        name: documentType,
-        description: "",
-        required: false,
+  async deleteDocument(documentId: string): Promise<void> {
+    try {
+      // 1. Récupérer le document pour avoir l'URL du fichier
+      const { data: document, error: fetchError } = await supabase
+        .from("property_documents")
+        .select("*")
+        .eq("id", documentId)
+        .single()
+
+      if (fetchError) {
+        console.error("Erreur récupération document:", fetchError)
+        throw new Error(fetchError.message)
       }
-    )
+
+      // 2. Supprimer le fichier du stockage
+      try {
+        await SupabaseStorageService.deleteFile(document.file_url)
+      } catch (storageError) {
+        console.warn("Erreur suppression fichier (continuant):", storageError)
+        // On continue même si la suppression du fichier échoue
+      }
+
+      // 3. Supprimer l'entrée de la base de données
+      const { error } = await supabase.from("property_documents").delete().eq("id", documentId)
+
+      if (error) {
+        console.error("Erreur suppression document:", error)
+        throw new Error(error.message)
+      }
+    } catch (error) {
+      console.error("Erreur deleteDocument:", error)
+      throw error
+    }
   },
 }
