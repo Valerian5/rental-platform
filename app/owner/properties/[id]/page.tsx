@@ -33,7 +33,7 @@ export default function PropertyDetailPage() {
   const [activeTab, setActiveTab] = useState(initialTab)
   const [slotsLoaded, setSlotsLoaded] = useState(false)
 
-  // Gestionnaire de changement de créneaux - MÉMORISÉ et STABLE
+  // Gestionnaire de changement de créneaux - MÉMORISÉ
   const handleSlotsChange = useCallback((newSlots: any[]) => {
     console.log("🔄 Mise à jour des créneaux:", newSlots.length)
     setVisitSlots(newSlots)
@@ -80,7 +80,8 @@ export default function PropertyDetailPage() {
         setProperty(propertyData)
         console.log("✅ Propriété chargée:", propertyData)
 
-        // Marquer comme chargé
+        // Initialiser les créneaux vides - le VisitScheduler se chargera du loading
+        setVisitSlots([])
         setSlotsLoaded(true)
       } catch (error: any) {
         console.error("❌ Erreur lors du chargement:", error)
@@ -188,25 +189,36 @@ export default function PropertyDetailPage() {
   }
 
   // Composant de gestion des visites - SIMPLIFIÉ
-const VisitManagement = () => {
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">Gestion des visites</h3>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline">{visitSlots.length} créneaux disponibles</Badge>
+  const VisitManagement = () => {
+    if (!slotsLoaded) {
+      return (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center space-y-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="text-gray-600">Chargement des créneaux...</p>
+          </div>
         </div>
-      </div>
+      )
+    }
 
-      <VisitScheduler
-        propertyId={property.id}
-        visitSlots={visitSlots}
-        onSlotsChange={handleSlotsChange}
-        mode="management"
-      />
-    </div>
-  );
-};
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">Gestion des visites</h3>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline">{visitSlots.length} créneaux disponibles</Badge>
+          </div>
+        </div>
+
+        <VisitScheduler
+          propertyId={property.id}
+          visitSlots={visitSlots}
+          onSlotsChange={handleSlotsChange}
+          mode="management"
+        />
+      </div>
+    )
+  }
 
   // États de chargement et d'erreur
   if (isLoading) {
