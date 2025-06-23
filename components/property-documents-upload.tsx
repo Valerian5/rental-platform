@@ -2,20 +2,122 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { File, Upload, AlertCircle, CheckCircle, X } from "lucide-react"
-import { propertyDocumentsService, REQUIRED_DOCUMENTS, type PropertyDocument } from "@/lib/property-documents-service"
+import { Progress } from "@/components/ui/progress"
+import { FileText, Check, AlertTriangle, X } from "lucide-react"
+import { FileUpload } from "@/components/file-upload"
 import { toast } from "sonner"
+
+interface PropertyDocument {
+  id: string
+  name: string
+  type: string
+  required: boolean
+  description: string
+  uploaded: boolean
+  url?: string
+}
 
 interface PropertyDocumentsUploadProps {
   propertyId: string
-  onDocumentsChange?: (documents: PropertyDocument[]) => void
+  onDocumentsChange?: (documents: any[]) => void
   showRequiredOnly?: boolean
 }
+
+const REQUIRED_DOCUMENTS: PropertyDocument[] = [
+  {
+    id: "dpe",
+    name: "Diagnostic de Performance Énergétique (DPE)",
+    type: "dpe",
+    required: true,
+    description: "Obligatoire pour toute mise en location",
+    uploaded: false,
+  },
+  {
+    id: "erp",
+    name: "État des Risques et Pollutions (ERP)",
+    type: "erp",
+    required: true,
+    description: "Obligatoire si la commune est concernée par un plan de prévention des risques",
+    uploaded: false,
+  },
+  {
+    id: "assurance_pno",
+    name: "Assurance Propriétaire Non Occupant (PNO)",
+    type: "assurance",
+    required: true,
+    description: "Attestation d'assurance obligatoire",
+    uploaded: false,
+  },
+  {
+    id: "diagnostic_plomb",
+    name: "Diagnostic Plomb (CREP)",
+    type: "diagnostic",
+    required: true,
+    description: "Obligatoire pour les logements construits avant 1949",
+    uploaded: false,
+  },
+  {
+    id: "diagnostic_amiante",
+    name: "Diagnostic Amiante",
+    type: "diagnostic",
+    required: true,
+    description: "Obligatoire pour les logements construits avant 1997",
+    uploaded: false,
+  },
+  {
+    id: "diagnostic_gaz",
+    name: "Diagnostic Gaz",
+    type: "diagnostic",
+    required: true,
+    description: "Obligatoire si installation gaz de plus de 15 ans",
+    uploaded: false,
+  },
+  {
+    id: "diagnostic_electricite",
+    name: "Diagnostic Électricité",
+    type: "diagnostic",
+    required: true,
+    description: "Obligatoire si installation électrique de plus de 15 ans",
+    uploaded: false,
+  },
+]
+
+const OPTIONAL_DOCUMENTS: PropertyDocument[] = [
+  {
+    id: "reglement_copropriete",
+    name: "Règlement de Copropriété",
+    type: "copropriete",
+    required: false,
+    description: "Pour les biens en copropriété",
+    uploaded: false,
+  },
+  {
+    id: "charges_copropriete",
+    name: "Relevé des Charges de Copropriété",
+    type: "copropriete",
+    required: false,
+    description: "Détail des charges de copropriété",
+    uploaded: false,
+  },
+  {
+    id: "audit_energetique",
+    name: "Audit Énergétique",
+    type: "energie",
+    required: false,
+    description: "Obligatoire pour les passoires thermiques (F et G) depuis 2023",
+    uploaded: false,
+  },
+  {
+    id: "carnet_entretien",
+    name: "Carnet d'Entretien",
+    type: "entretien",
+    required: false,
+    description: "Historique des travaux et entretiens",
+    uploaded: false,
+  },
+]
 
 export function PropertyDocumentsUpload({
   propertyId,
@@ -23,223 +125,228 @@ export function PropertyDocumentsUpload({
   showRequiredOnly = false,
 }: PropertyDocumentsUploadProps) {
   const [documents, setDocuments] = useState<PropertyDocument[]>([])
-  const [loading, setLoading] = useState(true)
-  const [selectedType, setSelectedType] = useState<string>("")
-  const [uploadingFile, setUploadingFile] = useState<File | null>(null)
-  const [isUploading, setIsUploading] = useState(false)
+  const [uploadingDocuments, setUploadingDocuments] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    loadDocuments()
-  }, [propertyId])
+    const allDocuments = showRequiredOnly ? REQUIRED_DOCUMENTS : [...REQUIRED_DOCUMENTS, ...OPTIONAL_DOCUMENTS]
 
-  const loadDocuments = async () => {
+    setDocuments(allDocuments.map((doc) => ({ ...doc })))
+  }, [showRequiredOnly])
+
+  const handleDocumentUpload = async (documentId: string, files: string[]) => {
+    if (files.length === 0) return
+
+    setUploadingDocuments((prev) => new Set([...prev, documentId]))
+
     try {
-      setLoading(true)
-      const docs = await propertyDocumentsService.getPropertyDocuments(propertyId)
-      setDocuments(docs)
+      // Simuler la sauvegarde du document
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+
+      setDocuments((prev) =>
+        prev.map((doc) => (doc.id === documentId ? { ...doc, uploaded: true, url: files[0] } : doc)),
+      )
+
+      toast.success("Document uploadé avec succès")
+
+      // Notifier le parent
       if (onDocumentsChange) {
-        onDocumentsChange(docs)
+        const updatedDocs = documents.map((doc) =>
+          doc.id === documentId ? { ...doc, uploaded: true, url: files[0] } : doc,
+        )
+        onDocumentsChange(updatedDocs.filter((doc) => doc.uploaded))
       }
-    } catch (error: any) {
-      console.error("Erreur chargement documents:", error)
-      toast.error("Erreur lors du chargement des documents")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleUpload = async () => {
-    if (!uploadingFile || !selectedType) return
-
-    setIsUploading(true)
-    try {
-      const newDoc = await propertyDocumentsService.uploadDocument(propertyId, uploadingFile, selectedType)
-
-      setDocuments((prev) => [...prev, newDoc])
-      if (onDocumentsChange) {
-        onDocumentsChange([...documents, newDoc])
-      }
-
-      setSelectedType("")
-      setUploadingFile(null)
-
-      // Reset l'input
-      const input = document.getElementById("document-file") as HTMLInputElement
-      if (input) input.value = ""
-
-      toast.success("Document ajouté avec succès")
-    } catch (error: any) {
-      console.error("Erreur upload:", error)
+    } catch (error) {
+      console.error("Erreur upload document:", error)
       toast.error("Erreur lors de l'upload du document")
     } finally {
-      setIsUploading(false)
+      setUploadingDocuments((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(documentId)
+        return newSet
+      })
     }
   }
 
-  const handleDeleteDocument = async (documentId: string) => {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer ce document ?")) return
-
-    try {
-      await propertyDocumentsService.deleteDocument(documentId)
-      const updatedDocs = documents.filter((doc) => doc.id !== documentId)
-      setDocuments(updatedDocs)
-      if (onDocumentsChange) {
-        onDocumentsChange(updatedDocs)
-      }
-      toast.success("Document supprimé avec succès")
-    } catch (error: any) {
-      console.error("Erreur suppression:", error)
-      toast.error("Erreur lors de la suppression")
-    }
-  }
-
-  // Filtrer les types de documents si nécessaire
-  const documentTypes = Object.entries(REQUIRED_DOCUMENTS).filter(([_, info]) => !showRequiredOnly || info.required)
-
-  // Grouper les documents par type
-  const documentsByType = documents.reduce(
-    (acc, doc) => {
-      if (!acc[doc.document_type]) {
-        acc[doc.document_type] = []
-      }
-      acc[doc.document_type].push(doc)
-      return acc
-    },
-    {} as Record<string, PropertyDocument[]>,
-  )
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="text-gray-600">Chargement des documents...</p>
-        </div>
-      </div>
+  const handleDocumentRemove = (documentId: string) => {
+    setDocuments((prev) =>
+      prev.map((doc) => (doc.id === documentId ? { ...doc, uploaded: false, url: undefined } : doc)),
     )
+
+    if (onDocumentsChange) {
+      const updatedDocs = documents
+        .map((doc) => (doc.id === documentId ? { ...doc, uploaded: false, url: undefined } : doc))
+        .filter((doc) => doc.uploaded)
+      onDocumentsChange(updatedDocs)
+    }
+
+    toast.success("Document supprimé")
   }
+
+  const requiredDocuments = documents.filter((doc) => doc.required)
+  const optionalDocuments = documents.filter((doc) => !doc.required)
+  const uploadedRequired = requiredDocuments.filter((doc) => doc.uploaded).length
+  const totalRequired = requiredDocuments.length
+  const completionPercentage = (uploadedRequired / totalRequired) * 100
 
   return (
     <div className="space-y-6">
-      {/* Formulaire d'upload */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="document-type">Type de document</Label>
-          <Select value={selectedType} onValueChange={setSelectedType}>
-            <SelectTrigger>
-              <SelectValue placeholder="Sélectionner un type" />
-            </SelectTrigger>
-            <SelectContent>
-              {documentTypes.map(([key, info]) => (
-                <SelectItem key={key} value={key}>
-                  <div className="flex items-center gap-2">
-                    {info.name}
-                    {info.required && (
-                      <Badge variant="destructive" className="text-xs">
-                        Obligatoire
-                      </Badge>
-                    )}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="document-file">Fichier</Label>
-          <Input
-            id="document-file"
-            type="file"
-            accept=".pdf,.jpg,.jpeg,.png"
-            onChange={(e) => setUploadingFile(e.target.files?.[0] || null)}
-            disabled={!selectedType}
-          />
-        </div>
-      </div>
+      {/* Indicateur de progression */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span className="flex items-center">
+              <FileText className="h-5 w-5 mr-2" />
+              Progression des documents
+            </span>
+            <Badge variant={completionPercentage === 100 ? "default" : "secondary"}>
+              {uploadedRequired}/{totalRequired} obligatoires
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>Documents obligatoires</span>
+              <span>{Math.round(completionPercentage)}%</span>
+            </div>
+            <Progress value={completionPercentage} className="h-2" />
+          </div>
+        </CardContent>
+      </Card>
 
-      {selectedType && (
-        <div className="p-3 bg-blue-50 rounded-lg">
-          <p className="text-sm text-blue-800">
-            <strong>{REQUIRED_DOCUMENTS[selectedType as keyof typeof REQUIRED_DOCUMENTS]?.name}</strong>
-          </p>
-          <p className="text-xs text-blue-600 mt-1">
-            {REQUIRED_DOCUMENTS[selectedType as keyof typeof REQUIRED_DOCUMENTS]?.description}
-          </p>
-        </div>
-      )}
+      {/* Documents obligatoires */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center text-red-600">
+            <AlertTriangle className="h-5 w-5 mr-2" />
+            Documents obligatoires
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {requiredDocuments.map((document) => (
+            <div key={document.id} className="border rounded-lg p-4">
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex-1">
+                  <h4 className="font-medium flex items-center">
+                    {document.name}
+                    {document.uploaded && <Check className="h-4 w-4 ml-2 text-green-600" />}
+                  </h4>
+                  <p className="text-sm text-gray-600 mt-1">{document.description}</p>
+                </div>
+                <div className="flex items-center space-x-2">
+                  {document.uploaded && (
+                    <Button variant="outline" size="sm" onClick={() => handleDocumentRemove(document.id)}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                  <Badge variant={document.uploaded ? "default" : "secondary"}>
+                    {document.uploaded ? "Uploadé" : "Requis"}
+                  </Badge>
+                </div>
+              </div>
 
-      <Button onClick={handleUpload} disabled={!uploadingFile || !selectedType || isUploading}>
-        <Upload className="h-4 w-4 mr-2" />
-        {isUploading ? "Upload en cours..." : "Ajouter le document"}
-      </Button>
-
-      {/* Liste des documents requis */}
-      <div className="mt-8">
-        <h3 className="text-lg font-semibold mb-4">Documents {showRequiredOnly ? "obligatoires" : ""}</h3>
-        <div className="space-y-4">
-          {documentTypes.map(([docType, info]) => {
-            const docsOfType = documentsByType[docType] || []
-            const hasDocuments = docsOfType.length > 0
-
-            return (
-              <Card key={docType} className={info.required && !hasDocuments ? "border-red-300" : ""}>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`p-2 rounded-lg ${
-                          hasDocuments ? "bg-green-100" : info.required ? "bg-red-100" : "bg-gray-100"
-                        }`}
-                      >
-                        {hasDocuments ? (
-                          <CheckCircle className="h-5 w-5 text-green-600" />
-                        ) : info.required ? (
-                          <AlertCircle className="h-5 w-5 text-red-600" />
-                        ) : (
-                          <File className="h-5 w-5 text-gray-600" />
-                        )}
-                      </div>
-                      <div>
-                        <p className="font-medium">{info.name}</p>
-                        <p className="text-sm text-gray-600">{info.description}</p>
-                      </div>
-                    </div>
-                    <div>
-                      {info.required && (
-                        <Badge variant={hasDocuments ? "default" : "destructive"}>
-                          {hasDocuments ? "✓ Fourni" : "Obligatoire"}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Documents de ce type */}
-                  {hasDocuments && (
-                    <div className="mt-4 space-y-2">
-                      {docsOfType.map((doc) => (
-                        <div key={doc.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                          <div className="flex items-center gap-2">
-                            <File className="h-4 w-4 text-blue-500" />
-                            <span className="text-sm">{doc.document_name}</span>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteDocument(doc.id)}
-                            className="text-red-500 hover:text-red-700"
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
+              {!document.uploaded && (
+                <div className="mt-3">
+                  <FileUpload
+                    onFilesUploaded={(files) => handleDocumentUpload(document.id, files)}
+                    maxFiles={1}
+                    acceptedTypes={["application/pdf", "image/*"]}
+                    folder={`properties/${propertyId}/documents`}
+                    disabled={uploadingDocuments.has(document.id)}
+                  />
+                  {uploadingDocuments.has(document.id) && (
+                    <div className="flex items-center mt-2 text-sm text-gray-600">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                      Upload en cours...
                     </div>
                   )}
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
-      </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* Documents optionnels */}
+      {!showRequiredOnly && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center text-blue-600">
+              <FileText className="h-5 w-5 mr-2" />
+              Documents optionnels
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {optionalDocuments.map((document) => (
+              <div key={document.id} className="border rounded-lg p-4">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex-1">
+                    <h4 className="font-medium flex items-center">
+                      {document.name}
+                      {document.uploaded && <Check className="h-4 w-4 ml-2 text-green-600" />}
+                    </h4>
+                    <p className="text-sm text-gray-600 mt-1">{document.description}</p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    {document.uploaded && (
+                      <Button variant="outline" size="sm" onClick={() => handleDocumentRemove(document.id)}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                    <Badge variant={document.uploaded ? "default" : "outline"}>
+                      {document.uploaded ? "Uploadé" : "Optionnel"}
+                    </Badge>
+                  </div>
+                </div>
+
+                {!document.uploaded && (
+                  <div className="mt-3">
+                    <FileUpload
+                      onFilesUploaded={(files) => handleDocumentUpload(document.id, files)}
+                      maxFiles={1}
+                      acceptedTypes={["application/pdf", "image/*"]}
+                      folder={`properties/${propertyId}/documents`}
+                      disabled={uploadingDocuments.has(document.id)}
+                    />
+                    {uploadingDocuments.has(document.id) && (
+                      <div className="flex items-center mt-2 text-sm text-gray-600">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                        Upload en cours...
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Résumé */}
+      <Card className="bg-gray-50">
+        <CardContent className="pt-6">
+          <div className="text-center">
+            <h3 className="font-semibold mb-2">Statut des documents</h3>
+            <div className="flex justify-center space-x-6 text-sm">
+              <div className="flex items-center">
+                <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
+                <span>{uploadedRequired} documents obligatoires uploadés</span>
+              </div>
+              <div className="flex items-center">
+                <div className="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
+                <span>{optionalDocuments.filter((doc) => doc.uploaded).length} documents optionnels</span>
+              </div>
+            </div>
+            {completionPercentage === 100 && (
+              <div className="mt-3 p-3 bg-green-100 border border-green-200 rounded-lg">
+                <p className="text-green-800 text-sm font-medium">
+                  ✅ Tous les documents obligatoires ont été uploadés !
+                </p>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

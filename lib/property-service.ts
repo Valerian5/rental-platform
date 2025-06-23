@@ -1,5 +1,4 @@
 import { supabase } from "./supabase"
-import { imageService } from "./image-service"
 
 export interface Property {
   id: string
@@ -43,6 +42,50 @@ export interface Property {
   }>
   created_at: string
   updated_at: string
+}
+
+// Fonction utilitaire pour mapper les équipements du formulaire vers un tableau
+function mapEquipmentToArray(formData: any): string[] {
+  const equipment: string[] = []
+
+  // Équipements de cuisine
+  if (formData.equipped_kitchen) equipment.push("cuisine_equipee")
+  if (formData.dishwasher) equipment.push("lave_vaisselle")
+  if (formData.washing_machine) equipment.push("lave_linge")
+  if (formData.dryer) equipment.push("seche_linge")
+  if (formData.fridge) equipment.push("refrigerateur")
+  if (formData.oven) equipment.push("four")
+  if (formData.microwave) equipment.push("micro_ondes")
+
+  // Équipements de salle de bain
+  if (formData.bathtub) equipment.push("baignoire")
+  if (formData.shower) equipment.push("douche")
+
+  // Équipements de confort
+  if (formData.air_conditioning) equipment.push("climatisation")
+  if (formData.fireplace) equipment.push("cheminee")
+  if (formData.parking) equipment.push("parking")
+  if (formData.cellar) equipment.push("cave")
+  if (formData.elevator) equipment.push("ascenseur")
+  if (formData.intercom) equipment.push("interphone")
+  if (formData.digicode) equipment.push("digicode")
+
+  // Extérieur
+  if (formData.balcony) equipment.push("balcon")
+  if (formData.terrace) equipment.push("terrasse")
+  if (formData.garden) equipment.push("jardin")
+  if (formData.loggia) equipment.push("loggia")
+
+  return equipment
+}
+
+// Fonction utilitaire pour déterminer le type d'extérieur
+function getExteriorType(formData: any): string | null {
+  if (formData.garden) return "jardin"
+  if (formData.terrace) return "terrasse"
+  if (formData.balcony) return "balcon"
+  if (formData.loggia) return "loggia"
+  return null
 }
 
 export const propertyService = {
@@ -170,8 +213,15 @@ export const propertyService = {
     console.log("🏠 PropertyService.createProperty", propertyData)
 
     try {
-      // Nettoyer les données en ne gardant que les champs qui existent vraiment
+      // Mapper les équipements vers un tableau
+      const equipment = mapEquipmentToArray(propertyData)
+
+      // Déterminer le type d'extérieur
+      const exteriorType = getExteriorType(propertyData)
+
+      // Mapper les données du formulaire vers la structure de la table
       const cleanData = {
+        // Champs de base (correspondent à la table)
         title: propertyData.title,
         description: propertyData.description,
         address: propertyData.address,
@@ -186,12 +236,26 @@ export const propertyService = {
         furnished: propertyData.furnished || false,
         available: propertyData.available !== false,
         owner_id: propertyData.owner_id,
-        // Ajouter seulement les champs qui existent dans la table
-        ...(propertyData.charges_amount && { charges_amount: propertyData.charges_amount }),
-        ...(propertyData.security_deposit && { security_deposit: propertyData.security_deposit }),
-        ...(propertyData.energy_class && { energy_class: propertyData.energy_class }),
-        ...(propertyData.ges_class && { ges_class: propertyData.ges_class }),
-        ...(propertyData.equipment && { equipment: propertyData.equipment }),
+
+        // Champs financiers (noms corrects de la table)
+        charges_amount: propertyData.charges || 0,
+        security_deposit: propertyData.deposit || 0, // deposit -> security_deposit
+
+        // Champs supplémentaires
+        construction_year: propertyData.construction_year,
+        hide_exact_address: propertyData.hide_exact_address || false,
+        energy_class: propertyData.energy_class || null,
+        ges_class: propertyData.ges_class || null,
+        heating_type: propertyData.heating_type || null,
+        exterior_type: exteriorType,
+        equipment: equipment, // Tableau d'équipements
+
+        // Dates
+        move_in_date: propertyData.availability_date || null,
+
+        // Timestamps
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       }
 
       console.log("🧹 Données nettoyées:", cleanData)
@@ -457,25 +521,22 @@ export const propertyService = {
     }
   },
 
-  // Méthode pour uploader plusieurs images
-  uploadPropertyImages: async (propertyId: string, images: File[]): Promise<any[]> => {
+  // Méthode pour uploader plusieurs images - CORRIGÉE
+  uploadPropertyImages: async (propertyId: string, imageUrls: string[]): Promise<any[]> => {
     try {
-      console.log(`📸 Upload de ${images.length} images pour la propriété:`, propertyId)
+      console.log(`📸 Sauvegarde de ${imageUrls.length} images pour la propriété:`, propertyId)
 
-      const uploadPromises = images.map(async (image, index) => {
-        // Utiliser le service d'images existant
-        const imageUrl = await imageService.uploadPropertyImage(image, propertyId)
+      const results = []
 
-        // Sauvegarder les métadonnées
-        return await imageService.savePropertyImageMetadata(
-          propertyId,
-          imageUrl,
-          index === 0, // La première image est principale
-        )
-      })
+      for (let i = 0; i < imageUrls.length; i++) {
+        const imageUrl = imageUrls[i]
+        const isPrimary = i === 0 // La première image est principale
 
-      const results = await Promise.all(uploadPromises)
-      console.log(`✅ ${results.length} images uploadées`)
+        const result = await propertyService.addPropertyImage(propertyId, imageUrl, isPrimary)
+        results.push(result)
+      }
+
+      console.log(`✅ ${results.length} images sauvegardées`)
       return results
     } catch (error) {
       console.error("❌ Erreur uploadPropertyImages:", error)
