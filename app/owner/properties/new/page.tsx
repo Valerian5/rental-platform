@@ -11,12 +11,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { ArrowLeft, ArrowRight, Home, Upload, FileText, Check } from "lucide-react"
+import { ArrowLeft, ArrowRight, Home, Upload, FileText, Check, Calendar } from "lucide-react"
 import Link from "next/link"
 import { propertyService } from "@/lib/property-service"
 import { authService } from "@/lib/auth-service"
 import { FileUpload } from "@/components/file-upload"
 import { PropertyDocumentsUpload } from "@/components/property-documents-upload"
+import { VisitScheduler } from "@/components/visit-scheduler"
 import { toast } from "sonner"
 
 interface PropertyFormData {
@@ -111,6 +112,7 @@ export default function NewPropertyPage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [uploadedImages, setUploadedImages] = useState<string[]>([])
   const [uploadedDocuments, setUploadedDocuments] = useState<any[]>([])
+  const [visitSlots, setVisitSlots] = useState<any[]>([])
   const [createdPropertyId, setCreatedPropertyId] = useState<string | null>(null)
 
   const [formData, setFormData] = useState<PropertyFormData>({
@@ -215,6 +217,8 @@ export default function NewPropertyPage() {
       case 2:
         return uploadedImages.length > 0
       case 3:
+        return true // Créneaux optionnels
+      case 4:
         return true // Documents optionnels pour l'instant
       default:
         return true
@@ -232,10 +236,10 @@ export default function NewPropertyPage() {
 
           // Uploader les images si présentes
           if (uploadedImages.length > 0) {
-            await propertyService.uploadPropertyImages(property.id, uploadedImages as any)
+            await propertyService.uploadPropertyImages(property.id, uploadedImages)
           }
 
-          toast.success("Propriété créée, vous pouvez maintenant ajouter les documents")
+          toast.success("Propriété créée, vous pouvez maintenant configurer les créneaux de visite")
         } catch (error: any) {
           console.error("Erreur création propriété:", error)
           toast.error("Erreur lors de la création de la propriété")
@@ -265,17 +269,26 @@ export default function NewPropertyPage() {
     setIsSubmitting(true)
 
     try {
-      // Créer la propriété
-      const property = await propertyService.createProperty(formData)
-      setCreatedPropertyId(property.id)
+      let propertyId = createdPropertyId
 
-      // Uploader les images si présentes
-      if (uploadedImages.length > 0) {
-        await propertyService.uploadPropertyImages(property.id, uploadedImages as any)
+      // Si la propriété n'a pas encore été créée, la créer maintenant
+      if (!propertyId) {
+        const property = await propertyService.createProperty(formData)
+        propertyId = property.id
+
+        // Uploader les images si présentes
+        if (uploadedImages.length > 0) {
+          await propertyService.uploadPropertyImages(propertyId, uploadedImages)
+        }
+      }
+
+      // Sauvegarder les créneaux de visite si définis
+      if (visitSlots.length > 0) {
+        await propertyService.savePropertyVisitSlots(propertyId, visitSlots)
       }
 
       toast.success("Annonce créée avec succès !")
-      router.push(`/owner/properties/${property.id}/success`)
+      router.push(`/owner/properties/${propertyId}/success`)
     } catch (error: any) {
       console.error("Erreur création propriété:", error)
       toast.error("Erreur lors de la création de l'annonce")
@@ -285,7 +298,7 @@ export default function NewPropertyPage() {
   }
 
   const getStepProgress = () => {
-    return (currentStep / 4) * 100
+    return (currentStep / 5) * 100
   }
 
   const isStepCompleted = (step: number) => {
@@ -319,7 +332,7 @@ export default function NewPropertyPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Créer une nouvelle annonce</h1>
-            <p className="text-gray-600 mt-2">Étape {currentStep} sur 4</p>
+            <p className="text-gray-600 mt-2">Étape {currentStep} sur 5</p>
           </div>
           <div className="text-right">
             <Progress value={getStepProgress()} className="w-32 mb-2" />
@@ -334,8 +347,9 @@ export default function NewPropertyPage() {
           {[
             { step: 1, title: "Informations", icon: Home },
             { step: 2, title: "Photos", icon: Upload },
-            { step: 3, title: "Documents", icon: FileText },
-            { step: 4, title: "Publication", icon: Check },
+            { step: 3, title: "Créneaux", icon: Calendar },
+            { step: 4, title: "Documents", icon: FileText },
+            { step: 5, title: "Publication", icon: Check },
           ].map(({ step, title, icon: Icon }) => (
             <div key={step} className="flex items-center">
               <div
@@ -358,7 +372,7 @@ export default function NewPropertyPage() {
                   {title}
                 </p>
               </div>
-              {step < 4 && (
+              {step < 5 && (
                 <div className={`w-16 h-0.5 ml-4 ${isStepCompleted(step) ? "bg-blue-600" : "bg-gray-300"}`} />
               )}
             </div>
@@ -888,8 +902,30 @@ export default function NewPropertyPage() {
           </Card>
         )}
 
-        {/* Étape 3: Documents */}
+        {/* Étape 3: Créneaux de visite */}
         {currentStep === 3 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Calendar className="h-5 w-5 mr-2" />
+                Créneaux de visite
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!createdPropertyId ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-600">Création de la propriété en cours...</p>
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mt-2"></div>
+                </div>
+              ) : (
+                <VisitScheduler propertyId={createdPropertyId} onSlotsChange={setVisitSlots} />
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Étape 4: Documents */}
+        {currentStep === 4 && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
@@ -914,8 +950,8 @@ export default function NewPropertyPage() {
           </Card>
         )}
 
-        {/* Étape 4: Publication */}
-        {currentStep === 4 && (
+        {/* Étape 5: Publication */}
+        {currentStep === 5 && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
@@ -966,6 +1002,11 @@ export default function NewPropertyPage() {
                       </Badge>
                     </div>
                     <div className="flex items-center gap-2">
+                      <Badge variant={visitSlots.length > 0 ? "default" : "secondary"}>
+                        {visitSlots.length > 0 ? "✓" : "○"} Créneaux ({visitSlots.length})
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2">
                       <Badge variant={uploadedDocuments.length > 0 ? "default" : "secondary"}>
                         {uploadedDocuments.length > 0 ? "✓" : "○"} Documents ({uploadedDocuments.length})
                       </Badge>
@@ -986,7 +1027,7 @@ export default function NewPropertyPage() {
         </Button>
 
         <div className="flex gap-2">
-          {currentStep < 4 ? (
+          {currentStep < 5 ? (
             <Button onClick={nextStep} disabled={!validateStep(currentStep)}>
               Suivant
               <ArrowRight className="h-4 w-4 ml-2" />

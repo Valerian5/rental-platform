@@ -7,9 +7,14 @@ export const REQUIRED_DOCUMENTS = {
     description: "Document obligatoire indiquant la performance énergétique du logement",
     required: true,
   },
-  lead_risk: {
+  erp: {
     name: "État des Risques et Pollutions (ERP)",
     description: "Document d'information sur les risques naturels, miniers et technologiques",
+    required: true,
+  },
+  insurance: {
+    name: "Attestation d'assurance PNO",
+    description: "Assurance Propriétaire Non Occupant obligatoire",
     required: true,
   },
   surface_law: {
@@ -22,6 +27,11 @@ export const REQUIRED_DOCUMENTS = {
     description: "Obligatoire pour les biens construits avant 1997",
     required: false,
   },
+  lead: {
+    name: "Diagnostic Plomb (CREP)",
+    description: "Obligatoire pour les logements construits avant 1949",
+    required: false,
+  },
   gas_safety: {
     name: "Diagnostic Gaz",
     description: "Obligatoire si installation gaz de plus de 15 ans",
@@ -30,6 +40,31 @@ export const REQUIRED_DOCUMENTS = {
   electrical_safety: {
     name: "Diagnostic Électricité",
     description: "Obligatoire si installation électrique de plus de 15 ans",
+    required: false,
+  },
+  termites: {
+    name: "État Parasitaire (Termites)",
+    description: "Obligatoire dans certaines zones à risque",
+    required: false,
+  },
+  energy_audit: {
+    name: "Audit Énergétique",
+    description: "Obligatoire pour les logements classés F ou G depuis 2023",
+    required: false,
+  },
+  copropriety_docs: {
+    name: "Documents de Copropriété",
+    description: "Règlement de copropriété, PV d'AG, carnet d'entretien",
+    required: false,
+  },
+  property_tax: {
+    name: "Avis de Taxe Foncière",
+    description: "Dernier avis de taxe foncière reçu",
+    required: false,
+  },
+  other: {
+    name: "Autres Documents",
+    description: "Tout autre document relatif au bien",
     required: false,
   },
 }

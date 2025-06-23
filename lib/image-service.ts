@@ -21,13 +21,17 @@ export const imageService = {
     console.log("💾 Sauvegarde métadonnées image:", { propertyId, imageUrl, isPrimary })
 
     try {
+      // Si c'est l'image principale, désactiver les autres
+      if (isPrimary) {
+        await supabase.from("property_images").update({ is_primary: false }).eq("property_id", propertyId)
+      }
+
       const { data, error } = await supabase
         .from("property_images")
         .insert({
           property_id: propertyId,
           url: imageUrl,
           is_primary: isPrimary,
-          created_at: new Date().toISOString(),
         })
         .select()
         .single()
@@ -37,67 +41,10 @@ export const imageService = {
         throw error
       }
 
-      console.log("✅ Métadonnées sauvegardées:", data)
+      console.log("✅ Métadonnées image sauvegardées")
       return data
     } catch (error) {
-      console.error("❌ Erreur dans savePropertyImageMetadata:", error)
-      throw error
-    }
-  },
-
-  async deletePropertyImage(imageId: string, imageUrl: string) {
-    console.log("🗑️ Suppression image:", { imageId, imageUrl })
-
-    try {
-      // Supprimer de la base de données
-      const { error: dbError } = await supabase.from("property_images").delete().eq("id", imageId)
-
-      if (dbError) {
-        console.error("❌ Erreur suppression DB:", dbError)
-        throw dbError
-      }
-
-      // Extraire le chemin du fichier depuis l'URL
-      try {
-        const url = new URL(imageUrl)
-        const pathParts = url.pathname.split("/")
-        // Format: /storage/v1/object/public/bucket-name/path/to/file
-        if (pathParts.length >= 6) {
-          const filePath = pathParts.slice(6).join("/")
-          await SupabaseStorageService.deleteFile(filePath, "property-images")
-        }
-      } catch (urlError) {
-        console.warn("⚠️ Impossible de supprimer le fichier physique:", urlError)
-        // Continue même si la suppression du fichier échoue
-      }
-
-      console.log("✅ Image supprimée")
-    } catch (error) {
-      console.error("❌ Erreur dans deletePropertyImage:", error)
-      throw error
-    }
-  },
-
-  async getPropertyImages(propertyId: string) {
-    console.log("📋 Récupération images pour propriété:", propertyId)
-
-    try {
-      const { data, error } = await supabase
-        .from("property_images")
-        .select("*")
-        .eq("property_id", propertyId)
-        .order("is_primary", { ascending: false })
-        .order("created_at", { ascending: true })
-
-      if (error) {
-        console.error("❌ Erreur récupération images:", error)
-        throw error
-      }
-
-      console.log("✅ Images récupérées:", data?.length || 0)
-      return data || []
-    } catch (error) {
-      console.error("❌ Erreur dans getPropertyImages:", error)
+      console.error("❌ Erreur savePropertyImageMetadata:", error)
       throw error
     }
   },

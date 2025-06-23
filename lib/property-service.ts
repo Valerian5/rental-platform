@@ -1,5 +1,4 @@
 import { supabase } from "./supabase"
-import { imageService } from "./image-service"
 
 export interface Property {
   id: string
@@ -186,12 +185,40 @@ export const propertyService = {
         furnished: propertyData.furnished || false,
         available: propertyData.available !== false,
         owner_id: propertyData.owner_id,
-        // Ajouter seulement les champs qui existent dans la table
-        ...(propertyData.charges_amount && { charges_amount: propertyData.charges_amount }),
-        ...(propertyData.security_deposit && { security_deposit: propertyData.security_deposit }),
-        ...(propertyData.energy_class && { energy_class: propertyData.energy_class }),
-        ...(propertyData.ges_class && { ges_class: propertyData.ges_class }),
-        ...(propertyData.equipment && { equipment: propertyData.equipment }),
+        // Nouveaux champs
+        hide_exact_address: propertyData.hide_exact_address || false,
+        construction_year: propertyData.construction_year,
+        charges: propertyData.charges || 0,
+        deposit: propertyData.deposit || 0,
+        fees: propertyData.fees || 0,
+        floor: propertyData.floor,
+        total_floors: propertyData.total_floors,
+        balcony: propertyData.balcony || false,
+        terrace: propertyData.terrace || false,
+        garden: propertyData.garden || false,
+        loggia: propertyData.loggia || false,
+        equipped_kitchen: propertyData.equipped_kitchen || false,
+        bathtub: propertyData.bathtub || false,
+        shower: propertyData.shower || false,
+        dishwasher: propertyData.dishwasher || false,
+        washing_machine: propertyData.washing_machine || false,
+        dryer: propertyData.dryer || false,
+        fridge: propertyData.fridge || false,
+        oven: propertyData.oven || false,
+        microwave: propertyData.microwave || false,
+        air_conditioning: propertyData.air_conditioning || false,
+        fireplace: propertyData.fireplace || false,
+        parking: propertyData.parking || false,
+        cellar: propertyData.cellar || false,
+        elevator: propertyData.elevator || false,
+        intercom: propertyData.intercom || false,
+        digicode: propertyData.digicode || false,
+        availability_date: propertyData.availability_date || null,
+        energy_class: propertyData.energy_class || null,
+        ges_class: propertyData.ges_class || null,
+        heating_type: propertyData.heating_type || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       }
 
       console.log("🧹 Données nettoyées:", cleanData)
@@ -457,25 +484,22 @@ export const propertyService = {
     }
   },
 
-  // Méthode pour uploader plusieurs images
-  uploadPropertyImages: async (propertyId: string, images: File[]): Promise<any[]> => {
+  // Méthode pour uploader plusieurs images - CORRIGÉE
+  uploadPropertyImages: async (propertyId: string, imageUrls: string[]): Promise<any[]> => {
     try {
-      console.log(`📸 Upload de ${images.length} images pour la propriété:`, propertyId)
+      console.log(`📸 Sauvegarde de ${imageUrls.length} images pour la propriété:`, propertyId)
 
-      const uploadPromises = images.map(async (image, index) => {
-        // Utiliser le service d'images existant
-        const imageUrl = await imageService.uploadPropertyImage(image, propertyId)
+      const results = []
 
-        // Sauvegarder les métadonnées
-        return await imageService.savePropertyImageMetadata(
-          propertyId,
-          imageUrl,
-          index === 0, // La première image est principale
-        )
-      })
+      for (let i = 0; i < imageUrls.length; i++) {
+        const imageUrl = imageUrls[i]
+        const isPrimary = i === 0 // La première image est principale
 
-      const results = await Promise.all(uploadPromises)
-      console.log(`✅ ${results.length} images uploadées`)
+        const result = await propertyService.addPropertyImage(propertyId, imageUrl, isPrimary)
+        results.push(result)
+      }
+
+      console.log(`✅ ${results.length} images sauvegardées`)
       return results
     } catch (error) {
       console.error("❌ Erreur uploadPropertyImages:", error)
