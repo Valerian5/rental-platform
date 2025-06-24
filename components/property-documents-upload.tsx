@@ -153,18 +153,28 @@ export function PropertyDocumentsUpload({
       const urlParts = fileUrl.split("/")
       const fileName = urlParts[urlParts.length - 1]
 
-      // Créer les métadonnées du document
+      // Créer les métadonnées du document (sans file_size pour éviter l'erreur)
       const documentData = {
         property_id: propertyId,
         document_type: documentId,
         document_name: fileName,
         file_url: fileUrl,
-        file_size: 0, // On ne connaît pas la taille depuis l'URL
         uploaded_at: new Date().toISOString(),
       }
 
       console.log("💾 Sauvegarde métadonnées:", documentData)
 
+      // Vérifier d'abord si la table existe et sa structure
+      const { data: tableCheck, error: tableError } = await supabase.from("property_documents").select("id").limit(1)
+
+      if (tableError) {
+        console.error("❌ Erreur accès table:", tableError)
+        throw new Error(`Table non accessible: ${tableError.message}`)
+      }
+
+      console.log("✅ Table property_documents accessible")
+
+      // Insérer le document
       const { data, error } = await supabase.from("property_documents").insert(documentData).select().single()
 
       if (error) {
@@ -211,8 +221,24 @@ export function PropertyDocumentsUpload({
         return
       }
 
-      // Si on a une URL, essayer de supprimer via le service
-      // (Note: pour l'instant on fait juste la suppression locale)
+      // Supprimer de la base de données si on a l'URL
+      if (document.url) {
+        try {
+          const { error: deleteError } = await supabase
+            .from("property_documents")
+            .delete()
+            .eq("property_id", propertyId)
+            .eq("document_type", documentId)
+
+          if (deleteError) {
+            console.warn("⚠️ Erreur suppression DB:", deleteError)
+          } else {
+            console.log("✅ Document supprimé de la DB")
+          }
+        } catch (dbError) {
+          console.warn("⚠️ Erreur suppression DB:", dbError)
+        }
+      }
 
       setDocuments((prev) =>
         prev.map((doc) => (doc.id === documentId ? { ...doc, uploaded: false, url: undefined } : doc)),
