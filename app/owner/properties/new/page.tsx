@@ -21,7 +21,7 @@ import { VisitScheduler } from "@/components/visit-scheduler"
 import { toast } from "sonner"
 
 interface PropertyFormData {
-  // Informations de base
+  // ... (inchangé, voir ton code original)
   title: string
   description: string
   address: string
@@ -29,27 +29,24 @@ interface PropertyFormData {
   postal_code: string
   hide_exact_address: boolean
 
-  // Caractéristiques du bien
   surface: number
   construction_year: number | null
-  price: number // loyer hors charges
+  price: number
   charges: number
   deposit: number
   property_type: string
-  furnished: boolean // type de location (meublé/non meublé)
+  furnished: boolean
   rooms: number
   bedrooms: number
   bathrooms: number
   floor: number | null
   total_floors: number | null
 
-  // Extérieur
   balcony: boolean
   terrace: boolean
   garden: boolean
   loggia: boolean
 
-  // Équipements
   equipped_kitchen: boolean
   bathtub: boolean
   shower: boolean
@@ -67,20 +64,25 @@ interface PropertyFormData {
   intercom: boolean
   digicode: boolean
 
-  // Informations financières
   fees: number
 
-  // Disponibilité
   available: boolean
   availability_date: string
 
-  // Autres informations
   energy_class: string
   ges_class: string
   heating_type: string
 
-  // Champ technique
   owner_id: string
+}
+
+const EQUIPMENT_KEYS = [
+  "equipped_kitchen", "bathtub", "shower", "dishwasher", "washing_machine",
+  "dryer", "fridge", "oven", "microwave", "air_conditioning", "fireplace",
+  "parking", "cellar", "elevator", "intercom", "digicode"
+]
+function buildEquipmentArray(formData: PropertyFormData): string[] {
+  return EQUIPMENT_KEYS.filter((key) => (formData as any)[key])
 }
 
 const PROPERTY_TYPES = [
@@ -91,9 +93,7 @@ const PROPERTY_TYPES = [
   { value: "duplex", label: "Duplex" },
   { value: "townhouse", label: "Maison de ville" },
 ]
-
 const ENERGY_CLASSES = ["A", "B", "C", "D", "E", "F", "G"]
-
 const HEATING_TYPES = [
   { value: "individual_gas", label: "Gaz individuel" },
   { value: "collective_gas", label: "Gaz collectif" },
@@ -116,15 +116,12 @@ export default function NewPropertyPage() {
   const [createdPropertyId, setCreatedPropertyId] = useState<string | null>(null)
 
   const [formData, setFormData] = useState<PropertyFormData>({
-    // Informations de base
     title: "",
     description: "",
     address: "",
     city: "",
     postal_code: "",
     hide_exact_address: false,
-
-    // Caractéristiques du bien
     surface: 0,
     construction_year: null,
     price: 0,
@@ -137,14 +134,10 @@ export default function NewPropertyPage() {
     bathrooms: 0,
     floor: null,
     total_floors: null,
-
-    // Extérieur
     balcony: false,
     terrace: false,
     garden: false,
     loggia: false,
-
-    // Équipements
     equipped_kitchen: false,
     bathtub: false,
     shower: false,
@@ -161,20 +154,12 @@ export default function NewPropertyPage() {
     elevator: false,
     intercom: false,
     digicode: false,
-
-    // Informations financières
     fees: 0,
-
-    // Disponibilité
     available: true,
     availability_date: "",
-
-    // Autres informations
     energy_class: "",
     ges_class: "",
     heating_type: "",
-
-    // Champ technique
     owner_id: "",
   })
 
@@ -194,7 +179,6 @@ export default function NewPropertyPage() {
         router.push("/login")
       }
     }
-
     checkAuth()
   }, [router])
 
@@ -202,20 +186,10 @@ export default function NewPropertyPage() {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
-  // Fonction sécurisée pour gérer les images uploadées
-  const handleFilesUploaded = (urls: string[] | undefined) => {
-    console.log("📸 handleFilesUploaded appelé avec:", urls)
-    const safeUrls = Array.isArray(urls) ? urls : []
-    console.log("📸 URLs sécurisées:", safeUrls)
-    setUploadedImages(safeUrls)
-  }
-
   const validateStep = (step: number): boolean => {
-    console.log(`🔍 Validation étape ${step}`)
-
     switch (step) {
       case 1:
-        const isValid1 = !!(
+        return !!(
           formData.title &&
           formData.description &&
           formData.address &&
@@ -224,52 +198,48 @@ export default function NewPropertyPage() {
           formData.price > 0 &&
           formData.surface > 0
         )
-        console.log("✅ Étape 1 valide:", isValid1)
-        return isValid1
-
       case 2:
-        const imagesCount = Array.isArray(uploadedImages) ? uploadedImages.length : 0
-        const isValid2 = imagesCount > 0
-        console.log("📸 Images uploadées:", imagesCount, "- Valide:", isValid2)
-        return isValid2
-
+        return Array.isArray(uploadedImages) && uploadedImages.length > 0
       case 3:
-        console.log("✅ Étape 3 valide (créneaux optionnels)")
         return true // Créneaux optionnels
-
       case 4:
-        console.log("✅ Étape 4 valide (documents optionnels)")
-        return true // Documents optionnels pour l'instant
-
+        return true // Documents optionnels
       default:
         return true
     }
   }
 
   const nextStep = async () => {
-    console.log(`🚀 nextStep appelé - Étape actuelle: ${currentStep}`)
-
     if (validateStep(currentStep)) {
-      // Si on passe de l'étape 2 à 3, créer la propriété
+      // Création de la propriété à l'étape 2 (après l'upload des images)
       if (currentStep === 2 && !createdPropertyId) {
-        console.log("🏠 Création de la propriété...")
         setIsSubmitting(true)
-
         try {
-          const property = await propertyService.createProperty(formData)
-          setCreatedPropertyId(property.id)
-          console.log("✅ Propriété créée:", property.id)
+          // PATCH equipment
+          const {
+            equipped_kitchen, bathtub, shower, dishwasher, washing_machine, dryer, fridge, oven, microwave,
+            air_conditioning, fireplace, parking, cellar, elevator, intercom, digicode,
+            ...rest
+          } = formData
+          const equipment = buildEquipmentArray(formData)
+          const propertyToSend = { ...rest, equipment }
 
-          // Uploader les images si présentes
-          const safeImages = Array.isArray(uploadedImages) ? uploadedImages : []
-          if (safeImages.length > 0) {
-            console.log("📸 Upload des images:", safeImages.length)
-            await propertyService.uploadPropertyImages(property.id, safeImages)
+          const property = await propertyService.createProperty(propertyToSend)
+          setCreatedPropertyId(property.id)
+
+          // Upload images si présentes
+          if (Array.isArray(uploadedImages) && uploadedImages.length > 0) {
+            await propertyService.uploadPropertyImages(property.id, uploadedImages)
+          }
+
+          // PATCH - Sauvegarde des créneaux après création de la propriété
+          if (visitSlots.length > 0) {
+            await propertyService.savePropertyVisitSlots(property.id, visitSlots)
           }
 
           toast.success("Propriété créée, vous pouvez maintenant configurer les créneaux de visite")
         } catch (error: any) {
-          console.error("❌ Erreur création propriété:", error)
+          console.error("Erreur création propriété:", error)
           toast.error("Erreur lors de la création de la propriété")
           setIsSubmitting(false)
           return
@@ -277,17 +247,13 @@ export default function NewPropertyPage() {
           setIsSubmitting(false)
         }
       }
-
-      console.log(`➡️ Passage à l'étape ${currentStep + 1}`)
       setCurrentStep((prev) => prev + 1)
     } else {
-      console.log("❌ Validation échouée pour l'étape", currentStep)
       toast.error("Veuillez remplir tous les champs obligatoires")
     }
   }
 
   const prevStep = () => {
-    console.log(`⬅️ Retour à l'étape ${currentStep - 1}`)
     setCurrentStep((prev) => prev - 1)
   }
 
@@ -302,22 +268,32 @@ export default function NewPropertyPage() {
     try {
       let propertyId = createdPropertyId
 
-      // Si la propriété n'a pas encore été créée, la créer maintenant
       if (!propertyId) {
-        const property = await propertyService.createProperty(formData)
+        const {
+          equipped_kitchen, bathtub, shower, dishwasher, washing_machine, dryer, fridge, oven, microwave,
+          air_conditioning, fireplace, parking, cellar, elevator, intercom, digicode,
+          ...rest
+        } = formData
+        const equipment = buildEquipmentArray(formData)
+        const propertyToSend = { ...rest, equipment }
+
+        const property = await propertyService.createProperty(propertyToSend)
         propertyId = property.id
 
-        // Uploader les images si présentes
-        const safeImages = Array.isArray(uploadedImages) ? uploadedImages : []
-        if (safeImages.length > 0) {
-          await propertyService.uploadPropertyImages(propertyId, safeImages)
+        if (Array.isArray(uploadedImages) && uploadedImages.length > 0) {
+          await propertyService.uploadPropertyImages(propertyId, uploadedImages)
         }
       }
 
-      // Sauvegarder les créneaux de visite si définis
-      if (Array.isArray(visitSlots) && visitSlots.length > 0) {
+      // PATCH - Sauvegarde des créneaux à la publication finale
+      if (visitSlots.length > 0 && propertyId) {
         await propertyService.savePropertyVisitSlots(propertyId, visitSlots)
       }
+
+      // Sauvegarde les créneaux de visite si définis (optionnel, déjà fait plus haut)
+      // if (visitSlots.length > 0) {
+      //   await propertyService.savePropertyVisitSlots(propertyId, visitSlots)
+      // }
 
       toast.success("Annonce créée avec succès !")
       router.push(`/owner/properties/${propertyId}/success`)
@@ -339,21 +315,6 @@ export default function NewPropertyPage() {
     return false
   }
 
-  // Fonction sécurisée pour obtenir le nombre d'images
-  const getImagesCount = () => {
-    return Array.isArray(uploadedImages) ? uploadedImages.length : 0
-  }
-
-  // Fonction sécurisée pour obtenir le nombre de documents
-  const getDocumentsCount = () => {
-    return Array.isArray(uploadedDocuments) ? uploadedDocuments.length : 0
-  }
-
-  // Fonction sécurisée pour obtenir le nombre de créneaux
-  const getSlotsCount = () => {
-    return Array.isArray(visitSlots) ? visitSlots.length : 0
-  }
-
   if (!currentUser) {
     return (
       <div className="container mx-auto py-8">
@@ -366,6 +327,10 @@ export default function NewPropertyPage() {
       </div>
     )
   }
+
+  const imagesCount = Array.isArray(uploadedImages) ? uploadedImages.length : 0
+  const docsCount = Array.isArray(uploadedDocuments) ? uploadedDocuments.length : 0
+  const slotsCount = Array.isArray(visitSlots) ? visitSlots.length : 0
 
   return (
     <div className="container mx-auto py-8 max-w-4xl">
@@ -951,24 +916,29 @@ export default function NewPropertyPage() {
 
         {/* Étape 3: Créneaux de visite */}
         {currentStep === 3 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Calendar className="h-5 w-5 mr-2" />
-                Créneaux de visite
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {!createdPropertyId ? (
-                <div className="text-center py-8">
-                  <p className="text-gray-600">Création de la propriété en cours...</p>
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mt-2"></div>
-                </div>
-              ) : (
-                <VisitScheduler propertyId={createdPropertyId} onSlotsChange={setVisitSlots} />
-              )}
-            </CardContent>
-          </Card>
+                  <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Calendar className="h-5 w-5 mr-2" />
+              Créneaux de visite
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!createdPropertyId ? (
+              <div className="text-center py-8">
+                <p className="text-gray-600">Création de la propriété en cours...</p>
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mt-2"></div>
+              </div>
+            ) : (
+              <VisitScheduler
+                visitSlots={visitSlots}
+                onSlotsChange={setVisitSlots}
+                mode="creation"
+                propertyId={createdPropertyId}
+              />
+            )}
+          </CardContent>
+        </Card>
         )}
 
         {/* Étape 4: Documents */}
