@@ -7,7 +7,22 @@ import { useRouter, useParams, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Edit, Trash2, Eye, Calendar, MapPin, Home, Bed, Bath, Square, Upload, X } from "lucide-react"
+import {
+  ArrowLeft,
+  Edit,
+  Trash2,
+  Eye,
+  Calendar,
+  MapPin,
+  Home,
+  Bed,
+  Bath,
+  Square,
+  Upload,
+  X,
+  Pause,
+  Play,
+} from "lucide-react"
 import Link from "next/link"
 import { propertyService } from "@/lib/property-service"
 import { authService } from "@/lib/auth-service"
@@ -18,6 +33,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { PropertyDocumentsManager } from "@/components/property-documents-manager"
+import { ApplicationsList } from "@/components/applications-list"
 
 export default function PropertyDetailPage() {
   const router = useRouter()
@@ -470,6 +486,34 @@ export default function PropertyDetailPage() {
                     </Link>
                   </Button>
 
+                  <Button
+                    variant={property.available ? "secondary" : "default"}
+                    className="w-full"
+                    onClick={async () => {
+                      try {
+                        await propertyService.updateProperty(property.id, {
+                          available: !property.available,
+                        })
+                        setProperty((prev) => ({ ...prev, available: !prev.available }))
+                        toast.success(property.available ? "Annonce mise en pause" : "Annonce réactivée")
+                      } catch (error) {
+                        toast.error("Erreur lors de la modification")
+                      }
+                    }}
+                  >
+                    {property.available ? (
+                      <>
+                        <Pause className="h-4 w-4 mr-2" />
+                        Mettre en pause
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-4 w-4 mr-2" />
+                        Réactiver l'annonce
+                      </>
+                    )}
+                  </Button>
+
                   <Button variant="destructive" className="w-full" onClick={handleDelete}>
                     <Trash2 className="h-4 w-4 mr-2" />
                     Supprimer le bien
@@ -556,10 +600,7 @@ export default function PropertyDetailPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-8 text-gray-500">
-                <p>Chargement des candidatures...</p>
-                <p className="text-sm mt-2">Les candidatures pour ce bien apparaîtront ici</p>
-              </div>
+              <ApplicationsList propertyId={property.id} />
             </CardContent>
           </Card>
         </TabsContent>

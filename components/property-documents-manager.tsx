@@ -30,11 +30,17 @@ export function PropertyDocumentsManager({ propertyId }: PropertyDocumentsManage
   const loadDocuments = async () => {
     try {
       setLoading(true)
+      console.log("🔄 Chargement documents pour propriété:", propertyId)
+
+      // Debug de la structure de table
+      await propertyDocumentsService.debugTableStructure()
+
       const docs = await propertyDocumentsService.getPropertyDocuments(propertyId)
+      console.log("📄 Documents chargés:", docs)
       setDocuments(docs)
     } catch (error: any) {
-      console.error("Erreur chargement documents:", error)
-      toast.error("Erreur lors du chargement des documents")
+      console.error("❌ Erreur chargement documents:", error)
+      toast.error(`Erreur lors du chargement des documents: ${error.message}`)
     } finally {
       setLoading(false)
     }
@@ -49,7 +55,7 @@ export function PropertyDocumentsManager({ propertyId }: PropertyDocumentsManage
       toast.success("Document supprimé avec succès")
     } catch (error: any) {
       console.error("Erreur suppression:", error)
-      toast.error("Erreur lors de la suppression")
+      toast.error(`Erreur lors de la suppression: ${error.message}`)
     }
   }
 
@@ -67,7 +73,7 @@ export function PropertyDocumentsManager({ propertyId }: PropertyDocumentsManage
       toast.success("Document mis à jour avec succès")
     } catch (error: any) {
       console.error("Erreur mise à jour:", error)
-      toast.error("Erreur lors de la mise à jour")
+      toast.error(`Erreur lors de la mise à jour: ${error.message}`)
     }
   }
 
@@ -98,7 +104,7 @@ export function PropertyDocumentsManager({ propertyId }: PropertyDocumentsManage
       toast.success("Document ajouté avec succès")
     } catch (error: any) {
       console.error("Erreur upload:", error)
-      toast.error("Erreur lors de l'upload du document")
+      toast.error(`Erreur lors de l'upload du document: ${error.message}`)
     }
   }
 
@@ -133,6 +139,21 @@ export function PropertyDocumentsManager({ propertyId }: PropertyDocumentsManage
 
   return (
     <div className="space-y-6">
+      {/* Debug info */}
+      <Card className="border-yellow-200 bg-yellow-50">
+        <CardContent className="p-4">
+          <div className="text-sm text-yellow-800">
+            <p>
+              <strong>Debug:</strong> Propriété ID: {propertyId}
+            </p>
+            <p>Documents trouvés: {documents.length}</p>
+            <Button variant="outline" size="sm" onClick={loadDocuments} className="mt-2">
+              Recharger les documents
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Statistiques */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
@@ -232,7 +253,7 @@ export function PropertyDocumentsManager({ propertyId }: PropertyDocumentsManage
               <Input
                 id="global-document-file"
                 type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
                 onChange={(e) => {
                   const file = e.target.files?.[0]
                   if (file && selectedType) {
@@ -365,7 +386,7 @@ export function PropertyDocumentsManager({ propertyId }: PropertyDocumentsManage
                                   <Label>Nouveau fichier</Label>
                                   <Input
                                     type="file"
-                                    accept=".pdf,.jpg,.jpeg,.png"
+                                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
                                     onChange={(e) => setUploadingFile(e.target.files?.[0] || null)}
                                   />
                                 </div>

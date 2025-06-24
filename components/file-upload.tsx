@@ -13,7 +13,7 @@ interface FileUploadProps {
   acceptedTypes?: string[]
   folder?: string
   existingFiles?: string[]
-  bucket?: string // Nouvelle prop pour forcer un bucket
+  bucket?: string
 }
 
 export function FileUpload({
@@ -22,7 +22,7 @@ export function FileUpload({
   acceptedTypes = ["image/*"],
   folder = "general",
   existingFiles = [],
-  bucket, // Utiliser cette prop si fournie
+  bucket,
 }: FileUploadProps) {
   const [isUploading, setIsUploading] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState<string[]>(existingFiles)
@@ -88,7 +88,6 @@ export function FileUpload({
 
   const handleFileInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     handleFiles(e.target.files)
-    // Reset input pour permettre de sélectionner le même fichier
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
@@ -122,6 +121,13 @@ export function FileUpload({
   }
 
   const acceptString = acceptedTypes.join(",")
+
+  // Fonction pour détecter si c'est une image
+  const isImageFile = (url: string) => {
+    const imageExtensions = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"]
+    const urlLower = url.toLowerCase()
+    return imageExtensions.some((ext) => urlLower.includes(ext)) || url.includes("image")
+  }
 
   return (
     <div className="space-y-4">
@@ -176,53 +182,45 @@ export function FileUpload({
       {/* Aperçu des fichiers uploadés */}
       {Array.isArray(uploadedFiles) && uploadedFiles.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {uploadedFiles.map((url, index) => {
-            const isImage =
-              url.includes(".jpg") ||
-              url.includes(".jpeg") ||
-              url.includes(".png") ||
-              url.includes(".gif") ||
-              url.includes(".webp")
-
-            return (
-              <div key={index} className="relative group">
-                <div className="aspect-square rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center">
-                  {isImage ? (
-                    <img
-                      src={url || "/placeholder.svg"}
-                      alt={`Upload ${index + 1}`}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement
-                        target.style.display = "none"
-                        const fallback = target.nextElementSibling as HTMLElement
-                        if (fallback) {
-                          fallback.classList.remove("hidden")
-                        }
-                      }}
-                    />
-                  ) : (
-                    <div className="flex flex-col items-center justify-center p-4">
-                      <FileText className="h-12 w-12 text-gray-400 mb-2" />
-                      <span className="text-xs text-gray-500 text-center truncate w-full">Document</span>
-                    </div>
-                  )}
-                  <div className="hidden w-full h-full flex items-center justify-center">
-                    <ImageIcon className="h-8 w-8 text-gray-400" />
+          {uploadedFiles.map((url, index) => (
+            <div key={index} className="relative group">
+              <div className="aspect-square rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center">
+                {isImageFile(url) ? (
+                  <img
+                    src={url || "/placeholder.svg"}
+                    alt={`Upload ${index + 1}`}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      console.log("❌ Erreur chargement image:", url)
+                      const target = e.target as HTMLImageElement
+                      target.style.display = "none"
+                      const fallback = target.nextElementSibling as HTMLElement
+                      if (fallback) {
+                        fallback.classList.remove("hidden")
+                      }
+                    }}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-4">
+                    <FileText className="h-12 w-12 text-gray-400 mb-2" />
+                    <span className="text-xs text-gray-500 text-center truncate w-full">Document</span>
                   </div>
+                )}
+                <div className="hidden w-full h-full flex items-center justify-center">
+                  <ImageIcon className="h-8 w-8 text-gray-400" />
                 </div>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={() => removeFile(index)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
               </div>
-            )
-          })}
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={() => removeFile(index)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
         </div>
       )}
     </div>

@@ -39,6 +39,28 @@ export default function EditPropertyPage() {
     postal_code: "",
     furnished: false,
     available: true,
+    // Nouveaux champs ajoutés
+    floor: "",
+    total_floors: "",
+    elevator: false,
+    balcony: false,
+    terrace: false,
+    garden: false,
+    parking: false,
+    garage: false,
+    cellar: false,
+    heating_type: "",
+    energy_class: "",
+    internet: false,
+    pets_allowed: false,
+    smoking_allowed: false,
+    charges: "",
+    deposit: "",
+    availability_date: "",
+    minimum_lease_duration: "",
+    maximum_lease_duration: "",
+    utilities_included: false,
+    furnished_details: "",
   })
 
   useEffect(() => {
@@ -78,6 +100,28 @@ export default function EditPropertyPage() {
           postal_code: propertyData.postal_code || "",
           furnished: propertyData.furnished || false,
           available: propertyData.available !== false,
+          // Nouveaux champs
+          floor: propertyData.floor?.toString() || "",
+          total_floors: propertyData.total_floors?.toString() || "",
+          elevator: propertyData.elevator || false,
+          balcony: propertyData.balcony || false,
+          terrace: propertyData.terrace || false,
+          garden: propertyData.garden || false,
+          parking: propertyData.parking || false,
+          garage: propertyData.garage || false,
+          cellar: propertyData.cellar || false,
+          heating_type: propertyData.heating_type || "",
+          energy_class: propertyData.energy_class || "",
+          internet: propertyData.internet || false,
+          pets_allowed: propertyData.pets_allowed || false,
+          smoking_allowed: propertyData.smoking_allowed || false,
+          charges: propertyData.charges?.toString() || "",
+          deposit: propertyData.deposit?.toString() || "",
+          availability_date: propertyData.availability_date || "",
+          minimum_lease_duration: propertyData.minimum_lease_duration?.toString() || "",
+          maximum_lease_duration: propertyData.maximum_lease_duration?.toString() || "",
+          utilities_included: propertyData.utilities_included || false,
+          furnished_details: propertyData.furnished_details || "",
         })
       } catch (error: any) {
         console.error("Erreur lors du chargement:", error)
@@ -112,6 +156,16 @@ export default function EditPropertyPage() {
         rooms: Number.parseInt(formData.rooms),
         bedrooms: formData.bedrooms ? Number.parseInt(formData.bedrooms) : null,
         bathrooms: formData.bathrooms ? Number.parseInt(formData.bathrooms) : null,
+        floor: formData.floor ? Number.parseInt(formData.floor) : null,
+        total_floors: formData.total_floors ? Number.parseInt(formData.total_floors) : null,
+        charges: formData.charges ? Number.parseFloat(formData.charges) : null,
+        deposit: formData.deposit ? Number.parseFloat(formData.deposit) : null,
+        minimum_lease_duration: formData.minimum_lease_duration
+          ? Number.parseInt(formData.minimum_lease_duration)
+          : null,
+        maximum_lease_duration: formData.maximum_lease_duration
+          ? Number.parseInt(formData.maximum_lease_duration)
+          : null,
       }
 
       await propertyService.updateProperty(property.id, updateData)
@@ -277,6 +331,30 @@ export default function EditPropertyPage() {
                 </Select>
               </div>
             </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="charges">Charges (€)</Label>
+                <Input
+                  id="charges"
+                  type="number"
+                  value={formData.charges}
+                  onChange={(e) => handleInputChange("charges", e.target.value)}
+                  placeholder="50"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="deposit">Dépôt de garantie (€)</Label>
+                <Input
+                  id="deposit"
+                  type="number"
+                  value={formData.deposit}
+                  onChange={(e) => handleInputChange("deposit", e.target.value)}
+                  placeholder="800"
+                />
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -334,13 +412,145 @@ export default function EditPropertyPage() {
               </div>
             </div>
 
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="furnished"
-                checked={formData.furnished}
-                onCheckedChange={(checked) => handleInputChange("furnished", checked)}
-              />
-              <Label htmlFor="furnished">Bien meublé</Label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="floor">Étage</Label>
+                <Input
+                  id="floor"
+                  type="number"
+                  value={formData.floor}
+                  onChange={(e) => handleInputChange("floor", e.target.value)}
+                  placeholder="2"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="total_floors">Nombre d'étages total</Label>
+                <Input
+                  id="total_floors"
+                  type="number"
+                  value={formData.total_floors}
+                  onChange={(e) => handleInputChange("total_floors", e.target.value)}
+                  placeholder="5"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="furnished"
+                  checked={formData.furnished}
+                  onCheckedChange={(checked) => handleInputChange("furnished", checked)}
+                />
+                <Label htmlFor="furnished">Meublé</Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="elevator"
+                  checked={formData.elevator}
+                  onCheckedChange={(checked) => handleInputChange("elevator", checked)}
+                />
+                <Label htmlFor="elevator">Ascenseur</Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="balcony"
+                  checked={formData.balcony}
+                  onCheckedChange={(checked) => handleInputChange("balcony", checked)}
+                />
+                <Label htmlFor="balcony">Balcon</Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="terrace"
+                  checked={formData.terrace}
+                  onCheckedChange={(checked) => handleInputChange("terrace", checked)}
+                />
+                <Label htmlFor="terrace">Terrasse</Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="garden"
+                  checked={formData.garden}
+                  onCheckedChange={(checked) => handleInputChange("garden", checked)}
+                />
+                <Label htmlFor="garden">Jardin</Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="parking"
+                  checked={formData.parking}
+                  onCheckedChange={(checked) => handleInputChange("parking", checked)}
+                />
+                <Label htmlFor="parking">Parking</Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="garage"
+                  checked={formData.garage}
+                  onCheckedChange={(checked) => handleInputChange("garage", checked)}
+                />
+                <Label htmlFor="garage">Garage</Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="cellar"
+                  checked={formData.cellar}
+                  onCheckedChange={(checked) => handleInputChange("cellar", checked)}
+                />
+                <Label htmlFor="cellar">Cave</Label>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="heating_type">Type de chauffage</Label>
+                <Select
+                  value={formData.heating_type}
+                  onValueChange={(value) => handleInputChange("heating_type", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionnez" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="individual_gas">Gaz individuel</SelectItem>
+                    <SelectItem value="collective_gas">Gaz collectif</SelectItem>
+                    <SelectItem value="electric">Électrique</SelectItem>
+                    <SelectItem value="fuel">Fioul</SelectItem>
+                    <SelectItem value="heat_pump">Pompe à chaleur</SelectItem>
+                    <SelectItem value="wood">Bois</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="energy_class">Classe énergétique</Label>
+                <Select
+                  value={formData.energy_class}
+                  onValueChange={(value) => handleInputChange("energy_class", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionnez" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="A">A</SelectItem>
+                    <SelectItem value="B">B</SelectItem>
+                    <SelectItem value="C">C</SelectItem>
+                    <SelectItem value="D">D</SelectItem>
+                    <SelectItem value="E">E</SelectItem>
+                    <SelectItem value="F">F</SelectItem>
+                    <SelectItem value="G">G</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="flex items-center space-x-2">
@@ -394,6 +604,79 @@ export default function EditPropertyPage() {
                 />
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Conditions de location */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Conditions de location</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="availability_date">Date de disponibilité</Label>
+                <Input
+                  id="availability_date"
+                  type="date"
+                  value={formData.availability_date}
+                  onChange={(e) => handleInputChange("availability_date", e.target.value)}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="minimum_lease_duration">Durée minimum (mois)</Label>
+                <Input
+                  id="minimum_lease_duration"
+                  type="number"
+                  value={formData.minimum_lease_duration}
+                  onChange={(e) => handleInputChange("minimum_lease_duration", e.target.value)}
+                  placeholder="12"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="pets_allowed"
+                  checked={formData.pets_allowed}
+                  onCheckedChange={(checked) => handleInputChange("pets_allowed", checked)}
+                />
+                <Label htmlFor="pets_allowed">Animaux autorisés</Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="smoking_allowed"
+                  checked={formData.smoking_allowed}
+                  onCheckedChange={(checked) => handleInputChange("smoking_allowed", checked)}
+                />
+                <Label htmlFor="smoking_allowed">Fumeurs autorisés</Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="internet"
+                  checked={formData.internet}
+                  onCheckedChange={(checked) => handleInputChange("internet", checked)}
+                />
+                <Label htmlFor="internet">Internet inclus</Label>
+              </div>
+            </div>
+
+            {formData.furnished && (
+              <div>
+                <Label htmlFor="furnished_details">Détails ameublement</Label>
+                <Textarea
+                  id="furnished_details"
+                  value={formData.furnished_details}
+                  onChange={(e) => handleInputChange("furnished_details", e.target.value)}
+                  placeholder="Décrivez l'ameublement..."
+                  rows={3}
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
 
