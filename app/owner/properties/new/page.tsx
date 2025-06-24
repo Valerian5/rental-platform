@@ -916,29 +916,24 @@ export default function NewPropertyPage() {
 
         {/* Étape 3: Créneaux de visite */}
         {currentStep === 3 && (
-                  <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Calendar className="h-5 w-5 mr-2" />
-              Créneaux de visite
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {!createdPropertyId ? (
-              <div className="text-center py-8">
-                <p className="text-gray-600">Création de la propriété en cours...</p>
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mt-2"></div>
-              </div>
-            ) : (
-              <VisitScheduler
-                visitSlots={visitSlots}
-                onSlotsChange={setVisitSlots}
-                mode="creation"
-                propertyId={createdPropertyId}
-              />
-            )}
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Calendar className="h-5 w-5 mr-2" />
+                Créneaux de visite
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!createdPropertyId ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-600">Création de la propriété en cours...</p>
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mt-2"></div>
+                </div>
+              ) : (
+                <VisitScheduler propertyId={createdPropertyId} onSlotsChange={setVisitSlots} />
+              )}
+            </CardContent>
+          </Card>
         )}
 
         {/* Étape 4: Documents */}
