@@ -258,6 +258,7 @@ export function PropertyDocumentsUpload({
                     maxFiles={1}
                     acceptedTypes={["application/pdf", "image/*"]}
                     folder={`properties/${propertyId}/documents`}
+                    bucket="property-documents"
                     disabled={uploadingDocuments.has(document.id)}
                   />
                   {uploadingDocuments.has(document.id) && (
@@ -312,6 +313,7 @@ export function PropertyDocumentsUpload({
                       maxFiles={1}
                       acceptedTypes={["application/pdf", "image/*"]}
                       folder={`properties/${propertyId}/documents`}
+                      bucket="property-documents"
                       disabled={uploadingDocuments.has(document.id)}
                     />
                     {uploadingDocuments.has(document.id) && (
