@@ -7,8 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { FileText, Check, AlertTriangle, X } from "lucide-react"
 import { FileUpload } from "@/components/file-upload"
-import { propertyDocumentsService } from "@/lib/property-documents-service"
 import { toast } from "sonner"
+import { supabase } from "@/lib/supabase"
 
 interface PropertyDocument {
   id: string
@@ -133,30 +133,50 @@ export function PropertyDocumentsUpload({
     setDocuments(allDocuments.map((doc) => ({ ...doc })))
   }, [showRequiredOnly])
 
-  const handleDocumentUpload = async (documentId: string, files: File[]) => {
-    console.log("📄 handleDocumentUpload appelé:", documentId, files.length, "fichiers")
+  const handleDocumentUpload = async (documentId: string, files: string[]) => {
+    console.log("📄 handleDocumentUpload appelé:", documentId, files.length, "URLs")
 
     if (files.length === 0) {
-      console.log("❌ Aucun fichier fourni")
+      console.log("❌ Aucune URL fournie")
       return
     }
 
-    const file = files[0]
-    console.log("📄 Fichier à traiter:", file.name, file.type, file.size)
+    const fileUrl = files[0]
+    console.log("📄 URL à traiter:", fileUrl)
 
     setUploadingDocuments((prev) => new Set([...prev, documentId]))
 
     try {
-      console.log("📤 Upload du document via service...")
+      console.log("💾 Sauvegarde des métadonnées du document...")
 
-      // Utiliser le vrai service au lieu de simuler
-      const uploadedDocument = await propertyDocumentsService.uploadDocument(propertyId, file, documentId)
+      // Extraire le nom du fichier depuis l'URL
+      const urlParts = fileUrl.split("/")
+      const fileName = urlParts[urlParts.length - 1]
 
-      console.log("✅ Document uploadé avec succès:", uploadedDocument)
+      // Créer les métadonnées du document
+      const documentData = {
+        property_id: propertyId,
+        document_type: documentId,
+        document_name: fileName,
+        file_url: fileUrl,
+        file_size: 0, // On ne connaît pas la taille depuis l'URL
+        uploaded_at: new Date().toISOString(),
+      }
+
+      console.log("💾 Sauvegarde métadonnées:", documentData)
+
+      const { data, error } = await supabase.from("property_documents").insert(documentData).select().single()
+
+      if (error) {
+        console.error("❌ Erreur sauvegarde document:", error)
+        throw new Error(`Erreur sauvegarde: ${error.message}`)
+      }
+
+      console.log("✅ Document sauvegardé avec ID:", data.id)
 
       // Mettre à jour l'état local
       setDocuments((prev) =>
-        prev.map((doc) => (doc.id === documentId ? { ...doc, uploaded: true, url: uploadedDocument.file_url } : doc)),
+        prev.map((doc) => (doc.id === documentId ? { ...doc, uploaded: true, url: fileUrl } : doc)),
       )
 
       toast.success("Document uploadé avec succès")
@@ -164,7 +184,7 @@ export function PropertyDocumentsUpload({
       // Notifier le parent
       if (onDocumentsChange) {
         const updatedDocs = documents.map((doc) =>
-          doc.id === documentId ? { ...doc, uploaded: true, url: uploadedDocument.file_url } : doc,
+          doc.id === documentId ? { ...doc, uploaded: true, url: fileUrl } : doc,
         )
         onDocumentsChange(updatedDocs.filter((doc) => doc.uploaded))
       }
@@ -290,7 +310,6 @@ export function PropertyDocumentsUpload({
                     folder={`properties/${propertyId}/documents`}
                     bucket="property-documents"
                     disabled={uploadingDocuments.has(document.id)}
-                    mode="direct"
                   />
                   {uploadingDocuments.has(document.id) && (
                     <div className="flex items-center mt-2 text-sm text-gray-600">
@@ -346,7 +365,6 @@ export function PropertyDocumentsUpload({
                       folder={`properties/${propertyId}/documents`}
                       bucket="property-documents"
                       disabled={uploadingDocuments.has(document.id)}
-                      mode="direct"
                     />
                     {uploadingDocuments.has(document.id) && (
                       <div className="flex items-center mt-2 text-sm text-gray-600">

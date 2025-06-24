@@ -234,8 +234,10 @@ export default function NewPropertyPage() {
         return isValid2
 
       case 3:
-        console.log("✅ Étape 3 valide (créneaux optionnels)")
-        return true // Créneaux optionnels
+        const slotsCount = Array.isArray(visitSlots) ? visitSlots.length : 0
+        const isValid3 = slotsCount > 0
+        console.log("📅 Créneaux de visite:", slotsCount, "- Valide:", isValid3)
+        return isValid3
 
       case 4:
         console.log("✅ Étape 4 valide (documents optionnels)")
@@ -282,7 +284,19 @@ export default function NewPropertyPage() {
       setCurrentStep((prev) => prev + 1)
     } else {
       console.log("❌ Validation échouée pour l'étape", currentStep)
-      toast.error("Veuillez remplir tous les champs obligatoires")
+
+      // Message d'erreur spécifique selon l'étape
+      let errorMessage = "Veuillez remplir tous les champs obligatoires"
+
+      if (currentStep === 1) {
+        errorMessage = "Veuillez remplir tous les champs obligatoires (titre, description, adresse, prix, surface)"
+      } else if (currentStep === 2) {
+        errorMessage = "Veuillez ajouter au moins une photo de votre bien"
+      } else if (currentStep === 3) {
+        errorMessage = "Veuillez définir au moins un créneau de visite"
+      }
+
+      toast.error(errorMessage)
     }
   }
 
@@ -959,6 +973,16 @@ export default function NewPropertyPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <h3 className="font-semibold text-blue-800 mb-2">📅 Créneaux de visite obligatoires</h3>
+                <div className="text-blue-700 text-sm space-y-2">
+                  <p>
+                    • Au moins <strong>un créneau de visite</strong> doit être défini pour publier votre annonce
+                  </p>
+                  <p>• Les locataires pourront choisir parmi ces créneaux pour planifier leur visite</p>
+                  <p>• Vous pourrez modifier ces créneaux plus tard depuis la page de gestion du bien</p>
+                </div>
+              </div>
               {!createdPropertyId ? (
                 <div className="text-center py-8">
                   <p className="text-gray-600">Création de la propriété en cours...</p>
