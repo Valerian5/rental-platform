@@ -965,7 +965,12 @@ export default function NewPropertyPage() {
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mt-2"></div>
                 </div>
               ) : (
-                <VisitScheduler propertyId={createdPropertyId} onSlotsChange={setVisitSlots} />
+                <VisitScheduler
+                  propertyId={createdPropertyId}
+                  visitSlots={visitSlots}
+                  mode="creation"
+                  onSlotsChange={setVisitSlots}
+                />
               )}
             </CardContent>
           </Card>
