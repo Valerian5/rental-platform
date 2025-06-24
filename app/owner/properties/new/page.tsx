@@ -83,18 +83,6 @@ interface PropertyFormData {
   owner_id: string
 }
 
-// Liste des clés équipements
-const EQUIPMENT_KEYS = [
-  "equipped_kitchen", "bathtub", "shower", "dishwasher", "washing_machine",
-  "dryer", "fridge", "oven", "microwave", "air_conditioning", "fireplace",
-  "parking", "cellar", "elevator", "intercom", "digicode"
-]
-
-// Fonction utilitaire pour créer le tableau d'équipements cochés
-function buildEquipmentArray(formData: PropertyFormData): string[] {
-  return EQUIPMENT_KEYS.filter((key) => (formData as any)[key])
-}
-
 const PROPERTY_TYPES = [
   { value: "apartment", label: "Appartement" },
   { value: "house", label: "Maison" },
@@ -214,10 +202,20 @@ export default function NewPropertyPage() {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
+  // Fonction sécurisée pour gérer les images uploadées
+  const handleFilesUploaded = (urls: string[] | undefined) => {
+    console.log("📸 handleFilesUploaded appelé avec:", urls)
+    const safeUrls = Array.isArray(urls) ? urls : []
+    console.log("📸 URLs sécurisées:", safeUrls)
+    setUploadedImages(safeUrls)
+  }
+
   const validateStep = (step: number): boolean => {
+    console.log(`🔍 Validation étape ${step}`)
+
     switch (step) {
       case 1:
-        return !!(
+        const isValid1 = !!(
           formData.title &&
           formData.description &&
           formData.address &&
@@ -226,43 +224,52 @@ export default function NewPropertyPage() {
           formData.price > 0 &&
           formData.surface > 0
         )
+        console.log("✅ Étape 1 valide:", isValid1)
+        return isValid1
+
       case 2:
-        return Array.isArray(uploadedImages) && uploadedImages.length > 0
+        const imagesCount = Array.isArray(uploadedImages) ? uploadedImages.length : 0
+        const isValid2 = imagesCount > 0
+        console.log("📸 Images uploadées:", imagesCount, "- Valide:", isValid2)
+        return isValid2
+
       case 3:
+        console.log("✅ Étape 3 valide (créneaux optionnels)")
         return true // Créneaux optionnels
+
       case 4:
+        console.log("✅ Étape 4 valide (documents optionnels)")
         return true // Documents optionnels pour l'instant
+
       default:
         return true
     }
   }
 
   const nextStep = async () => {
+    console.log(`🚀 nextStep appelé - Étape actuelle: ${currentStep}`)
+
     if (validateStep(currentStep)) {
       // Si on passe de l'étape 2 à 3, créer la propriété
       if (currentStep === 2 && !createdPropertyId) {
+        console.log("🏠 Création de la propriété...")
         setIsSubmitting(true)
-        try {
-          // PATCH : mapping équipements
-          const {
-            equipped_kitchen, bathtub, shower, dishwasher, washing_machine, dryer, fridge, oven, microwave,
-            air_conditioning, fireplace, parking, cellar, elevator, intercom, digicode,
-            ...rest
-          } = formData
-          const equipment = buildEquipmentArray(formData)
-          const propertyToSend = { ...rest, equipment }
 
-          const property = await propertyService.createProperty(propertyToSend)
+        try {
+          const property = await propertyService.createProperty(formData)
           setCreatedPropertyId(property.id)
+          console.log("✅ Propriété créée:", property.id)
 
           // Uploader les images si présentes
-          if (Array.isArray(uploadedImages) && uploadedImages.length > 0) {
-            await propertyService.uploadPropertyImages(property.id, uploadedImages)
+          const safeImages = Array.isArray(uploadedImages) ? uploadedImages : []
+          if (safeImages.length > 0) {
+            console.log("📸 Upload des images:", safeImages.length)
+            await propertyService.uploadPropertyImages(property.id, safeImages)
           }
 
           toast.success("Propriété créée, vous pouvez maintenant configurer les créneaux de visite")
         } catch (error: any) {
-          console.error("Erreur création propriété:", error)
+          console.error("❌ Erreur création propriété:", error)
           toast.error("Erreur lors de la création de la propriété")
           setIsSubmitting(false)
           return
@@ -271,13 +278,16 @@ export default function NewPropertyPage() {
         }
       }
 
+      console.log(`➡️ Passage à l'étape ${currentStep + 1}`)
       setCurrentStep((prev) => prev + 1)
     } else {
+      console.log("❌ Validation échouée pour l'étape", currentStep)
       toast.error("Veuillez remplir tous les champs obligatoires")
     }
   }
 
   const prevStep = () => {
+    console.log(`⬅️ Retour à l'étape ${currentStep - 1}`)
     setCurrentStep((prev) => prev - 1)
   }
 
@@ -294,21 +304,13 @@ export default function NewPropertyPage() {
 
       // Si la propriété n'a pas encore été créée, la créer maintenant
       if (!propertyId) {
-        // PATCH : mapping équipements
-        const {
-          equipped_kitchen, bathtub, shower, dishwasher, washing_machine, dryer, fridge, oven, microwave,
-          air_conditioning, fireplace, parking, cellar, elevator, intercom, digicode,
-          ...rest
-        } = formData
-        const equipment = buildEquipmentArray(formData)
-        const propertyToSend = { ...rest, equipment }
-
-        const property = await propertyService.createProperty(propertyToSend)
+        const property = await propertyService.createProperty(formData)
         propertyId = property.id
 
         // Uploader les images si présentes
-        if (Array.isArray(uploadedImages) && uploadedImages.length > 0) {
-          await propertyService.uploadPropertyImages(propertyId, uploadedImages)
+        const safeImages = Array.isArray(uploadedImages) ? uploadedImages : []
+        if (safeImages.length > 0) {
+          await propertyService.uploadPropertyImages(propertyId, safeImages)
         }
       }
 
@@ -337,6 +339,21 @@ export default function NewPropertyPage() {
     return false
   }
 
+  // Fonction sécurisée pour obtenir le nombre d'images
+  const getImagesCount = () => {
+    return Array.isArray(uploadedImages) ? uploadedImages.length : 0
+  }
+
+  // Fonction sécurisée pour obtenir le nombre de documents
+  const getDocumentsCount = () => {
+    return Array.isArray(uploadedDocuments) ? uploadedDocuments.length : 0
+  }
+
+  // Fonction sécurisée pour obtenir le nombre de créneaux
+  const getSlotsCount = () => {
+    return Array.isArray(visitSlots) ? visitSlots.length : 0
+  }
+
   if (!currentUser) {
     return (
       <div className="container mx-auto py-8">
@@ -349,11 +366,6 @@ export default function NewPropertyPage() {
       </div>
     )
   }
-
-  // Fallbacks robustes dans le JSX pour éviter erreur .length sur undefined
-  const imagesCount = Array.isArray(uploadedImages) ? uploadedImages.length : 0
-  const docsCount = Array.isArray(uploadedDocuments) ? uploadedDocuments.length : 0
-  const slotsCount = Array.isArray(visitSlots) ? visitSlots.length : 0
 
   return (
     <div className="container mx-auto py-8 max-w-4xl">
@@ -927,7 +939,7 @@ export default function NewPropertyPage() {
             </CardHeader>
             <CardContent>
               <FileUpload
-                onFilesUploaded={setUploadedImages}
+                onFilesUploaded={handleFilesUploaded}
                 maxFiles={10}
                 acceptedTypes={["image/*"]}
                 folder="properties"
@@ -1032,21 +1044,18 @@ export default function NewPropertyPage() {
                   <h4 className="font-semibold mb-2">Statut</h4>
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <Badge
-                        variant={Array.isArray(uploadedImages) && uploadedImages.length > 0 ? "default" : "secondary"}
-                      >
-                        {Array.isArray(uploadedImages) && uploadedImages.length > 0 ? "✓" : "○"} Photos (
-                        {Array.isArray(uploadedImages) ? uploadedImages.length : 0})
+                      <Badge variant={getImagesCount() > 0 ? "default" : "secondary"}>
+                        {getImagesCount() > 0 ? "✓" : "○"} Photos ({getImagesCount()})
                       </Badge>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant={visitSlots.length > 0 ? "default" : "secondary"}>
-                        {visitSlots.length > 0 ? "✓" : "○"} Créneaux ({visitSlots.length})
+                      <Badge variant={getSlotsCount() > 0 ? "default" : "secondary"}>
+                        {getSlotsCount() > 0 ? "✓" : "○"} Créneaux ({getSlotsCount()})
                       </Badge>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant={uploadedDocuments.length > 0 ? "default" : "secondary"}>
-                        {uploadedDocuments.length > 0 ? "✓" : "○"} Documents ({uploadedDocuments.length})
+                      <Badge variant={getDocumentsCount() > 0 ? "default" : "secondary"}>
+                        {getDocumentsCount() > 0 ? "✓" : "○"} Documents ({getDocumentsCount()})
                       </Badge>
                     </div>
                   </div>
