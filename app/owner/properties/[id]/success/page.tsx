@@ -10,7 +10,7 @@ import Link from "next/link"
 import { propertyService } from "@/lib/property-service"
 import { authService } from "@/lib/auth-service"
 import { toast } from "sonner"
-import { supabase } from "@/lib/supabase-client"
+import { supabase } from "@/lib/supabase"
 
 export default function PropertySuccessPage() {
   const router = useRouter()
