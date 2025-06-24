@@ -215,7 +215,7 @@ export default function NewPropertyPage() {
           formData.surface > 0
         )
       case 2:
-        return uploadedImages.length > 0
+        return Array.isArray(uploadedImages) && uploadedImages.length > 0
       case 3:
         return true // Créneaux optionnels
       case 4:
@@ -235,7 +235,7 @@ export default function NewPropertyPage() {
           setCreatedPropertyId(property.id)
 
           // Uploader les images si présentes
-          if (uploadedImages.length > 0) {
+          if (Array.isArray(uploadedImages) && uploadedImages.length > 0) {
             await propertyService.uploadPropertyImages(property.id, uploadedImages)
           }
 
@@ -997,8 +997,11 @@ export default function NewPropertyPage() {
                   <h4 className="font-semibold mb-2">Statut</h4>
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <Badge variant={uploadedImages.length > 0 ? "default" : "secondary"}>
-                        {uploadedImages.length > 0 ? "✓" : "○"} Photos ({uploadedImages.length})
+                      <Badge
+                        variant={Array.isArray(uploadedImages) && uploadedImages.length > 0 ? "default" : "secondary"}
+                      >
+                        {Array.isArray(uploadedImages) && uploadedImages.length > 0 ? "✓" : "○"} Photos (
+                        {Array.isArray(uploadedImages) ? uploadedImages.length : 0})
                       </Badge>
                     </div>
                     <div className="flex items-center gap-2">

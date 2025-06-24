@@ -31,8 +31,9 @@ export function FileUpload({
     if (!files || files.length === 0) return
 
     const fileArray = Array.from(files)
+    const currentFiles = Array.isArray(uploadedFiles) ? uploadedFiles : []
 
-    if (uploadedFiles.length + fileArray.length > maxFiles) {
+    if (currentFiles.length + fileArray.length > maxFiles) {
       toast.error(`Maximum ${maxFiles} fichiers autorisés`)
       return
     }
@@ -60,7 +61,7 @@ export function FileUpload({
         console.log("✅ Fichier uploadé:", result.url)
       }
 
-      const allFiles = [...uploadedFiles, ...newUrls]
+      const allFiles = [...currentFiles, ...newUrls]
       setUploadedFiles(allFiles)
       onFilesUploaded(allFiles)
 
@@ -98,7 +99,8 @@ export function FileUpload({
   }
 
   const removeFile = (indexToRemove: number) => {
-    const newFiles = uploadedFiles.filter((_, index) => index !== indexToRemove)
+    const currentFiles = Array.isArray(uploadedFiles) ? uploadedFiles : []
+    const newFiles = currentFiles.filter((_, index) => index !== indexToRemove)
     setUploadedFiles(newFiles)
     onFilesUploaded(newFiles)
   }
@@ -148,7 +150,7 @@ export function FileUpload({
                   {isDragOver ? "Déposez les fichiers ici" : "Glissez-déposez vos fichiers ici"}
                 </p>
                 <p className="text-gray-500 mb-4">
-                  ou cliquez pour sélectionner ({uploadedFiles.length}/{maxFiles})
+                  ou cliquez pour sélectionner ({Array.isArray(uploadedFiles) ? uploadedFiles.length : 0}/{maxFiles})
                 </p>
                 <Button type="button" variant="outline">
                   Sélectionner des fichiers
@@ -160,7 +162,7 @@ export function FileUpload({
       </Card>
 
       {/* Aperçu des fichiers uploadés */}
-      {uploadedFiles.length > 0 && (
+      {Array.isArray(uploadedFiles) && uploadedFiles.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {uploadedFiles.map((url, index) => (
             <div key={index} className="relative group">
