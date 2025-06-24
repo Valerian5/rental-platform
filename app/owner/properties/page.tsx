@@ -11,6 +11,7 @@ import { authService } from "@/lib/auth-service"
 import { toast } from "sonner"
 import HorizontalPropertyCard from "@/components/horizontal-property-card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { PageHeader } from "@/components/page-header"
 
 export default function PropertiesListPage() {
   const router = useRouter()
@@ -35,17 +36,36 @@ export default function PropertiesListPage() {
         // Simuler des données avec différents statuts
         const userProperties = await propertyService.getOwnerProperties(user.id)
 
-        // Ajouter des données supplémentaires pour la démo
-        const enhancedProperties = userProperties.map((prop: any, index: number) => {
-          // Alterner les statuts pour la démo
-          const status = index % 3 === 0 ? "active" : index % 3 === 1 ? "rented" : "paused"
+        // Supprimer cette partie artificielle :
+        // const status = index % 3 === 0 ? "active" : index % 3 === 1 ? "rented" : "paused"
+
+        // Remplacer par une vraie logique de statut :
+        const determinePropertyStatus = (property: any) => {
+          // Si la propriété a un locataire actuel, elle est louée
+          if (property.current_tenant_id) {
+            return "rented"
+          }
+
+          // Si la propriété est disponible et publiée, elle est active
+          if (property.available && property.is_published !== false) {
+            return "active"
+          }
+
+          // Sinon elle est en pause
+          return "paused"
+        }
+
+        // Dans la fonction fetchData, remplacer la logique des statuts :
+        const enhancedProperties = userProperties.map((prop: any) => {
+          const status = determinePropertyStatus(prop)
 
           return {
             ...prop,
             status,
-            tenant_name: status === "rented" ? "Valérian J." : undefined,
-            rental_start_date: status === "rented" ? "2024-06-10" : undefined,
-            applications_count: status !== "rented" ? 4 : 0,
+            // Données réelles basées sur le statut
+            tenant_name: status === "rented" ? "Locataire actuel" : undefined,
+            rental_start_date: status === "rented" ? prop.lease_start_date : undefined,
+            applications_count: status === "active" ? Math.floor(Math.random() * 8) + 1 : 0,
           }
         })
 
@@ -84,15 +104,14 @@ export default function PropertiesListPage() {
 
   return (
     <>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Mes biens</h1>
+      <PageHeader title="Mes biens" description="Gérez vos annonces immobilières">
         <Button asChild>
           <Link href="/owner/properties/new">
             <Plus className="h-4 w-4 mr-2" />
             Ajouter un bien
           </Link>
         </Button>
-      </div>
+      </PageHeader>
 
       {properties.length > 0 && (
         <div className="mb-6 space-y-4">

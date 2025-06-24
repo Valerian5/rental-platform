@@ -89,11 +89,10 @@ export function PropertyDocumentsManager({ propertyId }: PropertyDocumentsManage
   }
 
   const handleUploadNewDocument = async (file: File, documentType: string) => {
+    const toastId = toast.loading("Upload du document en cours...")
+
     try {
-      toast.loading("Upload du document en cours...")
-
       const newDoc = await propertyDocumentsService.uploadDocument(propertyId, file, documentType)
-
       setDocuments((prev) => [...prev, newDoc])
       setSelectedType("")
 
@@ -101,10 +100,10 @@ export function PropertyDocumentsManager({ propertyId }: PropertyDocumentsManage
       const input = document.getElementById("global-document-file") as HTMLInputElement
       if (input) input.value = ""
 
-      toast.success("Document ajouté avec succès")
+      toast.success("Document ajouté avec succès", { id: toastId })
     } catch (error: any) {
       console.error("Erreur upload:", error)
-      toast.error(`Erreur lors de l'upload du document: ${error.message}`)
+      toast.error(`Erreur lors de l'upload du document: ${error.message}`, { id: toastId })
     }
   }
 
@@ -139,21 +138,6 @@ export function PropertyDocumentsManager({ propertyId }: PropertyDocumentsManage
 
   return (
     <div className="space-y-6">
-      {/* Debug info */}
-      <Card className="border-yellow-200 bg-yellow-50">
-        <CardContent className="p-4">
-          <div className="text-sm text-yellow-800">
-            <p>
-              <strong>Debug:</strong> Propriété ID: {propertyId}
-            </p>
-            <p>Documents trouvés: {documents.length}</p>
-            <Button variant="outline" size="sm" onClick={loadDocuments} className="mt-2">
-              Recharger les documents
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Statistiques */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>

@@ -10,12 +10,14 @@ import Link from "next/link"
 import { propertyService } from "@/lib/property-service"
 import { authService } from "@/lib/auth-service"
 import { toast } from "sonner"
+import { supabase } from "@/lib/supabase-client"
 
 export default function PropertySuccessPage() {
   const router = useRouter()
   const params = useParams()
   const [property, setProperty] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [documentsCount, setDocumentsCount] = useState(0)
 
   useEffect(() => {
     const fetchProperty = async () => {
@@ -29,6 +31,20 @@ export default function PropertySuccessPage() {
         if (params.id) {
           const propertyData = await propertyService.getPropertyById(params.id as string)
           setProperty(propertyData)
+
+          if (propertyData) {
+            // Charger le nombre de documents
+            try {
+              const { data: docs } = await supabase
+                .from("property_documents")
+                .select("id")
+                .eq("property_id", propertyData.id)
+
+              setDocumentsCount(docs?.length || 0)
+            } catch (error) {
+              console.error("Erreur chargement documents:", error)
+            }
+          }
         }
       } catch (error) {
         console.error("Erreur lors du chargement du bien:", error)
@@ -181,9 +197,13 @@ export default function PropertySuccessPage() {
           <CardContent className="p-6 text-center">
             <Edit className="h-8 w-8 mx-auto mb-3 text-purple-600" />
             <h3 className="font-semibold mb-2">Ajouter des documents</h3>
-            <p className="text-sm text-gray-600 mb-4">Ajoutez les documents obligatoires</p>
+            <p className="text-sm text-gray-600 mb-4">
+              {documentsCount > 0 ? `${documentsCount} document(s) ajouté(s)` : "Ajoutez les documents obligatoires"}
+            </p>
             <Button variant="outline" size="sm" asChild>
-              <Link href={`/owner/properties/${property.id}?tab=documents`}>Ajouter des documents</Link>
+              <Link href={`/owner/properties/${property.id}?tab=documents`}>
+                {documentsCount > 0 ? "Gérer les documents" : "Ajouter des documents"}
+              </Link>
             </Button>
           </CardContent>
         </Card>
