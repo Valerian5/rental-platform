@@ -327,9 +327,10 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
     console.log("📅 Date sélectionnée:", dateStr)
     setSelectedDate(dateStr)
 
-    // Récupérer les créneaux existants pour ce jour
+    // CORRECTION: Utiliser les créneaux des props (qui incluent les créneaux temporaires)
     const existingSlots = safeVisitSlots.filter((slot) => slot.date === dateStr)
     console.log("🔍 Créneaux existants pour", dateStr, ":", existingSlots.length)
+    console.log("🔍 Tous les créneaux disponibles:", safeVisitSlots.length)
 
     if (existingSlots.length > 0) {
       // Il y a des créneaux existants
@@ -346,17 +347,25 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
           setCustomDuration(duration)
         }
 
+        // CORRECTION: Utiliser les vraies heures de début et fin des créneaux existants
+        const allStartTimes = existingSlots.map((slot) => slot.start_time).sort()
+        const allEndTimes = existingSlots.map((slot) => slot.end_time).sort()
+        const earliestStart = allStartTimes[0]
+        const latestEnd = allEndTimes[allEndTimes.length - 1]
+
         setDayConfig({
           date: dateStr,
           slotDuration: commonDuration,
-          startTime: "08:00",
-          endTime: "20:00",
+          startTime: earliestStart || "08:00",
+          endTime: latestEnd || "20:00",
           isGroupVisit: firstSlot.is_group_visit,
           capacity: firstSlot.max_capacity,
           selectedSlots: existingSlots.map(
             (slot) => `${formatTimeString(slot.start_time)}-${formatTimeString(slot.end_time)}`,
           ),
         })
+
+        console.log("✅ Configuration restaurée avec", existingSlots.length, "créneaux sélectionnés")
       } catch (error) {
         console.error("Erreur parsing créneaux existants:", error)
         setDayConfig({
@@ -371,6 +380,7 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
       }
     } else {
       // Pas de créneaux existants
+      console.log("🔄 Aucun créneau existant, configuration par défaut")
       setDayConfig({
         date: dateStr,
         slotDuration: 30,
@@ -398,7 +408,12 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
       return
     }
 
+    console.log("🚀 Application configuration pour", selectedDate)
+    console.log("🚀 Créneaux sélectionnés:", dayConfig.selectedSlots)
+    console.log("🚀 Mode:", mode)
+
     const otherDaysSlots = safeVisitSlots.filter((slot) => slot.date !== selectedDate)
+    console.log("🚀 Créneaux autres jours:", otherDaysSlots.length)
 
     const newSlots: VisitSlot[] = dayConfig.selectedSlots.map((slotKey) => {
       const [startTime, endTime] = slotKey.split("-")
@@ -413,12 +428,18 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
       }
     })
 
+    console.log("🚀 Nouveaux créneaux créés:", newSlots)
+
     const allSlots = [...otherDaysSlots, ...newSlots]
+    console.log("🚀 Total créneaux après application:", allSlots.length)
+
+    // CORRECTION: Appeler onSlotsChange AVANT la sauvegarde pour mettre à jour l'état parent
     onSlotsChange(allSlots)
 
     if (mode === "management") {
       await saveSlotsToDatabase(allSlots)
     } else {
+      console.log("✅ Mode création - créneaux stockés temporairement")
       toast.success(`${newSlots.length} créneaux configurés pour le ${formatDateForDisplay(selectedDate)}`)
     }
   }
