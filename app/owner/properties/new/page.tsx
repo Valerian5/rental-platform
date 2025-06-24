@@ -83,6 +83,18 @@ interface PropertyFormData {
   owner_id: string
 }
 
+// Liste des clés équipements
+const EQUIPMENT_KEYS = [
+  "equipped_kitchen", "bathtub", "shower", "dishwasher", "washing_machine",
+  "dryer", "fridge", "oven", "microwave", "air_conditioning", "fireplace",
+  "parking", "cellar", "elevator", "intercom", "digicode"
+]
+
+// Fonction utilitaire pour créer le tableau d'équipements cochés
+function buildEquipmentArray(formData: PropertyFormData): string[] {
+  return EQUIPMENT_KEYS.filter((key) => (formData as any)[key])
+}
+
 const PROPERTY_TYPES = [
   { value: "apartment", label: "Appartement" },
   { value: "house", label: "Maison" },
@@ -231,7 +243,16 @@ export default function NewPropertyPage() {
       if (currentStep === 2 && !createdPropertyId) {
         setIsSubmitting(true)
         try {
-          const property = await propertyService.createProperty(formData)
+          // PATCH : mapping équipements
+          const {
+            equipped_kitchen, bathtub, shower, dishwasher, washing_machine, dryer, fridge, oven, microwave,
+            air_conditioning, fireplace, parking, cellar, elevator, intercom, digicode,
+            ...rest
+          } = formData
+          const equipment = buildEquipmentArray(formData)
+          const propertyToSend = { ...rest, equipment }
+
+          const property = await propertyService.createProperty(propertyToSend)
           setCreatedPropertyId(property.id)
 
           // Uploader les images si présentes
@@ -273,17 +294,26 @@ export default function NewPropertyPage() {
 
       // Si la propriété n'a pas encore été créée, la créer maintenant
       if (!propertyId) {
-        const property = await propertyService.createProperty(formData)
+        // PATCH : mapping équipements
+        const {
+          equipped_kitchen, bathtub, shower, dishwasher, washing_machine, dryer, fridge, oven, microwave,
+          air_conditioning, fireplace, parking, cellar, elevator, intercom, digicode,
+          ...rest
+        } = formData
+        const equipment = buildEquipmentArray(formData)
+        const propertyToSend = { ...rest, equipment }
+
+        const property = await propertyService.createProperty(propertyToSend)
         propertyId = property.id
 
         // Uploader les images si présentes
-        if (uploadedImages.length > 0) {
+        if (Array.isArray(uploadedImages) && uploadedImages.length > 0) {
           await propertyService.uploadPropertyImages(propertyId, uploadedImages)
         }
       }
 
       // Sauvegarder les créneaux de visite si définis
-      if (visitSlots.length > 0) {
+      if (Array.isArray(visitSlots) && visitSlots.length > 0) {
         await propertyService.savePropertyVisitSlots(propertyId, visitSlots)
       }
 
@@ -319,6 +349,11 @@ export default function NewPropertyPage() {
       </div>
     )
   }
+
+  // Fallbacks robustes dans le JSX pour éviter erreur .length sur undefined
+  const imagesCount = Array.isArray(uploadedImages) ? uploadedImages.length : 0
+  const docsCount = Array.isArray(uploadedDocuments) ? uploadedDocuments.length : 0
+  const slotsCount = Array.isArray(visitSlots) ? visitSlots.length : 0
 
   return (
     <div className="container mx-auto py-8 max-w-4xl">
