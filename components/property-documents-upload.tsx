@@ -196,18 +196,24 @@ export function PropertyDocumentsUpload({
           <CardTitle className="flex items-center justify-between">
             <span className="flex items-center">
               <FileText className="h-5 w-5 mr-2" />
-              Progression des documents
+              Documents du bien
             </span>
-            <Badge variant={completionPercentage === 100 ? "default" : "secondary"}>
-              {uploadedRequired}/{totalRequired} obligatoires
-            </Badge>
+            <Badge variant="outline">Optionnel</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+            <p className="text-amber-800 text-sm">
+              <strong>💡 Information :</strong> Ces documents ne sont pas obligatoires maintenant, mais ils seront
+              requis lors de la signature du bail avec votre locataire.
+            </p>
+          </div>
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span>Documents obligatoires</span>
-              <span>{Math.round(completionPercentage)}%</span>
+              <span>Documents obligatoires uploadés</span>
+              <span>
+                {uploadedRequired}/{totalRequired}
+              </span>
             </div>
             <Progress value={completionPercentage} className="h-2" />
           </div>
@@ -217,9 +223,9 @@ export function PropertyDocumentsUpload({
       {/* Documents obligatoires */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center text-red-600">
+          <CardTitle className="flex items-center text-orange-600">
             <AlertTriangle className="h-5 w-5 mr-2" />
-            Documents obligatoires
+            Documents requis pour le bail
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">

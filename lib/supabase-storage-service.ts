@@ -8,20 +8,23 @@ const supabase = createClient(supabaseUrl, supabaseKey)
 export const SupabaseStorageService = {
   async uploadFile(file: File, bucket = "property-images", folder = "general") {
     console.log("📤 Upload vers Supabase:", file.name, "dans", bucket, folder)
+    console.log("📄 Type MIME:", file.type, "Taille:", file.size)
 
     try {
       // Générer un nom de fichier unique
       const fileExt = file.name.split(".").pop()
       const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
 
-      // Upload vers Supabase Storage
+      // Upload vers Supabase Storage avec options étendues
       const { data, error } = await supabase.storage.from(bucket).upload(fileName, file, {
         cacheControl: "3600",
         upsert: false,
+        contentType: file.type || "application/octet-stream",
       })
 
       if (error) {
         console.error("❌ Erreur Supabase upload:", error)
+        console.error("📄 Détails fichier:", { name: file.name, type: file.type, size: file.size })
         throw error
       }
 

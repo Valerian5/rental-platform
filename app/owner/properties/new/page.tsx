@@ -982,10 +982,24 @@ export default function NewPropertyPage() {
             <CardHeader>
               <CardTitle className="flex items-center">
                 <FileText className="h-5 w-5 mr-2" />
-                Documents obligatoires
+                Documents du bien (optionnel)
               </CardTitle>
             </CardHeader>
             <CardContent>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <h3 className="font-semibold text-blue-800 mb-2">📋 Documents optionnels</h3>
+                <div className="text-blue-700 text-sm space-y-2">
+                  <p>
+                    • Les documents ne sont <strong>pas obligatoires</strong> pour publier votre annonce
+                  </p>
+                  <p>
+                    • Ils seront <strong>requis lors de la création du bail</strong> avec le locataire
+                  </p>
+                  <p>• Vous pourrez les ajouter plus tard depuis la page de gestion du bien</p>
+                  <p>• Avoir les documents dès maintenant facilite le processus de location</p>
+                </div>
+              </div>
+
               {!createdPropertyId ? (
                 <div className="text-center py-8">
                   <p className="text-gray-600">Création de la propriété en cours...</p>
@@ -995,7 +1009,7 @@ export default function NewPropertyPage() {
                 <PropertyDocumentsUpload
                   propertyId={createdPropertyId}
                   onDocumentsChange={setUploadedDocuments}
-                  showRequiredOnly={true}
+                  showRequiredOnly={false}
                 />
               )}
             </CardContent>
