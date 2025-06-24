@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { FileText, Check, AlertTriangle, X } from "lucide-react"
 import { FileUpload } from "@/components/file-upload"
+import { propertyDocumentsService } from "@/lib/property-documents-service"
 import { toast } from "sonner"
 
 interface PropertyDocument {
@@ -129,21 +130,33 @@ export function PropertyDocumentsUpload({
 
   useEffect(() => {
     const allDocuments = showRequiredOnly ? REQUIRED_DOCUMENTS : [...REQUIRED_DOCUMENTS, ...OPTIONAL_DOCUMENTS]
-
     setDocuments(allDocuments.map((doc) => ({ ...doc })))
   }, [showRequiredOnly])
 
-  const handleDocumentUpload = async (documentId: string, files: string[]) => {
-    if (files.length === 0) return
+  const handleDocumentUpload = async (documentId: string, files: File[]) => {
+    console.log("📄 handleDocumentUpload appelé:", documentId, files.length, "fichiers")
+
+    if (files.length === 0) {
+      console.log("❌ Aucun fichier fourni")
+      return
+    }
+
+    const file = files[0]
+    console.log("📄 Fichier à traiter:", file.name, file.type, file.size)
 
     setUploadingDocuments((prev) => new Set([...prev, documentId]))
 
     try {
-      // Simuler la sauvegarde du document
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      console.log("📤 Upload du document via service...")
 
+      // Utiliser le vrai service au lieu de simuler
+      const uploadedDocument = await propertyDocumentsService.uploadDocument(propertyId, file, documentId)
+
+      console.log("✅ Document uploadé avec succès:", uploadedDocument)
+
+      // Mettre à jour l'état local
       setDocuments((prev) =>
-        prev.map((doc) => (doc.id === documentId ? { ...doc, uploaded: true, url: files[0] } : doc)),
+        prev.map((doc) => (doc.id === documentId ? { ...doc, uploaded: true, url: uploadedDocument.file_url } : doc)),
       )
 
       toast.success("Document uploadé avec succès")
@@ -151,13 +164,13 @@ export function PropertyDocumentsUpload({
       // Notifier le parent
       if (onDocumentsChange) {
         const updatedDocs = documents.map((doc) =>
-          doc.id === documentId ? { ...doc, uploaded: true, url: files[0] } : doc,
+          doc.id === documentId ? { ...doc, uploaded: true, url: uploadedDocument.file_url } : doc,
         )
         onDocumentsChange(updatedDocs.filter((doc) => doc.uploaded))
       }
-    } catch (error) {
-      console.error("Erreur upload document:", error)
-      toast.error("Erreur lors de l'upload du document")
+    } catch (error: any) {
+      console.error("❌ Erreur upload document:", error)
+      toast.error(`Erreur lors de l'upload: ${error.message || "Erreur inconnue"}`)
     } finally {
       setUploadingDocuments((prev) => {
         const newSet = new Set(prev)
@@ -167,19 +180,36 @@ export function PropertyDocumentsUpload({
     }
   }
 
-  const handleDocumentRemove = (documentId: string) => {
-    setDocuments((prev) =>
-      prev.map((doc) => (doc.id === documentId ? { ...doc, uploaded: false, url: undefined } : doc)),
-    )
+  const handleDocumentRemove = async (documentId: string) => {
+    console.log("🗑️ Suppression document:", documentId)
 
-    if (onDocumentsChange) {
-      const updatedDocs = documents
-        .map((doc) => (doc.id === documentId ? { ...doc, uploaded: false, url: undefined } : doc))
-        .filter((doc) => doc.uploaded)
-      onDocumentsChange(updatedDocs)
+    try {
+      // Trouver le document dans l'état local
+      const document = documents.find((doc) => doc.id === documentId)
+      if (!document || !document.uploaded) {
+        console.log("❌ Document non trouvé ou pas uploadé")
+        return
+      }
+
+      // Si on a une URL, essayer de supprimer via le service
+      // (Note: pour l'instant on fait juste la suppression locale)
+
+      setDocuments((prev) =>
+        prev.map((doc) => (doc.id === documentId ? { ...doc, uploaded: false, url: undefined } : doc)),
+      )
+
+      if (onDocumentsChange) {
+        const updatedDocs = documents
+          .map((doc) => (doc.id === documentId ? { ...doc, uploaded: false, url: undefined } : doc))
+          .filter((doc) => doc.uploaded)
+        onDocumentsChange(updatedDocs)
+      }
+
+      toast.success("Document supprimé")
+    } catch (error: any) {
+      console.error("❌ Erreur suppression:", error)
+      toast.error(`Erreur lors de la suppression: ${error.message}`)
     }
-
-    toast.success("Document supprimé")
   }
 
   const requiredDocuments = documents.filter((doc) => doc.required)
@@ -260,6 +290,7 @@ export function PropertyDocumentsUpload({
                     folder={`properties/${propertyId}/documents`}
                     bucket="property-documents"
                     disabled={uploadingDocuments.has(document.id)}
+                    mode="direct"
                   />
                   {uploadingDocuments.has(document.id) && (
                     <div className="flex items-center mt-2 text-sm text-gray-600">
@@ -315,6 +346,7 @@ export function PropertyDocumentsUpload({
                       folder={`properties/${propertyId}/documents`}
                       bucket="property-documents"
                       disabled={uploadingDocuments.has(document.id)}
+                      mode="direct"
                     />
                     {uploadingDocuments.has(document.id) && (
                       <div className="flex items-center mt-2 text-sm text-gray-600">
