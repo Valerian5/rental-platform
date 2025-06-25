@@ -21,53 +21,60 @@ export interface LeaseAnalysis {
 }
 
 class LeaseDataAnalyzer {
-  // Définition des champs avec mapping intelligent
+  // Définition des champs basée sur les templates existants
   private fieldDefinitions: Record<string, Omit<FieldMapping, "value" | "source">> = {
     // === PARTIES ===
-    bailleur_nom_prenom: {
-      key: "bailleur_nom_prenom",
+    nom_bailleur: {
+      key: "nom_bailleur",
       label: "Nom et prénom du bailleur",
       required: true,
       type: "text",
       category: "parties",
     },
-    bailleur_domicile: {
-      key: "bailleur_domicile",
-      label: "Domicile du bailleur",
+    adresse_bailleur: {
+      key: "adresse_bailleur",
+      label: "Adresse du bailleur",
       required: true,
       type: "textarea",
       category: "parties",
     },
-    bailleur_email: {
-      key: "bailleur_email",
+    email_bailleur: {
+      key: "email_bailleur",
       label: "Email du bailleur",
       required: true,
       type: "email",
       category: "parties",
     },
-    bailleur_telephone: {
-      key: "bailleur_telephone",
+    telephone_bailleur: {
+      key: "telephone_bailleur",
       label: "Téléphone du bailleur",
       required: true,
       type: "text",
       category: "parties",
     },
-    locataire_nom_prenom: {
-      key: "locataire_nom_prenom",
+    nom_locataire: {
+      key: "nom_locataire",
       label: "Nom et prénom du locataire",
       required: true,
       type: "text",
       category: "parties",
     },
-    locataire_email: {
-      key: "locataire_email",
+    adresse_locataire: {
+      key: "adresse_locataire",
+      label: "Adresse du locataire",
+      required: true,
+      type: "textarea",
+      category: "parties",
+    },
+    email_locataire: {
+      key: "email_locataire",
       label: "Email du locataire",
       required: true,
       type: "email",
       category: "parties",
     },
-    locataire_telephone: {
-      key: "locataire_telephone",
+    telephone_locataire: {
+      key: "telephone_locataire",
       label: "Téléphone du locataire",
       required: true,
       type: "text",
@@ -75,85 +82,143 @@ class LeaseDataAnalyzer {
     },
 
     // === LOGEMENT ===
-    localisation_logement: {
-      key: "localisation_logement",
-      label: "Localisation complète du logement",
+    adresse_postale: {
+      key: "adresse_postale",
+      label: "Adresse du logement",
       required: true,
-      type: "textarea",
+      type: "text",
       category: "logement",
     },
-    surface_habitable: {
-      key: "surface_habitable",
-      label: "Surface habitable (m²)",
+    code_postal: {
+      key: "code_postal",
+      label: "Code postal",
+      required: true,
+      type: "text",
+      category: "logement",
+    },
+    ville: {
+      key: "ville",
+      label: "Ville",
+      required: true,
+      type: "text",
+      category: "logement",
+    },
+    type_logement: {
+      key: "type_logement",
+      label: "Type de logement",
+      required: true,
+      type: "select",
+      category: "logement",
+      options: ["Appartement", "Maison", "Studio", "Chambre"],
+    },
+    surface_m2: {
+      key: "surface_m2",
+      label: "Surface (m²)",
       required: true,
       type: "number",
       category: "logement",
     },
     nombre_pieces: {
       key: "nombre_pieces",
-      label: "Nombre de pièces principales",
+      label: "Nombre de pièces",
       required: true,
       type: "number",
       category: "logement",
     },
-    niveau_performance_dpe: {
-      key: "niveau_performance_dpe",
-      label: "Classe DPE",
-      required: true,
-      type: "select",
+    etage: {
+      key: "etage",
+      label: "Étage",
+      required: false,
+      type: "text",
       category: "logement",
-      options: ["A", "B", "C", "D", "E", "F", "G"],
     },
-    periode_construction: {
-      key: "periode_construction",
-      label: "Période de construction",
+    zone_geographique: {
+      key: "zone_geographique",
+      label: "Zone géographique",
       required: true,
       type: "select",
       category: "logement",
-      options: ["avant 1949", "de 1949 à 1974", "de 1975 à 1989", "de 1989 à 2005", "depuis 2005"],
+      options: ["Paris", "zone tendue", "zone non tendue"],
     },
 
     // === CONDITIONS FINANCIÈRES ===
-    montant_loyer_mensuel: {
-      key: "montant_loyer_mensuel",
-      label: "Montant du loyer mensuel (€)",
+    loyer: {
+      key: "loyer",
+      label: "Loyer mensuel (€)",
       required: true,
       type: "number",
       category: "financier",
     },
-    montant_provisions_charges: {
-      key: "montant_provisions_charges",
-      label: "Montant des provisions sur charges (€)",
+    charges: {
+      key: "charges",
+      label: "Charges (€)",
       required: true,
       type: "number",
       category: "financier",
     },
-    montant_depot_garantie: {
-      key: "montant_depot_garantie",
-      label: "Montant du dépôt de garantie (€)",
+    loyer_cc: {
+      key: "loyer_cc",
+      label: "Loyer charges comprises (€)",
+      required: true,
+      type: "number",
+      category: "financier",
+    },
+    depot_garantie: {
+      key: "depot_garantie",
+      label: "Dépôt de garantie (€)",
+      required: true,
+      type: "number",
+      category: "financier",
+    },
+    nb_mois_depot: {
+      key: "nb_mois_depot",
+      label: "Nombre de mois de dépôt",
       required: true,
       type: "number",
       category: "financier",
     },
 
     // === DURÉE ===
-    date_prise_effet: {
-      key: "date_prise_effet",
-      label: "Date de prise d'effet",
+    date_debut: {
+      key: "date_debut",
+      label: "Date de début",
       required: true,
       type: "date",
       category: "duree",
     },
-    duree_contrat: {
-      key: "duree_contrat",
-      label: "Durée du contrat",
+    date_fin: {
+      key: "date_fin",
+      label: "Date de fin",
       required: true,
-      type: "select",
+      type: "date",
       category: "duree",
-      options: ["1 an (meublé)", "3 ans (vide)", "6 ans (commercial)"],
+    },
+    duree: {
+      key: "duree",
+      label: "Durée (mois)",
+      required: true,
+      type: "number",
+      category: "duree",
     },
 
-    // === ANNEXES ===
+    // === USAGE ET CLAUSES ===
+    usage_prevu: {
+      key: "usage_prevu",
+      label: "Usage prévu",
+      required: true,
+      type: "select",
+      category: "annexes",
+      options: ["résidence principale", "résidence secondaire", "logement étudiant"],
+    },
+    clauses_particulieres: {
+      key: "clauses_particulieres",
+      label: "Clauses particulières",
+      required: false,
+      type: "textarea",
+      category: "annexes",
+    },
+
+    // === SIGNATURE ===
     ville_signature: {
       key: "ville_signature",
       label: "Ville de signature",
@@ -186,43 +251,56 @@ class LeaseDataAnalyzer {
         .eq("id", leaseId)
         .single()
 
-      if (leaseError) throw leaseError
+      if (leaseError) {
+        console.error("❌ Erreur récupération bail:", leaseError)
+        throw leaseError
+      }
+
+      console.log("📋 Bail récupéré:", lease.id)
 
       // Récupérer les données complétées précédemment
-      const { data: completedData } = await supabase
+      const { data: completedData, error: completedError } = await supabase
         .from("lease_completed_data")
         .select("field_name, field_value, source")
         .eq("lease_id", leaseId)
 
-      const completedFields = completedData?.reduce(
-        (acc, item) => {
-          acc[item.field_name] = {
-            value: item.field_value,
-            source: item.source as "auto" | "manual",
-          }
-          return acc
-        },
-        {} as Record<string, { value: any; source: "auto" | "manual" }>,
-      )
+      if (completedError) {
+        console.error("❌ Erreur récupération données complétées:", completedError)
+      }
+
+      console.log("💾 Données complétées récupérées:", completedData?.length || 0, "champs")
+
+      const completedFields =
+        completedData?.reduce(
+          (acc, item) => {
+            acc[item.field_name] = {
+              value: item.field_value,
+              source: item.source as "auto" | "manual",
+            }
+            return acc
+          },
+          {} as Record<string, { value: any; source: "auto" | "manual" }>,
+        ) || {}
 
       // Mapper les données automatiques
       const autoData = this.mapAutomaticData(lease)
+      console.log("🤖 Données automatiques mappées:", Object.keys(autoData).length, "champs")
 
       // Construire l'analyse complète
       const availableData: Record<string, FieldMapping> = {}
       const missingRequired: string[] = []
 
       for (const [key, definition] of Object.entries(this.fieldDefinitions)) {
-        const completed = completedFields?.[key]
+        const completed = completedFields[key]
         const autoValue = autoData[key]
 
         let value = completed?.value || autoValue || ""
         let source: "auto" | "manual" | "missing" = "missing"
 
-        if (completed?.value) {
+        if (completed?.value !== undefined && completed?.value !== null && completed?.value !== "") {
           source = completed.source
           value = completed.value
-        } else if (autoValue) {
+        } else if (autoValue !== undefined && autoValue !== null && autoValue !== "") {
           source = "auto"
           value = autoValue
         }
@@ -233,7 +311,7 @@ class LeaseDataAnalyzer {
           source,
         }
 
-        if (definition.required && !value) {
+        if (definition.required && (!value || value === "")) {
           missingRequired.push(key)
         }
       }
@@ -243,6 +321,7 @@ class LeaseDataAnalyzer {
       const completionRate = Math.round((completedFields_count / totalFields) * 100)
 
       console.log(`📊 Analyse terminée: ${completedFields_count}/${totalFields} champs (${completionRate}%)`)
+      console.log("❌ Champs manquants:", missingRequired)
 
       return {
         leaseId,
@@ -260,55 +339,138 @@ class LeaseDataAnalyzer {
   private mapAutomaticData(lease: any): Record<string, any> {
     const data: Record<string, any> = {}
 
-    // === PARTIES ===
-    // Mapping des champs composés
-    if (lease.owner?.first_name && lease.owner?.last_name) {
-      data.bailleur_nom_prenom = `${lease.owner.first_name} ${lease.owner.last_name}`
+    try {
+      // === PARTIES ===
+      // Mapping des champs composés
+      if (lease.owner?.first_name && lease.owner?.last_name) {
+        data.nom_bailleur = `${lease.owner.first_name} ${lease.owner.last_name}`
+      }
+      if (lease.tenant?.first_name && lease.tenant?.last_name) {
+        data.nom_locataire = `${lease.tenant.first_name} ${lease.tenant.last_name}`
+      }
+
+      // Adresses et contacts
+      data.adresse_bailleur = lease.owner?.address || ""
+      data.email_bailleur = lease.owner?.email || ""
+      data.telephone_bailleur = lease.owner?.phone || ""
+      data.adresse_locataire = lease.tenant?.address || ""
+      data.email_locataire = lease.tenant?.email || ""
+      data.telephone_locataire = lease.tenant?.phone || ""
+
+      // === LOGEMENT ===
+      data.adresse_postale = lease.property?.address || ""
+      data.code_postal = lease.property?.postal_code || ""
+      data.ville = lease.property?.city || ""
+      data.type_logement = lease.property?.type || ""
+      data.surface_m2 = lease.property?.surface || ""
+      data.nombre_pieces = lease.property?.rooms || ""
+      data.etage = lease.property?.floor || ""
+
+      // Zone géographique (à déterminer selon la ville)
+      data.zone_geographique = this.getZoneGeographique(lease.property?.city || "")
+
+      // === FINANCIER ===
+      data.loyer = lease.monthly_rent || ""
+      data.charges = lease.charges || 0
+      data.loyer_cc = (lease.monthly_rent || 0) + (lease.charges || 0)
+      data.depot_garantie = lease.deposit || ""
+      data.nb_mois_depot = lease.deposit && lease.monthly_rent ? Math.round(lease.deposit / lease.monthly_rent) : ""
+
+      // === DURÉE ===
+      data.date_debut = lease.start_date ? this.formatDate(lease.start_date) : ""
+      data.date_fin = lease.end_date ? this.formatDate(lease.end_date) : ""
+
+      // Durée selon le type
+      if (lease.lease_type === "furnished") {
+        data.duree = 12
+      } else if (lease.lease_type === "unfurnished") {
+        data.duree = 36
+      }
+
+      // === USAGE ET CLAUSES ===
+      data.usage_prevu = "résidence principale"
+      data.clauses_particulieres = lease.metadata?.special_conditions || ""
+
+      // === SIGNATURE ===
+      data.ville_signature = lease.property?.city || ""
+      data.date_signature = this.formatDate(new Date().toISOString())
+
+      console.log(
+        "🗺️ Données automatiques mappées:",
+        Object.keys(data).filter((k) => data[k]).length,
+        "champs non vides",
+      )
+    } catch (error) {
+      console.error("❌ Erreur mapping automatique:", error)
     }
-    if (lease.tenant?.first_name && lease.tenant?.last_name) {
-      data.locataire_nom_prenom = `${lease.tenant.first_name} ${lease.tenant.last_name}`
-    }
-
-    // Adresses
-    data.bailleur_domicile = lease.owner?.address || ""
-    data.bailleur_email = lease.owner?.email || ""
-    data.bailleur_telephone = lease.owner?.phone || ""
-    data.locataire_email = lease.tenant?.email || ""
-    data.locataire_telephone = lease.tenant?.phone || ""
-
-    // === LOGEMENT ===
-    if (lease.property?.address && lease.property?.city) {
-      data.localisation_logement = `${lease.property.address}, ${lease.property.postal_code || ""} ${
-        lease.property.city
-      }`.trim()
-    }
-    data.surface_habitable = lease.property?.surface || ""
-    data.nombre_pieces = lease.property?.rooms || ""
-
-    // === FINANCIER ===
-    data.montant_loyer_mensuel = lease.monthly_rent || ""
-    data.montant_provisions_charges = lease.charges || ""
-    data.montant_depot_garantie = lease.deposit || ""
-
-    // === DURÉE ===
-    data.date_prise_effet = lease.start_date ? lease.start_date.split("T")[0] : ""
-
-    // Durée selon le type
-    if (lease.lease_type === "furnished") {
-      data.duree_contrat = "1 an (meublé)"
-    } else if (lease.lease_type === "unfurnished") {
-      data.duree_contrat = "3 ans (vide)"
-    }
-
-    // === ANNEXES ===
-    data.ville_signature = lease.property?.city || ""
-    data.date_signature = new Date().toISOString().split("T")[0]
 
     return data
   }
 
+  private getZoneGeographique(ville: string): string {
+    if (!ville) return ""
+
+    const villeNormalized = ville.toLowerCase()
+
+    // Paris
+    if (villeNormalized.includes("paris")) {
+      return "Paris"
+    }
+
+    // Zones tendues (liste simplifiée)
+    const zonesTendues = [
+      "marseille",
+      "lyon",
+      "toulouse",
+      "nice",
+      "nantes",
+      "montpellier",
+      "strasbourg",
+      "bordeaux",
+      "lille",
+      "rennes",
+      "reims",
+      "toulon",
+      "saint-étienne",
+      "le havre",
+      "grenoble",
+      "dijon",
+      "angers",
+      "nîmes",
+      "villeurbanne",
+      "saint-denis",
+      "aix-en-provence",
+      "brest",
+      "limoges",
+      "tours",
+      "amiens",
+      "perpignan",
+      "metz",
+      "besançon",
+      "orléans",
+      "mulhouse",
+      "rouen",
+      "caen",
+      "nancy",
+    ]
+
+    const isZoneTendue = zonesTendues.some((zoneTendue) => villeNormalized.includes(zoneTendue))
+    return isZoneTendue ? "zone tendue" : "zone non tendue"
+  }
+
+  private formatDate(dateString: string): string {
+    const date = new Date(dateString)
+    return date.toLocaleDateString("fr-FR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    })
+  }
+
   async saveCompletedData(leaseId: string, fieldName: string, fieldValue: any, source: "manual" = "manual") {
     try {
+      console.log("💾 Sauvegarde:", fieldName, "=", fieldValue)
+
       const { error } = await supabase.from("lease_completed_data").upsert(
         {
           lease_id: leaseId,
@@ -322,7 +484,12 @@ class LeaseDataAnalyzer {
         },
       )
 
-      if (error) throw error
+      if (error) {
+        console.error("❌ Erreur sauvegarde:", error)
+        throw error
+      }
+
+      console.log("✅ Sauvegarde réussie")
     } catch (error) {
       console.error("❌ Erreur sauvegarde:", error)
       throw error

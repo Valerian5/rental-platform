@@ -6,10 +6,18 @@ import { leaseDataAnalyzer } from "@/lib/lease-data-analyzer"
 function compileTemplate(template: string, data: any): string {
   let result = template
 
+  console.log("🔧 Compilation template avec", Object.keys(data).length, "variables")
+
   // Remplacer les variables simples {{variable}}
   result = result.replace(/\{\{(\w+)\}\}/g, (match, key) => {
     const value = data[key]
-    return value !== undefined && value !== null && value !== "" ? String(value) : match
+    if (value !== undefined && value !== null && value !== "") {
+      console.log("✅ Remplacé:", key, "=", value)
+      return String(value)
+    } else {
+      console.log("❌ Variable non trouvée:", key)
+      return match
+    }
   })
 
   // Remplacer les conditions {{#if variable}}...{{/if}}
@@ -43,7 +51,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     // 1. Analyser les données complétées
     const analysis = await leaseDataAnalyzer.analyze(params.id)
 
+    console.log("📊 Résultat analyse:")
+    console.log("- Taux completion:", analysis.completionRate + "%")
+    console.log("- Peut générer:", analysis.canGenerate)
+    console.log("- Champs manquants:", analysis.missingRequired)
+
     if (!analysis.canGenerate) {
+      console.log("❌ Génération impossible - données incomplètes")
       return NextResponse.json(
         {
           success: false,
@@ -88,6 +102,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     console.log("📊 Données template préparées:", Object.keys(templateData).length, "champs")
+    console.log("🔍 Échantillon données:", Object.fromEntries(Object.entries(templateData).slice(0, 5)))
 
     // 5. Compiler le template
     const generatedDocument = compileTemplate(template.template_content, templateData)
