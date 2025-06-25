@@ -46,22 +46,34 @@ function compileTemplate(template: string, data: any): string {
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    console.log("🔄 Génération document pour bail:", params.id)
+    console.log("🔄 [SERVER] Génération document pour bail:", params.id)
 
     // 1. Analyser les données complétées
+    console.log("🔍 [SERVER] Début analyse des données...")
     const analysis = await leaseDataAnalyzer.analyze(params.id)
-	console.log(">>> ANALYSE BACKEND", JSON.stringify(analysis, null, 2))
 
-    console.log("📊 Résultat analyse:")
+    console.log("📊 [SERVER] Résultat analyse:")
     console.log("- Taux completion:", analysis.completionRate + "%")
     console.log("- Peut générer:", analysis.canGenerate)
     console.log("- Champs manquants:", analysis.missingRequired)
     console.log("- Nombre champs manquants:", analysis.missingRequired.length)
 
-    // CORRIGÉ : Utiliser directement canGenerate de l'analyse
+    // LOGS DÉTAILLÉS pour débugger la différence client/serveur
+    console.log("🔍 [SERVER] Détail des champs obligatoires:")
+    for (const [key, field] of Object.entries(analysis.availableData)) {
+      if (field.required) {
+        const isEmpty = !field.value || field.value === "" || field.value === null || field.value === undefined
+        if (isEmpty) {
+          console.log(`❌ [SERVER] Champ obligatoire manquant: ${key} = "${field.value}"`)
+        } else {
+          console.log(`✅ [SERVER] Champ obligatoire OK: ${key} = "${field.value}"`)
+        }
+      }
+    }
+
     if (!analysis.canGenerate) {
-      console.log("❌ Génération impossible - données obligatoires incomplètes")
-      console.log("❌ Champs manquants détaillés:", analysis.missingRequired)
+      console.log("❌ [SERVER] Génération impossible - données obligatoires incomplètes")
+      console.log("❌ [SERVER] Champs manquants détaillés:", analysis.missingRequired)
 
       return NextResponse.json(
         {
@@ -75,9 +87,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       )
     }
 
-    console.log("✅ Données suffisantes pour génération")
+    console.log("✅ [SERVER] Données suffisantes pour génération")
 
     // 2. Récupérer le bail pour le type
+    console.log("🔍 [SERVER] Récupération du bail...")
     const { data: lease, error: leaseError } = await supabase
       .from("leases")
       .select("lease_type")
@@ -85,11 +98,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .single()
 
     if (leaseError) {
-      console.error("❌ Erreur récupération bail:", leaseError)
+      console.error("❌ [SERVER] Erreur récupération bail:", leaseError)
       throw leaseError
     }
 
+    console.log("📋 [SERVER] Type de bail:", lease.lease_type)
+
     // 3. Récupérer le template approprié
+    console.log("🔍 [SERVER] Récupération du template...")
     const { data: template, error: templateError } = await supabase
       .from("lease_templates")
       .select("*")
@@ -99,28 +115,35 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .single()
 
     if (templateError) {
-      console.error("❌ Erreur récupération template:", templateError)
+      console.error("❌ [SERVER] Erreur récupération template:", templateError)
+      console.error("❌ [SERVER] Détails erreur template:", {
+        lease_type: lease.lease_type,
+        error: templateError,
+      })
       throw templateError
     }
 
-    console.log("📄 Template récupéré:", template.name)
+    console.log("📄 [SERVER] Template récupéré:", template.name)
 
     // 4. Préparer les données pour le template
+    console.log("🔧 [SERVER] Préparation des données template...")
     const templateData: Record<string, any> = {}
 
     for (const [key, field] of Object.entries(analysis.availableData)) {
       templateData[key] = field.value || "" // Utiliser une chaîne vide si pas de valeur
     }
 
-    console.log("📊 Données template préparées:", Object.keys(templateData).length, "champs")
-    console.log("🔍 Échantillon données:", Object.fromEntries(Object.entries(templateData).slice(0, 5)))
+    console.log("📊 [SERVER] Données template préparées:", Object.keys(templateData).length, "champs")
+    console.log("🔍 [SERVER] Échantillon données:", Object.fromEntries(Object.entries(templateData).slice(0, 10)))
 
     // 5. Compiler le template
+    console.log("🔧 [SERVER] Compilation du template...")
     const generatedDocument = compileTemplate(template.template_content, templateData)
 
-    console.log("✅ Document généré, longueur:", generatedDocument.length, "caractères")
+    console.log("✅ [SERVER] Document généré, longueur:", generatedDocument.length, "caractères")
 
     // 6. Sauvegarder le document généré
+    console.log("💾 [SERVER] Sauvegarde du document...")
     const { error: updateError } = await supabase
       .from("leases")
       .update({
@@ -131,11 +154,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .eq("id", params.id)
 
     if (updateError) {
-      console.error("❌ Erreur sauvegarde document:", updateError)
+      console.error("❌ [SERVER] Erreur sauvegarde document:", updateError)
       throw updateError
     }
 
-    console.log("✅ Document sauvegardé avec succès")
+    console.log("✅ [SERVER] Document sauvegardé avec succès")
 
     return NextResponse.json({
       success: true,
@@ -144,7 +167,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       completion_rate: analysis.completionRate,
     })
   } catch (error) {
-    console.error("❌ Erreur génération document:", error)
+    console.error("❌ [SERVER] Erreur génération document:", error)
     return NextResponse.json(
       {
         success: false,
