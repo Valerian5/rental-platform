@@ -50,6 +50,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     // 1. Analyser les données complétées
     const analysis = await leaseDataAnalyzer.analyze(params.id)
+	console.log(">>> ANALYSE BACKEND", JSON.stringify(analysis, null, 2))
 
     console.log("📊 Résultat analyse:")
     console.log("- Taux completion:", analysis.completionRate + "%")
