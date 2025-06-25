@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
+import { supabase } from "@/lib/supabase"
 
 export default function NewLeasePage() {
   const router = useRouter()
@@ -165,7 +166,7 @@ export default function NewLeasePage() {
         const selectedProperty = properties.find((p) => p.id === value)
         if (selectedProperty) {
           newData.monthly_rent = selectedProperty.price?.toString() || ""
-          newData.charges = selectedProperty.charges?.toString() || "0"
+          newData.charges = selectedProperty.charges_amount?.toString() || selectedProperty.charges?.toString() || "0"
           newData.deposit = (selectedProperty.price * 1).toString() || ""
         }
       }
@@ -258,6 +259,17 @@ export default function NewLeasePage() {
         return
       }
 
+      // Récupérer le token d'authentification
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        toast.error("Vous n'êtes pas connecté ou votre session a expiré")
+        setSaving(false)
+        return
+      }
+
       const leaseData = {
         property_id: formData.property_id,
         tenant_id: formData.tenant_id,
@@ -282,6 +294,7 @@ export default function NewLeasePage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify(leaseData),
       })
