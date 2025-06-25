@@ -21,7 +21,7 @@ export interface LeaseAnalysis {
 }
 
 class LeaseDataAnalyzer {
-  // Harmonisation : Ajout des alias pour compatibilité avec les anciens templates
+  // Définition des champs basée sur les templates existants
   private fieldDefinitions: Record<string, Omit<FieldMapping, "value" | "source">> = {
     // === PARTIES ===
     nom_bailleur: {
@@ -31,14 +31,6 @@ class LeaseDataAnalyzer {
       type: "text",
       category: "parties",
     },
-    bailleur_nom_prenom: {
-      key: "bailleur_nom_prenom",
-      label: "Nom et prénom du bailleur (alias)",
-      required: false,
-      type: "text",
-      category: "parties",
-      description: "Alias pour compatibilité template"
-    },
     adresse_bailleur: {
       key: "adresse_bailleur",
       label: "Adresse du bailleur",
@@ -46,33 +38,11 @@ class LeaseDataAnalyzer {
       type: "textarea",
       category: "parties",
     },
-    bailleur_domicile: {
-      key: "bailleur_domicile",
-      label: "Domicile du bailleur (alias)",
-      required: false,
-      type: "textarea",
-      category: "parties",
-      description: "Alias pour compatibilité template"
-    },
     email_bailleur: {
       key: "email_bailleur",
       label: "Email du bailleur",
       required: true,
       type: "email",
-      category: "parties",
-    },
-    bailleur_email: {
-      key: "bailleur_email",
-      label: "Email du bailleur (alias)",
-      required: false,
-      type: "email",
-      category: "parties",
-    },
-    bailleur_qualite: {
-      key: "bailleur_qualite",
-      label: "Qualité du bailleur",
-      required: false,
-      type: "text",
       category: "parties",
     },
     telephone_bailleur: {
@@ -89,14 +59,6 @@ class LeaseDataAnalyzer {
       type: "text",
       category: "parties",
     },
-    locataire_nom_prenom: {
-      key: "locataire_nom_prenom",
-      label: "Nom et prénom du locataire (alias)",
-      required: false,
-      type: "text",
-      category: "parties",
-      description: "Alias pour compatibilité template"
-    },
     adresse_locataire: {
       key: "adresse_locataire",
       label: "Adresse du locataire",
@@ -108,13 +70,6 @@ class LeaseDataAnalyzer {
       key: "email_locataire",
       label: "Email du locataire",
       required: true,
-      type: "email",
-      category: "parties",
-    },
-    locataire_email: {
-      key: "locataire_email",
-      label: "Email du locataire (alias)",
-      required: false,
       type: "email",
       category: "parties",
     },
@@ -148,14 +103,6 @@ class LeaseDataAnalyzer {
       type: "text",
       category: "logement",
     },
-    localisation_logement: {
-      key: "localisation_logement",
-      label: "Localisation du logement (alias)",
-      required: false,
-      type: "text",
-      category: "logement",
-      description: "Alias pour compatibilité template"
-    },
     type_logement: {
       key: "type_logement",
       label: "Type de logement",
@@ -164,29 +111,12 @@ class LeaseDataAnalyzer {
       category: "logement",
       options: ["Appartement", "Maison", "Studio", "Chambre"],
     },
-    type_habitat: {
-      key: "type_habitat",
-      label: "Type d'habitat (alias)",
-      required: false,
-      type: "select",
-      category: "logement",
-      options: ["Appartement", "Maison", "Studio", "Chambre"],
-      description: "Alias pour compatibilité template"
-    },
     surface_m2: {
       key: "surface_m2",
       label: "Surface (m²)",
       required: true,
       type: "number",
       category: "logement",
-    },
-    surface_habitable: {
-      key: "surface_habitable",
-      label: "Surface habitable (alias)",
-      required: false,
-      type: "number",
-      category: "logement",
-      description: "Alias pour compatibilité template"
     },
     nombre_pieces: {
       key: "nombre_pieces",
@@ -209,83 +139,6 @@ class LeaseDataAnalyzer {
       type: "select",
       category: "logement",
       options: ["Paris", "zone tendue", "zone non tendue"],
-    },
-    identifiant_fiscal: {
-      key: "identifiant_fiscal",
-      label: "Identifiant fiscal du logement",
-      required: false,
-      type: "text",
-      category: "logement",
-    },
-    regime_juridique: {
-      key: "regime_juridique",
-      label: "Régime juridique de l'immeuble",
-      required: false,
-      type: "text",
-      category: "logement",
-    },
-    periode_construction: {
-      key: "periode_construction",
-      label: "Période de construction",
-      required: false,
-      type: "text",
-      category: "logement",
-    },
-    autres_parties: {
-      key: "autres_parties",
-      label: "Autres parties du logement",
-      required: false,
-      type: "text",
-      category: "logement",
-    },
-    elements_equipements: {
-      key: "elements_equipements",
-      label: "Éléments d'équipements du logement",
-      required: false,
-      type: "text",
-      category: "logement",
-    },
-    modalite_chauffage: {
-      key: "modalite_chauffage",
-      label: "Modalité de production de chauffage",
-      required: false,
-      type: "text",
-      category: "logement",
-    },
-    modalite_eau_chaude: {
-      key: "modalite_eau_chaude",
-      label: "Modalité de production d'eau chaude sanitaire",
-      required: false,
-      type: "text",
-      category: "logement",
-    },
-    niveau_performance_dpe: {
-      key: "niveau_performance_dpe",
-      label: "Niveau de performance du logement",
-      required: false,
-      type: "text",
-      category: "logement",
-    },
-    locaux_accessoires: {
-      key: "locaux_accessoires",
-      label: "Locaux et équipements accessoires",
-      required: false,
-      type: "text",
-      category: "logement",
-    },
-    locaux_communs: {
-      key: "locaux_communs",
-      label: "Locaux à usage commun",
-      required: false,
-      type: "text",
-      category: "logement",
-    },
-    equipement_technologies: {
-      key: "equipement_technologies",
-      label: "Équipement d'accès aux technologies",
-      required: false,
-      type: "text",
-      category: "logement",
     },
 
     // === CONDITIONS FINANCIÈRES ===
@@ -317,148 +170,6 @@ class LeaseDataAnalyzer {
       type: "number",
       category: "financier",
     },
-    montant_loyer_mensuel: {
-      key: "montant_loyer_mensuel",
-      label: "Montant du loyer mensuel (alias)",
-      required: false,
-      type: "number",
-      category: "financier",
-    },
-    soumis_decret_evolution: {
-      key: "soumis_decret_evolution",
-      label: "Soumis au décret d'évolution des loyers",
-      required: false,
-      type: "select",
-      category: "financier",
-      options: ["Oui", "Non"]
-    },
-    soumis_loyer_reference: {
-      key: "soumis_loyer_reference",
-      label: "Soumis au loyer de référence majoré",
-      required: false,
-      type: "select",
-      category: "financier",
-      options: ["Oui", "Non"]
-    },
-    montant_loyer_reference: {
-      key: "montant_loyer_reference",
-      label: "Montant du loyer de référence",
-      required: false,
-      type: "number",
-      category: "financier",
-    },
-    montant_loyer_reference_majore: {
-      key: "montant_loyer_reference_majore",
-      label: "Montant du loyer de référence majoré",
-      required: false,
-      type: "number",
-      category: "financier",
-    },
-    complement_loyer: {
-      key: "complement_loyer",
-      label: "Complément de loyer",
-      required: false,
-      type: "number",
-      category: "financier",
-    },
-    infos_dernier_loyer: {
-      key: "infos_dernier_loyer",
-      label: "Informations relatives au loyer du dernier locataire",
-      required: false,
-      type: "textarea",
-      category: "financier",
-    },
-    date_revision: {
-      key: "date_revision",
-      label: "Date de révision",
-      required: false,
-      type: "date",
-      category: "financier",
-    },
-    date_reference_irl: {
-      key: "date_reference_irl",
-      label: "Date de référence de l'IRL",
-      required: false,
-      type: "date",
-      category: "financier",
-    },
-    modalite_reglement_charges: {
-      key: "modalite_reglement_charges",
-      label: "Modalité de règlement des charges",
-      required: false,
-      type: "text",
-      category: "financier",
-    },
-    montant_provisions_charges: {
-      key: "montant_provisions_charges",
-      label: "Montant des provisions sur charges",
-      required: false,
-      type: "number",
-      category: "financier",
-    },
-    modalites_revision_forfait: {
-      key: "modalites_revision_forfait",
-      label: "Modalités de révision du forfait",
-      required: false,
-      type: "text",
-      category: "financier",
-    },
-    contribution_economies: {
-      key: "contribution_economies",
-      label: "Contribution partage économies de charges",
-      required: false,
-      type: "text",
-      category: "financier",
-    },
-    periodicite_paiement: {
-      key: "periodicite_paiement",
-      label: "Périodicité du paiement",
-      required: false,
-      type: "text",
-      category: "financier",
-    },
-    paiement_echeance: {
-      key: "paiement_echeance",
-      label: "Paiement à échoir ou échu",
-      required: false,
-      type: "text",
-      category: "financier",
-    },
-    date_paiement: {
-      key: "date_paiement",
-      label: "Date de paiement",
-      required: false,
-      type: "text",
-      category: "financier",
-    },
-    lieu_paiement: {
-      key: "lieu_paiement",
-      label: "Lieu de paiement",
-      required: false,
-      type: "text",
-      category: "financier",
-    },
-    montant_premiere_echeance: {
-      key: "montant_premiere_echeance",
-      label: "Montant total première échéance",
-      required: false,
-      type: "number",
-      category: "financier",
-    },
-    reevaluation_loyer: {
-      key: "reevaluation_loyer",
-      label: "Modalités de réévaluation d'un loyer sous-évalué",
-      required: false,
-      type: "text",
-      category: "financier",
-    },
-    montant_depenses_energie: {
-      key: "montant_depenses_energie",
-      label: "Montant estimé des dépenses annuelles d'énergie",
-      required: false,
-      type: "number",
-      category: "financier",
-    },
 
     // === DURÉE ===
     date_debut: {
@@ -467,14 +178,6 @@ class LeaseDataAnalyzer {
       required: true,
       type: "date",
       category: "duree",
-    },
-    date_prise_effet: {
-      key: "date_prise_effet",
-      label: "Date de prise d'effet du contrat (alias)",
-      required: false,
-      type: "date",
-      category: "duree",
-      description: "Alias pour compatibilité template"
     },
     date_fin: {
       key: "date_fin",
@@ -490,20 +193,6 @@ class LeaseDataAnalyzer {
       type: "number",
       category: "duree",
     },
-    duree_contrat: {
-      key: "duree_contrat",
-      label: "Durée du contrat (alias)",
-      required: false,
-      type: "text",
-      category: "duree",
-    },
-    evenement_duree_reduite: {
-      key: "evenement_duree_reduite",
-      label: "Événement justifiant durée réduite",
-      required: false,
-      type: "text",
-      category: "duree",
-    },
 
     // === USAGE ET CLAUSES ===
     usage_prevu: {
@@ -514,13 +203,6 @@ class LeaseDataAnalyzer {
       category: "annexes",
       options: ["résidence principale", "résidence secondaire", "logement étudiant"],
     },
-    destination_locaux: {
-      key: "destination_locaux",
-      label: "Destination des locaux",
-      required: false,
-      type: "text",
-      category: "annexes",
-    },
     clauses_particulieres: {
       key: "clauses_particulieres",
       label: "Clauses particulières",
@@ -528,13 +210,7 @@ class LeaseDataAnalyzer {
       type: "textarea",
       category: "annexes",
     },
-    conditions_particulieres: {
-      key: "conditions_particulieres",
-      label: "Conditions particulières (alias)",
-      required: false,
-      type: "textarea",
-      category: "annexes",
-    },
+
     // === SIGNATURE ===
     ville_signature: {
       key: "ville_signature",
@@ -546,154 +222,8 @@ class LeaseDataAnalyzer {
     date_signature: {
       key: "date_signature",
       label: "Date de signature",
-      required: false,
+      required: false, // Changé à false car on ne veut pas forcer une date
       type: "date",
-      category: "annexes",
-    },
-
-    // === GARANTIES, TRAVAUX, ETC ===
-    travaux_amelioration: {
-      key: "travaux_amelioration",
-      label: "Travaux d'amélioration",
-      required: false,
-      type: "textarea",
-      category: "annexes",
-    },
-    majoration_travaux: {
-      key: "majoration_travaux",
-      label: "Majoration du loyer consécutive à des travaux",
-      required: false,
-      type: "text",
-      category: "annexes",
-    },
-    diminution_travaux: {
-      key: "diminution_travaux",
-      label: "Diminution de loyer consécutive à des travaux",
-      required: false,
-      type: "text",
-      category: "annexes",
-    },
-    montant_depot_garantie: {
-      key: "montant_depot_garantie",
-      label: "Montant du dépôt de garantie (alias)",
-      required: false,
-      type: "number",
-      category: "financier",
-    },
-    clause_solidarite: {
-      key: "clause_solidarite",
-      label: "Clause de solidarité",
-      required: false,
-      type: "textarea",
-      category: "annexes",
-    },
-    clause_resolutoire: {
-      key: "clause_resolutoire",
-      label: "Clause résolutoire",
-      required: false,
-      type: "textarea",
-      category: "annexes",
-    },
-
-    // === HONORAIRES ===
-    plafond_honoraires_visite: {
-      key: "plafond_honoraires_visite",
-      label: "Honoraires visite/dossier/rédaction",
-      required: false,
-      type: "number",
-      category: "financier",
-    },
-    plafond_honoraires_etat_lieux: {
-      key: "plafond_honoraires_etat_lieux",
-      label: "Honoraires état des lieux",
-      required: false,
-      type: "number",
-      category: "financier",
-    },
-    honoraires_bailleur: {
-      key: "honoraires_bailleur",
-      label: "Honoraires à la charge du bailleur",
-      required: false,
-      type: "number",
-      category: "financier",
-    },
-    honoraires_locataire: {
-      key: "honoraires_locataire",
-      label: "Honoraires à la charge du locataire",
-      required: false,
-      type: "number",
-      category: "financier",
-    },
-
-    // === ANNEXES (diagnostics, etc) ===
-    annexe_reglement: {
-      key: "annexe_reglement",
-      label: "Extrait du règlement de copropriété",
-      required: false,
-      type: "text",
-      category: "annexes",
-    },
-    annexe_dpe: {
-      key: "annexe_dpe",
-      label: "Diagnostic de performance énergétique",
-      required: false,
-      type: "text",
-      category: "annexes",
-    },
-    annexe_plomb: {
-      key: "annexe_plomb",
-      label: "Constat de risque d'exposition au plomb",
-      required: false,
-      type: "text",
-      category: "annexes",
-    },
-    annexe_amiante: {
-      key: "annexe_amiante",
-      label: "État amiante",
-      required: false,
-      type: "text",
-      category: "annexes",
-    },
-    annexe_electricite_gaz: {
-      key: "annexe_electricite_gaz",
-      label: "État installation électricité/gaz",
-      required: false,
-      type: "text",
-      category: "annexes",
-    },
-    annexe_risques: {
-      key: "annexe_risques",
-      label: "État des risques naturels et technologiques",
-      required: false,
-      type: "text",
-      category: "annexes",
-    },
-    annexe_notice: {
-      key: "annexe_notice",
-      label: "Notice d'information",
-      required: false,
-      type: "text",
-      category: "annexes",
-    },
-    annexe_etat_lieux: {
-      key: "annexe_etat_lieux",
-      label: "État des lieux",
-      required: false,
-      type: "text",
-      category: "annexes",
-    },
-    annexe_autorisation: {
-      key: "annexe_autorisation",
-      label: "Autorisation préalable de mise en location",
-      required: false,
-      type: "text",
-      category: "annexes",
-    },
-    annexe_references_loyers: {
-      key: "annexe_references_loyers",
-      label: "Références loyers voisinage",
-      required: false,
-      type: "text",
       category: "annexes",
     },
   }
@@ -719,6 +249,18 @@ class LeaseDataAnalyzer {
         throw leaseError
       }
 
+      console.log("📋 Bail récupéré:", lease.id)
+      console.log("🏠 Propriété:", lease.property?.title)
+      console.log("👤 Locataire:", lease.tenant?.email)
+      console.log("🏠 Owner:", lease.owner?.email)
+      console.log("💰 Données financières bail:", {
+        monthly_rent: lease.monthly_rent,
+        charges: lease.charges,
+        deposit_amount: lease.deposit_amount,
+        start_date: lease.start_date,
+        end_date: lease.end_date,
+      })
+
       // Récupérer les données complétées précédemment
       const { data: completedData, error: completedError } = await supabase
         .from("lease_completed_data")
@@ -728,6 +270,8 @@ class LeaseDataAnalyzer {
       if (completedError) {
         console.error("❌ Erreur récupération données complétées:", completedError)
       }
+
+      console.log("💾 Données complétées récupérées:", completedData?.length || 0, "champs")
 
       const completedFields =
         completedData?.reduce(
@@ -741,8 +285,9 @@ class LeaseDataAnalyzer {
           {} as Record<string, { value: any; source: "auto" | "manual" }>,
         ) || {}
 
-      // Mapper les données automatiques (inclut les alias pour compatibilité template)
+      // Mapper les données automatiques
       const autoData = this.mapAutomaticData(lease)
+      console.log("🤖 Données automatiques mappées:", Object.keys(autoData).length, "champs")
 
       // Construire l'analyse complète
       const availableData: Record<string, FieldMapping> = {}
@@ -769,15 +314,26 @@ class LeaseDataAnalyzer {
           source,
         }
 
+        // LOGS DÉTAILLÉS pour débugger
         const isEmpty = !value || value === "" || value === null || value === undefined
         if (definition.required && isEmpty) {
+          console.log(`❌ Champ obligatoire manquant: ${key} (${definition.label})`)
+          console.log(`   - Valeur complétée: ${completed?.value}`)
+          console.log(`   - Valeur auto: ${autoValue}`)
+          console.log(`   - Valeur finale: ${value}`)
           missingRequired.push(key)
+        } else if (definition.required) {
+          console.log(`✅ Champ obligatoire OK: ${key} = ${value}`)
         }
       }
 
-      const totalFields = Object.keys(this.fieldDefinitions).filter((k) => this.fieldDefinitions[k].required).length
+      const totalFields = Object.keys(this.fieldDefinitions).length
       const completedFields_count = totalFields - missingRequired.length
       const completionRate = Math.round((completedFields_count / totalFields) * 100)
+
+      console.log(`📊 Analyse terminée: ${completedFields_count}/${totalFields} champs (${completionRate}%)`)
+      console.log("❌ Champs manquants:", missingRequired)
+      console.log("🎯 Peut générer:", missingRequired.length === 0)
 
       return {
         leaseId,
@@ -796,145 +352,116 @@ class LeaseDataAnalyzer {
     const data: Record<string, any> = {}
 
     try {
+      console.log("🗺️ Mapping automatique des données...")
+      console.log("📋 Lease data:", {
+        monthly_rent: lease.monthly_rent,
+        charges: lease.charges,
+        deposit_amount: lease.deposit_amount,
+        start_date: lease.start_date,
+        end_date: lease.end_date,
+      })
+      console.log("🏠 Property data:", {
+        address: lease.property?.address,
+        city: lease.property?.city,
+        postal_code: lease.property?.postal_code,
+        property_type: lease.property?.property_type,
+        surface: lease.property?.surface,
+        rooms: lease.property?.rooms,
+        floor: lease.property?.floor,
+        charges_amount: lease.property?.charges_amount,
+      })
+
       // === PARTIES ===
       if (lease.owner?.first_name && lease.owner?.last_name) {
         data.nom_bailleur = `${lease.owner.first_name} ${lease.owner.last_name}`
-        data.bailleur_nom_prenom = data.nom_bailleur
       }
-      if (lease.owner?.address) {
-        data.adresse_bailleur = lease.owner.address
-        data.bailleur_domicile = lease.owner.address
-      }
-      data.email_bailleur = lease.owner?.email || ""
-      data.bailleur_email = lease.owner?.email || ""
-      data.telephone_bailleur = lease.owner?.phone || ""
-      data.bailleur_qualite = "Personne physique"
-
       if (lease.tenant?.first_name && lease.tenant?.last_name) {
         data.nom_locataire = `${lease.tenant.first_name} ${lease.tenant.last_name}`
-        data.locataire_nom_prenom = data.nom_locataire
       }
+
+      // Adresses et contacts
+      data.adresse_bailleur = lease.owner?.address || ""
+      data.email_bailleur = lease.owner?.email || ""
+      data.telephone_bailleur = lease.owner?.phone || ""
       data.adresse_locataire = lease.tenant?.address || ""
       data.email_locataire = lease.tenant?.email || ""
-      data.locataire_email = lease.tenant?.email || ""
       data.telephone_locataire = lease.tenant?.phone || ""
 
       // === LOGEMENT ===
       data.adresse_postale = lease.property?.address || ""
       data.code_postal = lease.property?.postal_code || ""
       data.ville = lease.property?.city || ""
-      data.localisation_logement = lease.property?.address ? `${lease.property.address}, ${lease.property.city}` : ""
-      data.type_logement = (() => {
-        const propertyType = lease.property?.property_type || ""
-        if (propertyType.toLowerCase().includes("apartment")) return "Appartement"
-        if (propertyType.toLowerCase().includes("house")) return "Maison"
-        if (propertyType.toLowerCase().includes("studio")) return "Studio"
-        if (propertyType.toLowerCase().includes("room")) return "Chambre"
-        return propertyType.charAt(0).toUpperCase() + propertyType.slice(1)
-      })()
-      data.type_habitat = data.type_logement
+
+      // Mapping du type de logement
+      const propertyType = lease.property?.property_type || ""
+      if (propertyType.toLowerCase().includes("apartment")) {
+        data.type_logement = "Appartement"
+      } else if (propertyType.toLowerCase().includes("house")) {
+        data.type_logement = "Maison"
+      } else if (propertyType.toLowerCase().includes("studio")) {
+        data.type_logement = "Studio"
+      } else if (propertyType.toLowerCase().includes("room")) {
+        data.type_logement = "Chambre"
+      } else {
+        // Fallback pour les types français
+        data.type_logement = propertyType.charAt(0).toUpperCase() + propertyType.slice(1)
+      }
+
       data.surface_m2 = lease.property?.surface || ""
-      data.surface_habitable = lease.property?.surface || ""
       data.nombre_pieces = lease.property?.rooms || ""
       data.etage = lease.property?.floor || ""
+
+      // Zone géographique (à déterminer selon la ville)
       data.zone_geographique = this.getZoneGeographique(lease.property?.city || "")
 
-      // Champs supplémentaires du template : vides par défaut (saisie manuelle possible)
-      data.identifiant_fiscal = ""
-      data.regime_juridique = ""
-      data.periode_construction = ""
-      data.autres_parties = ""
-      data.elements_equipements = ""
-      data.modalite_chauffage = ""
-      data.modalite_eau_chaude = ""
-      data.niveau_performance_dpe = ""
-      data.locaux_accessoires = ""
-      data.locaux_communs = ""
-      data.equipement_technologies = ""
-
-      // === FINANCIER ===
+      // === FINANCIER - CORRIGÉ POUR UTILISER LES DONNÉES DU BAIL ===
       data.loyer = lease.monthly_rent || ""
       data.charges = lease.charges || 0
       data.loyer_cc = (lease.monthly_rent || 0) + (lease.charges || 0)
-      data.depot_garantie = lease.deposit_amount || ""
-      data.montant_loyer_mensuel = lease.monthly_rent || ""
-      data.soumis_decret_evolution = "Non"
-      data.soumis_loyer_reference = "Non"
-      data.montant_loyer_reference = ""
-      data.montant_loyer_reference_majore = ""
-      data.complement_loyer = ""
-      data.infos_dernier_loyer = ""
-      data.date_revision = ""
-      data.date_reference_irl = ""
-      data.modalite_reglement_charges = "Provisions sur charges avec régularisation annuelle"
-      data.montant_provisions_charges = lease.charges || 0
-      data.modalites_revision_forfait = ""
-      data.contribution_economies = ""
-      data.periodicite_paiement = "Mensuel"
-      data.paiement_echeance = "À échoir"
-      data.date_paiement = "Le 1er de chaque mois"
-      data.lieu_paiement = lease.property?.city || ""
-      data.montant_premiere_echeance = (lease.monthly_rent || 0) + (lease.charges || 0)
-      data.reevaluation_loyer = ""
-      data.montant_depenses_energie = ""
+      data.depot_garantie = lease.deposit_amount || "" // CORRIGÉ : utilise deposit_amount
 
-      // === DURÉE ===
+      // === DURÉE - CORRIGÉ POUR UTILISER LES DATES DU BAIL ===
       data.date_debut = lease.start_date ? this.formatDateForInput(lease.start_date) : ""
-      data.date_prise_effet = data.date_debut
       data.date_fin = lease.end_date ? this.formatDateForInput(lease.end_date) : ""
+
+      // Calculer la durée en mois entre les dates
       if (lease.start_date && lease.end_date) {
         const startDate = new Date(lease.start_date)
         const endDate = new Date(lease.end_date)
         const diffTime = Math.abs(endDate.getTime() - startDate.getTime())
-        const diffMonths = Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 30.44))
+        const diffMonths = Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 30.44)) // 30.44 jours par mois en moyenne
         data.duree = diffMonths
-        data.duree_contrat = diffMonths > 12 ? `${Math.round(diffMonths / 12)} ans` : `${diffMonths} mois`
       } else {
+        // Fallback selon le type de bail
         if (lease.lease_type === "furnished") {
           data.duree = 12
-          data.duree_contrat = "1 an"
         } else if (lease.lease_type === "unfurnished") {
           data.duree = 36
-          data.duree_contrat = "3 ans"
         }
       }
-      data.evenement_duree_reduite = ""
 
       // === USAGE ET CLAUSES ===
       data.usage_prevu = "résidence principale"
-      data.destination_locaux = "Usage d'habitation"
       data.clauses_particulieres = lease.metadata?.special_conditions || ""
-      data.conditions_particulieres = lease.metadata?.special_conditions || ""
 
       // === SIGNATURE ===
       data.ville_signature = lease.property?.city || ""
-      data.date_signature = ""
+      // CORRIGÉ : Ne pas mettre de date de signature automatique
+      // data.date_signature = this.formatDate(new Date().toISOString())
 
-      // === GARANTIES, TRAVAUX, ETC ===
-      data.travaux_amelioration = ""
-      data.majoration_travaux = ""
-      data.diminution_travaux = ""
-      data.montant_depot_garantie = lease.deposit_amount || ""
-      data.clause_solidarite = ""
-      data.clause_resolutoire = ""
-
-      // === HONORAIRES ===
-      data.plafond_honoraires_visite = ""
-      data.plafond_honoraires_etat_lieux = ""
-      data.honoraires_bailleur = ""
-      data.honoraires_locataire = ""
-
-      // === ANNEXES ===
-      data.annexe_reglement = ""
-      data.annexe_dpe = ""
-      data.annexe_plomb = ""
-      data.annexe_amiante = ""
-      data.annexe_electricite_gaz = ""
-      data.annexe_risques = ""
-      data.annexe_notice = ""
-      data.annexe_etat_lieux = ""
-      data.annexe_autorisation = ""
-      data.annexe_references_loyers = ""
+      console.log("🗺️ Données automatiques mappées:", {
+        nom_bailleur: data.nom_bailleur,
+        nom_locataire: data.nom_locataire,
+        adresse_postale: data.adresse_postale,
+        type_logement: data.type_logement,
+        surface_m2: data.surface_m2,
+        loyer: data.loyer,
+        charges: data.charges,
+        depot_garantie: data.depot_garantie,
+        date_debut: data.date_debut,
+        date_fin: data.date_fin,
+        duree: data.duree,
+      })
     } catch (error) {
       console.error("❌ Erreur mapping automatique:", error)
     }
@@ -944,28 +471,67 @@ class LeaseDataAnalyzer {
 
   private getZoneGeographique(ville: string): string {
     if (!ville) return ""
+
     const villeNormalized = ville.toLowerCase()
-    if (villeNormalized.includes("paris")) return "Paris"
+
+    // Paris
+    if (villeNormalized.includes("paris")) {
+      return "Paris"
+    }
+
+    // Zones tendues (liste simplifiée)
     const zonesTendues = [
-      "marseille","lyon","toulouse","nice","nantes","montpellier","strasbourg","bordeaux","lille","rennes","reims",
-      "toulon","saint-étienne","le havre","grenoble","dijon","angers","nîmes","villeurbanne","saint-denis",
-      "aix-en-provence","brest","limoges","tours","amiens","perpignan","metz","besançon","orléans","mulhouse",
-      "rouen","caen","nancy"
+      "marseille",
+      "lyon",
+      "toulouse",
+      "nice",
+      "nantes",
+      "montpellier",
+      "strasbourg",
+      "bordeaux",
+      "lille",
+      "rennes",
+      "reims",
+      "toulon",
+      "saint-étienne",
+      "le havre",
+      "grenoble",
+      "dijon",
+      "angers",
+      "nîmes",
+      "villeurbanne",
+      "saint-denis",
+      "aix-en-provence",
+      "brest",
+      "limoges",
+      "tours",
+      "amiens",
+      "perpignan",
+      "metz",
+      "besançon",
+      "orléans",
+      "mulhouse",
+      "rouen",
+      "caen",
+      "nancy",
     ]
+
     const isZoneTendue = zonesTendues.some((zoneTendue) => villeNormalized.includes(zoneTendue))
     return isZoneTendue ? "zone tendue" : "zone non tendue"
   }
 
+  // CORRIGÉ : Format pour les champs input date (YYYY-MM-DD)
   private formatDateForInput(dateString: string): string {
     try {
       const date = new Date(dateString)
-      return date.toISOString().split("T")[0]
+      return date.toISOString().split("T")[0] // Format YYYY-MM-DD
     } catch (error) {
       console.error("❌ Erreur formatage date:", dateString, error)
       return ""
     }
   }
 
+  // Format pour l'affichage français (DD/MM/YYYY)
   private formatDate(dateString: string): string {
     try {
       const date = new Date(dateString)
@@ -982,6 +548,8 @@ class LeaseDataAnalyzer {
 
   async saveCompletedData(leaseId: string, fieldName: string, fieldValue: any, source: "manual" = "manual") {
     try {
+      console.log("💾 Sauvegarde:", fieldName, "=", fieldValue)
+
       const { error } = await supabase.from("lease_completed_data").upsert(
         {
           lease_id: leaseId,
@@ -999,6 +567,8 @@ class LeaseDataAnalyzer {
         console.error("❌ Erreur sauvegarde:", error)
         throw error
       }
+
+      console.log("✅ Sauvegarde réussie")
     } catch (error) {
       console.error("❌ Erreur sauvegarde:", error)
       throw error
