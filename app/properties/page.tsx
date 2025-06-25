@@ -33,11 +33,24 @@ export default function PropertiesListPage() {
         }
         setCurrentUser(user)
 
-        // Utiliser la nouvelle fonction avec statistiques réelles
-        const propertiesWithStats = await propertyService.getOwnerPropertiesWithStats(user.id)
+        // Version simplifiée sans compteurs
+        const userProperties = await propertyService.getOwnerProperties(user.id)
 
-        setProperties(propertiesWithStats)
-        setFilteredProperties(propertiesWithStats)
+        // Logique de statut simplifiée
+        const enhancedProperties = userProperties.map((prop: any) => {
+          let status = "paused"
+          if (prop.available && prop.is_published !== false) {
+            status = "active"
+          }
+
+          return {
+            ...prop,
+            status,
+          }
+        })
+
+        setProperties(enhancedProperties)
+        setFilteredProperties(enhancedProperties)
       } catch (error) {
         console.error("Erreur lors du chargement des biens:", error)
         toast.error("Erreur lors du chargement des biens")
