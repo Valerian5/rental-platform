@@ -314,8 +314,16 @@ class LeaseDataAnalyzer {
           source,
         }
 
-        if (definition.required && (!value || value === "")) {
+        // LOGS DÉTAILLÉS pour débugger
+        const isEmpty = !value || value === "" || value === null || value === undefined
+        if (definition.required && isEmpty) {
+          console.log(`❌ Champ obligatoire manquant: ${key} (${definition.label})`)
+          console.log(`   - Valeur complétée: ${completed?.value}`)
+          console.log(`   - Valeur auto: ${autoValue}`)
+          console.log(`   - Valeur finale: ${value}`)
           missingRequired.push(key)
+        } else if (definition.required) {
+          console.log(`✅ Champ obligatoire OK: ${key} = ${value}`)
         }
       }
 
@@ -325,6 +333,7 @@ class LeaseDataAnalyzer {
 
       console.log(`📊 Analyse terminée: ${completedFields_count}/${totalFields} champs (${completionRate}%)`)
       console.log("❌ Champs manquants:", missingRequired)
+      console.log("🎯 Peut générer:", missingRequired.length === 0)
 
       return {
         leaseId,

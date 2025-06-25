@@ -31,6 +31,7 @@ interface Lease {
   tenant: any
   owner: any
   metadata?: any
+  deposit_amount: number
 }
 
 export default function LeaseDetailPage() {
@@ -287,7 +288,7 @@ export default function LeaseDetailPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Dépôt</span>
-                <span className="text-sm font-medium">{lease.deposit}€</span>
+                <span className="text-sm font-medium">{lease.deposit_amount}€</span>
               </div>
             </CardContent>
           </Card>
