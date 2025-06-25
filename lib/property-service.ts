@@ -389,6 +389,79 @@ export const propertyService = {
     }
   },
 
+  // NOUVELLE FONCTION : Récupérer les propriétés avec les statistiques
+  async getOwnerPropertiesWithStats(ownerId: string): Promise<any[]> {
+    console.log("📊 PropertyService.getOwnerPropertiesWithStats", ownerId)
+
+    try {
+      // Récupérer les propriétés
+      const properties = await this.getOwnerProperties(ownerId)
+
+      // Récupérer les statistiques pour chaque propriété
+      const propertiesWithStats = await Promise.all(
+        properties.map(async (property) => {
+          try {
+            // Compter les candidatures actives
+            const { count: applicationsCount } = await supabase
+              .from("applications")
+              .select("*", { count: "exact", head: true })
+              .eq("property_id", property.id)
+              .in("status", ["pending", "visit_proposed", "visit_scheduled"])
+
+            // Vérifier s'il y a un bail actif (propriété louée)
+            const { data: activeLease } = await supabase
+              .from("leases")
+              .select(`
+                id,
+                tenant_id,
+                start_date,
+                users!tenant_id (first_name, last_name)
+              `)
+              .eq("property_id", property.id)
+              .eq("status", "active")
+              .single()
+
+            // Déterminer le statut
+            let status = "paused"
+            let tenant_name = undefined
+            let rental_start_date = undefined
+
+            if (activeLease) {
+              status = "rented"
+              const tenant = activeLease.users
+              tenant_name = tenant ? `${tenant.first_name} ${tenant.last_name}`.trim() : "Locataire"
+              rental_start_date = activeLease.start_date
+            } else if (property.available && property.is_published !== false) {
+              status = "active"
+            }
+
+            return {
+              ...property,
+              status,
+              applications_count: applicationsCount || 0,
+              tenant_name,
+              rental_start_date,
+            }
+          } catch (error) {
+            console.error(`❌ Erreur stats pour propriété ${property.id}:`, error)
+            // En cas d'erreur, retourner la propriété avec des valeurs par défaut
+            return {
+              ...property,
+              status: property.available ? "active" : "paused",
+              applications_count: 0,
+            }
+          }
+        }),
+      )
+
+      console.log(`✅ ${propertiesWithStats.length} propriétés avec statistiques récupérées`)
+      return propertiesWithStats
+    } catch (error) {
+      console.error("❌ Erreur dans getOwnerPropertiesWithStats:", error)
+      throw error
+    }
+  },
+
   async searchProperties(filters: any = {}): Promise<Property[]> {
     console.log("🔍 PropertyService.searchProperties", filters)
 
