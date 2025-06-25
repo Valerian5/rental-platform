@@ -113,7 +113,7 @@ export default function NewLeasePage() {
                 tenant_id: app.tenant_id || "",
                 monthly_rent: app.property?.price?.toString() || "",
                 charges: app.property?.charges_amount?.toString() || "0",
-                deposit: (app.property?.security_deposit).toString() || "",
+                deposit: (app.property?.security_deposit || app.property?.price).toString() || "",
               }))
 
               // Utiliser directement les données du tenant depuis l'application
@@ -854,7 +854,7 @@ export default function NewLeasePage() {
                     )}
                     {formData.deposit && (
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Dépôt:</span>
+                        <span className="text-muted-foreground">Dépôt</span>
                         <span className="font-medium">{formData.deposit} €</span>
                       </div>
                     )}

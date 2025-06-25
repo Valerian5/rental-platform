@@ -56,13 +56,21 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     console.log("- Peut générer:", analysis.canGenerate)
     console.log("- Champs manquants:", analysis.missingRequired)
 
-    if (!analysis.canGenerate) {
-      console.log("❌ Génération impossible - données incomplètes")
+    // CORRIGÉ : Vérifier si on a vraiment des champs obligatoires manquants
+    const reallyMissingRequired = analysis.missingRequired.filter((fieldName) => {
+      const field = analysis.availableData[fieldName]
+      return field && field.required && (!field.value || field.value === "")
+    })
+
+    console.log("🔍 Champs vraiment manquants (obligatoires):", reallyMissingRequired)
+
+    if (reallyMissingRequired.length > 0) {
+      console.log("❌ Génération impossible - données obligatoires incomplètes")
       return NextResponse.json(
         {
           success: false,
-          error: "Données incomplètes",
-          missingFields: analysis.missingRequired,
+          error: "Données obligatoires incomplètes",
+          missingFields: reallyMissingRequired,
           completionRate: analysis.completionRate,
           needsCompletion: true,
         },
@@ -70,7 +78,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       )
     }
 
-    console.log("✅ Données complètes, génération possible")
+    console.log("✅ Données suffisantes pour génération")
 
     // 2. Récupérer le bail pour le type
     const { data: lease, error: leaseError } = await supabase
@@ -98,7 +106,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const templateData: Record<string, any> = {}
 
     for (const [key, field] of Object.entries(analysis.availableData)) {
-      templateData[key] = field.value
+      templateData[key] = field.value || "" // Utiliser une chaîne vide si pas de valeur
     }
 
     console.log("📊 Données template préparées:", Object.keys(templateData).length, "champs")

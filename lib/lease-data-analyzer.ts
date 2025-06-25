@@ -222,7 +222,7 @@ class LeaseDataAnalyzer {
     date_signature: {
       key: "date_signature",
       label: "Date de signature",
-      required: true,
+      required: false, // Changé à false car on ne veut pas forcer une date
       type: "date",
       category: "annexes",
     },
@@ -253,6 +253,13 @@ class LeaseDataAnalyzer {
       console.log("🏠 Propriété:", lease.property?.title)
       console.log("👤 Locataire:", lease.tenant?.email)
       console.log("🏠 Owner:", lease.owner?.email)
+      console.log("💰 Données financières bail:", {
+        monthly_rent: lease.monthly_rent,
+        charges: lease.charges,
+        deposit: lease.deposit,
+        start_date: lease.start_date,
+        end_date: lease.end_date,
+      })
 
       // Récupérer les données complétées précédemment
       const { data: completedData, error: completedError } = await supabase
@@ -376,7 +383,7 @@ class LeaseDataAnalyzer {
       data.code_postal = lease.property?.postal_code || ""
       data.ville = lease.property?.city || ""
 
-      // Mapping du type de logement - CORRIGÉ
+      // Mapping du type de logement
       const propertyType = lease.property?.property_type || ""
       if (propertyType.toLowerCase().includes("apartment")) {
         data.type_logement = "Appartement"
@@ -398,21 +405,30 @@ class LeaseDataAnalyzer {
       // Zone géographique (à déterminer selon la ville)
       data.zone_geographique = this.getZoneGeographique(lease.property?.city || "")
 
-      // === FINANCIER - CORRIGÉ ===
+      // === FINANCIER - CORRIGÉ POUR UTILISER LES DONNÉES DU BAIL ===
       data.loyer = lease.monthly_rent || ""
       data.charges = lease.charges || 0
       data.loyer_cc = (lease.monthly_rent || 0) + (lease.charges || 0)
-      data.depot_garantie = lease.deposit || ""
+      data.depot_garantie = lease.deposit || "" // CORRIGÉ : utilise le deposit du bail
 
-      // === DURÉE - CORRIGÉ ===
+      // === DURÉE - CORRIGÉ POUR UTILISER LES DATES DU BAIL ===
       data.date_debut = lease.start_date ? this.formatDate(lease.start_date) : ""
       data.date_fin = lease.end_date ? this.formatDate(lease.end_date) : ""
 
-      // Durée selon le type
-      if (lease.lease_type === "furnished") {
-        data.duree = 12
-      } else if (lease.lease_type === "unfurnished") {
-        data.duree = 36
+      // Calculer la durée en mois entre les dates
+      if (lease.start_date && lease.end_date) {
+        const startDate = new Date(lease.start_date)
+        const endDate = new Date(lease.end_date)
+        const diffTime = Math.abs(endDate.getTime() - startDate.getTime())
+        const diffMonths = Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 30.44)) // 30.44 jours par mois en moyenne
+        data.duree = diffMonths
+      } else {
+        // Fallback selon le type de bail
+        if (lease.lease_type === "furnished") {
+          data.duree = 12
+        } else if (lease.lease_type === "unfurnished") {
+          data.duree = 36
+        }
       }
 
       // === USAGE ET CLAUSES ===
@@ -421,7 +437,8 @@ class LeaseDataAnalyzer {
 
       // === SIGNATURE ===
       data.ville_signature = lease.property?.city || ""
-      data.date_signature = this.formatDate(new Date().toISOString())
+      // CORRIGÉ : Ne pas mettre de date de signature automatique
+      // data.date_signature = this.formatDate(new Date().toISOString())
 
       console.log("🗺️ Données automatiques mappées:", {
         nom_bailleur: data.nom_bailleur,
@@ -434,6 +451,7 @@ class LeaseDataAnalyzer {
         depot_garantie: data.depot_garantie,
         date_debut: data.date_debut,
         date_fin: data.date_fin,
+        duree: data.duree,
       })
     } catch (error) {
       console.error("❌ Erreur mapping automatique:", error)
