@@ -113,7 +113,7 @@ export default function NewLeasePage() {
                 tenant_id: app.tenant_id || "",
                 monthly_rent: app.property?.price?.toString() || "",
                 charges: app.property?.charges_amount?.toString() || "0",
-                deposit: (app.property?.price * 1).toString() || "",
+                deposit: (app.property?.security_deposit).toString() || "",
               }))
 
               // Utiliser directement les données du tenant depuis l'application
