@@ -256,7 +256,7 @@ class LeaseDataAnalyzer {
       console.log("💰 Données financières bail:", {
         monthly_rent: lease.monthly_rent,
         charges: lease.charges,
-        deposit: lease.deposit_amout,
+        deposit_amount: lease.deposit_amount,
         start_date: lease.start_date,
         end_date: lease.end_date,
       })
@@ -347,7 +347,7 @@ class LeaseDataAnalyzer {
       console.log("📋 Lease data:", {
         monthly_rent: lease.monthly_rent,
         charges: lease.charges,
-        deposit: lease.deposit_amount,
+        deposit_amount: lease.deposit_amount,
         start_date: lease.start_date,
         end_date: lease.end_date,
       })
@@ -409,11 +409,11 @@ class LeaseDataAnalyzer {
       data.loyer = lease.monthly_rent || ""
       data.charges = lease.charges || 0
       data.loyer_cc = (lease.monthly_rent || 0) + (lease.charges || 0)
-      data.depot_garantie = lease.deposit_amount || "" // CORRIGÉ : utilise le deposit du bail
+      data.depot_garantie = lease.deposit_amount || "" // CORRIGÉ : utilise deposit_amount
 
       // === DURÉE - CORRIGÉ POUR UTILISER LES DATES DU BAIL ===
-      data.date_debut = lease.start_date ? this.formatDate(lease.start_date) : ""
-      data.date_fin = lease.end_date ? this.formatDate(lease.end_date) : ""
+      data.date_debut = lease.start_date ? this.formatDateForInput(lease.start_date) : ""
+      data.date_fin = lease.end_date ? this.formatDateForInput(lease.end_date) : ""
 
       // Calculer la durée en mois entre les dates
       if (lease.start_date && lease.end_date) {
@@ -511,13 +511,30 @@ class LeaseDataAnalyzer {
     return isZoneTendue ? "zone tendue" : "zone non tendue"
   }
 
+  // CORRIGÉ : Format pour les champs input date (YYYY-MM-DD)
+  private formatDateForInput(dateString: string): string {
+    try {
+      const date = new Date(dateString)
+      return date.toISOString().split("T")[0] // Format YYYY-MM-DD
+    } catch (error) {
+      console.error("❌ Erreur formatage date:", dateString, error)
+      return ""
+    }
+  }
+
+  // Format pour l'affichage français (DD/MM/YYYY)
   private formatDate(dateString: string): string {
-    const date = new Date(dateString)
-    return date.toLocaleDateString("fr-FR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    })
+    try {
+      const date = new Date(dateString)
+      return date.toLocaleDateString("fr-FR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      })
+    } catch (error) {
+      console.error("❌ Erreur formatage date:", dateString, error)
+      return ""
+    }
   }
 
   async saveCompletedData(leaseId: string, fieldName: string, fieldValue: any, source: "manual" = "manual") {

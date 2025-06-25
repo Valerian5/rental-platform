@@ -55,22 +55,18 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     console.log("- Taux completion:", analysis.completionRate + "%")
     console.log("- Peut générer:", analysis.canGenerate)
     console.log("- Champs manquants:", analysis.missingRequired)
+    console.log("- Nombre champs manquants:", analysis.missingRequired.length)
 
-    // CORRIGÉ : Vérifier si on a vraiment des champs obligatoires manquants
-    const reallyMissingRequired = analysis.missingRequired.filter((fieldName) => {
-      const field = analysis.availableData[fieldName]
-      return field && field.required && (!field.value || field.value === "")
-    })
-
-    console.log("🔍 Champs vraiment manquants (obligatoires):", reallyMissingRequired)
-
-    if (reallyMissingRequired.length > 0) {
+    // CORRIGÉ : Utiliser directement canGenerate de l'analyse
+    if (!analysis.canGenerate) {
       console.log("❌ Génération impossible - données obligatoires incomplètes")
+      console.log("❌ Champs manquants détaillés:", analysis.missingRequired)
+
       return NextResponse.json(
         {
           success: false,
           error: "Données obligatoires incomplètes",
-          missingFields: reallyMissingRequired,
+          missingFields: analysis.missingRequired,
           completionRate: analysis.completionRate,
           needsCompletion: true,
         },
@@ -87,7 +83,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .eq("id", params.id)
       .single()
 
-    if (leaseError) throw leaseError
+    if (leaseError) {
+      console.error("❌ Erreur récupération bail:", leaseError)
+      throw leaseError
+    }
 
     // 3. Récupérer le template approprié
     const { data: template, error: templateError } = await supabase
@@ -98,7 +97,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .eq("is_active", true)
       .single()
 
-    if (templateError) throw templateError
+    if (templateError) {
+      console.error("❌ Erreur récupération template:", templateError)
+      throw templateError
+    }
 
     console.log("📄 Template récupéré:", template.name)
 
@@ -115,7 +117,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     // 5. Compiler le template
     const generatedDocument = compileTemplate(template.template_content, templateData)
 
-    console.log("✅ Document généré")
+    console.log("✅ Document généré, longueur:", generatedDocument.length, "caractères")
 
     // 6. Sauvegarder le document généré
     const { error: updateError } = await supabase
@@ -127,7 +129,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       })
       .eq("id", params.id)
 
-    if (updateError) throw updateError
+    if (updateError) {
+      console.error("❌ Erreur sauvegarde document:", updateError)
+      throw updateError
+    }
+
+    console.log("✅ Document sauvegardé avec succès")
 
     return NextResponse.json({
       success: true,
