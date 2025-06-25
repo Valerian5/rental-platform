@@ -82,6 +82,7 @@ export default function NewLeasePage() {
         if (propertiesResponse.ok) {
           const propertiesData = await propertiesResponse.json()
           console.log("🏠 Propriétés chargées:", propertiesData.properties?.length || 0)
+          console.log("🏠 Première propriété:", propertiesData.properties?.[0])
           setProperties(propertiesData.properties || [])
         } else {
           console.error("Erreur chargement propriétés:", propertiesResponse.status)
@@ -111,7 +112,7 @@ export default function NewLeasePage() {
                 property_id: app.property_id || "",
                 tenant_id: app.tenant_id || "",
                 monthly_rent: app.property?.price?.toString() || "",
-                charges: app.property?.charges?.toString() || "0",
+                charges: app.property?.charges_amount?.toString() || "0",
                 deposit: (app.property?.price * 1).toString() || "",
               }))
 
@@ -165,9 +166,16 @@ export default function NewLeasePage() {
       if (name === "property_id") {
         const selectedProperty = properties.find((p) => p.id === value)
         if (selectedProperty) {
+          console.log("🏠 Propriété sélectionnée:", {
+            price: selectedProperty.price,
+            charges_amount: selectedProperty.charges_amount,
+            security_deposit: selectedProperty.security_deposit,
+          })
+
           newData.monthly_rent = selectedProperty.price?.toString() || ""
-          newData.charges = selectedProperty.charges_amount?.toString() || selectedProperty.charges?.toString() || "0"
-          newData.deposit = (selectedProperty.price * 1).toString() || ""
+          newData.charges = selectedProperty.charges_amount?.toString() || "0"
+          newData.deposit =
+            selectedProperty.security_deposit?.toString() || (selectedProperty.price * 1).toString() || ""
         }
       }
 
@@ -437,7 +445,7 @@ export default function NewLeasePage() {
                       </div>
                       <div>
                         <span className="text-muted-foreground">Type:</span>
-                        <p>{selectedProperty.property_type || selectedProperty.type}</p>
+                        <p>{selectedProperty.property_type}</p>
                       </div>
                       <div>
                         <span className="text-muted-foreground">Surface:</span>
@@ -447,10 +455,10 @@ export default function NewLeasePage() {
                         <span className="text-muted-foreground">Loyer:</span>
                         <p>{selectedProperty.price} €/mois</p>
                       </div>
-                      {selectedProperty.charges && (
+                      {selectedProperty.charges_amount && (
                         <div>
                           <span className="text-muted-foreground">Charges:</span>
-                          <p>{selectedProperty.charges} €/mois</p>
+                          <p>{selectedProperty.charges_amount} €/mois</p>
                         </div>
                       )}
                     </div>
@@ -792,7 +800,7 @@ export default function NewLeasePage() {
                       <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
                         <div>
                           <span className="text-muted-foreground">Type:</span>
-                          <p>{selectedProperty.property_type || selectedProperty.type}</p>
+                          <p>{selectedProperty.property_type}</p>
                         </div>
                         <div>
                           <span className="text-muted-foreground">Surface:</span>

@@ -170,13 +170,6 @@ class LeaseDataAnalyzer {
       type: "number",
       category: "financier",
     },
-    nb_mois_depot: {
-      key: "nb_mois_depot",
-      label: "Nombre de mois de dépôt",
-      required: true,
-      type: "number",
-      category: "financier",
-    },
 
     // === DURÉE ===
     date_debut: {
@@ -257,6 +250,9 @@ class LeaseDataAnalyzer {
       }
 
       console.log("📋 Bail récupéré:", lease.id)
+      console.log("🏠 Propriété:", lease.property?.title)
+      console.log("👤 Locataire:", lease.tenant?.email)
+      console.log("🏠 Owner:", lease.owner?.email)
 
       // Récupérer les données complétées précédemment
       const { data: completedData, error: completedError } = await supabase
@@ -340,8 +336,26 @@ class LeaseDataAnalyzer {
     const data: Record<string, any> = {}
 
     try {
+      console.log("🗺️ Mapping automatique des données...")
+      console.log("📋 Lease data:", {
+        monthly_rent: lease.monthly_rent,
+        charges: lease.charges,
+        deposit: lease.deposit,
+        start_date: lease.start_date,
+        end_date: lease.end_date,
+      })
+      console.log("🏠 Property data:", {
+        address: lease.property?.address,
+        city: lease.property?.city,
+        postal_code: lease.property?.postal_code,
+        property_type: lease.property?.property_type,
+        surface: lease.property?.surface,
+        rooms: lease.property?.rooms,
+        floor: lease.property?.floor,
+        charges_amount: lease.property?.charges_amount,
+      })
+
       // === PARTIES ===
-      // Mapping des champs composés
       if (lease.owner?.first_name && lease.owner?.last_name) {
         data.nom_bailleur = `${lease.owner.first_name} ${lease.owner.last_name}`
       }
@@ -361,7 +375,22 @@ class LeaseDataAnalyzer {
       data.adresse_postale = lease.property?.address || ""
       data.code_postal = lease.property?.postal_code || ""
       data.ville = lease.property?.city || ""
-      data.type_logement = lease.property?.type || ""
+
+      // Mapping du type de logement - CORRIGÉ
+      const propertyType = lease.property?.property_type || ""
+      if (propertyType.toLowerCase().includes("apartment")) {
+        data.type_logement = "Appartement"
+      } else if (propertyType.toLowerCase().includes("house")) {
+        data.type_logement = "Maison"
+      } else if (propertyType.toLowerCase().includes("studio")) {
+        data.type_logement = "Studio"
+      } else if (propertyType.toLowerCase().includes("room")) {
+        data.type_logement = "Chambre"
+      } else {
+        // Fallback pour les types français
+        data.type_logement = propertyType.charAt(0).toUpperCase() + propertyType.slice(1)
+      }
+
       data.surface_m2 = lease.property?.surface || ""
       data.nombre_pieces = lease.property?.rooms || ""
       data.etage = lease.property?.floor || ""
@@ -369,14 +398,13 @@ class LeaseDataAnalyzer {
       // Zone géographique (à déterminer selon la ville)
       data.zone_geographique = this.getZoneGeographique(lease.property?.city || "")
 
-      // === FINANCIER ===
+      // === FINANCIER - CORRIGÉ ===
       data.loyer = lease.monthly_rent || ""
       data.charges = lease.charges || 0
       data.loyer_cc = (lease.monthly_rent || 0) + (lease.charges || 0)
       data.depot_garantie = lease.deposit || ""
-      data.nb_mois_depot = lease.deposit && lease.monthly_rent ? Math.round(lease.deposit / lease.monthly_rent) : ""
 
-      // === DURÉE ===
+      // === DURÉE - CORRIGÉ ===
       data.date_debut = lease.start_date ? this.formatDate(lease.start_date) : ""
       data.date_fin = lease.end_date ? this.formatDate(lease.end_date) : ""
 
@@ -395,11 +423,18 @@ class LeaseDataAnalyzer {
       data.ville_signature = lease.property?.city || ""
       data.date_signature = this.formatDate(new Date().toISOString())
 
-      console.log(
-        "🗺️ Données automatiques mappées:",
-        Object.keys(data).filter((k) => data[k]).length,
-        "champs non vides",
-      )
+      console.log("🗺️ Données automatiques mappées:", {
+        nom_bailleur: data.nom_bailleur,
+        nom_locataire: data.nom_locataire,
+        adresse_postale: data.adresse_postale,
+        type_logement: data.type_logement,
+        surface_m2: data.surface_m2,
+        loyer: data.loyer,
+        charges: data.charges,
+        depot_garantie: data.depot_garantie,
+        date_debut: data.date_debut,
+        date_fin: data.date_fin,
+      })
     } catch (error) {
       console.error("❌ Erreur mapping automatique:", error)
     }
