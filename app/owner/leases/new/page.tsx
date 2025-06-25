@@ -19,7 +19,6 @@ import { cn } from "@/lib/utils"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
-import { supabase } from "@/lib/supabase"
 
 export default function NewLeasePage() {
   const router = useRouter()
@@ -74,9 +73,9 @@ export default function NewLeasePage() {
       setUser(currentUser)
       console.log("👤 Utilisateur connecté:", currentUser.id)
 
-      // Charger les propriétés du propriétaire
+      // Charger les propriétés du propriétaire avec l'API correcte
       try {
-        const propertiesResponse = await fetch(`/api/properties?owner_id=${currentUser.id}`)
+        const propertiesResponse = await fetch(`/api/properties/owner?owner_id=${currentUser.id}`)
         console.log("🏠 Réponse propriétés:", propertiesResponse.status)
 
         if (propertiesResponse.ok) {
@@ -111,7 +110,7 @@ export default function NewLeasePage() {
                 property_id: app.property_id || "",
                 tenant_id: app.tenant_id || "",
                 monthly_rent: app.property?.price?.toString() || "",
-                charges: app.property?.charges?.toString() || "",
+                charges: app.property?.charges?.toString() || "0",
                 deposit: (app.property?.price * 1).toString() || "",
               }))
 
@@ -160,6 +159,16 @@ export default function NewLeasePage() {
   const handleSelectChange = (name: string, value: string) => {
     setFormData((prev) => {
       const newData = { ...prev, [name]: value }
+
+      // Si on change de propriété, récupérer les charges
+      if (name === "property_id") {
+        const selectedProperty = properties.find((p) => p.id === value)
+        if (selectedProperty) {
+          newData.monthly_rent = selectedProperty.price?.toString() || ""
+          newData.charges = selectedProperty.charges?.toString() || "0"
+          newData.deposit = (selectedProperty.price * 1).toString() || ""
+        }
+      }
 
       // Recalculer la date de fin si on change le type de bail et qu'on a une date de début
       if (name === "lease_type" && prev.start_date) {
@@ -269,20 +278,10 @@ export default function NewLeasePage() {
 
       console.log("📝 Données à envoyer:", leaseData)
 
-      // Récupérer le token de session depuis Supabase
-      const { data: sessionData } = await supabase.auth.getSession()
-
-      if (!sessionData.session?.access_token) {
-        toast.error("Vous n'êtes pas connecté ou votre session a expiré")
-        setSaving(false)
-        return
-      }
-
       const response = await fetch("/api/leases", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${sessionData.session.access_token}`,
         },
         body: JSON.stringify(leaseData),
       })
@@ -300,12 +299,8 @@ export default function NewLeasePage() {
 
       toast.success("Bail créé avec succès")
 
-      // Rediriger vers la page de completion
-      if (data.redirect) {
-        router.push(data.redirect)
-      } else {
-        router.push(`/owner/leases/${data.lease.id}`)
-      }
+      // Rediriger vers la page de completion des données
+      router.push(`/owner/leases/${data.lease.id}/complete-data`)
 
       // Gestion des documents (optionnel pour l'instant)
       if (formData.documents.length > 0) {
@@ -404,11 +399,16 @@ export default function NewLeasePage() {
                     <SelectContent>
                       {properties.map((property) => (
                         <SelectItem key={property.id} value={property.id}>
-                          {property.title} - {property.address}
+                          {property.title} - {property.address}, {property.city}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {properties.length === 0 && (
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Aucun bien trouvé. Assurez-vous d'avoir créé des annonces.
+                    </p>
+                  )}
                 </div>
 
                 {selectedProperty && (
@@ -424,7 +424,7 @@ export default function NewLeasePage() {
                       </div>
                       <div>
                         <span className="text-muted-foreground">Type:</span>
-                        <p>{selectedProperty.type}</p>
+                        <p>{selectedProperty.property_type || selectedProperty.type}</p>
                       </div>
                       <div>
                         <span className="text-muted-foreground">Surface:</span>
@@ -462,6 +462,11 @@ export default function NewLeasePage() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {tenants.length === 0 && (
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Aucun locataire trouvé. Les locataires apparaissent après avoir postulé à vos annonces.
+                    </p>
+                  )}
                 </div>
 
                 {selectedTenant && (
@@ -761,7 +766,7 @@ export default function NewLeasePage() {
           <Card>
             <CardHeader>
               <CardTitle>Récapitulatif du bail</CardTitle>
-              <CardDescription>Vérifiez les informations avant de générer le bail</CardDescription>
+              <CardDescription>Vérifiez les informations avant de créer le bail</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -774,7 +779,7 @@ export default function NewLeasePage() {
                       <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
                         <div>
                           <span className="text-muted-foreground">Type:</span>
-                          <p>{selectedProperty.type}</p>
+                          <p>{selectedProperty.property_type || selectedProperty.type}</p>
                         </div>
                         <div>
                           <span className="text-muted-foreground">Surface:</span>
@@ -851,7 +856,7 @@ export default function NewLeasePage() {
                 Précédent
               </Button>
               <Button onClick={handleSubmit} disabled={saving}>
-                {saving ? "Génération..." : "Générer le bail"}
+                {saving ? "Création..." : "Créer le bail"}
               </Button>
             </CardFooter>
           </Card>

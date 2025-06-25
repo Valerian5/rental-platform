@@ -92,11 +92,11 @@ export default function LeaseDetailPage() {
       if (data.success) {
         toast.success("Document généré avec succès")
         await loadLease() // Recharger pour avoir le document
-
-        // Afficher un message informatif
-        toast.info("Vous pouvez maintenant vérifier et compléter les données si nécessaire", {
-          duration: 5000,
-        })
+      } else if (data.needsCompletion) {
+        toast.info("Certaines données sont manquantes. Redirection vers le formulaire de completion...")
+        setTimeout(() => {
+          router.push(`/owner/leases/${params.id}/complete-data`)
+        }, 1500)
       } else {
         toast.error(data.error || "Erreur lors de la génération")
       }
@@ -329,7 +329,7 @@ export default function LeaseDetailPage() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <h3 className="text-lg font-medium">Document généré</h3>
-                    <Button variant="outline" onClick={() => router.push(`/owner/leases/${lease.id}/complete`)}>
+                    <Button variant="outline" onClick={() => router.push(`/owner/leases/${lease.id}/complete-data`)}>
                       <Edit className="h-4 w-4 mr-2" />
                       Compléter les données
                     </Button>
@@ -365,7 +365,7 @@ export default function LeaseDetailPage() {
                       )}
                       {generating ? "Génération..." : "Générer le document"}
                     </Button>
-                    <Button variant="outline" onClick={() => router.push(`/owner/leases/${lease.id}/complete`)}>
+                    <Button variant="outline" onClick={() => router.push(`/owner/leases/${lease.id}/complete-data`)}>
                       <Edit className="h-4 w-4 mr-2" />
                       Compléter les données d'abord
                     </Button>
