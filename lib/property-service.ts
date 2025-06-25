@@ -389,7 +389,7 @@ export const propertyService = {
     }
   },
 
-  // NOUVELLE FONCTION : Récupérer les propriétés avec les statistiques
+  // FONCTION CORRIGÉE : Récupérer les propriétés avec les statistiques
   async getOwnerPropertiesWithStats(ownerId: string): Promise<any[]> {
     console.log("📊 PropertyService.getOwnerPropertiesWithStats", ownerId)
 
@@ -401,15 +401,26 @@ export const propertyService = {
       const propertiesWithStats = await Promise.all(
         properties.map(async (property) => {
           try {
-            // Compter les candidatures actives
-            const { count: applicationsCount } = await supabase
+            console.log(`📊 Récupération stats pour propriété ${property.id}`)
+
+            // CORRECTION : Compter les candidatures avec une requête plus simple
+            const { data: applications, error: appError } = await supabase
               .from("applications")
-              .select("*", { count: "exact", head: true })
+              .select("id, status")
               .eq("property_id", property.id)
-              .in("status", ["pending", "visit_proposed", "visit_scheduled"])
+
+            if (appError) {
+              console.error(`❌ Erreur candidatures pour ${property.id}:`, appError)
+            }
+
+            // Filtrer les candidatures actives
+            const activeApplications =
+              applications?.filter((app) => ["pending", "visit_proposed", "visit_scheduled"].includes(app.status)) || []
+
+            console.log(`📊 Propriété ${property.id}: ${activeApplications.length} candidatures actives`)
 
             // Vérifier s'il y a un bail actif (propriété louée)
-            const { data: activeLease } = await supabase
+            const { data: activeLease, error: leaseError } = await supabase
               .from("leases")
               .select(`
                 id,
@@ -419,7 +430,11 @@ export const propertyService = {
               `)
               .eq("property_id", property.id)
               .eq("status", "active")
-              .single()
+              .maybeSingle() // Utiliser maybeSingle au lieu de single
+
+            if (leaseError) {
+              console.error(`❌ Erreur bail pour ${property.id}:`, leaseError)
+            }
 
             // Déterminer le statut
             let status = "paused"
@@ -435,10 +450,12 @@ export const propertyService = {
               status = "active"
             }
 
+            console.log(`📊 Propriété ${property.id}: statut=${status}, candidatures=${activeApplications.length}`)
+
             return {
               ...property,
               status,
-              applications_count: applicationsCount || 0,
+              applications_count: activeApplications.length,
               tenant_name,
               rental_start_date,
             }
