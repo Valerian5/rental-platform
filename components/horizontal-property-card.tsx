@@ -16,6 +16,15 @@ export default function HorizontalPropertyCard({ property }: HorizontalPropertyC
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
 
+  // Debug temporaire - à supprimer après vérification
+  console.log("🏠 Property data:", {
+    id: property.id,
+    title: property.title,
+    status: property.status,
+    applications_count: property.applications_count,
+    tenant_name: property.tenant_name,
+  })
+
   // Trouver l'image principale
   const mainImage =
     property.property_images?.find((img: any) => img.is_primary)?.url ||
@@ -107,9 +116,9 @@ export default function HorizontalPropertyCard({ property }: HorizontalPropertyC
               </div>
             )}
 
-            {property.status === "active" && property.applications_count > 0 && (
+            {property.status === "active" && (property.applications_count || 0) > 0 && (
               <div className="bg-green-50 p-2 rounded-md text-sm mb-3">
-                <div className="font-medium">{property.applications_count} candidature(s) reçue(s)</div>
+                <div className="font-medium">{property.applications_count || 0} candidature(s) reçue(s)</div>
               </div>
             )}
 
