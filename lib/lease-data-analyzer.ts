@@ -256,7 +256,7 @@ class LeaseDataAnalyzer {
       console.log("💰 Données financières bail:", {
         monthly_rent: lease.monthly_rent,
         charges: lease.charges,
-        deposit: lease.deposit,
+        deposit: lease.deposit_amout,
         start_date: lease.start_date,
         end_date: lease.end_date,
       })
@@ -347,7 +347,7 @@ class LeaseDataAnalyzer {
       console.log("📋 Lease data:", {
         monthly_rent: lease.monthly_rent,
         charges: lease.charges,
-        deposit: lease.deposit,
+        deposit: lease.deposit_amount,
         start_date: lease.start_date,
         end_date: lease.end_date,
       })
@@ -409,7 +409,7 @@ class LeaseDataAnalyzer {
       data.loyer = lease.monthly_rent || ""
       data.charges = lease.charges || 0
       data.loyer_cc = (lease.monthly_rent || 0) + (lease.charges || 0)
-      data.depot_garantie = lease.deposit || "" // CORRIGÉ : utilise le deposit du bail
+      data.depot_garantie = lease.deposit_amount || "" // CORRIGÉ : utilise le deposit du bail
 
       // === DURÉE - CORRIGÉ POUR UTILISER LES DATES DU BAIL ===
       data.date_debut = lease.start_date ? this.formatDate(lease.start_date) : ""
