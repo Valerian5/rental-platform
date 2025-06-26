@@ -222,7 +222,7 @@ class LeaseDataAnalyzer {
     date_signature: {
       key: "date_signature",
       label: "Date de signature",
-      required: false, // Changé à false car on ne veut pas forcer une date
+      required: false,
       type: "date",
       category: "annexes",
     },
@@ -232,7 +232,7 @@ class LeaseDataAnalyzer {
     try {
       console.log("🔍 Analyse des données pour bail:", leaseId)
 
-      // Récupérer toutes les données du bail
+      // CORRIGÉ : Récupérer le bail avec TOUTES les nouvelles colonnes
       const { data: lease, error: leaseError } = await supabase
         .from("leases")
         .select(`
@@ -250,18 +250,17 @@ class LeaseDataAnalyzer {
       }
 
       console.log("📋 Bail récupéré:", lease.id)
-      console.log("🏠 Propriété:", lease.property?.title)
-      console.log("👤 Locataire:", lease.tenant?.email)
-      console.log("🏠 Owner:", lease.owner?.email)
-      console.log("💰 Données financières bail:", {
-        monthly_rent: lease.monthly_rent,
-        charges: lease.charges,
-        deposit_amount: lease.deposit_amount,
-        start_date: lease.start_date,
-        end_date: lease.end_date,
+      console.log("💾 Données bail dans DB:", {
+        nom_bailleur: lease.nom_bailleur,
+        adresse_bailleur: lease.adresse_bailleur,
+        nom_locataire: lease.nom_locataire,
+        adresse_locataire: lease.adresse_locataire,
+        adresse_postale: lease.adresse_postale,
+        loyer: lease.loyer,
+        depot_garantie: lease.depot_garantie,
       })
 
-      // Récupérer les données complétées précédemment
+      // Récupérer les données complétées de l'ancienne table (pour migration)
       const { data: completedData, error: completedError } = await supabase
         .from("lease_completed_data")
         .select("field_name, field_value, source")
@@ -271,7 +270,7 @@ class LeaseDataAnalyzer {
         console.error("❌ Erreur récupération données complétées:", completedError)
       }
 
-      console.log("💾 Données complétées récupérées:", completedData?.length || 0, "champs")
+      console.log("💾 Données complétées (ancienne table):", completedData?.length || 0, "champs")
 
       const completedFields =
         completedData?.reduce(
@@ -294,13 +293,18 @@ class LeaseDataAnalyzer {
       const missingRequired: string[] = []
 
       for (const [key, definition] of Object.entries(this.fieldDefinitions)) {
-        const completed = completedFields[key]
-        const autoValue = autoData[key]
+        // CORRIGÉ : Priorité aux données de la table leases
+        const dbValue = lease[key] // Valeur directe de la table leases
+        const completed = completedFields[key] // Valeur de l'ancienne table
+        const autoValue = autoData[key] // Valeur automatique
 
-        let value = completed?.value || autoValue || ""
+        let value = dbValue || completed?.value || autoValue || ""
         let source: "auto" | "manual" | "missing" = "missing"
 
-        if (completed?.value !== undefined && completed?.value !== null && completed?.value !== "") {
+        if (dbValue !== undefined && dbValue !== null && dbValue !== "") {
+          source = "manual" // Données saisies dans la table leases
+          value = dbValue
+        } else if (completed?.value !== undefined && completed?.value !== null && completed?.value !== "") {
           source = completed.source
           value = completed.value
         } else if (autoValue !== undefined && autoValue !== null && autoValue !== "") {
@@ -318,12 +322,13 @@ class LeaseDataAnalyzer {
         const isEmpty = !value || value === "" || value === null || value === undefined
         if (definition.required && isEmpty) {
           console.log(`❌ Champ obligatoire manquant: ${key} (${definition.label})`)
+          console.log(`   - Valeur DB: ${dbValue}`)
           console.log(`   - Valeur complétée: ${completed?.value}`)
           console.log(`   - Valeur auto: ${autoValue}`)
           console.log(`   - Valeur finale: ${value}`)
           missingRequired.push(key)
         } else if (definition.required) {
-          console.log(`✅ Champ obligatoire OK: ${key} = ${value}`)
+          console.log(`✅ Champ obligatoire OK: ${key} = ${value} (source: ${source})`)
         }
       }
 
@@ -353,23 +358,6 @@ class LeaseDataAnalyzer {
 
     try {
       console.log("🗺️ Mapping automatique des données...")
-      console.log("📋 Lease data:", {
-        monthly_rent: lease.monthly_rent,
-        charges: lease.charges,
-        deposit_amount: lease.deposit_amount,
-        start_date: lease.start_date,
-        end_date: lease.end_date,
-      })
-      console.log("🏠 Property data:", {
-        address: lease.property?.address,
-        city: lease.property?.city,
-        postal_code: lease.property?.postal_code,
-        property_type: lease.property?.property_type,
-        surface: lease.property?.surface,
-        rooms: lease.property?.rooms,
-        floor: lease.property?.floor,
-        charges_amount: lease.property?.charges_amount,
-      })
 
       // === PARTIES ===
       if (lease.owner?.first_name && lease.owner?.last_name) {
@@ -403,24 +391,21 @@ class LeaseDataAnalyzer {
       } else if (propertyType.toLowerCase().includes("room")) {
         data.type_logement = "Chambre"
       } else {
-        // Fallback pour les types français
         data.type_logement = propertyType.charAt(0).toUpperCase() + propertyType.slice(1)
       }
 
       data.surface_m2 = lease.property?.surface || ""
       data.nombre_pieces = lease.property?.rooms || ""
       data.etage = lease.property?.floor || ""
-
-      // Zone géographique (à déterminer selon la ville)
       data.zone_geographique = this.getZoneGeographique(lease.property?.city || "")
 
-      // === FINANCIER - CORRIGÉ POUR UTILISER LES DONNÉES DU BAIL ===
+      // === FINANCIER ===
       data.loyer = lease.monthly_rent || ""
       data.charges = lease.charges || 0
       data.loyer_cc = (lease.monthly_rent || 0) + (lease.charges || 0)
-      data.depot_garantie = lease.deposit_amount || "" // CORRIGÉ : utilise deposit_amount
+      data.depot_garantie = lease.deposit_amount || ""
 
-      // === DURÉE - CORRIGÉ POUR UTILISER LES DATES DU BAIL ===
+      // === DURÉE ===
       data.date_debut = lease.start_date ? this.formatDateForInput(lease.start_date) : ""
       data.date_fin = lease.end_date ? this.formatDateForInput(lease.end_date) : ""
 
@@ -429,10 +414,9 @@ class LeaseDataAnalyzer {
         const startDate = new Date(lease.start_date)
         const endDate = new Date(lease.end_date)
         const diffTime = Math.abs(endDate.getTime() - startDate.getTime())
-        const diffMonths = Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 30.44)) // 30.44 jours par mois en moyenne
+        const diffMonths = Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 30.44))
         data.duree = diffMonths
       } else {
-        // Fallback selon le type de bail
         if (lease.lease_type === "furnished") {
           data.duree = 12
         } else if (lease.lease_type === "unfurnished") {
@@ -446,40 +430,19 @@ class LeaseDataAnalyzer {
 
       // === SIGNATURE ===
       data.ville_signature = lease.property?.city || ""
-      // CORRIGÉ : Ne pas mettre de date de signature automatique
-      // data.date_signature = this.formatDate(new Date().toISOString())
 
-      console.log("🗺️ Données automatiques mappées:", {
-        nom_bailleur: data.nom_bailleur,
-        nom_locataire: data.nom_locataire,
-        adresse_postale: data.adresse_postale,
-        type_logement: data.type_logement,
-        surface_m2: data.surface_m2,
-        loyer: data.loyer,
-        charges: data.charges,
-        depot_garantie: data.depot_garantie,
-        date_debut: data.date_debut,
-        date_fin: data.date_fin,
-        duree: data.duree,
-      })
+      return data
     } catch (error) {
       console.error("❌ Erreur mapping automatique:", error)
+      return data
     }
-
-    return data
   }
 
   private getZoneGeographique(ville: string): string {
     if (!ville) return ""
-
     const villeNormalized = ville.toLowerCase()
+    if (villeNormalized.includes("paris")) return "Paris"
 
-    // Paris
-    if (villeNormalized.includes("paris")) {
-      return "Paris"
-    }
-
-    // Zones tendues (liste simplifiée)
     const zonesTendues = [
       "marseille",
       "lyon",
@@ -501,74 +464,38 @@ class LeaseDataAnalyzer {
       "nîmes",
       "villeurbanne",
       "saint-denis",
-      "aix-en-provence",
-      "brest",
-      "limoges",
-      "tours",
-      "amiens",
-      "perpignan",
-      "metz",
-      "besançon",
-      "orléans",
-      "mulhouse",
-      "rouen",
-      "caen",
-      "nancy",
     ]
 
-    const isZoneTendue = zonesTendues.some((zoneTendue) => villeNormalized.includes(zoneTendue))
-    return isZoneTendue ? "zone tendue" : "zone non tendue"
+    return zonesTendues.some((zone) => villeNormalized.includes(zone)) ? "zone tendue" : "zone non tendue"
   }
 
-  // CORRIGÉ : Format pour les champs input date (YYYY-MM-DD)
   private formatDateForInput(dateString: string): string {
     try {
-      const date = new Date(dateString)
-      return date.toISOString().split("T")[0] // Format YYYY-MM-DD
-    } catch (error) {
-      console.error("❌ Erreur formatage date:", dateString, error)
+      return new Date(dateString).toISOString().split("T")[0]
+    } catch {
       return ""
     }
   }
 
-  // Format pour l'affichage français (DD/MM/YYYY)
-  private formatDate(dateString: string): string {
-    try {
-      const date = new Date(dateString)
-      return date.toLocaleDateString("fr-FR", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      })
-    } catch (error) {
-      console.error("❌ Erreur formatage date:", dateString, error)
-      return ""
-    }
-  }
-
+  // CORRIGÉ : Sauvegarder directement dans la table leases
   async saveCompletedData(leaseId: string, fieldName: string, fieldValue: any, source: "manual" = "manual") {
     try {
-      console.log("💾 Sauvegarde:", fieldName, "=", fieldValue)
+      console.log("💾 Sauvegarde directe dans leases:", fieldName, "=", fieldValue)
 
-      const { error } = await supabase.from("lease_completed_data").upsert(
-        {
-          lease_id: leaseId,
-          field_name: fieldName,
-          field_value: fieldValue,
-          source,
-          updated_at: new Date().toISOString(),
-        },
-        {
-          onConflict: "lease_id,field_name",
-        },
-      )
+      // Construire l'objet de mise à jour
+      const updateData: Record<string, any> = {
+        [fieldName]: fieldValue,
+        updated_at: new Date().toISOString(),
+      }
+
+      const { error } = await supabase.from("leases").update(updateData).eq("id", leaseId)
 
       if (error) {
-        console.error("❌ Erreur sauvegarde:", error)
+        console.error("❌ Erreur sauvegarde directe:", error)
         throw error
       }
 
-      console.log("✅ Sauvegarde réussie")
+      console.log("✅ Sauvegarde directe réussie")
     } catch (error) {
       console.error("❌ Erreur sauvegarde:", error)
       throw error
