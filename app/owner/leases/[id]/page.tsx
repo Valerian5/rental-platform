@@ -10,6 +10,7 @@ import { FileText, Download, Printer, Send, CheckCircle, RefreshCw, Edit } from 
 import { PageHeader } from "@/components/page-header"
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
 import { authService } from "@/lib/auth-service"
+import { LeaseDocumentViewer } from "@/components/lease-document-viewer"
 
 interface Lease {
   id: string
@@ -41,6 +42,7 @@ export default function LeaseDetailPage() {
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [user, setUser] = useState<any>(null)
+  const [generatedDocument, setGeneratedDocument] = useState<any>(null)
 
   useEffect(() => {
     checkAuthAndLoadLease()
@@ -92,11 +94,12 @@ export default function LeaseDetailPage() {
 
       if (data.success) {
         toast.success("Document généré avec succès")
-        await loadLease() // Recharger pour avoir le document
-      } else if (data.needsCompletion) {
-        toast.info("Certaines données sont manquantes. Redirection vers le formulaire de completion...")
+        setGeneratedDocument(data) // Stocker les données de génération
+        await loadLease() // Recharger pour avoir le document en DB
+      } else if (data.redirectTo) {
+        toast.info("Certaines données sont manquantes. Redirection vers le formulaire...")
         setTimeout(() => {
-          router.push(`/owner/leases/${params.id}/complete-data`)
+          router.push(data.redirectTo)
         }, 1500)
       } else {
         toast.error(data.error || "Erreur lors de la génération")
@@ -326,7 +329,13 @@ export default function LeaseDetailPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {lease.generated_document ? (
+              {lease.generated_document && generatedDocument ? (
+                <LeaseDocumentViewer
+                  document={generatedDocument.document}
+                  analysis={generatedDocument.analysis}
+                  leaseId={lease.id}
+                />
+              ) : lease.generated_document ? (
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <h3 className="text-lg font-medium">Document généré</h3>
