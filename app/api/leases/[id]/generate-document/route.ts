@@ -1,123 +1,184 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { leaseDataAnalyzer } from "@/lib/lease-data-analyzer"
-import { leaseTemplateService } from "@/lib/lease-template-service"
 import { supabase } from "@/lib/supabase"
+
+// Moteur de template simple pour remplacer les variables
+function compileTemplate(template: string, data: any): string {
+  let result = template
+
+  console.log("🔧 Compilation template avec", Object.keys(data).length, "variables")
+
+  // Remplacer les variables simples {{variable}}
+  result = result.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+    const value = data[key]
+    if (value !== undefined && value !== null && value !== "") {
+      console.log("✅ Remplacé:", key, "=", value)
+      return String(value)
+    } else {
+      console.log("❌ Variable non trouvée:", key)
+      return match
+    }
+  })
+
+  // Remplacer les conditions {{#if variable}}...{{/if}}
+  result = result.replace(/\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (match, key, content) => {
+    const value = data[key]
+    return value && value !== "" ? content : ""
+  })
+
+  // Remplacer les boucles {{#each array}}...{{/each}}
+  result = result.replace(/\{\{#each\s+(\w+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (match, key, content) => {
+    const array = data[key]
+    if (!Array.isArray(array)) return ""
+
+    return array
+      .map((item) => {
+        let itemContent = content
+        // Remplacer {{this}} par l'élément actuel
+        itemContent = itemContent.replace(/\{\{this\}\}/g, String(item))
+        return itemContent
+      })
+      .join("")
+  })
+
+  return result
+}
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const leaseId = params.id
     console.log("🚀 [SERVER] Génération document pour bail:", leaseId)
 
-    // Analyser les données du bail
+    // 1. Analyser les données du bail
+    console.log("🔍 [SERVER] Début analyse des données...")
     const analysis = await leaseDataAnalyzer.analyze(leaseId)
-    console.log(`📊 [SERVER] Analyse: ${analysis.completionRate}% complet`)
-    console.log("🎯 [SERVER] Peut générer:", analysis.canGenerate)
+
+    console.log("📊 [SERVER] Résultat analyse:")
+    console.log("- Taux completion:", analysis.completionRate + "%")
+    console.log("- Peut générer:", analysis.canGenerate)
+    console.log("- Champs manquants:", analysis.missingRequired)
 
     if (!analysis.canGenerate) {
-      const missingFields = analysis.missingRequired.map((field) => {
-        const fieldDef = analysis.availableData[field]
-        return `${fieldDef?.label || field}`
-      })
-
-      console.log("❌ [SERVER] Champs manquants détaillés:", analysis.missingRequired)
+      console.log("❌ [SERVER] Génération impossible - données obligatoires incomplètes")
       return NextResponse.json(
         {
-          error: "Données manquantes",
-          message: "Certaines données obligatoires sont manquantes",
-          missingFields,
+          success: false,
+          error: "Données obligatoires incomplètes",
+          missingFields: analysis.missingRequired,
+          completionRate: analysis.completionRate,
           redirectTo: `/owner/leases/${leaseId}/complete-data`,
         },
         { status: 400 },
       )
     }
 
-    // Récupérer le bail pour déterminer le type
-    const { data: lease } = await supabase.from("leases").select("lease_type").eq("id", leaseId).single()
+    console.log("✅ [SERVER] Données suffisantes pour génération")
 
-    if (!lease) {
-      return NextResponse.json({ error: "Bail non trouvé" }, { status: 404 })
-    }
-
-    // Récupérer le template approprié
-    const template = await leaseTemplateService.getDefaultTemplate(lease.lease_type)
-    if (!template) {
-      return NextResponse.json({ error: `Template non trouvé pour le type: ${lease.lease_type}` }, { status: 404 })
-    }
-
-    console.log("📄 [SERVER] Template trouvé:", template.name)
-
-    // Préparer les données pour le template
-    const templateData: Record<string, any> = {}
-    for (const [key, field] of Object.entries(analysis.availableData)) {
-      templateData[key] = field.value
-    }
-
-    console.log("🔧 [SERVER] Compilation du template...")
-    console.log("🔧 Compilation template avec", Object.keys(templateData).length, "variables")
-
-    // Compiler le template avec Handlebars
-    const Handlebars = require("handlebars")
-
-    // Enregistrer les helpers
-    Handlebars.registerHelper("if", function (conditional: any, options: any) {
-      if (conditional) {
-        return options.fn(this)
-      } else {
-        return options.inverse(this)
-      }
-    })
-
-    Handlebars.registerHelper("each", (context: any[], options: any) => {
-      let ret = ""
-      if (context && context.length > 0) {
-        for (let i = 0; i < context.length; i++) {
-          ret += options.fn(context[i])
-        }
-      }
-      return ret
-    })
-
-    // Debug: vérifier les variables utilisées dans le template
-    const templateVariables = template.template_content.match(/\{\{([^}]+)\}\}/g) || []
-    const uniqueVariables = [...new Set(templateVariables.map((v) => v.replace(/[{}]/g, "").trim()))]
-
-    for (const variable of uniqueVariables) {
-      if (templateData[variable] !== undefined) {
-        console.log(`✅ Remplacé: ${variable} = ${templateData[variable]}`)
-      } else {
-        console.log(`❌ Variable non trouvée: ${variable}`)
-      }
-    }
-
-    const compiledTemplate = Handlebars.compile(template.template_content)
-    const documentContent = compiledTemplate(templateData)
-
-    console.log("✅ [SERVER] Document généré, longueur:", documentContent.length, "caractères")
-
-    // Sauvegarder le document généré
-    console.log("💾 [SERVER] Sauvegarde du document...")
-    const { error: saveError } = await supabase
+    // 2. Récupérer le bail pour le type
+    console.log("🔍 [SERVER] Récupération du bail...")
+    const { data: lease, error: leaseError } = await supabase
       .from("leases")
-      .update({
-        generated_document: documentContent,
-        document_generated_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
+      .select("lease_type")
       .eq("id", leaseId)
+      .single()
 
-    if (saveError) {
-      console.error("❌ [SERVER] Erreur sauvegarde:", saveError)
-      throw saveError
+    if (leaseError) {
+      console.error("❌ [SERVER] Erreur récupération bail:", leaseError)
+      return NextResponse.json({ success: false, error: "Bail non trouvé" }, { status: 404 })
     }
 
-    console.log("✅ [SERVER] Document sauvegardé avec succès")
+    console.log("📋 [SERVER] Type de bail:", lease.lease_type)
 
-    // CORRIGÉ : Retourner le document généré
+    // 3. Récupérer le template approprié
+    console.log("🔍 [SERVER] Récupération du template...")
+    const { data: template, error: templateError } = await supabase
+      .from("lease_templates")
+      .select("*")
+      .eq("lease_type", lease.lease_type)
+      .eq("is_default", true)
+      .eq("is_active", true)
+      .single()
+
+    if (templateError) {
+      console.error("❌ [SERVER] Erreur récupération template:", templateError)
+      return NextResponse.json(
+        { success: false, error: `Template non trouvé pour le type: ${lease.lease_type}` },
+        { status: 404 },
+      )
+    }
+
+    console.log("📄 [SERVER] Template récupéré:", template.name)
+
+    // 4. Préparer les données pour le template
+    console.log("🔧 [SERVER] Préparation des données template...")
+    const templateData: Record<string, any> = {}
+
+    for (const [key, field] of Object.entries(analysis.availableData)) {
+      templateData[key] = field.value || ""
+    }
+
+    console.log("📊 [SERVER] Données template préparées:", Object.keys(templateData).length, "champs")
+
+    // 5. Compiler le template
+    console.log("🔧 [SERVER] Compilation du template...")
+    const generatedDocument = compileTemplate(template.template_content, templateData)
+
+    console.log("✅ [SERVER] Document généré, longueur:", generatedDocument.length, "caractères")
+
+    // 6. CORRECTION : Sauvegarder le document généré avec vérification
+    console.log("💾 [SERVER] Sauvegarde du document...")
+
+    const updateData = {
+      generated_document: generatedDocument,
+      document_generated_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }
+
+    console.log("💾 [SERVER] Données à sauvegarder:", {
+      documentLength: generatedDocument.length,
+      hasContent: !!generatedDocument,
+    })
+
+    const { data: updateResult, error: updateError } = await supabase
+      .from("leases")
+      .update(updateData)
+      .eq("id", leaseId)
+      .select("id, generated_document, document_generated_at")
+
+    if (updateError) {
+      console.error("❌ [SERVER] Erreur sauvegarde document:", updateError)
+      return NextResponse.json({ success: false, error: "Erreur lors de la sauvegarde du document" }, { status: 500 })
+    }
+
+    console.log("✅ [SERVER] Document sauvegardé avec succès:", {
+      id: updateResult?.[0]?.id,
+      documentSaved: !!updateResult?.[0]?.generated_document,
+      savedLength: updateResult?.[0]?.generated_document?.length || 0,
+    })
+
+    // 7. Vérification de la sauvegarde
+    const { data: verifyLease, error: verifyError } = await supabase
+      .from("leases")
+      .select("generated_document, document_generated_at")
+      .eq("id", leaseId)
+      .single()
+
+    if (verifyError) {
+      console.error("❌ [SERVER] Erreur vérification:", verifyError)
+    } else {
+      console.log("🔍 [SERVER] Vérification sauvegarde:", {
+        hasDocument: !!verifyLease.generated_document,
+        documentLength: verifyLease.generated_document?.length || 0,
+        generatedAt: verifyLease.document_generated_at,
+      })
+    }
+
+    // 8. Retourner la réponse avec le document
     return NextResponse.json({
       success: true,
       message: "Document généré avec succès",
       document: {
-        content: documentContent,
+        content: generatedDocument,
         template: template.name,
         generatedAt: new Date().toISOString(),
       },
@@ -125,11 +186,20 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         completionRate: analysis.completionRate,
         totalFields: Object.keys(analysis.availableData).length,
       },
+      debug: {
+        documentLength: generatedDocument.length,
+        templateUsed: template.name,
+        savedToDatabase: !!updateResult?.[0]?.generated_document,
+      },
     })
   } catch (error) {
-    console.error("❌ [SERVER] Erreur génération:", error)
+    console.error("❌ [SERVER] Erreur génération document:", error)
     return NextResponse.json(
-      { error: "Erreur lors de la génération du document", details: error instanceof Error ? error.message : error },
+      {
+        success: false,
+        error: "Erreur lors de la génération du document",
+        details: error instanceof Error ? error.message : "Erreur inconnue",
+      },
       { status: 500 },
     )
   }
