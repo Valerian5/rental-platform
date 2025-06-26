@@ -1,135 +1,165 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { leaseDataAnalyzer } from "@/lib/lease-data-analyzer"
 import { supabase } from "@/lib/supabase"
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    console.log("🔍 [SERVER] Récupération bail:", params.id)
+// Moteur de template simple pour remplacer les variables
+function compileTemplate(template: string, data: any): string {
+  let result = template
 
-    const { data: lease, error } = await supabase
+  console.log("🔧 [TEMPLATE] Compilation avec", Object.keys(data).length, "variables")
+
+  // Remplacer les variables simples {{variable}}
+  result = result.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+    const value = data[key]
+    if (value !== undefined && value !== null && value !== "") {
+      console.log("✅ [TEMPLATE] Remplacé:", key, "=", value)
+      return String(value)
+    } else {
+      console.log("❌ [TEMPLATE] Variable non trouvée:", key)
+      return match
+    }
+  })
+
+  // Remplacer les conditions {{#if variable}}...{{/if}}
+  result = result.replace(/\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (match, key, content) => {
+    const value = data[key]
+    return value && value !== "" ? content : ""
+  })
+
+  // Remplacer les boucles {{#each array}}...{{/each}}
+  result = result.replace(/\{\{#each\s+(\w+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (match, key, content) => {
+    const array = data[key]
+    if (!Array.isArray(array)) return ""
+
+    return array
+      .map((item) => {
+        let itemContent = content
+        itemContent = itemContent.replace(/\{\{this\}\}/g, String(item))
+        return itemContent
+      })
+      .join("")
+  })
+
+  return result
+}
+
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const leaseId = params.id
+    console.log("🚀 [GENERATE] Génération document pour bail:", leaseId)
+
+    // 1. Analyser les données du bail
+    console.log("🔍 [GENERATE] Début analyse des données...")
+    const analysis = await leaseDataAnalyzer.analyze(leaseId)
+
+    console.log("📊 [GENERATE] Résultat analyse:")
+    console.log("- Taux completion:", analysis.completionRate + "%")
+    console.log("- Peut générer:", analysis.canGenerate)
+    console.log("- Champs manquants:", analysis.missingRequired)
+
+    if (!analysis.canGenerate) {
+      console.log("❌ [GENERATE] Génération impossible - données incomplètes")
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Données obligatoires incomplètes",
+          missingFields: analysis.missingRequired,
+          completionRate: analysis.completionRate,
+          redirectTo: `/owner/leases/${leaseId}/complete-data`,
+        },
+        { status: 400 },
+      )
+    }
+
+    // 2. Récupérer le bail pour le type
+    const { data: lease, error: leaseError } = await supabase
       .from("leases")
-      .select(`
-        *,
-        property:properties(*),
-        tenant:users!leases_tenant_id_fkey(*),
-        owner:users!leases_owner_id_fkey(*)
-      `)
-      .eq("id", params.id)
+      .select("lease_type")
+      .eq("id", leaseId)
       .single()
 
-    if (error) {
-      console.error("❌ [SERVER] Erreur récupération bail:", error)
+    if (leaseError) {
+      console.error("❌ [GENERATE] Erreur récupération bail:", leaseError)
       return NextResponse.json({ success: false, error: "Bail non trouvé" }, { status: 404 })
     }
 
-    console.log("✅ [SERVER] Bail récupéré:", {
-      id: lease.id,
-      hasGeneratedDocument: !!lease.generated_document,
-      documentLength: lease.generated_document?.length || 0,
-      documentGeneratedAt: lease.document_generated_at,
-    })
+    console.log("📋 [GENERATE] Type de bail:", lease.lease_type)
 
-    return NextResponse.json({
-      success: true,
-      lease,
-    })
-  } catch (error) {
-    console.error("❌ [SERVER] Erreur:", error)
-    return NextResponse.json({ success: false, error: "Erreur serveur" }, { status: 500 })
-  }
-}
-
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    console.log("🔄 [SERVER] Mise à jour bail:", params.id)
-
-    const body = await request.json()
-    const { status, signed_by_owner, signed_by_tenant, metadata } = body
-
-    console.log("📝 [SERVER] Données à mettre à jour:", {
-      status,
-      signed_by_owner,
-      signed_by_tenant,
-      hasMetadata: !!metadata,
-    })
-
-    const updates: any = {
-      updated_at: new Date().toISOString(),
-    }
-
-    if (status !== undefined) updates.status = status
-    if (signed_by_owner !== undefined) {
-      updates.signed_by_owner = signed_by_owner
-      if (signed_by_owner) {
-        updates.owner_signature_date = new Date().toISOString()
-      }
-    }
-    if (signed_by_tenant !== undefined) {
-      updates.signed_by_tenant = signed_by_tenant
-      if (signed_by_tenant) {
-        updates.tenant_signature_date = new Date().toISOString()
-      }
-    }
-    if (metadata !== undefined) updates.metadata = metadata
-
-    console.log("💾 [SERVER] Mise à jour avec:", updates)
-
-    const { data, error } = await supabase.from("leases").update(updates).eq("id", params.id).select().single()
-
-    if (error) {
-      console.error("❌ [SERVER] Erreur mise à jour bail:", error)
-      return NextResponse.json({ success: false, error: "Erreur lors de la mise à jour" }, { status: 500 })
-    }
-
-    console.log("✅ [SERVER] Bail mis à jour avec succès")
-
-    return NextResponse.json({
-      success: true,
-      lease: data,
-    })
-  } catch (error) {
-    console.error("❌ [SERVER] Erreur mise à jour:", error)
-    return NextResponse.json({ success: false, error: "Erreur serveur" }, { status: 500 })
-  }
-}
-
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    console.log("🗑️ [SERVER] Suppression bail:", params.id)
-
-    // Vérifier que le bail existe
-    const { data: existingLease, error: checkError } = await supabase
-      .from("leases")
-      .select("id, status")
-      .eq("id", params.id)
+    // 3. Récupérer le template approprié
+    const { data: template, error: templateError } = await supabase
+      .from("lease_templates")
+      .select("*")
+      .eq("lease_type", lease.lease_type)
+      .eq("is_default", true)
+      .eq("is_active", true)
       .single()
 
-    if (checkError) {
-      console.error("❌ [SERVER] Bail non trouvé:", checkError)
-      return NextResponse.json({ success: false, error: "Bail non trouvé" }, { status: 404 })
+    if (templateError) {
+      console.error("❌ [GENERATE] Erreur récupération template:", templateError)
+      return NextResponse.json(
+        { success: false, error: `Template non trouvé pour le type: ${lease.lease_type}` },
+        { status: 404 },
+      )
     }
 
-    // Vérifier que le bail peut être supprimé (pas signé)
-    if (existingLease.status === "signed") {
-      console.log("❌ [SERVER] Tentative de suppression d'un bail signé")
-      return NextResponse.json({ success: false, error: "Impossible de supprimer un bail signé" }, { status: 400 })
+    console.log("📄 [GENERATE] Template récupéré:", template.name)
+
+    // 4. Préparer les données pour le template
+    const templateData: Record<string, any> = {}
+    for (const [key, field] of Object.entries(analysis.availableData)) {
+      templateData[key] = field.value || ""
     }
 
-    // Supprimer le bail
-    const { error: deleteError } = await supabase.from("leases").delete().eq("id", params.id)
+    console.log("📊 [GENERATE] Données template préparées:", Object.keys(templateData).length, "champs")
 
-    if (deleteError) {
-      console.error("❌ [SERVER] Erreur suppression bail:", deleteError)
-      return NextResponse.json({ success: false, error: "Erreur lors de la suppression" }, { status: 500 })
+    // 5. Compiler le template
+    const generatedDocument = compileTemplate(template.template_content, templateData)
+    console.log("✅ [GENERATE] Document généré, longueur:", generatedDocument.length, "caractères")
+
+    // 6. Sauvegarder le document généré
+    const { data: updateResult, error: updateError } = await supabase
+      .from("leases")
+      .update({
+        generated_document: generatedDocument,
+        document_generated_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", leaseId)
+      .select("id, generated_document")
+
+    if (updateError) {
+      console.error("❌ [GENERATE] Erreur sauvegarde:", updateError)
+      return NextResponse.json({ success: false, error: "Erreur lors de la sauvegarde" }, { status: 500 })
     }
 
-    console.log("✅ [SERVER] Bail supprimé avec succès")
+    console.log("✅ [GENERATE] Document sauvegardé:", {
+      id: updateResult?.[0]?.id,
+      documentSaved: !!updateResult?.[0]?.generated_document,
+      savedLength: updateResult?.[0]?.generated_document?.length || 0,
+    })
 
     return NextResponse.json({
       success: true,
-      message: "Bail supprimé avec succès",
+      message: "Document généré avec succès",
+      document: {
+        content: generatedDocument,
+        template: template.name,
+        generatedAt: new Date().toISOString(),
+      },
+      analysis: {
+        completionRate: analysis.completionRate,
+        totalFields: Object.keys(analysis.availableData).length,
+      },
     })
   } catch (error) {
-    console.error("❌ [SERVER] Erreur suppression:", error)
-    return NextResponse.json({ success: false, error: "Erreur serveur" }, { status: 500 })
+    console.error("❌ [GENERATE] Erreur:", error)
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Erreur lors de la génération du document",
+        details: error instanceof Error ? error.message : "Erreur inconnue",
+      },
+      { status: 500 },
+    )
   }
 }
