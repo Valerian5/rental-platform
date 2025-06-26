@@ -71,6 +71,10 @@ export default function LeaseDetailPage() {
 
       if (data.success) {
         setLease(data.lease)
+        console.log("🔍 [CLIENT] Bail chargé:", {
+          hasGeneratedDocument: !!data.lease.generated_document,
+          documentLength: data.lease.generated_document?.length || 0,
+        })
       } else {
         toast.error("Bail non trouvé")
         router.push("/owner/leases")
@@ -86,26 +90,53 @@ export default function LeaseDetailPage() {
   const generateDocument = async () => {
     try {
       setGenerating(true)
+      console.log("🚀 [CLIENT] Début génération document...")
+
       const response = await fetch(`/api/leases/${params.id}/generate-document`, {
         method: "POST",
       })
 
       const data = await response.json()
+      console.log("📊 [CLIENT] Réponse API génération:", {
+        success: data.success,
+        hasDocument: !!data.document,
+        hasAnalysis: !!data.analysis,
+        documentLength: data.document?.content?.length || 0,
+      })
 
       if (data.success) {
         toast.success("Document généré avec succès")
-        setGeneratedDocument(data) // Stocker les données de génération
-        await loadLease() // Recharger pour avoir le document en DB
+
+        // Stocker les données de génération AVANT de recharger
+        setGeneratedDocument({
+          document: {
+            content: data.document.content,
+            template: data.document.template || data.template_used,
+            generatedAt: data.document.generatedAt || new Date().toISOString(),
+          },
+          analysis: data.analysis || {
+            completionRate: data.completion_rate || 100,
+            totalFields: 0,
+          },
+        })
+
+        console.log("✅ [CLIENT] Données de génération stockées")
+
+        // Recharger le bail pour avoir le document en DB
+        await loadLease()
+
+        console.log("✅ [CLIENT] Bail rechargé après génération")
       } else if (data.redirectTo) {
         toast.info("Certaines données sont manquantes. Redirection vers le formulaire...")
         setTimeout(() => {
           router.push(data.redirectTo)
         }, 1500)
       } else {
+        console.error("❌ [CLIENT] Erreur génération:", data)
         toast.error(data.error || "Erreur lors de la génération")
       }
     } catch (error) {
-      console.error("Erreur:", error)
+      console.error("❌ [CLIENT] Erreur génération:", error)
       toast.error("Erreur lors de la génération")
     } finally {
       setGenerating(false)
@@ -145,6 +176,14 @@ export default function LeaseDetailPage() {
         return type
     }
   }
+
+  // Debug: Afficher l'état actuel
+  console.log("🔍 [CLIENT] État actuel:", {
+    hasLease: !!lease,
+    hasGeneratedDocumentInDB: !!lease?.generated_document,
+    hasGeneratedDocumentState: !!generatedDocument,
+    generatedDocumentKeys: generatedDocument ? Object.keys(generatedDocument) : [],
+  })
 
   if (loading) {
     return (
@@ -329,6 +368,12 @@ export default function LeaseDetailPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
+              {/* Debug info */}
+              <div className="mb-4 p-2 bg-gray-100 rounded text-xs">
+                <strong>Debug:</strong> DB={!!lease.generated_document ? "✅" : "❌"} | State=
+                {!!generatedDocument ? "✅" : "❌"} | Length={lease.generated_document?.length || 0}
+              </div>
+
               {lease.generated_document && generatedDocument ? (
                 <LeaseDocumentViewer
                   document={generatedDocument.document}
@@ -338,7 +383,7 @@ export default function LeaseDetailPage() {
               ) : lease.generated_document ? (
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-medium">Document généré</h3>
+                    <h3 className="text-lg font-medium">Document généré (mode fallback)</h3>
                     <Button variant="outline" onClick={() => router.push(`/owner/leases/${lease.id}/complete-data`)}>
                       <Edit className="h-4 w-4 mr-2" />
                       Compléter les données
