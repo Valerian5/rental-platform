@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Switch } from "@/components/ui/switch"
 import { toast } from "sonner"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
@@ -26,7 +27,7 @@ import {
   Euro,
   Clock,
   FileCheck,
-  X,
+  EyeOff,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { authService } from "@/lib/auth-service"
@@ -124,11 +125,10 @@ export default function NewLeasePageImproved() {
   const searchParams = useSearchParams()
   const applicationId = searchParams.get("application")
 
-  const [mounted, setMounted] = useState(false)
   const [currentStep, setCurrentStep] = useState(1)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [showPreview, setShowPreview] = useState(false)
+  const [showPreview, setShowPreview] = useState(true)
   const [previewContent, setPreviewContent] = useState("")
   const [user, setUser] = useState<any>(null)
   const [properties, setProperties] = useState<any[]>([])
@@ -220,9 +220,7 @@ export default function NewLeasePageImproved() {
     documents: [],
   })
 
-  // Initialisation côté client uniquement
   useEffect(() => {
-    setMounted(true)
     checkAuthAndLoadData()
   }, [applicationId])
 
@@ -373,15 +371,6 @@ export default function NewLeasePageImproved() {
 
         if (field === "lease_type") {
           newData.duree_contrat = value === "furnished" ? 12 : 36
-          if (newData.date_prise_effet) {
-            const endDate = new Date(newData.date_prise_effet)
-            endDate.setMonth(endDate.getMonth() + Number(newData.duree_contrat))
-          }
-        }
-
-        if (field === "date_prise_effet" && value) {
-          const endDate = new Date(value)
-          endDate.setMonth(endDate.getMonth() + Number(newData.duree_contrat || 36))
         }
 
         return newData
@@ -392,8 +381,6 @@ export default function NewLeasePageImproved() {
 
   const generatePreview = useCallback(async () => {
     try {
-      console.log("🔍 [PREVIEW] Génération preview avec template officiel")
-
       const response = await fetch("/api/lease-templates/preview", {
         method: "POST",
         headers: {
@@ -408,14 +395,10 @@ export default function NewLeasePageImproved() {
       if (response.ok) {
         const data = await response.json()
         setPreviewContent(data.preview)
-        console.log("✅ [PREVIEW] Preview générée avec template:", data.template?.name)
       } else {
-        console.error("❌ [PREVIEW] Erreur API:", response.status)
-        // Fallback vers preview simple
         generateSimplePreview()
       }
     } catch (error) {
-      console.error("❌ [PREVIEW] Erreur:", error)
       generateSimplePreview()
     }
   }, [formData])
@@ -472,11 +455,12 @@ export default function NewLeasePageImproved() {
     setPreviewContent(preview)
   }, [formData])
 
+  // Générer le preview automatiquement quand les données changent
   useEffect(() => {
-    if (showPreview && mounted) {
+    if (formData.property_id && formData.tenant_id) {
       generatePreview()
     }
-  }, [formData, showPreview, mounted, generatePreview])
+  }, [formData, generatePreview])
 
   const validateStep = useCallback(
     (step: number): boolean => {
@@ -530,9 +514,7 @@ export default function NewLeasePageImproved() {
         return
       }
 
-      console.log("🔐 [SUBMIT] Début création bail - pas de token nécessaire côté client")
-
-      // Préparer les données pour l'API - MAPPING COMPLET
+      // Préparer les données pour l'API
       const leaseData = {
         // Champs de base
         property_id: formData.property_id,
@@ -549,7 +531,7 @@ export default function NewLeasePageImproved() {
         lease_type: formData.lease_type,
         application_id: applicationId || undefined,
 
-        // TOUS les champs du formulaire - COMPLET
+        // TOUS les champs du formulaire
         ...formData,
 
         // Conversion des dates
@@ -565,15 +547,6 @@ export default function NewLeasePageImproved() {
         },
       }
 
-      console.log("📝 [SUBMIT] Création bail avec données COMPLÈTES:", {
-        totalFields: Object.keys(leaseData).length,
-        bailleur: leaseData.bailleur_nom_prenom,
-        locataire: leaseData.locataire_nom_prenom,
-        logement: leaseData.localisation_logement,
-        loyer: leaseData.montant_loyer_mensuel,
-      })
-
-      // Appel API sans token - l'authentification se fait côté serveur avec les cookies
       const response = await fetch("/api/leases", {
         method: "POST",
         headers: {
@@ -584,26 +557,23 @@ export default function NewLeasePageImproved() {
 
       if (!response.ok) {
         const errorData = await response.json()
-        console.error("❌ [SUBMIT] Erreur API:", response.status, errorData)
         throw new Error(errorData.error || `Erreur ${response.status}: ${response.statusText}`)
       }
 
       const data = await response.json()
-      console.log("✅ [SUBMIT] Bail créé avec succès:", data.lease?.id)
       toast.success("Bail créé avec succès")
 
       // Rediriger vers la page du bail
       router.push(`/owner/leases/${data.lease.id}`)
     } catch (error) {
-      console.error("❌ [SUBMIT] Erreur création bail:", error)
+      console.error("Erreur création bail:", error)
       toast.error(error instanceof Error ? error.message : "Erreur lors de la création du bail")
     } finally {
       setSaving(false)
     }
   }, [formData, applicationId, router, validateStep])
 
-  // Ne pas rendre le composant tant qu'il n'est pas monté côté client
-  if (!mounted || loading) {
+  if (loading) {
     return (
       <div className="container mx-auto py-6">
         <div className="flex items-center justify-center min-h-[400px]">
@@ -640,7 +610,7 @@ export default function NewLeasePageImproved() {
       <PageHeader title="Création d'un nouveau bail" description="Assistant de création de contrat de location" />
 
       <div className="mt-6">
-        {/* Indicateur d'étapes amélioré */}
+        {/* Indicateur d'étapes */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
             {steps.map((step, index) => (
@@ -874,7 +844,7 @@ export default function NewLeasePageImproved() {
                   </div>
                 )}
 
-                {/* Étape 3: Logement - COMPLET */}
+                {/* Étape 3: Logement */}
                 {currentStep === 3 && (
                   <div className="space-y-6">
                     <div>
@@ -999,7 +969,7 @@ export default function NewLeasePageImproved() {
                   </div>
                 )}
 
-                {/* Étape 4: Financier - COMPLET */}
+                {/* Étape 4: Financier */}
                 {currentStep === 4 && (
                   <div className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1264,7 +1234,7 @@ export default function NewLeasePageImproved() {
             </Card>
           </div>
 
-          {/* Panneau latéral */}
+          {/* Panneau latéral avec preview en temps réel */}
           <div className="space-y-6">
             {/* Résumé */}
             <Card>
@@ -1307,67 +1277,38 @@ export default function NewLeasePageImproved() {
               </CardContent>
             </Card>
 
-            {/* Aperçu */}
-            <Card>
+            {/* Aperçu en temps réel */}
+            <Card className="sticky top-6">
               <CardHeader>
-                <CardTitle className="text-sm flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2 text-sm">
                   <Eye className="h-4 w-4" />
-                  Aperçu
+                  Aperçu du contrat
+                  <div className="ml-auto flex items-center gap-2">
+                    <Switch checked={showPreview} onCheckedChange={setShowPreview} size="sm" />
+                    {showPreview ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                  </div>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowPreview(!showPreview)}
-                  className="w-full"
-                  disabled={!formData.property_id || !formData.tenant_id}
-                >
-                  <FileText className="h-4 w-4 mr-2" />
-                  {showPreview ? "Masquer" : "Voir l'aperçu"}
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Validation */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Validation</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {steps.map((step) => (
-                  <div key={step.id} className="flex items-center gap-2 text-sm">
-                    {validateStep(step.id) ? (
-                      <CheckCircle className="h-4 w-4 text-green-600" />
-                    ) : (
-                      <div className="h-4 w-4 rounded-full border border-gray-300" />
-                    )}
-                    <span className={validateStep(step.id) ? "text-green-600" : "text-muted-foreground"}>
-                      {step.title}
-                    </span>
+                {showPreview && formData.property_id && formData.tenant_id ? (
+                  <div
+                    className="text-xs space-y-3 max-h-96 overflow-y-auto border rounded p-3 bg-white"
+                    dangerouslySetInnerHTML={{ __html: previewContent }}
+                  />
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">
+                      {!formData.property_id || !formData.tenant_id
+                        ? "Sélectionnez un bien et un locataire pour voir l'aperçu"
+                        : "Activez l'aperçu pour voir le contrat"}
+                    </p>
                   </div>
-                ))}
+                )}
               </CardContent>
             </Card>
           </div>
         </div>
-
-        {/* Aperçu en plein écran */}
-        {showPreview && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg max-w-4xl max-h-[90vh] overflow-auto">
-              <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
-                <h3 className="text-lg font-semibold">Aperçu du contrat</h3>
-                <Button variant="ghost" size="sm" onClick={() => setShowPreview(false)}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="p-6">
-                <div dangerouslySetInnerHTML={{ __html: previewContent }} />
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )

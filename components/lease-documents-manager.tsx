@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -92,32 +92,24 @@ const OPTIONAL_DOCUMENTS = [
 ]
 
 export function LeaseDocumentsManager({ formData, onDocumentsChange, onAnnexesChange }: LeaseDocumentsManagerProps) {
-  const [mounted, setMounted] = useState(false)
   const [documents, setDocuments] = useState<DocumentInfo[]>([])
   const [uploading, setUploading] = useState(false)
 
-  // État des annexes initialisé de manière sûre
-  const [annexes, setAnnexes] = useState<Record<string, boolean>>({})
+  // Initialisation simple des annexes
+  const [annexes, setAnnexes] = useState<Record<string, boolean>>(() => ({
+    annexe_dpe: formData?.annexe_dpe ?? true,
+    annexe_risques: formData?.annexe_risques ?? true,
+    annexe_notice: formData?.annexe_notice ?? true,
+    annexe_plomb: formData?.annexe_plomb ?? false,
+    annexe_amiante: formData?.annexe_amiante ?? false,
+    annexe_electricite_gaz: formData?.annexe_electricite_gaz ?? false,
+    annexe_reglement: formData?.annexe_reglement ?? false,
+    annexe_etat_lieux: formData?.annexe_etat_lieux ?? false,
+  }))
 
-  // Initialisation côté client uniquement pour éviter les problèmes d'hydratation
-  useEffect(() => {
-    setMounted(true)
-    setAnnexes({
-      annexe_dpe: formData?.annexe_dpe || false,
-      annexe_risques: formData?.annexe_risques || false,
-      annexe_notice: formData?.annexe_notice || false,
-      annexe_plomb: formData?.annexe_plomb || false,
-      annexe_amiante: formData?.annexe_amiante || false,
-      annexe_electricite_gaz: formData?.annexe_electricite_gaz || false,
-      annexe_reglement: formData?.annexe_reglement || false,
-      annexe_etat_lieux: formData?.annexe_etat_lieux || false,
-    })
-  }, [formData])
-
-  // Détecter le type de document basé sur le nom du fichier
-  const detectDocumentType = useCallback((fileName: string): string | null => {
+  // Détecter le type de document
+  const detectDocumentType = (fileName: string): string | null => {
     if (!fileName) return null
-
     const name = fileName.toLowerCase()
 
     for (const doc of [...REQUIRED_DOCUMENTS, ...OPTIONAL_DOCUMENTS]) {
@@ -127,191 +119,112 @@ export function LeaseDocumentsManager({ formData, onDocumentsChange, onAnnexesCh
         }
       }
     }
-
     return null
-  }, [])
+  }
 
-  // Calculer les statistiques des documents de manière sûre
-  const getDocumentStats = useCallback(() => {
-    if (!mounted) {
-      return {
-        requiredCount: 0,
-        totalRequired: REQUIRED_DOCUMENTS.length,
-        optionalCount: 0,
-        totalOptional: OPTIONAL_DOCUMENTS.length,
-        completionPercentage: 0,
-        totalDocuments: 0,
-      }
-    }
-
-    const requiredCount = REQUIRED_DOCUMENTS.filter((doc) => annexes[doc.key]).length
-    const totalRequired = REQUIRED_DOCUMENTS.length
-    const optionalCount = OPTIONAL_DOCUMENTS.filter((doc) => annexes[doc.key]).length
-    const totalOptional = OPTIONAL_DOCUMENTS.length
-
-    const completionPercentage = totalRequired > 0 ? Math.round((requiredCount / totalRequired) * 100) : 100
-
-    return {
-      requiredCount,
-      totalRequired,
-      optionalCount,
-      totalOptional,
-      completionPercentage,
-      totalDocuments: documents.length,
-    }
-  }, [mounted, annexes, documents.length])
+  // Calculer les statistiques de manière simple
+  const requiredCount = REQUIRED_DOCUMENTS.filter((doc) => annexes[doc.key]).length
+  const totalRequired = REQUIRED_DOCUMENTS.length
+  const optionalCount = OPTIONAL_DOCUMENTS.filter((doc) => annexes[doc.key]).length
+  const completionPercentage = totalRequired > 0 ? Math.round((requiredCount / totalRequired) * 100) : 100
 
   // Formater la taille du fichier
-  const formatFileSize = useCallback((bytes: number): string => {
+  const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return "0 B"
     const k = 1024
     const sizes = ["B", "KB", "MB", "GB"]
     const i = Math.floor(Math.log(bytes) / Math.log(k))
     return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i]
-  }, [])
+  }
 
   // Gérer l'upload de fichiers
-  const handleFileUpload = useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const files = Array.from(event.target.files || [])
-      if (files.length === 0) return
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || [])
+    if (files.length === 0) return
 
-      setUploading(true)
+    setUploading(true)
 
-      try {
-        const newDocuments: DocumentInfo[] = []
+    try {
+      const newDocuments: DocumentInfo[] = []
 
-        for (const file of files) {
-          console.log("📄 [UPLOAD] Traitement fichier:", {
-            name: file.name,
-            size: file.size,
-            type: file.type,
-          })
+      for (const file of files) {
+        const detectedType = detectDocumentType(file.name)
 
-          const detectedType = detectDocumentType(file.name)
-          console.log("🔍 [UPLOAD] Type détecté:", detectedType)
-
-          const docInfo: DocumentInfo = {
-            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            file: file,
-            category: detectedType
-              ? REQUIRED_DOCUMENTS.find((d) => d.key === detectedType)
-                ? "required"
-                : "optional"
-              : "custom",
-            detectedType: detectedType || undefined,
-          }
-
-          newDocuments.push(docInfo)
-
-          // Marquer automatiquement l'annexe comme présente si détectée
-          if (detectedType) {
-            setAnnexes((prev) => {
-              const updated = { ...prev, [detectedType]: true }
-              console.log("✅ [UPLOAD] Annexe marquée:", detectedType, "->", true)
-              return updated
-            })
-          }
+        const docInfo: DocumentInfo = {
+          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          file: file,
+          category: detectedType
+            ? REQUIRED_DOCUMENTS.find((d) => d.key === detectedType)
+              ? "required"
+              : "optional"
+            : "custom",
+          detectedType: detectedType || undefined,
         }
 
-        const updatedDocuments = [...documents, ...newDocuments]
-        setDocuments(updatedDocuments)
+        newDocuments.push(docInfo)
 
-        // Notifier le parent
-        onDocumentsChange(updatedDocuments.map((d) => d.file))
-
-        console.log("✅ [UPLOAD] Documents ajoutés:", {
-          nouveaux: newDocuments.length,
-          total: updatedDocuments.length,
-        })
-
-        toast.success(`${newDocuments.length} document(s) ajouté(s)`)
-      } catch (error) {
-        console.error("❌ [UPLOAD] Erreur:", error)
-        toast.error("Erreur lors de l'upload des documents")
-      } finally {
-        setUploading(false)
-        // Reset input
-        if (event.target) {
-          event.target.value = ""
-        }
-      }
-    },
-    [documents, detectDocumentType, onDocumentsChange],
-  )
-
-  // Supprimer un document
-  const removeDocument = useCallback(
-    (documentId: string) => {
-      const docToRemove = documents.find((d) => d.id === documentId)
-      if (!docToRemove) return
-
-      const updatedDocuments = documents.filter((d) => d.id !== documentId)
-
-      // Si c'était un document détecté automatiquement, décocher l'annexe
-      if (docToRemove.detectedType) {
-        // Vérifier s'il reste d'autres documents du même type
-        const hasOtherOfSameType = updatedDocuments.some((d) => d.detectedType === docToRemove.detectedType)
-        if (!hasOtherOfSameType) {
+        // Marquer automatiquement l'annexe comme présente si détectée
+        if (detectedType) {
           setAnnexes((prev) => ({
             ...prev,
-            [docToRemove.detectedType!]: false,
+            [detectedType]: true,
           }))
         }
       }
 
+      const updatedDocuments = [...documents, ...newDocuments]
       setDocuments(updatedDocuments)
       onDocumentsChange(updatedDocuments.map((d) => d.file))
-      toast.success("Document supprimé")
-    },
-    [documents, onDocumentsChange],
-  )
 
-  // Gérer les changements d'annexes manuels
-  const handleAnnexeChange = useCallback(
-    (key: string, checked: boolean) => {
-      const updated = { ...annexes, [key]: checked }
-      setAnnexes(updated)
-      onAnnexesChange(updated)
-    },
-    [annexes, onAnnexesChange],
-  )
+      toast.success(`${newDocuments.length} document(s) ajouté(s)`)
+    } catch (error) {
+      console.error("Erreur upload:", error)
+      toast.error("Erreur lors de l'upload des documents")
+    } finally {
+      setUploading(false)
+      if (event.target) {
+        event.target.value = ""
+      }
+    }
+  }
+
+  // Supprimer un document
+  const removeDocument = (documentId: string) => {
+    const docToRemove = documents.find((d) => d.id === documentId)
+    if (!docToRemove) return
+
+    const updatedDocuments = documents.filter((d) => d.id !== documentId)
+
+    // Si c'était un document détecté automatiquement, décocher l'annexe
+    if (docToRemove.detectedType) {
+      const hasOtherOfSameType = updatedDocuments.some((d) => d.detectedType === docToRemove.detectedType)
+      if (!hasOtherOfSameType) {
+        setAnnexes((prev) => ({
+          ...prev,
+          [docToRemove.detectedType!]: false,
+        }))
+      }
+    }
+
+    setDocuments(updatedDocuments)
+    onDocumentsChange(updatedDocuments.map((d) => d.file))
+    toast.success("Document supprimé")
+  }
+
+  // Gérer les changements d'annexes
+  const handleAnnexeChange = (key: string, checked: boolean) => {
+    const updated = { ...annexes, [key]: checked }
+    setAnnexes(updated)
+    onAnnexesChange(updated)
+  }
 
   // Synchroniser les annexes avec le parent
   useEffect(() => {
-    if (mounted) {
-      onAnnexesChange(annexes)
-    }
-  }, [annexes, onAnnexesChange, mounted])
-
-  // Ne pas rendre le composant tant qu'il n'est pas monté côté client
-  if (!mounted) {
-    return (
-      <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileCheck className="h-5 w-5" />
-              Documents et Annexes
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-center py-8">
-              <div className="text-center space-y-2">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="text-sm text-muted-foreground">Chargement...</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  const stats = getDocumentStats()
+    onAnnexesChange(annexes)
+  }, [annexes, onAnnexesChange])
 
   return (
     <div className="space-y-6">
@@ -330,25 +243,25 @@ export function LeaseDocumentsManager({ formData, onDocumentsChange, onAnnexesCh
               <div className="flex justify-between text-sm mb-2">
                 <span>Documents obligatoires</span>
                 <span>
-                  {stats.requiredCount}/{stats.totalRequired}
+                  {requiredCount}/{totalRequired}
                 </span>
               </div>
-              <Progress value={stats.completionPercentage} className="h-2" />
-              <p className="text-xs text-muted-foreground mt-1">{stats.completionPercentage}% complété</p>
+              <Progress value={completionPercentage} className="h-2" />
+              <p className="text-xs text-muted-foreground mt-1">{completionPercentage}% complété</p>
             </div>
 
             {/* Résumé */}
             <div className="grid grid-cols-3 gap-4 text-center">
               <div className="space-y-1">
-                <div className="text-2xl font-bold text-blue-600">{stats.totalDocuments}</div>
+                <div className="text-2xl font-bold text-blue-600">{documents.length}</div>
                 <div className="text-xs text-muted-foreground">Documents uploadés</div>
               </div>
               <div className="space-y-1">
-                <div className="text-2xl font-bold text-green-600">{stats.requiredCount}</div>
+                <div className="text-2xl font-bold text-green-600">{requiredCount}</div>
                 <div className="text-xs text-muted-foreground">Obligatoires</div>
               </div>
               <div className="space-y-1">
-                <div className="text-2xl font-bold text-orange-600">{stats.optionalCount}</div>
+                <div className="text-2xl font-bold text-orange-600">{optionalCount}</div>
                 <div className="text-xs text-muted-foreground">Optionnels</div>
               </div>
             </div>
@@ -490,7 +403,7 @@ export function LeaseDocumentsManager({ formData, onDocumentsChange, onAnnexesCh
       </Card>
 
       {/* Validation finale */}
-      {stats.requiredCount === stats.totalRequired ? (
+      {requiredCount === totalRequired ? (
         <Alert>
           <CheckCircle className="h-4 w-4" />
           <AlertDescription>✅ Tous les documents obligatoires sont présents. Le bail peut être créé.</AlertDescription>
@@ -499,7 +412,7 @@ export function LeaseDocumentsManager({ formData, onDocumentsChange, onAnnexesCh
         <Alert>
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
-            ⚠️ Il manque {stats.totalRequired - stats.requiredCount} document(s) obligatoire(s) pour finaliser le bail.
+            ⚠️ Il manque {totalRequired - requiredCount} document(s) obligatoire(s) pour finaliser le bail.
           </AlertDescription>
         </Alert>
       )}
