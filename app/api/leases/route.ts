@@ -71,6 +71,12 @@ export async function POST(request: NextRequest) {
       locataire_domicile: data.locataire_domicile || "",
       locataire_email: data.locataire_email || "",
       locataire_telephone: data.locataire_telephone || "",
+	  email_bailleur: data.email_bailleur || data.bailleur_email || "",
+	email_locataire: data.email_locataire || data.locataire_email || "",
+	adresse_locataire: data.adresse_locataire || "",
+	adresse_bailleur: data.adresse_bailleur || data.bailleur_domicile || "",
+	code_postal: data.code_postal || "",
+	ville: data.ville || "",
 
       // === LOGEMENT ===
       localisation_logement: data.localisation_logement || "",
