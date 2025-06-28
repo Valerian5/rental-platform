@@ -1,44 +1,28 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
+
+// Créer le client Supabase avec les variables d'environnement
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 export async function POST(request: NextRequest) {
   try {
     console.log("🚀 [LEASES API] Début création bail")
 
-    // Utiliser le client Supabase côté serveur avec les cookies
-    const supabase = createServerSupabaseClient()
+    // Tester la connexion Supabase
+    const { data: testConnection, error: connectionError } = await supabase.from("users").select("id").limit(1)
 
-    // Vérifier l'authentification côté serveur
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      console.log("❌ [LEASES API] Pas d'utilisateur authentifié:", authError?.message)
-      return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
+    if (connectionError) {
+      console.error("❌ [LEASES API] Erreur connexion Supabase:", connectionError)
+      return NextResponse.json(
+        { error: "Erreur de connexion à la base de données", details: connectionError },
+        { status: 500 },
+      )
     }
 
-    console.log("✅ [LEASES API] Utilisateur authentifié:", user.id)
-
-    // Récupérer le profil utilisateur
-    const { data: userProfile, error: profileError } = await supabase
-      .from("users")
-      .select("*")
-      .eq("id", user.id)
-      .single()
-
-    if (profileError || !userProfile) {
-      console.log("❌ [LEASES API] Erreur profil utilisateur:", profileError?.message)
-      return NextResponse.json({ error: "Profil utilisateur non trouvé" }, { status: 401 })
-    }
-
-    if (userProfile.user_type !== "owner") {
-      console.log("❌ [LEASES API] Type utilisateur incorrect:", userProfile.user_type)
-      return NextResponse.json({ error: "Accès réservé aux propriétaires" }, { status: 403 })
-    }
-
-    console.log("✅ [LEASES API] Propriétaire autorisé:", userProfile.email)
+    console.log("✅ [LEASES API] Connexion Supabase OK")
 
     const data = await request.json()
     console.log("📝 [LEASES API] Données reçues:", Object.keys(data).length, "champs")
@@ -66,7 +50,7 @@ export async function POST(request: NextRequest) {
       // Champs de base
       property_id: data.property_id,
       tenant_id: data.tenant_id,
-      owner_id: userProfile.id,
+      owner_id: data.owner_id,
       start_date: data.start_date,
       end_date: endDate,
       monthly_rent: Number.parseFloat(data.monthly_rent) || Number.parseFloat(data.montant_loyer_mensuel) || 0,
@@ -219,31 +203,9 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    // Utiliser le client Supabase côté serveur
-    const supabase = createServerSupabaseClient()
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
-    }
-
-    // Récupérer le profil utilisateur
-    const { data: userProfile, error: profileError } = await supabase
-      .from("users")
-      .select("*")
-      .eq("id", user.id)
-      .single()
-
-    if (profileError || !userProfile) {
-      return NextResponse.json({ error: "Profil utilisateur non trouvé" }, { status: 401 })
-    }
-
     const { searchParams } = new URL(request.url)
     const ownerId = searchParams.get("owner_id")
+    const tenantId = searchParams.get("tenant_id")
 
     let query = supabase.from("leases").select(`
       *,
@@ -252,12 +214,10 @@ export async function GET(request: NextRequest) {
       owner:users!leases_owner_id_fkey(*)
     `)
 
-    if (userProfile.user_type === "owner") {
-      query = query.eq("owner_id", userProfile.id)
-    } else if (userProfile.user_type === "tenant") {
-      query = query.eq("tenant_id", userProfile.id)
-    } else if (ownerId && userProfile.user_type === "admin") {
+    if (ownerId) {
       query = query.eq("owner_id", ownerId)
+    } else if (tenantId) {
+      query = query.eq("tenant_id", tenantId)
     }
 
     const { data: leases, error } = await query.order("created_at", { ascending: false })
