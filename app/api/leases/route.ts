@@ -46,118 +46,126 @@ export async function POST(request: NextRequest) {
     }
 
     // Préparer les données pour insertion - MAPPING COMPLET
-    const leaseData = {
-      // Champs de base
-      property_id: data.property_id,
-      tenant_id: data.tenant_id,
-      owner_id: data.owner_id,
-      start_date: data.start_date,
-      end_date: endDate,
-      monthly_rent: Number.parseFloat(data.monthly_rent) || Number.parseFloat(data.montant_loyer_mensuel) || 0,
-      charges: Number.parseFloat(data.charges) || Number.parseFloat(data.montant_provisions_charges) || 0,
-      deposit_amount: Number.parseFloat(data.deposit) || Number.parseFloat(data.montant_depot_garantie) || 0,
-      lease_type: data.lease_type || "unfurnished",
-      status: "draft",
-      application_id: data.application_id || null,
+const leaseData = {
+  // Identification
+  bailleur_nom_prenom: data.bailleur_nom_prenom,
+  bailleur_domicile: data.bailleur_domicile,
+  bailleur_qualite: data.bailleur_qualite ?? "Particulier",
+  bailleur_email: data.bailleur_email ?? data.email_bailleur,
+  telephone_bailleur: data.telephone_bailleur,
 
-      // === PARTIES ===
-      bailleur_nom_prenom: data.bailleur_nom_prenom || "",
-      bailleur_domicile: data.bailleur_domicile || "",
-      bailleur_email: data.bailleur_email || "",
-      bailleur_telephone: data.telephone_bailleur || "",
-      bailleur_qualite: data.bailleur_qualite || "Propriétaire",
+  locataire_nom_prenom: data.locataire_nom_prenom,
+  locataire_email: data.locataire_email ?? data.email_locataire,
+  telephone_locataire: data.telephone_locataire,
 
-      locataire_nom_prenom: data.locataire_nom_prenom || "",
-      locataire_domicile: data.locataire_domicile || "",
-      locataire_email: data.locataire_email || "",
-      locataire_telephone: data.locataire_telephone || "",
-	  email_bailleur: data.email_bailleur || data.bailleur_email || "",
-	email_locataire: data.email_locataire || data.locataire_email || "",
-	adresse_locataire: data.adresse_locataire || "",
-	adresse_bailleur: data.adresse_bailleur || data.bailleur_domicile || "",
-	code_postal: data.code_postal || "",
-	ville: data.ville || "",
+  // Adresse
+  localisation_logement: data.localisation_logement,
+  adresse_postale: data.adresse_postale,
+  code_postal: data.code_postal,
+  ville: data.ville,
+  etage: data.etage,
+  zone_geographique: data.zone_geographique,
 
-      // === LOGEMENT ===
-      localisation_logement: data.localisation_logement || "",
-      identifiant_fiscal: data.identifiant_fiscal || "",
-      type_habitat: data.type_habitat || "",
-      regime_juridique: data.regime_juridique || "Copropriété",
-      periode_construction: data.periode_construction || "Après 1949",
-      surface_habitable: Number.parseFloat(data.surface_habitable) || 0,
-      nombre_pieces: Number.parseInt(data.nombre_pieces) || 0,
-      autres_parties: data.autres_parties || "",
-      elements_equipements: data.elements_equipements || "",
-      modalite_chauffage: data.modalite_chauffage || "",
-      modalite_eau_chaude: data.modalite_eau_chaude || "",
-      niveau_performance_dpe: data.niveau_performance_dpe || "D",
-      destination_locaux: data.destination_locaux || "Usage d'habitation exclusivement",
-      locaux_accessoires: data.locaux_accessoires || "",
-      locaux_communs: data.locaux_communs || "",
-      equipement_technologies: data.equipement_technologies || "",
+  // Logement
+  type_logement: data.type_logement,
+  type_habitat: data.type_habitat,
+  regime_juridique: data.regime_juridique ?? "Copropriété",
+  periode_construction: data.periode_construction,
+  surface_habitable: data.surface_habitable,
+  surface_m2: data.surface_habitable,
+  nombre_pieces: data.nombre_pieces,
+  autres_parties: data.autres_parties,
+  elements_equipements: data.elements_equipements,
+  modalite_chauffage: data.modalite_chauffage,
+  modalite_eau_chaude: data.modalite_eau_chaude,
+  niveau_performance_dpe: data.niveau_performance_dpe,
+  destination_locaux: data.destination_locaux ?? "Usage d'habitation",
+  locaux_accessoires: data.locaux_accessoires,
+  locaux_communs: data.locaux_communs,
+  equipement_technologies: data.equipement_technologies,
+  identifiant_fiscal: data.identifiant_fiscal,
 
-      // === FINANCIER ===
-      montant_loyer_mensuel: Number.parseFloat(data.montant_loyer_mensuel) || Number.parseFloat(data.monthly_rent) || 0,
-      soumis_decret_evolution: data.soumis_decret_evolution || "Non",
-      soumis_loyer_reference: data.soumis_loyer_reference || "Non",
-      montant_provisions_charges:
-        Number.parseFloat(data.montant_provisions_charges) || Number.parseFloat(data.charges) || 0,
-      modalite_reglement_charges: data.modalite_reglement_charges || "Forfait",
-      montant_depot_garantie:
-        Number.parseFloat(data.montant_depot_garantie) || Number.parseFloat(data.deposit_amount) || 0,
-      periodicite_paiement: data.periodicite_paiement || "Mensuelle",
-      paiement_echeance: data.paiement_echeance || "À terme échu",
-      date_paiement: data.date_paiement || "1",
-      lieu_paiement: data.lieu_paiement || "Virement bancaire",
-      montant_depenses_energie: data.montant_depenses_energie || "",
+  // Dates
+  start_date: data.date_prise_effet ?? data.start_date,
+  end_date: data.date_fin,
+  date_debut: data.date_prise_effet ?? data.start_date,
+  date_fin: data.date_fin,
+  date_prise_effet: data.date_prise_effet,
+  duree: data.duree ?? parseInt(data.duree_contrat),
+  duree_contrat: data.duree_contrat,
+  evenement_duree_reduite: data.evenement_duree_reduite,
 
-      // === DURÉE ===
-      date_prise_effet: data.date_prise_effet || data.start_date,
-      duree_contrat: Number.parseInt(data.duree_contrat) || (data.lease_type === "furnished" ? 12 : 36),
-      evenement_duree_reduite: data.evenement_duree_reduite || "",
+  // Loyer & charges
+  loyer: data.montant_loyer_mensuel,
+  loyer_cc: data.loyer_cc,
+  montant_loyer_mensuel: data.montant_loyer_mensuel,
+  mensual_rent: data.montant_loyer_mensuel,
+  charges: data.montant_provisions_charges ?? 0,
+  montant_provisions_charges: data.montant_provisions_charges,
+  modalite_reglement_charges: data.modalite_reglement_charges ?? "Forfait",
+  modalites_revision_forfait: data.modalites_revision_forfait,
+  soumis_decret_evolution: data.soumis_decret_evolution ?? false,
+  soumis_loyer_reference: data.soumis_loyer_reference ?? false,
+  montant_loyer_reference: data.montant_loyer_reference,
+  montant_loyer_reference_majore: data.montant_loyer_reference_majore,
+  complement_loyer: data.complement_loyer ?? 0,
+  infos_dernier_loyer: data.infos_dernier_loyer,
+  date_revision: data.date_revision,
+  date_reference_irl: data.date_reference_irl,
+  contribution_economies: data.contribution_economies ?? 0,
+  reevaluation_loyer: data.reevaluation_loyer,
 
-      // === TRAVAUX ===
-      montant_travaux_amelioration: data.montant_travaux_amelioration || "",
+  // Paiement
+  periodicite_paiement: data.periodicite_paiement ?? "Mensuel",
+  paiement_echeance: data.paiement_echeance ?? "À terme échu",
+  date_paiement: data.date_paiement ?? "Le 1er de chaque mois",
+  lieu_paiement: data.lieu_paiement ?? "Virement bancaire",
+  montant_premiere_echeance: data.montant_premiere_echeance,
 
-      // === CONDITIONS ===
-      clause_solidarite: data.clause_solidarite || "Applicable",
-      clause_resolutoire: data.clause_resolutoire || "Applicable",
-      usage_prevu: data.usage_prevu || "Résidence principale",
+  // Dépôt & garantie
+  montant_depot_garantie: data.montant_depot_garantie,
+  deposit: data.montant_depot_garantie,
+  deposit_amount: data.montant_depot_garantie,
+  security_deposit: data.montant_depot_garantie,
 
-      // === HONORAIRES ===
-      honoraires_locataire: data.honoraires_locataire || "",
-      plafond_honoraires_etat_lieux: data.plafond_honoraires_etat_lieux || "",
+  // Travaux
+  travaux_amelioration: data.travaux_amelioration,
+  majoration_travaux: data.majoration_travaux ?? 0,
+  diminution_travaux: data.diminution_travaux ?? 0,
 
-      // === ANNEXES ===
-      annexe_dpe: data.annexe_dpe || false,
-      annexe_risques: data.annexe_risques || false,
-      annexe_notice: data.annexe_notice || false,
-      annexe_etat_lieux: data.annexe_etat_lieux || false,
-      annexe_reglement: data.annexe_reglement || false,
-      annexe_plomb: data.annexe_plomb || false,
-      annexe_amiante: data.annexe_amiante || false,
-      annexe_electricite_gaz: data.annexe_electricite_gaz || false,
+  // Annexes
+  annexe_dpe: data.annexe_dpe ?? false,
+  annexe_risques: data.annexe_risques ?? false,
+  annexe_notice: data.annexe_notice ?? false,
+  annexe_etat_lieux: data.annexe_etat_lieux ?? false,
+  annexe_reglement: data.annexe_reglement ?? false,
+  annexe_plomb: data.annexe_plomb ?? false,
+  annexe_amiante: data.annexe_amiante ?? false,
+  annexe_electricite_gaz: data.annexe_electricite_gaz ?? false,
+  annexe_autorisation: data.annexe_autorisation ?? false,
+  annexe_references_loyers: data.annexe_references_loyers ?? false,
 
-      // === SIGNATURE ===
-      lieu_signature: data.lieu_signature || "",
-      date_signature: data.date_signature || null,
+  // Signatures & statut
+  clause_solidarite: data.clause_solidarite ?? true,
+  clause_resolutoire: data.clause_resolutoire ?? true,
+  statut: data.status ?? "draft",
+  document_validation_status: data.document_validation_status ?? "pending",
+  date_signature: data.date_signature,
+  ville_signature: data.lieu_signature,
+  nom_bailleur: data.nom_bailleur ?? data.bailleur_nom_prenom,
+  nom_locataire: data.nom_locataire ?? data.locataire_nom_prenom,
 
-      // === AUTRES ===
-      conditions_particulieres: data.special_conditions || data.conditions_particulieres || "",
+  // Honoraires
+  plafond_honoraires_visite: data.plafond_honoraires_visite,
+  plafond_honoraires_etat_lieux: data.plafond_honoraires_etat_lieux,
+  honoraires_bailleur: data.honoraires_bailleur ?? 0,
+  honoraires_locataire: data.honoraires_locataire ?? 0,
 
-      // Métadonnées
-      metadata: JSON.stringify({
-        special_conditions: data.special_conditions || "",
-        documents_count: data.documents?.length || 0,
-        form_completed: true,
-        created_from: "new_form_v3_complete",
-        total_fields_mapped: Object.keys(data).length,
-      }),
+  // Informations diverses
+  montant_depenses_energie: data.montant_depenses_energie,
+  conditions_particulieres: data.conditions_particulieres,
+}
 
-      // Timestamps
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }
 
     console.log("💾 [LEASES API] Données préparées pour insertion:", {
       totalFields: Object.keys(leaseData).length,
