@@ -33,7 +33,6 @@ import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
 import { LeaseDocumentsManager } from "@/components/lease-documents-manager"
-import { supabase } from "@/lib/supabase"
 
 interface LeaseFormData {
   // Sélection
@@ -522,20 +521,7 @@ export default function NewLeasePageImproved() {
         return
       }
 
-      // Récupérer la session Supabase pour l'authentification
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession()
-
-      if (sessionError || !session?.access_token) {
-        console.error("❌ [SUBMIT] Erreur session:", sessionError)
-        toast.error("Session expirée, veuillez vous reconnecter")
-        router.push("/login")
-        return
-      }
-
-      console.log("🔐 [SUBMIT] Session valide, token présent")
+      console.log("🔐 [SUBMIT] Début création bail - pas de token nécessaire côté client")
 
       // Préparer les données pour l'API - MAPPING COMPLET
       const leaseData = {
@@ -576,14 +562,13 @@ export default function NewLeasePageImproved() {
         locataire: leaseData.locataire_nom_prenom,
         logement: leaseData.localisation_logement,
         loyer: leaseData.montant_loyer_mensuel,
-        hasSession: !!session?.access_token,
       })
 
+      // Appel API sans token - l'authentification se fait côté serveur avec les cookies
       const response = await fetch("/api/leases", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify(leaseData),
       })

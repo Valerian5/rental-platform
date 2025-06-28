@@ -1,16 +1,44 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
-import { authService } from "@/lib/auth-service"
+import { createServerSupabaseClient } from "@/lib/supabase-server"
 
 export async function POST(request: NextRequest) {
   try {
     console.log("🚀 [LEASES API] Début création bail")
 
-    // Vérifier l'authentification
-    const user = await authService.getCurrentUser()
-    if (!user || user.user_type !== "owner") {
+    // Utiliser le client Supabase côté serveur avec les cookies
+    const supabase = createServerSupabaseClient()
+
+    // Vérifier l'authentification côté serveur
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      console.log("❌ [LEASES API] Pas d'utilisateur authentifié:", authError?.message)
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
     }
+
+    console.log("✅ [LEASES API] Utilisateur authentifié:", user.id)
+
+    // Récupérer le profil utilisateur
+    const { data: userProfile, error: profileError } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", user.id)
+      .single()
+
+    if (profileError || !userProfile) {
+      console.log("❌ [LEASES API] Erreur profil utilisateur:", profileError?.message)
+      return NextResponse.json({ error: "Profil utilisateur non trouvé" }, { status: 401 })
+    }
+
+    if (userProfile.user_type !== "owner") {
+      console.log("❌ [LEASES API] Type utilisateur incorrect:", userProfile.user_type)
+      return NextResponse.json({ error: "Accès réservé aux propriétaires" }, { status: 403 })
+    }
+
+    console.log("✅ [LEASES API] Propriétaire autorisé:", userProfile.email)
 
     const data = await request.json()
     console.log("📝 [LEASES API] Données reçues:", Object.keys(data).length, "champs")
@@ -38,7 +66,7 @@ export async function POST(request: NextRequest) {
       // Champs de base
       property_id: data.property_id,
       tenant_id: data.tenant_id,
-      owner_id: user.id,
+      owner_id: userProfile.id,
       start_date: data.start_date,
       end_date: endDate,
       monthly_rent: Number.parseFloat(data.monthly_rent) || Number.parseFloat(data.montant_loyer_mensuel) || 0,
@@ -68,21 +96,47 @@ export async function POST(request: NextRequest) {
       periode_construction: data.periode_construction || "Après 1949",
       surface_habitable: Number.parseFloat(data.surface_habitable) || 0,
       nombre_pieces: Number.parseInt(data.nombre_pieces) || 0,
+      autres_parties: data.autres_parties || "",
+      elements_equipements: data.elements_equipements || "",
+      modalite_chauffage: data.modalite_chauffage || "",
+      modalite_eau_chaude: data.modalite_eau_chaude || "",
       niveau_performance_dpe: data.niveau_performance_dpe || "D",
+      destination_locaux: data.destination_locaux || "Usage d'habitation exclusivement",
+      locaux_accessoires: data.locaux_accessoires || "",
+      locaux_communs: data.locaux_communs || "",
+      equipement_technologies: data.equipement_technologies || "",
 
       // === FINANCIER ===
       montant_loyer_mensuel: Number.parseFloat(data.montant_loyer_mensuel) || Number.parseFloat(data.monthly_rent) || 0,
+      soumis_decret_evolution: data.soumis_decret_evolution || "Non",
+      soumis_loyer_reference: data.soumis_loyer_reference || "Non",
       montant_provisions_charges:
         Number.parseFloat(data.montant_provisions_charges) || Number.parseFloat(data.charges) || 0,
+      modalite_reglement_charges: data.modalite_reglement_charges || "Forfait",
       montant_depot_garantie:
         Number.parseFloat(data.montant_depot_garantie) || Number.parseFloat(data.deposit_amount) || 0,
       periodicite_paiement: data.periodicite_paiement || "Mensuelle",
+      paiement_echeance: data.paiement_echeance || "À terme échu",
       date_paiement: data.date_paiement || "1",
+      lieu_paiement: data.lieu_paiement || "Virement bancaire",
+      montant_depenses_energie: data.montant_depenses_energie || "",
 
       // === DURÉE ===
       date_prise_effet: data.date_prise_effet || data.start_date,
       duree_contrat: Number.parseInt(data.duree_contrat) || (data.lease_type === "furnished" ? 12 : 36),
       evenement_duree_reduite: data.evenement_duree_reduite || "",
+
+      // === TRAVAUX ===
+      montant_travaux_amelioration: data.montant_travaux_amelioration || "",
+
+      // === CONDITIONS ===
+      clause_solidarite: data.clause_solidarite || "Applicable",
+      clause_resolutoire: data.clause_resolutoire || "Applicable",
+      usage_prevu: data.usage_prevu || "Résidence principale",
+
+      // === HONORAIRES ===
+      honoraires_locataire: data.honoraires_locataire || "",
+      plafond_honoraires_etat_lieux: data.plafond_honoraires_etat_lieux || "",
 
       // === ANNEXES ===
       annexe_dpe: data.annexe_dpe || false,
@@ -90,13 +144,15 @@ export async function POST(request: NextRequest) {
       annexe_notice: data.annexe_notice || false,
       annexe_etat_lieux: data.annexe_etat_lieux || false,
       annexe_reglement: data.annexe_reglement || false,
+      annexe_plomb: data.annexe_plomb || false,
+      annexe_amiante: data.annexe_amiante || false,
+      annexe_electricite_gaz: data.annexe_electricite_gaz || false,
 
       // === SIGNATURE ===
       lieu_signature: data.lieu_signature || "",
       date_signature: data.date_signature || null,
 
       // === AUTRES ===
-      usage_prevu: data.usage_prevu || "résidence principale",
       conditions_particulieres: data.special_conditions || data.conditions_particulieres || "",
 
       // Métadonnées
@@ -104,7 +160,8 @@ export async function POST(request: NextRequest) {
         special_conditions: data.special_conditions || "",
         documents_count: data.documents?.length || 0,
         form_completed: true,
-        created_from: "new_form_v2",
+        created_from: "new_form_v3_complete",
+        total_fields_mapped: Object.keys(data).length,
       }),
 
       // Timestamps
@@ -162,9 +219,27 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await authService.getCurrentUser()
-    if (!user) {
+    // Utiliser le client Supabase côté serveur
+    const supabase = createServerSupabaseClient()
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
+
+    if (authError || !user) {
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
+    }
+
+    // Récupérer le profil utilisateur
+    const { data: userProfile, error: profileError } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", user.id)
+      .single()
+
+    if (profileError || !userProfile) {
+      return NextResponse.json({ error: "Profil utilisateur non trouvé" }, { status: 401 })
     }
 
     const { searchParams } = new URL(request.url)
@@ -177,11 +252,11 @@ export async function GET(request: NextRequest) {
       owner:users!leases_owner_id_fkey(*)
     `)
 
-    if (user.user_type === "owner") {
-      query = query.eq("owner_id", user.id)
-    } else if (user.user_type === "tenant") {
-      query = query.eq("tenant_id", user.id)
-    } else if (ownerId && user.user_type === "admin") {
+    if (userProfile.user_type === "owner") {
+      query = query.eq("owner_id", userProfile.id)
+    } else if (userProfile.user_type === "tenant") {
+      query = query.eq("tenant_id", userProfile.id)
+    } else if (ownerId && userProfile.user_type === "admin") {
       query = query.eq("owner_id", ownerId)
     }
 
