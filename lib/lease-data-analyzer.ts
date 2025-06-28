@@ -45,6 +45,14 @@ class LeaseDataAnalyzer {
       type: "email",
       category: "parties",
     },
+    bailleur_qualite: {
+      key: "bailleur_qualite",
+      label: "Qualité du bailleur",
+      required: false,
+      type: "select",
+      category: "parties",
+      options: ["Propriétaire", "Mandataire", "Gérant"],
+    },
     locataire_nom_prenom: {
       key: "locataire_nom_prenom",
       label: "Nom et prénom du locataire",
@@ -138,13 +146,6 @@ class LeaseDataAnalyzer {
       type: "text",
       category: "annexes",
     },
-    date_signature: {
-      key: "date_signature",
-      label: "Date de signature",
-      required: false,
-      type: "date",
-      category: "annexes",
-    },
   }
 
   async analyze(leaseId: string): Promise<LeaseAnalysis> {
@@ -178,7 +179,23 @@ class LeaseDataAnalyzer {
       const availableData: Record<string, FieldMapping> = {}
       const missingRequired: string[] = []
 
-      for (const [key, definition] of Object.entries(this.fieldDefinitions)) {
+      // Analyser tous les champs de la base de données
+      const allFields = { ...this.fieldDefinitions }
+
+      // Ajouter dynamiquement les champs présents dans le bail
+      Object.keys(lease).forEach((key) => {
+        if (!allFields[key] && lease[key] !== null && lease[key] !== undefined) {
+          allFields[key] = {
+            key,
+            label: key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
+            required: false,
+            type: "text",
+            category: "annexes",
+          }
+        }
+      })
+
+      for (const [key, definition] of Object.entries(allFields)) {
         // Priorité : valeur en DB > valeur automatique > vide
         const dbValue = lease[key]
         const autoValue = autoData[key]
@@ -210,11 +227,14 @@ class LeaseDataAnalyzer {
         }
       }
 
-      const totalFields = Object.keys(this.fieldDefinitions).length
-      const completedFields_count = totalFields - missingRequired.length
-      const completionRate = Math.round((completedFields_count / totalFields) * 100)
+      const totalRequiredFields = Object.values(allFields).filter((f) => f.required).length
+      const completedRequiredFields = totalRequiredFields - missingRequired.length
+      const completionRate =
+        totalRequiredFields > 0 ? Math.round((completedRequiredFields / totalRequiredFields) * 100) : 100
 
-      console.log(`📊 [ANALYZER] Analyse terminée: ${completedFields_count}/${totalFields} champs (${completionRate}%)`)
+      console.log(
+        `📊 [ANALYZER] Analyse terminée: ${completedRequiredFields}/${totalRequiredFields} champs obligatoires (${completionRate}%)`,
+      )
       console.log("❌ [ANALYZER] Champs manquants:", missingRequired)
 
       return {

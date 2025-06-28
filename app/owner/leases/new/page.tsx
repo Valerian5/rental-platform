@@ -18,7 +18,6 @@ import {
   CalendarIcon,
   ChevronLeft,
   ChevronRight,
-  Upload,
   Check,
   Eye,
   FileText,
@@ -33,6 +32,7 @@ import { cn } from "@/lib/utils"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
+import { LeaseDocumentsManager } from "@/components/lease-documents-manager"
 import { supabase } from "@/lib/supabase"
 
 interface LeaseFormData {
@@ -80,6 +80,9 @@ interface LeaseFormData {
   annexe_notice: boolean
   annexe_etat_lieux: boolean
   annexe_reglement: boolean
+  annexe_plomb: boolean
+  annexe_amiante: boolean
+  annexe_electricite_gaz: boolean
 
   // Signature
   lieu_signature: string
@@ -151,6 +154,9 @@ export default function NewLeasePageImproved() {
     annexe_notice: true,
     annexe_etat_lieux: false,
     annexe_reglement: false,
+    annexe_plomb: false,
+    annexe_amiante: false,
+    annexe_electricite_gaz: false,
 
     // Signature
     lieu_signature: "",
@@ -329,62 +335,84 @@ export default function NewLeasePageImproved() {
 
   const generatePreview = async () => {
     try {
-      // Simuler la génération de preview
-      const templateData = {
-        bailleur_nom_prenom: formData.bailleur_nom_prenom || "[Nom du bailleur]",
-        locataire_nom_prenom: formData.locataire_nom_prenom || "[Nom du locataire]",
-        localisation_logement: formData.localisation_logement || "[Adresse du logement]",
-        montant_loyer_mensuel: formData.montant_loyer_mensuel || "[Montant du loyer]",
-        date_prise_effet: formData.date_prise_effet
-          ? format(formData.date_prise_effet, "dd/MM/yyyy", { locale: fr })
-          : "[Date de début]",
-      }
+      console.log("🔍 [PREVIEW] Génération preview avec template officiel")
 
-      const preview = `
-        <div class="space-y-6">
-          <div class="text-center">
-            <h1 class="text-2xl font-bold">CONTRAT DE LOCATION</h1>
-            <p class="text-gray-600">Logement ${formData.lease_type === "furnished" ? "meublé" : "non meublé"}</p>
-          </div>
-          
-          <div class="grid grid-cols-2 gap-6">
-            <div>
-              <h3 class="font-semibold mb-2">BAILLEUR</h3>
-              <p>${templateData.bailleur_nom_prenom}</p>
-              <p class="text-sm text-gray-600">${formData.bailleur_domicile || "[Adresse du bailleur]"}</p>
-            </div>
-            <div>
-              <h3 class="font-semibold mb-2">LOCATAIRE</h3>
-              <p>${templateData.locataire_nom_prenom}</p>
-              <p class="text-sm text-gray-600">${formData.locataire_domicile || "[Adresse du locataire]"}</p>
-            </div>
-          </div>
-          
+      const response = await fetch("/api/lease-templates/preview", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          leaseType: formData.lease_type,
+          formData: formData,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setPreviewContent(data.preview)
+        console.log("✅ [PREVIEW] Preview générée avec template:", data.template?.name)
+      } else {
+        console.error("❌ [PREVIEW] Erreur API:", response.status)
+        // Fallback vers preview simple
+        generateSimplePreview()
+      }
+    } catch (error) {
+      console.error("❌ [PREVIEW] Erreur:", error)
+      generateSimplePreview()
+    }
+  }
+
+  const generateSimplePreview = () => {
+    const preview = `
+      <div class="space-y-6 p-6 bg-white">
+        <div class="text-center border-b pb-4">
+          <h1 class="text-2xl font-bold">CONTRAT DE LOCATION</h1>
+          <p class="text-gray-600">Logement ${formData.lease_type === "furnished" ? "meublé" : "non meublé"}</p>
+        </div>
+        
+        <div class="grid grid-cols-2 gap-6">
           <div>
-            <h3 class="font-semibold mb-2">LOGEMENT</h3>
-            <p>${templateData.localisation_logement}</p>
-            <p class="text-sm text-gray-600">${formData.type_habitat} - ${formData.surface_habitable} m² - ${formData.nombre_pieces} pièces</p>
+            <h3 class="font-semibold mb-2 text-blue-600">BAILLEUR</h3>
+            <p class="font-medium">${formData.bailleur_nom_prenom || "[Nom du bailleur]"}</p>
+            <p class="text-sm text-gray-600">${formData.bailleur_domicile || "[Adresse du bailleur]"}</p>
+            <p class="text-sm text-gray-600">${formData.bailleur_email || "[Email du bailleur]"}</p>
           </div>
-          
           <div>
-            <h3 class="font-semibold mb-2">CONDITIONS FINANCIÈRES</h3>
-            <p>Loyer mensuel : ${templateData.montant_loyer_mensuel} €</p>
-            <p>Charges : ${formData.montant_provisions_charges || "0"} €</p>
-            <p>Dépôt de garantie : ${formData.montant_depot_garantie || "0"} €</p>
-          </div>
-          
-          <div>
-            <h3 class="font-semibold mb-2">DURÉE</h3>
-            <p>Date de prise d'effet : ${templateData.date_prise_effet}</p>
-            <p>Durée : ${formData.duree_contrat} mois</p>
+            <h3 class="font-semibold mb-2 text-blue-600">LOCATAIRE</h3>
+            <p class="font-medium">${formData.locataire_nom_prenom || "[Nom du locataire]"}</p>
+            <p class="text-sm text-gray-600">${formData.locataire_domicile || "[Adresse du locataire]"}</p>
+            <p class="text-sm text-gray-600">${formData.locataire_email || "[Email du locataire]"}</p>
           </div>
         </div>
-      `
-
-      setPreviewContent(preview)
-    } catch (error) {
-      console.error("Erreur génération preview:", error)
-    }
+        
+        <div>
+          <h3 class="font-semibold mb-2 text-blue-600">LOGEMENT</h3>
+          <p class="font-medium">${formData.localisation_logement || "[Adresse du logement]"}</p>
+          <p class="text-sm text-gray-600">${formData.type_habitat || "[Type]"} - ${formData.surface_habitable || "[Surface]"} m² - ${formData.nombre_pieces || "[Pièces]"} pièces</p>
+        </div>
+        
+        <div>
+          <h3 class="font-semibold mb-2 text-blue-600">CONDITIONS FINANCIÈRES</h3>
+          <div class="bg-gray-50 p-3 rounded">
+            <p>Loyer mensuel : <span class="font-medium">${formData.montant_loyer_mensuel || "[Montant]"} €</span></p>
+            <p>Charges : <span class="font-medium">${formData.montant_provisions_charges || "0"} €</span></p>
+            <p>Dépôt de garantie : <span class="font-medium">${formData.montant_depot_garantie || "[Dépôt]"} €</span></p>
+          </div>
+        </div>
+        
+        <div>
+          <h3 class="font-semibold mb-2 text-blue-600">DURÉE</h3>
+          <p>Date de prise d'effet : <span class="font-medium">${
+            formData.date_prise_effet
+              ? format(formData.date_prise_effet, "dd/MM/yyyy", { locale: fr })
+              : "[Date de début]"
+          }</span></p>
+          <p>Durée : <span class="font-medium">${formData.duree_contrat || "[Durée]"} mois</span></p>
+        </div>
+      </div>
+    `
+    setPreviewContent(preview)
   }
 
   useEffect(() => {
@@ -451,8 +479,9 @@ export default function NewLeasePageImproved() {
         return
       }
 
-      // Préparer les données pour l'API
+      // Préparer les données pour l'API - MAPPING COMPLET
       const leaseData = {
+        // Champs de base
         property_id: formData.property_id,
         tenant_id: formData.tenant_id,
         start_date: formData.date_prise_effet?.toISOString().split("T")[0],
@@ -467,16 +496,28 @@ export default function NewLeasePageImproved() {
         lease_type: formData.lease_type,
         application_id: applicationId || undefined,
 
-        // Données complètes pour éviter l'étape de complétion
+        // TOUS les champs du formulaire
         ...formData,
+
+        // Conversion des dates
+        date_prise_effet: formData.date_prise_effet?.toISOString().split("T")[0],
+        date_signature: formData.date_signature?.toISOString().split("T")[0],
 
         metadata: {
           special_conditions: formData.special_conditions,
           documents_count: formData.documents.length,
+          form_version: "v2_complete",
+          created_from: "new_form_improved",
         },
       }
 
-      console.log("📝 Création bail avec données complètes:", Object.keys(leaseData).length, "champs")
+      console.log("📝 [SUBMIT] Création bail avec données complètes:", {
+        totalFields: Object.keys(leaseData).length,
+        bailleur: leaseData.bailleur_nom_prenom,
+        locataire: leaseData.locataire_nom_prenom,
+        logement: leaseData.localisation_logement,
+        loyer: leaseData.montant_loyer_mensuel,
+      })
 
       const response = await fetch("/api/leases", {
         method: "POST",
@@ -498,7 +539,7 @@ export default function NewLeasePageImproved() {
       // Rediriger vers la page du bail
       router.push(`/owner/leases/${data.lease.id}`)
     } catch (error) {
-      console.error("Erreur création bail:", error)
+      console.error("❌ [SUBMIT] Erreur création bail:", error)
       toast.error(error instanceof Error ? error.message : "Erreur lors de la création du bail")
     } finally {
       setSaving(false)
@@ -524,7 +565,7 @@ export default function NewLeasePageImproved() {
     { id: 3, title: "Logement", icon: Home, description: "Détails du bien" },
     { id: 4, title: "Financier", icon: Euro, description: "Conditions financières" },
     { id: 5, title: "Durée", icon: Clock, description: "Période du bail" },
-    { id: 6, title: "Finalisation", icon: FileCheck, description: "Vérification et signature" },
+    { id: 6, title: "Documents", icon: FileCheck, description: "Documents et finalisation" },
   ]
 
   const currentStepData = steps.find((s) => s.id === currentStep)
@@ -1054,75 +1095,48 @@ export default function NewLeasePageImproved() {
                     </div>
 
                     <div>
-                      <h4 className="font-medium mb-3">Annexes obligatoires</h4>
-                      <div className="space-y-3">
-                        {[
-                          { key: "annexe_dpe", label: "Diagnostic de performance énergétique (DPE)" },
-                          { key: "annexe_risques", label: "État des risques et pollutions" },
-                          { key: "annexe_notice", label: "Notice d'information" },
-                          { key: "annexe_etat_lieux", label: "État des lieux d'entrée" },
-                          { key: "annexe_reglement", label: "Règlement de copropriété" },
-                        ].map((annexe) => (
-                          <div key={annexe.key} className="flex items-center justify-between">
-                            <Label htmlFor={annexe.key} className="text-sm">
-                              {annexe.label}
-                            </Label>
-                            <Switch
-                              id={annexe.key}
-                              checked={formData[annexe.key as keyof LeaseFormData] as boolean}
-                              onCheckedChange={(checked) =>
-                                handleInputChange(annexe.key as keyof LeaseFormData, checked)
-                              }
-                            />
-                          </div>
-                        ))}
-                      </div>
+                      <Label htmlFor="lieu_signature">Lieu de signature *</Label>
+                      <Input
+                        id="lieu_signature"
+                        value={formData.lieu_signature}
+                        onChange={(e) => handleInputChange("lieu_signature", e.target.value)}
+                        placeholder="Paris"
+                      />
+                    </div>
+
+                    <div>
+                      <Label>Date de signature</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !formData.date_signature && "text-muted-foreground",
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {formData.date_signature
+                              ? format(formData.date_signature, "PPP", { locale: fr })
+                              : "Sélectionner une date"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={formData.date_signature || undefined}
+                            onSelect={(date) => handleInputChange("date_signature", date)}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </div>
                 )}
 
-                {/* Étape 6: Finalisation */}
+                {/* Étape 6: Documents */}
                 {currentStep === 6 && (
                   <div className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="lieu_signature">Lieu de signature *</Label>
-                        <Input
-                          id="lieu_signature"
-                          value={formData.lieu_signature}
-                          onChange={(e) => handleInputChange("lieu_signature", e.target.value)}
-                          placeholder="Paris"
-                        />
-                      </div>
-                      <div>
-                        <Label>Date de signature</Label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className={cn(
-                                "w-full justify-start text-left font-normal",
-                                !formData.date_signature && "text-muted-foreground",
-                              )}
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {formData.date_signature
-                                ? format(formData.date_signature, "PPP", { locale: fr })
-                                : "Sélectionner une date"}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={formData.date_signature || undefined}
-                              onSelect={(date) => handleInputChange("date_signature", date)}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                    </div>
-
                     <div>
                       <Label htmlFor="special_conditions">Conditions particulières</Label>
                       <Textarea
@@ -1134,43 +1148,15 @@ export default function NewLeasePageImproved() {
                       />
                     </div>
 
-                    <div>
-                      <Label>Documents annexes</Label>
-                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                        <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                        <div className="mt-4">
-                          <Label htmlFor="file-upload" className="cursor-pointer">
-                            <span className="mt-2 block text-sm font-medium text-gray-900">
-                              Cliquez pour télécharger des documents
-                            </span>
-                            <span className="mt-1 block text-xs text-gray-500">PDF, DOC, DOCX jusqu'à 10MB</span>
-                          </Label>
-                          <Input
-                            id="file-upload"
-                            type="file"
-                            multiple
-                            accept=".pdf,.doc,.docx"
-                            onChange={(e) => {
-                              const files = Array.from(e.target.files || [])
-                              handleInputChange("documents", [...formData.documents, ...files])
-                            }}
-                            className="hidden"
-                          />
-                        </div>
-                      </div>
-                      {formData.documents.length > 0 && (
-                        <div className="mt-2">
-                          <p className="text-sm text-gray-600">
-                            {formData.documents.length} document(s) sélectionné(s)
-                          </p>
-                          <ul className="text-xs text-gray-500">
-                            {formData.documents.map((file, index) => (
-                              <li key={index}>{file.name}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
+                    <LeaseDocumentsManager
+                      formData={formData}
+                      onDocumentsChange={(documents) => handleInputChange("documents", documents)}
+                      onAnnexesChange={(annexes) => {
+                        Object.entries(annexes).forEach(([key, value]) => {
+                          handleInputChange(key as keyof LeaseFormData, value)
+                        })
+                      }}
+                    />
 
                     {/* Validation finale */}
                     <Alert>
