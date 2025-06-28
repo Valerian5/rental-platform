@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
       bailleur_nom_prenom: data.bailleur_nom_prenom || "",
       bailleur_domicile: data.bailleur_domicile || "",
       bailleur_email: data.bailleur_email || "",
-      bailleur_telephone: data.bailleur_telephone || "",
+      bailleur_telephone: data.telephone_bailleur || "",
       bailleur_qualite: data.bailleur_qualite || "Propriétaire",
 
       locataire_nom_prenom: data.locataire_nom_prenom || "",
