@@ -83,14 +83,44 @@ export function LeaseDocumentsManager({ formData, onDocumentsChange, onAnnexesCh
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
   const [loading, setLoading] = useState(false)
 
-  // Calculer les statistiques
+  // Fonction pour détecter le type de document basé sur le nom du fichier
+  const detectDocumentType = (fileName: string): string => {
+    const name = fileName.toLowerCase()
+    if (name.includes("dpe") || name.includes("diagnostic") || name.includes("performance")) return "dpe"
+    if (name.includes("risque") || name.includes("pollution") || name.includes("erp")) return "risques"
+    if (name.includes("notice") || name.includes("information")) return "notice"
+    if (name.includes("etat") && name.includes("lieu")) return "etat_lieux"
+    if (name.includes("reglement") || name.includes("copropriete")) return "reglement"
+    if (name.includes("plomb")) return "plomb"
+    if (name.includes("amiante")) return "amiante"
+    if (name.includes("electricite") || name.includes("gaz") || name.includes("installation")) return "electricite_gaz"
+    return "autre"
+  }
+
+  // Calculer les statistiques avec détection automatique
   const requiredDocs = Object.entries(REQUIRED_LEASE_DOCUMENTS).filter(([_, info]) => info.required)
-  const uploadedRequiredDocs = requiredDocs.filter(([key]) =>
-    documents.some((doc) => doc.document_type === key || uploadedFiles.some((file) => file.name.includes(key))),
+
+  // Compter les documents uploadés par type détecté
+  const uploadedByType = uploadedFiles.reduce(
+    (acc, file) => {
+      const type = detectDocumentType(file.name)
+      acc[type] = (acc[type] || 0) + 1
+      return acc
+    },
+    {} as Record<string, number>,
   )
-  const completionRate = Math.round((uploadedRequiredDocs.length / requiredDocs.length) * 100)
+
+  // Compter les documents requis qui ont été uploadés
+  const uploadedRequiredDocs = requiredDocs.filter(([key]) => {
+    return uploadedByType[key] > 0 || documents.some((doc) => doc.document_type === key)
+  })
+
+  const completionRate =
+    requiredDocs.length > 0 ? Math.round((uploadedRequiredDocs.length / requiredDocs.length) * 100) : 100
 
   const handleFileUpload = (documentType: string, file: File) => {
+    console.log("📁 [DOCS] Upload fichier:", file.name, "Taille:", file.size, "bytes")
+
     const newFiles = [...uploadedFiles, file]
     setUploadedFiles(newFiles)
     onDocumentsChange(newFiles)
@@ -104,13 +134,17 @@ export function LeaseDocumentsManager({ formData, onDocumentsChange, onAnnexesCh
       })
     }
 
-    toast.success(`Document ${docInfo?.name || documentType} ajouté`)
+    toast.success(`Document ${docInfo?.name || documentType} ajouté (${(file.size / 1024).toFixed(1)} KB)`)
   }
 
   const handleRemoveFile = (index: number) => {
+    const removedFile = uploadedFiles[index]
     const newFiles = uploadedFiles.filter((_, i) => i !== index)
     setUploadedFiles(newFiles)
     onDocumentsChange(newFiles)
+
+    console.log("🗑️ [DOCS] Suppression fichier:", removedFile.name)
+    toast.info(`Document ${removedFile.name} supprimé`)
   }
 
   const getAnnexesState = () => {
@@ -128,6 +162,11 @@ export function LeaseDocumentsManager({ formData, onDocumentsChange, onAnnexesCh
       ...getAnnexesState(),
       [annexeKey]: checked,
     })
+  }
+
+  // Fonction pour obtenir les fichiers d'un type spécifique
+  const getFilesForType = (docType: string) => {
+    return uploadedFiles.filter((file) => detectDocumentType(file.name) === docType)
   }
 
   return (
@@ -193,9 +232,9 @@ export function LeaseDocumentsManager({ formData, onDocumentsChange, onAnnexesCh
       <div className="space-y-4">
         {Object.entries(REQUIRED_LEASE_DOCUMENTS).map(([docType, info]) => {
           const hasDocument =
-            documents.some((doc) => doc.document_type === docType) ||
-            uploadedFiles.some((file) => file.name.toLowerCase().includes(docType))
+            documents.some((doc) => doc.document_type === docType) || getFilesForType(docType).length > 0
           const isAnnexeActive = formData[info.annexeKey] || false
+          const filesForType = getFilesForType(docType)
 
           return (
             <Card key={docType}>
@@ -251,7 +290,7 @@ export function LeaseDocumentsManager({ formData, onDocumentsChange, onAnnexesCh
                         <div>
                           <p className="font-medium">{doc.document_name}</p>
                           <div className="flex items-center gap-4 text-xs text-gray-500">
-                            <span>{(doc.file_size / 1024 / 1024).toFixed(1)} MB</span>
+                            <span>{(doc.file_size / 1024).toFixed(1)} KB</span>
                             <span>Ajouté le {new Date(doc.uploaded_at).toLocaleDateString("fr-FR")}</span>
                           </div>
                         </div>
@@ -276,29 +315,30 @@ export function LeaseDocumentsManager({ formData, onDocumentsChange, onAnnexesCh
                     </div>
                   ))}
 
-                {/* Fichiers uploadés */}
-                {uploadedFiles
-                  .filter((file) => file.name.toLowerCase().includes(docType))
-                  .map((file, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between p-3 border rounded-lg mb-2 bg-blue-50"
-                    >
-                      <div className="flex items-center gap-3">
-                        <File className="h-8 w-8 text-blue-500" />
-                        <div>
-                          <p className="font-medium">{file.name}</p>
-                          <div className="flex items-center gap-4 text-xs text-gray-500">
-                            <span>{(file.size / 1024 / 1024).toFixed(1)} MB</span>
-                            <span>Nouveau fichier</span>
-                          </div>
+                {/* Fichiers uploadés pour ce type */}
+                {filesForType.map((file, index) => (
+                  <div
+                    key={`${docType}-${index}`}
+                    className="flex items-center justify-between p-3 border rounded-lg mb-2 bg-blue-50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <File className="h-8 w-8 text-blue-500" />
+                      <div>
+                        <p className="font-medium">{file.name}</p>
+                        <div className="flex items-center gap-4 text-xs text-gray-500">
+                          <span>{(file.size / 1024).toFixed(1)} KB</span>
+                          <span>Nouveau fichier</span>
+                          <Badge variant="outline" className="text-xs">
+                            Type détecté: {docType}
+                          </Badge>
                         </div>
                       </div>
-                      <Button variant="outline" size="sm" onClick={() => handleRemoveFile(uploadedFiles.indexOf(file))}>
-                        <X className="h-4 w-4 text-red-500" />
-                      </Button>
                     </div>
-                  ))}
+                    <Button variant="outline" size="sm" onClick={() => handleRemoveFile(uploadedFiles.indexOf(file))}>
+                      <X className="h-4 w-4 text-red-500" />
+                    </Button>
+                  </div>
+                ))}
 
                 {/* Zone d'upload */}
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
@@ -329,6 +369,57 @@ export function LeaseDocumentsManager({ formData, onDocumentsChange, onAnnexesCh
         })}
       </div>
 
+      {/* Upload libre pour autres documents */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Autres documents</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+            <Upload className="mx-auto h-8 w-8 text-gray-400 mb-2" />
+            <Label htmlFor="upload-other" className="cursor-pointer">
+              <span className="text-sm font-medium text-gray-900">Ajouter d'autres documents</span>
+              <span className="block text-xs text-gray-500 mt-1">PDF, JPG, PNG jusqu'à 10MB</span>
+            </Label>
+            <Input
+              id="upload-other"
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) {
+                  handleFileUpload("autre", file)
+                  e.target.value = ""
+                }
+              }}
+              className="hidden"
+            />
+          </div>
+
+          {/* Afficher les autres documents */}
+          {getFilesForType("autre").map((file, index) => (
+            <div
+              key={`autre-${index}`}
+              className="flex items-center justify-between p-3 border rounded-lg mt-2 bg-gray-50"
+            >
+              <div className="flex items-center gap-3">
+                <File className="h-8 w-8 text-gray-500" />
+                <div>
+                  <p className="font-medium">{file.name}</p>
+                  <div className="flex items-center gap-4 text-xs text-gray-500">
+                    <span>{(file.size / 1024).toFixed(1)} KB</span>
+                    <span>Document libre</span>
+                  </div>
+                </div>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => handleRemoveFile(uploadedFiles.indexOf(file))}>
+                <X className="h-4 w-4 text-red-500" />
+              </Button>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
       {/* Résumé des annexes */}
       <Card>
         <CardHeader>
@@ -354,7 +445,7 @@ export function LeaseDocumentsManager({ formData, onDocumentsChange, onAnnexesCh
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
             Il manque {requiredDocs.length - uploadedRequiredDocs.length} document(s) obligatoire(s) pour finaliser le
-            bail.
+            bail. Les documents sont détectés automatiquement selon leur nom.
           </AlertDescription>
         </Alert>
       )}

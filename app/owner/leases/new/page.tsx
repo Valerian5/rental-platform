@@ -52,7 +52,7 @@ interface LeaseFormData {
   locataire_email: string
   locataire_telephone: string
 
-  // Logement
+  // Logement - COMPLET selon template
   localisation_logement: string
   identifiant_fiscal: string
   type_habitat: string
@@ -60,19 +60,45 @@ interface LeaseFormData {
   periode_construction: string
   surface_habitable: number | string
   nombre_pieces: number | string
+  autres_parties: string
+  elements_equipements: string
+  modalite_chauffage: string
+  modalite_eau_chaude: string
   niveau_performance_dpe: string
+  destination_locaux: string
+  locaux_accessoires: string
+  locaux_communs: string
+  equipement_technologies: string
 
-  // Financier
+  // Financier - COMPLET
   montant_loyer_mensuel: number | string
+  soumis_decret_evolution: string
+  soumis_loyer_reference: string
   montant_provisions_charges: number | string
+  modalite_reglement_charges: string
   montant_depot_garantie: number | string
   periodicite_paiement: string
+  paiement_echeance: string
   date_paiement: string
+  lieu_paiement: string
+  montant_depenses_energie: string
 
   // Durée
   date_prise_effet: Date | null
   duree_contrat: number | string
   evenement_duree_reduite: string
+
+  // Travaux
+  montant_travaux_amelioration: string
+
+  // Conditions particulières
+  clause_solidarite: string
+  clause_resolutoire: string
+  usage_prevu: string
+
+  // Honoraires
+  honoraires_locataire: string
+  plafond_honoraires_etat_lieux: string
 
   // Annexes
   annexe_dpe: boolean
@@ -126,7 +152,7 @@ export default function NewLeasePageImproved() {
     locataire_email: "",
     locataire_telephone: "",
 
-    // Logement
+    // Logement - COMPLET
     localisation_logement: "",
     identifiant_fiscal: "",
     type_habitat: "",
@@ -134,19 +160,45 @@ export default function NewLeasePageImproved() {
     periode_construction: "Après 1949",
     surface_habitable: "",
     nombre_pieces: "",
+    autres_parties: "",
+    elements_equipements: "",
+    modalite_chauffage: "",
+    modalite_eau_chaude: "",
     niveau_performance_dpe: "D",
+    destination_locaux: "Usage d'habitation exclusivement",
+    locaux_accessoires: "",
+    locaux_communs: "",
+    equipement_technologies: "",
 
-    // Financier
+    // Financier - COMPLET
     montant_loyer_mensuel: "",
+    soumis_decret_evolution: "Non",
+    soumis_loyer_reference: "Non",
     montant_provisions_charges: "",
+    modalite_reglement_charges: "Forfait",
     montant_depot_garantie: "",
     periodicite_paiement: "Mensuelle",
+    paiement_echeance: "À terme échu",
     date_paiement: "1",
+    lieu_paiement: "Virement bancaire",
+    montant_depenses_energie: "",
 
     // Durée
     date_prise_effet: null,
     duree_contrat: "",
     evenement_duree_reduite: "",
+
+    // Travaux
+    montant_travaux_amelioration: "",
+
+    // Conditions
+    clause_solidarite: "Applicable",
+    clause_resolutoire: "Applicable",
+    usage_prevu: "Résidence principale",
+
+    // Honoraires
+    honoraires_locataire: "",
+    plafond_honoraires_etat_lieux: "",
 
     // Annexes
     annexe_dpe: true,
@@ -470,14 +522,20 @@ export default function NewLeasePageImproved() {
         return
       }
 
+      // Récupérer la session Supabase pour l'authentification
       const {
         data: { session },
+        error: sessionError,
       } = await supabase.auth.getSession()
 
-      if (!session?.access_token) {
-        toast.error("Session expirée")
+      if (sessionError || !session?.access_token) {
+        console.error("❌ [SUBMIT] Erreur session:", sessionError)
+        toast.error("Session expirée, veuillez vous reconnecter")
+        router.push("/login")
         return
       }
+
+      console.log("🔐 [SUBMIT] Session valide, token présent")
 
       // Préparer les données pour l'API - MAPPING COMPLET
       const leaseData = {
@@ -496,7 +554,7 @@ export default function NewLeasePageImproved() {
         lease_type: formData.lease_type,
         application_id: applicationId || undefined,
 
-        // TOUS les champs du formulaire
+        // TOUS les champs du formulaire - COMPLET
         ...formData,
 
         // Conversion des dates
@@ -506,17 +564,19 @@ export default function NewLeasePageImproved() {
         metadata: {
           special_conditions: formData.special_conditions,
           documents_count: formData.documents.length,
-          form_version: "v2_complete",
-          created_from: "new_form_improved",
+          form_version: "v3_complete_template",
+          created_from: "new_form_complete",
+          total_fields: Object.keys(formData).length,
         },
       }
 
-      console.log("📝 [SUBMIT] Création bail avec données complètes:", {
+      console.log("📝 [SUBMIT] Création bail avec données COMPLÈTES:", {
         totalFields: Object.keys(leaseData).length,
         bailleur: leaseData.bailleur_nom_prenom,
         locataire: leaseData.locataire_nom_prenom,
         logement: leaseData.localisation_logement,
         loyer: leaseData.montant_loyer_mensuel,
+        hasSession: !!session?.access_token,
       })
 
       const response = await fetch("/api/leases", {
@@ -530,10 +590,12 @@ export default function NewLeasePageImproved() {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || "Erreur lors de la création du bail")
+        console.error("❌ [SUBMIT] Erreur API:", response.status, errorData)
+        throw new Error(errorData.error || `Erreur ${response.status}: ${response.statusText}`)
       }
 
       const data = await response.json()
+      console.log("✅ [SUBMIT] Bail créé avec succès:", data.lease?.id)
       toast.success("Bail créé avec succès")
 
       // Rediriger vers la page du bail
@@ -817,7 +879,7 @@ export default function NewLeasePageImproved() {
                   </div>
                 )}
 
-                {/* Étape 3: Logement */}
+                {/* Étape 3: Logement - COMPLET */}
                 {currentStep === 3 && (
                   <div className="space-y-6">
                     <div>
@@ -937,10 +999,54 @@ export default function NewLeasePageImproved() {
                         </Select>
                       </div>
                     </div>
+
+                    {/* Champs supplémentaires du template */}
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="autres_parties">Autres parties du logement</Label>
+                        <Textarea
+                          id="autres_parties"
+                          value={formData.autres_parties}
+                          onChange={(e) => handleInputChange("autres_parties", e.target.value)}
+                          placeholder="Cave, parking, balcon..."
+                          rows={2}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="elements_equipements">Éléments d'équipements</Label>
+                        <Textarea
+                          id="elements_equipements"
+                          value={formData.elements_equipements}
+                          onChange={(e) => handleInputChange("elements_equipements", e.target.value)}
+                          placeholder="Cuisine équipée, lave-vaisselle..."
+                          rows={2}
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="modalite_chauffage">Modalité de chauffage</Label>
+                          <Input
+                            id="modalite_chauffage"
+                            value={formData.modalite_chauffage}
+                            onChange={(e) => handleInputChange("modalite_chauffage", e.target.value)}
+                            placeholder="Chauffage central, individuel..."
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="modalite_eau_chaude">Modalité eau chaude</Label>
+                          <Input
+                            id="modalite_eau_chaude"
+                            value={formData.modalite_eau_chaude}
+                            onChange={(e) => handleInputChange("modalite_eau_chaude", e.target.value)}
+                            placeholder="Chauffe-eau électrique, gaz..."
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
 
-                {/* Étape 4: Financier */}
+                {/* Étape 4: Financier - COMPLET */}
                 {currentStep === 4 && (
                   <div className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1012,6 +1118,63 @@ export default function NewLeasePageImproved() {
                             ))}
                           </SelectContent>
                         </Select>
+                      </div>
+                    </div>
+
+                    {/* Champs supplémentaires du template */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="modalite_reglement_charges">Modalité règlement charges</Label>
+                        <Select
+                          value={formData.modalite_reglement_charges}
+                          onValueChange={(value) => handleInputChange("modalite_reglement_charges", value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Forfait">Forfait</SelectItem>
+                            <SelectItem value="Provisions avec régularisation">
+                              Provisions avec régularisation
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="paiement_echeance">Paiement échéance</Label>
+                        <Select
+                          value={formData.paiement_echeance}
+                          onValueChange={(value) => handleInputChange("paiement_echeance", value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="À échoir">À échoir</SelectItem>
+                            <SelectItem value="À terme échu">À terme échu</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="lieu_paiement">Lieu de paiement</Label>
+                        <Input
+                          id="lieu_paiement"
+                          value={formData.lieu_paiement}
+                          onChange={(e) => handleInputChange("lieu_paiement", e.target.value)}
+                          placeholder="Virement bancaire"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="montant_depenses_energie">Dépenses énergie estimées</Label>
+                        <Input
+                          id="montant_depenses_energie"
+                          value={formData.montant_depenses_energie}
+                          onChange={(e) => handleInputChange("montant_depenses_energie", e.target.value)}
+                          placeholder="1200€ - 1600€"
+                        />
                       </div>
                     </div>
 
@@ -1130,6 +1293,52 @@ export default function NewLeasePageImproved() {
                           />
                         </PopoverContent>
                       </Popover>
+                    </div>
+
+                    {/* Conditions particulières */}
+                    <div className="space-y-4">
+                      <h4 className="font-medium">Conditions particulières</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="clause_solidarite">Clause de solidarité</Label>
+                          <Select
+                            value={formData.clause_solidarite}
+                            onValueChange={(value) => handleInputChange("clause_solidarite", value)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Applicable">Applicable</SelectItem>
+                              <SelectItem value="Non applicable">Non applicable</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="clause_resolutoire">Clause résolutoire</Label>
+                          <Select
+                            value={formData.clause_resolutoire}
+                            onValueChange={(value) => handleInputChange("clause_resolutoire", value)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Applicable">Applicable</SelectItem>
+                              <SelectItem value="Non applicable">Non applicable</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="usage_prevu">Usage prévu</Label>
+                        <Input
+                          id="usage_prevu"
+                          value={formData.usage_prevu}
+                          onChange={(e) => handleInputChange("usage_prevu", e.target.value)}
+                          placeholder="Résidence principale"
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
