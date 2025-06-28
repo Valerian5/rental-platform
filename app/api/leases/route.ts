@@ -75,11 +75,11 @@ const leaseData = {
   bailleur_qualite: data.bailleur_qualite ?? "Particulier",
   bailleur_telephone: data.bailleur_telephone,
 
-  // Parties LOCATAIRE
+  // Parties LOCATAIRE (nommage exact SQL)
   locataire_nom_prenom: data.locataire_nom_prenom,
   locataire_domicile: data.locataire_domicile,
   locataire_email: data.locataire_email,
-  locataire_telephone: data.locataire_telephone,
+  telephone_locataire: data.telephone_locataire, // CORRECTION
 
   // Adresse logement
   localisation_logement: data.localisation_logement,
