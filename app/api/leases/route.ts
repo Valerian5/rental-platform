@@ -47,18 +47,41 @@ export async function POST(request: NextRequest) {
 
     // Préparer les données pour insertion - MAPPING COMPLET
 const leaseData = {
-  // Identification
+  // Identifiants de base
+  property_id: data.property_id,
+  tenant_id: data.tenant_id,
+  owner_id: data.owner_id,
+  template_id: data.template_id,
+  application_id: data.application_id,
+
+  // Dates
+  start_date: data.date_prise_effet ?? data.start_date,
+  end_date: data.end_date ?? data.date_fin,
+  date_debut: data.date_prise_effet ?? data.start_date,
+  date_fin: data.end_date ?? data.date_fin,
+  date_prise_effet: data.date_prise_effet ?? data.start_date,
+  date_signature: data.date_signature,
+  data_completed_at: data.data_completed_at,
+
+  // Durée
+  duree: Number(data.duree) || Number(data.duree_contrat) || null,
+  duree_contrat: String(data.duree_contrat ?? data.duree ?? ""),
+  evenement_duree_reduite: data.evenement_duree_reduite,
+
+  // Parties BAILLEUR
   bailleur_nom_prenom: data.bailleur_nom_prenom,
   bailleur_domicile: data.bailleur_domicile,
+  bailleur_email: data.bailleur_email,
   bailleur_qualite: data.bailleur_qualite ?? "Particulier",
-  bailleur_email: data.bailleur_email ?? data.email_bailleur,
-  telephone_bailleur: data.telephone_bailleur,
+  bailleur_telephone: data.bailleur_telephone,
 
+  // Parties LOCATAIRE
   locataire_nom_prenom: data.locataire_nom_prenom,
-  locataire_email: data.locataire_email ?? data.email_locataire,
-  telephone_locataire: data.telephone_locataire,
+  locataire_domicile: data.locataire_domicile,
+  locataire_email: data.locataire_email,
+  locataire_telephone: data.locataire_telephone,
 
-  // Adresse
+  // Adresse logement
   localisation_logement: data.localisation_logement,
   adresse_postale: data.adresse_postale,
   code_postal: data.code_postal,
@@ -71,9 +94,9 @@ const leaseData = {
   type_habitat: data.type_habitat,
   regime_juridique: data.regime_juridique ?? "Copropriété",
   periode_construction: data.periode_construction,
-  surface_habitable: data.surface_habitable,
-  surface_m2: data.surface_habitable,
-  nombre_pieces: data.nombre_pieces,
+  surface_habitable: parseFloat(data.surface_habitable) || null,
+  surface_m2: parseFloat(data.surface_habitable) || null,
+  nombre_pieces: Number(data.nombre_pieces) || null,
   autres_parties: data.autres_parties,
   elements_equipements: data.elements_equipements,
   modalite_chauffage: data.modalite_chauffage,
@@ -85,34 +108,24 @@ const leaseData = {
   equipement_technologies: data.equipement_technologies,
   identifiant_fiscal: data.identifiant_fiscal,
 
-  // Dates
-  start_date: data.date_prise_effet ?? data.start_date,
-  end_date: data.date_fin,
-  date_debut: data.date_prise_effet ?? data.start_date,
-  date_fin: data.date_fin,
-  date_prise_effet: data.date_prise_effet,
-  duree: data.duree ?? parseInt(data.duree_contrat),
-  duree_contrat: data.duree_contrat,
-  evenement_duree_reduite: data.evenement_duree_reduite,
-
-  // Loyer & charges
-  loyer: data.montant_loyer_mensuel,
-  loyer_cc: data.loyer_cc,
-  montant_loyer_mensuel: data.montant_loyer_mensuel,
-  mensual_rent: data.montant_loyer_mensuel,
-  charges: data.montant_provisions_charges ?? 0,
-  montant_provisions_charges: data.montant_provisions_charges,
+  // Financier
+  monthly_rent: parseFloat(data.monthly_rent ?? data.montant_loyer_mensuel) || null,
+  loyer: parseFloat(data.loyer ?? data.montant_loyer_mensuel) || null,
+  loyer_cc: parseFloat(data.loyer_cc) || null,
+  montant_loyer_mensuel: parseFloat(data.montant_loyer_mensuel) || null,
+  charges: parseFloat(data.charges ?? data.montant_provisions_charges) || 0,
+  montant_provisions_charges: parseFloat(data.montant_provisions_charges) || 0,
   modalite_reglement_charges: data.modalite_reglement_charges ?? "Forfait",
   modalites_revision_forfait: data.modalites_revision_forfait,
-  soumis_decret_evolution: data.soumis_decret_evolution ?? false,
-  soumis_loyer_reference: data.soumis_loyer_reference ?? false,
-  montant_loyer_reference: data.montant_loyer_reference,
-  montant_loyer_reference_majore: data.montant_loyer_reference_majore,
-  complement_loyer: data.complement_loyer ?? 0,
+  soumis_decret_evolution: data.soumis_decret_evolution === "Oui" || data.soumis_decret_evolution === true,
+  soumis_loyer_reference: data.soumis_loyer_reference === "Oui" || data.soumis_loyer_reference === true,
+  montant_loyer_reference: parseFloat(data.montant_loyer_reference) || null,
+  montant_loyer_reference_majore: parseFloat(data.montant_loyer_reference_majore) || null,
+  complement_loyer: parseFloat(data.complement_loyer) || 0,
   infos_dernier_loyer: data.infos_dernier_loyer,
   date_revision: data.date_revision,
   date_reference_irl: data.date_reference_irl,
-  contribution_economies: data.contribution_economies ?? 0,
+  contribution_economies: parseFloat(data.contribution_economies) || 0,
   reevaluation_loyer: data.reevaluation_loyer,
 
   // Paiement
@@ -120,50 +133,61 @@ const leaseData = {
   paiement_echeance: data.paiement_echeance ?? "À terme échu",
   date_paiement: data.date_paiement ?? "Le 1er de chaque mois",
   lieu_paiement: data.lieu_paiement ?? "Virement bancaire",
-  montant_premiere_echeance: data.montant_premiere_echeance,
+  montant_premiere_echeance: parseFloat(data.montant_premiere_echeance) || null,
 
   // Dépôt & garantie
-  montant_depot_garantie: data.montant_depot_garantie,
-  deposit: data.montant_depot_garantie,
-  deposit_amount: data.montant_depot_garantie,
-  security_deposit: data.montant_depot_garantie,
+  deposit_amount: parseFloat(data.deposit_amount ?? data.montant_depot_garantie ?? data.depot_garantie) || null,
+  depot_garantie: parseFloat(data.depot_garantie ?? data.montant_depot_garantie ?? data.deposit_amount) || null,
+  montant_depot_garantie: parseFloat(data.montant_depot_garantie ?? data.deposit_amount ?? data.depot_garantie) || null,
+  deposit: parseFloat(data.deposit ?? data.montant_depot_garantie ?? data.depot_garantie ?? data.deposit_amount) || null,
+  security_deposit: parseFloat(data.security_deposit ?? data.montant_depot_garantie ?? data.deposit_amount) || null,
 
   // Travaux
   travaux_amelioration: data.travaux_amelioration,
-  majoration_travaux: data.majoration_travaux ?? 0,
-  diminution_travaux: data.diminution_travaux ?? 0,
+  majoration_travaux: parseFloat(data.majoration_travaux) || 0,
+  diminution_travaux: parseFloat(data.diminution_travaux) || 0,
 
-  // Annexes
-  annexe_dpe: data.annexe_dpe ?? false,
-  annexe_risques: data.annexe_risques ?? false,
-  annexe_notice: data.annexe_notice ?? false,
-  annexe_etat_lieux: data.annexe_etat_lieux ?? false,
-  annexe_reglement: data.annexe_reglement ?? false,
-  annexe_plomb: data.annexe_plomb ?? false,
-  annexe_amiante: data.annexe_amiante ?? false,
-  annexe_electricite_gaz: data.annexe_electricite_gaz ?? false,
-  annexe_autorisation: data.annexe_autorisation ?? false,
-  annexe_references_loyers: data.annexe_references_loyers ?? false,
+  // Annexe (documents)
+  annexe_dpe: !!data.annexe_dpe,
+  annexe_risques: !!data.annexe_risques,
+  annexe_notice: !!data.annexe_notice,
+  annexe_etat_lieux: !!data.annexe_etat_lieux,
+  annexe_reglement: !!data.annexe_reglement,
+  annexe_plomb: !!data.annexe_plomb,
+  annexe_amiante: !!data.annexe_amiante,
+  annexe_electricite_gaz: !!data.annexe_electricite_gaz,
+  annexe_autorisation: !!data.annexe_autorisation,
+  annexe_references_loyers: !!data.annexe_references_loyers,
 
   // Signatures & statut
-  clause_solidarite: data.clause_solidarite ?? true,
-  clause_resolutoire: data.clause_resolutoire ?? true,
-  statut: data.status ?? "draft",
+  clause_solidarite: data.clause_solidarite === "Applicable" || data.clause_solidarite === true,
+  clause_resolutoire: data.clause_resolutoire === "Applicable" || data.clause_resolutoire === true,
+  status: data.status ?? "draft",
   document_validation_status: data.document_validation_status ?? "pending",
-  date_signature: data.date_signature,
   ville_signature: data.lieu_signature,
-  nom_bailleur: data.nom_bailleur ?? data.bailleur_nom_prenom,
-  nom_locataire: data.nom_locataire ?? data.locataire_nom_prenom,
 
   // Honoraires
-  plafond_honoraires_visite: data.plafond_honoraires_visite,
-  plafond_honoraires_etat_lieux: data.plafond_honoraires_etat_lieux,
-  honoraires_bailleur: data.honoraires_bailleur ?? 0,
-  honoraires_locataire: data.honoraires_locataire ?? 0,
+  plafond_honoraires_visite: parseFloat(data.plafond_honoraires_visite) || null,
+  plafond_honoraires_etat_lieux: parseFloat(data.plafond_honoraires_etat_lieux) || null,
+  honoraires_bailleur: parseFloat(data.honoraires_bailleur) || 0,
+  honoraires_locataire: parseFloat(data.honoraires_locataire) || 0,
 
   // Informations diverses
-  montant_depenses_energie: data.montant_depenses_energie,
+  montant_depenses_energie: parseFloat(data.montant_depenses_energie) || null,
   conditions_particulieres: data.conditions_particulieres,
+
+  // Usage et options
+  usage_prevu: data.usage_prevu ?? "résidence principale",
+  lease_type: data.lease_type ?? "unfurnished",
+  lease_document_url: data.lease_document_url,
+  document_url: data.document_url,
+
+  // Métadonnées, docs générés, complétion
+  metadata: data.metadata || {},
+  generated_document: data.generated_document,
+  document_generated_at: data.document_generated_at,
+  completed_data: data.completed_data || {},
+  completion_rate: Number(data.completion_rate) || 0,
 }
 
 
