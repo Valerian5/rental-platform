@@ -28,6 +28,7 @@ import {
   EyeOff,
   X,
   ExternalLink,
+  Plus,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { authService } from "@/lib/auth-service"
@@ -50,10 +51,15 @@ interface LeaseFormData {
   bailleur_email: string
   bailleur_telephone: string
   bailleur_qualite: string
+
+  // Mandataire
+  mandataire_represente: boolean
   mandataire_nom: string
   mandataire_adresse: string
   mandataire_activite: string
   mandataire_carte_pro: string
+  mandataire_garant_nom: string
+  mandataire_garant_adresse: string
 
   // === PARTIES - LOCATAIRE ===
   locataire_nom_prenom: string
@@ -89,12 +95,19 @@ interface LeaseFormData {
   montant_loyer_reference: number | string
   montant_loyer_reference_majore: number | string
   complement_loyer: number | string
+  complement_loyer_justification: string
 
   // Charges
   type_charges: string // provisions/periodique/forfait/aucune
   montant_provisions_charges: number | string
   modalite_reglement_charges: string
   modalites_revision_forfait: string
+
+  // Assurance colocataires
+  assurance_colocataires: boolean
+  montant_assurance_colocataires_annuel: number | string
+  montant_assurance_colocataires_mensuel: number | string
+  frequence_assurance: string
 
   // Indexation du loyer
   trimestre_reference_irl: string
@@ -109,6 +122,19 @@ interface LeaseFormData {
   // Dépenses énergie
   montant_depenses_energie_min: number | string
   montant_depenses_energie_max: number | string
+  annee_reference_prix_energie: string
+
+  // Travaux
+  travaux_amelioration_montant: number | string
+  travaux_amelioration_nature: string
+  travaux_majoration_loyer: boolean
+  travaux_majoration_nature: string
+  travaux_majoration_modalites: string
+  travaux_majoration_delai: string
+  travaux_majoration_montant: number | string
+  travaux_diminution_loyer: boolean
+  travaux_diminution_duree: string
+  travaux_diminution_modalites: string
 
   // === ÉCHÉANCES ===
   date_prise_effet: Date | null
@@ -116,13 +142,18 @@ interface LeaseFormData {
   evenement_duree_reduite: string
   date_paiement_loyer: string
   paiement_avance_ou_terme: string
+  lieu_paiement: string
+  montant_premiere_echeance: number | string
 
-  // === CLAUSES ===
+  // === CLAUSES GÉNÉRIQUES ===
   clause_resolutoire: boolean
   clause_solidarite: boolean
   visites_relouer_vendre: boolean
   mode_paiement_loyer: string
+  mise_disposition_meubles: string
   animaux_domestiques: string
+  entretien_appareils: string
+  degradations_locataire: string
 
   // === HONORAIRES ===
   location_avec_professionnel: boolean
@@ -133,11 +164,15 @@ interface LeaseFormData {
   honoraires_locataire_etat_lieux: number | string
   plafond_honoraires_etat_lieux: number | string
   honoraires_bailleur_etat_lieux: number | string
+  autres_prestations: string
+  honoraires_autres_prestations: number | string
 
   // === CLAUSES OPTIONNELLES ===
   franchise_loyer: string
   clause_libre: string
   travaux_bailleur_cours: string
+  travaux_locataire_cours: string
+  travaux_entre_locataires: string
 
   // === ANNEXES ===
   annexe_dpe: boolean
@@ -148,6 +183,8 @@ interface LeaseFormData {
   annexe_plomb: boolean
   annexe_amiante: boolean
   annexe_electricite_gaz: boolean
+  annexe_autorisation: boolean
+  annexe_references_loyers: boolean
 
   // === GARANTS ===
   garants: Array<{
@@ -198,10 +235,15 @@ export default function NewLeasePageComplete() {
     bailleur_email: "",
     bailleur_telephone: "",
     bailleur_qualite: "Propriétaire",
+
+    // Mandataire
+    mandataire_represente: false,
     mandataire_nom: "",
     mandataire_adresse: "",
     mandataire_activite: "",
     mandataire_carte_pro: "",
+    mandataire_garant_nom: "",
+    mandataire_garant_adresse: "",
 
     // === PARTIES - LOCATAIRE ===
     locataire_nom_prenom: "",
@@ -237,12 +279,19 @@ export default function NewLeasePageComplete() {
     montant_loyer_reference: "",
     montant_loyer_reference_majore: "",
     complement_loyer: "",
+    complement_loyer_justification: "",
 
     // Charges
     type_charges: "provisions",
     montant_provisions_charges: "",
     modalite_reglement_charges: "Forfait",
     modalites_revision_forfait: "",
+
+    // Assurance colocataires
+    assurance_colocataires: false,
+    montant_assurance_colocataires_annuel: "",
+    montant_assurance_colocataires_mensuel: "",
+    frequence_assurance: "mensuel",
 
     // Indexation du loyer
     trimestre_reference_irl: "",
@@ -257,6 +306,19 @@ export default function NewLeasePageComplete() {
     // Dépenses énergie
     montant_depenses_energie_min: "",
     montant_depenses_energie_max: "",
+    annee_reference_prix_energie: new Date().getFullYear().toString(),
+
+    // Travaux
+    travaux_amelioration_montant: "",
+    travaux_amelioration_nature: "",
+    travaux_majoration_loyer: false,
+    travaux_majoration_nature: "",
+    travaux_majoration_modalites: "",
+    travaux_majoration_delai: "",
+    travaux_majoration_montant: "",
+    travaux_diminution_loyer: false,
+    travaux_diminution_duree: "",
+    travaux_diminution_modalites: "",
 
     // === ÉCHÉANCES ===
     date_prise_effet: null,
@@ -264,13 +326,18 @@ export default function NewLeasePageComplete() {
     evenement_duree_reduite: "",
     date_paiement_loyer: "1",
     paiement_avance_ou_terme: "avance",
+    lieu_paiement: "Virement bancaire",
+    montant_premiere_echeance: "",
 
-    // === CLAUSES ===
+    // === CLAUSES GÉNÉRIQUES ===
     clause_resolutoire: true,
     clause_solidarite: true,
     visites_relouer_vendre: true,
     mode_paiement_loyer: "virement",
+    mise_disposition_meubles: "",
     animaux_domestiques: "interdits",
+    entretien_appareils: "locataire",
+    degradations_locataire: "reparation",
 
     // === HONORAIRES ===
     location_avec_professionnel: false,
@@ -281,11 +348,15 @@ export default function NewLeasePageComplete() {
     honoraires_locataire_etat_lieux: "",
     plafond_honoraires_etat_lieux: "",
     honoraires_bailleur_etat_lieux: "",
+    autres_prestations: "",
+    honoraires_autres_prestations: "",
 
     // === CLAUSES OPTIONNELLES ===
     franchise_loyer: "",
     clause_libre: "",
     travaux_bailleur_cours: "",
+    travaux_locataire_cours: "",
+    travaux_entre_locataires: "",
 
     // === ANNEXES ===
     annexe_dpe: true,
@@ -296,6 +367,8 @@ export default function NewLeasePageComplete() {
     annexe_plomb: false,
     annexe_amiante: false,
     annexe_electricite_gaz: false,
+    annexe_autorisation: false,
+    annexe_references_loyers: false,
 
     // === GARANTS ===
     garants: [],
@@ -400,9 +473,9 @@ export default function NewLeasePageComplete() {
       property_id: app.property_id || "",
       tenant_id: app.tenant_id || "",
       lease_type: property?.furnished ? "furnished" : "unfurnished",
-      bail_type: tenantProfile?.rental_type || "single", // depuis le profil locataire
-      owner_type: ownerProfile?.owner_type || "individual", // depuis le profil propriétaire
-      guarantee_type: tenantProfile?.guarantee_type || "guarantor", // depuis le profil locataire
+      bail_type: tenantProfile?.rental_type || "single",
+      owner_type: ownerProfile?.owner_type || "individual",
+      guarantee_type: tenantProfile?.guarantee_type || "guarantor",
 
       // Parties - Bailleur
       bailleur_nom_prenom: `${currentUser.first_name || ""} ${currentUser.last_name || ""}`.trim(),
@@ -472,7 +545,6 @@ export default function NewLeasePageComplete() {
             newData.montant_provisions_charges = selectedProperty.charges_amount || "0"
             newData.montant_depot_garantie = selectedProperty.security_deposit || selectedProperty.price || ""
             newData.lieu_signature = selectedProperty.city || ""
-            // Récupérer les infos depuis l'annonce
             newData.lease_type = selectedProperty.furnished ? "furnished" : "unfurnished"
           }
         }
@@ -484,7 +556,6 @@ export default function NewLeasePageComplete() {
             newData.locataire_domicile = selectedTenant.address || ""
             newData.locataire_email = selectedTenant.email || ""
             newData.locataire_telephone = selectedTenant.phone || ""
-            // Récupérer les infos depuis le dossier locataire
             newData.bail_type = selectedTenant.rental_type || "single"
             newData.guarantee_type = selectedTenant.guarantee_type || "guarantor"
           }
@@ -492,6 +563,17 @@ export default function NewLeasePageComplete() {
 
         if (field === "lease_type") {
           newData.duree_contrat = value === "furnished" ? 12 : 36
+        }
+
+        // Auto-calcul assurance colocataires
+        if (field === "montant_assurance_colocataires_annuel") {
+          const annuel = Number.parseFloat(String(value)) || 0
+          newData.montant_assurance_colocataires_mensuel = (annuel / 12).toFixed(2)
+        }
+
+        if (field === "montant_assurance_colocataires_mensuel") {
+          const mensuel = Number.parseFloat(String(value)) || 0
+          newData.montant_assurance_colocataires_annuel = (mensuel * 12).toFixed(2)
         }
 
         return newData
@@ -693,36 +775,20 @@ export default function NewLeasePageComplete() {
         lease_type: formData.lease_type,
         application_id: applicationId || undefined,
 
-        // Parties
-        bailleur_nom_prenom: formData.bailleur_nom_prenom,
-        bailleur_domicile: formData.bailleur_domicile,
-        bailleur_email: formData.bailleur_email,
-        bailleur_telephone: formData.bailleur_telephone,
-        bailleur_qualite: formData.bailleur_qualite,
-        locataire_nom_prenom: formData.locataire_nom_prenom,
-        locataire_domicile: formData.locataire_domicile,
-        locataire_email: formData.locataire_email,
-        locataire_telephone: formData.locataire_telephone,
+        // TOUS LES CHAMPS DU FORMULAIRE COMPLET
+        ...formData,
 
-        // Logement
-        localisation_logement: formData.localisation_logement,
-        identifiant_fiscal: formData.identifiant_fiscal,
-        type_habitat: formData.type_habitat,
-        regime_juridique: formData.regime_juridique,
-        periode_construction: formData.periode_construction,
+        // Conversion des dates
+        date_prise_effet: formData.date_prise_effet?.toISOString().split("T")[0],
+        date_signature: formData.date_signature?.toISOString().split("T")[0],
+        locataire_date_naissance: formData.locataire_date_naissance?.toISOString().split("T")[0],
+        date_dernier_loyer: formData.date_dernier_loyer?.toISOString().split("T")[0],
+        date_revision_dernier_loyer: formData.date_revision_dernier_loyer?.toISOString().split("T")[0],
+
+        // Conversion des nombres
         surface_habitable: formData.surface_habitable ? Number.parseFloat(String(formData.surface_habitable)) : null,
         nombre_pieces: formData.nombre_pieces ? Number.parseInt(String(formData.nombre_pieces)) : null,
-        autres_parties: formData.autres_parties,
-        elements_equipements: formData.elements_equipements,
-        modalite_chauffage: formData.modalite_chauffage,
-        modalite_eau_chaude: formData.modalite_eau_chaude,
-        niveau_performance_dpe: formData.niveau_performance_dpe,
-        destination_locaux: formData.destination_locaux,
-        locaux_accessoires: formData.locaux_accessoires,
-        locaux_communs: formData.locaux_communs,
-        equipement_technologies: formData.equipement_technologies,
-
-        // Financier
+        duree_contrat: formData.duree_contrat ? Number.parseInt(String(formData.duree_contrat)) : null,
         montant_loyer_reference: formData.montant_loyer_reference
           ? Number.parseFloat(String(formData.montant_loyer_reference))
           : null,
@@ -730,40 +796,30 @@ export default function NewLeasePageComplete() {
           ? Number.parseFloat(String(formData.montant_loyer_reference_majore))
           : null,
         complement_loyer: formData.complement_loyer ? Number.parseFloat(String(formData.complement_loyer)) : null,
-        modalite_reglement_charges: formData.modalite_reglement_charges,
-
-        // Indexation
-        trimestre_reference_irl: formData.trimestre_reference_irl,
-        date_revision_loyer: formData.date_revision_loyer,
-        zone_tendue: formData.zone_tendue,
-        ancien_locataire_duree: formData.ancien_locataire_duree,
+        montant_assurance_colocataires_annuel: formData.montant_assurance_colocataires_annuel
+          ? Number.parseFloat(String(formData.montant_assurance_colocataires_annuel))
+          : null,
+        montant_assurance_colocataires_mensuel: formData.montant_assurance_colocataires_mensuel
+          ? Number.parseFloat(String(formData.montant_assurance_colocataires_mensuel))
+          : null,
         dernier_loyer_ancien: formData.dernier_loyer_ancien
           ? Number.parseFloat(String(formData.dernier_loyer_ancien))
           : null,
-
-        // Dépenses énergie - CORRECTION : utiliser des nombres
         montant_depenses_energie_min: formData.montant_depenses_energie_min
           ? Number.parseFloat(String(formData.montant_depenses_energie_min))
           : null,
         montant_depenses_energie_max: formData.montant_depenses_energie_max
           ? Number.parseFloat(String(formData.montant_depenses_energie_max))
           : null,
-
-        // Durée
-        duree_contrat: formData.duree_contrat ? Number.parseInt(String(formData.duree_contrat)) : null,
-        evenement_duree_reduite: formData.evenement_duree_reduite,
-        date_paiement_loyer: formData.date_paiement_loyer,
-        paiement_avance_ou_terme: formData.paiement_avance_ou_terme,
-
-        // Clauses
-        clause_resolutoire: formData.clause_resolutoire,
-        clause_solidarite: formData.clause_solidarite,
-        visites_relouer_vendre: formData.visites_relouer_vendre,
-        mode_paiement_loyer: formData.mode_paiement_loyer,
-        animaux_domestiques: formData.animaux_domestiques,
-
-        // Honoraires
-        location_avec_professionnel: formData.location_avec_professionnel,
+        travaux_amelioration_montant: formData.travaux_amelioration_montant
+          ? Number.parseFloat(String(formData.travaux_amelioration_montant))
+          : null,
+        travaux_majoration_montant: formData.travaux_majoration_montant
+          ? Number.parseFloat(String(formData.travaux_majoration_montant))
+          : null,
+        montant_premiere_echeance: formData.montant_premiere_echeance
+          ? Number.parseFloat(String(formData.montant_premiere_echeance))
+          : null,
         honoraires_locataire_visite: formData.honoraires_locataire_visite
           ? Number.parseFloat(String(formData.honoraires_locataire_visite))
           : null,
@@ -773,7 +829,6 @@ export default function NewLeasePageComplete() {
         honoraires_bailleur_visite: formData.honoraires_bailleur_visite
           ? Number.parseFloat(String(formData.honoraires_bailleur_visite))
           : null,
-        etat_lieux_professionnel: formData.etat_lieux_professionnel,
         honoraires_locataire_etat_lieux: formData.honoraires_locataire_etat_lieux
           ? Number.parseFloat(String(formData.honoraires_locataire_etat_lieux))
           : null,
@@ -783,37 +838,15 @@ export default function NewLeasePageComplete() {
         honoraires_bailleur_etat_lieux: formData.honoraires_bailleur_etat_lieux
           ? Number.parseFloat(String(formData.honoraires_bailleur_etat_lieux))
           : null,
-
-        // Clauses optionnelles
-        franchise_loyer: formData.franchise_loyer,
-        clause_libre: formData.clause_libre,
-        travaux_bailleur_cours: formData.travaux_bailleur_cours,
-
-        // Annexes
-        annexe_dpe: formData.annexe_dpe,
-        annexe_risques: formData.annexe_risques,
-        annexe_notice: formData.annexe_notice,
-        annexe_etat_lieux: formData.annexe_etat_lieux,
-        annexe_reglement: formData.annexe_reglement,
-        annexe_plomb: formData.annexe_plomb,
-        annexe_amiante: formData.annexe_amiante,
-        annexe_electricite_gaz: formData.annexe_electricite_gaz,
-
-        // Signature
-        lieu_signature: formData.lieu_signature,
-        date_signature: formData.date_signature?.toISOString().split("T")[0],
-
-        // Dates
-        date_prise_effet: formData.date_prise_effet?.toISOString().split("T")[0],
-        locataire_date_naissance: formData.locataire_date_naissance?.toISOString().split("T")[0],
-        date_dernier_loyer: formData.date_dernier_loyer?.toISOString().split("T")[0],
-        date_revision_dernier_loyer: formData.date_revision_dernier_loyer?.toISOString().split("T")[0],
+        honoraires_autres_prestations: formData.honoraires_autres_prestations
+          ? Number.parseFloat(String(formData.honoraires_autres_prestations))
+          : null,
 
         // Métadonnées
         metadata: {
           special_conditions: formData.special_conditions,
           documents_count: formData.documents.length,
-          form_version: "v5_complete_smartloc_fixed",
+          form_version: "v6_complete_smartloc_fixed",
           created_from: "new_form_complete_integrated",
           total_fields: Object.keys(formData).length,
           garants_count: formData.garants.length,
@@ -1132,6 +1165,86 @@ export default function NewLeasePageComplete() {
                           rows={2}
                         />
                       </div>
+
+                      {/* Mandataire */}
+                      <div className="mt-6">
+                        <div className="flex items-center space-x-2 mb-4">
+                          <Switch
+                            id="mandataire_represente"
+                            checked={formData.mandataire_represente}
+                            onCheckedChange={(checked) => handleInputChange("mandataire_represente", checked)}
+                          />
+                          <Label htmlFor="mandataire_represente">
+                            Propriétaire représenté par un mandataire pour la signature
+                          </Label>
+                        </div>
+
+                        {formData.mandataire_represente && (
+                          <div className="border-l-4 border-blue-500 pl-4 space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <Label htmlFor="mandataire_nom">Nom ou raison sociale du mandataire</Label>
+                                <Input
+                                  id="mandataire_nom"
+                                  value={formData.mandataire_nom}
+                                  onChange={(e) => handleInputChange("mandataire_nom", e.target.value)}
+                                  placeholder="Nom du mandataire"
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor="mandataire_activite">Activité exercée</Label>
+                                <Input
+                                  id="mandataire_activite"
+                                  value={formData.mandataire_activite}
+                                  onChange={(e) => handleInputChange("mandataire_activite", e.target.value)}
+                                  placeholder="Président, membre SCI, gestionnaire..."
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <Label htmlFor="mandataire_adresse">Adresse du mandataire</Label>
+                              <Textarea
+                                id="mandataire_adresse"
+                                value={formData.mandataire_adresse}
+                                onChange={(e) => handleInputChange("mandataire_adresse", e.target.value)}
+                                placeholder="Adresse complète du mandataire"
+                                rows={2}
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="mandataire_carte_pro">
+                                Numéro et lieu de délivrance carte professionnelle
+                              </Label>
+                              <Input
+                                id="mandataire_carte_pro"
+                                value={formData.mandataire_carte_pro}
+                                onChange={(e) => handleInputChange("mandataire_carte_pro", e.target.value)}
+                                placeholder="Numéro et lieu de délivrance"
+                              />
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <Label htmlFor="mandataire_garant_nom">Nom du garant du mandataire</Label>
+                                <Input
+                                  id="mandataire_garant_nom"
+                                  value={formData.mandataire_garant_nom}
+                                  onChange={(e) => handleInputChange("mandataire_garant_nom", e.target.value)}
+                                  placeholder="Nom du garant"
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor="mandataire_garant_adresse">Adresse du garant du mandataire</Label>
+                                <Input
+                                  id="mandataire_garant_adresse"
+                                  value={formData.mandataire_garant_adresse}
+                                  onChange={(e) => handleInputChange("mandataire_garant_adresse", e.target.value)}
+                                  placeholder="Adresse du garant"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div>
@@ -1292,6 +1405,42 @@ export default function NewLeasePageComplete() {
                       </div>
                     </div>
 
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="regime_juridique">Régime juridique</Label>
+                        <Select
+                          value={formData.regime_juridique}
+                          onValueChange={(value) => handleInputChange("regime_juridique", value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Copropriété">Copropriété</SelectItem>
+                            <SelectItem value="Monopropriété">Monopropriété</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="periode_construction">Période de construction</Label>
+                        <Select
+                          value={formData.periode_construction}
+                          onValueChange={(value) => handleInputChange("periode_construction", value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Avant 1949">Avant 1949</SelectItem>
+                            <SelectItem value="1949-1974">1949-1974</SelectItem>
+                            <SelectItem value="1975-1989">1975-1989</SelectItem>
+                            <SelectItem value="1990-2005">1990-2005</SelectItem>
+                            <SelectItem value="Après 2005">Après 2005</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
                     <div>
                       <Label htmlFor="autres_parties">Autres parties du logement</Label>
                       <Textarea
@@ -1300,6 +1449,17 @@ export default function NewLeasePageComplete() {
                         onChange={(e) => handleInputChange("autres_parties", e.target.value)}
                         placeholder="Balcon, terrasse, jardin, cave..."
                         rows={2}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="elements_equipements">Éléments d'équipements du logement</Label>
+                      <Textarea
+                        id="elements_equipements"
+                        value={formData.elements_equipements}
+                        onChange={(e) => handleInputChange("elements_equipements", e.target.value)}
+                        placeholder="Cuisine équipée, salle de bain avec douche, placards..."
+                        rows={3}
                       />
                     </div>
 
@@ -1401,30 +1561,39 @@ export default function NewLeasePageComplete() {
                           onCheckedChange={(checked) => handleInputChange("zone_encadree", checked)}
                         />
                         <Label htmlFor="zone_encadree">Le logement est situé en zone d'encadrement des loyers</Label>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            window.open("https://www.service-public.fr/particuliers/vosdroits/F1314", "_blank")
+                          }
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
                       </div>
 
                       {formData.zone_encadree && (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-l-4 border-blue-500 pl-4">
                           <div>
-                            <Label htmlFor="montant_loyer_reference">Loyer de référence (€)</Label>
+                            <Label htmlFor="montant_loyer_reference">Loyer de référence (€/m²)</Label>
                             <Input
                               id="montant_loyer_reference"
                               type="number"
                               step="0.01"
                               value={formData.montant_loyer_reference}
                               onChange={(e) => handleInputChange("montant_loyer_reference", e.target.value)}
-                              placeholder="800.00"
+                              placeholder="20.00"
                             />
                           </div>
                           <div>
-                            <Label htmlFor="montant_loyer_reference_majore">Loyer de référence majoré (€)</Label>
+                            <Label htmlFor="montant_loyer_reference_majore">Loyer de référence majoré (€/m²)</Label>
                             <Input
                               id="montant_loyer_reference_majore"
                               type="number"
                               step="0.01"
                               value={formData.montant_loyer_reference_majore}
                               onChange={(e) => handleInputChange("montant_loyer_reference_majore", e.target.value)}
-                              placeholder="960.00"
+                              placeholder="24.00"
                             />
                           </div>
                           <div>
@@ -1438,6 +1607,20 @@ export default function NewLeasePageComplete() {
                               placeholder="50.00"
                             />
                           </div>
+                          {formData.complement_loyer && (
+                            <div className="md:col-span-3">
+                              <Label htmlFor="complement_loyer_justification">
+                                Justification du complément de loyer
+                              </Label>
+                              <Textarea
+                                id="complement_loyer_justification"
+                                value={formData.complement_loyer_justification}
+                                onChange={(e) => handleInputChange("complement_loyer_justification", e.target.value)}
+                                placeholder="Caractéristiques exceptionnelles du logement justifiant le complément..."
+                                rows={2}
+                              />
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1455,17 +1638,19 @@ export default function NewLeasePageComplete() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="provisions">Provisions sur charges</SelectItem>
+                              <SelectItem value="provisions">
+                                Provisions sur charges (avec régularisation annuelle)
+                              </SelectItem>
+                              <SelectItem value="periodique">Paiement périodique sans provisions</SelectItem>
                               <SelectItem value="forfait">Forfait de charges</SelectItem>
-                              <SelectItem value="periodique">Paiement périodique</SelectItem>
-                              <SelectItem value="aucune">Aucune charge</SelectItem>
+                              <SelectItem value="aucune">Absence de charge</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
 
                         {formData.type_charges !== "aucune" && (
                           <div>
-                            <Label htmlFor="montant_provisions_charges">Montant des charges (€)</Label>
+                            <Label htmlFor="montant_provisions_charges">Montant mensuel des charges (€)</Label>
                             <Input
                               id="montant_provisions_charges"
                               type="number"
@@ -1474,6 +1659,92 @@ export default function NewLeasePageComplete() {
                               onChange={(e) => handleInputChange("montant_provisions_charges", e.target.value)}
                               placeholder="100.00"
                             />
+                          </div>
+                        )}
+
+                        {formData.type_charges === "forfait" && (
+                          <div>
+                            <Label htmlFor="modalites_revision_forfait">
+                              Modalité de révision du forfait de charges
+                            </Label>
+                            <Select
+                              value={formData.modalites_revision_forfait}
+                              onValueChange={(value) => handleInputChange("modalites_revision_forfait", value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="indexation_loyer">Indexation identique au loyer</SelectItem>
+                                <SelectItem value="autre">À saisir</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        {/* Assurance colocataires */}
+                        {formData.bail_type === "couple" && (
+                          <div className="border-t pt-4">
+                            <div className="flex items-center space-x-2 mb-4">
+                              <Switch
+                                id="assurance_colocataires"
+                                checked={formData.assurance_colocataires}
+                                onCheckedChange={(checked) => handleInputChange("assurance_colocataires", checked)}
+                              />
+                              <Label htmlFor="assurance_colocataires">
+                                Le bailleur souscrit une assurance pour le compte des colocataires
+                              </Label>
+                            </div>
+
+                            {formData.assurance_colocataires && (
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                  <Label htmlFor="montant_assurance_colocataires_annuel">
+                                    Montant récupérable (€/an)
+                                  </Label>
+                                  <Input
+                                    id="montant_assurance_colocataires_annuel"
+                                    type="number"
+                                    step="0.01"
+                                    value={formData.montant_assurance_colocataires_annuel}
+                                    onChange={(e) =>
+                                      handleInputChange("montant_assurance_colocataires_annuel", e.target.value)
+                                    }
+                                    placeholder="120.00"
+                                  />
+                                </div>
+                                <div>
+                                  <Label htmlFor="montant_assurance_colocataires_mensuel">
+                                    Montant récupérable (€/mois)
+                                  </Label>
+                                  <Input
+                                    id="montant_assurance_colocataires_mensuel"
+                                    type="number"
+                                    step="0.01"
+                                    value={formData.montant_assurance_colocataires_mensuel}
+                                    onChange={(e) =>
+                                      handleInputChange("montant_assurance_colocataires_mensuel", e.target.value)
+                                    }
+                                    placeholder="10.00"
+                                  />
+                                </div>
+                                <div>
+                                  <Label htmlFor="frequence_assurance">Fréquence de paiement</Label>
+                                  <Select
+                                    value={formData.frequence_assurance}
+                                    onValueChange={(value) => handleInputChange("frequence_assurance", value)}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="mensuel">Mensuellement</SelectItem>
+                                      <SelectItem value="annuel">Annuellement</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1552,6 +1823,15 @@ export default function NewLeasePageComplete() {
                             Le logement est en zone tendue (l'évolution du loyer entre 2 locataires est plafonnée à
                             l'IRL)
                           </Label>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              window.open("https://www.service-public.fr/particuliers/vosdroits/F1314", "_blank")
+                            }
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </Button>
                         </div>
 
                         <div>
@@ -1575,7 +1855,7 @@ export default function NewLeasePageComplete() {
                         </div>
 
                         {formData.ancien_locataire_duree === "moins_18_mois" && (
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-l-4 border-orange-500 pl-4">
                             <div>
                               <Label htmlFor="dernier_loyer_ancien">
                                 Dernier loyer versé par l'ancien locataire (€/mois)
@@ -1650,7 +1930,7 @@ export default function NewLeasePageComplete() {
 
                     <div>
                       <h3 className="text-lg font-medium mb-4">Dépenses d'énergie</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                           <Label htmlFor="montant_depenses_energie_min">Montant estimé minimum (€/an)</Label>
                           <Input
@@ -1673,129 +1953,275 @@ export default function NewLeasePageComplete() {
                             placeholder="1000"
                           />
                         </div>
+                        <div>
+                          <Label htmlFor="annee_reference_prix_energie">Année de référence des prix</Label>
+                          <Input
+                            id="annee_reference_prix_energie"
+                            type="number"
+                            value={formData.annee_reference_prix_energie}
+                            onChange={(e) => handleInputChange("annee_reference_prix_energie", e.target.value)}
+                            placeholder="2024"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="text-lg font-medium mb-4">Travaux</h3>
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="travaux_amelioration_montant">Montant des travaux d'amélioration (€)</Label>
+                            <Input
+                              id="travaux_amelioration_montant"
+                              type="number"
+                              step="0.01"
+                              value={formData.travaux_amelioration_montant}
+                              onChange={(e) => handleInputChange("travaux_amelioration_montant", e.target.value)}
+                              placeholder="5000.00"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="travaux_amelioration_nature">Nature des travaux d'amélioration</Label>
+                            <Input
+                              id="travaux_amelioration_nature"
+                              value={formData.travaux_amelioration_nature}
+                              onChange={(e) => handleInputChange("travaux_amelioration_nature", e.target.value)}
+                              placeholder="Rénovation cuisine, salle de bain..."
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            id="travaux_majoration_loyer"
+                            checked={formData.travaux_majoration_loyer}
+                            onCheckedChange={(checked) => handleInputChange("travaux_majoration_loyer", checked)}
+                          />
+                          <Label htmlFor="travaux_majoration_loyer">
+                            Majoration du loyer en cours de bail consécutive à des travaux d'amélioration
+                          </Label>
+                        </div>
+
+                        {formData.travaux_majoration_loyer && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-l-4 border-green-500 pl-4">
+                            <div>
+                              <Label htmlFor="travaux_majoration_nature">Nature des travaux</Label>
+                              <Input
+                                id="travaux_majoration_nature"
+                                value={formData.travaux_majoration_nature}
+                                onChange={(e) => handleInputChange("travaux_majoration_nature", e.target.value)}
+                                placeholder="Description des travaux"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="travaux_majoration_modalites">Modalités d'exécution</Label>
+                              <Input
+                                id="travaux_majoration_modalites"
+                                value={formData.travaux_majoration_modalites}
+                                onChange={(e) => handleInputChange("travaux_majoration_modalites", e.target.value)}
+                                placeholder="Modalités d'exécution"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="travaux_majoration_delai">Délai de réalisation</Label>
+                              <Input
+                                id="travaux_majoration_delai"
+                                value={formData.travaux_majoration_delai}
+                                onChange={(e) => handleInputChange("travaux_majoration_delai", e.target.value)}
+                                placeholder="6 mois"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="travaux_majoration_montant">Montant de la majoration (€)</Label>
+                              <Input
+                                id="travaux_majoration_montant"
+                                type="number"
+                                step="0.01"
+                                value={formData.travaux_majoration_montant}
+                                onChange={(e) => handleInputChange("travaux_majoration_montant", e.target.value)}
+                                placeholder="50.00"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            id="travaux_diminution_loyer"
+                            checked={formData.travaux_diminution_loyer}
+                            onCheckedChange={(checked) => handleInputChange("travaux_diminution_loyer", checked)}
+                          />
+                          <Label htmlFor="travaux_diminution_loyer">
+                            Diminution de loyer en cours de bail consécutive à des travaux entrepris par le locataire
+                          </Label>
+                        </div>
+
+                        {formData.travaux_diminution_loyer && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-l-4 border-red-500 pl-4">
+                            <div>
+                              <Label htmlFor="travaux_diminution_duree">Durée de cette diminution</Label>
+                              <Input
+                                id="travaux_diminution_duree"
+                                value={formData.travaux_diminution_duree}
+                                onChange={(e) => handleInputChange("travaux_diminution_duree", e.target.value)}
+                                placeholder="3 mois"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="travaux_diminution_modalites">Modalités de dédommagement</Label>
+                              <Input
+                                id="travaux_diminution_modalites"
+                                value={formData.travaux_diminution_modalites}
+                                onChange={(e) => handleInputChange("travaux_diminution_modalites", e.target.value)}
+                                placeholder="En cas de départ anticipé"
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* Étape 5: Durée */}
+                {/* Étape 5: Durée et clauses */}
                 {currentStep === 5 && (
                   <div className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="date_prise_effet">Date de prise d'effet *</Label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className={cn(
-                                "w-full justify-start text-left font-normal",
-                                !formData.date_prise_effet && "text-muted-foreground",
-                              )}
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {formData.date_prise_effet
-                                ? format(formData.date_prise_effet, "dd/MM/yyyy", { locale: fr })
-                                : "Sélectionner une date"}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                            <Calendar
-                              mode="single"
-                              selected={formData.date_prise_effet || undefined}
-                              onSelect={(date) => handleInputChange("date_prise_effet", date)}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
+                    <div>
+                      <h3 className="text-lg font-medium mb-4">Échéances</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="date_prise_effet">Date d'entrée *</Label>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "w-full justify-start text-left font-normal",
+                                  !formData.date_prise_effet && "text-muted-foreground",
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {formData.date_prise_effet
+                                  ? format(formData.date_prise_effet, "dd/MM/yyyy", { locale: fr })
+                                  : "Sélectionner une date"}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                              <Calendar
+                                mode="single"
+                                selected={formData.date_prise_effet || undefined}
+                                onSelect={(date) => handleInputChange("date_prise_effet", date)}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+
+                        <div>
+                          <Label htmlFor="duree_contrat">Durée du contrat (mois) *</Label>
+                          <Input
+                            id="duree_contrat"
+                            type="number"
+                            value={formData.duree_contrat}
+                            onChange={(e) => handleInputChange("duree_contrat", e.target.value)}
+                            placeholder="36"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {formData.lease_type === "furnished"
+                              ? "12 mois minimum pour meublé"
+                              : "36 mois minimum pour vide"}
+                          </p>
+                        </div>
                       </div>
 
                       <div>
-                        <Label htmlFor="duree_contrat">Durée du contrat (mois) *</Label>
+                        <Label htmlFor="evenement_duree_reduite">
+                          Événement justifiant une durée réduite (si applicable)
+                        </Label>
+                        <Textarea
+                          id="evenement_duree_reduite"
+                          value={formData.evenement_duree_reduite}
+                          onChange={(e) => handleInputChange("evenement_duree_reduite", e.target.value)}
+                          placeholder="Mutation professionnelle, études..."
+                          rows={2}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <Label htmlFor="date_paiement_loyer">Le loyer est payé le</Label>
+                          <Select
+                            value={formData.date_paiement_loyer}
+                            onValueChange={(value) => handleInputChange("date_paiement_loyer", value)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="1">Le 1er de chaque mois</SelectItem>
+                              <SelectItem value="5">Le 5 de chaque mois</SelectItem>
+                              <SelectItem value="10">Le 10 de chaque mois</SelectItem>
+                              <SelectItem value="15">Le 15 de chaque mois</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div>
+                          <Label htmlFor="paiement_avance_ou_terme">Modalité de paiement</Label>
+                          <Select
+                            value={formData.paiement_avance_ou_terme}
+                            onValueChange={(value) => handleInputChange("paiement_avance_ou_terme", value)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="avance">En avance pour le mois à venir</SelectItem>
+                              <SelectItem value="terme">Une fois le mois écoulé</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div>
+                          <Label htmlFor="lieu_paiement">Mode de paiement</Label>
+                          <Select
+                            value={formData.lieu_paiement}
+                            onValueChange={(value) => handleInputChange("lieu_paiement", value)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Virement bancaire">Virement bancaire</SelectItem>
+                              <SelectItem value="Prélèvement automatique">Prélèvement automatique</SelectItem>
+                              <SelectItem value="Chèque">Chèque</SelectItem>
+                              <SelectItem value="Espèces">Espèces</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="montant_premiere_echeance">
+                          Montant total dû à la première échéance (€) - optionnel
+                        </Label>
                         <Input
-                          id="duree_contrat"
+                          id="montant_premiere_echeance"
                           type="number"
-                          value={formData.duree_contrat}
-                          onChange={(e) => handleInputChange("duree_contrat", e.target.value)}
-                          placeholder="36"
+                          step="0.01"
+                          value={formData.montant_premiere_echeance}
+                          onChange={(e) => handleInputChange("montant_premiere_echeance", e.target.value)}
+                          placeholder="950.00"
                         />
                         <p className="text-xs text-muted-foreground mt-1">
-                          {formData.lease_type === "furnished"
-                            ? "12 mois minimum pour meublé"
-                            : "36 mois minimum pour vide"}
+                          Somme du loyer, charges, contribution économies et assurance colocataires
                         </p>
                       </div>
                     </div>
 
                     <div>
-                      <Label htmlFor="evenement_duree_reduite">
-                        Événement justifiant une durée réduite (si applicable)
-                      </Label>
-                      <Textarea
-                        id="evenement_duree_reduite"
-                        value={formData.evenement_duree_reduite}
-                        onChange={(e) => handleInputChange("evenement_duree_reduite", e.target.value)}
-                        placeholder="Mutation professionnelle, études..."
-                        rows={2}
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="date_paiement_loyer">Date de paiement du loyer</Label>
-                        <Select
-                          value={formData.date_paiement_loyer}
-                          onValueChange={(value) => handleInputChange("date_paiement_loyer", value)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="1">Le 1er de chaque mois</SelectItem>
-                            <SelectItem value="5">Le 5 de chaque mois</SelectItem>
-                            <SelectItem value="10">Le 10 de chaque mois</SelectItem>
-                            <SelectItem value="15">Le 15 de chaque mois</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div>
-                        <Label htmlFor="paiement_avance_ou_terme">Paiement</Label>
-                        <Select
-                          value={formData.paiement_avance_ou_terme}
-                          onValueChange={(value) => handleInputChange("paiement_avance_ou_terme", value)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="avance">À l'avance</SelectItem>
-                            <SelectItem value="terme">À terme échu</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="mode_paiement_loyer">Mode de paiement du loyer</Label>
-                      <Select
-                        value={formData.mode_paiement_loyer}
-                        onValueChange={(value) => handleInputChange("mode_paiement_loyer", value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="virement">Virement bancaire</SelectItem>
-                          <SelectItem value="prelevement">Prélèvement automatique</SelectItem>
-                          <SelectItem value="cheque">Chèque</SelectItem>
-                          <SelectItem value="especes">Espèces</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <h3 className="text-lg font-medium mb-4">Clauses particulières</h3>
+                      <h3 className="text-lg font-medium mb-4">Clauses génériques</h3>
                       <div className="space-y-4">
                         <div className="flex items-center space-x-2">
                           <Switch
@@ -1824,28 +2250,287 @@ export default function NewLeasePageComplete() {
                           <Label htmlFor="visites_relouer_vendre">Visites pour relouer ou vendre</Label>
                         </div>
 
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="mode_paiement_loyer">Mode de paiement du loyer</Label>
+                            <Select
+                              value={formData.mode_paiement_loyer}
+                              onValueChange={(value) => handleInputChange("mode_paiement_loyer", value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="virement">Virement bancaire</SelectItem>
+                                <SelectItem value="prelevement">Prélèvement automatique</SelectItem>
+                                <SelectItem value="cheque">Chèque</SelectItem>
+                                <SelectItem value="especes">Espèces</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div>
+                            <Label htmlFor="animaux_domestiques">Animaux domestiques</Label>
+                            <Select
+                              value={formData.animaux_domestiques}
+                              onValueChange={(value) => handleInputChange("animaux_domestiques", value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="interdits">Interdits</SelectItem>
+                                <SelectItem value="autorises">Autorisés</SelectItem>
+                                <SelectItem value="avec_accord">Avec accord préalable</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+
+                        {formData.lease_type === "furnished" && (
+                          <div>
+                            <Label htmlFor="mise_disposition_meubles">Mise à disposition des meubles</Label>
+                            <Textarea
+                              id="mise_disposition_meubles"
+                              value={formData.mise_disposition_meubles}
+                              onChange={(e) => handleInputChange("mise_disposition_meubles", e.target.value)}
+                              placeholder="Modalités de mise à disposition et d'entretien des meubles..."
+                              rows={2}
+                            />
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="entretien_appareils">Entretien annuel des appareils</Label>
+                            <Select
+                              value={formData.entretien_appareils}
+                              onValueChange={(value) => handleInputChange("entretien_appareils", value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="locataire">À la charge du locataire</SelectItem>
+                                <SelectItem value="bailleur">À la charge du bailleur</SelectItem>
+                                <SelectItem value="partage">Partagé</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div>
+                            <Label htmlFor="degradations_locataire">Dégradations du locataire</Label>
+                            <Select
+                              value={formData.degradations_locataire}
+                              onValueChange={(value) => handleInputChange("degradations_locataire", value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="reparation">Réparation à la charge du locataire</SelectItem>
+                                <SelectItem value="retenue_depot">Retenue sur dépôt de garantie</SelectItem>
+                                <SelectItem value="expertise">Expertise contradictoire</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="text-lg font-medium mb-4">Honoraires d'agence</h3>
+                      <div className="flex items-center space-x-2 mb-4">
+                        <Switch
+                          id="location_avec_professionnel"
+                          checked={formData.location_avec_professionnel}
+                          onCheckedChange={(checked) => handleInputChange("location_avec_professionnel", checked)}
+                        />
+                        <Label htmlFor="location_avec_professionnel">
+                          La location a été réalisée avec l'entremise d'un professionnel mandaté
+                        </Label>
+                      </div>
+
+                      {formData.location_avec_professionnel && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-l-4 border-blue-500 pl-4">
+                          <div>
+                            <Label htmlFor="honoraires_locataire_visite">Honoraires locataire (€)</Label>
+                            <Input
+                              id="honoraires_locataire_visite"
+                              type="number"
+                              step="0.01"
+                              value={formData.honoraires_locataire_visite}
+                              onChange={(e) => handleInputChange("honoraires_locataire_visite", e.target.value)}
+                              placeholder="200.00"
+                            />
+                            <p className="text-xs text-muted-foreground">Visites, dossier, bail</p>
+                          </div>
+                          <div>
+                            <Label htmlFor="plafond_honoraires_locataire">Plafond honoraires (€/m²)</Label>
+                            <Input
+                              id="plafond_honoraires_locataire"
+                              type="number"
+                              step="0.01"
+                              value={formData.plafond_honoraires_locataire}
+                              onChange={(e) => handleInputChange("plafond_honoraires_locataire", e.target.value)}
+                              placeholder="12.00"
+                            />
+                            <p className="text-xs text-muted-foreground">Visites, dossier, bail</p>
+                          </div>
+                          <div>
+                            <Label htmlFor="honoraires_bailleur_visite">Honoraires bailleur (€)</Label>
+                            <Input
+                              id="honoraires_bailleur_visite"
+                              type="number"
+                              step="0.01"
+                              value={formData.honoraires_bailleur_visite}
+                              onChange={(e) => handleInputChange("honoraires_bailleur_visite", e.target.value)}
+                              placeholder="150.00"
+                            />
+                            <p className="text-xs text-muted-foreground">Visites, dossier, bail</p>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex items-center space-x-2 mt-4 mb-4">
+                        <Switch
+                          id="etat_lieux_professionnel"
+                          checked={formData.etat_lieux_professionnel}
+                          onCheckedChange={(checked) => handleInputChange("etat_lieux_professionnel", checked)}
+                        />
+                        <Label htmlFor="etat_lieux_professionnel">
+                          L'état des lieux a été réalisé avec l'entremise d'un professionnel mandaté
+                        </Label>
+                      </div>
+
+                      {formData.etat_lieux_professionnel && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-l-4 border-green-500 pl-4">
+                          <div>
+                            <Label htmlFor="honoraires_locataire_etat_lieux">
+                              Honoraires locataire état des lieux (€)
+                            </Label>
+                            <Input
+                              id="honoraires_locataire_etat_lieux"
+                              type="number"
+                              step="0.01"
+                              value={formData.honoraires_locataire_etat_lieux}
+                              onChange={(e) => handleInputChange("honoraires_locataire_etat_lieux", e.target.value)}
+                              placeholder="100.00"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="plafond_honoraires_etat_lieux">
+                              Plafond honoraires état des lieux (€/m²)
+                            </Label>
+                            <Input
+                              id="plafond_honoraires_etat_lieux"
+                              type="number"
+                              step="0.01"
+                              value={formData.plafond_honoraires_etat_lieux}
+                              onChange={(e) => handleInputChange("plafond_honoraires_etat_lieux", e.target.value)}
+                              placeholder="3.00"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="honoraires_bailleur_etat_lieux">
+                              Honoraires bailleur état des lieux (€)
+                            </Label>
+                            <Input
+                              id="honoraires_bailleur_etat_lieux"
+                              type="number"
+                              step="0.01"
+                              value={formData.honoraires_bailleur_etat_lieux}
+                              onChange={(e) => handleInputChange("honoraires_bailleur_etat_lieux", e.target.value)}
+                              placeholder="100.00"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="mt-4">
+                        <Label htmlFor="autres_prestations">Autres prestations facturées au bailleur</Label>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <Textarea
+                            id="autres_prestations"
+                            value={formData.autres_prestations}
+                            onChange={(e) => handleInputChange("autres_prestations", e.target.value)}
+                            placeholder="Détails des prestations..."
+                            rows={2}
+                          />
+                          <div>
+                            <Label htmlFor="honoraires_autres_prestations">Honoraires autres prestations (€)</Label>
+                            <Input
+                              id="honoraires_autres_prestations"
+                              type="number"
+                              step="0.01"
+                              value={formData.honoraires_autres_prestations}
+                              onChange={(e) => handleInputChange("honoraires_autres_prestations", e.target.value)}
+                              placeholder="50.00"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="text-lg font-medium mb-4">Clauses optionnelles</h3>
+                      <div className="space-y-4">
                         <div>
-                          <Label htmlFor="animaux_domestiques">Animaux domestiques</Label>
-                          <Select
-                            value={formData.animaux_domestiques}
-                            onValueChange={(value) => handleInputChange("animaux_domestiques", value)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="interdits">Interdits</SelectItem>
-                              <SelectItem value="autorises">Autorisés</SelectItem>
-                              <SelectItem value="avec_accord">Avec accord préalable</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <Label htmlFor="franchise_loyer">Franchise de loyer</Label>
+                          <Textarea
+                            id="franchise_loyer"
+                            value={formData.franchise_loyer}
+                            onChange={(e) => handleInputChange("franchise_loyer", e.target.value)}
+                            placeholder="Période de gratuité accordée au locataire..."
+                            rows={2}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="clause_libre">Clause libre</Label>
+                          <Textarea
+                            id="clause_libre"
+                            value={formData.clause_libre}
+                            onChange={(e) => handleInputChange("clause_libre", e.target.value)}
+                            placeholder="Clauses particulières spécifiques au bail..."
+                            rows={3}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="travaux_bailleur_cours">Travaux bailleur en cours de bail</Label>
+                          <Textarea
+                            id="travaux_bailleur_cours"
+                            value={formData.travaux_bailleur_cours}
+                            onChange={(e) => handleInputChange("travaux_bailleur_cours", e.target.value)}
+                            placeholder="Travaux prévus par le bailleur pendant la location..."
+                            rows={2}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="travaux_locataire_cours">Travaux locataire en cours de bail</Label>
+                          <Textarea
+                            id="travaux_locataire_cours"
+                            value={formData.travaux_locataire_cours}
+                            onChange={(e) => handleInputChange("travaux_locataire_cours", e.target.value)}
+                            placeholder="Travaux autorisés pour le locataire..."
+                            rows={2}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="travaux_entre_locataires">Travaux entre deux locataires</Label>
+                          <Textarea
+                            id="travaux_entre_locataires"
+                            value={formData.travaux_entre_locataires}
+                            onChange={(e) => handleInputChange("travaux_entre_locataires", e.target.value)}
+                            placeholder="Travaux effectués entre deux locations..."
+                            rows={2}
+                          />
                         </div>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* Étape 6: Documents */}
+                {/* Étape 6: Documents et finalisation */}
                 {currentStep === 6 && (
                   <div className="space-y-6">
                     <div>
@@ -1868,7 +2553,7 @@ export default function NewLeasePageComplete() {
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                   <div>
-                                    <Label>Prénom</Label>
+                                    <Label>Prénom du garant</Label>
                                     <Input
                                       value={garant.prenom}
                                       onChange={(e) => updateGarant(index, "prenom", e.target.value)}
@@ -1876,7 +2561,7 @@ export default function NewLeasePageComplete() {
                                     />
                                   </div>
                                   <div>
-                                    <Label>Nom</Label>
+                                    <Label>Nom du garant</Label>
                                     <Input
                                       value={garant.nom}
                                       onChange={(e) => updateGarant(index, "nom", e.target.value)}
@@ -1884,11 +2569,55 @@ export default function NewLeasePageComplete() {
                                     />
                                   </div>
                                   <div className="md:col-span-2">
-                                    <Label>Adresse</Label>
+                                    <Label>Adresse du garant</Label>
                                     <Input
                                       value={garant.adresse}
                                       onChange={(e) => updateGarant(index, "adresse", e.target.value)}
                                       placeholder="123 rue de la Paix, 75001 Paris"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label>Date de fin d'engagement</Label>
+                                    <Popover>
+                                      <PopoverTrigger asChild>
+                                        <Button
+                                          variant="outline"
+                                          className={cn(
+                                            "w-full justify-start text-left font-normal",
+                                            !garant.date_fin_engagement && "text-muted-foreground",
+                                          )}
+                                        >
+                                          <CalendarIcon className="mr-2 h-4 w-4" />
+                                          {garant.date_fin_engagement
+                                            ? format(garant.date_fin_engagement, "dd/MM/yyyy", { locale: fr })
+                                            : "Sélectionner une date"}
+                                        </Button>
+                                      </PopoverTrigger>
+                                      <PopoverContent className="w-auto p-0">
+                                        <Calendar
+                                          mode="single"
+                                          selected={garant.date_fin_engagement || undefined}
+                                          onSelect={(date) => updateGarant(index, "date_fin_engagement", date)}
+                                          initialFocus
+                                        />
+                                      </PopoverContent>
+                                    </Popover>
+                                  </div>
+                                  <div>
+                                    <Label>Montant maximum d'engagement (€)</Label>
+                                    <Input
+                                      type="number"
+                                      value={garant.montant_max_engagement}
+                                      onChange={(e) => updateGarant(index, "montant_max_engagement", e.target.value)}
+                                      placeholder="5000"
+                                    />
+                                  </div>
+                                  <div className="md:col-span-2">
+                                    <Label>Le garant se porte caution pour</Label>
+                                    <Input
+                                      value={garant.pour_locataire}
+                                      onChange={(e) => updateGarant(index, "pour_locataire", e.target.value)}
+                                      placeholder="Nom du locataire"
                                     />
                                   </div>
                                 </div>
@@ -1900,6 +2629,7 @@ export default function NewLeasePageComplete() {
                         <p className="text-muted-foreground">Aucun garant ajouté</p>
                       )}
                       <Button variant="outline" onClick={addGarant} className="mt-4 bg-transparent">
+                        <Plus className="h-4 w-4 mr-2" />
                         Ajouter un garant
                       </Button>
                     </div>
@@ -1938,6 +2668,54 @@ export default function NewLeasePageComplete() {
                             onCheckedChange={(checked) => handleInputChange("annexe_etat_lieux", checked)}
                           />
                           <Label htmlFor="annexe_etat_lieux">État des lieux d'entrée</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            id="annexe_reglement"
+                            checked={formData.annexe_reglement}
+                            onCheckedChange={(checked) => handleInputChange("annexe_reglement", checked)}
+                          />
+                          <Label htmlFor="annexe_reglement">Règlement de copropriété</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            id="annexe_plomb"
+                            checked={formData.annexe_plomb}
+                            onCheckedChange={(checked) => handleInputChange("annexe_plomb", checked)}
+                          />
+                          <Label htmlFor="annexe_plomb">Constat de risque d'exposition au plomb</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            id="annexe_amiante"
+                            checked={formData.annexe_amiante}
+                            onCheckedChange={(checked) => handleInputChange("annexe_amiante", checked)}
+                          />
+                          <Label htmlFor="annexe_amiante">État amiante</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            id="annexe_electricite_gaz"
+                            checked={formData.annexe_electricite_gaz}
+                            onCheckedChange={(checked) => handleInputChange("annexe_electricite_gaz", checked)}
+                          />
+                          <Label htmlFor="annexe_electricite_gaz">État installation électricité/gaz</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            id="annexe_autorisation"
+                            checked={formData.annexe_autorisation}
+                            onCheckedChange={(checked) => handleInputChange("annexe_autorisation", checked)}
+                          />
+                          <Label htmlFor="annexe_autorisation">Autorisation préalable de mise en location</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            id="annexe_references_loyers"
+                            checked={formData.annexe_references_loyers}
+                            onCheckedChange={(checked) => handleInputChange("annexe_references_loyers", checked)}
+                          />
+                          <Label htmlFor="annexe_references_loyers">Références aux loyers du voisinage</Label>
                         </div>
                       </div>
                     </div>
@@ -1990,7 +2768,7 @@ export default function NewLeasePageComplete() {
                         id="special_conditions"
                         value={formData.special_conditions}
                         onChange={(e) => handleInputChange("special_conditions", e.target.value)}
-                        placeholder="Conditions spéciales, clauses particulières..."
+                        placeholder="Conditions particulières spécifiques à ce bail..."
                         rows={4}
                       />
                     </div>
@@ -2010,18 +2788,28 @@ export default function NewLeasePageComplete() {
                   <ChevronLeft className="h-4 w-4 mr-2" />
                   Précédent
                 </Button>
-
-                {currentStep < 6 ? (
-                  <Button onClick={nextStep} disabled={!validateStep(currentStep)}>
-                    Suivant
-                    <ChevronRight className="h-4 w-4 ml-2" />
-                  </Button>
-                ) : (
-                  <Button onClick={handleSubmit} disabled={saving}>
-                    {saving ? "Création..." : "Créer le bail"}
-                    <FileCheck className="h-4 w-4 ml-2" />
-                  </Button>
-                )}
+                <div className="flex gap-2">
+                  {currentStep < 6 ? (
+                    <Button onClick={nextStep} disabled={!validateStep(currentStep)}>
+                      Suivant
+                      <ChevronRight className="h-4 w-4 ml-2" />
+                    </Button>
+                  ) : (
+                    <Button onClick={handleSubmit} disabled={saving} className="bg-green-600 hover:bg-green-700">
+                      {saving ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Création...
+                        </>
+                      ) : (
+                        <>
+                          <Check className="h-4 w-4 mr-2" />
+                          Créer le bail
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
               </CardFooter>
             </Card>
           </div>
@@ -2035,17 +2823,29 @@ export default function NewLeasePageComplete() {
                     <Eye className="h-5 w-5" />
                     Aperçu du bail
                   </span>
-                  <Button variant="ghost" size="sm" onClick={() => setShowPreview(!showPreview)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowPreview(!showPreview)}
+                    className="text-muted-foreground"
+                  >
                     {showPreview ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
                 </CardTitle>
               </CardHeader>
               {showPreview && (
-                <CardContent>
-                  <div
-                    className="prose prose-sm max-w-none text-xs"
-                    dangerouslySetInnerHTML={{ __html: previewContent }}
-                  />
+                <CardContent className="max-h-[600px] overflow-y-auto">
+                  {previewContent ? (
+                    <div
+                      className="prose prose-sm max-w-none text-xs"
+                      dangerouslySetInnerHTML={{ __html: previewContent }}
+                    />
+                  ) : (
+                    <div className="text-center text-muted-foreground py-8">
+                      <Eye className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p>L'aperçu s'affichera une fois les informations de base renseignées</p>
+                    </div>
+                  )}
                 </CardContent>
               )}
             </Card>
