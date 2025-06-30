@@ -22,9 +22,9 @@ interface LeaseDocument {
 }
 
 interface LeaseDocumentsManagerProps {
-  formData: any
+  formData?: any
   onDocumentsChange: (documents: File[]) => void
-  onAnnexesChange: (annexes: Record<string, boolean>) => void
+  onAnnexesChange?: (annexes: Record<string, boolean>) => void
 }
 
 const REQUIRED_LEASE_DOCUMENTS = {
@@ -76,9 +76,25 @@ const REQUIRED_LEASE_DOCUMENTS = {
     required: false,
     annexeKey: "annexe_electricite_gaz",
   },
+  autorisation: {
+    name: "Autorisation préalable de mise en location",
+    description: "Dans certains territoires",
+    required: false,
+    annexeKey: "annexe_autorisation",
+  },
+  references_loyers: {
+    name: "Références aux loyers du voisinage",
+    description: "Pour loyers sous-évalués",
+    required: false,
+    annexeKey: "annexe_references_loyers",
+  },
 }
 
-export function LeaseDocumentsManager({ formData, onDocumentsChange, onAnnexesChange }: LeaseDocumentsManagerProps) {
+export function LeaseDocumentsManager({
+  formData = {},
+  onDocumentsChange,
+  onAnnexesChange,
+}: LeaseDocumentsManagerProps) {
   const [documents, setDocuments] = useState<LeaseDocument[]>([])
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
   const [loading, setLoading] = useState(false)
@@ -94,6 +110,8 @@ export function LeaseDocumentsManager({ formData, onDocumentsChange, onAnnexesCh
     if (name.includes("plomb")) return "plomb"
     if (name.includes("amiante")) return "amiante"
     if (name.includes("electricite") || name.includes("gaz") || name.includes("installation")) return "electricite_gaz"
+    if (name.includes("autorisation")) return "autorisation"
+    if (name.includes("reference") || name.includes("loyer")) return "references_loyers"
     return "autre"
   }
 
@@ -127,7 +145,7 @@ export function LeaseDocumentsManager({ formData, onDocumentsChange, onAnnexesCh
 
     // Activer automatiquement l'annexe correspondante
     const docInfo = REQUIRED_LEASE_DOCUMENTS[documentType as keyof typeof REQUIRED_LEASE_DOCUMENTS]
-    if (docInfo?.annexeKey) {
+    if (docInfo?.annexeKey && onAnnexesChange) {
       onAnnexesChange({
         ...getAnnexesState(),
         [docInfo.annexeKey]: true,
@@ -151,17 +169,20 @@ export function LeaseDocumentsManager({ formData, onDocumentsChange, onAnnexesCh
     const annexes: Record<string, boolean> = {}
     Object.values(REQUIRED_LEASE_DOCUMENTS).forEach((doc) => {
       if (doc.annexeKey) {
-        annexes[doc.annexeKey] = formData[doc.annexeKey] || false
+        // Utiliser une valeur par défaut si formData ou la propriété n'existe pas
+        annexes[doc.annexeKey] = formData?.[doc.annexeKey] || false
       }
     })
     return annexes
   }
 
   const handleAnnexeToggle = (annexeKey: string, checked: boolean) => {
-    onAnnexesChange({
-      ...getAnnexesState(),
-      [annexeKey]: checked,
-    })
+    if (onAnnexesChange) {
+      onAnnexesChange({
+        ...getAnnexesState(),
+        [annexeKey]: checked,
+      })
+    }
   }
 
   // Fonction pour obtenir les fichiers d'un type spécifique
@@ -233,7 +254,7 @@ export function LeaseDocumentsManager({ formData, onDocumentsChange, onAnnexesCh
         {Object.entries(REQUIRED_LEASE_DOCUMENTS).map(([docType, info]) => {
           const hasDocument =
             documents.some((doc) => doc.document_type === docType) || getFilesForType(docType).length > 0
-          const isAnnexeActive = formData[info.annexeKey] || false
+          const isAnnexeActive = formData?.[info.annexeKey] || false
           const filesForType = getFilesForType(docType)
 
           return (
@@ -267,7 +288,7 @@ export function LeaseDocumentsManager({ formData, onDocumentsChange, onAnnexesCh
                     )}
                     <div className="flex items-center gap-2">
                       <Label htmlFor={`annexe-${docType}`} className="text-sm">
-                        Annexer
+                        Annexer au bail
                       </Label>
                       <Switch
                         id={`annexe-${docType}`}
@@ -430,8 +451,8 @@ export function LeaseDocumentsManager({ formData, onDocumentsChange, onAnnexesCh
             {Object.entries(REQUIRED_LEASE_DOCUMENTS).map(([docType, info]) => (
               <div key={docType} className="flex items-center justify-between p-2 rounded border">
                 <span className="text-sm">{info.name}</span>
-                <Badge variant={formData[info.annexeKey] ? "default" : "secondary"}>
-                  {formData[info.annexeKey] ? "Inclus" : "Non inclus"}
+                <Badge variant={formData?.[info.annexeKey] ? "default" : "secondary"}>
+                  {formData?.[info.annexeKey] ? "Inclus" : "Non inclus"}
                 </Badge>
               </div>
             ))}
