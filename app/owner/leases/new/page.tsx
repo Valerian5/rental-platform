@@ -359,9 +359,9 @@ export default function NewLeasePageComplete() {
     travaux_entre_locataires: "",
 
     // === ANNEXES ===
-    annexe_dpe: true,
-    annexe_risques: true,
-    annexe_notice: true,
+    annexe_dpe: false,
+    annexe_risques: false,
+    annexe_notice: false,
     annexe_etat_lieux: false,
     annexe_reglement: false,
     annexe_plomb: false,

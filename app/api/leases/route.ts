@@ -203,17 +203,16 @@ export async function POST(request: NextRequest) {
       travaux_entre_locataires: body.travaux_entre_locataires || null,
 
       // === ANNEXES ===
-      // === ANNEXES (tous les booléens) ===
-      annexe_dpe: data.annexe_dpe === true || data.annexe_dpe === "true" ? "true" : "false",
-      annexe_risques: data.annexe_risques === true || data.annexe_risques === "true" ? "true" : "false",
-      annexe_notice: data.annexe_notice === true || data.annexe_notice === "true" ? "true" : "false",
-      annexe_etat_lieux: data.annexe_etat_lieux === true || data.annexe_etat_lieux === "true" ? "true" : "false",
-      annexe_reglement: data.annexe_reglement === true || data.annexe_reglement === "true" ? "true" : "false",
-      annexe_plomb: data.annexe_plomb === true || data.annexe_plomb === "true" ? "true" : "false",
-      annexe_amiante: data.annexe_amiante === true || data.annexe_amiante === "true" ? "true" : "false",
-      annexe_electricite_gaz: data.annexe_electricite_gaz === true || data.annexe_electricite_gaz === "true" ? "true" : "false",
-      annexe_autorisation: data.annexe_autorisation === true || data.annexe_autorisation === "true" ? "true" : "false",
-      annexe_references_loyers: data.annexe_references_loyers === true || data.annexe_references_loyers === "true" ? "true" : "false",
+      annexe_dpe: body.annexe_dpe || false,
+      annexe_risques: body.annexe_risques || false,
+      annexe_notice: body.annexe_notice || false,
+      annexe_etat_lieux: body.annexe_etat_lieux || false,
+      annexe_reglement: body.annexe_reglement || false,
+      annexe_plomb: body.annexe_plomb || false,
+      annexe_amiante: body.annexe_amiante || false,
+      annexe_electricite_gaz: body.annexe_electricite_gaz || false,
+      annexe_autorisation: body.annexe_autorisation || false,
+      annexe_references_loyers: body.annexe_references_loyers || false,
 
       // === SIGNATURE ===
       lieu_signature: body.lieu_signature || null,
