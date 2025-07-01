@@ -33,6 +33,7 @@ import {
   FileCheck,
   EyeOff,
   X,
+  ExternalLink,
   Plus,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
