@@ -785,9 +785,9 @@ export default function NewLeasePageComplete() {
       // Logement
       adresse_postale: formData.adresse_logement || "[Adresse du logement]",
       complement_adresse: formData.complement_adresse || "",
-      surface_m2: formData.surface_habitable || "[Surface]",
+      surface_habitable: formData.surface_habitable || "[Surface]",
       nombre_pieces: formData.nombre_pieces || "[Pièces]",
-      type_logement: formData.type_habitat === "immeuble_collectif" ? "Appartement" : "Maison",
+      type_habitat: formData.type_habitat === "immeuble_collectif" ? "Appartement" : "Maison",
       zone_geographique: formData.adresse_logement?.split(",").pop()?.trim() || "[Zone]",
 
       // Financier
