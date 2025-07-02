@@ -773,14 +773,17 @@ export default function NewLeasePageComplete() {
     // Préparer les données pour le template
     const templateData: Record<string, any> = {
       // === PARTIES ===
-      bailleur_nom_prenom: formData.landlord_name || "[Nom du bailleur]",
-      bailleur_domicile: formData.landlord_address || "[Adresse du bailleur]",
-      bailleur_email: formData.landlord_email || "[Email du bailleur]",
-      bailleur_telephone: formData.landlord_phone || "[Téléphone du bailleur]",
-      bailleur_qualite: "Propriétaire",
-
-      locataire_nom_prenom: formData.tenant_name || "[Nom du locataire]",
-      locataire_email: formData.tenant_email || "[Email du locataire]",
+    bailleur_nom_prenom: lease.bailleur_nom_prenom || lease.nom_bailleur || "",
+    bailleur_domicile: lease.bailleur_domicile || lease.adresse_bailleur || "",
+    bailleur_qualite: lease.bailleur_qualite || "Personne physique",
+    bailleur_email: lease.bailleur_email || lease.email_bailleur || "",
+    bailleur_telephone: lease.bailleur_telephone || "",
+    nom_bailleur: lease.nom_bailleur || lease.bailleur_nom_prenom || "",
+    locataire_nom_prenom: lease.locataire_nom_prenom || lease.nom_locataire || "",
+    nom_locataire: lease.nom_locataire || lease.locataire_nom_prenom || "",
+    locataire_email: lease.locataire_email || lease.email_locataire || "",
+    telephone_locataire: lease.telephone_locataire || "",
+    locataire_domicile: lease.locataire_domicile || "",
 
       // === LOGEMENT ===
       localisation_logement: formData.property_address || "[Adresse du logement]",
