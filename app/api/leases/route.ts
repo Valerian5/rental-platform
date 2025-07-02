@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
         // Logement
         nombre_pieces: leaseData.nombre_pieces,
         surface_habitable: leaseData.surface_habitable,
-        adresse_logement: leaseData.adresse_logement,
+        localisation_logement: leaseData.localisation_logement,
         complement_adresse: leaseData.complement_adresse,
         periode_construction: leaseData.periode_construction,
         performance_dpe: leaseData.performance_dpe,
