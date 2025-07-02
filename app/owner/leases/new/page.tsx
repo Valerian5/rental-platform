@@ -799,7 +799,7 @@ export default function NewLeasePageComplete() {
       surface_m2: formData.surface_area || "[Surface]",
       nombre_pieces: formData.rooms || "[Pièces]",
       autres_parties: "[Autres parties]",
-      elements_equipements: formData.mandatory_equipment.join(", ") || "[Équipements]",
+      elements_equipements: (formData.equipements_logement || []).join(", ") || "[Équipements]",
       modalite_chauffage: "[Chauffage individuel]",
       modalite_eau_chaude: "[Eau chaude individuelle]",
       niveau_performance_dpe: formData.energy_class || "D",
@@ -859,7 +859,7 @@ export default function NewLeasePageComplete() {
       travaux_entre_locataires: formData.travaux_entre_locataires ? "Autorisés" : "Non autorisés",
 
       // === ÉQUIPEMENTS MEUBLÉ ===
-      mise_disposition_meubles: formData.mandatory_equipment.join(", ") || "[Aucun équipement]",
+      mise_disposition_meubles: (formData.equipements_logement || []).join(", ") || "[Aucun équipement]",
       franchise_loyer: formData.intended_use || "Résidence principale",
       clause_libre: formData.custom_clauses || "[Aucune clause particulière]",
 
