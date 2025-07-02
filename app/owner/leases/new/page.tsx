@@ -50,6 +50,15 @@ interface ClauseState {
   clauseId?: string
 }
 
+interface LeaseTemplate {
+  id: string
+  name: string
+  lease_type: string
+  template_content: string
+  is_default: boolean
+  is_active: boolean
+}
+
 interface LeaseFormData {
   // === SÉLECTION DE BASE ===
   property_id: string
@@ -163,19 +172,16 @@ interface LeaseFormData {
   raison_duree_reduite: string
   jour_paiement_loyer: string
   paiement_avance: boolean // true=avance, false=terme_echu
+  mode_paiement_loyer: string // Déplacé ici depuis les clauses
 
   // === CLAUSES ===
-  // Clauses génériques
-  clause_resolutoire: boolean
-  clause_solidarite: boolean
-  visites_relouer_vendre: boolean
-  mode_paiement_loyer: string
-  mise_disposition_meubles: string
-
   // Clauses avec toggle et texte modifiable
   clauses: {
     [key: string]: ClauseState
   }
+
+  // Mise à disposition des meubles (si meublé)
+  mise_disposition_meubles: string
 
   // Clauses optionnelles honoraires (avec checkbox)
   honoraires_professionnel: boolean
@@ -243,6 +249,7 @@ export default function NewLeasePageComplete() {
   const [tenants, setTenants] = useState<any[]>([])
   const [application, setApplication] = useState<any>(null)
   const [leaseClauses, setLeaseClauses] = useState<LeaseClause[]>([])
+  const [leaseTemplates, setLeaseTemplates] = useState<LeaseTemplate[]>([])
 
   const [formData, setFormData] = useState<LeaseFormData>({
     // === SÉLECTION DE BASE ===
@@ -342,16 +349,11 @@ export default function NewLeasePageComplete() {
     raison_duree_reduite: "",
     jour_paiement_loyer: "1",
     paiement_avance: true,
+    mode_paiement_loyer: "virement", // Déplacé ici
 
     // === CLAUSES ===
-    clause_resolutoire: true,
-    clause_solidarite: true,
-    visites_relouer_vendre: true,
-    mode_paiement_loyer: "virement",
-    mise_disposition_meubles: "",
-
-    // Clauses avec toggle
     clauses: {},
+    mise_disposition_meubles: "",
 
     honoraires_professionnel: false,
     honoraires_locataire_visite: "",
@@ -441,11 +443,15 @@ export default function NewLeasePageComplete() {
     { value: "2024-T4", label: "4e trimestre 2024 - 144,53" },
   ]
 
-  // Catégories de clauses avec toggle (sauf honoraires)
+  // Catégories de clauses avec toggle - TOUTES LES CLAUSES
   const clauseCategories = [
+    { key: "clause_resolutoire", label: "Clause résolutoire" },
+    { key: "clause_solidarite", label: "Clause de solidarité" },
+    { key: "visites_relouer_vendre", label: "Visites pour relouer ou vendre" },
     { key: "animaux_domestiques", label: "Animaux domestiques" },
     { key: "entretien_appareils", label: "Entretien annuel des appareils" },
     { key: "degradations_locataire", label: "Dégradations du locataire" },
+    { key: "renonciation_regularisation", label: "Renonciation à la régularisation" },
     { key: "travaux_bailleur", label: "Travaux bailleur en cours de bail" },
     { key: "travaux_locataire", label: "Travaux locataire en cours de bail" },
     { key: "travaux_entre_locataires", label: "Travaux entre deux locataires" },
@@ -473,6 +479,13 @@ export default function NewLeasePageComplete() {
       }
 
       setUser(currentUser)
+
+      // Charger les templates de bail
+      const templatesResponse = await fetch("/api/admin/lease-templates")
+      if (templatesResponse.ok) {
+        const templatesData = await templatesResponse.json()
+        setLeaseTemplates(templatesData.templates || [])
+      }
 
       // Charger les clauses de bail
       const clausesResponse = await fetch("/api/lease-clauses")
@@ -741,96 +754,125 @@ export default function NewLeasePageComplete() {
     }))
   }
 
+  // Fonction pour générer le preview avec le template
   const generatePreview = useCallback(() => {
-    const preview = `
-      <div class="space-y-6 p-6 bg-white">
-        <div class="text-center border-b pb-4">
-          <h1 class="text-2xl font-bold">CONTRAT DE LOCATION</h1>
-          <p class="text-gray-600">Logement ${formData.lease_type === "furnished" ? "meublé" : "non meublé"}</p>
-        </div>
-        
-        <div class="grid grid-cols-2 gap-6">
-          <div>
-            <h3 class="font-semibold mb-2 text-blue-600">BAILLEUR</h3>
-            <p class="font-medium">${formData.bailleur_nom_prenom || "[Nom du bailleur]"}</p>
-            <p class="text-sm text-gray-600">${formData.bailleur_adresse || "[Adresse du bailleur]"}</p>
-            <p class="text-sm text-gray-600">${formData.bailleur_email || "[Email du bailleur]"}</p>
-          </div>
-          <div>
-            <h3 class="font-semibold mb-2 text-blue-600">LOCATAIRE(S)</h3>
-            ${
-              formData.locataires
-                .map(
-                  (loc) => `
-              <p class="font-medium">${loc.prenom} ${loc.nom}</p>
-              <p class="text-sm text-gray-600">${loc.email}</p>
-            `,
-                )
-                .join("") || "<p>[Locataires]</p>"
-            }
-          </div>
-        </div>
-        
-        <div>
-          <h3 class="font-semibold mb-2 text-blue-600">LOGEMENT</h3>
-          <p class="font-medium">${formData.adresse_logement || "[Adresse du logement]"}</p>
-          ${formData.complement_adresse ? `<p class="text-sm text-gray-600">${formData.complement_adresse}</p>` : ""}
-          <p class="text-sm text-gray-600">${formData.surface_habitable || "[Surface]"} m² - ${formData.nombre_pieces || "[Pièces]"} pièces</p>
-        </div>
-        
-        <div>
-          <h3 class="font-semibold mb-2 text-blue-600">CONDITIONS FINANCIÈRES</h3>
-          <div class="bg-gray-50 p-3 rounded">
-            <p>Loyer mensuel : <span class="font-medium">${formData.loyer_mensuel || "[Montant]"} €</span></p>
-            <p>Charges : <span class="font-medium">${formData.montant_charges || "0"} €</span></p>
-            <p>Dépôt de garantie : <span class="font-medium">${formData.depot_garantie || "[Dépôt]"} €</span></p>
-          </div>
-        </div>
-        
-        <div>
-          <h3 class="font-semibold mb-2 text-blue-600">DURÉE</h3>
-          <p>Date d'entrée : <span class="font-medium">${
-            formData.date_entree ? format(formData.date_entree, "dd/MM/yyyy", { locale: fr }) : "[Date de début]"
-          }</span></p>
-          <p>Durée : <span class="font-medium">${formData.duree_contrat || "[Durée]"} mois</span></p>
-        </div>
+    // Trouver le template approprié
+    const template = leaseTemplates.find((t) => t.lease_type === formData.lease_type && t.is_default && t.is_active)
 
-        <div>
-          <h3 class="font-semibold mb-2 text-blue-600">CLAUSES SPÉCIFIQUES</h3>
-          <div class="space-y-2">
-            ${clauseCategories
-              .map((category) => {
-                const clause = formData.clauses[category.key]
-                if (clause?.enabled) {
-                  return `
-                  <div class="p-2 bg-green-50 rounded">
-                    <p class="font-medium text-green-800">${category.label}</p>
-                    <p class="text-sm text-green-700">${clause.text || "Texte de la clause"}</p>
-                  </div>
-                `
-                } else {
-                  return `
-                  <div class="p-2 bg-gray-50 rounded">
-                    <p class="font-medium text-gray-600">${category.label}</p>
-                    <p class="text-sm text-gray-500">Aucune</p>
-                  </div>
-                `
-                }
-              })
-              .join("")}
+    if (!template) {
+      setPreviewContent(`
+        <div class="p-6 bg-white">
+          <div class="text-center text-gray-500">
+            <p>Aucun template trouvé pour le type de bail sélectionné</p>
           </div>
         </div>
+      `)
+      return
+    }
+
+    // Préparer les données pour le template
+    const templateData: Record<string, any> = {
+      // Parties
+      bailleur_nom_prenom: formData.bailleur_nom_prenom || "[Nom du bailleur]",
+      bailleur_adresse: formData.bailleur_adresse || "[Adresse du bailleur]",
+      bailleur_email: formData.bailleur_email || "[Email du bailleur]",
+      bailleur_telephone: formData.bailleur_telephone || "[Téléphone du bailleur]",
+
+      // Locataires
+      locataire_nom_prenom: formData.locataires.map((l) => `${l.prenom} ${l.nom}`).join(", ") || "[Nom du locataire]",
+      locataire_email: formData.locataires.map((l) => l.email).join(", ") || "[Email du locataire]",
+
+      // Logement
+      adresse_postale: formData.adresse_logement || "[Adresse du logement]",
+      complement_adresse: formData.complement_adresse || "",
+      surface_m2: formData.surface_habitable || "[Surface]",
+      nombre_pieces: formData.nombre_pieces || "[Pièces]",
+      type_logement: formData.type_habitat === "immeuble_collectif" ? "Appartement" : "Maison",
+      zone_geographique: formData.adresse_logement?.split(",").pop()?.trim() || "[Zone]",
+
+      // Financier
+      loyer: formData.loyer_mensuel || "[Loyer]",
+      charges: formData.montant_charges || "0",
+      loyer_cc:
+        formData.loyer_mensuel && formData.montant_charges
+          ? (Number(formData.loyer_mensuel) + Number(formData.montant_charges)).toFixed(2)
+          : "[Loyer CC]",
+      depot_garantie: formData.depot_garantie || "[Dépôt]",
+      nb_mois_depot: formData.lease_type === "furnished" ? "2" : "1",
+
+      // Dates
+      date_debut: formData.date_entree ? format(formData.date_entree, "dd/MM/yyyy", { locale: fr }) : "[Date début]",
+      date_fin:
+        formData.date_entree && formData.duree_contrat
+          ? (() => {
+              const endDate = new Date(formData.date_entree)
+              endDate.setMonth(endDate.getMonth() + Number(formData.duree_contrat))
+              return format(endDate, "dd/MM/yyyy", { locale: fr })
+            })()
+          : "[Date fin]",
+      duree: formData.duree_contrat || "[Durée]",
+
+      // Clauses - Générer les variables pour chaque clause
+      ...Object.fromEntries(
+        clauseCategories.map((category) => [
+          category.key,
+          formData.clauses[category.key]?.enabled ? formData.clauses[category.key]?.text || "Clause activée" : "Aucune",
+        ]),
+      ),
+
+      // Mode de paiement
+      mode_paiement_loyer: formData.mode_paiement_loyer || "virement",
+
+      // Mise à disposition des meubles
+      mise_disposition_meubles: formData.mise_disposition_meubles || "",
+
+      // Franchise de loyer
+      franchise_loyer: formData.franchise_loyer || "Aucune",
+
+      // Clause libre
+      clause_libre: formData.clause_libre || "Aucune",
+
+      // Signature
+      ville_signature: formData.adresse_logement?.split(",").pop()?.trim() || "[Ville]",
+      date_signature: new Date().toLocaleDateString("fr-FR"),
+    }
+
+    // Compiler le template
+    let compiledContent = template.template_content
+
+    // Remplacer les variables {{variable}}
+    Object.entries(templateData).forEach(([key, value]) => {
+      const regex = new RegExp(`\\{\\{${key}\\}\\}`, "g")
+      compiledContent = compiledContent.replace(regex, String(value))
+    })
+
+    // Remplacer les conditions {{#if variable}}...{{/if}}
+    compiledContent = compiledContent.replace(/\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (match, key, content) => {
+      const value = templateData[key]
+      return value && value !== "" && value !== "Aucune" ? content : ""
+    })
+
+    // Convertir en HTML avec mise en forme
+    const formattedHTML = compiledContent
+      .replace(/\n\n/g, '</p><p class="mb-4">')
+      .replace(/\n/g, "<br>")
+      .replace(/^/, '<p class="mb-4">')
+      .replace(/$/, "</p>")
+      .replace(/<p class="mb-4"><\/p>/g, "")
+
+    setPreviewContent(`
+      <div class="prose prose-sm max-w-none p-6 bg-white">
+        ${formattedHTML}
       </div>
-    `
-    setPreviewContent(preview)
-  }, [formData, clauseCategories])
+    `)
+  }, [formData, leaseTemplates, clauseCategories])
 
   // Générer le preview automatiquement quand les données changent
   useEffect(() => {
-    if (formData.property_id && formData.tenant_id) {
+    if (formData.property_id && formData.tenant_id && leaseTemplates.length > 0) {
       generatePreview()
     }
-  }, [formData, generatePreview])
+  }, [formData, leaseTemplates, generatePreview])
 
   const validateStep = useCallback(
     (step: number): boolean => {
@@ -893,7 +935,7 @@ export default function NewLeasePageComplete() {
         endDate.setMonth(endDate.getMonth() + durationMonths)
       }
 
-      // Préparer les données pour l'API - SANS les anciennes colonnes de clauses
+      // Préparer les données pour l'API
       const leaseData = {
         // Champs de base
         property_id: formData.property_id,
@@ -907,7 +949,7 @@ export default function NewLeasePageComplete() {
         lease_type: formData.lease_type,
         application_id: applicationId || undefined,
 
-        // Tous les champs du formulaire SAUF les clauses individuelles
+        // Tous les champs du formulaire
         bail_type: formData.bail_type,
         owner_type: formData.owner_type,
         guarantee_type: formData.guarantee_type,
@@ -991,12 +1033,9 @@ export default function NewLeasePageComplete() {
         raison_duree_reduite: formData.raison_duree_reduite,
         jour_paiement_loyer: formData.jour_paiement_loyer,
         paiement_avance: formData.paiement_avance,
-
-        // Clauses génériques
-        clause_resolutoire: formData.clause_resolutoire,
-        clause_solidarite: formData.clause_solidarite,
-        visites_relouer_vendre: formData.visites_relouer_vendre,
         mode_paiement_loyer: formData.mode_paiement_loyer,
+
+        // Clauses
         mise_disposition_meubles: formData.mise_disposition_meubles,
 
         // Honoraires
@@ -1050,8 +1089,8 @@ export default function NewLeasePageComplete() {
 
         // Métadonnées avec clauses
         metadata: {
-          form_version: "v10_complete_with_clause_toggles",
-          created_from: "new_form_complete_clauses",
+          form_version: "v11_complete_with_template_preview",
+          created_from: "new_form_complete_clauses_template",
           total_fields: Object.keys(formData).length,
           locataires_count: formData.locataires.length,
           garants_count: formData.garants.length,
@@ -2336,7 +2375,7 @@ export default function NewLeasePageComplete() {
                       )}
                     </div>
 
-                    {/* Modalités de paiement */}
+                    {/* Modalités de paiement - DÉPLACÉ ICI */}
                     <div>
                       <h3 className="text-lg font-medium mb-4">Modalités de paiement</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2372,6 +2411,25 @@ export default function NewLeasePageComplete() {
                             </SelectContent>
                           </Select>
                         </div>
+                      </div>
+
+                      {/* Mode de paiement - DÉPLACÉ ICI */}
+                      <div className="mt-4">
+                        <Label htmlFor="mode_paiement_loyer">Mode de paiement du loyer</Label>
+                        <Select
+                          value={formData.mode_paiement_loyer}
+                          onValueChange={(value) => handleInputChange("mode_paiement_loyer", value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="virement">Virement bancaire</SelectItem>
+                            <SelectItem value="cheque">Chèque</SelectItem>
+                            <SelectItem value="prelevement">Prélèvement automatique</SelectItem>
+                            <SelectItem value="especes">Espèces</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
 
@@ -2499,89 +2557,9 @@ export default function NewLeasePageComplete() {
                 {/* Étape 6: Clauses */}
                 {currentStep === 6 && (
                   <div className="space-y-6">
-                    {/* Clauses génériques */}
+                    {/* Clauses avec toggle et texte modifiable - TOUTES LES CLAUSES */}
                     <div>
-                      <h3 className="text-lg font-medium mb-4">Clauses génériques</h3>
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between p-3 border rounded-lg">
-                          <div>
-                            <Label htmlFor="clause_resolutoire" className="font-medium">
-                              Clause résolutoire
-                            </Label>
-                            <p className="text-sm text-gray-600">Résiliation automatique en cas de non-paiement</p>
-                          </div>
-                          <Switch
-                            id="clause_resolutoire"
-                            checked={formData.clause_resolutoire}
-                            onCheckedChange={(checked) => handleInputChange("clause_resolutoire", checked)}
-                          />
-                        </div>
-
-                        <div className="flex items-center justify-between p-3 border rounded-lg">
-                          <div>
-                            <Label htmlFor="clause_solidarite" className="font-medium">
-                              Clause de solidarité
-                            </Label>
-                            <p className="text-sm text-gray-600">Solidarité entre les colocataires</p>
-                          </div>
-                          <Switch
-                            id="clause_solidarite"
-                            checked={formData.clause_solidarite}
-                            onCheckedChange={(checked) => handleInputChange("clause_solidarite", checked)}
-                          />
-                        </div>
-
-                        <div className="flex items-center justify-between p-3 border rounded-lg">
-                          <div>
-                            <Label htmlFor="visites_relouer_vendre" className="font-medium">
-                              Visites pour relouer ou vendre
-                            </Label>
-                            <p className="text-sm text-gray-600">Autorisation de visites en fin de bail</p>
-                          </div>
-                          <Switch
-                            id="visites_relouer_vendre"
-                            checked={formData.visites_relouer_vendre}
-                            onCheckedChange={(checked) => handleInputChange("visites_relouer_vendre", checked)}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Mode de paiement */}
-                    <div>
-                      <Label htmlFor="mode_paiement_loyer">Mode de paiement du loyer</Label>
-                      <Select
-                        value={formData.mode_paiement_loyer}
-                        onValueChange={(value) => handleInputChange("mode_paiement_loyer", value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="virement">Virement bancaire</SelectItem>
-                          <SelectItem value="cheque">Chèque</SelectItem>
-                          <SelectItem value="prelevement">Prélèvement automatique</SelectItem>
-                          <SelectItem value="especes">Espèces</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Mise à disposition des meubles (si meublé) */}
-                    {formData.lease_type === "furnished" && (
-                      <div>
-                        <Label htmlFor="mise_disposition_meubles">Mise à disposition des meubles</Label>
-                        <Textarea
-                          id="mise_disposition_meubles"
-                          value={formData.mise_disposition_meubles}
-                          onChange={(e) => handleInputChange("mise_disposition_meubles", e.target.value)}
-                          placeholder="Modalités de mise à disposition des meubles et équipements..."
-                        />
-                      </div>
-                    )}
-
-                    {/* Clauses avec toggle et texte modifiable */}
-                    <div>
-                      <h3 className="text-lg font-medium mb-4">Clauses spécifiques</h3>
+                      <h3 className="text-lg font-medium mb-4">Clauses du contrat</h3>
                       <div className="space-y-4">
                         {clauseCategories.map((category) => {
                           const clause = formData.clauses[category.key] || { enabled: false, text: "" }
@@ -2623,6 +2601,19 @@ export default function NewLeasePageComplete() {
                         })}
                       </div>
                     </div>
+
+                    {/* Mise à disposition des meubles (si meublé) */}
+                    {formData.lease_type === "furnished" && (
+                      <div>
+                        <Label htmlFor="mise_disposition_meubles">Mise à disposition des meubles</Label>
+                        <Textarea
+                          id="mise_disposition_meubles"
+                          value={formData.mise_disposition_meubles}
+                          onChange={(e) => handleInputChange("mise_disposition_meubles", e.target.value)}
+                          placeholder="Modalités de mise à disposition des meubles et équipements..."
+                        />
+                      </div>
+                    )}
 
                     {/* Honoraires d'agence */}
                     <div>
@@ -2800,8 +2791,7 @@ export default function NewLeasePageComplete() {
                         id="clause_libre"
                         value={formData.clause_libre}
                         onChange={(e) => handleInputChange("clause_libre", e.target.value)}
-                        placeholder="Clause personnalisée..."
-                        rows={4}
+                        placeholder="Clause libre personnalisée..."
                       />
                     </div>
 
@@ -2810,7 +2800,7 @@ export default function NewLeasePageComplete() {
                       <h3 className="text-lg font-medium mb-4">Annexes</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <h4 className="font-medium mb-2">Annexes obligatoires</h4>
+                          <h4 className="font-medium mb-2">Diagnostics obligatoires</h4>
                           <div className="space-y-2">
                             <div className="flex items-center space-x-2">
                               <Checkbox
@@ -2829,25 +2819,9 @@ export default function NewLeasePageComplete() {
                                 onCheckedChange={(checked) => handleInputChange("annexe_dpe", checked)}
                               />
                               <Label htmlFor="annexe_dpe" className="text-sm">
-                                Diagnostic de performance énergétique
+                                DPE
                               </Label>
                             </div>
-                            <div className="flex items-center space-x-2">
-                              <Checkbox
-                                id="annexe_erp"
-                                checked={formData.annexe_erp}
-                                onCheckedChange={(checked) => handleInputChange("annexe_erp", checked)}
-                              />
-                              <Label htmlFor="annexe_erp" className="text-sm">
-                                État des risques et pollutions
-                              </Label>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div>
-                          <h4 className="font-medium mb-2">Annexes conditionnelles</h4>
-                          <div className="space-y-2">
                             <div className="flex items-center space-x-2">
                               <Checkbox
                                 id="annexe_plomb"
@@ -2855,7 +2829,7 @@ export default function NewLeasePageComplete() {
                                 onCheckedChange={(checked) => handleInputChange("annexe_plomb", checked)}
                               />
                               <Label htmlFor="annexe_plomb" className="text-sm">
-                                Constat de risque d'exposition au plomb
+                                Plomb
                               </Label>
                             </div>
                             <div className="flex items-center space-x-2">
@@ -2865,7 +2839,7 @@ export default function NewLeasePageComplete() {
                                 onCheckedChange={(checked) => handleInputChange("annexe_amiante", checked)}
                               />
                               <Label htmlFor="annexe_amiante" className="text-sm">
-                                Diagnostic amiante
+                                Amiante
                               </Label>
                             </div>
                             <div className="flex items-center space-x-2">
@@ -2875,7 +2849,7 @@ export default function NewLeasePageComplete() {
                                 onCheckedChange={(checked) => handleInputChange("annexe_electricite", checked)}
                               />
                               <Label htmlFor="annexe_electricite" className="text-sm">
-                                Diagnostic électricité
+                                Installation électrique
                               </Label>
                             </div>
                             <div className="flex items-center space-x-2">
@@ -2885,7 +2859,17 @@ export default function NewLeasePageComplete() {
                                 onCheckedChange={(checked) => handleInputChange("annexe_gaz", checked)}
                               />
                               <Label htmlFor="annexe_gaz" className="text-sm">
-                                Diagnostic gaz
+                                Installation gaz
+                              </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id="annexe_erp"
+                                checked={formData.annexe_erp}
+                                onCheckedChange={(checked) => handleInputChange("annexe_erp", checked)}
+                              />
+                              <Label htmlFor="annexe_erp" className="text-sm">
+                                ERP (Risques et pollutions)
                               </Label>
                             </div>
                             <div className="flex items-center space-x-2">
@@ -2895,75 +2879,107 @@ export default function NewLeasePageComplete() {
                                 onCheckedChange={(checked) => handleInputChange("annexe_bruit", checked)}
                               />
                               <Label htmlFor="annexe_bruit" className="text-sm">
-                                Information sur le bruit
+                                Bruit
+                              </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id="annexe_autres"
+                                checked={formData.annexe_autres}
+                                onCheckedChange={(checked) => handleInputChange("annexe_autres", checked)}
+                              />
+                              <Label htmlFor="annexe_autres" className="text-sm">
+                                Autres diagnostics
                               </Label>
                             </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="mt-4">
-                        <h4 className="font-medium mb-2">Documents gérés par l'administration</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                          <div className="flex items-center space-x-2">
-                            <Checkbox
-                              id="annexe_etat_lieux"
-                              checked={formData.annexe_etat_lieux}
-                              onCheckedChange={(checked) => handleInputChange("annexe_etat_lieux", checked)}
-                            />
-                            <Label htmlFor="annexe_etat_lieux" className="text-sm">
-                              État des lieux
-                            </Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Checkbox
-                              id="annexe_notice_information"
-                              checked={formData.annexe_notice_information}
-                              onCheckedChange={(checked) => handleInputChange("annexe_notice_information", checked)}
-                            />
-                            <Label htmlFor="annexe_notice_information" className="text-sm">
-                              Notice d'information
-                            </Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Checkbox
-                              id="annexe_inventaire_meubles"
-                              checked={formData.annexe_inventaire_meubles}
-                              onCheckedChange={(checked) => handleInputChange("annexe_inventaire_meubles", checked)}
-                            />
-                            <Label htmlFor="annexe_inventaire_meubles" className="text-sm">
-                              Inventaire des meubles
-                            </Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Checkbox
-                              id="annexe_liste_charges"
-                              checked={formData.annexe_liste_charges}
-                              onCheckedChange={(checked) => handleInputChange("annexe_liste_charges", checked)}
-                            />
-                            <Label htmlFor="annexe_liste_charges" className="text-sm">
-                              Liste des charges
-                            </Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Checkbox
-                              id="annexe_reparations_locatives"
-                              checked={formData.annexe_reparations_locatives}
-                              onCheckedChange={(checked) => handleInputChange("annexe_reparations_locatives", checked)}
-                            />
-                            <Label htmlFor="annexe_reparations_locatives" className="text-sm">
-                              Réparations locatives
-                            </Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Checkbox
-                              id="annexe_grille_vetuste"
-                              checked={formData.annexe_grille_vetuste}
-                              onCheckedChange={(checked) => handleInputChange("annexe_grille_vetuste", checked)}
-                            />
-                            <Label htmlFor="annexe_grille_vetuste" className="text-sm">
-                              Grille de vétusté
-                            </Label>
+                        <div>
+                          <h4 className="font-medium mb-2">Documents contractuels</h4>
+                          <div className="space-y-2">
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id="annexe_etat_lieux"
+                                checked={formData.annexe_etat_lieux}
+                                onCheckedChange={(checked) => handleInputChange("annexe_etat_lieux", checked)}
+                              />
+                              <Label htmlFor="annexe_etat_lieux" className="text-sm">
+                                État des lieux
+                              </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id="annexe_notice_information"
+                                checked={formData.annexe_notice_information}
+                                onCheckedChange={(checked) => handleInputChange("annexe_notice_information", checked)}
+                              />
+                              <Label htmlFor="annexe_notice_information" className="text-sm">
+                                Notice d'information
+                              </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id="annexe_inventaire_meubles"
+                                checked={formData.annexe_inventaire_meubles}
+                                onCheckedChange={(checked) => handleInputChange("annexe_inventaire_meubles", checked)}
+                              />
+                              <Label htmlFor="annexe_inventaire_meubles" className="text-sm">
+                                Inventaire des meubles
+                              </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id="annexe_liste_charges"
+                                checked={formData.annexe_liste_charges}
+                                onCheckedChange={(checked) => handleInputChange("annexe_liste_charges", checked)}
+                              />
+                              <Label htmlFor="annexe_liste_charges" className="text-sm">
+                                Liste des charges
+                              </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id="annexe_reparations_locatives"
+                                checked={formData.annexe_reparations_locatives}
+                                onCheckedChange={(checked) =>
+                                  handleInputChange("annexe_reparations_locatives", checked)
+                                }
+                              />
+                              <Label htmlFor="annexe_reparations_locatives" className="text-sm">
+                                Réparations locatives
+                              </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id="annexe_grille_vetuste"
+                                checked={formData.annexe_grille_vetuste}
+                                onCheckedChange={(checked) => handleInputChange("annexe_grille_vetuste", checked)}
+                              />
+                              <Label htmlFor="annexe_grille_vetuste" className="text-sm">
+                                Grille de vétusté
+                              </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id="annexe_bail_parking"
+                                checked={formData.annexe_bail_parking}
+                                onCheckedChange={(checked) => handleInputChange("annexe_bail_parking", checked)}
+                              />
+                              <Label htmlFor="annexe_bail_parking" className="text-sm">
+                                Bail de parking
+                              </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id="annexe_actes_caution"
+                                checked={formData.annexe_actes_caution}
+                                onCheckedChange={(checked) => handleInputChange("annexe_actes_caution", checked)}
+                              />
+                              <Label htmlFor="annexe_actes_caution" className="text-sm">
+                                Actes de caution
+                              </Label>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -2984,17 +3000,7 @@ export default function NewLeasePageComplete() {
                     </Button>
                   ) : (
                     <Button type="button" onClick={handleSubmit} disabled={saving}>
-                      {saving ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                          Création...
-                        </>
-                      ) : (
-                        <>
-                          <Check className="h-4 w-4 mr-2" />
-                          Créer le bail
-                        </>
-                      )}
+                      {saving ? "Création..." : "Créer le bail"}
                     </Button>
                   )}
                 </div>
@@ -3002,7 +3008,7 @@ export default function NewLeasePageComplete() {
             </Card>
           </div>
 
-          {/* Aperçu */}
+          {/* Preview */}
           <div className="lg:col-span-1">
             <Card className="sticky top-6">
               <CardHeader>
@@ -3017,8 +3023,14 @@ export default function NewLeasePageComplete() {
                 </div>
               </CardHeader>
               {showPreview && (
-                <CardContent>
-                  <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: previewContent }} />
+                <CardContent className="max-h-[600px] overflow-y-auto">
+                  {previewContent ? (
+                    <div className="text-xs leading-relaxed" dangerouslySetInnerHTML={{ __html: previewContent }} />
+                  ) : (
+                    <div className="text-center text-gray-500 py-8">
+                      <p>Sélectionnez un bien et un locataire pour voir l'aperçu</p>
+                    </div>
+                  )}
                 </CardContent>
               )}
             </Card>
