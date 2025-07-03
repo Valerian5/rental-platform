@@ -6,11 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import { FileText, Download, Printer, Send, CheckCircle, RefreshCw, Edit } from "lucide-react"
+import { FileText, Download, Printer, Send, CheckCircle, RefreshCw, Edit, Upload } from "lucide-react"
 import { PageHeader } from "@/components/page-header"
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
 import { authService } from "@/lib/auth-service"
 import { LeaseDocumentViewer } from "@/components/lease-document-viewer"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { LeaseAnnexesManager } from "@/components/lease-annexes-manager"
 
 interface Lease {
   id: string
@@ -43,9 +45,12 @@ export default function LeaseDetailPage() {
   const [generating, setGenerating] = useState(false)
   const [user, setUser] = useState<any>(null)
   const [generatedDocument, setGeneratedDocument] = useState<any>(null)
+  const [annexes, setAnnexes] = useState<any[]>([])
+  const [loadingAnnexes, setLoadingAnnexes] = useState(false)
 
   useEffect(() => {
     checkAuthAndLoadLease()
+    loadAnnexes() // Ajouter cette ligne
   }, [params.id])
 
   const checkAuthAndLoadLease = async () => {
@@ -177,6 +182,22 @@ export default function LeaseDetailPage() {
     }
   }
 
+  const loadAnnexes = async () => {
+    try {
+      setLoadingAnnexes(true)
+      const response = await fetch(`/api/leases/${params.id}/annexes`)
+      const data = await response.json()
+
+      if (data.success) {
+        setAnnexes(data.annexes)
+      }
+    } catch (error) {
+      console.error("Erreur chargement annexes:", error)
+    } finally {
+      setLoadingAnnexes(false)
+    }
+  }
+
   // Debug: Afficher l'état actuel
   console.log("🔍 [CLIENT] État actuel:", {
     hasLease: !!lease,
@@ -253,7 +274,101 @@ export default function LeaseDetailPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <Tabs defaultValue="document" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="document">Document de bail</TabsTrigger>
+          <TabsTrigger value="annexes">Annexes et documents</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="document" className="mt-6">
+          {/* Contenu actuel du document */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Document de bail
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {/* Debug info */}
+              <div className="mb-4 p-2 bg-gray-100 rounded text-xs">
+                <strong>Debug:</strong> DB={!!lease.generated_document ? "✅" : "❌"} | State=
+                {!!generatedDocument ? "✅" : "❌"} | Length={lease.generated_document?.length || 0}
+              </div>
+
+              {lease.generated_document && generatedDocument ? (
+                <LeaseDocumentViewer
+                  document={generatedDocument.document}
+                  analysis={generatedDocument.analysis}
+                  leaseId={lease.id}
+                />
+              ) : lease.generated_document ? (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-medium">Document généré (mode fallback)</h3>
+                    <Button variant="outline" onClick={() => router.push(`/owner/leases/${lease.id}/complete-data`)}>
+                      <Edit className="h-4 w-4 mr-2" />
+                      Compléter les données
+                    </Button>
+                  </div>
+                  <div className="bg-white border rounded-lg p-8 print:shadow-none print:border-none">
+                    <div
+                      className="prose prose-sm max-w-none"
+                      dangerouslySetInnerHTML={{
+                        __html: lease.generated_document
+                          .replace(/\n/g, "<br>")
+                          .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+                          .replace(/^# (.*$)/gim, "<h1>$1</h1>")
+                          .replace(/^## (.*$)/gim, "<h2>$1</h2>")
+                          .replace(/^### (.*$)/gim, "<h3>$1</h3>"),
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Document non généré</h3>
+                  <p className="text-gray-600 mb-4">
+                    Le document de bail n'a pas encore été généré. Cliquez sur "Générer le document" pour créer le
+                    contrat.
+                  </p>
+                  <div className="space-x-2">
+                    <Button onClick={generateDocument} disabled={generating}>
+                      {generating ? (
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <FileText className="h-4 w-4 mr-2" />
+                      )}
+                      {generating ? "Génération..." : "Générer le document"}
+                    </Button>
+                    <Button variant="outline" onClick={() => router.push(`/owner/leases/${lease.id}/complete-data`)}>
+                      <Edit className="h-4 w-4 mr-2" />
+                      Compléter les données d'abord
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="annexes" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Upload className="h-5 w-5" />
+                Annexes et documents
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <LeaseAnnexesManager leaseId={lease.id} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 hidden">
         {/* Informations principales */}
         <div className="lg:col-span-1 space-y-6">
           <Card>
