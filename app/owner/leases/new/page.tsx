@@ -903,7 +903,7 @@ export default function NewLeasePageComplete() {
           { label: "Baux", href: "/owner/leases" },
           { label: "Nouveau bail", href: "/owner/leases/new" },
         ]}
-      </div>
+      />
       <PageHeader title="Création d'un nouveau bail" description="Assistant de création de contrat de location" />
 
       <div className="mt-6">
@@ -2267,6 +2267,7 @@ export default function NewLeasePageComplete() {
         </div>
       </div>
     </div>
+	</div>
   )
 }
 
