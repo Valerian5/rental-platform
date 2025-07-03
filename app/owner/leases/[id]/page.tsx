@@ -23,7 +23,6 @@ interface Lease {
   end_date: string
   monthly_rent: number
   charges: number
-  deposit: number
   lease_type: string
   status: string
   signed_by_owner: boolean
@@ -44,13 +43,9 @@ export default function LeaseDetailPage() {
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [user, setUser] = useState<any>(null)
-  const [generatedDocument, setGeneratedDocument] = useState<any>(null)
-  const [annexes, setAnnexes] = useState<any[]>([])
-  const [loadingAnnexes, setLoadingAnnexes] = useState(false)
 
   useEffect(() => {
     checkAuthAndLoadLease()
-    loadAnnexes() // Ajouter cette ligne
   }, [params.id])
 
   const checkAuthAndLoadLease = async () => {
@@ -76,10 +71,6 @@ export default function LeaseDetailPage() {
 
       if (data.success) {
         setLease(data.lease)
-        console.log("🔍 [CLIENT] Bail chargé:", {
-          hasGeneratedDocument: !!data.lease.generated_document,
-          documentLength: data.lease.generated_document?.length || 0,
-        })
       } else {
         toast.error("Bail non trouvé")
         router.push("/owner/leases")
@@ -95,49 +86,21 @@ export default function LeaseDetailPage() {
   const generateDocument = async () => {
     try {
       setGenerating(true)
-      console.log("🚀 [CLIENT] Début génération document...")
-
       const response = await fetch(`/api/leases/${params.id}/generate-document`, {
         method: "POST",
       })
 
       const data = await response.json()
-      console.log("📊 [CLIENT] Réponse API génération:", {
-        success: data.success,
-        hasDocument: !!data.document,
-        hasAnalysis: !!data.analysis,
-        documentLength: data.document?.content?.length || 0,
-      })
 
       if (data.success) {
         toast.success("Document généré avec succès")
-
-        // Stocker les données de génération AVANT de recharger
-        setGeneratedDocument({
-          document: {
-            content: data.document.content,
-            template: data.document.template || data.template_used,
-            generatedAt: data.document.generatedAt || new Date().toISOString(),
-          },
-          analysis: data.analysis || {
-            completionRate: data.completion_rate || 100,
-            totalFields: 0,
-          },
-        })
-
-        console.log("✅ [CLIENT] Données de génération stockées")
-
-        // Recharger le bail pour avoir le document en DB
         await loadLease()
-
-        console.log("✅ [CLIENT] Bail rechargé après génération")
       } else if (data.redirectTo) {
         toast.info("Certaines données sont manquantes. Redirection vers le formulaire...")
         setTimeout(() => {
           router.push(data.redirectTo)
         }, 1500)
       } else {
-        console.error("❌ [CLIENT] Erreur génération:", data)
         toast.error(data.error || "Erreur lors de la génération")
       }
     } catch (error) {
@@ -153,7 +116,6 @@ export default function LeaseDetailPage() {
   }
 
   const handleDownloadPDF = async () => {
-    // TODO: Implémenter la génération PDF
     toast.info("Génération PDF en cours de développement")
   }
 
@@ -181,30 +143,6 @@ export default function LeaseDetailPage() {
         return type
     }
   }
-
-  const loadAnnexes = async () => {
-    try {
-      setLoadingAnnexes(true)
-      const response = await fetch(`/api/leases/${params.id}/annexes`)
-      const data = await response.json()
-
-      if (data.success) {
-        setAnnexes(data.annexes)
-      }
-    } catch (error) {
-      console.error("Erreur chargement annexes:", error)
-    } finally {
-      setLoadingAnnexes(false)
-    }
-  }
-
-  // Debug: Afficher l'état actuel
-  console.log("🔍 [CLIENT] État actuel:", {
-    hasLease: !!lease,
-    hasGeneratedDocumentInDB: !!lease?.generated_document,
-    hasGeneratedDocumentState: !!generatedDocument,
-    generatedDocumentKeys: generatedDocument ? Object.keys(generatedDocument) : [],
-  })
 
   if (loading) {
     return (
@@ -274,101 +212,7 @@ export default function LeaseDetailPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="document" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="document">Document de bail</TabsTrigger>
-          <TabsTrigger value="annexes">Annexes et documents</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="document" className="mt-6">
-          {/* Contenu actuel du document */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Document de bail
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {/* Debug info */}
-              <div className="mb-4 p-2 bg-gray-100 rounded text-xs">
-                <strong>Debug:</strong> DB={!!lease.generated_document ? "✅" : "❌"} | State=
-                {!!generatedDocument ? "✅" : "❌"} | Length={lease.generated_document?.length || 0}
-              </div>
-
-              {lease.generated_document && generatedDocument ? (
-                <LeaseDocumentViewer
-                  document={generatedDocument.document}
-                  analysis={generatedDocument.analysis}
-                  leaseId={lease.id}
-                />
-              ) : lease.generated_document ? (
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-medium">Document généré (mode fallback)</h3>
-                    <Button variant="outline" onClick={() => router.push(`/owner/leases/${lease.id}/complete-data`)}>
-                      <Edit className="h-4 w-4 mr-2" />
-                      Compléter les données
-                    </Button>
-                  </div>
-                  <div className="bg-white border rounded-lg p-8 print:shadow-none print:border-none">
-                    <div
-                      className="prose prose-sm max-w-none"
-                      dangerouslySetInnerHTML={{
-                        __html: lease.generated_document
-                          .replace(/\n/g, "<br>")
-                          .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-                          .replace(/^# (.*$)/gim, "<h1>$1</h1>")
-                          .replace(/^## (.*$)/gim, "<h2>$1</h2>")
-                          .replace(/^### (.*$)/gim, "<h3>$1</h3>"),
-                      }}
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Document non généré</h3>
-                  <p className="text-gray-600 mb-4">
-                    Le document de bail n'a pas encore été généré. Cliquez sur "Générer le document" pour créer le
-                    contrat.
-                  </p>
-                  <div className="space-x-2">
-                    <Button onClick={generateDocument} disabled={generating}>
-                      {generating ? (
-                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <FileText className="h-4 w-4 mr-2" />
-                      )}
-                      {generating ? "Génération..." : "Générer le document"}
-                    </Button>
-                    <Button variant="outline" onClick={() => router.push(`/owner/leases/${lease.id}/complete-data`)}>
-                      <Edit className="h-4 w-4 mr-2" />
-                      Compléter les données d'abord
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="annexes" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Upload className="h-5 w-5" />
-                Annexes et documents
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <LeaseAnnexesManager leaseId={lease.id} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Informations principales */}
         <div className="lg:col-span-1 space-y-6">
           <Card>
@@ -473,77 +317,74 @@ export default function LeaseDetailPage() {
           </Card>
         </div>
 
-        {/* Document généré */}
+        {/* Document et Annexes */}
         <div className="lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Document de bail
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {/* Debug info */}
-              <div className="mb-4 p-2 bg-gray-100 rounded text-xs">
-                <strong>Debug:</strong> DB={!!lease.generated_document ? "✅" : "❌"} | State=
-                {!!generatedDocument ? "✅" : "❌"} | Length={lease.generated_document?.length || 0}
-              </div>
+          <Tabs defaultValue="document" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="document">Document de bail</TabsTrigger>
+              <TabsTrigger value="annexes">Annexes et documents</TabsTrigger>
+            </TabsList>
 
-              {lease.generated_document && generatedDocument ? (
-                <LeaseDocumentViewer
-                  document={generatedDocument.document}
-                  analysis={generatedDocument.analysis}
-                  leaseId={lease.id}
-                />
-              ) : lease.generated_document ? (
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-medium">Document généré (mode fallback)</h3>
-                    <Button variant="outline" onClick={() => router.push(`/owner/leases/${lease.id}/complete-data`)}>
-                      <Edit className="h-4 w-4 mr-2" />
-                      Compléter les données
-                    </Button>
-                  </div>
-                  <div className="bg-white border rounded-lg p-8 print:shadow-none print:border-none">
-                    <div
-                      className="prose prose-sm max-w-none"
-                      dangerouslySetInnerHTML={{
-                        __html: lease.generated_document
-                          .replace(/\n/g, "<br>")
-                          .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-                          .replace(/^# (.*$)/gim, "<h1>$1</h1>")
-                          .replace(/^## (.*$)/gim, "<h2>$1</h2>")
-                          .replace(/^### (.*$)/gim, "<h3>$1</h3>"),
-                      }}
+            <TabsContent value="document" className="mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    Document de bail
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {lease.generated_document ? (
+                    <LeaseDocumentViewer
+                      document={{ content: lease.generated_document }}
+                      analysis={{ completionRate: 100, totalFields: 0 }} // Placeholder analysis
+                      leaseId={lease.id}
                     />
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Document non généré</h3>
-                  <p className="text-gray-600 mb-4">
-                    Le document de bail n'a pas encore été généré. Cliquez sur "Générer le document" pour créer le
-                    contrat.
-                  </p>
-                  <div className="space-x-2">
-                    <Button onClick={generateDocument} disabled={generating}>
-                      {generating ? (
-                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <FileText className="h-4 w-4 mr-2" />
-                      )}
-                      {generating ? "Génération..." : "Générer le document"}
-                    </Button>
-                    <Button variant="outline" onClick={() => router.push(`/owner/leases/${lease.id}/complete-data`)}>
-                      <Edit className="h-4 w-4 mr-2" />
-                      Compléter les données d'abord
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  ) : (
+                    <div className="text-center py-12">
+                      <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">Document non généré</h3>
+                      <p className="text-gray-600 mb-4">
+                        Le document de bail n'a pas encore été généré. Cliquez sur "Générer le document" pour créer le
+                        contrat.
+                      </p>
+                      <div className="space-x-2">
+                        <Button onClick={generateDocument} disabled={generating}>
+                          {generating ? (
+                            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <FileText className="h-4 w-4 mr-2" />
+                          )}
+                          {generating ? "Génération..." : "Générer le document"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => router.push(`/owner/leases/${lease.id}/complete-data`)}
+                        >
+                          <Edit className="h-4 w-4 mr-2" />
+                          Compléter les données d'abord
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="annexes" className="mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Upload className="h-5 w-5" />
+                    Annexes et documents
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <LeaseAnnexesManager leaseId={lease.id} />
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
     </div>
