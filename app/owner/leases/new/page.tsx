@@ -1354,7 +1354,7 @@ export default function NewLeasePageComplete() {
                     </div>
                   </div>
                 )}
-                                {/* Étape 4: Financier */}
+               {/* Étape 4: Financier */}
                 {currentStep === 4 && (
                   <div className="space-y-6">
                     <div>
@@ -2219,37 +2219,30 @@ export default function NewLeasePageComplete() {
                         onChange={(e) => handleInputChange("clause_libre", e.target.value)}
                         placeholder="Clause libre personnalisée..."
                       />
-                    </div>	
-               </CardContent>
+                    </div>
+              </CardContent>
               <CardFooter className="flex justify-between">
                 <Button type="button" variant="outline" onClick={prevStep} disabled={currentStep === 1}>
-                  <ChevronLeft className="h-4 w-4 mr-2" />
-                  Précédent
+                  <ChevronLeft className="h-4 w-4 mr-2" /> Précédent
                 </Button>
-                <div className="flex gap-2">
-                  {currentStep < 6 ? (
-                    <Button type="button" onClick={nextStep}>
-                      Suivant
-                      <ChevronRight className="h-4 w-4 ml-2" />
-                    </Button>
-                  ) : (
-                    <Button type="button" onClick={handleSubmit} disabled={saving}>
-                      {saving ? "Création..." : "Créer le bail"}
-                    </Button>
-                  )}
-                </div>
+                {currentStep < 6 ? (
+                  <Button type="button" onClick={nextStep}>
+                    Suivant <ChevronRight className="h-4 w-4 ml-2" />
+                  </Button>
+                ) : (
+                  <Button type="button" onClick={handleSubmit} disabled={saving}>
+                    {saving ? "Création..." : "Créer le bail"}
+                  </Button>
+                )}
               </CardFooter>
             </Card>
           </div>
-
-          {/* Preview */}
           <div className="lg:col-span-1">
             <Card className="sticky top-6">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2">
-                    <Eye className="h-5 w-5" />
-                    Aperçu du bail
+                    <Eye className="h-5 w-5" /> Aperçu
                   </CardTitle>
                   <Button variant="ghost" size="sm" onClick={() => setShowPreview(!showPreview)}>
                     {showPreview ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -2262,7 +2255,7 @@ export default function NewLeasePageComplete() {
                     <div className="text-xs leading-relaxed" dangerouslySetInnerHTML={{ __html: previewContent }} />
                   ) : (
                     <div className="text-center text-gray-500 py-8">
-                      <p>Sélectionnez un bien et un locataire pour voir l'aperçu</p>
+                      <p>L'aperçu s'affichera ici.</p>
                     </div>
                   )}
                 </CardContent>
