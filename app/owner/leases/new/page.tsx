@@ -2220,6 +2220,7 @@ export default function NewLeasePageComplete() {
                         placeholder="Clause libre personnalisée..."
                       />
                     </div>
+					)}
               </CardContent>
               <CardFooter className="flex justify-between">
                 <Button type="button" variant="outline" onClick={prevStep} disabled={currentStep === 1}>
