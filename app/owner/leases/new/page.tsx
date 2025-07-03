@@ -903,7 +903,7 @@ export default function NewLeasePageComplete() {
           { label: "Baux", href: "/owner/leases" },
           { label: "Nouveau bail", href: "/owner/leases/new" },
         ]}
-      />
+      <div/>
       <PageHeader title="Création d'un nouveau bail" description="Assistant de création de contrat de location" />
 
       <div className="mt-6">
@@ -2221,6 +2221,7 @@ export default function NewLeasePageComplete() {
                       />
                     </div>
 					)}
+					
               </CardContent>
               <CardFooter className="flex justify-between">
                 <Button type="button" variant="outline" onClick={prevStep} disabled={currentStep === 1}>
@@ -2268,3 +2269,6 @@ export default function NewLeasePageComplete() {
     </div>
   )
 }
+
+
+
