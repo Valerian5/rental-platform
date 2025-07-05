@@ -645,10 +645,35 @@ const templateData: Record<string, any> = {
   // === PARTIES ===
   bailleur_nom_prenom: formData.bailleur_nom_prenom || "[Nom du bailleur]",
   bailleur_domicile: formData.bailleur_adresse || "[Adresse du bailleur]",
-  bailleur_qualite: formData.bailleur_qualite || "Personne physique",
+  bailleur_qualite:
+    formData.bailleur_qualite ||
+    (formData.owner_type === "company"
+      ? "Personne morale"
+      : formData.owner_type === "sci"
+        ? "SCI"
+        : "Personne physique"),
   bailleur_email: formData.bailleur_email || "[Email du bailleur]",
   bailleur_telephone: formData.bailleur_telephone || "[Téléphone du bailleur]",
-  nom_bailleur: formData.bailleur_nom_prenom || "[Nom du bailleur]",
+
+  // Mandataire (si mandataire_represente true)
+  mandataire_nom: formData.mandataire_represente ? (formData.mandataire_nom || "[Nom du mandataire]") : "",
+  mandataire_adresse: formData.mandataire_represente ? (formData.mandataire_adresse || "[Adresse du mandataire]") : "",
+  mandataire_activite: formData.mandataire_represente ? (formData.mandataire_activite || "") : "",
+  mandataire_carte_pro: formData.mandataire_represente ? (formData.mandataire_carte_pro || "") : "",
+  mandataire_garant_nom: formData.mandataire_represente ? (formData.mandataire_garant_nom || "") : "",
+  mandataire_garant_adresse: formData.mandataire_represente ? (formData.mandataire_garant_adresse || "") : "",
+
+  // SCI
+  sci_denomination: formData.sci_denomination || "",
+  sci_mandataire_nom: formData.sci_mandataire_nom || "",
+  sci_mandataire_adresse: formData.sci_mandataire_adresse || "",
+
+  // Personne morale
+  personne_morale_denomination: formData.personne_morale_denomination || "",
+  personne_morale_mandataire_nom: formData.personne_morale_mandataire_nom || "",
+  personne_morale_mandataire_adresse: formData.personne_morale_mandataire_adresse || "",
+
+  // === LOCATAIRES ===
   nom_locataire: formData.locataires[0]?.prenom && formData.locataires[0]?.nom
     ? `${formData.locataires[0].prenom} ${formData.locataires[0].nom}` : "[Nom du locataire]",
   locataire_nom_prenom: formData.locataires[0]?.prenom && formData.locataires[0]?.nom
@@ -674,7 +699,7 @@ const templateData: Record<string, any> = {
   locaux_accessoires: formatList(formData.locaux_privatifs_types, formData.locaux_privatifs_autres),
   locaux_communs: formatList(formData.locaux_communs_types, formData.locaux_communs_autres),
   equipement_technologies: formatList(formData.equipement_technologies_types),
-  
+
   // === DATES ET DURÉE ===
   date_prise_effet: formData.date_entree
     ? format(formData.date_entree, "dd/MM/yyyy", { locale: fr })
