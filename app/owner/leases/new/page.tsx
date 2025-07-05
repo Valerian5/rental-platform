@@ -641,41 +641,131 @@ export default function NewLeasePageComplete() {
       return list.join(", ") || "N/A"
     }
 
-    const templateData: Record<string, any> = {
-      bailleur_nom_prenom: formData.bailleur_nom_prenom || "[Nom bailleur]",
-      bailleur_domicile: formData.bailleur_adresse || "[Adresse bailleur]",
-      bailleur_email: formData.bailleur_email || "[Email bailleur]",
-      bailleur_telephone: formData.bailleur_telephone || "[Tél bailleur]",
-      locataire_nom_prenom: formData.locataires.map((l) => `${l.prenom} ${l.nom}`).join(", ") || "[Nom locataire]",
-      locataire_email: formData.locataires.map((l) => l.email).join(", ") || "[Email locataire]",
-      localisation_logement: formData.adresse_logement || "[Adresse logement]",
-      complement_adresse: formData.complement_adresse || "",
-      surface_habitable: formData.surface_habitable || "[Surface]",
-      nombre_pieces: formData.nombre_pieces || "[Pièces]",
-      autres_parties: formatList(formData.autres_parties_types, {}, formData.autres_parties_autres),
-      elements_equipements: formatList(formData.equipements_logement_types, {}, formData.equipements_logement_autres),
-      locaux_accessoires: formatList(
-        formData.locaux_privatifs_types,
-        {
-          cave: formData.cave_numero,
-          parking: formData.parking_numero,
-          garage: formData.garage_numero,
-        },
-        formData.locaux_privatifs_autres,
-      ),
-      locaux_communs: formatList(formData.locaux_communs_types, {}, formData.locaux_communs_autres),
-      equipement_technologies: formData.equipement_technologies_types.join(", ") || "N/A",
-      date_prise_effet: formData.date_entree
-        ? format(formData.date_entree, "dd/MM/yyyy", { locale: fr })
-        : "[Date début]",
-      duree_contrat: `${formData.duree_contrat || "[Durée]"} mois`,
-      montant_loyer_mensuel: formData.loyer_mensuel || "[Loyer]",
-      montant_provisions_charges: formData.montant_charges || "0",
-      montant_depot_garantie: formData.depot_garantie || "[Dépôt]",
-      ...Object.fromEntries(
-        Object.entries(formData.clauses).map(([key, value]) => [key, value.enabled ? value.text : ""]),
-      ),
-    }
+const templateData: Record<string, any> = {
+  // === PARTIES ===
+  bailleur_nom_prenom: formData.bailleur_nom_prenom || "[Nom du bailleur]",
+  bailleur_domicile: formData.bailleur_adresse || "[Adresse du bailleur]",
+  bailleur_qualite: formData.bailleur_qualite || "Personne physique",
+  bailleur_email: formData.bailleur_email || "[Email du bailleur]",
+  bailleur_telephone: formData.bailleur_telephone || "[Téléphone du bailleur]",
+  nom_bailleur: formData.bailleur_nom_prenom || "[Nom du bailleur]",
+  nom_locataire: formData.locataires[0]?.prenom && formData.locataires[0]?.nom
+    ? `${formData.locataires[0].prenom} ${formData.locataires[0].nom}` : "[Nom du locataire]",
+  locataire_nom_prenom: formData.locataires[0]?.prenom && formData.locataires[0]?.nom
+    ? `${formData.locataires[0].prenom} ${formData.locataires[0].nom}` : "[Nom du locataire]",
+  locataire_email: formData.locataires[0]?.email || "[Email du locataire]",
+  telephone_locataire: "", // à compléter si tu ajoutes ce champ
+  locataire_domicile: "",  // à compléter si tu ajoutes ce champ
+
+  // === LOGEMENT ===
+  localisation_logement: formData.adresse_logement || "[Adresse du logement]",
+  adresse_logement: formData.adresse_logement || "[Adresse du logement]",
+  complement_adresse: formData.complement_adresse || "",
+  code_postal: "", // à compléter si tu ajoutes ce champ
+  ville: "", // à compléter si tu ajoutes ce champ
+  type_logement: formData.type_logement || "",
+  type_habitat: formData.type_habitat || "",
+  regime_juridique: formData.regime_juridique || "",
+  modalite_chauffage: formData.production_chauffage === "collectif" ? "Collectif" : "Individuel",
+modalite_eau_chaude: formData.production_eau_chaude === "collective" ? "Collective" : "Individuelle",
+  surface_habitable: formData.surface_habitable || "[Surface]",
+  nombre_pieces: formData.nombre_pieces || "[Pièces]",
+  autres_parties: (formData.autres_parties || []).join(", "),
+  elements_equipements: (formData.equipements_logement || []).join(", "),
+  locaux_accessoires: (formData.equipements_privatifs || []).join(", "),
+  locaux_communs: (formData.equipements_communs || []).join(", "),
+  equipement_technologies: (formData.equipements_technologies || []).join(", "),
+  identifiant_fiscal: formData.identifiant_fiscal || "",
+  periode_construction: formData.periode_construction || "",
+  niveau_performance_dpe: formData.performance_dpe || "",
+  destination_locaux: formData.destination_locaux || "",
+  zone_geographique: "", // à compléter si tu ajoutes ce champ
+
+  // === CONDITIONS FINANCIÈRES ===
+  montant_loyer_mensuel: formData.loyer_mensuel || "[Loyer]",
+  loyer: formData.loyer_mensuel || "[Loyer]",
+  charges: formData.montant_charges || "0",
+  loyer_cc: formData.loyer_mensuel && formData.montant_charges
+    ? (parseFloat(formData.loyer_mensuel) + parseFloat(formData.montant_charges)).toString()
+    : "",
+  depot_garantie: formData.depot_garantie || "",
+  montant_depot_garantie: formData.depot_garantie || "",
+  montant_premiere_echeance: formData.loyer_mensuel && formData.montant_charges
+    ? (parseFloat(formData.loyer_mensuel) + parseFloat(formData.montant_charges)).toString()
+    : "",
+  montant_provisions_charges: formData.montant_charges || "0",
+  complement_loyer: formData.complement_loyer || "",
+  montant_loyer_reference: formData.loyer_reference || "",
+  montant_loyer_reference_majore: formData.loyer_reference_majore || "",
+  soumis_decret_evolution: formData.zone_encadree ? "Oui" : "Non",
+  soumis_loyer_reference: formData.zone_encadree ? "Oui" : "Non",
+  infos_dernier_loyer: formData.dernier_loyer_ancien ? formData.dernier_loyer_ancien.toString() : "",
+  date_revision: formData.date_revision_loyer || "",
+  date_reference_irl: formData.trimestre_reference_irl || "",
+  modalite_reglement_charges: formData.type_charges || "",
+  modalites_revision_forfait: formData.modalite_revision_forfait || "",
+  contribution_economies: "", // à compléter si tu ajoutes ce champ
+  periodicite_paiement: "Mensuel", // ou à calculer depuis formData
+  paiement_echeance: formData.paiement_avance ? "À échoir" : "À terme échu",
+  date_paiement: `le ${formData.jour_paiement_loyer || "1"} de chaque mois`,
+  lieu_paiement: formData.mode_paiement_loyer === "virement" ? "Virement bancaire" : formData.mode_paiement_loyer || "",
+  reevaluation_loyer: "", // à compléter si tu ajoutes ce champ
+  montant_depenses_energie: formData.estimation_depenses_energie_min && formData.estimation_depenses_energie_max
+    ? `${formData.estimation_depenses_energie_min} - ${formData.estimation_depenses_energie_max} €/an`
+    : "",
+
+  // === DATES ET DURÉE ===
+  date_prise_effet: formData.date_entree
+    ? format(formData.date_entree, "dd/MM/yyyy", { locale: fr })
+    : "[Date début]",
+  date_debut: formData.date_entree
+    ? format(formData.date_entree, "dd/MM/yyyy", { locale: fr })
+    : "[Date début]",
+  date_fin: formData.date_entree && formData.duree_contrat
+    ? format(
+        new Date(
+          new Date(formData.date_entree).setMonth(
+            new Date(formData.date_entree).getMonth() + parseInt(formData.duree_contrat + "")
+          )
+        ),
+        "dd/MM/yyyy",
+        { locale: fr }
+      )
+    : "[Date fin]",
+  duree: formData.duree_contrat || "",
+  duree_contrat: formData.duree_contrat || "",
+  evenement_duree_reduite: formData.raison_duree_reduite || "",
+  usage_prevu: "résidence principale",
+
+  // === CLAUSES ===
+  clause_solidarite: formData.clauses?.clause_solidarite?.enabled
+    ? formData.clauses?.clause_solidarite?.text || "[Clause solidarité]"
+    : "",
+  clause_resolutoire: formData.clauses?.clause_resolutoire?.enabled
+    ? formData.clauses?.clause_resolutoire?.text || "[Clause résolutoire]"
+    : "",
+  // Ajoute ici d'autres clauses si tu en as dans formData.clauses...
+
+  clauses_particulieres: formData.clauses_particulieres || "",
+  conditions_particulieres: formData.conditions_particulieres || "",
+  travaux_amelioration: formData.travaux_amelioration || "",
+  majoration_travaux: formData.majoration_travaux || "",
+  diminution_travaux: formData.diminution_travaux || "",
+
+  // === HONORAIRES ===
+  plafond_honoraires_visite: formData.plafond_honoraires_locataire || "",
+  plafond_honoraires_etat_lieux: formData.plafond_honoraires_etat_lieux || "",
+  honoraires_bailleur: formData.honoraires_bailleur_visite || "",
+  honoraires_locataire: formData.honoraires_locataire_visite || "",
+
+  // === SIGNATURE ===
+  ville_signature: formData.ville_signature || "",
+  lieu_signature: formData.lieu_signature || formData.ville_signature || "",
+  date_signature: formData.date_signature
+    ? format(new Date(formData.date_signature), "dd/MM/yyyy", { locale: fr })
+    : format(new Date(), "dd/MM/yyyy", { locale: fr }),
+
+};
 
     let compiledContent = template.template_content
     Object.entries(templateData).forEach(([key, value]) => {
