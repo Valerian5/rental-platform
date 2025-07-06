@@ -760,7 +760,10 @@ const templateData: Record<string, any> = {
   locataire_domicile: formData.locataire_domicile || "",
 
   // === LOGEMENT ===
-  localisation_logement: formData.adresse_logement || "[Adresse du logement]",
+  localisation_logement: [
+  formData.adresse_logement,
+  formData.complement_adresse
+].filter(Boolean).join(", ") || "[Adresse du logement]",
   identifiant_fiscal: formData.identifiant_fiscal || "",
   type_habitat: formData.type_habitat || "",
   regime_juridique: formData.regime_juridique || "",
@@ -1404,22 +1407,33 @@ const templateData: Record<string, any> = {
                 {currentStep === 3 && (
                   <div className="space-y-6">
                     <div className="grid md:grid-cols-2 gap-4">
+					<div>
+                        <Label htmlFor="adresse_logement">Adresse du logement</Label>
                       <Input
                         value={formData.adresse_logement}
                         onChange={(e) => handleInputChange("adresse_logement", e.target.value)}
                         placeholder="Adresse du logement *"
                       />
+					</div>
+					<div>
+                        <Label htmlFor="complement_adresse">Complèment d'adresse</Label>
                       <Input
                         value={formData.complement_adresse}
                         onChange={(e) => handleInputChange("complement_adresse", e.target.value)}
-                        placeholder="Complément d'adresse"
+                        placeholder="Batiment, Étage, Numéro, etc"
                       />
+					  </div>
+					  <div>
+                        <Label htmlFor="nombre_pieces">Nombre de pièces</Label>
                       <Input
                         type="number"
                         value={formData.nombre_pieces}
                         onChange={(e) => handleInputChange("nombre_pieces", e.target.value)}
                         placeholder="Nombre de pièces *"
                       />
+					  </div>
+					  <div>
+                        <Label htmlFor="surface_habitable">Surface habitable</Label>
                       <Input
                         type="number"
                         step="0.01"
@@ -1427,9 +1441,10 @@ const templateData: Record<string, any> = {
                         onChange={(e) => handleInputChange("surface_habitable", e.target.value)}
                         placeholder="Surface habitable (m²) *"
                       />
+					</div>
                     </div>
 
-                    <div className="grid md:grid-cols-2 gap-4">
+                    <div className="grid md:grid-cols-3 gap-4">
                       <div>
                         <Label htmlFor="performance_dpe">Performance DPE</Label>
                         <Select
@@ -1450,7 +1465,25 @@ const templateData: Record<string, any> = {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div>
+					  <div>
+						  <Label htmlFor="periode_construction">Période de construction</Label>
+						  <Select
+							value={formData.periode_construction}
+							onValueChange={(value) => handleInputChange("periode_construction", value)}
+						  >
+							<SelectTrigger>
+							  <SelectValue placeholder="Sélectionner une période" />
+							</SelectTrigger>
+							<SelectContent>
+							  <SelectItem value="Avant 1949">Avant 1949</SelectItem>
+							  <SelectItem value="De 1949 à 1974">De 1949 à 1974</SelectItem>
+							  <SelectItem value="De 1975 à 1989">De 1975 à 1989</SelectItem>
+							  <SelectItem value="De 1990 à 2005">De 1990 à 2005</SelectItem>
+							  <SelectItem value="Depuis 2005">Depuis 2005</SelectItem>
+							</SelectContent>
+						  </Select>
+						</div>
+					  <div>
                         <Label htmlFor="type_habitat">Type d'habitat</Label>
                         <Select
                           value={formData.type_habitat}
