@@ -640,6 +640,83 @@ export default function NewLeasePageComplete() {
       if (types.includes("autres") && autres) list.push(autres)
       return list.join(", ") || "N/A"
     }
+	
+// Locaux privatifs (Parking/Cave/Garage/Autres)
+function getLocauxPrivatifsLabel(formData: LeaseFormData): string {
+  const arr = (formData.locaux_privatifs_types || []).map(type => {
+    if (type === "parking" && formData.parking_numero) {
+      return `Parking (n° ${formData.parking_numero})`;
+    }
+    if (type === "cave" && formData.cave_numero) {
+      return `Cave (n° ${formData.cave_numero})`;
+    }
+    if (type === "garage" && formData.garage_numero) {
+      return `Garage (n° ${formData.garage_numero})`;
+    }
+    if (type !== "autres") {
+      // Met la première lettre capitale
+      return type.charAt(0).toUpperCase() + type.slice(1).replace("_", " ");
+    }
+    return null;
+  }).filter(Boolean);
+
+  if (formData.locaux_privatifs_types?.includes("autres") && formData.locaux_privatifs_autres) {
+    arr.push(formData.locaux_privatifs_autres);
+  }
+  return arr.join(", ");
+}
+
+// Locaux communs (autres locaux communs texte)
+function getLocauxCommunsLabel(formData: LeaseFormData): string {
+  const arr = (formData.locaux_communs_types || []).map(type => {
+    if (type !== "autres") {
+      return type.charAt(0).toUpperCase() + type.slice(1).replace("_", " ");
+    }
+    return null;
+  }).filter(Boolean);
+
+  if (formData.locaux_communs_types?.includes("autres") && formData.locaux_communs_autres) {
+    arr.push(formData.locaux_communs_autres);
+  }
+  return arr.join(", ");
+}
+
+// Autres parties (autres parties texte)
+function getAutresPartiesLabel(formData: LeaseFormData): string {
+  const arr = (formData.autres_parties_types || []).map(type => {
+    if (type !== "autres") {
+      return type.charAt(0).toUpperCase() + type.slice(1).replace("_", " ");
+    }
+    return null;
+  }).filter(Boolean);
+
+  if (formData.autres_parties_types?.includes("autres") && formData.autres_parties_autres) {
+    arr.push(formData.autres_parties_autres);
+  }
+  return arr.join(", ");
+}
+
+// Équipements du logement (autres équipements texte)
+function getEquipementsLogementLabel(formData: LeaseFormData): string {
+  const arr = (formData.equipements_logement_types || []).map(type => {
+    if (type !== "autres") {
+      return type.charAt(0).toUpperCase() + type.slice(1).replace("_", " ");
+    }
+    return null;
+  }).filter(Boolean);
+
+  if (formData.equipements_logement_types?.includes("autres") && formData.equipements_logement_autres) {
+    arr.push(formData.equipements_logement_autres);
+  }
+  return arr.join(", ");
+}
+
+// Équipements technologiques (liste simple)
+function getEquipementsTechnologiesLabel(formData: LeaseFormData): string {
+  return (formData.equipement_technologies_types || [])
+    .map(type => type.charAt(0).toUpperCase() + type.slice(1).replace("_", " "))
+    .join(", ");
+}	
 
 const templateData: Record<string, any> = {
   // === PARTIES ===
@@ -690,15 +767,16 @@ const templateData: Record<string, any> = {
   periode_construction: formData.periode_construction || "",
   surface_habitable: formData.surface_habitable || "",
   nombre_pieces: formData.nombre_pieces || "",
-  autres_parties: formatList(formData.autres_parties_types, formData.autres_parties_autres),
-  elements_equipements: formatList(formData.equipements_logement_types, formData.equipements_logement_autres),
+  locaux_accessoires: getLocauxPrivatifsLabel(formData),
+  locaux_communs: getLocauxCommunsLabel(formData),
+  autres_parties: getAutresPartiesLabel(formData),
+  elements_equipements: getEquipementsLogementLabel(formData),
+  equipement_technologies: getEquipementsTechnologiesLabel(formData),
   modalite_chauffage: formData.production_chauffage === "collectif" ? "Collectif" : "Individuel",
   modalite_eau_chaude: formData.production_eau_chaude === "collective" ? "Collective" : "Individuelle",
   niveau_performance_dpe: formData.performance_dpe || "",
   destination_locaux: formData.destination_locaux || "",
-  locaux_accessoires: formatList(formData.locaux_privatifs_types, formData.locaux_privatifs_autres),
-  locaux_communs: formatList(formData.locaux_communs_types, formData.locaux_communs_autres),
-  equipement_technologies: formatList(formData.equipement_technologies_types),
+
 
   // === DATES ET DURÉE ===
   date_prise_effet: formData.date_entree
