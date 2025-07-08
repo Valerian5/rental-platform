@@ -796,6 +796,24 @@ const templateData: Record<string, any> = {
   complement_loyer: formData.complement_loyer || "",
   date_revision: formData.date_revision_loyer || "",
   date_reference_irl: formData.trimestre_reference_irl || "",
+    soumis_decret_evolution_loyers: formData.soumis_decret_evolution_loyers ? "Oui" : "Non",
+  infos_dernier_loyer: [
+    formData.dernier_loyer_ancien ? `Montant : ${formData.dernier_loyer_ancien}€` : null,
+    formData.date_dernier_loyer ? `Date de versement : ${formatDate(formData.date_dernier_loyer)}` : null,
+    formData.date_revision_dernier_loyer ? `Date dernière révision : ${formatDate(formData.date_revision_dernier_loyer)}` : null
+  ].filter(Boolean).join(" / ") || "Non communiqué",
+  contribution_charges: formData.contribution_charges_montant && formData.contribution_charges_duree
+    ? `${formData.contribution_charges_montant}€ pour ${formData.contribution_charges_duree}` : "",
+  justification_travaux_contribution: formData.justification_travaux_contribution || "",
+  assurance_colocataires: formData.assurance_colocataires ? "Oui" : "Non",
+  assurance_montant: formData.assurance_montant || "",
+  assurance_montant_mensuel: formData.assurance_montant && formData.assurance_frequence === "annuel"
+    ? (Number(formData.assurance_montant) / 12).toFixed(2)
+    : formData.assurance_montant || "",
+  reevaluation_loyer_montant: formData.reevaluation_loyer_montant || "",
+  reevaluation_loyer_modalite: formData.reevaluation_loyer_modalite || "",
+  travaux_bailleur_majoration: formData.travaux_bailleur_majoration || "",
+  travaux_locataire_diminution: formData.travaux_locataire_diminution || "",
   modalite_reglement_charges: formData.type_charges || "",
   montant_provisions_charges: formData.montant_charges || "",
   modalites_revision_forfait: formData.modalite_revision_forfait || "",
@@ -1818,7 +1836,7 @@ const templateData: Record<string, any> = {
                         checked={formData.zone_tendue}
                         onCheckedChange={(checked) => handleInputChange("zone_tendue", checked)}
                       />
-                      <Label htmlFor="zone_tendue">Zone tendue</Label>
+                      <Label htmlFor="zone_tendue">Le logement est en zone tendue (l'évolution du loyer entre 2 locataires est plafonnée à l'IRL)</Label>
                     </div>
 
                     <div>
