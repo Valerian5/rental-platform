@@ -35,6 +35,11 @@ const CLAUSE_CATEGORIES = [
   { value: "degradations_locataire", label: "Dégradations du locataire" },
   { value: "travaux_bailleur", label: "Travaux du bailleur" },
   { value: "travaux_locataire", label: "Travaux du locataire" },
+  { value: "travaux_ente_locataires", label: "Travaux entre locataires" },
+  { value: "renonciation", label: "Clause de renonciation à la régularisation des charges" },
+  { value: "degradation", label: "Dégradation du locataire et grille de vetusté" },
+  { value: "entretien", label: "Entretien des appareils de chauffage" },
+  { value: "visite", label: "Droit de visite du bailleur" },
   { value: "autres", label: "Autres clauses" },
 ]
 

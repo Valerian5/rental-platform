@@ -818,7 +818,6 @@ const templateData: Record<string, any> = {
   montant_participation_restante: formData.contribution_charges_montant && formData.contribution_charges_duree
     ? `${formData.contribution_charges_montant}€ pour ${formData.contribution_charges_duree}` : "",
   justificatif_travaux_contribution: formData.justification_travaux_contribution || "",
-  annee_reference_energie: formData.annee_reference_energie || "",
 
   // Assurance colocation
   assurance_colocataires: formData.assurance_colocataires ? "Oui" : "Non",
@@ -847,6 +846,7 @@ const templateData: Record<string, any> = {
     formData.estimation_depenses_energie_min && formData.estimation_depenses_energie_max
       ? `${formData.estimation_depenses_energie_min} - ${formData.estimation_depenses_energie_max} €/an`
       : "",
+  annee_reference_energie: formData.annee_reference_energie || "",
 
   // === TRAVAUX ===
   travaux_amelioration: formData.travaux_amelioration || "",
