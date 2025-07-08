@@ -15,7 +15,6 @@ import { Switch } from "@/components/ui/switch"
 import { toast } from "sonner"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
-import { useMemo } from "react"
 import {
   CalendarIcon,
   ChevronLeft,
@@ -387,21 +386,22 @@ export default function NewLeasePageComplete() {
     { value: "2024-T3", label: "3e trimestre 2024 - 144,01" },
     { value: "2024-T4", label: "4e trimestre 2024 - 144,53" },
   ]
-  
-  const clauseCategoriesDynamic = useMemo(() => {
-  const categories = Array.from(new Set(leaseClauses.map(cl => cl.category)))
-  return categories.map((cat) => {
-    const clauses = leaseClauses.filter(cl => cl.category === cat)
-    const defaultClause = clauses.find(cl => cl.is_default && cl.is_active) || clauses[0]
-    return {
-      category: cat,
-      label: defaultClause?.name || cat,
-      defaultText: defaultClause?.clause_text || "",
-      clauseId: defaultClause?.id,
-    }
-  })
-}, [leaseClauses])
 
+const clauseCategories = [
+  { key: "clause_resolutoire", label: "Clause résolutoire" },
+  { key: "clause_solidarite", label: "Clause de solidarité" },
+  { key: "visites_relouer_vendre", label: "Visites pour relouer ou vendre" },
+  { key: "mode_paiement_loyer", label: "Mode de paiement du loyer" },
+  { key: "mise_disposition_meubles", label: "Mise à disposition des meubles" },
+  { key: "animaux_domestiques", label: "Animaux domestiques" },
+  { key: "assurance_habitation_locataire", label: "Assurance habitation du locataire" },
+  { key: "entretien_annuel_appareils", label: "Entretien annuel des appareils" },
+  { key: "degradations_locataire", label: "Dégradations du locataire" },
+  { key: "renonciation_regularisation", label: "Renonciation à la régularisation" },
+  { key: "travaux_bailleur", label: "Travaux bailleur en cours de bail" },
+  { key: "travaux_locataire", label: "Travaux locataire en cours de bail" },
+  { key: "travaux_entre_locataires", label: "Travaux entre deux locataires" },
+]
   useEffect(() => {
     checkAuthAndLoadData()
   }, [applicationId])
@@ -567,24 +567,12 @@ export default function NewLeasePageComplete() {
     })
   }
 
-const handleClauseToggle = (categoryKey: string, enabled: boolean) => {
-  setFormData((prev) => {
-    const defaultText = clauseCategoriesDynamic.find((c) => c.category === categoryKey)?.defaultText || ""
-    return {
+  const handleClauseToggle = (categoryKey: string, enabled: boolean) => {
+    setFormData((prev) => ({
       ...prev,
-      clauses: {
-        ...prev.clauses,
-        [categoryKey]: {
-          ...prev.clauses[categoryKey],
-          enabled,
-          text: enabled
-            ? (prev.clauses[categoryKey]?.text || defaultText)
-            : "", // vide si désactivée
-        },
-      },
-    }
-  })
-}
+      clauses: { ...prev.clauses, [categoryKey]: { ...prev.clauses[categoryKey], enabled } },
+    }))
+  }
 
   const handleClauseTextChange = (categoryKey: string, text: string) => {
     setFormData((prev) => ({
@@ -2367,38 +2355,35 @@ travaux_entre_locataires: formData.clauses?.travaux_entre_locataires?.enabled ? 
                   </div>
                 )}
 
-{/* Étape 6: Clauses */}
-{currentStep === 6 && (
-  <div className="space-y-6">
-    <div>
-      <h3 className="text-lg font-medium mb-4">Clauses du contrat</h3>
-      {clauseCategoriesDynamic.length === 0 && (
-        <div className="text-gray-500 text-sm">Aucune clause disponible. Configurez-les dans l'administration.</div>
-      )}
-      {clauseCategoriesDynamic.map(({ category, label, defaultText }) => (
-        <div key={category} className="mb-6 p-4 border rounded-lg">
-          <div className="flex items-center space-x-2 mb-3">
-            <Switch
-              id={`clause_${category}`}
-              checked={formData.clauses[category]?.enabled || false}
-              onCheckedChange={checked => handleClauseToggle(category, checked)}
-            />
-            <Label htmlFor={`clause_${category}`} className="font-medium">
-              {label}
-            </Label>
-          </div>
-          {formData.clauses[category]?.enabled && (
-            <Textarea
-              value={formData.clauses[category]?.text ?? defaultText}
-              onChange={e => handleClauseTextChange(category, e.target.value)}
-              placeholder={`Texte de la clause "${label.toLowerCase()}"`}
-              className="mt-2"
-              rows={3}
-            />
-          )}
-        </div>
-      ))}
-    </div>
+                {/* Étape 6: Clauses */}
+                {currentStep === 6 && (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-lg font-medium mb-4">Clauses du contrat</h3>
+                      {clauseCategories.map((category) => (
+                        <div key={category.key} className="mb-6 p-4 border rounded-lg">
+                          <div className="flex items-center space-x-2 mb-3">
+                            <Switch
+                              id={`clause_${category.key}`}
+                              checked={formData.clauses[category.key]?.enabled || false}
+                              onCheckedChange={(checked) => handleClauseToggle(category.key, checked)}
+                            />
+                            <Label htmlFor={`clause_${category.key}`} className="font-medium">
+                              {category.label}
+                            </Label>
+                          </div>
+                          {formData.clauses[category.key]?.enabled && (
+                            <Textarea
+                              value={formData.clauses[category.key]?.text || ""}
+                              onChange={(e) => handleClauseTextChange(category.key, e.target.value)}
+                              placeholder={`Texte de la clause ${category.label.toLowerCase()}`}
+                              className="mt-2"
+                              rows={3}
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
 
                     {formData.lease_type === "furnished" && (
                       <div>
