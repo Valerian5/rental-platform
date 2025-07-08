@@ -870,12 +870,12 @@ assurance_habitation_locataire: formData.clauses?.assurance_habitation_locataire
 entretien_annuel_appareils: formData.clauses?.entretien_annuel_appareils?.enabled ? formData.clauses?.entretien_annuel_appareils?.text : "",
 degradations_locataire: formData.clauses?.degradations_locataire?.enabled ? formData.clauses?.degradations_locataire?.text : "",
 renonciation_regularisation: formData.clauses?.renonciation_regularisation?.enabled ? formData.clauses?.renonciation_regularisation?.text : "",
-honoraires_agence: formData.clauses?.honoraires_agence?.enabled ? formData.clauses?.honoraires_agence?.text : "",
-franchise_loyer: formData.clauses?.franchise_loyer?.enabled ? formData.clauses?.franchise_loyer?.text : "",
-clause_libre: formData.clauses?.clause_libre?.enabled ? formData.clauses?.clause_libre?.text : "",
-travaux_bailleur: formData.clauses?.travaux_bailleur?.enabled ? formData.clauses?.travaux_bailleur?.text : "",
-travaux_locataire: formData.clauses?.travaux_locataire?.enabled ? formData.clauses?.travaux_locataire?.text : "",
-travaux_entre_locataires: formData.clauses?.travaux_entre_locataires?.enabled ? formData.clauses?.travaux_entre_locataires?.text : "",
+honoraires_agence: formData.clauses?.honoraires_agence?.disabled ? formData.clauses?.honoraires_agence?.text : "",
+franchise_loyer: formData.clauses?.franchise_loyer?.disabled ? formData.clauses?.franchise_loyer?.text : "",
+clause_libre: formData.clauses?.clause_libre?.disabled ? formData.clauses?.clause_libre?.text : "",
+travaux_bailleur: formData.clauses?.travaux_bailleur?.disabled ? formData.clauses?.travaux_bailleur?.text : "",
+travaux_locataire: formData.clauses?.travaux_locataire?.disabled ? formData.clauses?.travaux_locataire?.text : "",
+travaux_entre_locataires: formData.clauses?.travaux_entre_locataires?.disabled ? formData.clauses?.travaux_entre_locataires?.text : "",
 
   // === HONORAIRES ===
   montant_plafond_honoraires: formData.plafond_honoraires_locataire || "",
