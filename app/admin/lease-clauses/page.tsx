@@ -46,7 +46,7 @@ const CLAUSE_CATEGORIES = [
   { value: "travaux_bailleur", label: "Travaux bailleur en cours de bail" },
   { value: "travaux_locataire", label: "Travaux locataire en cours de bail" },
   { value: "travaux_entre_locataires", label: "Travaux entre deux locataires" },
-]
+];
 
 export default function LeaseClausesAdminPage() {
   const [clauses, setClauses] = useState<LeaseClause[]>([])
