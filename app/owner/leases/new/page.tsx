@@ -643,6 +643,19 @@ const clauseCategories = [
       return list.join(", ") || "N/A"
     }
 	
+	const locatairesList = formData.locataires
+  .map((loc) => {
+    const nom = loc.nom || "";
+    const prenom = loc.prenom || "";
+    const email = loc.email || "";
+    const naissance = loc.date_naissance
+      ? ` (${format(loc.date_naissance, "dd/MM/yyyy", { locale: fr })})`
+      : "";
+    return `${nom} ${prenom} - ${email}${naissance}`;
+  })
+  .filter(Boolean)
+  .join("<br/>");
+	
 // Locaux privatifs (Parking/Cave/Garage/Autres)
 function getLocauxPrivatifsLabel(formData: LeaseFormData): string {
   const arr = (formData.locaux_privatifs_types || []).map(type => {
@@ -764,6 +777,7 @@ const templateData: Record<string, any> = {
   locataire_email: formData.locataires[0]?.email || "[Email du locataire]",
   telephone_locataire: formData.telephone_locataire || "",
   locataire_domicile: formData.locataire_domicile || "",
+  locataires_list: locatairesList || "[Aucun locataire]",
 
   // === LOGEMENT ===
   localisation_logement: [
@@ -870,12 +884,12 @@ assurance_habitation_locataire: formData.clauses?.assurance_habitation_locataire
 entretien_annuel_appareils: formData.clauses?.entretien_annuel_appareils?.enabled ? formData.clauses?.entretien_annuel_appareils?.text : "",
 degradations_locataire: formData.clauses?.degradations_locataire?.enabled ? formData.clauses?.degradations_locataire?.text : "",
 renonciation_regularisation: formData.clauses?.renonciation_regularisation?.enabled ? formData.clauses?.renonciation_regularisation?.text : "",
-honoraires_agence: formData.clauses?.honoraires_agence?.disabled ? formData.clauses?.honoraires_agence?.text : "",
-franchise_loyer: formData.clauses?.franchise_loyer?.disabled ? formData.clauses?.franchise_loyer?.text : "",
-clause_libre: formData.clauses?.clause_libre?.disabled ? formData.clauses?.clause_libre?.text : "",
-travaux_bailleur: formData.clauses?.travaux_bailleur?.disabled ? formData.clauses?.travaux_bailleur?.text : "",
-travaux_locataire: formData.clauses?.travaux_locataire?.disabled ? formData.clauses?.travaux_locataire?.text : "",
-travaux_entre_locataires: formData.clauses?.travaux_entre_locataires?.disabled ? formData.clauses?.travaux_entre_locataires?.text : "",
+honoraires_agence: formData.clauses?.honoraires_agence?.enabled ? formData.clauses?.honoraires_agence?.text : "",
+franchise_loyer: formData.clauses?.franchise_loyer?.enabled ? formData.clauses?.franchise_loyer?.text : "",
+clause_libre: formData.clauses?.clause_libre?.enabled ? formData.clauses?.clause_libre?.text : "",
+travaux_bailleur: formData.clauses?.travaux_bailleur?.enabled ? formData.clauses?.travaux_bailleur?.text : "",
+travaux_locataire: formData.clauses?.travaux_locataire?.enabled ? formData.clauses?.travaux_locataire?.text : "",
+travaux_entre_locataires: formData.clauses?.travaux_entre_locataires?.enabled ? formData.clauses?.travaux_entre_locataires?.text : "",
 
   // === HONORAIRES ===
   montant_plafond_honoraires: formData.plafond_honoraires_locataire || "",
