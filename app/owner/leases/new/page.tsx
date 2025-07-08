@@ -387,22 +387,12 @@ export default function NewLeasePageComplete() {
     { value: "2024-T3", label: "3e trimestre 2024 - 144,01" },
     { value: "2024-T4", label: "4e trimestre 2024 - 144,53" },
   ]
-
-// Charge toutes les clauses actives depuis l’API admin
-const [leaseClauses, setLeaseClauses] = useState<LeaseClause[]>([])
-
-useEffect(() => {
-  fetch("/api/lease-clauses?active=true")
-    .then(res => res.json())
-    .then(data => setLeaseClauses(data.clauses || []))
-}, [])
-
-// Regroupe les clauses par catégorie et récupère la clause par défaut (ou la première)
-const clauseCategoriesDynamic = useMemo(() => {
+  
+  const clauseCategoriesDynamic = useMemo(() => {
   const categories = Array.from(new Set(leaseClauses.map(cl => cl.category)))
   return categories.map((cat) => {
     const clauses = leaseClauses.filter(cl => cl.category === cat)
-    const defaultClause = clauses.find(cl => cl.is_default) || clauses[0]
+    const defaultClause = clauses.find(cl => cl.is_default && cl.is_active) || clauses[0]
     return {
       category: cat,
       label: defaultClause?.name || cat,
