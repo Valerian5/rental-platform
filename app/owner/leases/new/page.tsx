@@ -744,11 +744,15 @@ const templateData: Record<string, any> = {
   sci_denomination: formData.sci_denomination || "",
   sci_mandataire_nom: formData.sci_mandataire_nom || "",
   sci_mandataire_adresse: formData.sci_mandataire_adresse || "",
+  sci_mandataire_activite: formData.sci_mandataire_activite || "",
+  sci_mandataire_carte_pro: formData.sci_mandataire_carte_pro || "",
 
   // Personne morale
   personne_morale_denomination: formData.personne_morale_denomination || "",
   personne_morale_mandataire_nom: formData.personne_morale_mandataire_nom || "",
   personne_morale_mandataire_adresse: formData.personne_morale_mandataire_adresse || "",
+  personne_morale_mandataire_activite: formData.personne_morale_mandataire_activite || "",
+  personne_morale_mandataire_carte_pro: formData.personne_morale_mandataire_carte_pro || "",
 
   // === LOCATAIRES ===
   nom_locataire: formData.locataires[0]?.prenom && formData.locataires[0]?.nom
@@ -761,9 +765,9 @@ const templateData: Record<string, any> = {
 
   // === LOGEMENT ===
   localisation_logement: [
-  formData.adresse_logement,
-  formData.complement_adresse
-].filter(Boolean).join(", ") || "[Adresse du logement]",
+    formData.adresse_logement,
+    formData.complement_adresse
+  ].filter(Boolean).join(", ") || "[Adresse du logement]",
   identifiant_fiscal: formData.identifiant_fiscal || "",
   type_habitat: formData.type_habitat || "",
   regime_juridique: formData.regime_juridique || "",
@@ -780,7 +784,6 @@ const templateData: Record<string, any> = {
   niveau_performance_dpe: formData.performance_dpe || "",
   destination_locaux: formData.destination_locaux || "",
 
-
   // === DATES ET DURÉE ===
   date_prise_effet: formData.date_entree
     ? format(formData.date_entree, "dd/MM/yyyy", { locale: fr })
@@ -794,35 +797,51 @@ const templateData: Record<string, any> = {
   montant_loyer_reference: formData.loyer_reference || "",
   montant_loyer_reference_majore: formData.loyer_reference_majore || "",
   complement_loyer: formData.complement_loyer || "",
-  date_revision: formData.date_revision_loyer || "",
+  complement_loyer_justification: formData.complement_loyer_justification || "",
+  date_revision: formData.date_revision_loyer === "autre"
+    ? formData.date_revision_personnalisee
+    : formData.date_revision_loyer || "",
   date_reference_irl: formData.trimestre_reference_irl || "",
-    soumis_decret_evolution_loyers: formData.soumis_decret_evolution_loyers ? "Oui" : "Non",
-  infos_dernier_loyer: [
-    formData.dernier_loyer_ancien ? `Montant : ${formData.dernier_loyer_ancien}€` : null,
-    formData.date_dernier_loyer ? `Date de versement : ${formatDate(formData.date_dernier_loyer)}` : null,
-    formData.date_revision_dernier_loyer ? `Date dernière révision : ${formatDate(formData.date_revision_dernier_loyer)}` : null
-  ].filter(Boolean).join(" / ") || "Non communiqué",
-  contribution_charges: formData.contribution_charges_montant && formData.contribution_charges_duree
+  soumis_decret_evolution_loyers: formData.soumis_decret_evolution_loyers ? "Oui" : "Non",
+
+  // Ancien loyer - pour le mapping conditionnel {{montant_dernier_loyer}}, {{date_dernier_loyer}}, {{date_derniere_revision}}
+  montant_dernier_loyer: formData.dernier_loyer_ancien || "",
+  date_dernier_loyer: formData.date_dernier_loyer ? format(formData.date_dernier_loyer, "dd/MM/yyyy", { locale: fr }) : "",
+  date_derniere_revision: formData.date_revision_dernier_loyer ? format(formData.date_revision_dernier_loyer, "dd/MM/yyyy", { locale: fr }) : "",
+
+  // Charges/forfaits
+  modalite_reglement_charges: formData.type_charges || "",
+  montant_provisions_charges: formData.montant_charges || "",
+  modalites_revision_forfait: formData.modalite_revision_forfait || "",
+
+  // Économies de charges
+  montant_participation_restante: formData.contribution_charges_montant && formData.contribution_charges_duree
     ? `${formData.contribution_charges_montant}€ pour ${formData.contribution_charges_duree}` : "",
-  justification_travaux_contribution: formData.justification_travaux_contribution || "",
+  justificatif_travaux_contribution: formData.justification_travaux_contribution || "",
+
+  // Assurance colocation
   assurance_colocataires: formData.assurance_colocataires ? "Oui" : "Non",
   assurance_montant: formData.assurance_montant || "",
   assurance_montant_mensuel: formData.assurance_montant && formData.assurance_frequence === "annuel"
     ? (Number(formData.assurance_montant) / 12).toFixed(2)
     : formData.assurance_montant || "",
-  reevaluation_loyer_montant: formData.reevaluation_loyer_montant || "",
-  reevaluation_loyer_modalite: formData.reevaluation_loyer_modalite || "",
-  travaux_bailleur_majoration: formData.travaux_bailleur_majoration || "",
-  travaux_locataire_diminution: formData.travaux_locataire_diminution || "",
-  modalite_reglement_charges: formData.type_charges || "",
-  montant_provisions_charges: formData.montant_charges || "",
-  modalites_revision_forfait: formData.modalite_revision_forfait || "",
+
+  // Modalités de paiement
   periodicite_paiement: "Mensuel",
   paiement_echeance: formData.paiement_avance ? "À échoir" : "À terme échu",
   date_paiement: `le ${formData.jour_paiement_loyer || "1"} de chaque mois`,
   lieu_paiement: formData.mode_paiement_loyer === "virement"
     ? "Virement bancaire"
     : (formData.mode_paiement_loyer || ""),
+
+  // Récap total loyer (calcul à ajouter si besoin)
+  montant_total_loyer: (() => {
+    const loyer = Number(formData.loyer_mensuel) || 0;
+    const charges = Number(formData.montant_charges) || 0;
+    return (loyer + charges).toFixed(2) + " €";
+  })(),
+
+  // Dépenses énergie
   montant_depenses_energie:
     formData.estimation_depenses_energie_min && formData.estimation_depenses_energie_max
       ? `${formData.estimation_depenses_energie_min} - ${formData.estimation_depenses_energie_max} €/an`
@@ -830,9 +849,12 @@ const templateData: Record<string, any> = {
 
   // === TRAVAUX ===
   travaux_amelioration: formData.travaux_amelioration || "",
+  majoration_travaux: formData.travaux_bailleur_majoration || "",
+  diminution_travaux: formData.travaux_locataire_diminution || "",
 
   // === GARANTIES ===
   depot_garantie: formData.depot_garantie || "",
+  montant_depot_garantie: formData.depot_garantie || "",
 
   // === CLAUSES ===
   clause_solidarite: formData.clauses?.clause_solidarite?.enabled
@@ -841,10 +863,45 @@ const templateData: Record<string, any> = {
   clause_resolutoire: formData.clauses?.clause_resolutoire?.enabled
     ? formData.clauses?.clause_resolutoire?.text || "[Clause résolutoire]"
     : "",
+  clause_visite: formData.clauses?.visites_relouer_vendre?.enabled
+    ? formData.clauses?.visites_relouer_vendre?.text || "[Clause visites]"
+    : "",
+  clause_animaux: formData.clauses?.animaux_domestiques?.enabled
+    ? formData.clauses?.animaux_domestiques?.text || "[Clause animaux]"
+    : "",
+  clause_entretien: formData.clauses?.entretien_appareils?.enabled
+    ? formData.clauses?.entretien_appareils?.text || "[Clause entretien]"
+    : "",
+  clause_degradation: formData.clauses?.degradations_locataire?.enabled
+    ? formData.clauses?.degradations_locataire?.text || "[Clause dégradations]"
+    : "",
+  clause_renonciation: formData.clauses?.renonciation_regularisation?.enabled
+    ? formData.clauses?.renonciation_regularisation?.text || "[Clause renonciation]"
+    : "",
+  clause_travaux_bailleur: formData.clauses?.travaux_bailleur?.enabled
+    ? formData.clauses?.travaux_bailleur?.text || "[Clause travaux bailleur]"
+    : "",
+  clause_travaux_entre_locataires: formData.clauses?.travaux_entre_locataires?.enabled
+    ? formData.clauses?.travaux_entre_locataires?.text || "[Clause travaux entre locataires]"
+    : "",
+  clause_travaux_locataire: formData.clauses?.travaux_locataire?.enabled
+    ? formData.clauses?.travaux_locataire?.text || "[Clause travaux locataire]"
+    : "",
 
   // === HONORAIRES ===
+  montant_plafond_honoraires: formData.plafond_honoraires_locataire || "",
   plafond_honoraires_etat_lieux: formData.plafond_honoraires_etat_lieux || "",
   honoraires_locataire: formData.honoraires_locataire_visite || "",
+  honoraires_bailleur: formData.honoraires_bailleur_visite || "",
+  honoraires_etat_lieux: formData.honoraires_bailleur_etat_lieux || "",
+  autres_prestations: formData.autres_prestations ? "Oui" : "Non",
+  details_autres_prestations: formData.details_autres_prestations || "",
+  honoraires_autres_prestations: formData.honoraires_autres_prestations || "",
+
+  // === MEUBLÉ/FRANCHISE/CLAUSE LIBRE ===
+  mise_disposition_meubles: formData.mise_disposition_meubles || "",
+  franchise_loyer: formData.franchise_loyer || "",
+  clause_libre: formData.clause_libre || "",
 
   // === SIGNATURE ===
   date_signature: formData.date_signature
