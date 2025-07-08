@@ -30,17 +30,22 @@ interface LeaseClause {
 }
 
 const CLAUSE_CATEGORIES = [
+  { value: "clause_resolutoire", label: "Clause résolutoire" },
+  { value: "clause_solidarite", label: "Clause de solidarité" },
+  { value: "visites_relouer_vendre", label: "Visites pour relouer ou vendre" },
+  { value: "mode_paiement_loyer", label: "Mode de paiement du loyer" },
+  { value: "mise_disposition_meubles", label: "Mise à disposition des meubles" },
   { value: "animaux_domestiques", label: "Animaux domestiques" },
-  { value: "entretien_appareils", label: "Entretien des appareils" },
+  { value: "assurance_habitation_locataire", label: "Assurance habitation du locataire" },
+  { value: "entretien_annuel_appareils", label: "Entretien annuel des appareils" },
   { value: "degradations_locataire", label: "Dégradations du locataire" },
-  { value: "travaux_bailleur", label: "Travaux du bailleur" },
-  { value: "travaux_locataire", label: "Travaux du locataire" },
-  { value: "travaux_ente_locataires", label: "Travaux entre locataires" },
-  { value: "renonciation", label: "Clause de renonciation à la régularisation des charges" },
-  { value: "degradation", label: "Dégradation du locataire et grille de vetusté" },
-  { value: "entretien", label: "Entretien des appareils de chauffage" },
-  { value: "visite", label: "Droit de visite du bailleur" },
-  { value: "autres", label: "Autres clauses" },
+  { value: "renonciation_regularisation", label: "Renonciation à la régularisation" },
+  { value: "honoraires_agence", label: "Honoraires d'agence" },
+  { value: "franchise_loyer", label: "Franchise de loyer" },
+  { value: "clause_libre", label: "Clause libre" },
+  { value: "travaux_bailleur", label: "Travaux bailleur en cours de bail" },
+  { value: "travaux_locataire", label: "Travaux locataire en cours de bail" },
+  { value: "travaux_entre_locataires", label: "Travaux entre deux locataires" },
 ]
 
 export default function LeaseClausesAdminPage() {

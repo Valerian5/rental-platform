@@ -858,36 +858,22 @@ const templateData: Record<string, any> = {
   montant_depot_garantie: formData.depot_garantie || "",
 
   // === CLAUSES ===
-  clause_solidarite: formData.clauses?.clause_solidarite?.enabled
-    ? formData.clauses?.clause_solidarite?.text || "[Clause solidarité]"
-    : "",
-  clause_resolutoire: formData.clauses?.clause_resolutoire?.enabled
-    ? formData.clauses?.clause_resolutoire?.text || "[Clause résolutoire]"
-    : "",
-  clause_visite: formData.clauses?.visites_relouer_vendre?.enabled
-    ? formData.clauses?.visites_relouer_vendre?.text || "[Clause visites]"
-    : "",
-  clause_animaux: formData.clauses?.animaux_domestiques?.enabled
-    ? formData.clauses?.animaux_domestiques?.text || "[Clause animaux]"
-    : "",
-  clause_entretien: formData.clauses?.entretien_appareils?.enabled
-    ? formData.clauses?.entretien_appareils?.text || "[Clause entretien]"
-    : "",
-  clause_degradation: formData.clauses?.degradations_locataire?.enabled
-    ? formData.clauses?.degradations_locataire?.text || "[Clause dégradations]"
-    : "",
-  clause_renonciation: formData.clauses?.renonciation_regularisation?.enabled
-    ? formData.clauses?.renonciation_regularisation?.text || "[Clause renonciation]"
-    : "",
-  clause_travaux_bailleur: formData.clauses?.travaux_bailleur?.enabled
-    ? formData.clauses?.travaux_bailleur?.text || "[Clause travaux bailleur]"
-    : "",
-  clause_travaux_entre_locataires: formData.clauses?.travaux_entre_locataires?.enabled
-    ? formData.clauses?.travaux_entre_locataires?.text || "[Clause travaux entre locataires]"
-    : "",
-  clause_travaux_locataire: formData.clauses?.travaux_locataire?.enabled
-    ? formData.clauses?.travaux_locataire?.text || "[Clause travaux locataire]"
-    : "",
+clause_resolutoire: formData.clauses?.clause_resolutoire?.enabled ? formData.clauses?.clause_resolutoire?.text : "",
+clause_solidarite: formData.clauses?.clause_solidarite?.enabled ? formData.clauses?.clause_solidarite?.text : "",
+visites_relouer_vendre: formData.clauses?.visites_relouer_vendre?.enabled ? formData.clauses?.visites_relouer_vendre?.text : "",
+mode_paiement_loyer: formData.clauses?.mode_paiement_loyer?.enabled ? formData.clauses?.mode_paiement_loyer?.text : "",
+mise_disposition_meubles: formData.clauses?.mise_disposition_meubles?.enabled ? formData.clauses?.mise_disposition_meubles?.text : "",
+animaux_domestiques: formData.clauses?.animaux_domestiques?.enabled ? formData.clauses?.animaux_domestiques?.text : "",
+assurance_habitation_locataire: formData.clauses?.assurance_habitation_locataire?.enabled ? formData.clauses?.assurance_habitation_locataire?.text : "",
+entretien_annuel_appareils: formData.clauses?.entretien_annuel_appareils?.enabled ? formData.clauses?.entretien_annuel_appareils?.text : "",
+degradations_locataire: formData.clauses?.degradations_locataire?.enabled ? formData.clauses?.degradations_locataire?.text : "",
+renonciation_regularisation: formData.clauses?.renonciation_regularisation?.enabled ? formData.clauses?.renonciation_regularisation?.text : "",
+honoraires_agence: formData.clauses?.honoraires_agence?.enabled ? formData.clauses?.honoraires_agence?.text : "",
+franchise_loyer: formData.clauses?.franchise_loyer?.enabled ? formData.clauses?.franchise_loyer?.text : "",
+clause_libre: formData.clauses?.clause_libre?.enabled ? formData.clauses?.clause_libre?.text : "",
+travaux_bailleur: formData.clauses?.travaux_bailleur?.enabled ? formData.clauses?.travaux_bailleur?.text : "",
+travaux_locataire: formData.clauses?.travaux_locataire?.enabled ? formData.clauses?.travaux_locataire?.text : "",
+travaux_entre_locataires: formData.clauses?.travaux_entre_locataires?.enabled ? formData.clauses?.travaux_entre_locataires?.text : "",
 
   // === HONORAIRES ===
   montant_plafond_honoraires: formData.plafond_honoraires_locataire || "",
