@@ -2427,7 +2427,7 @@ travaux_entre_locataires: formData.clauses?.travaux_entre_locataires?.enabled ? 
                       {formData.honoraires_professionnel && (
                         <div className="grid md:grid-cols-2 gap-4 p-4 bg-blue-50 rounded-lg">
                           <div>
-                            <Label htmlFor="honoraires_locataire_visite">Honoraires locataire - Visite (€)</Label>
+                            <Label htmlFor="honoraires_locataire_visite">Honoraires locataire - Visite, Dossier et Rédaction du bail (€)</Label>
                             <Input
                               id="honoraires_locataire_visite"
                               type="number"
@@ -2438,7 +2438,7 @@ travaux_entre_locataires: formData.clauses?.travaux_entre_locataires?.enabled ? 
                             />
                           </div>
                           <div>
-                            <Label htmlFor="plafond_honoraires_locataire">Plafond honoraires locataire (€)</Label>
+                            <Label htmlFor="plafond_honoraires_locataire">Plafond honoraires locataire (€/m²)</Label>
                             <Input
                               id="plafond_honoraires_locataire"
                               type="number"
@@ -2449,7 +2449,7 @@ travaux_entre_locataires: formData.clauses?.travaux_entre_locataires?.enabled ? 
                             />
                           </div>
                           <div>
-                            <Label htmlFor="honoraires_bailleur_visite">Honoraires bailleur - Visite (€)</Label>
+                            <Label htmlFor="honoraires_bailleur_visite">Honoraires bailleur - Visite, Dossier et Rédaction du bail (€)</Label>
                             <Input
                               id="honoraires_bailleur_visite"
                               type="number"
@@ -2488,7 +2488,7 @@ travaux_entre_locataires: formData.clauses?.travaux_entre_locataires?.enabled ? 
                             />
                           </div>
                           <div>
-                            <Label htmlFor="plafond_honoraires_etat_lieux">Plafond honoraires état des lieux (€)</Label>
+                            <Label htmlFor="plafond_honoraires_etat_lieux">Plafond honoraires état des lieux (€/m²)</Label>
                             <Input
                               id="plafond_honoraires_etat_lieux"
                               type="number"
