@@ -42,6 +42,23 @@ export async function POST(request: NextRequest) {
         owner_type: leaseData.owner_type,
         guarantee_type: leaseData.guarantee_type,
 
+        // === PARTIES - BAILLEUR COMPLET ===
+        bailleur_qualite:
+          leaseData.owner_type === "company"
+            ? "Personne morale"
+            : leaseData.owner_type === "sci"
+              ? "SCI"
+              : "Personne physique",
+
+        // === PARTIES - LOCATAIRE COMPLET ===
+        locataire_nom_prenom:
+          leaseData.locataires && leaseData.locataires[0]
+            ? `${leaseData.locataires[0].prenom} ${leaseData.locataires[0].nom}`
+            : null,
+        locataire_email: (leaseData.locataires && leaseData.locataires[0]?.email) || null,
+        telephone_locataire: (leaseData.locataires && leaseData.locataires[0]?.telephone) || null,
+        locataire_domicile: (leaseData.locataires && leaseData.locataires[0]?.adresse) || null,
+
         // Parties
         bailleur_nom_prenom: leaseData.bailleur_nom_prenom,
         bailleur_email: leaseData.bailleur_email,
@@ -68,8 +85,35 @@ export async function POST(request: NextRequest) {
         // Logement
         nombre_pieces: leaseData.nombre_pieces,
         surface_habitable: leaseData.surface_habitable,
-        localisation_logement: leaseData.localisation_logement,
+        adresse_logement: leaseData.adresse_logement,
         complement_adresse: leaseData.complement_adresse,
+
+        // === LOGEMENT COMPLET ===
+        localisation_logement: [leaseData.adresse_logement, leaseData.complement_adresse].filter(Boolean).join(", "),
+        periode_construction: leaseData.periode_construction,
+        autres_parties:
+          leaseData.autres_parties_types?.length > 0
+            ? [...leaseData.autres_parties_types, leaseData.autres_parties_autres].filter(Boolean).join(", ")
+            : null,
+        elements_equipements:
+          leaseData.equipements_logement_types?.length > 0
+            ? [...leaseData.equipements_logement_types, leaseData.equipements_logement_autres]
+                .filter(Boolean)
+                .join(", ")
+            : null,
+        locaux_accessoires:
+          leaseData.locaux_privatifs_types?.length > 0
+            ? [...leaseData.locaux_privatifs_types, leaseData.locaux_privatifs_autres].filter(Boolean).join(", ")
+            : null,
+        locaux_communs:
+          leaseData.locaux_communs_types?.length > 0
+            ? [...leaseData.locaux_communs_types, leaseData.locaux_communs_autres].filter(Boolean).join(", ")
+            : null,
+        equipement_technologies: leaseData.equipement_technologies_types?.join(", ") || null,
+        modalite_chauffage: leaseData.production_chauffage,
+        modalite_eau_chaude: leaseData.production_eau_chaude,
+        niveau_performance_dpe: leaseData.performance_dpe,
+
         periode_construction: leaseData.periode_construction,
         performance_dpe: leaseData.performance_dpe,
         type_habitat: leaseData.type_habitat,
@@ -107,6 +151,32 @@ export async function POST(request: NextRequest) {
         estimation_depenses_energie_max: leaseData.estimation_depenses_energie_max,
         annee_reference_energie: leaseData.annee_reference_energie,
 
+        // === FINANCIER COMPLET ===
+        montant_loyer_mensuel: Number(leaseData.loyer_mensuel) || null,
+        montant_provisions_charges: Number(leaseData.montant_charges) || null,
+        montant_depot_garantie: Number(leaseData.depot_garantie) || null,
+        soumis_loyer_reference: leaseData.zone_encadree,
+        montant_loyer_reference: Number(leaseData.loyer_reference) || null,
+        montant_loyer_reference_majore: Number(leaseData.loyer_reference_majore) || null,
+        complement_loyer: Number(leaseData.complement_loyer) || null,
+        soumis_decret_evolution: leaseData.zone_tendue,
+        modalite_reglement_charges: leaseData.type_charges,
+        modalites_revision_forfait: leaseData.modalite_revision_forfait,
+        date_revision:
+          leaseData.date_revision_loyer === "autre"
+            ? leaseData.date_revision_personnalisee
+            : leaseData.date_revision_loyer,
+        date_reference_irl: leaseData.trimestre_reference_irl,
+        periodicite_paiement: "Mensuel",
+        paiement_echeance: leaseData.paiement_avance ? "À échoir" : "À terme échu",
+        date_paiement: `Le ${leaseData.jour_paiement_loyer} de chaque mois`,
+        lieu_paiement:
+          leaseData.mode_paiement_loyer === "virement" ? "Virement bancaire" : leaseData.mode_paiement_loyer,
+        montant_depenses_energie:
+          leaseData.estimation_depenses_energie_min && leaseData.estimation_depenses_energie_max
+            ? `${leaseData.estimation_depenses_energie_min} - ${leaseData.estimation_depenses_energie_max} €/an`
+            : null,
+
         // Durée
         duree_contrat: leaseData.duree_contrat,
         contrat_duree_reduite: leaseData.contrat_duree_reduite,
@@ -114,12 +184,21 @@ export async function POST(request: NextRequest) {
         jour_paiement_loyer: leaseData.jour_paiement_loyer,
         paiement_avance: leaseData.paiement_avance,
 
+        // === DATES ET DURÉE ===
+        date_prise_effet: leaseData.date_entree?.toISOString().split("T")[0],
+        evenement_duree_reduite: leaseData.raison_duree_reduite,
+
         // Clauses génériques
         clause_resolutoire: leaseData.clause_resolutoire,
         clause_solidarite: leaseData.clause_solidarite,
         visites_relouer_vendre: leaseData.visites_relouer_vendre,
         mode_paiement_loyer: leaseData.mode_paiement_loyer,
         mise_disposition_meubles: leaseData.mise_disposition_meubles,
+
+        // === CLAUSES PRINCIPALES ===
+        clause_solidarite: leaseData.clauses?.clause_solidarite?.enabled || false,
+        clause_resolutoire: leaseData.clauses?.clause_resolutoire?.enabled || false,
+        usage_prevu: "résidence principale",
 
         // Honoraires
         honoraires_professionnel: leaseData.honoraires_professionnel,
@@ -133,6 +212,12 @@ export async function POST(request: NextRequest) {
         autres_prestations: leaseData.autres_prestations,
         details_autres_prestations: leaseData.details_autres_prestations,
         honoraires_autres_prestations: leaseData.honoraires_autres_prestations,
+
+        // === HONORAIRES ===
+        plafond_honoraires_visite: Number(leaseData.plafond_honoraires_locataire) || null,
+        plafond_honoraires_etat_lieux: Number(leaseData.plafond_honoraires_etat_lieux) || null,
+        honoraires_bailleur: Number(leaseData.honoraires_bailleur_visite) || null,
+        honoraires_locataire: Number(leaseData.honoraires_locataire_visite) || null,
 
         franchise_loyer: leaseData.franchise_loyer,
         clause_libre: leaseData.clause_libre,
@@ -156,8 +241,41 @@ export async function POST(request: NextRequest) {
         annexe_bail_parking: leaseData.annexe_bail_parking,
         annexe_actes_caution: leaseData.annexe_actes_caution,
 
+        // === SIGNATURE ===
+        lieu_signature: leaseData.lieu_signature || null,
+        date_signature: new Date().toISOString().split("T")[0],
+
+        // === ANNEXES ===
+        annexe_dpe: true,
+        annexe_risques: true,
+        annexe_notice: true,
+        annexe_etat_lieux: false,
+        annexe_reglement: false,
+        annexe_plomb: false,
+        annexe_amiante: false,
+        annexe_electricite_gaz: false,
+        annexe_autorisation: false,
+        annexe_references_loyers: false,
+
+        // === CHAMPS DE COMPLETION ===
+        completion_rate: 100,
+        data_completed_at: new Date().toISOString(),
+
         // Métadonnées
-        metadata: leaseData.metadata,
+        metadata: {
+          form_version: "v13_complete_form",
+          locataires: leaseData.locataires,
+          garants: leaseData.garants,
+          clauses: leaseData.clauses,
+          bail_type: leaseData.bail_type,
+          owner_type: leaseData.owner_type,
+          guarantee_type: leaseData.guarantee_type,
+          autres_parties_types: leaseData.autres_parties_types,
+          equipements_logement_types: leaseData.equipements_logement_types,
+          locaux_privatifs_types: leaseData.locaux_privatifs_types,
+          locaux_communs_types: leaseData.locaux_communs_types,
+          equipement_technologies_types: leaseData.equipement_technologies_types,
+        },
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
