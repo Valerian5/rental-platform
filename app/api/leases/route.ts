@@ -17,213 +17,287 @@ export async function POST(request: NextRequest) {
     // Extraire les métadonnées
     const { metadata, ...leaseData } = body
 
-    // Préparer les données pour l'insertion en utilisant EXACTEMENT les colonnes de la table
+    // Fonction utilitaire pour convertir les dates
+    const parseDate = (dateValue: any): string | null => {
+      if (!dateValue) return null
+      if (typeof dateValue === "string") {
+        // Si c'est déjà une date ISO, la retourner
+        if (dateValue.match(/^\d{4}-\d{2}-\d{2}$/)) return dateValue
+        // Si c'est un objet Date stringifié
+        try {
+          const parsed = new Date(dateValue)
+          if (!isNaN(parsed.getTime())) {
+            return parsed.toISOString().split("T")[0]
+          }
+        } catch {
+          return null
+        }
+      }
+      if (dateValue instanceof Date) {
+        return dateValue.toISOString().split("T")[0]
+      }
+      return null
+    }
+
+    // Fonction utilitaire pour convertir les nombres
+    const parseNumber = (value: any): number | null => {
+      if (value === null || value === undefined || value === "") return null
+      const num = Number(value)
+      return isNaN(num) ? null : num
+    }
+
+    // Fonction utilitaire pour convertir les booléens
+    const parseBoolean = (value: any): boolean => {
+      if (typeof value === "boolean") return value
+      if (typeof value === "string") {
+        return value.toLowerCase() === "true" || value === "1"
+      }
+      return Boolean(value)
+    }
+
+    // Fonction utilitaire pour les tableaux
+    const parseArray = (value: any): string[] => {
+      if (Array.isArray(value)) return value.filter((v) => v && typeof v === "string")
+      if (typeof value === "string") {
+        try {
+          const parsed = JSON.parse(value)
+          return Array.isArray(parsed) ? parsed.filter((v) => v && typeof v === "string") : []
+        } catch {
+          return value.split(",").filter((v) => v.trim())
+        }
+      }
+      return []
+    }
+
+    // Préparer les données pour l'insertion en respectant EXACTEMENT les types de colonnes
     const insertData = {
-      // === CHAMPS DE BASE (colonnes existantes) ===
+      // === CHAMPS DE BASE OBLIGATOIRES ===
       property_id: leaseData.property_id,
       tenant_id: leaseData.tenant_id,
       owner_id: leaseData.owner_id,
-      start_date: leaseData.start_date,
-      end_date: leaseData.end_date,
-      monthly_rent: Number(leaseData.monthly_rent) || 0,
-      montant_charges: Number(leaseData.montant_charges) || 0,
-      deposit_amount: Number(leaseData.deposit_amount) || 0,
-      security_deposit: Number(leaseData.security_deposit) || Number(leaseData.deposit_amount) || 0,
-      lease_type: leaseData.lease_type,
-      status: "draft",
-      signed_by_tenant: false,
-      signed_by_owner: false,
-      application_id: leaseData.application_id,
+      start_date: parseDate(leaseData.start_date), // date not null
+      end_date: parseDate(leaseData.end_date), // date not null
+      monthly_rent: parseNumber(leaseData.monthly_rent) || 0, // numeric(10,2) not null
+      deposit_amount: parseNumber(leaseData.deposit_amount) || 0, // numeric(10,2) not null
+      status: "draft", // varchar(20) not null
+      signed_by_tenant: false, // boolean
+      signed_by_owner: false, // boolean
+      lease_type: leaseData.lease_type || "unfurnished", // varchar(20)
 
-      // === CHAMPS EXISTANTS DANS LA TABLE ===
-      deposit: Number(leaseData.deposit_amount) || 0,
-      loyer: Number(leaseData.monthly_rent) || 0,
-      loyer_cc: Number(leaseData.monthly_rent) + Number(leaseData.charges || 0),
-      depot_garantie: Number(leaseData.deposit_amount) || 0,
-      date_debut: leaseData.start_date,
-      date_fin: leaseData.end_date,
-      duree: Number(leaseData.duree_contrat) || null,
+      // === CHAMPS OPTIONNELS DE BASE ===
+      charges: parseNumber(leaseData.charges) || 0, // numeric(10,2)
+      deposit: parseNumber(leaseData.deposit_amount), // numeric(10,2)
+      security_deposit: parseNumber(leaseData.deposit_amount) || 0, // numeric(10,2)
+      application_id: leaseData.application_id || null, // uuid
 
-      // === PARTIES - BAILLEUR (colonnes existantes) ===
-      bailleur_nom_prenom: leaseData.bailleur_nom_prenom,
-      bailleur_domicile: leaseData.bailleur_adresse,
+      // === DATES (toutes les colonnes date) ===
+      signed_date: null, // date
+      date_signature: null, // date
+      date_debut: parseDate(leaseData.start_date), // date
+      date_fin: parseDate(leaseData.end_date), // date
+      date_prise_effet: parseDate(leaseData.date_entree || leaseData.start_date), // date
+
+      // ATTENTION: Ces champs ne sont PAS des dates mais des TEXT
+      // date_revision est TEXT, pas date !
+      date_revision:
+        leaseData.date_revision_loyer === "autre"
+          ? leaseData.date_revision_personnalisee
+          : leaseData.date_revision_loyer, // TEXT (pas date!)
+
+      // Ces champs sont des vraies dates
+      date_reference_irl: parseDate(leaseData.date_reference_irl), // date
+      date_dernier_loyer: parseDate(leaseData.date_dernier_loyer), // date
+      date_revision_dernier_loyer: parseDate(leaseData.date_revision_dernier_loyer), // date
+
+      // === PARTIES - BAILLEUR (tous TEXT) ===
+      nom_bailleur: leaseData.bailleur_nom_prenom, // text
+      bailleur_nom_prenom: leaseData.bailleur_nom_prenom, // text
+      adresse_bailleur: leaseData.bailleur_adresse, // text
+      bailleur_domicile: leaseData.bailleur_adresse, // text
+      bailleur_telephone: leaseData.bailleur_telephone, // text
+      email_bailleur: leaseData.bailleur_email, // text
+      bailleur_email: leaseData.bailleur_email, // text
       bailleur_qualite:
         leaseData.owner_type === "individual"
           ? "Particulier"
           : leaseData.owner_type === "sci"
             ? "SCI"
-            : "Personne morale",
-      bailleur_email: leaseData.bailleur_email,
-      email_bailleur: leaseData.bailleur_email,
-      bailleur_telephone: leaseData.bailleur_telephone,
+            : "Personne morale", // text
 
-      // Mandataire (colonnes existantes)
-      mandataire_represente: leaseData.mandataire_represente ? "true" : "false",
-      mandataire_nom: leaseData.mandataire_nom,
-      mandataire_adresse: leaseData.mandataire_adresse,
-      mandataire_activite: leaseData.mandataire_activite,
-      mandataire_carte_pro: leaseData.mandataire_carte_pro,
-      mandataire_garant_nom: leaseData.mandataire_garant_nom,
-      mandataire_garant_adresse: leaseData.mandataire_garant_adresse,
+      // Mandataire (tous TEXT)
+      mandataire_represente: leaseData.mandataire_represente ? "true" : "false", // text (pas boolean!)
+      mandataire_nom: leaseData.mandataire_nom, // text
+      mandataire_adresse: leaseData.mandataire_adresse, // text
+      mandataire_activite: leaseData.mandataire_activite, // text
+      mandataire_carte_pro: leaseData.mandataire_carte_pro, // text
+      mandataire_garant_nom: leaseData.mandataire_garant_nom, // text
+      mandataire_garant_adresse: leaseData.mandataire_garant_adresse, // text
 
-      // SCI (colonnes existantes)
-      sci_denomination: leaseData.sci_denomination,
-      sci_mandataire_nom: leaseData.sci_mandataire_nom,
-      sci_mandataire_adresse: leaseData.sci_mandataire_adresse,
+      // SCI (tous TEXT)
+      sci_denomination: leaseData.sci_denomination, // text
+      sci_mandataire_nom: leaseData.sci_mandataire_nom, // text
+      sci_mandataire_adresse: leaseData.sci_mandataire_adresse, // text
 
-      // Personne morale (colonnes existantes)
-      personne_morale_denomination: leaseData.personne_morale_denomination,
-      personne_morale_mandataire_nom: leaseData.personne_morale_mandataire_nom,
-      personne_morale_mandataire_adresse: leaseData.personne_morale_mandataire_adresse,
+      // Personne morale (tous TEXT)
+      personne_morale_denomination: leaseData.personne_morale_denomination, // text
+      personne_morale_mandataire_nom: leaseData.personne_morale_mandataire_nom, // text
+      personne_morale_mandataire_adresse: leaseData.personne_morale_mandataire_adresse, // text
 
-      // === LOCATAIRES (colonnes existantes) ===
-      locataire_nom_prenom: metadata?.locataires?.[0]
-        ? `${metadata.locataires[0].prenom} ${metadata.locataires[0].nom}`
-        : null,
-      locataire_email: metadata?.locataires?.[0]?.email,
-      email_locataire: metadata?.locataires?.[0]?.email,
+      // === LOCATAIRES (tous TEXT) ===
       nom_locataire: metadata?.locataires?.[0]
         ? `${metadata.locataires[0].prenom} ${metadata.locataires[0].nom}`
-        : null,
-      telephone_locataire: metadata?.locataires?.[0]?.telephone,
-      locataire_domicile: metadata?.locataires?.[0]?.adresse,
+        : null, // text
+      locataire_nom_prenom: metadata?.locataires?.[0]
+        ? `${metadata.locataires[0].prenom} ${metadata.locataires[0].nom}`
+        : null, // text
+      locataire_domicile: metadata?.locataires?.[0]?.adresse, // text
+      telephone_locataire: metadata?.locataires?.[0]?.telephone, // text
+      email_locataire: metadata?.locataires?.[0]?.email, // text
+      locataire_email: metadata?.locataires?.[0]?.email, // text
 
-      // === LOGEMENT (colonnes existantes) ===
-      adresse_logement: leaseData.adresse_logement,
-      localisation_logement: leaseData.adresse_logement,
-      complement_adresse: leaseData.complement_adresse,
-      complement_adresse_logement: leaseData.complement_adresse,
-      adresse_postale: leaseData.adresse_logement,
-      ville: leaseData.ville || "Non spécifié",
-      code_postal: leaseData.code_postal || "00000",
+      // === LOGEMENT ===
+      // Adresses (TEXT)
+      adresse_postale: leaseData.adresse_logement, // text
+      adresse_logement: leaseData.adresse_logement, // text
+      localisation_logement: leaseData.adresse_logement, // text
+      complement_adresse: leaseData.complement_adresse, // text
+      complement_adresse_logement: leaseData.complement_adresse, // text
+      code_postal: leaseData.code_postal || "00000", // text
+      ville: leaseData.ville || "Non spécifié", // text
 
-      nombre_pieces: Number(leaseData.nombre_pieces) || null,
-      surface_habitable: Number(leaseData.surface_habitable) || null,
-      surface_m2: Number(leaseData.surface_habitable) || null,
+      // Caractéristiques (NUMERIC/INTEGER)
+      nombre_pieces: parseNumber(leaseData.nombre_pieces), // integer
+      surface_habitable: parseNumber(leaseData.surface_habitable), // numeric
+      surface_m2: parseNumber(leaseData.surface_habitable), // numeric
 
-      performance_dpe: leaseData.performance_dpe,
-      niveau_performance_dpe: leaseData.performance_dpe,
+      // Caractéristiques (TEXT)
+      type_logement: leaseData.type_habitat, // text
+      type_habitat: leaseData.type_habitat, // text
+      type_habitat_detail: leaseData.type_habitat, // text (avec contrainte check)
+      performance_dpe: leaseData.performance_dpe, // text
+      niveau_performance_dpe: leaseData.performance_dpe, // text
+      regime_juridique: leaseData.regime_juridique, // text (avec contrainte check)
+      destination_locaux: leaseData.destination_locaux, // text (avec contrainte check)
+      production_chauffage: leaseData.production_chauffage, // text
+      modalite_chauffage: leaseData.production_chauffage, // text (avec contrainte check)
+      production_eau_chaude: leaseData.production_eau_chaude, // text
+      modalite_eau_chaude: leaseData.production_eau_chaude, // text (avec contrainte check)
+      identifiant_fiscal: leaseData.identifiant_fiscal, // text
+      periode_construction: leaseData.periode_construction, // text
+      etage: leaseData.etage, // text
+      zone_geographique: leaseData.zone_tendue ? "Zone tendue" : "Zone normale", // text
 
-      type_habitat: leaseData.type_habitat,
-      type_habitat_detail: leaseData.type_habitat,
-      type_logement: leaseData.type_habitat,
+      // === TABLEAUX POSTGRESQL (text[]) ===
+      autres_parties_types: parseArray(leaseData.autres_parties_types), // text[]
+      equipements_types: parseArray(leaseData.equipements_logement_types), // text[]
+      locaux_privatifs_types: parseArray(leaseData.locaux_privatifs_types), // text[]
+      locaux_communs_types: parseArray(leaseData.locaux_communs_types), // text[]
+      equipement_technologies_types: parseArray(leaseData.equipement_technologies_types), // text[]
 
-      regime_juridique: leaseData.regime_juridique,
-      destination_locaux: leaseData.destination_locaux,
+      // Détails des équipements (TEXT)
+      autres_parties_autres: leaseData.autres_parties_autres, // text
+      equipements_autres: leaseData.equipements_logement_autres, // text
+      equipements_logement_autres: leaseData.equipements_logement_autres, // text
+      equipements_logement_types: leaseData.equipements_logement_types?.join(","), // text
+      locaux_privatifs_autres: leaseData.locaux_privatifs_autres, // text
+      cave_numero: leaseData.cave_numero, // text
+      parking_numero: leaseData.parking_numero, // text
+      garage_numero: leaseData.garage_numero, // text
+      locaux_communs_autres: leaseData.locaux_communs_autres, // text
+      equipement_technologies_autres: leaseData.equipement_technologies_autres, // text
 
-      production_chauffage: leaseData.production_chauffage,
-      modalite_chauffage: leaseData.production_chauffage,
+      // Descriptions détaillées (TEXT)
+      autres_parties:
+        leaseData.autres_parties_types?.join(", ") +
+        (leaseData.autres_parties_autres ? `, ${leaseData.autres_parties_autres}` : ""), // text
+      elements_equipements:
+        leaseData.equipements_logement_types?.join(", ") +
+        (leaseData.equipements_logement_autres ? `, ${leaseData.equipements_logement_autres}` : ""), // text
+      locaux_accessoires:
+        leaseData.locaux_privatifs_types?.join(", ") +
+        (leaseData.locaux_privatifs_autres ? `, ${leaseData.locaux_privatifs_autres}` : ""), // text
+      locaux_communs:
+        leaseData.locaux_communs_types?.join(", ") +
+        (leaseData.locaux_communs_autres ? `, ${leaseData.locaux_communs_autres}` : ""), // text
+      equipement_technologies: leaseData.equipement_technologies_types?.join(", "), // text
 
-      production_eau_chaude: leaseData.production_eau_chaude,
-      modalite_eau_chaude: leaseData.production_eau_chaude,
+      // === COLONNES JSONB ===
+      equipements_logement: leaseData.equipements_logement_types || [], // jsonb
+      equipements_privatifs: leaseData.locaux_privatifs_types || [], // jsonb
+      equipements_communs: leaseData.locaux_communs_types || [], // jsonb
+      equipements_technologies: leaseData.equipement_technologies_types || [], // jsonb
 
-      identifiant_fiscal: leaseData.identifiant_fiscal,
-      periode_construction: leaseData.periode_construction,
+      // === FINANCIER ===
+      // Montants principaux (NUMERIC)
+      loyer: parseNumber(leaseData.monthly_rent), // numeric
+      loyer_cc: parseNumber(leaseData.monthly_rent) + parseNumber(leaseData.montant_charges || 0), // numeric
+      montant_loyer_mensuel: parseNumber(leaseData.monthly_rent), // numeric
+      depot_garantie: parseNumber(leaseData.deposit_amount), // numeric
+      montant_depot_garantie: parseNumber(leaseData.deposit_amount), // numeric
 
-      // === TABLEAUX POSTGRESQL (text[]) - colonnes existantes ===
-      autres_parties_types: leaseData.autres_parties_types || [],
-      autres_parties_autres: leaseData.autres_parties_autres,
+      // Zone encadrée (BOOLEAN et NUMERIC)
+      zone_encadree: parseBoolean(leaseData.zone_encadree), // boolean
+      soumis_loyer_reference: parseBoolean(leaseData.zone_encadree), // boolean
+      loyer_reference: parseNumber(leaseData.loyer_reference), // numeric
+      loyer_reference_majore: parseNumber(leaseData.loyer_reference_majore), // numeric
+      montant_loyer_reference: parseNumber(leaseData.loyer_reference), // numeric
+      montant_loyer_reference_majore: parseNumber(leaseData.loyer_reference_majore), // numeric
+      complement_loyer: parseNumber(leaseData.complement_loyer), // numeric
+      complement_loyer_justification: leaseData.complement_loyer_justification, // text
 
-      equipements_types: leaseData.equipements_logement_types || [],
-      equipements_autres: leaseData.equipements_logement_autres,
-      equipements_logement_types: leaseData.equipements_logement_types?.join(",") || null,
-      equipements_logement_autres: leaseData.equipements_logement_autres,
+      zone_tendue: parseBoolean(leaseData.zone_tendue), // boolean
 
-      locaux_privatifs_types: leaseData.locaux_privatifs_types || [],
-      locaux_privatifs_autres: leaseData.locaux_privatifs_autres,
-      cave_numero: leaseData.cave_numero,
-      parking_numero: leaseData.parking_numero,
-      garage_numero: leaseData.garage_numero,
-
-      locaux_communs_types: leaseData.locaux_communs_types || [],
-      locaux_communs_autres: leaseData.locaux_communs_autres,
-
-      equipement_technologies_types: leaseData.equipement_technologies_types || [],
-      equipement_technologies_autres: leaseData.equipement_technologies_autres,
-
-      // === COLONNES JSONB (existantes) ===
-      equipements_logement: leaseData.equipements_logement_types || [],
-      equipements_privatifs: leaseData.locaux_privatifs_types || [],
-      equipements_communs: leaseData.locaux_communs_types || [],
-      equipements_technologies: leaseData.equipement_technologies_types || [],
-
-      // === FINANCIER (colonnes existantes) ===
-      montant_loyer_mensuel: Number(leaseData.monthly_rent) || null,
-      montant_depot_garantie: Number(leaseData.deposit_amount) || null,
-
-      // Zone encadrée (colonnes existantes)
-      zone_encadree: leaseData.zone_encadree || false,
-      soumis_loyer_reference: leaseData.zone_encadree || false,
-      loyer_reference: Number(leaseData.loyer_reference) || null,
-      loyer_reference_majore: Number(leaseData.loyer_reference_majore) || null,
-      complement_loyer: Number(leaseData.complement_loyer) || null,
-      complement_loyer_justification: leaseData.complement_loyer_justification,
-      montant_loyer_reference: Number(leaseData.loyer_reference) || null,
-      montant_loyer_reference_majore: Number(leaseData.loyer_reference_majore) || null,
-
-      zone_tendue: leaseData.zone_tendue || false,
-      zone_geographique: leaseData.zone_tendue ? "Zone tendue" : "Zone normale",
-
-      // Charges (colonnes existantes)
-      type_charges: leaseData.type_charges,
-      montant_charges: Number(leaseData.montant_charges) || null,
-      montant_provisions_charges: Number(leaseData.montant_charges) || null,
+      // Charges (TEXT et NUMERIC)
+      type_charges: leaseData.type_charges, // text
+      montant_charges: parseNumber(leaseData.montant_charges), // numeric
+      montant_provisions_charges: parseNumber(leaseData.montant_charges), // numeric
       modalite_reglement_charges:
         leaseData.type_charges === "provisions"
           ? "Provisions"
           : leaseData.type_charges === "forfait"
             ? "Forfait"
-            : "Autre",
-      modalite_revision_forfait: leaseData.modalite_revision_forfait,
-      modalites_revision_forfait: leaseData.modalite_revision_forfait,
+            : "Autre", // text
+      modalite_revision_forfait: leaseData.modalite_revision_forfait, // text
+      modalites_revision_forfait: leaseData.modalite_revision_forfait, // text
 
-      // Assurance colocation (colonnes existantes)
-      assurance_colocataires: leaseData.assurance_colocataires || false,
-      assurance_colocataire: leaseData.assurance_colocataires || false,
-      assurance_montant: Number(leaseData.assurance_montant) || null,
-      assurance_colocataire_montant: Number(leaseData.assurance_montant) || null,
-      assurance_frequence: leaseData.assurance_frequence,
-      assurance_colocataire_frequence: leaseData.assurance_frequence,
+      // Assurance colocation (BOOLEAN et NUMERIC et TEXT)
+      assurance_colocataires: parseBoolean(leaseData.assurance_colocataires), // boolean
+      assurance_colocataire: parseBoolean(leaseData.assurance_colocataires), // boolean
+      assurance_montant: parseNumber(leaseData.assurance_montant), // numeric
+      assurance_colocataire_montant: parseNumber(leaseData.assurance_montant), // numeric
+      assurance_frequence: leaseData.assurance_frequence, // text
+      assurance_colocataire_frequence: leaseData.assurance_frequence, // text (avec contrainte check)
 
-      // IRL et révision (colonnes existantes)
-      trimestre_reference_irl: leaseData.trimestre_reference_irl,
-      date_revision_loyer: leaseData.date_revision_loyer,
-      date_revision:
-        leaseData.date_revision_loyer === "autre"
-          ? leaseData.date_revision_personnalisee
-          : leaseData.date_revision_loyer,
-      date_revision_personnalisee: leaseData.date_revision_personnalisee,
-      date_reference_irl: leaseData.date_dernier_loyer,
-
-      ancien_locataire_duree: leaseData.ancien_locataire_duree,
-      dernier_loyer_ancien: Number(leaseData.dernier_loyer_ancien) || null,
-      date_dernier_loyer: leaseData.date_dernier_loyer,
-      date_revision_dernier_loyer: leaseData.date_revision_dernier_loyer,
+      // IRL et révision (TEXT principalement)
+      trimestre_reference_irl: leaseData.trimestre_reference_irl, // text
+      date_revision_loyer: leaseData.date_revision_loyer, // text
+      date_revision_personnalisee: leaseData.date_revision_personnalisee, // text
+      ancien_locataire_duree: leaseData.ancien_locataire_duree, // text
+      dernier_loyer_ancien: parseNumber(leaseData.dernier_loyer_ancien), // numeric
       infos_dernier_loyer:
         leaseData.ancien_locataire_duree === "moins_18_mois"
           ? `Dernier loyer: ${leaseData.dernier_loyer_ancien}€`
-          : null,
+          : null, // text
 
-      // Énergie (colonnes existantes)
-      estimation_depenses_energie_min: Number(leaseData.estimation_depenses_energie_min) || null,
-      estimation_depenses_energie_max: Number(leaseData.estimation_depenses_energie_max) || null,
-      annee_reference_energie: leaseData.annee_reference_energie,
-      montant_depenses_energie: Number(leaseData.estimation_depenses_energie_max) || null,
+      // Énergie (NUMERIC et TEXT)
+      estimation_depenses_energie_min: parseNumber(leaseData.estimation_depenses_energie_min), // numeric
+      estimation_depenses_energie_max: parseNumber(leaseData.estimation_depenses_energie_max), // numeric
+      annee_reference_energie: leaseData.annee_reference_energie, // varchar(4)
+      montant_depenses_energie: parseNumber(leaseData.estimation_depenses_energie_max), // numeric
 
-      // === DURÉE (colonnes existantes) ===
-      date_entree: leaseData.date_entree,
-      date_prise_effet: leaseData.date_entree,
-      duree_contrat: leaseData.duree_contrat?.toString(),
-      contrat_duree_reduite: leaseData.contrat_duree_reduite || false,
-      raison_duree_reduite: leaseData.raison_duree_reduite,
-      evenement_duree_reduite: leaseData.raison_duree_reduite,
+      // === DURÉE ===
+      duree: parseNumber(leaseData.duree_contrat), // integer
+      duree_contrat: leaseData.duree_contrat?.toString(), // text
+      contrat_duree_reduite: parseBoolean(leaseData.contrat_duree_reduite), // boolean
+      raison_duree_reduite: leaseData.raison_duree_reduite, // text
+      evenement_duree_reduite: leaseData.raison_duree_reduite, // text
 
-      // Paiement (colonnes existantes)
-      jour_paiement_loyer: leaseData.jour_paiement_loyer?.toString(),
-      paiement_avance: leaseData.paiement_avance,
-      paiement_echeance: leaseData.paiement_avance ? "À échoir" : "À terme échu",
-      date_paiement: `Le ${leaseData.jour_paiement_loyer || "1"} de chaque mois`,
-      mode_paiement_loyer: leaseData.mode_paiement_loyer,
+      // Paiement (TEXT principalement)
+      jour_paiement_loyer: leaseData.jour_paiement_loyer?.toString(), // text
+      paiement_avance: parseBoolean(leaseData.paiement_avance), // boolean
+      paiement_echeance: leaseData.paiement_avance ? "À échoir" : "À terme échu", // text
+      date_paiement: `Le ${leaseData.jour_paiement_loyer || "1"} de chaque mois`, // text
+      mode_paiement_loyer: leaseData.mode_paiement_loyer, // varchar(50)
       lieu_paiement:
         leaseData.mode_paiement_loyer === "virement"
           ? "Virement bancaire"
@@ -231,73 +305,74 @@ export async function POST(request: NextRequest) {
             ? "Chèque"
             : leaseData.mode_paiement_loyer === "prelevement"
               ? "Prélèvement automatique"
-              : leaseData.mode_paiement_loyer,
-      periodicite_paiement: "Mensuel",
+              : leaseData.mode_paiement_loyer, // text
+      periodicite_paiement: "Mensuel", // text
 
-      // === CLAUSES (colonnes existantes) ===
-      clause_solidarite: metadata?.clauses?.clause_solidarite?.enabled || false,
-      clause_resolutoire: metadata?.clauses?.clause_resolutoire?.enabled || false,
-      clauses_particulieres: leaseData.clause_libre,
-      conditions_particulieres: leaseData.clause_libre,
+      // === CLAUSES (BOOLEAN principalement) ===
+      clause_solidarite: parseBoolean(metadata?.clauses?.clause_solidarite?.enabled), // boolean
+      clause_resolutoire: parseBoolean(metadata?.clauses?.clause_resolutoire?.enabled), // boolean
+
+      // Textes des clauses (TEXT)
+      clauses_particulieres: leaseData.clause_libre, // text
+      conditions_particulieres: leaseData.clause_libre, // text
       clauses_personnalisees: Object.entries(metadata?.clauses || {})
         .filter(([_, clause]) => clause && typeof clause === "object" && clause.enabled)
         .map(([key, clause]) => `${key}: ${clause.text}`)
-        .join("\n\n"),
+        .join("\n\n"), // text
 
-      // === HONORAIRES (colonnes existantes) ===
-      honoraires_professionnel: leaseData.honoraires_professionnel ? "true" : "false",
-      honoraires_locataire_visite: leaseData.honoraires_locataire_visite?.toString(),
-      plafond_honoraires_locataire: leaseData.plafond_honoraires_locataire?.toString(),
-      honoraires_bailleur_visite: leaseData.honoraires_bailleur_visite?.toString(),
-      etat_lieux_professionnel: leaseData.etat_lieux_professionnel ? "true" : "false",
-      honoraires_locataire_etat_lieux: leaseData.honoraires_locataire_etat_lieux?.toString(),
-      plafond_honoraires_etat_lieux: leaseData.plafond_honoraires_etat_lieux?.toString(),
-      honoraires_bailleur_etat_lieux: leaseData.honoraires_bailleur_etat_lieux?.toString(),
-      autres_prestations: leaseData.autres_prestations ? "true" : "false",
-      details_autres_prestations: leaseData.details_autres_prestations,
-      honoraires_autres_prestations: leaseData.honoraires_autres_prestations?.toString(),
+      // === HONORAIRES (TEXT principalement) ===
+      honoraires_professionnel: leaseData.honoraires_professionnel ? "true" : "false", // text
+      honoraires_locataire_visite: leaseData.honoraires_locataire_visite?.toString(), // text
+      plafond_honoraires_locataire: leaseData.plafond_honoraires_locataire?.toString(), // text
+      honoraires_bailleur_visite: leaseData.honoraires_bailleur_visite?.toString(), // text
+      etat_lieux_professionnel: leaseData.etat_lieux_professionnel ? "true" : "false", // text
+      honoraires_locataire_etat_lieux: leaseData.honoraires_locataire_etat_lieux?.toString(), // text
+      plafond_honoraires_etat_lieux: leaseData.plafond_honoraires_etat_lieux?.toString(), // text
+      honoraires_bailleur_etat_lieux: leaseData.honoraires_bailleur_etat_lieux?.toString(), // text
+      autres_prestations: leaseData.autres_prestations ? "true" : "false", // text
+      details_autres_prestations: leaseData.details_autres_prestations, // text
+      honoraires_autres_prestations: leaseData.honoraires_autres_prestations?.toString(), // text
+
+      // Totaux des honoraires (NUMERIC)
       honoraires_bailleur:
-        Number(leaseData.honoraires_bailleur_visite || 0) + Number(leaseData.honoraires_bailleur_etat_lieux || 0),
+        parseNumber(leaseData.honoraires_bailleur_visite || 0) +
+        parseNumber(leaseData.honoraires_bailleur_etat_lieux || 0), // numeric
       honoraires_locataire:
-        Number(leaseData.honoraires_locataire_visite || 0) + Number(leaseData.honoraires_locataire_etat_lieux || 0),
-      plafond_honoraires_visite: Number(leaseData.plafond_honoraires_locataire || 0),
+        parseNumber(leaseData.honoraires_locataire_visite || 0) +
+        parseNumber(leaseData.honoraires_locataire_etat_lieux || 0), // numeric
+      plafond_honoraires_visite: parseNumber(leaseData.plafond_honoraires_locataire), // numeric
 
-      // === MEUBLÉ/FRANCHISE/CLAUSE LIBRE (colonnes existantes) ===
-      mise_disposition_meubles: leaseData.mise_disposition_meubles,
-      franchise_loyer: leaseData.franchise_loyer,
-      clause_libre: leaseData.clause_libre,
+      // === MEUBLÉ/FRANCHISE/CLAUSE LIBRE (TEXT) ===
+      mise_disposition_meubles: leaseData.mise_disposition_meubles, // text
+      franchise_loyer: leaseData.franchise_loyer, // text
+      clause_libre: leaseData.clause_libre, // text
 
-      // === ANNEXES (colonnes existantes) ===
-      annexe_reglement: false,
-      annexe_dpe: false,
-      annexe_plomb: false,
-      annexe_amiante: false,
-      annexe_electricite_gaz: false,
-      annexe_risques: false,
-      annexe_notice: false,
-      annexe_etat_lieux: false,
-      annexe_autorisation: false,
-      annexe_references_loyers: false,
-      annexe_actes_caution: null,
+      // === ANNEXES (BOOLEAN) ===
+      annexe_reglement: false, // boolean
+      annexe_dpe: false, // boolean
+      annexe_plomb: false, // boolean
+      annexe_amiante: false, // boolean
+      annexe_electricite_gaz: false, // boolean
+      annexe_risques: false, // boolean
+      annexe_notice: false, // boolean
+      annexe_etat_lieux: false, // boolean
+      annexe_autorisation: false, // boolean
+      annexe_references_loyers: false, // boolean
+      annexe_actes_caution: null, // text
 
-      // === AUTRES CHAMPS (colonnes existantes) ===
-      usage_prevu: "résidence principale",
-      etage: leaseData.etage || null,
-      ville_signature: "Non spécifié",
-      lieu_signature: "Non spécifié",
-      date_signature: null,
-      signed_date: null,
+      // === AUTRES CHAMPS ===
+      usage_prevu: "résidence principale", // text
+      ville_signature: "Non spécifié", // text
+      lieu_signature: "Non spécifié", // text
 
-      // === COMPLETION (colonnes existantes) ===
-      completion_rate: 100,
-      completion_percentage: 100,
-      form_version: "v12_dynamic_fields",
-      last_updated_section: "clauses",
-      completed_data: {},
-      data_completed_at: new Date().toISOString(),
-      document_validation_status: "pending",
+      // === COMPLETION (INTEGER et TEXT) ===
+      completion_rate: 100, // integer
+      completion_percentage: 100, // integer
+      form_version: "v12_dynamic_fields", // text
+      last_updated_section: "clauses", // text
+      document_validation_status: "pending", // varchar(50)
 
-      // === MÉTADONNÉES (colonne existante) ===
+      // === MÉTADONNÉES (JSONB) ===
       metadata: {
         form_version: "v12_dynamic_fields",
         locataires: metadata?.locataires || [],
@@ -307,14 +382,94 @@ export async function POST(request: NextRequest) {
         owner_type: leaseData.owner_type,
         guarantee_type: leaseData.guarantee_type,
         ...metadata,
-      },
+      }, // jsonb
 
-      // === TIMESTAMPS (colonnes existantes) ===
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      completed_data: {}, // jsonb
+
+      // === TIMESTAMPS (timestamp with time zone) ===
+      created_at: new Date().toISOString(), // timestamp with time zone
+      updated_at: new Date().toISOString(), // timestamp with time zone
+      data_completed_at: new Date().toISOString(), // timestamp with time zone
+
+      // Champs optionnels pour les timestamps
+      document_generated_at: null, // timestamp with time zone
+      owner_signature_date: null, // timestamp with time zone
+      tenant_signature_date: null, // timestamp with time zone
+
+      // Champs optionnels
+      template_id: null, // uuid
+      document_url: null, // text
+      lease_document_url: null, // text
+      generated_document: null, // text
+
+      // Champs spécialisés
+      jardin_description: null, // text
+      jardin_surface: null, // numeric
+      installations_sanitaires_description: null, // text
+      evolution_loyer_relocation: false, // boolean
+      travaux_bailleur_cours_html: null, // text
+      travaux_locataire_cours_html: null, // text
+      travaux_entre_locataires_html: null, // text
+      clause_animaux_domestiques_id: null, // uuid
+      clause_entretien_appareils_id: null, // uuid
+      clause_degradations_locataire_id: null, // uuid
+
+      // Champs financiers supplémentaires
+      soumis_decret_evolution: false, // boolean
+      contribution_economies: 0, // numeric
+      montant_premiere_echeance: null, // numeric
+      reevaluation_loyer: null, // text
+      travaux_amelioration: null, // text
+      majoration_travaux: 0, // numeric
+      diminution_travaux: 0, // numeric
     }
 
     console.log("📝 [LEASES] Données préparées pour insertion:", Object.keys(insertData).length, "champs")
+
+    // Validation supplémentaire avant insertion
+    const validationErrors = []
+
+    // Vérifier les contraintes check
+    if (insertData.modalite_chauffage && !["individuel", "collectif"].includes(insertData.modalite_chauffage)) {
+      validationErrors.push(`modalite_chauffage invalide: ${insertData.modalite_chauffage}`)
+    }
+
+    if (insertData.modalite_eau_chaude && !["individuelle", "collective"].includes(insertData.modalite_eau_chaude)) {
+      validationErrors.push(`modalite_eau_chaude invalide: ${insertData.modalite_eau_chaude}`)
+    }
+
+    if (
+      insertData.type_habitat_detail &&
+      !["immeuble_collectif", "individuel"].includes(insertData.type_habitat_detail)
+    ) {
+      validationErrors.push(`type_habitat_detail invalide: ${insertData.type_habitat_detail}`)
+    }
+
+    if (insertData.destination_locaux && !["usage_habitation", "usage_mixte"].includes(insertData.destination_locaux)) {
+      validationErrors.push(`destination_locaux invalide: ${insertData.destination_locaux}`)
+    }
+
+    if (insertData.lease_type && !["unfurnished", "furnished", "commercial"].includes(insertData.lease_type)) {
+      validationErrors.push(`lease_type invalide: ${insertData.lease_type}`)
+    }
+
+    if (
+      insertData.assurance_colocataire_frequence &&
+      !["mensuel", "annuel"].includes(insertData.assurance_colocataire_frequence)
+    ) {
+      validationErrors.push(`assurance_colocataire_frequence invalide: ${insertData.assurance_colocataire_frequence}`)
+    }
+
+    if (validationErrors.length > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Erreurs de validation",
+          details: validationErrors.join(", "),
+        },
+        { status: 400 },
+      )
+    }
 
     // Insérer le bail
     const { data: lease, error: insertError } = await supabase.from("leases").insert(insertData).select("*").single()
@@ -327,6 +482,7 @@ export async function POST(request: NextRequest) {
           error: "Erreur lors de la création du bail",
           details: insertError.message,
           code: insertError.code,
+          hint: insertError.hint,
         },
         { status: 500 },
       )
