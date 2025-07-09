@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
       start_date: leaseData.start_date,
       end_date: leaseData.end_date,
       monthly_rent: Number(leaseData.monthly_rent) || 0,
-      charges: Number(leaseData.charges) || 0,
+      montant_charges: Number(leaseData.montant_charges) || 0,
       deposit_amount: Number(leaseData.deposit_amount) || 0,
       security_deposit: Number(leaseData.security_deposit) || Number(leaseData.deposit_amount) || 0,
       lease_type: leaseData.lease_type,
