@@ -25,10 +25,10 @@ export async function POST(request: NextRequest) {
       owner_id: leaseData.owner_id,
       start_date: leaseData.start_date,
       end_date: leaseData.end_date,
-      monthly_rent: leaseData.monthly_rent || 0,
-      charges: leaseData.charges || 0,
-      deposit_amount: leaseData.deposit_amount || 0,
-      security_deposit: leaseData.security_deposit || 0,
+      monthly_rent: Number(leaseData.monthly_rent) || 0,
+      charges: Number(leaseData.charges) || 0,
+      deposit_amount: Number(leaseData.deposit_amount) || 0,
+      security_deposit: Number(leaseData.security_deposit) || 0,
       lease_type: leaseData.lease_type,
       status: "draft",
       signed_by_tenant: false,
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
       email_bailleur: leaseData.bailleur_email,
 
       // Mandataire
-      mandataire_represente: leaseData.mandataire_represente || false,
+      mandataire_represente: leaseData.mandataire_represente ? "true" : "false",
       mandataire_nom: leaseData.mandataire_nom,
       mandataire_adresse: leaseData.mandataire_adresse,
       mandataire_activite: leaseData.mandataire_activite,
@@ -78,9 +78,9 @@ export async function POST(request: NextRequest) {
       adresse_logement: leaseData.adresse_logement,
       complement_adresse_logement: leaseData.complement_adresse,
       complement_adresse: leaseData.complement_adresse,
-      nombre_pieces: leaseData.nombre_pieces,
-      surface_habitable: leaseData.surface_habitable,
-      surface_m2: leaseData.surface_habitable,
+      nombre_pieces: Number(leaseData.nombre_pieces) || null,
+      surface_habitable: Number(leaseData.surface_habitable) || null,
+      surface_m2: Number(leaseData.surface_habitable) || null,
       performance_dpe: leaseData.performance_dpe,
       type_habitat: leaseData.type_habitat,
       type_habitat_detail: leaseData.type_habitat,
@@ -93,45 +93,53 @@ export async function POST(request: NextRequest) {
       identifiant_fiscal: leaseData.identifiant_fiscal,
       periode_construction: leaseData.periode_construction,
 
-      // Autres parties et équipements
-      autres_parties_types: JSON.stringify(leaseData.autres_parties_types || []),
+      // === TABLEAUX POSTGRESQL (text[]) ===
+      // Pour les colonnes text[], on passe directement les tableaux JavaScript
+      autres_parties_types: leaseData.autres_parties_types || [],
       autres_parties_autres: leaseData.autres_parties_autres,
-      equipements_logement: JSON.stringify(leaseData.equipements_logement_types || []),
-      equipements_logement_types: JSON.stringify(leaseData.equipements_logement_types || []),
-      equipements_logement_autres: leaseData.equipements_logement_autres,
-      locaux_privatifs_types: JSON.stringify(leaseData.locaux_privatifs_types || []),
+      equipements_types: leaseData.equipements_logement_types || [],
+      equipements_autres: leaseData.equipements_logement_autres,
+      locaux_privatifs_types: leaseData.locaux_privatifs_types || [],
       cave_numero: leaseData.cave_numero,
       parking_numero: leaseData.parking_numero,
       garage_numero: leaseData.garage_numero,
       locaux_privatifs_autres: leaseData.locaux_privatifs_autres,
-      locaux_communs_types: JSON.stringify(leaseData.locaux_communs_types || []),
+      locaux_communs_types: leaseData.locaux_communs_types || [],
       locaux_communs_autres: leaseData.locaux_communs_autres,
-      equipement_technologies_types: JSON.stringify(leaseData.equipement_technologies_types || []),
-      equipements_privatifs: JSON.stringify(leaseData.locaux_privatifs_types || []),
-      equipements_communs: JSON.stringify(leaseData.locaux_communs_types || []),
-      equipements_technologies: JSON.stringify(leaseData.equipement_technologies_types || []),
+      equipement_technologies_types: leaseData.equipement_technologies_types || [],
+
+      // === COLONNES JSONB ===
+      // Pour les colonnes jsonb, on peut passer directement les objets/tableaux JavaScript
+      equipements_logement: leaseData.equipements_logement_types || [],
+      equipements_privatifs: leaseData.locaux_privatifs_types || [],
+      equipements_communs: leaseData.locaux_communs_types || [],
+      equipements_technologies: leaseData.equipement_technologies_types || [],
+
+      // Champs texte pour compatibilité
+      equipements_logement_types: leaseData.equipements_logement_types?.join(",") || null,
+      equipements_logement_autres: leaseData.equipements_logement_autres,
 
       // === FINANCIER ===
-      loyer_mensuel: leaseData.loyer_mensuel,
-      montant_loyer_mensuel: leaseData.loyer_mensuel,
-      loyer: leaseData.loyer_mensuel,
-      depot_garantie: leaseData.depot_garantie,
-      montant_depot_garantie: leaseData.depot_garantie,
+      loyer_mensuel: Number(leaseData.loyer_mensuel) || null,
+      montant_loyer_mensuel: Number(leaseData.loyer_mensuel) || null,
+      loyer: Number(leaseData.loyer_mensuel) || null,
+      depot_garantie: Number(leaseData.depot_garantie) || null,
+      montant_depot_garantie: Number(leaseData.depot_garantie) || null,
 
       // Zone encadrée
       zone_encadree: leaseData.zone_encadree || false,
-      soumis_loyer_reference: leaseData.zone_encadree ? "true" : "false",
-      loyer_reference: leaseData.loyer_reference,
-      loyer_reference_majore: leaseData.loyer_reference_majore,
-      complement_loyer: leaseData.complement_loyer,
+      soumis_loyer_reference: leaseData.zone_encadree || false,
+      loyer_reference: Number(leaseData.loyer_reference) || null,
+      loyer_reference_majore: Number(leaseData.loyer_reference_majore) || null,
+      complement_loyer: Number(leaseData.complement_loyer) || null,
       complement_loyer_justification: leaseData.complement_loyer_justification,
 
       zone_tendue: leaseData.zone_tendue || false,
 
       // Charges
       type_charges: leaseData.type_charges,
-      montant_charges: leaseData.montant_charges,
-      montant_provisions_charges: leaseData.montant_charges,
+      montant_charges: Number(leaseData.montant_charges) || null,
+      montant_provisions_charges: Number(leaseData.montant_charges) || null,
       modalite_reglement_charges:
         leaseData.type_charges === "provisions"
           ? "Provisions"
@@ -142,9 +150,9 @@ export async function POST(request: NextRequest) {
 
       // Assurance colocation
       assurance_colocataires: leaseData.assurance_colocataires || false,
-      assurance_colocataire: leaseData.assurance_colocataires ? "true" : "false",
-      assurance_montant: leaseData.assurance_montant,
-      assurance_colocataire_montant: leaseData.assurance_montant,
+      assurance_colocataire: leaseData.assurance_colocataires || false,
+      assurance_montant: Number(leaseData.assurance_montant) || null,
+      assurance_colocataire_montant: Number(leaseData.assurance_montant) || null,
       assurance_frequence: leaseData.assurance_frequence,
       assurance_colocataire_frequence: leaseData.assurance_frequence,
 
@@ -157,13 +165,13 @@ export async function POST(request: NextRequest) {
           : leaseData.date_revision_loyer,
       date_revision_personnalisee: leaseData.date_revision_personnalisee,
       ancien_locataire_duree: leaseData.ancien_locataire_duree,
-      dernier_loyer_ancien: leaseData.dernier_loyer_ancien,
+      dernier_loyer_ancien: Number(leaseData.dernier_loyer_ancien) || null,
       date_dernier_loyer: leaseData.date_dernier_loyer,
       date_revision_dernier_loyer: leaseData.date_revision_dernier_loyer,
 
       // Énergie
-      estimation_depenses_energie_min: leaseData.estimation_depenses_energie_min,
-      estimation_depenses_energie_max: leaseData.estimation_depenses_energie_max,
+      estimation_depenses_energie_min: Number(leaseData.estimation_depenses_energie_min) || null,
+      estimation_depenses_energie_max: Number(leaseData.estimation_depenses_energie_max) || null,
       annee_reference_energie: leaseData.annee_reference_energie,
 
       // === DURÉE ===
@@ -171,14 +179,14 @@ export async function POST(request: NextRequest) {
       date_prise_effet: leaseData.date_entree,
       date_debut: leaseData.date_entree,
       date_fin: leaseData.end_date,
-      duree_contrat: leaseData.duree_contrat,
-      duree: leaseData.duree_contrat,
-      contrat_duree_reduite: leaseData.contrat_duree_reduite ? "true" : "false",
+      duree_contrat: leaseData.duree_contrat?.toString(),
+      duree: Number(leaseData.duree_contrat) || null,
+      contrat_duree_reduite: leaseData.contrat_duree_reduite || false,
       raison_duree_reduite: leaseData.raison_duree_reduite,
       evenement_duree_reduite: leaseData.raison_duree_reduite,
 
       // Paiement
-      jour_paiement_loyer: Number.parseInt(leaseData.jour_paiement_loyer) || 1,
+      jour_paiement_loyer: leaseData.jour_paiement_loyer?.toString(),
       paiement_avance: leaseData.paiement_avance,
       paiement_echeance: leaseData.paiement_avance ? "À échoir" : "À terme échu",
       date_paiement: `Le ${leaseData.jour_paiement_loyer || "1"} de chaque mois`,
@@ -194,21 +202,21 @@ export async function POST(request: NextRequest) {
       periodicite_paiement: "Mensuel",
 
       // === CLAUSES ===
-      clause_solidarite: metadata?.clauses?.clause_solidarite?.enabled ? "true" : "false",
-      clause_resolutoire: metadata?.clauses?.clause_resolutoire?.enabled ? "true" : "false",
+      clause_solidarite: metadata?.clauses?.clause_solidarite?.enabled || false,
+      clause_resolutoire: metadata?.clauses?.clause_resolutoire?.enabled || false,
 
       // === HONORAIRES ===
       honoraires_professionnel: leaseData.honoraires_professionnel ? "true" : "false",
-      honoraires_locataire_visite: leaseData.honoraires_locataire_visite,
-      plafond_honoraires_locataire: leaseData.plafond_honoraires_locataire,
-      honoraires_bailleur_visite: leaseData.honoraires_bailleur_visite,
+      honoraires_locataire_visite: leaseData.honoraires_locataire_visite?.toString(),
+      plafond_honoraires_locataire: leaseData.plafond_honoraires_locataire?.toString(),
+      honoraires_bailleur_visite: leaseData.honoraires_bailleur_visite?.toString(),
       etat_lieux_professionnel: leaseData.etat_lieux_professionnel ? "true" : "false",
-      honoraires_locataire_etat_lieux: leaseData.honoraires_locataire_etat_lieux,
-      plafond_honoraires_etat_lieux: leaseData.plafond_honoraires_etat_lieux,
-      honoraires_bailleur_etat_lieux: leaseData.honoraires_bailleur_etat_lieux,
+      honoraires_locataire_etat_lieux: leaseData.honoraires_locataire_etat_lieux?.toString(),
+      plafond_honoraires_etat_lieux: leaseData.plafond_honoraires_etat_lieux?.toString(),
+      honoraires_bailleur_etat_lieux: leaseData.honoraires_bailleur_etat_lieux?.toString(),
       autres_prestations: leaseData.autres_prestations ? "true" : "false",
       details_autres_prestations: leaseData.details_autres_prestations,
-      honoraires_autres_prestations: leaseData.honoraires_autres_prestations,
+      honoraires_autres_prestations: leaseData.honoraires_autres_prestations?.toString(),
 
       // === MEUBLÉ/FRANCHISE/CLAUSE LIBRE ===
       mise_disposition_meubles: leaseData.mise_disposition_meubles,
@@ -216,16 +224,16 @@ export async function POST(request: NextRequest) {
       clause_libre: leaseData.clause_libre,
 
       // === ANNEXES ===
-      annexe_reglement: "false",
-      annexe_dpe: "false",
-      annexe_plomb: "false",
-      annexe_amiante: "false",
-      annexe_electricite_gaz: "false",
-      annexe_risques: "false",
-      annexe_notice: "false",
-      annexe_etat_lieux: "false",
-      annexe_autorisation: "false",
-      annexe_references_loyers: "false",
+      annexe_reglement: false,
+      annexe_dpe: false,
+      annexe_plomb: false,
+      annexe_amiante: false,
+      annexe_electricite_gaz: false,
+      annexe_risques: false,
+      annexe_notice: false,
+      annexe_etat_lieux: false,
+      annexe_autorisation: false,
+      annexe_references_loyers: false,
 
       // === USAGE ===
       usage_prevu: "résidence principale",
@@ -234,18 +242,21 @@ export async function POST(request: NextRequest) {
       completion_rate: 100,
       completion_percentage: 100,
       form_version: "v12_dynamic_fields",
-      completed_data: JSON.stringify({}),
+      completed_data: {},
       data_completed_at: new Date().toISOString(),
       document_validation_status: "pending",
 
       // === MÉTADONNÉES ===
-      metadata: JSON.stringify({
+      metadata: {
         form_version: "v12_dynamic_fields",
         locataires: metadata?.locataires || [],
         garants: metadata?.garants || [],
         clauses: metadata?.clauses || {},
+        bail_type: leaseData.bail_type,
+        owner_type: leaseData.owner_type,
+        guarantee_type: leaseData.guarantee_type,
         ...metadata,
-      }),
+      },
 
       // === TIMESTAMPS ===
       created_at: new Date().toISOString(),
@@ -266,6 +277,53 @@ export async function POST(request: NextRequest) {
     }
 
     console.log("✅ [LEASES] Bail créé avec succès:", lease.id)
+
+    // Gérer les clauses spécifiques dans la table lease_clauses si nécessaire
+    if (metadata?.clauses) {
+      const clausesToInsert = []
+
+      for (const [category, clauseData] of Object.entries(metadata.clauses)) {
+        if (clauseData && typeof clauseData === "object" && clauseData.enabled) {
+          clausesToInsert.push({
+            lease_id: lease.id,
+            category: category,
+            clause_text: clauseData.text || "",
+            is_enabled: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+        }
+      }
+
+      if (clausesToInsert.length > 0) {
+        const { error: clausesError } = await supabase.from("lease_clauses").insert(clausesToInsert)
+
+        if (clausesError) {
+          console.error("❌ [LEASES] Erreur insertion clauses:", clausesError)
+          // Ne pas faire échouer la création du bail pour les clauses
+        } else {
+          console.log(`✅ [LEASES] ${clausesToInsert.length} clauses insérées pour le bail ${lease.id}`)
+        }
+      }
+    }
+
+    // Mettre à jour le statut de la candidature si applicable
+    if (leaseData.application_id) {
+      const { error: updateError } = await supabase
+        .from("applications")
+        .update({
+          status: "lease_created",
+          lease_id: lease.id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", leaseData.application_id)
+
+      if (updateError) {
+        console.error("❌ [LEASES] Erreur mise à jour candidature:", updateError)
+      } else {
+        console.log("✅ [LEASES] Candidature mise à jour")
+      }
+    }
 
     return NextResponse.json({
       success: true,
