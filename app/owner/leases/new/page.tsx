@@ -893,10 +893,13 @@ travaux_entre_locataires: formData.clauses?.travaux_entre_locataires?.enabled ? 
 
   // === HONORAIRES ===
   montant_plafond_honoraires: formData.plafond_honoraires_locataire || "",
-  plafond_honoraires_etat_lieux: formData.plafond_honoraires_etat_lieux || "",
   honoraires_locataire: formData.honoraires_locataire_visite || "",
   honoraires_bailleur: formData.honoraires_bailleur_visite || "",
-  honoraires_etat_lieux: formData.honoraires_bailleur_etat_lieux || "",
+  
+  plafond_honoraires_etat_lieux: formData.plafond_honoraires_etat_lieux || "",
+  honoraires_etat_lieux_bailleur: formData.honoraires_bailleur_etat_lieux || "",
+  honoraires_etat_lieux_locataire: formData.honoraires_locataire_etat_lieux || "",
+  
   autres_prestations: formData.autres_prestations ? "Oui" : "Non",
   details_autres_prestations: formData.details_autres_prestations || "",
   honoraires_autres_prestations: formData.honoraires_autres_prestations || "",
