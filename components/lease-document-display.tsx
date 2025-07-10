@@ -103,17 +103,6 @@ export function LeaseDocumentDisplay({ document, leaseId, generatedAt }: LeaseDo
     }
   }
 
-  // Fonction pour extraire le texte brut pour l'aperçu
-  const getPreviewText = (htmlContent: string) => {
-    // Créer un élément temporaire pour extraire le texte
-    const tempDiv = document.createElement("div")
-    tempDiv.innerHTML = htmlContent
-    const textContent = tempDiv.textContent || tempDiv.innerText || ""
-
-    // Prendre les 500 premiers caractères
-    return textContent.substring(0, 500) + (textContent.length > 500 ? "..." : "")
-  }
-
   return (
     <div className="space-y-4">
       {/* En-tête avec actions */}
@@ -171,10 +160,15 @@ export function LeaseDocumentDisplay({ document, leaseId, generatedAt }: LeaseDo
             ) : (
               // Aperçu en texte brut
               <div className="space-y-2">
-                <div className="text-gray-700 whitespace-pre-wrap">{getPreviewText(document)}</div>
+                <div
+                  className="text-gray-700 whitespace-pre-wrap"
+                  dangerouslySetInnerHTML={{
+                    __html: document.substring(0, 1000) + (document.length > 1000 ? "..." : ""),
+                  }}
+                />
                 <div className="border-t pt-4 mt-4">
                   <p className="text-sm text-gray-500 italic">
-                    Aperçu du document. Cliquez sur "Document complet" pour voir l'intégralité avec la mise en forme.
+                    Aperçu du document. Cliquez sur "Document complet" pour voir l'intégralité.
                   </p>
                 </div>
               </div>
