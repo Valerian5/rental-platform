@@ -10,9 +10,9 @@ import { FileText, Download, Printer, Send, CheckCircle, RefreshCw, Edit, Upload
 import { PageHeader } from "@/components/page-header"
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
 import { authService } from "@/lib/auth-service"
-import { LeaseDocumentViewer } from "@/components/lease-document-viewer"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { LeaseAnnexesManager } from "@/components/lease-annexes-manager"
+import { LeaseDocumentDisplay } from "@/components/lease-document-display"
 
 interface Lease {
   id: string
@@ -94,6 +94,7 @@ export default function LeaseDetailPage() {
 
       if (data.success) {
         toast.success("Document généré avec succès")
+        // Recharger les données du bail pour afficher le document
         await loadLease()
       } else if (data.redirectTo) {
         toast.info("Certaines données sont manquantes. Redirection vers le formulaire...")
@@ -335,10 +336,10 @@ export default function LeaseDetailPage() {
                 </CardHeader>
                 <CardContent>
                   {lease.generated_document ? (
-                    <LeaseDocumentViewer
-                      document={{ content: lease.generated_document }}
-                      analysis={{ completionRate: 100, totalFields: 0 }} // Placeholder analysis
+                    <LeaseDocumentDisplay
+                      document={lease.generated_document}
                       leaseId={lease.id}
+                      generatedAt={lease.document_generated_at}
                     />
                   ) : (
                     <div className="text-center py-12">
