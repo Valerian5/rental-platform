@@ -66,6 +66,90 @@ function formatAsHTML(content: string): string {
   )
 }
 
+// Fonction utilitaire pour parser les données JSON de manière sécurisée
+function safeParseJSON(value: any, defaultValue: any = null): any {
+  if (value === null || value === undefined) {
+    return defaultValue
+  }
+
+  // Si c'est déjà un objet/array, le retourner directement
+  if (typeof value === "object") {
+    return value
+  }
+
+  // Si c'est une chaîne, essayer de la parser
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value)
+    } catch (error) {
+      console.log("⚠️ [PARSE] Impossible de parser JSON:", value, "- utilisation valeur par défaut")
+      return defaultValue
+    }
+  }
+
+  return defaultValue
+}
+
+// Fonction utilitaire pour formater les listes
+function formatList(items: any, separator = ", "): string {
+  if (!items) return ""
+
+  // Si c'est déjà un array
+  if (Array.isArray(items)) {
+    return items.filter(Boolean).join(separator)
+  }
+
+  // Si c'est une chaîne JSON
+  if (typeof items === "string") {
+    try {
+      const parsed = JSON.parse(items)
+      if (Array.isArray(parsed)) {
+        return parsed.filter(Boolean).join(separator)
+      }
+    } catch (error) {
+      // Si ce n'est pas du JSON, traiter comme une chaîne simple
+      return items
+    }
+  }
+
+  return String(items)
+}
+
+// Fonction pour formater les équipements avec détails
+function formatEquipments(types: any, details: any = {}, autres = ""): string {
+  let typesList: string[] = []
+
+  // Parser les types
+  if (Array.isArray(types)) {
+    typesList = types
+  } else if (typeof types === "string") {
+    try {
+      const parsed = JSON.parse(types)
+      typesList = Array.isArray(parsed) ? parsed : []
+    } catch (error) {
+      typesList = types ? [types] : []
+    }
+  }
+
+  if (typesList.length === 0) return ""
+
+  const list = typesList
+    .map((type) => {
+      if (type === "cave" && details?.cave_numero) return `Cave (n° ${details.cave_numero})`
+      if (type === "parking" && details?.parking_numero) return `Parking (n° ${details.parking_numero})`
+      if (type === "garage" && details?.garage_numero) return `Garage (n° ${details.garage_numero})`
+      if (type !== "autres") return type.charAt(0).toUpperCase() + type.slice(1).replace("_", " ")
+      return null
+    })
+    .filter(Boolean)
+
+  if (typesList.includes("autres") && autres) {
+    list.push(autres)
+  }
+
+  return list.join(", ")
+}
+
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const leaseId = params.id
@@ -101,6 +185,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           error: "Données obligatoires incomplètes",
           missingFields: missingFields,
           completionRate: Math.round(((requiredFields.length - missingFields.length) / requiredFields.length) * 100),
+          redirectTo: `/owner/leases/${leaseId}/complete-data`,
         },
         { status: 400 },
       )
@@ -125,33 +210,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     console.log("📄 [GENERATE] Template récupéré:", template.name)
 
-    // 4. Préparer les données pour le template
-    const metadata = lease.metadata ? JSON.parse(lease.metadata) : {}
-    const locataires = metadata.locataires || []
-    const garants = metadata.garants || []
-    const clauses = metadata.clauses || {}
-
-    // Formatage des listes
-    const formatList = (items: string[], separator = ", ") => {
-      if (!Array.isArray(items)) return ""
-      return items.filter(Boolean).join(separator)
-    }
-
-    const formatEquipments = (types: string[], details: any = {}, autres = "") => {
-      if (!Array.isArray(types)) return ""
-      const list = types
-        .map((type) => {
-          if (type === "cave" && details.cave_numero) return `Cave (n° ${details.cave_numero})`
-          if (type === "parking" && details.parking_numero) return `Parking (n° ${details.parking_numero})`
-          if (type === "garage" && details.garage_numero) return `Garage (n° ${details.garage_numero})`
-          if (type !== "autres") return type.charAt(0).toUpperCase() + type.slice(1).replace("_", " ")
-          return null
-        })
-        .filter(Boolean)
-
-      if (types.includes("autres") && autres) list.push(autres)
-      return list.join(", ")
-    }
+    // 4. Préparer les données pour le template avec parsing sécurisé
+    const metadata = safeParseJSON(lease.metadata, {})
+    const locataires = safeParseJSON(metadata.locataires, [])
+    const garants = safeParseJSON(metadata.garants, [])
+    const clauses = safeParseJSON(metadata.clauses, {})
 
     const templateData: Record<string, any> = {
       // === PARTIES ===
@@ -184,10 +247,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       telephone_locataire: lease.telephone_locataire || "",
       locataire_domicile: lease.locataire_domicile || "",
       locataires_list:
-        locataires
-          .map((loc: any) => `${loc.nom || ""} ${loc.prenom || ""} - ${loc.email || ""}`)
-          .filter(Boolean)
-          .join("<br/>") || "[Aucun locataire]",
+        Array.isArray(locataires) && locataires.length > 0
+          ? locataires
+              .map((loc: any) => `${loc.nom || ""} ${loc.prenom || ""} - ${loc.email || ""}`)
+              .filter(Boolean)
+              .join("<br/>")
+          : "[Aucun locataire]",
 
       // === LOGEMENT ===
       localisation_logement:
@@ -199,20 +264,20 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       surface_habitable: lease.surface_habitable || "",
       nombre_pieces: lease.nombre_pieces || "",
 
-      // Équipements et locaux
+      // Équipements et locaux avec parsing sécurisé
       locaux_accessoires: formatEquipments(
-        JSON.parse(lease.locaux_privatifs_types || "[]"),
-        { cave_numero: lease.cave_numero, parking_numero: lease.parking_numero, garage_numero: lease.garage_numero },
+        lease.locaux_privatifs_types,
+        {
+          cave_numero: lease.cave_numero,
+          parking_numero: lease.parking_numero,
+          garage_numero: lease.garage_numero,
+        },
         lease.locaux_privatifs_autres,
       ),
-      locaux_communs: formatEquipments(JSON.parse(lease.locaux_communs_types || "[]"), {}, lease.locaux_communs_autres),
-      autres_parties: formatEquipments(JSON.parse(lease.autres_parties_types || "[]"), {}, lease.autres_parties_autres),
-      elements_equipements: formatEquipments(
-        JSON.parse(lease.equipements_logement_types || "[]"),
-        {},
-        lease.equipements_logement_autres,
-      ),
-      equipement_technologies: formatList(JSON.parse(lease.equipement_technologies_types || "[]")),
+      locaux_communs: formatEquipments(lease.locaux_communs_types, {}, lease.locaux_communs_autres),
+      autres_parties: formatEquipments(lease.autres_parties_types, {}, lease.autres_parties_autres),
+      elements_equipements: formatEquipments(lease.equipements_logement_types, {}, lease.equipements_logement_autres),
+      equipement_technologies: formatList(lease.equipement_technologies_types),
 
       modalite_chauffage: lease.production_chauffage === "collectif" ? "Collectif" : "Individuel",
       modalite_eau_chaude: lease.production_eau_chaude === "collective" ? "Collective" : "Individuelle",
