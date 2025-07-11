@@ -58,7 +58,7 @@ export function LeaseDocumentDisplay({ document, leaseId, generatedAt }: LeaseDo
             </style>
           </head>
           <body>
-            ${document}
+            ${formatDocumentForPrint(document)}
             <div class="signature-section">
               <div class="signature-box">
                 <p><strong>Signature du bailleur</strong></p>
@@ -102,6 +102,52 @@ export function LeaseDocumentDisplay({ document, leaseId, generatedAt }: LeaseDo
       handlePrint()
     }
   }
+
+  const formatDocumentForDisplay = (content: string) => {
+    return content.split("\n").map((line, index) => {
+      if (line.trim() === "") return <br key={index} />
+
+      // Titres principaux (tout en majuscules)
+      if (line === line.toUpperCase() && line.length > 10 && !line.includes(":")) {
+        return (
+          <h2 key={index} className="text-xl font-bold mt-6 mb-4 text-blue-800">
+            {line}
+          </h2>
+        )
+      }
+
+      // Sous-titres avec numéros romains
+      if (/^[IVX]+\.\s/.test(line)) {
+        return (
+          <h3 key={index} className="text-lg font-semibold mt-4 mb-2 text-blue-600">
+            {line}
+          </h3>
+        )
+      }
+
+      // Articles avec lettres
+      if (/^[A-Z]\.\s/.test(line)) {
+        return (
+          <h4 key={index} className="text-base font-medium mt-3 mb-2 text-gray-800">
+            {line}
+          </h4>
+        )
+      }
+
+      // Paragraphes normaux
+      return (
+        <p key={index} className="mb-3 text-gray-700">
+          {line}
+        </p>
+      )
+    })
+  }
+
+  const formatDocumentForPrint = (content: string) => {
+    return content.replace(/\n\n/g, "</p><p>").replace(/\n/g, "<br>").replace(/^/, "<p>").replace(/$/, "</p>")
+  }
+
+  const previewContent = document.split("\n").slice(0, 20).join("\n")
 
   return (
     <div className="space-y-4">
@@ -155,20 +201,13 @@ export function LeaseDocumentDisplay({ document, leaseId, generatedAt }: LeaseDo
         <CardContent className="p-6">
           <div className="prose max-w-none">
             {showFullDocument ? (
-              // Affichage complet avec HTML interprété
-              <div className="space-y-2" dangerouslySetInnerHTML={{ __html: document }} />
+              <div className="space-y-2">{formatDocumentForDisplay(document)}</div>
             ) : (
-              // Aperçu en texte brut
               <div className="space-y-2">
-                <div
-                  className="text-gray-700 whitespace-pre-wrap"
-                  dangerouslySetInnerHTML={{
-                    __html: document.substring(0, 1000) + (document.length > 1000 ? "..." : ""),
-                  }}
-                />
+                {formatDocumentForDisplay(previewContent)}
                 <div className="border-t pt-4 mt-4">
                   <p className="text-sm text-gray-500 italic">
-                    Aperçu du document. Cliquez sur "Document complet" pour voir l'intégralité.
+                    Aperçu des 20 premières lignes. Cliquez sur "Document complet" pour voir l'intégralité.
                   </p>
                 </div>
               </div>
