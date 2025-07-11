@@ -58,7 +58,7 @@ export function LeaseDocumentDisplay({ document, leaseId, generatedAt }: LeaseDo
             </style>
           </head>
           <body>
-            ${formatDocumentForPrint(document)}
+            ${document}
             <div class="signature-section">
               <div class="signature-box">
                 <p><strong>Signature du bailleur</strong></p>
@@ -103,51 +103,16 @@ export function LeaseDocumentDisplay({ document, leaseId, generatedAt }: LeaseDo
     }
   }
 
-  const formatDocumentForDisplay = (content: string) => {
-    return content.split("\n").map((line, index) => {
-      if (line.trim() === "") return <br key={index} />
+  // Fonction pour extraire le texte brut pour l'aperçu
+  const getPreviewText = (htmlContent: string) => {
+    // Créer un élément temporaire pour extraire le texte
+    const tempDiv = document.createElement("div")
+    tempDiv.innerHTML = htmlContent
+    const textContent = tempDiv.textContent || tempDiv.innerText || ""
 
-      // Titres principaux (tout en majuscules)
-      if (line === line.toUpperCase() && line.length > 10 && !line.includes(":")) {
-        return (
-          <h2 key={index} className="text-xl font-bold mt-6 mb-4 text-blue-800">
-            {line}
-          </h2>
-        )
-      }
-
-      // Sous-titres avec numéros romains
-      if (/^[IVX]+\.\s/.test(line)) {
-        return (
-          <h3 key={index} className="text-lg font-semibold mt-4 mb-2 text-blue-600">
-            {line}
-          </h3>
-        )
-      }
-
-      // Articles avec lettres
-      if (/^[A-Z]\.\s/.test(line)) {
-        return (
-          <h4 key={index} className="text-base font-medium mt-3 mb-2 text-gray-800">
-            {line}
-          </h4>
-        )
-      }
-
-      // Paragraphes normaux
-      return (
-        <p key={index} className="mb-3 text-gray-700">
-          {line}
-        </p>
-      )
-    })
+    // Prendre les 500 premiers caractères
+    return textContent.substring(0, 500) + (textContent.length > 500 ? "..." : "")
   }
-
-  const formatDocumentForPrint = (content: string) => {
-    return content.replace(/\n\n/g, "</p><p>").replace(/\n/g, "<br>").replace(/^/, "<p>").replace(/$/, "</p>")
-  }
-
-  const previewContent = document.split("\n").slice(0, 20).join("\n")
 
   return (
     <div className="space-y-4">
@@ -201,13 +166,15 @@ export function LeaseDocumentDisplay({ document, leaseId, generatedAt }: LeaseDo
         <CardContent className="p-6">
           <div className="prose max-w-none">
             {showFullDocument ? (
-              <div className="space-y-2">{formatDocumentForDisplay(document)}</div>
+              // Affichage complet avec HTML interprété
+              <div className="space-y-2" dangerouslySetInnerHTML={{ __html: document }} />
             ) : (
+              // Aperçu en texte brut
               <div className="space-y-2">
-                {formatDocumentForDisplay(previewContent)}
+                <div className="text-gray-700 whitespace-pre-wrap">{getPreviewText(document)}</div>
                 <div className="border-t pt-4 mt-4">
                   <p className="text-sm text-gray-500 italic">
-                    Aperçu des 20 premières lignes. Cliquez sur "Document complet" pour voir l'intégralité.
+                    Aperçu du document. Cliquez sur "Document complet" pour voir l'intégralité avec la mise en forme.
                   </p>
                 </div>
               </div>
