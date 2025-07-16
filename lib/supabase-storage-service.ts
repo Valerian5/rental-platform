@@ -11,12 +11,18 @@ export const SupabaseStorageService = {
     console.log("📄 Type MIME:", file.type, "Taille:", file.size)
 
     try {
+      // Vérifier si le bucket existe, sinon utiliser un bucket par défaut
+      const availableBuckets = ["property-images", "property-documents", "documents", "lease-annexes"]
+      const targetBucket = availableBuckets.includes(bucket) ? bucket : "property-documents"
+
+      console.log("🪣 Bucket cible:", targetBucket)
+
       // Générer un nom de fichier unique
       const fileExt = file.name.split(".").pop()
       const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
 
       // Upload vers Supabase Storage avec options étendues
-      const { data, error } = await supabase.storage.from(bucket).upload(fileName, file, {
+      const { data, error } = await supabase.storage.from(targetBucket).upload(fileName, file, {
         cacheControl: "3600",
         upsert: false,
         contentType: file.type || "application/octet-stream",
@@ -25,20 +31,27 @@ export const SupabaseStorageService = {
       if (error) {
         console.error("❌ Erreur Supabase upload:", error)
         console.error("📄 Détails fichier:", { name: file.name, type: file.type, size: file.size })
+
+        // Si le bucket n'existe pas, essayer avec le bucket par défaut
+        if (error.message?.includes("Bucket not found") && targetBucket !== "property-documents") {
+          console.log("🔄 Tentative avec bucket par défaut: property-documents")
+          return await this.uploadFile(file, "property-documents", folder)
+        }
+
         throw error
       }
 
       // Obtenir l'URL publique
       const {
         data: { publicUrl },
-      } = supabase.storage.from(bucket).getPublicUrl(fileName)
+      } = supabase.storage.from(targetBucket).getPublicUrl(fileName)
 
       console.log("✅ Upload réussi:", publicUrl)
 
       return {
         url: publicUrl,
         path: fileName,
-        bucket,
+        bucket: targetBucket,
       }
     } catch (error) {
       console.error("❌ Erreur upload:", error)
@@ -105,5 +118,49 @@ export const SupabaseStorageService = {
       data: { publicUrl },
     } = supabase.storage.from(bucket).getPublicUrl(path)
     return publicUrl
+  },
+
+  // Fonction pour créer un bucket s'il n'existe pas
+  async ensureBucketExists(bucketName: string) {
+    try {
+      const { data: buckets, error } = await supabase.storage.listBuckets()
+
+      if (error) {
+        console.error("❌ Erreur liste buckets:", error)
+        return false
+      }
+
+      const bucketExists = buckets?.some((bucket) => bucket.name === bucketName)
+
+      if (!bucketExists) {
+        console.log("🪣 Création du bucket:", bucketName)
+
+        const { error: createError } = await supabase.storage.createBucket(bucketName, {
+          public: true,
+          fileSizeLimit: 52428800, // 50MB
+          allowedMimeTypes: [
+            "application/pdf",
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "text/plain",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          ],
+        })
+
+        if (createError) {
+          console.error("❌ Erreur création bucket:", createError)
+          return false
+        }
+
+        console.log("✅ Bucket créé:", bucketName)
+      }
+
+      return true
+    } catch (error) {
+      console.error("❌ Erreur vérification bucket:", error)
+      return false
+    }
   },
 }

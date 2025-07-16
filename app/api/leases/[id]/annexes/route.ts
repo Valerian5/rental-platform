@@ -51,8 +51,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ success: false, error: "Bail non trouvé" }, { status: 404 })
     }
 
+    // S'assurer que le bucket existe
+    const bucketReady = await SupabaseStorageService.ensureBucketExists("lease-annexes")
+    const targetBucket = bucketReady ? "lease-annexes" : "property-documents"
+
+    console.log("🪣 [API] Bucket utilisé:", targetBucket)
+
     // Upload vers Supabase Storage
-    const result = await SupabaseStorageService.uploadFile(file, "lease-annexes", `leases/${params.id}`)
+    const result = await SupabaseStorageService.uploadFile(file, targetBucket, `leases/${params.id}`)
 
     console.log("✅ [API] Fichier uploadé:", result.url)
 
@@ -80,7 +86,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         const pathParts = url.pathname.split("/")
         if (pathParts.length >= 6) {
           const filePath = pathParts.slice(6).join("/")
-          await SupabaseStorageService.deleteFile(filePath, "lease-annexes")
+          await SupabaseStorageService.deleteFile(filePath, result.bucket)
         }
       } catch (deleteError) {
         console.warn("⚠️ [API] Impossible de supprimer le fichier après erreur:", deleteError)
