@@ -43,21 +43,27 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     console.log("📄 [API] Fichier reçu:", file.name, "type:", annexType)
 
-    // Vérifier que le bail existe
-    const { data: lease, error: leaseError } = await supabase.from("leases").select("id").eq("id", params.id).single()
+    // Vérifier que le bail existe et récupérer les infos nécessaires
+    const { data: lease, error: leaseError } = await supabase
+      .from("leases")
+      .select("id, owner_id, tenant_id")
+      .eq("id", params.id)
+      .single()
 
     if (leaseError) {
       console.error("❌ [API] Bail non trouvé:", leaseError)
       return NextResponse.json({ success: false, error: "Bail non trouvé" }, { status: 404 })
     }
 
+    console.log("📋 [API] Bail trouvé:", lease.id, "owner:", lease.owner_id)
+
     // Upload vers Supabase Storage avec fallback automatique
     console.log("🪣 [API] Tentative upload avec fallback automatique")
-    const result = await SupabaseStorageService.uploadFile(file, "property-documents", `leases/${params.id}`)
+    const result = await SupabaseStorageService.uploadFile(file, "documents", `leases/${params.id}`)
 
     console.log("✅ [API] Fichier uploadé:", result.url, "dans bucket:", result.bucket)
 
-    // Sauvegarder les métadonnées
+    // Sauvegarder les métadonnées avec plus de logs
     const annexData = {
       lease_id: params.id,
       annex_type: annexType || "other",
@@ -67,6 +73,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       uploaded_at: new Date().toISOString(),
     }
 
+    console.log("💾 [API] Données à insérer:", annexData)
+
+    // Utiliser le client Supabase avec auth bypass pour debug
     const { data: savedAnnex, error: saveError } = await supabase
       .from("lease_annexes")
       .insert(annexData)
@@ -75,6 +84,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     if (saveError) {
       console.error("❌ [API] Erreur sauvegarde annexe:", saveError)
+      console.error("📋 [API] Code erreur:", saveError.code)
+      console.error("📋 [API] Message:", saveError.message)
+      console.error("📋 [API] Détails:", saveError.details)
+
       // Supprimer le fichier uploadé en cas d'erreur
       try {
         const url = new URL(result.url)
@@ -86,7 +99,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       } catch (deleteError) {
         console.warn("⚠️ [API] Impossible de supprimer le fichier après erreur:", deleteError)
       }
-      return NextResponse.json({ success: false, error: "Erreur lors de la sauvegarde" }, { status: 500 })
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Erreur lors de la sauvegarde: " + saveError.message,
+          code: saveError.code,
+        },
+        { status: 500 },
+      )
     }
 
     console.log("✅ [API] Annexe sauvegardée avec ID:", savedAnnex.id)
