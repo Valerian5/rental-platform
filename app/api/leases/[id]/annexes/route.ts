@@ -51,16 +51,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ success: false, error: "Bail non trouvé" }, { status: 404 })
     }
 
-    // S'assurer que le bucket existe
-    const bucketReady = await SupabaseStorageService.ensureBucketExists("lease-annexes")
-    const targetBucket = bucketReady ? "lease-annexes" : "property-documents"
+    // Upload vers Supabase Storage avec fallback automatique
+    console.log("🪣 [API] Tentative upload avec fallback automatique")
+    const result = await SupabaseStorageService.uploadFile(file, "property-documents", `leases/${params.id}`)
 
-    console.log("🪣 [API] Bucket utilisé:", targetBucket)
-
-    // Upload vers Supabase Storage
-    const result = await SupabaseStorageService.uploadFile(file, targetBucket, `leases/${params.id}`)
-
-    console.log("✅ [API] Fichier uploadé:", result.url)
+    console.log("✅ [API] Fichier uploadé:", result.url, "dans bucket:", result.bucket)
 
     // Sauvegarder les métadonnées
     const annexData = {
