@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase"
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const leaseId = params.id
-    console.log("🧾 [RENT-RECEIPTS] Récupération quittances pour bail:", leaseId)
+    console.log("🔍 [RENT-RECEIPTS] Récupération quittances pour bail:", leaseId)
 
     const { data: receipts, error } = await supabase
       .from("rent_receipts")

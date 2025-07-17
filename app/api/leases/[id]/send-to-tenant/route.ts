@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
 import { emailService } from "@/lib/email-service"
-import { notificationsService } from "@/lib/notifications-service"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -13,9 +12,24 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .from("leases")
       .select(`
         *,
-        property:properties(*),
-        tenant:users!leases_tenant_id_fkey(*),
-        owner:users!leases_owner_id_fkey(*)
+        property:properties(
+          id,
+          title,
+          address,
+          city
+        ),
+        tenant:users!leases_tenant_id_fkey(
+          id,
+          first_name,
+          last_name,
+          email
+        ),
+        owner:users!leases_owner_id_fkey(
+          id,
+          first_name,
+          last_name,
+          email
+        )
       `)
       .eq("id", leaseId)
       .single()
@@ -47,28 +61,33 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     // 4. Créer une notification pour le locataire
-    try {
-      await notificationsService.createNotification(lease.tenant_id, {
-        title: "Nouveau bail à signer",
-        content: `Votre bail pour ${lease.property?.title || "la propriété"} est prêt à être signé. Consultez votre espace personnel pour le visualiser et le signer.`,
-        type: "lease_ready",
-        action_url: `/tenant/leases/${leaseId}`,
-      })
-      console.log("✅ [SEND-TO-TENANT] Notification créée")
-    } catch (notifError) {
-      console.warn("⚠️ [SEND-TO-TENANT] Erreur notification:", notifError)
+    const { error: notificationError } = await supabase.from("notifications").insert({
+      user_id: lease.tenant.id,
+      type: "lease_ready",
+      title: "Votre bail est prêt à être signé",
+      message: `Le bail pour ${lease.property.title} est maintenant disponible pour signature.`,
+      data: {
+        lease_id: leaseId,
+        property_title: lease.property.title,
+        owner_name: `${lease.owner.first_name} ${lease.owner.last_name}`,
+      },
+      is_read: false,
+    })
+
+    if (notificationError) {
+      console.error("❌ [SEND-TO-TENANT] Erreur notification:", notificationError)
     }
 
     // 5. Envoyer un email au locataire
     try {
       await emailService.sendEmail({
-        to: lease.tenant?.email || "",
+        to: lease.tenant.email || "",
         template: "lease_ready",
         data: {
-          tenantName: `${lease.tenant?.first_name} ${lease.tenant?.last_name}`,
-          propertyTitle: lease.property?.title || "Propriété",
-          propertyAddress: lease.property?.address || "",
-          ownerName: `${lease.owner?.first_name} ${lease.owner?.last_name}`,
+          tenantName: `${lease.tenant.first_name} ${lease.tenant.last_name}`,
+          propertyTitle: lease.property.title || "Propriété",
+          propertyAddress: lease.property.address || "",
+          ownerName: `${lease.owner.first_name} ${lease.owner.last_name}`,
           leaseUrl: `${process.env.NEXT_PUBLIC_APP_URL}/tenant/leases/${leaseId}`,
           monthlyRent: lease.montant_loyer_mensuel,
           startDate: lease.date_prise_effet ? new Date(lease.date_prise_effet).toLocaleDateString("fr-FR") : "",

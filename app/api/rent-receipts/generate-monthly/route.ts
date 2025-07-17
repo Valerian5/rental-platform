@@ -6,19 +6,26 @@ export async function POST(request: NextRequest) {
     console.log("🔄 [GENERATE-RECEIPTS] Génération des quittances mensuelles")
 
     const currentDate = new Date()
-    const month = currentDate.toLocaleString("fr-FR", { month: "long" })
-    const year = currentDate.getFullYear()
+    const currentMonth = (currentDate.getMonth() + 1).toString()
+    const currentYear = currentDate.getFullYear()
 
     // Récupérer tous les baux actifs
     const { data: activeLeases, error: leasesError } = await supabase
       .from("leases")
       .select(`
-        *,
-        property:properties(id, title),
-        tenant:users!leases_tenant_id_fkey(id, first_name, last_name),
-        owner:users!leases_owner_id_fkey(id, first_name, last_name)
+        id,
+        tenant_id,
+        owner_id,
+        property_id,
+        monthly_rent,
+        charges,
+        start_date,
+        end_date,
+        status
       `)
       .in("status", ["active", "signed"])
+      .lte("start_date", currentDate.toISOString().split("T")[0])
+      .gte("end_date", currentDate.toISOString().split("T")[0])
 
     if (leasesError) {
       console.error("❌ [GENERATE-RECEIPTS] Erreur récupération baux:", leasesError)
@@ -27,110 +34,74 @@ export async function POST(request: NextRequest) {
 
     console.log(`📋 [GENERATE-RECEIPTS] ${activeLeases?.length || 0} baux actifs trouvés`)
 
-    const generatedReceipts = []
-    const errors = []
+    const receiptsToCreate = []
+    const existingReceipts = []
 
     for (const lease of activeLeases || []) {
-      try {
-        // Vérifier si la quittance n'existe pas déjà
-        const { data: existingReceipt } = await supabase
-          .from("rent_receipts")
-          .select("id")
-          .eq("lease_id", lease.id)
-          .eq("month", month)
-          .eq("year", year)
-          .single()
+      // Vérifier si la quittance existe déjà
+      const { data: existingReceipt, error: checkError } = await supabase
+        .from("rent_receipts")
+        .select("id")
+        .eq("lease_id", lease.id)
+        .eq("month", currentMonth)
+        .eq("year", currentYear)
+        .single()
 
-        if (existingReceipt) {
-          console.log(`⏭️ [GENERATE-RECEIPTS] Quittance déjà existante pour bail ${lease.id}`)
-          continue
-        }
-
-        // Créer la nouvelle quittance
-        const receiptData = {
-          lease_id: lease.id,
-          tenant_id: lease.tenant_id,
-          owner_id: lease.owner_id,
-          property_id: lease.property_id,
-          month,
-          year,
-          rent_amount: lease.montant_loyer_mensuel || lease.monthly_rent || 0,
-          charges_amount: lease.montant_charges || lease.charges || 0,
-          total_amount:
-            (lease.montant_loyer_mensuel || lease.monthly_rent || 0) + (lease.montant_charges || lease.charges || 0),
-          status: "pending",
-        }
-
-        const { data: newReceipt, error: receiptError } = await supabase
-          .from("rent_receipts")
-          .insert(receiptData)
-          .select()
-          .single()
-
-        if (receiptError) {
-          console.error(`❌ [GENERATE-RECEIPTS] Erreur création quittance pour bail ${lease.id}:`, receiptError)
-          errors.push({ leaseId: lease.id, error: receiptError.message })
-          continue
-        }
-
-        // Créer l'entrée de suivi de paiement
-        const paymentTrackingData = {
-          rent_receipt_id: newReceipt.id,
-          tenant_id: lease.tenant_id,
-          owner_id: lease.owner_id,
-          property_id: lease.property_id,
-          lease_id: lease.id,
-          rent_paid: 0,
-          charges_paid: 0,
-          total_paid: 0,
-          payment_status: "pending",
-        }
-
-        const { error: trackingError } = await supabase.from("payment_tracking").insert(paymentTrackingData)
-
-        if (trackingError) {
-          console.warn(`⚠️ [GENERATE-RECEIPTS] Erreur création suivi paiement pour ${newReceipt.id}:`, trackingError)
-        }
-
-        generatedReceipts.push({
-          receiptId: newReceipt.id,
-          leaseId: lease.id,
-          tenant: `${lease.tenant?.first_name} ${lease.tenant?.last_name}`,
-          property: lease.property?.title,
-          amount: receiptData.total_amount,
-        })
-
-        console.log(`✅ [GENERATE-RECEIPTS] Quittance créée pour bail ${lease.id}`)
-      } catch (error) {
-        console.error(`❌ [GENERATE-RECEIPTS] Erreur traitement bail ${lease.id}:`, error)
-        errors.push({ leaseId: lease.id, error: error instanceof Error ? error.message : "Erreur inconnue" })
+      if (checkError && checkError.code !== "PGRST116") {
+        console.error("❌ [GENERATE-RECEIPTS] Erreur vérification:", checkError)
+        continue
       }
+
+      if (existingReceipt) {
+        existingReceipts.push(lease.id)
+        continue
+      }
+
+      // Créer la nouvelle quittance
+      const receiptData = {
+        lease_id: lease.id,
+        tenant_id: lease.tenant_id,
+        owner_id: lease.owner_id,
+        property_id: lease.property_id,
+        month: currentMonth,
+        year: currentYear,
+        rent_amount: lease.monthly_rent,
+        charges_amount: lease.charges || 0,
+        total_amount: lease.monthly_rent + (lease.charges || 0),
+        status: "pending",
+      }
+
+      receiptsToCreate.push(receiptData)
     }
 
-    console.log(
-      `🎉 [GENERATE-RECEIPTS] Génération terminée: ${generatedReceipts.length} créées, ${errors.length} erreurs`,
-    )
+    // Insérer les nouvelles quittances
+    let createdReceipts = []
+    if (receiptsToCreate.length > 0) {
+      const { data: newReceipts, error: insertError } = await supabase
+        .from("rent_receipts")
+        .insert(receiptsToCreate)
+        .select("*")
+
+      if (insertError) {
+        console.error("❌ [GENERATE-RECEIPTS] Erreur insertion:", insertError)
+        return NextResponse.json({ success: false, error: "Erreur création quittances" }, { status: 500 })
+      }
+
+      createdReceipts = newReceipts || []
+    }
+
+    console.log(`✅ [GENERATE-RECEIPTS] ${createdReceipts.length} nouvelles quittances créées`)
+    console.log(`ℹ️ [GENERATE-RECEIPTS] ${existingReceipts.length} quittances existaient déjà`)
 
     return NextResponse.json({
       success: true,
-      message: `${generatedReceipts.length} quittances générées pour ${month} ${year}`,
-      generated: generatedReceipts,
-      errors: errors.length > 0 ? errors : undefined,
-      stats: {
-        totalLeases: activeLeases?.length || 0,
-        generated: generatedReceipts.length,
-        errors: errors.length,
-      },
+      message: `${createdReceipts.length} quittances créées pour ${currentMonth}/${currentYear}`,
+      created: createdReceipts.length,
+      existing: existingReceipts.length,
+      receipts: createdReceipts,
     })
   } catch (error) {
-    console.error("❌ [GENERATE-RECEIPTS] Erreur générale:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Erreur lors de la génération des quittances",
-        details: error instanceof Error ? error.message : "Erreur inconnue",
-      },
-      { status: 500 },
-    )
+    console.error("❌ [GENERATE-RECEIPTS] Erreur:", error)
+    return NextResponse.json({ success: false, error: "Erreur serveur" }, { status: 500 })
   }
 }

@@ -6,6 +6,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const tenantId = params.id
     console.log("🔍 [ACTIVE-LEASE] Récupération bail actif pour locataire:", tenantId)
 
+    // Récupérer le bail actif du locataire
     const { data: lease, error } = await supabase
       .from("leases")
       .select(`
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         )
       `)
       .eq("tenant_id", tenantId)
-      .in("status", ["active", "signed"])
+      .in("status", ["active", "signed", "sent_to_tenant"])
       .order("created_at", { ascending: false })
       .limit(1)
       .single()
@@ -38,14 +39,18 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     if (!lease) {
       console.log("ℹ️ [ACTIVE-LEASE] Aucun bail actif trouvé")
-      return NextResponse.json({ success: true, lease: null })
+      return NextResponse.json({
+        success: true,
+        lease: null,
+        message: "Aucun bail actif trouvé",
+      })
     }
 
     console.log("✅ [ACTIVE-LEASE] Bail actif récupéré:", lease.id)
 
     return NextResponse.json({
       success: true,
-      lease,
+      lease: lease,
     })
   } catch (error) {
     console.error("❌ [ACTIVE-LEASE] Erreur:", error)

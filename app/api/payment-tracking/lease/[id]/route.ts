@@ -4,21 +4,13 @@ import { supabase } from "@/lib/supabase"
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const leaseId = params.id
-    console.log("💳 [PAYMENT-TRACKING] Récupération paiements pour bail:", leaseId)
+    console.log("🔍 [PAYMENT-TRACKING] Récupération paiements pour bail:", leaseId)
 
     const { data: payments, error } = await supabase
       .from("payment_tracking")
-      .select(`
-        *,
-        rent_receipt:rent_receipts(
-          id,
-          month,
-          year,
-          total_amount
-        )
-      `)
+      .select("*")
       .eq("lease_id", leaseId)
-      .order("created_at", { ascending: false })
+      .order("payment_date", { ascending: false })
 
     if (error) {
       console.error("❌ [PAYMENT-TRACKING] Erreur récupération:", error)
