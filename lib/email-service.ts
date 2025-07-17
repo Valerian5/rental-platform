@@ -46,6 +46,42 @@ class EmailService {
         text: `Nouvelle candidature reçue pour ${data.propertyTitle} par ${data.tenantName}. Score: ${data.score}/100. Voir: ${data.applicationUrl}`,
       },
 
+      lease_ready: {
+        subject: `Votre bail est prêt à signer - ${data.propertyTitle}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #059669;">Votre bail est prêt !</h2>
+            <p>Bonjour ${data.tenantName},</p>
+            <p>Excellente nouvelle ! Votre bail de location est maintenant prêt à être signé.</p>
+            <div style="background: #f0fdf4; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <h3 style="margin: 0 0 10px 0;">${data.propertyTitle}</h3>
+              <p style="margin: 0;"><strong>Adresse :</strong> ${data.propertyAddress}</p>
+              <p style="margin: 0;"><strong>Loyer mensuel :</strong> ${data.monthlyRent}€</p>
+              <p style="margin: 0;"><strong>Date de prise d'effet :</strong> ${data.startDate}</p>
+              <p style="margin: 0;"><strong>Propriétaire :</strong> ${data.ownerName}</p>
+            </div>
+            <p><strong>Prochaines étapes :</strong></p>
+            <ol style="padding-left: 20px;">
+              <li>Consultez le bail dans votre espace personnel</li>
+              <li>Vérifiez toutes les informations</li>
+              <li>Signez électroniquement le document</li>
+              <li>Recevez votre exemplaire signé</li>
+            </ol>
+            <a href="${data.leaseUrl}" style="background: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; margin: 20px 0;">
+              Consulter et signer mon bail
+            </a>
+            <p style="color: #6b7280; font-size: 14px;">
+              <strong>Important :</strong> Vous avez 7 jours pour signer ce bail. Passé ce délai, vous devrez contacter votre propriétaire.
+            </p>
+            <p style="margin-top: 30px; color: #6b7280; font-size: 14px;">
+              Cordialement,<br>
+              L'équipe RentalPlatform
+            </p>
+          </div>
+        `,
+        text: `Votre bail pour ${data.propertyTitle} est prêt à signer. Consultez votre espace personnel: ${data.leaseUrl}`,
+      },
+
       visit_scheduled: {
         subject: `Visite programmée - ${data.propertyTitle}`,
         html: `
@@ -171,6 +207,14 @@ class EmailService {
     return this.sendEmail({
       to: ownerEmail,
       template: "application_received",
+      data,
+    })
+  }
+
+  async sendLeaseReadyNotification(tenantEmail: string, data: any) {
+    return this.sendEmail({
+      to: tenantEmail,
+      template: "lease_ready",
       data,
     })
   }

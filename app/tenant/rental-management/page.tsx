@@ -1,683 +1,553 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import {
   Home,
-  AlertTriangle,
+  FileText,
   CreditCard,
-  Shield,
+  AlertTriangle,
+  Calendar,
   Download,
-  Phone,
-  Mail,
-  Clock,
+  Upload,
   CheckCircle,
-  AlertCircle,
+  Clock,
+  Euro,
+  Receipt,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { authService } from "@/lib/auth-service"
+import { toast } from "sonner"
 
-// Données simulées - à remplacer par des appels API
-const currentLease = {
-  id: "1",
+interface ActiveLease {
+  id: string
   property: {
-    title: "Appartement 3 pièces",
-    address: "123 Rue de la Paix, 75001 Paris",
-    surface: 65,
-    rooms: 3,
-    bedrooms: 2,
-  },
+    id: string
+    title: string
+    address: string
+    city: string
+  }
   owner: {
-    name: "Marie Dupont",
-    email: "marie.dupont@email.com",
-    phone: "06 12 34 56 78",
-  },
-  startDate: "2023-01-01",
-  endDate: "2024-12-31",
-  monthlyRent: 1200,
-  charges: 150,
-  deposit: 2400,
-  status: "active",
-  leaseDocumentUrl: "/documents/bail-123.pdf",
+    first_name: string
+    last_name: string
+    email: string
+    phone: string
+  }
+  start_date: string
+  end_date: string
+  monthly_rent: number
+  charges: number
+  deposit: number
+  status: string
 }
 
-const rentReceipts = [
-  {
-    id: "1",
-    month: "décembre",
-    year: 2023,
-    rentAmount: 1200,
-    chargesAmount: 150,
-    totalAmount: 1350,
-    status: "paid",
-    paymentDate: "2023-12-05",
-    receiptUrl: "/receipts/dec-2023.pdf",
-  },
-  {
-    id: "2",
-    month: "novembre",
-    year: 2023,
-    rentAmount: 1200,
-    chargesAmount: 150,
-    totalAmount: 1350,
-    status: "paid",
-    paymentDate: "2023-11-03",
-    receiptUrl: "/receipts/nov-2023.pdf",
-  },
-  {
-    id: "3",
-    month: "janvier",
-    year: 2024,
-    rentAmount: 1200,
-    chargesAmount: 150,
-    totalAmount: 1350,
-    status: "pending",
-    paymentDate: null,
-    receiptUrl: null,
-  },
-]
+interface RentReceipt {
+  id: string
+  month: string
+  year: number
+  rent_amount: number
+  charges_amount: number
+  total_amount: number
+  payment_date: string | null
+  status: "pending" | "paid" | "overdue"
+  receipt_url: string | null
+}
 
-const myIncidents = [
-  {
-    id: "1",
-    title: "Fuite d'eau dans la salle de bain",
-    description: "Fuite au niveau du robinet de la douche",
-    category: "plumbing",
-    priority: "high",
-    status: "in_progress",
-    reportedDate: "2023-12-15",
-    photos: ["/photos/fuite1.jpg"],
-  },
-  {
-    id: "2",
-    title: "Problème de chauffage",
-    description: "Le radiateur de la chambre ne chauffe plus",
-    category: "heating",
-    priority: "medium",
-    status: "resolved",
-    reportedDate: "2023-11-20",
-    resolvedDate: "2023-11-25",
-    resolutionNotes: "Radiateur réparé par le plombier",
-  },
-]
-
-const maintenanceWorks = [
-  {
-    id: "1",
-    title: "Révision annuelle chaudière",
-    description: "Entretien obligatoire de la chaudière gaz",
-    type: "preventive",
-    scheduledDate: "2024-01-15",
-    status: "scheduled",
-    providerName: "Chauffage Pro",
-  },
-  {
-    id: "2",
-    title: "Réparation fuite salle de bain",
-    description: "Intervention suite au signalement d'incident",
-    type: "corrective",
-    scheduledDate: "2023-12-18",
-    completedDate: "2023-12-18",
-    status: "completed",
-    providerName: "Plomberie Express",
-    cost: 120,
-  },
-]
-
-const annualDocuments = [
-  {
-    id: "1",
-    documentType: "insurance",
-    documentName: "Attestation assurance habitation 2024",
-    expiryDate: "2024-12-31",
-    status: "valid",
-    documentUrl: "/documents/assurance-2024.pdf",
-  },
-  {
-    id: "2",
-    documentType: "boiler_maintenance",
-    documentName: "Certificat entretien chaudière 2023",
-    expiryDate: "2024-01-15",
-    status: "expiring",
-    documentUrl: "/documents/chaudiere-2023.pdf",
-  },
-]
+interface PaymentTracking {
+  id: string
+  rent_receipt_id: string
+  payment_method: string
+  payment_reference: string
+  payment_proof_url: string | null
+  total_paid: number
+  payment_status: string
+  payment_date: string | null
+  validated_by_owner: boolean
+  is_late: boolean
+  late_fees: number
+}
 
 export default function TenantRentalManagementPage() {
-  const [activeTab, setActiveTab] = useState("overview")
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [activeLease, setActiveLease] = useState<ActiveLease | null>(null)
+  const [rentReceipts, setRentReceipts] = useState<RentReceipt[]>([])
+  const [paymentTracking, setPaymentTracking] = useState<PaymentTracking[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "paid":
-        return <Badge className="bg-green-600">Payé</Badge>
-      case "pending":
-        return <Badge variant="secondary">En attente</Badge>
-      case "overdue":
-        return <Badge variant="destructive">En retard</Badge>
-      case "active":
-        return <Badge className="bg-blue-600">Actif</Badge>
-      case "resolved":
-        return <Badge className="bg-green-600">Résolu</Badge>
-      case "in_progress":
-        return <Badge className="bg-orange-600">En cours</Badge>
-      case "reported":
-        return <Badge variant="secondary">Signalé</Badge>
-      case "scheduled":
-        return <Badge className="bg-blue-600">Programmé</Badge>
-      case "completed":
-        return <Badge className="bg-green-600">Terminé</Badge>
-      case "valid":
-        return <Badge className="bg-green-600">Valide</Badge>
-      case "expiring":
-        return <Badge className="bg-orange-600">Expire bientôt</Badge>
-      case "expired":
-        return <Badge variant="destructive">Expiré</Badge>
-      default:
-        return <Badge variant="outline">{status}</Badge>
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const user = await authService.getCurrentUser()
+        if (!user || user.user_type !== "tenant") {
+          toast.error("Accès non autorisé")
+          window.location.href = "/login"
+          return
+        }
+
+        setCurrentUser(user)
+
+        // Récupérer le bail actuel
+        const leaseResponse = await fetch(`/api/leases/tenant/${user.id}/active`)
+        const leaseData = await leaseResponse.json()
+
+        if (leaseData.success && leaseData.lease) {
+          setActiveLease(leaseData.lease)
+
+          // Récupérer les quittances
+          const receiptsResponse = await fetch(`/api/rent-receipts/lease/${leaseData.lease.id}`)
+          const receiptsData = await receiptsResponse.json()
+
+          if (receiptsData.success) {
+            setRentReceipts(receiptsData.receipts || [])
+          }
+
+          // Récupérer le suivi des paiements
+          const paymentsResponse = await fetch(`/api/payment-tracking/lease/${leaseData.lease.id}`)
+          const paymentsData = await paymentsResponse.json()
+
+          if (paymentsData.success) {
+            setPaymentTracking(paymentsData.payments || [])
+          }
+        }
+      } catch (error) {
+        console.error("Erreur:", error)
+        toast.error("Erreur lors du chargement")
+      } finally {
+        setIsLoading(false)
+      }
     }
+
+    fetchData()
+  }, [])
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto py-6">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center space-y-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="text-gray-600">Chargement de votre espace locataire...</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
-  const getPriorityIcon = (priority: string) => {
-    switch (priority) {
-      case "urgent":
-        return <AlertTriangle className="h-4 w-4 text-red-600" />
-      case "high":
-        return <AlertCircle className="h-4 w-4 text-orange-600" />
-      case "medium":
-        return <Clock className="h-4 w-4 text-yellow-600" />
-      case "low":
-        return <CheckCircle className="h-4 w-4 text-green-600" />
-      default:
-        return <Clock className="h-4 w-4 text-gray-600" />
-    }
+  if (!activeLease) {
+    return (
+      <div className="container mx-auto py-6">
+        <Card>
+          <CardContent className="text-center py-12">
+            <Home className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+            <h3 className="text-lg font-semibold mb-2">Aucun bail actuel</h3>
+            <p className="text-muted-foreground mb-4">Vous n'avez actuellement aucun bail de location actif.</p>
+            <Button asChild>
+              <Link href="/tenant/search">Rechercher un logement</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
-  const expiringDocuments = annualDocuments.filter((doc) => doc.status === "expiring" || doc.status === "expired")
+  // Calculs pour le tableau de bord
+  const currentMonth = new Date().toLocaleString("fr-FR", { month: "long" })
+  const currentYear = new Date().getFullYear()
+
+  const currentReceipt = rentReceipts.find(
+    (r) => r.month.toLowerCase() === currentMonth.toLowerCase() && r.year === currentYear,
+  )
+
+  const overdueReceipts = rentReceipts.filter((r) => r.status === "overdue")
+  const paidReceipts = rentReceipts.filter((r) => r.status === "paid")
+  const totalPaid = paidReceipts.reduce((sum, r) => sum + r.total_amount, 0)
+
+  const nextPaymentDate = new Date()
+  nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1)
+  nextPaymentDate.setDate(5) // Supposons que le loyer est dû le 5 de chaque mois
 
   return (
     <div className="container mx-auto py-6">
       <div className="mb-6">
         <h1 className="text-3xl font-bold mb-2">Mon espace locataire</h1>
-        <p className="text-muted-foreground">Gérez votre location en toute simplicité</p>
+        <p className="text-muted-foreground">Gérez votre location : {activeLease.property.title}</p>
+      </div>
+
+      {/* Vue d'ensemble */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Loyer mensuel</CardTitle>
+            <Euro className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{activeLease.monthly_rent}€</div>
+            <p className="text-xs text-muted-foreground">+ {activeLease.charges}€ de charges</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Prochain paiement</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {nextPaymentDate.getDate()}/{nextPaymentDate.getMonth() + 1}
+            </div>
+            <p className="text-xs text-muted-foreground">{activeLease.monthly_rent + activeLease.charges}€ total</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Statut actuel</CardTitle>
+            {currentReceipt?.status === "paid" ? (
+              <CheckCircle className="h-4 w-4 text-green-600" />
+            ) : currentReceipt?.status === "overdue" ? (
+              <AlertTriangle className="h-4 w-4 text-red-600" />
+            ) : (
+              <Clock className="h-4 w-4 text-orange-600" />
+            )}
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {currentReceipt?.status === "paid"
+                ? "À jour"
+                : currentReceipt?.status === "overdue"
+                  ? "En retard"
+                  : "En attente"}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {currentMonth} {currentYear}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total payé</CardTitle>
+            <Receipt className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalPaid.toLocaleString()}€</div>
+            <p className="text-xs text-muted-foreground">{paidReceipts.length} paiements effectués</p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Alertes importantes */}
-      {expiringDocuments.length > 0 && (
-        <Alert className="mb-6 border-orange-200 bg-orange-50">
-          <AlertTriangle className="h-4 w-4 text-orange-600" />
-          <AlertDescription className="text-orange-800">
-            <strong>Documents à renouveler :</strong> {expiringDocuments.length} document(s) expire(nt) bientôt.
-            <Button variant="link" className="p-0 ml-2 text-orange-800" onClick={() => setActiveTab("documents")}>
-              Voir les détails
+      {overdueReceipts.length > 0 && (
+        <Card className="border-red-200 bg-red-50 mb-6">
+          <CardHeader>
+            <div className="flex items-center space-x-2">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              <CardTitle className="text-red-800">Paiements en retard</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-red-700 mb-4">
+              Vous avez {overdueReceipts.length} paiement(s) en retard. Veuillez régulariser votre situation rapidement.
+            </p>
+            <Button variant="destructive" size="sm">
+              <CreditCard className="h-4 w-4 mr-2" />
+              Effectuer un paiement
             </Button>
-          </AlertDescription>
-        </Alert>
+          </CardContent>
+        </Card>
       )}
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-6">
+      <Tabs defaultValue="overview" className="space-y-6">
+        <TabsList>
           <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
-          <TabsTrigger value="lease">Mon bail</TabsTrigger>
+          <TabsTrigger value="payments">Paiements</TabsTrigger>
           <TabsTrigger value="receipts">Quittances</TabsTrigger>
-          <TabsTrigger value="incidents">Incidents</TabsTrigger>
-          <TabsTrigger value="maintenance">Travaux</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
+          <TabsTrigger value="contact">Contact</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-6 mt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Informations du bail */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Home className="h-5 w-5 mr-2" />
-                  Mon logement
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <h3 className="font-semibold">{currentLease.property.title}</h3>
-                <p className="text-sm text-muted-foreground mb-3">{currentLease.property.address}</p>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Surface:</span>
-                    <span className="ml-1 font-medium">{currentLease.property.surface} m²</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Pièces:</span>
-                    <span className="ml-1 font-medium">{currentLease.property.rooms}</span>
-                  </div>
-                </div>
-                <div className="mt-3">{getStatusBadge(currentLease.status)}</div>
-              </CardContent>
-              <CardFooter>
-                <Button variant="outline" size="sm" className="w-full" onClick={() => setActiveTab("lease")}>
-                  Voir le bail
-                </Button>
-              </CardFooter>
-            </Card>
-
-            {/* Loyer du mois */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <CreditCard className="h-5 w-5 mr-2" />
-                  Loyer du mois
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span>Loyer:</span>
-                    <span className="font-medium">{currentLease.monthlyRent} €</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Charges:</span>
-                    <span className="font-medium">{currentLease.charges} €</span>
-                  </div>
-                  <hr />
-                  <div className="flex justify-between font-semibold">
-                    <span>Total:</span>
-                    <span>{currentLease.monthlyRent + currentLease.charges} €</span>
-                  </div>
-                </div>
-                <div className="mt-3">{getStatusBadge(rentReceipts[0]?.status || "pending")}</div>
-              </CardContent>
-              <CardFooter>
-                <Button variant="outline" size="sm" className="w-full" onClick={() => setActiveTab("receipts")}>
-                  Voir les quittances
-                </Button>
-              </CardFooter>
-            </Card>
-
-            {/* Contact propriétaire */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Phone className="h-5 w-5 mr-2" />
-                  Mon propriétaire
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <h3 className="font-semibold">{currentLease.owner.name}</h3>
-                <div className="space-y-2 mt-3">
-                  <div className="flex items-center text-sm">
-                    <Mail className="h-4 w-4 mr-2 text-muted-foreground" />
-                    <span>{currentLease.owner.email}</span>
-                  </div>
-                  <div className="flex items-center text-sm">
-                    <Phone className="h-4 w-4 mr-2 text-muted-foreground" />
-                    <span>{currentLease.owner.phone}</span>
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter>
-                <Button variant="outline" size="sm" className="w-full" asChild>
-                  <Link href="/messaging">Envoyer un message</Link>
-                </Button>
-              </CardFooter>
-            </Card>
-          </div>
-
-          {/* Incidents récents */}
+        <TabsContent value="overview" className="space-y-6">
+          {/* Informations du bail */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span className="flex items-center">
-                  <AlertTriangle className="h-5 w-5 mr-2" />
-                  Incidents récents
-                </span>
-                <Badge>{myIncidents.length}</Badge>
-              </CardTitle>
+              <CardTitle>Informations de votre location</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="font-semibold mb-2">Propriété</h4>
+                    <p className="text-sm text-muted-foreground">{activeLease.property.title}</p>
+                    <p className="text-sm text-muted-foreground">{activeLease.property.address}</p>
+                    <p className="text-sm text-muted-foreground">{activeLease.property.city}</p>
+                  </div>
+
+                  <div>
+                    <h4 className="font-semibold mb-2">Période du bail</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Du {new Date(activeLease.start_date).toLocaleDateString("fr-FR")}
+                      au {new Date(activeLease.end_date).toLocaleDateString("fr-FR")}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="font-semibold mb-2">Propriétaire</h4>
+                    <p className="text-sm text-muted-foreground">
+                      {activeLease.owner.first_name} {activeLease.owner.last_name}
+                    </p>
+                    <p className="text-sm text-muted-foreground">{activeLease.owner.email}</p>
+                    <p className="text-sm text-muted-foreground">{activeLease.owner.phone}</p>
+                  </div>
+
+                  <div>
+                    <h4 className="font-semibold mb-2">Montants</h4>
+                    <div className="space-y-1">
+                      <p className="text-sm">Loyer : {activeLease.monthly_rent}€</p>
+                      <p className="text-sm">Charges : {activeLease.charges}€</p>
+                      <p className="text-sm font-semibold">Total : {activeLease.monthly_rent + activeLease.charges}€</p>
+                      <p className="text-sm text-muted-foreground">Dépôt de garantie : {activeLease.deposit}€</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <Button asChild>
+                  <Link href={`/tenant/leases/${activeLease.id}`}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Consulter le bail
+                  </Link>
+                </Button>
+                <Button variant="outline" asChild>
+                  <Link href={`/tenant/messaging?owner=${activeLease.owner.first_name}`}>
+                    Contacter le propriétaire
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Actions rapides */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Actions rapides</CardTitle>
             </CardHeader>
             <CardContent>
-              {myIncidents.length > 0 ? (
-                <div className="space-y-3">
-                  {myIncidents.slice(0, 3).map((incident) => (
-                    <div key={incident.id} className="flex items-start gap-3 p-3 border rounded-lg">
-                      {getPriorityIcon(incident.priority)}
-                      <div className="flex-1">
-                        <h4 className="font-medium">{incident.title}</h4>
-                        <p className="text-sm text-muted-foreground">{incident.description}</p>
-                        <div className="flex items-center justify-between mt-2">
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(incident.reportedDate).toLocaleDateString("fr-FR")}
-                          </span>
-                          {getStatusBadge(incident.status)}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Button className="h-auto p-4 flex flex-col items-center space-y-2 bg-transparent" variant="outline">
+                  <CreditCard className="h-6 w-6" />
+                  <span>Effectuer un paiement</span>
+                </Button>
+
+                <Button className="h-auto p-4 flex flex-col items-center space-y-2 bg-transparent" variant="outline">
+                  <Upload className="h-6 w-6" />
+                  <span>Envoyer un justificatif</span>
+                </Button>
+
+                <Button className="h-auto p-4 flex flex-col items-center space-y-2 bg-transparent" variant="outline">
+                  <AlertTriangle className="h-6 w-6" />
+                  <span>Signaler un incident</span>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="payments" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Historique des paiements</CardTitle>
+              <CardDescription>Suivez vos paiements et leur validation par le propriétaire</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {paymentTracking.length > 0 ? (
+                <div className="space-y-4">
+                  {paymentTracking.map((payment) => (
+                    <div key={payment.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex items-center space-x-4">
+                        <div
+                          className={`w-3 h-3 rounded-full ${
+                            payment.validated_by_owner
+                              ? "bg-green-500"
+                              : payment.payment_status === "submitted"
+                                ? "bg-yellow-500"
+                                : "bg-gray-300"
+                          }`}
+                        />
+                        <div>
+                          <p className="font-medium">{payment.total_paid}€</p>
+                          <p className="text-sm text-muted-foreground">
+                            {payment.payment_method} - {payment.payment_reference}
+                          </p>
+                          {payment.payment_date && (
+                            <p className="text-sm text-muted-foreground">
+                              {new Date(payment.payment_date).toLocaleDateString("fr-FR")}
+                            </p>
+                          )}
                         </div>
+                      </div>
+                      <div className="text-right">
+                        <Badge
+                          variant={
+                            payment.validated_by_owner
+                              ? "default"
+                              : payment.payment_status === "submitted"
+                                ? "secondary"
+                                : "outline"
+                          }
+                        >
+                          {payment.validated_by_owner
+                            ? "Validé"
+                            : payment.payment_status === "submitted"
+                              ? "En attente"
+                              : "Brouillon"}
+                        </Badge>
+                        {payment.is_late && <p className="text-sm text-red-600 mt-1">Retard (+{payment.late_fees}€)</p>}
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-6">
-                  <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-600" />
-                  <p className="text-muted-foreground">Aucun incident signalé</p>
+                <div className="text-center py-8">
+                  <CreditCard className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-muted-foreground">Aucun paiement enregistré</p>
                 </div>
               )}
             </CardContent>
-            <CardFooter>
-              <div className="flex gap-2 w-full">
-                <Button variant="outline" size="sm" className="flex-1" onClick={() => setActiveTab("incidents")}>
-                  Voir tous les incidents
-                </Button>
-                <Button size="sm" className="flex-1" asChild>
-                  <Link href="/tenant/incidents/new">Signaler un incident</Link>
-                </Button>
-              </div>
-            </CardFooter>
           </Card>
         </TabsContent>
 
-        <TabsContent value="lease" className="space-y-6 mt-6">
+        <TabsContent value="receipts" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Informations du bail</CardTitle>
-              <CardDescription>Détails de votre contrat de location</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h3 className="font-semibold mb-3">Logement</h3>
-                  <div className="space-y-2">
-                    <div>
-                      <span className="text-muted-foreground">Adresse:</span>
-                      <p className="font-medium">{currentLease.property.address}</p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <span className="text-muted-foreground">Surface:</span>
-                        <p className="font-medium">{currentLease.property.surface} m²</p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Pièces:</span>
-                        <p className="font-medium">{currentLease.property.rooms}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="font-semibold mb-3">Propriétaire</h3>
-                  <div className="space-y-2">
-                    <div>
-                      <span className="text-muted-foreground">Nom:</span>
-                      <p className="font-medium">{currentLease.owner.name}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Email:</span>
-                      <p className="font-medium">{currentLease.owner.email}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Téléphone:</span>
-                      <p className="font-medium">{currentLease.owner.phone}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h3 className="font-semibold mb-3">Durée du bail</h3>
-                  <div className="space-y-2">
-                    <div>
-                      <span className="text-muted-foreground">Début:</span>
-                      <p className="font-medium">{new Date(currentLease.startDate).toLocaleDateString("fr-FR")}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Fin:</span>
-                      <p className="font-medium">{new Date(currentLease.endDate).toLocaleDateString("fr-FR")}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Statut:</span>
-                      <div className="mt-1">{getStatusBadge(currentLease.status)}</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="font-semibold mb-3">Conditions financières</h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Loyer mensuel:</span>
-                      <span className="font-medium">{currentLease.monthlyRent} €</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Charges:</span>
-                      <span className="font-medium">{currentLease.charges} €</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Dépôt de garantie:</span>
-                      <span className="font-medium">{currentLease.deposit} €</span>
-                    </div>
-                    <hr />
-                    <div className="flex justify-between font-semibold">
-                      <span>Total mensuel:</span>
-                      <span>{currentLease.monthlyRent + currentLease.charges} €</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button asChild>
-                <a href={currentLease.leaseDocumentUrl} download>
-                  <Download className="h-4 w-4 mr-2" />
-                  Télécharger le bail
-                </a>
-              </Button>
-            </CardFooter>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="receipts" className="space-y-6 mt-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold">Mes quittances de loyer</h2>
-            <Button variant="outline" size="sm">
-              Télécharger toutes les quittances
-            </Button>
-          </div>
-
-          <div className="grid gap-4">
-            {rentReceipts.map((receipt) => (
-              <Card key={receipt.id}>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-semibold capitalize">
-                        Quittance {receipt.month} {receipt.year}
-                      </h3>
-                      <div className="grid grid-cols-3 gap-4 mt-2 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Loyer:</span>
-                          <span className="ml-1 font-medium">{receipt.rentAmount} €</span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Charges:</span>
-                          <span className="ml-1 font-medium">{receipt.chargesAmount} €</span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Total:</span>
-                          <span className="ml-1 font-medium">{receipt.totalAmount} €</span>
-                        </div>
-                      </div>
-                      {receipt.paymentDate && (
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Payé le {new Date(receipt.paymentDate).toLocaleDateString("fr-FR")}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {getStatusBadge(receipt.status)}
-                      {receipt.receiptUrl && (
-                        <Button variant="outline" size="sm" asChild>
-                          <a href={receipt.receiptUrl} download>
-                            <Download className="h-4 w-4 mr-2" />
-                            Télécharger
-                          </a>
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="incidents" className="space-y-6 mt-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold">Mes incidents signalés</h2>
-            <Button asChild>
-              <Link href="/tenant/incidents/new">
-                <AlertTriangle className="h-4 w-4 mr-2" />
-                Signaler un incident
-              </Link>
-            </Button>
-          </div>
-
-          <div className="grid gap-4">
-            {myIncidents.map((incident) => (
-              <Card key={incident.id}>
-                <CardContent className="p-6">
-                  <div className="flex items-start gap-4">
-                    {getPriorityIcon(incident.priority)}
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-semibold">{incident.title}</h3>
-                        {getStatusBadge(incident.status)}
-                      </div>
-                      <p className="text-muted-foreground mb-3">{incident.description}</p>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Signalé le:</span>
-                          <span className="ml-1 font-medium">
-                            {new Date(incident.reportedDate).toLocaleDateString("fr-FR")}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Catégorie:</span>
-                          <span className="ml-1 font-medium capitalize">{incident.category}</span>
-                        </div>
-                      </div>
-                      {incident.resolvedDate && (
-                        <div className="mt-2 p-3 bg-green-50 rounded-lg">
-                          <p className="text-sm text-green-800">
-                            <strong>Résolu le {new Date(incident.resolvedDate).toLocaleDateString("fr-FR")}</strong>
-                          </p>
-                          {incident.resolutionNotes && (
-                            <p className="text-sm text-green-700 mt-1">{incident.resolutionNotes}</p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="maintenance" className="space-y-6 mt-6">
-          <h2 className="text-2xl font-bold">Travaux et maintenance</h2>
-
-          <div className="grid gap-4">
-            {maintenanceWorks.map((work) => (
-              <Card key={work.id}>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold">{work.title}</h3>
-                    {getStatusBadge(work.status)}
-                  </div>
-                  <p className="text-muted-foreground mb-3">{work.description}</p>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Type:</span>
-                      <span className="ml-1 font-medium capitalize">{work.type}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Programmé:</span>
-                      <span className="ml-1 font-medium">
-                        {new Date(work.scheduledDate).toLocaleDateString("fr-FR")}
-                      </span>
-                    </div>
-                    {work.providerName && (
-                      <div>
-                        <span className="text-muted-foreground">Prestataire:</span>
-                        <span className="ml-1 font-medium">{work.providerName}</span>
-                      </div>
-                    )}
-                    {work.cost && (
-                      <div>
-                        <span className="text-muted-foreground">Coût:</span>
-                        <span className="ml-1 font-medium">{work.cost} €</span>
-                      </div>
-                    )}
-                  </div>
-                  {work.completedDate && (
-                    <div className="mt-3 p-3 bg-green-50 rounded-lg">
-                      <p className="text-sm text-green-800">
-                        Terminé le {new Date(work.completedDate).toLocaleDateString("fr-FR")}
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="documents" className="space-y-6 mt-6">
-          <h2 className="text-2xl font-bold">Documents obligatoires</h2>
-
-          <div className="grid gap-4">
-            {annualDocuments.map((document) => (
-              <Card key={document.id}>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-semibold">{document.documentName}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Expire le {new Date(document.expiryDate).toLocaleDateString("fr-FR")}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {getStatusBadge(document.status)}
-                      <Button variant="outline" size="sm" asChild>
-                        <a href={document.documentUrl} download>
-                          <Download className="h-4 w-4 mr-2" />
-                          Télécharger
-                        </a>
-                      </Button>
-                    </div>
-                  </div>
-                  {document.status === "expiring" && (
-                    <Alert className="mt-3 border-orange-200 bg-orange-50">
-                      <AlertTriangle className="h-4 w-4 text-orange-600" />
-                      <AlertDescription className="text-orange-800">
-                        Ce document expire bientôt. Pensez à le renouveler.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Ajouter un document</CardTitle>
-              <CardDescription>Téléchargez vos documents obligatoires</CardDescription>
+              <CardTitle>Quittances de loyer</CardTitle>
+              <CardDescription>Téléchargez vos quittances de loyer mensuelles</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button asChild>
-                <Link href="/tenant/documents/upload">
-                  <Shield className="h-4 w-4 mr-2" />
-                  Ajouter un document
-                </Link>
-              </Button>
+              {rentReceipts.length > 0 ? (
+                <div className="space-y-4">
+                  {rentReceipts.map((receipt) => (
+                    <div key={receipt.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex items-center space-x-4">
+                        <Receipt className="h-5 w-5 text-muted-foreground" />
+                        <div>
+                          <p className="font-medium">
+                            {receipt.month} {receipt.year}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {receipt.total_amount}€ ({receipt.rent_amount}€ + {receipt.charges_amount}€)
+                          </p>
+                          {receipt.payment_date && (
+                            <p className="text-sm text-muted-foreground">
+                              Payé le {new Date(receipt.payment_date).toLocaleDateString("fr-FR")}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <Badge
+                          variant={
+                            receipt.status === "paid"
+                              ? "default"
+                              : receipt.status === "overdue"
+                                ? "destructive"
+                                : "secondary"
+                          }
+                        >
+                          {receipt.status === "paid"
+                            ? "Payé"
+                            : receipt.status === "overdue"
+                              ? "En retard"
+                              : "En attente"}
+                        </Badge>
+                        {receipt.receipt_url && (
+                          <Button size="sm" variant="outline">
+                            <Download className="h-4 w-4 mr-2" />
+                            Télécharger
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Receipt className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-muted-foreground">Aucune quittance disponible</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="documents" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Documents de location</CardTitle>
+              <CardDescription>Accédez à tous vos documents liés à la location</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Button variant="outline" className="h-auto p-4 flex flex-col items-center space-y-2 bg-transparent">
+                  <FileText className="h-6 w-6" />
+                  <span>Contrat de bail</span>
+                </Button>
+
+                <Button variant="outline" className="h-auto p-4 flex flex-col items-center space-y-2 bg-transparent">
+                  <FileText className="h-6 w-6" />
+                  <span>État des lieux</span>
+                </Button>
+
+                <Button variant="outline" className="h-auto p-4 flex flex-col items-center space-y-2 bg-transparent">
+                  <FileText className="h-6 w-6" />
+                  <span>Assurance habitation</span>
+                </Button>
+
+                <Button variant="outline" className="h-auto p-4 flex flex-col items-center space-y-2 bg-transparent">
+                  <FileText className="h-6 w-6" />
+                  <span>Diagnostics techniques</span>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="contact" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Contact propriétaire</CardTitle>
+              <CardDescription>Informations de contact de votre propriétaire</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h4 className="font-semibold mb-2">Informations</h4>
+                  <div className="space-y-2">
+                    <p>
+                      {activeLease.owner.first_name} {activeLease.owner.last_name}
+                    </p>
+                    <p className="text-sm text-muted-foreground">{activeLease.owner.email}</p>
+                    <p className="text-sm text-muted-foreground">{activeLease.owner.phone}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-semibold mb-2">Actions</h4>
+                  <div className="space-y-2">
+                    <Button className="w-full" asChild>
+                      <Link href={`/tenant/messaging?owner=${activeLease.owner.first_name}`}>Envoyer un message</Link>
+                    </Button>
+                    <Button variant="outline" className="w-full bg-transparent">
+                      Signaler un incident
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
