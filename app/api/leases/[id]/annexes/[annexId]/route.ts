@@ -1,55 +1,82 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
-import { SupabaseStorageService } from "@/lib/supabase-storage-service"
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string; annexId: string } }) {
+export async function GET(request: NextRequest, { params }: { params: { id: string; annexId: string } }) {
   try {
-    console.log("🗑️ [API] Suppression annexe:", params.annexId, "du bail:", params.id)
+    const { id: leaseId, annexId } = params
 
-    // Récupérer l'annexe
-    const { data: annex, error: fetchError } = await supabase
+    // Récupérer les infos de l'annexe
+    const { data: annexe, error: annexeError } = await supabase
       .from("lease_annexes")
       .select("*")
-      .eq("id", params.annexId)
-      .eq("lease_id", params.id)
+      .eq("id", annexId)
+      .eq("lease_id", leaseId)
       .single()
 
-    if (fetchError) {
-      console.error("❌ [API] Annexe non trouvée:", fetchError)
+    if (annexeError || !annexe) {
       return NextResponse.json({ success: false, error: "Annexe non trouvée" }, { status: 404 })
     }
 
-    console.log("📄 [API] Annexe à supprimer:", annex.file_name)
+    // Télécharger le fichier depuis Supabase Storage
+    const { data: fileData, error: downloadError } = await supabase.storage
+      .from("lease-annexes")
+      .download(annexe.file_path)
 
-    // Supprimer de la base de données
-    const { error: dbError } = await supabase.from("lease_annexes").delete().eq("id", params.annexId)
+    if (downloadError) {
+      console.error("Erreur téléchargement:", downloadError)
+      return NextResponse.json({ success: false, error: "Erreur lors du téléchargement" }, { status: 500 })
+    }
 
-    if (dbError) {
-      console.error("❌ [API] Erreur suppression DB:", dbError)
+    // Retourner le fichier
+    return new NextResponse(fileData, {
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "Content-Disposition": `attachment; filename="${annexe.name}"`,
+      },
+    })
+  } catch (error) {
+    console.error("Erreur:", error)
+    return NextResponse.json({ success: false, error: "Erreur serveur" }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: NextRequest, { params }: { params: { id: string; annexId: string } }) {
+  try {
+    const { id: leaseId, annexId } = params
+
+    // Récupérer les infos de l'annexe
+    const { data: annexe, error: annexeError } = await supabase
+      .from("lease_annexes")
+      .select("*")
+      .eq("id", annexId)
+      .eq("lease_id", leaseId)
+      .single()
+
+    if (annexeError || !annexe) {
+      return NextResponse.json({ success: false, error: "Annexe non trouvée" }, { status: 404 })
+    }
+
+    // Supprimer le fichier du storage
+    const { error: deleteFileError } = await supabase.storage.from("lease-annexes").remove([annexe.file_path])
+
+    if (deleteFileError) {
+      console.error("Erreur suppression fichier:", deleteFileError)
+    }
+
+    // Supprimer l'enregistrement de la base
+    const { error: deleteDbError } = await supabase.from("lease_annexes").delete().eq("id", annexId)
+
+    if (deleteDbError) {
+      console.error("Erreur suppression base:", deleteDbError)
       return NextResponse.json({ success: false, error: "Erreur lors de la suppression" }, { status: 500 })
     }
-
-    // Supprimer le fichier physique
-    try {
-      const url = new URL(annex.file_url)
-      const pathParts = url.pathname.split("/")
-      if (pathParts.length >= 6) {
-        const filePath = pathParts.slice(6).join("/")
-        console.log("🗑️ [API] Suppression fichier:", filePath)
-        await SupabaseStorageService.deleteFile(filePath, "lease-annexes")
-      }
-    } catch (urlError) {
-      console.warn("⚠️ [API] Impossible de supprimer le fichier physique:", urlError)
-    }
-
-    console.log("✅ [API] Annexe supprimée avec succès")
 
     return NextResponse.json({
       success: true,
       message: "Annexe supprimée avec succès",
     })
   } catch (error) {
-    console.error("❌ [API] Erreur suppression annexe:", error)
+    console.error("Erreur:", error)
     return NextResponse.json({ success: false, error: "Erreur serveur" }, { status: 500 })
   }
 }

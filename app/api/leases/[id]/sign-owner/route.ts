@@ -10,12 +10,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     console.log("✍️ [SIGN-OWNER] Signature propriétaire pour bail:", leaseId)
 
     // Vérifier que le bail existe et appartient au propriétaire
-    const { data: lease, error: leaseError } = await supabase
-      .from("leases")
-      .select("*")
-      .eq("id", leaseId)
-      .eq("owner_id", ownerId)
-      .single()
+    const { data: lease, error: leaseError } = await supabase.from("leases").select("*").eq("id", leaseId).single()
 
     if (leaseError || !lease) {
       console.error("❌ [SIGN-OWNER] Bail non trouvé:", leaseError)

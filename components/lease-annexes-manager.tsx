@@ -3,418 +3,263 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { FileText, Plus, Download, Trash2, Upload, Paperclip } from "lucide-react"
 import { toast } from "sonner"
-import { Upload, FileText, X, Info, Eye } from "lucide-react"
+
+interface Annexe {
+  id: string
+  name: string
+  file_path: string
+  file_size: number
+  uploaded_at: string
+}
 
 interface LeaseAnnexesManagerProps {
   leaseId: string
 }
 
-interface LeaseAnnex {
-  id: string
-  lease_id: string
-  annex_type: string
-  file_name: string
-  file_url: string
-  file_size: number
-  uploaded_at: string
-}
-
-const REQUIRED_ANNEXES = [
-  { key: "dpe", label: "Diagnostic de Performance Énergétique (DPE)", required: true },
-  { key: "risques", label: "État des Risques et Pollutions", required: true },
-  { key: "notice", label: "Notice d'information", required: true },
-]
-
-const OPTIONAL_ANNEXES = [
-  { key: "etat_lieux", label: "État des lieux d'entrée" },
-  { key: "reglement", label: "Règlement de copropriété" },
-  { key: "plomb", label: "Constat de Risque d'Exposition au Plomb (CREP)" },
-  { key: "amiante", label: "Diagnostic Amiante" },
-  { key: "electricite_gaz", label: "Diagnostics Électricité et Gaz" },
-  { key: "autorisation", label: "Autorisation d'occupation" },
-  { key: "references_loyers", label: "Références de loyers" },
-]
-
 export function LeaseAnnexesManager({ leaseId }: LeaseAnnexesManagerProps) {
-  const [annexes, setAnnexes] = useState<LeaseAnnex[]>([])
+  const [annexes, setAnnexes] = useState<Annexe[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
-  const [dragOver, setDragOver] = useState(false)
-
-  useEffect(() => {
-    loadAnnexes()
-  }, [leaseId])
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
 
   const loadAnnexes = async () => {
     try {
       setLoading(true)
       const response = await fetch(`/api/leases/${leaseId}/annexes`)
-      const data = await response.json()
 
-      if (data.success) {
+      if (response.ok) {
+        const data = await response.json()
         setAnnexes(data.annexes || [])
-      } else {
-        toast.error("Erreur lors du chargement des annexes")
       }
     } catch (error) {
-      console.error("Erreur:", error)
-      toast.error("Erreur lors du chargement")
+      console.error("Erreur chargement annexes:", error)
+      toast.error("Erreur lors du chargement des annexes")
     } finally {
       setLoading(false)
     }
   }
 
-  const handleFileUpload = async (files: FileList | null, annexType?: string) => {
-    if (!files || files.length === 0) return
+  const handleFileUpload = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+    const file = formData.get("file") as File
+
+    if (!file) {
+      toast.error("Veuillez sélectionner un fichier")
+      return
+    }
 
     try {
       setUploading(true)
-      const file = files[0]
 
-      const formData = new FormData()
-      formData.append("file", file)
-      formData.append("annexType", annexType || "other")
+      const uploadFormData = new FormData()
+      uploadFormData.append("file", file)
+      uploadFormData.append("leaseId", leaseId)
 
       const response = await fetch(`/api/leases/${leaseId}/annexes`, {
         method: "POST",
-        body: formData,
+        body: uploadFormData,
       })
 
-      const data = await response.json()
-
-      if (data.success) {
-        toast.success("Annexe uploadée avec succès")
-        await loadAnnexes()
-      } else {
-        toast.error(data.error || "Erreur lors de l'upload")
+      if (!response.ok) {
+        throw new Error("Erreur lors de l'upload")
       }
+
+      const data = await response.json()
+      toast.success("Annexe ajoutée avec succès")
+      setIsDialogOpen(false)
+      await loadAnnexes()
     } catch (error) {
       console.error("Erreur upload:", error)
-      toast.error("Erreur lors de l'upload")
+      toast.error("Erreur lors de l'ajout de l'annexe")
     } finally {
       setUploading(false)
     }
   }
 
-  const deleteAnnex = async (annexId: string) => {
+  const deleteAnnexe = async (annexeId: string) => {
     try {
-      const response = await fetch(`/api/leases/${leaseId}/annexes/${annexId}`, {
+      const response = await fetch(`/api/leases/${leaseId}/annexes/${annexeId}`, {
         method: "DELETE",
       })
 
-      const data = await response.json()
-
-      if (data.success) {
-        toast.success("Annexe supprimée")
-        await loadAnnexes()
-      } else {
-        toast.error("Erreur lors de la suppression")
+      if (!response.ok) {
+        throw new Error("Erreur lors de la suppression")
       }
+
+      toast.success("Annexe supprimée avec succès")
+      await loadAnnexes()
     } catch (error) {
-      console.error("Erreur:", error)
+      console.error("Erreur suppression:", error)
       toast.error("Erreur lors de la suppression")
     }
   }
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    setDragOver(true)
+  const downloadAnnexe = async (annexe: Annexe) => {
+    try {
+      const response = await fetch(`/api/leases/${leaseId}/annexes/${annexe.id}`)
+
+      if (!response.ok) {
+        throw new Error("Erreur lors du téléchargement")
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = annexe.name
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error) {
+      console.error("Erreur téléchargement:", error)
+      toast.error("Erreur lors du téléchargement")
+    }
   }
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault()
-    setDragOver(false)
-  }
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    setDragOver(false)
-    handleFileUpload(e.dataTransfer.files)
-  }
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return "0 Bytes"
-    const k = 1024
-    const sizes = ["Bytes", "KB", "MB", "GB"]
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
-  }
-
-  const getAnnexesByType = (type: string) => {
-    return annexes.filter((annex) => annex.annex_type === type)
-  }
-
-  const requiredCount = REQUIRED_ANNEXES.filter((annexe) => getAnnexesByType(annexe.key).length > 0).length
+  useEffect(() => {
+    loadAnnexes()
+  }, [leaseId])
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-8">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="text-gray-600">Chargement des annexes...</p>
-        </div>
-      </div>
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-center">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            <span className="ml-2">Chargement des annexes...</span>
+          </div>
+        </CardContent>
+      </Card>
     )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Résumé */}
-      <Alert>
-        <Info className="h-4 w-4" />
-        <AlertDescription>
-          <strong>Résumé:</strong> {requiredCount}/{REQUIRED_ANNEXES.length} annexes obligatoires, {annexes.length}{" "}
-          document(s) au total.
-        </AlertDescription>
-      </Alert>
-
-      {/* Upload général */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Ajouter des documents</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div
-            className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-              dragOver ? "border-blue-500 bg-blue-50" : "border-gray-300 hover:border-gray-400"
-            }`}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-          >
-            <Upload className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-            <p className="text-sm text-gray-600 mb-2">Glissez-déposez vos fichiers ici ou cliquez pour sélectionner</p>
-            <Input
-              type="file"
-              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-              onChange={(e) => handleFileUpload(e.target.files)}
-              className="hidden"
-              id="file-upload"
-              disabled={uploading}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => document.getElementById("file-upload")?.click()}
-              disabled={uploading}
-            >
-              {uploading ? "Upload en cours..." : "Sélectionner des fichiers"}
-            </Button>
-            <p className="text-xs text-gray-500 mt-2">
-              Formats acceptés: PDF, DOC, DOCX, JPG, PNG (max 10MB par fichier)
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Paperclip className="h-5 w-5" />
+            Annexes du bail
+          </CardTitle>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Ajouter une annexe
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Ajouter une annexe</DialogTitle>
+                <DialogDescription>Téléchargez un document à joindre au bail (PDF, DOC, JPG, PNG)</DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleFileUpload} className="space-y-4">
+                <div>
+                  <Label htmlFor="file">Fichier</Label>
+                  <Input id="file" name="file" type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" required />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                    Annuler
+                  </Button>
+                  <Button type="submit" disabled={uploading}>
+                    {uploading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Upload...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4 mr-2" />
+                        Ajouter
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {annexes.length > 0 ? (
+          <div className="space-y-3">
+            {annexes.map((annexe) => (
+              <div key={annexe.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <FileText className="h-5 w-5 text-gray-600" />
+                  <div>
+                    <p className="font-medium">{annexe.name}</p>
+                    <p className="text-sm text-gray-600">
+                      {(annexe.file_size / 1024).toFixed(1)} KB •{" "}
+                      {new Date(annexe.uploaded_at).toLocaleDateString("fr-FR")}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => downloadAnnexe(annexe)}>
+                    <Download className="h-4 w-4" />
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Supprimer l'annexe</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Êtes-vous sûr de vouloir supprimer "{annexe.name}" ? Cette action est irréversible.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Annuler</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => deleteAnnexe(annexe.id)}>Supprimer</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <Paperclip className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600 mb-4">Aucune annexe ajoutée pour ce bail</p>
+            <p className="text-sm text-gray-500">
+              Les annexes peuvent inclure des diagnostics, des états des lieux, des inventaires, etc.
             </p>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Annexes obligatoires */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Annexes obligatoires</span>
-            <Badge variant={requiredCount === REQUIRED_ANNEXES.length ? "default" : "destructive"}>
-              {requiredCount}/{REQUIRED_ANNEXES.length}
-            </Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {REQUIRED_ANNEXES.map((annexe) => {
-              const annexeFiles = getAnnexesByType(annexe.key)
-              return (
-                <div key={annexe.key} className="border rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <Label className="font-medium">{annexe.label}</Label>
-                    <Badge variant={annexeFiles.length > 0 ? "default" : "destructive"}>
-                      {annexeFiles.length > 0 ? "✓ Fourni" : "Manquant"}
-                    </Badge>
-                  </div>
-
-                  {annexeFiles.length > 0 ? (
-                    <div className="space-y-2">
-                      {annexeFiles.map((file) => (
-                        <div key={file.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                          <div className="flex items-center space-x-2">
-                            <FileText className="h-4 w-4 text-gray-500" />
-                            <div>
-                              <p className="text-sm font-medium">{file.file_name}</p>
-                              <p className="text-xs text-gray-500">
-                                {formatFileSize(file.file_size)} • {new Date(file.uploaded_at).toLocaleDateString()}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex space-x-1">
-                            <Button variant="ghost" size="sm" onClick={() => window.open(file.file_url, "_blank")}>
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => deleteAnnex(file.id)}
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-4 border-2 border-dashed border-gray-200 rounded">
-                      <Input
-                        type="file"
-                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                        onChange={(e) => handleFileUpload(e.target.files, annexe.key)}
-                        className="hidden"
-                        id={`upload-${annexe.key}`}
-                        disabled={uploading}
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => document.getElementById(`upload-${annexe.key}`)?.click()}
-                        disabled={uploading}
-                      >
-                        <Upload className="h-4 w-4 mr-2" />
-                        Ajouter ce document
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Annexes optionnelles */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Annexes optionnelles</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {OPTIONAL_ANNEXES.map((annexe) => {
-              const annexeFiles = getAnnexesByType(annexe.key)
-              return (
-                <div key={annexe.key} className="border rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <Label className="font-medium">{annexe.label}</Label>
-                    {annexeFiles.length > 0 && <Badge variant="outline">{annexeFiles.length} document(s)</Badge>}
-                  </div>
-
-                  {annexeFiles.length > 0 && (
-                    <div className="space-y-2 mb-2">
-                      {annexeFiles.map((file) => (
-                        <div key={file.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                          <div className="flex items-center space-x-2">
-                            <FileText className="h-4 w-4 text-gray-500" />
-                            <div>
-                              <p className="text-sm font-medium">{file.file_name}</p>
-                              <p className="text-xs text-gray-500">
-                                {formatFileSize(file.file_size)} • {new Date(file.uploaded_at).toLocaleDateString()}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex space-x-1">
-                            <Button variant="ghost" size="sm" onClick={() => window.open(file.file_url, "_blank")}>
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => deleteAnnex(file.id)}
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="text-center py-2 border-2 border-dashed border-gray-200 rounded">
-                    <Input
-                      type="file"
-                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                      onChange={(e) => handleFileUpload(e.target.files, annexe.key)}
-                      className="hidden"
-                      id={`upload-optional-${annexe.key}`}
-                      disabled={uploading}
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => document.getElementById(`upload-optional-${annexe.key}`)?.click()}
-                      disabled={uploading}
-                    >
-                      <Upload className="h-4 w-4 mr-2" />
-                      Ajouter
-                    </Button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Autres documents */}
-      {annexes.filter(
-        (a) =>
-          !REQUIRED_ANNEXES.some((r) => r.key === a.annex_type) &&
-          !OPTIONAL_ANNEXES.some((o) => o.key === a.annex_type),
-      ).length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Autres documents</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {annexes
-                .filter(
-                  (a) =>
-                    !REQUIRED_ANNEXES.some((r) => r.key === a.annex_type) &&
-                    !OPTIONAL_ANNEXES.some((o) => o.key === a.annex_type),
-                )
-                .map((file) => (
-                  <div key={file.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                    <div className="flex items-center space-x-2">
-                      <FileText className="h-4 w-4 text-gray-500" />
-                      <div>
-                        <p className="text-sm font-medium">{file.file_name}</p>
-                        <p className="text-xs text-gray-500">
-                          {formatFileSize(file.file_size)} • {new Date(file.uploaded_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex space-x-1">
-                      <Button variant="ghost" size="sm" onClick={() => window.open(file.file_url, "_blank")}>
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => deleteAnnex(file.id)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
