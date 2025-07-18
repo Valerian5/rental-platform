@@ -70,8 +70,12 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
   useEffect(() => {
     const fetchData = async () => {
       try {
+        console.log("🔍 TenantLayout - Début récupération données")
+
         // Récupérer l'utilisateur actuel
         const user = await authService.getCurrentUser()
+        console.log("👤 TenantLayout - Utilisateur récupéré:", user)
+
         if (user && user.user_type === "tenant") {
           setCurrentUser(user)
 
@@ -84,6 +88,7 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
             setUnreadCount(0)
           }
         } else {
+          console.log("❌ TenantLayout - Utilisateur non valide, redirection vers login")
           router.push("/login")
           return
         }
@@ -106,7 +111,7 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
           console.error("Erreur récupération paramètres:", settingsError)
         }
       } catch (error) {
-        console.error("Erreur récupération utilisateur:", error)
+        console.error("❌ TenantLayout - Erreur récupération utilisateur:", error)
         router.push("/login")
       } finally {
         setLoading(false)
@@ -152,6 +157,8 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
   if (!currentUser) {
     return null
   }
+
+  console.log("✅ TenantLayout - Rendu du layout avec utilisateur:", currentUser)
 
   return (
     <div className="min-h-screen bg-gray-50">
