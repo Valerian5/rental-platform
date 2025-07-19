@@ -1,12 +1,33 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { createServerClient } from "@/lib/supabase"
 
 export async function GET(request: NextRequest) {
   try {
     console.log("🔍 GET /api/admin/settings")
 
+    const supabase = createServerClient()
     const { searchParams } = new URL(request.url)
     const key = searchParams.get("key")
+
+    // Vérifier si la table existe
+    const { data: tableExists, error: tableError } = await supabase
+      .from("information_schema.tables")
+      .select("table_name")
+      .eq("table_schema", "public")
+      .eq("table_name", "site_settings")
+      .single()
+
+    if (tableError || !tableExists) {
+      console.error("❌ Table site_settings n'existe pas:", tableError)
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Table site_settings manquante",
+          details: "Veuillez exécuter scripts/create-site-settings-table.sql",
+        },
+        { status: 500 },
+      )
+    }
 
     if (key) {
       console.log("📋 Récupération paramètre:", key)
@@ -69,6 +90,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Clé manquante" }, { status: 400 })
     }
 
+    const supabase = createServerClient()
+
+    // Vérifier si la table existe
+    const { data: tableExists, error: tableError } = await supabase
+      .from("information_schema.tables")
+      .select("table_name")
+      .eq("table_schema", "public")
+      .eq("table_name", "site_settings")
+      .single()
+
+    if (tableError || !tableExists) {
+      console.error("❌ Table site_settings n'existe pas:", tableError)
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Table site_settings manquante",
+          details: "Veuillez exécuter scripts/create-site-settings-table.sql",
+        },
+        { status: 500 },
+      )
+    }
+
     const { data, error } = await supabase
       .from("site_settings")
       .upsert({
@@ -78,7 +121,10 @@ export async function POST(request: NextRequest) {
       })
       .select()
 
-    if (error) throw error
+    if (error) {
+      console.error("❌ Erreur sauvegarde:", error)
+      throw error
+    }
 
     return NextResponse.json({
       success: true,
@@ -86,6 +132,13 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("Erreur sauvegarde paramètres:", error)
-    return NextResponse.json({ success: false, error: "Erreur serveur" }, { status: 500 })
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Erreur serveur",
+        details: error.message,
+      },
+      { status: 500 },
+    )
   }
 }

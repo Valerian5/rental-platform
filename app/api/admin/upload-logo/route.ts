@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { SupabaseStorageService } from "@/lib/supabase-storage-service"
-import { supabase } from "@/lib/supabase"
+import { createServerClient } from "@/lib/supabase"
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,9 +29,12 @@ export async function POST(request: NextRequest) {
 
     console.log("✅ Validation OK, upload vers Supabase...")
 
-    // Upload vers Supabase Storage
+    // Upload vers Supabase Storage avec fallback sur plusieurs buckets
     const uploadResult = await SupabaseStorageService.uploadFile(file, "logos", "admin")
     console.log("✅ Upload Supabase terminé:", uploadResult)
+
+    // Utiliser le client serveur pour les opérations admin
+    const supabase = createServerClient()
 
     // Enregistrer dans la base de données
     const { data: fileRecord, error: dbError } = await supabase
@@ -48,19 +51,52 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (dbError) {
-      console.error("❌ Erreur DB:", dbError)
-      throw dbError
+      console.error("❌ Erreur DB uploaded_files:", dbError)
+      // Continuer même si l'enregistrement dans uploaded_files échoue
+    } else {
+      console.log("✅ Fichier enregistré en DB:", fileRecord)
     }
 
-    console.log("✅ Fichier enregistré en DB:", fileRecord)
+    // Vérifier si la table site_settings existe
+    const { data: tableExists, error: tableError } = await supabase
+      .from("information_schema.tables")
+      .select("table_name")
+      .eq("table_schema", "public")
+      .eq("table_name", "site_settings")
+      .single()
 
-    // Mettre à jour les paramètres du site
-    const { data: currentLogos } = await supabase
+    if (tableError || !tableExists) {
+      console.error("❌ Table site_settings n'existe pas:", tableError)
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Table site_settings manquante. Exécutez le script de création.",
+          details: "Veuillez exécuter scripts/create-site-settings-table.sql",
+        },
+        { status: 500 },
+      )
+    }
+
+    // Récupérer les logos actuels
+    const { data: currentLogos, error: getError } = await supabase
       .from("site_settings")
       .select("setting_value")
       .eq("setting_key", "logos")
       .single()
 
+    if (getError && getError.code !== "PGRST116") {
+      console.error("❌ Erreur récupération logos:", getError)
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Erreur récupération paramètres",
+          details: getError.message,
+        },
+        { status: 500 },
+      )
+    }
+
+    // Mettre à jour les logos
     const logos = currentLogos?.setting_value || {}
     logos[logoType] = uploadResult.url
 
@@ -72,7 +108,14 @@ export async function POST(request: NextRequest) {
 
     if (updateError) {
       console.error("❌ Erreur update settings:", updateError)
-      throw updateError
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Erreur mise à jour paramètres",
+          details: updateError.message,
+        },
+        { status: 500 },
+      )
     }
 
     console.log("✅ Paramètres mis à jour")
@@ -81,7 +124,7 @@ export async function POST(request: NextRequest) {
       success: true,
       data: {
         url: uploadResult.url,
-        filename: fileRecord.filename,
+        filename: uploadResult.path.split("/").pop(),
         logoType,
       },
     })
