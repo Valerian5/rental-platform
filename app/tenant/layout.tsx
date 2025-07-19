@@ -7,7 +7,6 @@ import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { NotificationCenter } from "@/components/notification-center"
 import {
@@ -25,26 +24,28 @@ import {
   FileText,
   Calendar,
   MessageSquare,
-  Bell,
   Settings,
   Menu,
-  X,
   ChevronDown,
   LogOut,
   User,
   Gavel,
   CreditCard,
   Bookmark,
+  Bell,
 } from "lucide-react"
 import { authService } from "@/lib/auth-service"
-import { notificationsService } from "@/lib/notifications-service"
 import { useToast } from "@/hooks/use-toast"
 
-const navigation = [
-  { name: "Tableau de bord!", href: "/tenant/dashboard", icon: Home },
+const headerNavigation = [
+  { name: "Tableau de bord", href: "/tenant/dashboard", icon: Home },
   { name: "Rechercher", href: "/tenant/search", icon: Search },
   { name: "Mes recherches", href: "/tenant/searches", icon: Bookmark },
   { name: "Favoris", href: "/tenant/favorites", icon: Heart },
+]
+
+const sidebarNavigation = [
+  { name: "Accueil", href: "/tenant/dashboard", icon: Home },
   { name: "Candidatures", href: "/tenant/applications", icon: FileText },
   { name: "Visites", href: "/tenant/visits", icon: Calendar },
   { name: "Baux", href: "/tenant/leases", icon: Gavel },
@@ -59,7 +60,6 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
   const router = useRouter()
   const { toast } = useToast()
   const [currentUser, setCurrentUser] = useState<any>(null)
-  const [unreadCount, setUnreadCount] = useState(0)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [siteSettings, setSiteSettings] = useState<any>({
     title: "RentalPlatform",
@@ -70,25 +70,13 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
   useEffect(() => {
     const fetchData = async () => {
       try {
-        console.log("🔍 TenantLayout - Début récupération données")
-
         // Récupérer l'utilisateur actuel
         const user = await authService.getCurrentUser()
-        console.log("👤 TenantLayout - Utilisateur récupéré:", user)
-
         if (user && user.user_type === "tenant") {
           setCurrentUser(user)
-
-          // Récupérer le nombre de notifications non lues
-          try {
-            const count = await notificationsService.getUnreadCount(user.id)
-            setUnreadCount(count)
-          } catch (error) {
-            console.error("Erreur comptage notifications:", error)
-            setUnreadCount(0)
-          }
+          // Stocker dans localStorage pour NotificationCenter
+          localStorage.setItem("user", JSON.stringify(user))
         } else {
-          console.log("❌ TenantLayout - Utilisateur non valide, redirection vers login")
           router.push("/login")
           return
         }
@@ -111,7 +99,7 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
           console.error("Erreur récupération paramètres:", settingsError)
         }
       } catch (error) {
-        console.error("❌ TenantLayout - Erreur récupération utilisateur:", error)
+        console.error("Erreur récupération utilisateur:", error)
         router.push("/login")
       } finally {
         setLoading(false)
@@ -124,6 +112,7 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
   const handleLogout = async () => {
     try {
       await authService.logout()
+      localStorage.removeItem("user")
       toast({
         title: "Déconnexion réussie",
         description: "À bientôt !",
@@ -158,112 +147,166 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
     return null
   }
 
-  console.log("✅ TenantLayout - Rendu du layout avec utilisateur:", currentUser)
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            {/* Logo et titre */}
-            <div className="flex items-center">
-              <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon" className="md:hidden">
-                    <Menu className="h-5 w-5" />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="w-80">
-                  <div className="flex flex-col h-full">
-                    <div className="flex items-center justify-between mb-6">
-                      <h2 className="text-lg font-semibold">Navigation</h2>
-                      <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(false)}>
-                        <X className="h-5 w-5" />
-                      </Button>
-                    </div>
-                    <nav className="flex-1">
-                      <ul className="space-y-2">
-                        {navigation.map((item) => {
-                          const Icon = item.icon
-                          return (
-                            <li key={item.name}>
-                              <Link
-                                href={item.href}
-                                className={cn(
-                                  "flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                                  isActive(item.href)
-                                    ? "bg-blue-100 text-blue-700"
-                                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-100",
-                                )}
-                                onClick={() => setMobileMenuOpen(false)}
-                              >
-                                <Icon className="h-5 w-5 mr-3" />
-                                {item.name}
-                                {item.name === "Notifications" && unreadCount > 0 && (
-                                  <Badge variant="destructive" className="ml-auto text-xs">
-                                    {unreadCount}
-                                  </Badge>
-                                )}
-                              </Link>
-                            </li>
-                          )
-                        })}
-                      </ul>
-                    </nav>
-                  </div>
-                </SheetContent>
-              </Sheet>
+    <div className="flex h-screen bg-gray-50">
+      {/* Sidebar Desktop */}
+      <div className="hidden lg:flex lg:w-64 lg:flex-col lg:border-r lg:bg-white">
+        <div className="flex h-16 items-center border-b px-6">
+          <Link href="/tenant/dashboard" className="flex items-center space-x-2">
+            {siteSettings.logo ? (
+              <img src={siteSettings.logo || "/placeholder.svg"} alt="Logo" className="h-8 w-8 object-contain" />
+            ) : (
+              <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                <Home className="h-5 w-5 text-white" />
+              </div>
+            )}
+            <span className="text-xl font-bold">{siteSettings.title}</span>
+          </Link>
+        </div>
+        <nav className="flex-1 space-y-1 px-4 py-4 overflow-y-auto">
+          {sidebarNavigation.map((item) => {
+            const Icon = item.icon
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={cn(
+                  "flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                  isActive(item.href)
+                    ? "bg-blue-100 text-blue-700"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-100",
+                )}
+              >
+                <Icon className="h-4 w-4 mr-3" />
+                {item.name}
+              </Link>
+            )
+          })}
+        </nav>
+      </div>
 
-              <Link href="/tenant/dashboard" className="flex items-center">
+      {/* Sidebar Mobile */}
+      <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+        <SheetContent side="left" className="w-80 p-0">
+          <div className="flex flex-col h-full">
+            <div className="flex h-16 items-center border-b px-6">
+              <Link href="/tenant/dashboard" className="flex items-center space-x-2">
                 {siteSettings.logo ? (
-                  <img
-                    src={siteSettings.logo || "/placeholder.svg"}
-                    alt="Logo"
-                    className="h-8 w-8 object-contain mr-3"
-                  />
+                  <img src={siteSettings.logo || "/placeholder.svg"} alt="Logo" className="h-8 w-8 object-contain" />
                 ) : (
-                  <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center mr-3">
+                  <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
                     <Home className="h-5 w-5 text-white" />
                   </div>
                 )}
-                <span className="text-xl font-bold text-gray-900">{siteSettings.title}</span>
+                <span className="text-xl font-bold">{siteSettings.title}</span>
               </Link>
             </div>
-
-            {/* Navigation desktop */}
-            <nav className="hidden md:flex space-x-1">
-              {navigation.slice(0, 6).map((item) => {
-                const Icon = item.icon
-                return (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className={cn(
-                      "flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                      isActive(item.href)
-                        ? "bg-blue-100 text-blue-700"
-                        : "text-gray-600 hover:text-gray-900 hover:bg-gray-100",
-                    )}
-                  >
-                    <Icon className="h-4 w-4 mr-2" />
-                    {item.name}
-                    {item.name === "Notifications" && unreadCount > 0 && (
-                      <Badge variant="destructive" className="ml-2 text-xs">
-                        {unreadCount}
-                      </Badge>
-                    )}
-                  </Link>
-                )
-              })}
+            <nav className="flex-1 space-y-1 px-4 py-4 overflow-y-auto">
+              {/* Navigation header en mobile */}
+              <div className="pb-4 border-b mb-4">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Navigation rapide</h3>
+                {headerNavigation.map((item) => {
+                  const Icon = item.icon
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      className={cn(
+                        "flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                        isActive(item.href)
+                          ? "bg-blue-100 text-blue-700"
+                          : "text-gray-600 hover:text-gray-900 hover:bg-gray-100",
+                      )}
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      <Icon className="h-4 w-4 mr-3" />
+                      {item.name}
+                    </Link>
+                  )
+                })}
+              </div>
+              {/* Navigation sidebar */}
+              <div>
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Menu principal</h3>
+                {sidebarNavigation.map((item) => {
+                  const Icon = item.icon
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      className={cn(
+                        "flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                        isActive(item.href)
+                          ? "bg-blue-100 text-blue-700"
+                          : "text-gray-600 hover:text-gray-900 hover:bg-gray-100",
+                      )}
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      <Icon className="h-4 w-4 mr-3" />
+                      {item.name}
+                    </Link>
+                  )
+                })}
+              </div>
             </nav>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Main Content */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Header */}
+        <header className="bg-white shadow-sm border-b">
+          <div className="flex justify-between items-center h-16 px-6">
+            {/* Logo et navigation principale */}
+            <div className="flex items-center space-x-6">
+              <div className="flex items-center space-x-4">
+                <Sheet>
+                  <SheetTrigger asChild>
+                    <Button variant="ghost" size="icon" className="lg:hidden">
+                      <Menu className="h-5 w-5" />
+                    </Button>
+                  </SheetTrigger>
+                </Sheet>
+                <Link href="/tenant/dashboard" className="flex items-center space-x-2">
+                  {siteSettings.logo ? (
+                    <img src={siteSettings.logo || "/placeholder.svg"} alt="Logo" className="h-8 w-8 object-contain" />
+                  ) : (
+                    <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                      <Home className="h-5 w-5 text-white" />
+                    </div>
+                  )}
+                  <span className="text-xl font-bold text-gray-900">{siteSettings.title}</span>
+                </Link>
+              </div>
+
+              {/* Navigation header desktop */}
+              <nav className="hidden lg:flex space-x-1">
+                {headerNavigation.map((item) => {
+                  const Icon = item.icon
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      className={cn(
+                        "flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                        isActive(item.href)
+                          ? "bg-blue-100 text-blue-700"
+                          : "text-gray-600 hover:text-gray-900 hover:bg-gray-100",
+                      )}
+                    >
+                      <Icon className="h-4 w-4 mr-2" />
+                      {item.name}
+                    </Link>
+                  )
+                })}
+              </nav>
+            </div>
 
             {/* Profil utilisateur */}
             <div className="flex items-center space-x-4">
-              {/* Notifications rapides */}
               <NotificationCenter />
 
-              {/* Menu utilisateur */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="flex items-center space-x-2">
@@ -310,11 +353,11 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
               </DropdownMenu>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Contenu principal */}
-      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">{children}</main>
+        {/* Page Content */}
+        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+      </div>
     </div>
   )
 }

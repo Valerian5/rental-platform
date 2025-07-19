@@ -21,12 +21,10 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import {
   Home,
   Building2,
-  FileText,
   Calendar,
   MessageSquare,
   Settings,
   Menu,
-  X,
   ChevronDown,
   LogOut,
   User,
@@ -41,15 +39,15 @@ import {
   FolderOpen,
   TrendingUp,
   Calculator,
+  Users,
 } from "lucide-react"
 import { authService } from "@/lib/auth-service"
-import { notificationsService } from "@/lib/notifications-service"
 import { useToast } from "@/hooks/use-toast"
 
 const navigation = [
   { name: "Tableau de bord", href: "/owner/dashboard", icon: Home },
   { name: "Mes annonces", href: "/owner/properties", icon: Building2 },
-  { name: "Candidatures", href: "/owner/applications", icon: FileText },
+  { name: "Candidatures", href: "/owner/applications", icon: Users },
   { name: "Visites", href: "/owner/visits", icon: Calendar },
   {
     name: "Gestion locative",
@@ -78,7 +76,6 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
   const router = useRouter()
   const { toast } = useToast()
   const [currentUser, setCurrentUser] = useState<any>(null)
-  const [unreadCount, setUnreadCount] = useState(0)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [expandedItems, setExpandedItems] = useState<string[]>([])
   const [siteSettings, setSiteSettings] = useState<any>({
@@ -94,15 +91,8 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
         const user = await authService.getCurrentUser()
         if (user && user.user_type === "owner") {
           setCurrentUser(user)
-
-          // Récupérer le nombre de notifications non lues
-          try {
-            const count = await notificationsService.getUnreadCount(user.id)
-            setUnreadCount(count)
-          } catch (error) {
-            console.error("Erreur comptage notifications:", error)
-            setUnreadCount(0)
-          }
+          // Stocker dans localStorage pour NotificationCenter
+          localStorage.setItem("user", JSON.stringify(user))
         } else {
           router.push("/login")
           return
@@ -139,6 +129,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
   const handleLogout = async () => {
     try {
       await authService.logout()
+      localStorage.removeItem("user")
       toast({
         title: "Déconnexion réussie",
         description: "À bientôt !",
@@ -180,12 +171,12 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
             <Button
               variant="ghost"
               className={cn(
-                "w-full justify-between text-left font-medium",
+                "w-full justify-between text-left font-medium px-3 py-2 h-auto",
                 isItemActive ? "bg-blue-100 text-blue-700" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100",
               )}
             >
               <div className="flex items-center">
-                <Icon className="h-4 w-4 mr-2" />
+                <Icon className="h-4 w-4 mr-3" />
                 {item.name}
               </div>
               <ChevronRight className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-90")} />
@@ -206,7 +197,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
                   )}
                   onClick={() => isMobile && setMobileMenuOpen(false)}
                 >
-                  <ChildIcon className="h-4 w-4 mr-2" />
+                  <ChildIcon className="h-4 w-4 mr-3" />
                   {child.name}
                 </Link>
               )
@@ -226,7 +217,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
         )}
         onClick={() => isMobile && setMobileMenuOpen(false)}
       >
-        <Icon className="h-4 w-4 mr-2" />
+        <Icon className="h-4 w-4 mr-3" />
         {item.name}
       </Link>
     )
@@ -245,127 +236,120 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            {/* Logo et titre */}
-            <div className="flex items-center">
-              <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon" className="md:hidden">
-                    <Menu className="h-5 w-5" />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="w-80">
-                  <div className="flex flex-col h-full">
-                    <div className="flex items-center justify-between mb-6">
-                      <h2 className="text-lg font-semibold">Navigation</h2>
-                      <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(false)}>
-                        <X className="h-5 w-5" />
-                      </Button>
-                    </div>
-                    <nav className="flex-1 space-y-2">{navigation.map((item) => renderNavigationItem(item, true))}</nav>
-                  </div>
-                </SheetContent>
-              </Sheet>
+    <div className="flex h-screen bg-gray-50">
+      {/* Sidebar Desktop */}
+      <div className="hidden lg:flex lg:w-64 lg:flex-col lg:border-r lg:bg-white">
+        <div className="flex h-16 items-center border-b px-6">
+          <Link href="/owner/dashboard" className="flex items-center space-x-2">
+            {siteSettings.logo ? (
+              <img src={siteSettings.logo || "/placeholder.svg"} alt="Logo" className="h-8 w-8 object-contain" />
+            ) : (
+              <Building2 className="h-6 w-6 text-blue-600" />
+            )}
+            <span className="text-xl font-bold">{siteSettings.title}</span>
+          </Link>
+        </div>
+        <nav className="flex-1 space-y-1 px-4 py-4 overflow-y-auto">
+          {navigation.map((item) => renderNavigationItem(item))}
+        </nav>
+      </div>
 
-              <Link href="/owner/dashboard" className="flex items-center">
+      {/* Sidebar Mobile */}
+      <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+        <SheetContent side="left" className="w-80 p-0">
+          <div className="flex flex-col h-full">
+            <div className="flex h-16 items-center border-b px-6">
+              <Link href="/owner/dashboard" className="flex items-center space-x-2">
                 {siteSettings.logo ? (
-                  <img
-                    src={siteSettings.logo || "/placeholder.svg"}
-                    alt="Logo"
-                    className="h-8 w-8 object-contain mr-3"
-                  />
+                  <img src={siteSettings.logo || "/placeholder.svg"} alt="Logo" className="h-8 w-8 object-contain" />
                 ) : (
-                  <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center mr-3">
-                    <Home className="h-5 w-5 text-white" />
-                  </div>
+                  <Building2 className="h-6 w-6 text-blue-600" />
                 )}
-                <span className="text-xl font-bold text-gray-900">{siteSettings.title}</span>
+                <span className="text-xl font-bold">{siteSettings.title}</span>
               </Link>
             </div>
-
-            {/* Navigation desktop */}
-            <nav className="hidden md:flex space-x-1">
-              {navigation.slice(0, 6).map((item) => {
-                const Icon = item.icon
-                return (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className={cn(
-                      "flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                      isActive(item.href)
-                        ? "bg-blue-100 text-blue-700"
-                        : "text-gray-600 hover:text-gray-900 hover:bg-gray-100",
-                    )}
-                  >
-                    <Icon className="h-4 w-4 mr-2" />
-                    {item.name}
-                  </Link>
-                )
-              })}
+            <nav className="flex-1 space-y-1 px-4 py-4 overflow-y-auto">
+              {navigation.map((item) => renderNavigationItem(item, true))}
             </nav>
+          </div>
+        </SheetContent>
+      </Sheet>
 
-            {/* Profil utilisateur */}
-            <div className="flex items-center space-x-4">
-              {/* Notifications rapides */}
-              <NotificationCenter />
-
-              {/* Menu utilisateur */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="flex items-center space-x-2">
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage
-                        src="/placeholder.svg?height=32&width=32&text=User"
-                        alt={`${currentUser.first_name} ${currentUser.last_name}`}
-                      />
-                      <AvatarFallback>
-                        {currentUser.first_name?.[0]}
-                        {currentUser.last_name?.[0]}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="hidden md:block text-left">
-                      <p className="text-sm font-medium text-gray-900">
-                        {currentUser.first_name} {currentUser.last_name}
-                      </p>
-                      <p className="text-xs text-gray-500">Propriétaire</p>
-                    </div>
-                    <ChevronDown className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>Mon compte</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link href="/profile" className="flex items-center">
-                      <User className="mr-2 h-4 w-4" />
-                      <span>Mon profil</span>
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href="/owner/settings" className="flex items-center">
-                      <Settings className="mr-2 h-4 w-4" />
-                      <span>Paramètres</span>
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout} className="text-red-600">
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>Se déconnecter</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+      {/* Main Content */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Header */}
+        <header className="flex h-16 items-center justify-between border-b bg-white px-6">
+          <div className="flex items-center space-x-4">
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="lg:hidden">
+                  <Menu className="h-5 w-5" />
+                </Button>
+              </SheetTrigger>
+            </Sheet>
+            <div className="lg:hidden flex items-center space-x-2">
+              {siteSettings.logo ? (
+                <img src={siteSettings.logo || "/placeholder.svg"} alt="Logo" className="h-8 w-8 object-contain" />
+              ) : (
+                <Building2 className="h-6 w-6 text-blue-600" />
+              )}
+              <span className="text-xl font-bold">{siteSettings.title}</span>
             </div>
           </div>
-        </div>
-      </header>
 
-      {/* Contenu principal */}
-      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">{children}</main>
+          <div className="flex items-center space-x-4">
+            <NotificationCenter />
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="flex items-center space-x-2">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage
+                      src="/placeholder.svg?height=32&width=32&text=User"
+                      alt={`${currentUser.first_name} ${currentUser.last_name}`}
+                    />
+                    <AvatarFallback>
+                      {currentUser.first_name?.[0]}
+                      {currentUser.last_name?.[0]}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="hidden md:block text-left">
+                    <p className="text-sm font-medium text-gray-900">
+                      {currentUser.first_name} {currentUser.last_name}
+                    </p>
+                    <p className="text-xs text-gray-500">Propriétaire</p>
+                  </div>
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Mon compte</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/profile" className="flex items-center">
+                    <User className="mr-2 h-4 w-4" />
+                    <span>Mon profil</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/owner/settings" className="flex items-center">
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Paramètres</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout} className="text-red-600">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>Se déconnecter</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </header>
+
+        {/* Page Content */}
+        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+      </div>
     </div>
   )
 }
