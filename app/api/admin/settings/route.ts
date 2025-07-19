@@ -6,32 +6,35 @@ export async function GET(request: NextRequest) {
     console.log("🔍 GET /api/admin/settings")
 
     const supabase = createServerClient()
+
+    // Vérifier l'authentification admin pour les opérations sensibles
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      console.log("❌ Pas d'utilisateur authentifié")
+      return NextResponse.json({ success: false, error: "Non authentifié" }, { status: 401 })
+    }
+
+    // Vérifier si l'utilisateur est admin
+    const { data: profile, error: profileError } = await supabase
+      .from("users")
+      .select("user_type")
+      .eq("id", user.id)
+      .single()
+
+    if (profileError || !profile || profile.user_type !== "admin") {
+      console.log("❌ Utilisateur non admin tente d'accéder aux paramètres")
+      return NextResponse.json({ success: false, error: "Accès non autorisé" }, { status: 403 })
+    }
+
     const { searchParams } = new URL(request.url)
     const key = searchParams.get("key")
 
-    // Vérifier si la table existe
-    const { data: tableExists, error: tableError } = await supabase
-      .from("information_schema.tables")
-      .select("table_name")
-      .eq("table_schema", "public")
-      .eq("table_name", "site_settings")
-      .single()
-
-    if (tableError || !tableExists) {
-      console.error("❌ Table site_settings n'existe pas:", tableError)
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Table site_settings manquante",
-          details: "Veuillez exécuter scripts/create-site-settings-table.sql",
-        },
-        { status: 500 },
-      )
-    }
-
     if (key) {
       console.log("📋 Récupération paramètre:", key)
-      // Récupérer un paramètre spécifique
       const { data, error } = await supabase
         .from("site_settings")
         .select("setting_value")
@@ -40,7 +43,10 @@ export async function GET(request: NextRequest) {
 
       if (error && error.code !== "PGRST116") {
         console.error("❌ Erreur Supabase:", error)
-        throw error
+        return NextResponse.json(
+          { success: false, error: "Erreur base de données", details: error.message },
+          { status: 500 },
+        )
       }
 
       console.log("✅ Paramètre récupéré:", data)
@@ -50,12 +56,14 @@ export async function GET(request: NextRequest) {
       })
     } else {
       console.log("📋 Récupération tous paramètres")
-      // Récupérer tous les paramètres
       const { data, error } = await supabase.from("site_settings").select("setting_key, setting_value")
 
       if (error) {
         console.error("❌ Erreur Supabase:", error)
-        throw error
+        return NextResponse.json(
+          { success: false, error: "Erreur base de données", details: error.message },
+          { status: 500 },
+        )
       }
 
       const settings = {}
@@ -84,32 +92,35 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = createServerClient()
+
+    // Vérifier l'authentification admin
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      console.log("❌ Pas d'utilisateur authentifié")
+      return NextResponse.json({ success: false, error: "Non authentifié" }, { status: 401 })
+    }
+
+    // Vérifier si l'utilisateur est admin
+    const { data: profile, error: profileError } = await supabase
+      .from("users")
+      .select("user_type")
+      .eq("id", user.id)
+      .single()
+
+    if (profileError || !profile || profile.user_type !== "admin") {
+      console.log("❌ Utilisateur non admin tente de modifier les paramètres")
+      return NextResponse.json({ success: false, error: "Accès non autorisé" }, { status: 403 })
+    }
+
     const { key, value } = await request.json()
 
     if (!key) {
       return NextResponse.json({ success: false, error: "Clé manquante" }, { status: 400 })
-    }
-
-    const supabase = createServerClient()
-
-    // Vérifier si la table existe
-    const { data: tableExists, error: tableError } = await supabase
-      .from("information_schema.tables")
-      .select("table_name")
-      .eq("table_schema", "public")
-      .eq("table_name", "site_settings")
-      .single()
-
-    if (tableError || !tableExists) {
-      console.error("❌ Table site_settings n'existe pas:", tableError)
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Table site_settings manquante",
-          details: "Veuillez exécuter scripts/create-site-settings-table.sql",
-        },
-        { status: 500 },
-      )
     }
 
     const { data, error } = await supabase
@@ -123,7 +134,7 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error("❌ Erreur sauvegarde:", error)
-      throw error
+      return NextResponse.json({ success: false, error: "Erreur sauvegarde", details: error.message }, { status: 500 })
     }
 
     return NextResponse.json({

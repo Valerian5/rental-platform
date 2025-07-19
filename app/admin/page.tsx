@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   Upload,
   ImageIcon,
@@ -16,6 +17,8 @@ import {
   MessageSquare,
   Menu,
   Save,
+  UserPlus,
+  Shield,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -26,7 +29,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   Sidebar,
   SidebarContent,
@@ -38,11 +41,14 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar"
 import { useToast } from "@/hooks/use-toast"
-import React from "react"
 import { Toaster } from "@/components/ui/toaster"
+import { authService } from "@/lib/auth-service"
 
 function AdminContent() {
   const { toast } = useToast()
+  const router = useRouter()
+  const [isLoading, setIsLoading] = useState(true)
+  const [currentUser, setCurrentUser] = useState(null)
   const [isUploading, setIsUploading] = useState(false)
   const [logos, setLogos] = useState({
     main: null,
@@ -65,31 +71,70 @@ function AdminContent() {
   const [darkMode, setDarkMode] = useState(false)
   const [siteTitle, setSiteTitle] = useState("Louer Ici")
   const [siteDescription, setSiteDescription] = useState("Plateforme de gestion locative intelligente")
+  const [inviteEmail, setInviteEmail] = useState("")
+
+  // Vérifier l'authentification admin au chargement
+  useEffect(() => {
+    checkAdminAuth()
+  }, [])
+
+  const checkAdminAuth = async () => {
+    try {
+      setIsLoading(true)
+      const user = await authService.getCurrentUser()
+
+      if (!user) {
+        router.push("/login")
+        return
+      }
+
+      if (user.user_type !== "admin") {
+        toast({
+          title: "Accès refusé",
+          description: "Vous n'avez pas les permissions d'administrateur",
+          variant: "destructive",
+        })
+        router.push("/")
+        return
+      }
+
+      setCurrentUser(user)
+      await loadSettings()
+    } catch (error) {
+      console.error("❌ Erreur vérification admin:", error)
+      router.push("/login")
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   // Fonction pour charger les paramètres
   const loadSettings = async () => {
     try {
       const response = await fetch("/api/admin/settings")
       const result = await response.json()
-      if (result.success) {
-        setSettings(result.data)
-        setLogos(result.data.logos || {})
-        // Mettre à jour les autres états avec les données chargées
-        if (result.data.colors) {
-          setPrimaryColor(result.data.colors.primary || "#0066FF")
-          setSecondaryColor(result.data.colors.secondary || "#FF6B00")
-          setAccentColor(result.data.colors.accent || "#00C48C")
-        }
-        if (result.data.site_info) {
-          setSiteTitle(result.data.site_info.title || "Louer Ici")
-          setSiteDescription(result.data.site_info.description || "Plateforme de gestion locative intelligente")
-        }
+
+      if (!result.success) {
+        throw new Error(result.error || "Erreur chargement paramètres")
+      }
+
+      setSettings(result.data)
+      setLogos(result.data.logos || {})
+
+      if (result.data.colors) {
+        setPrimaryColor(result.data.colors.primary || "#0066FF")
+        setSecondaryColor(result.data.colors.secondary || "#FF6B00")
+        setAccentColor(result.data.colors.accent || "#00C48C")
+      }
+      if (result.data.site_info) {
+        setSiteTitle(result.data.site_info.title || "Louer Ici")
+        setSiteDescription(result.data.site_info.description || "Plateforme de gestion locative intelligente")
       }
     } catch (error) {
       console.error("Erreur chargement paramètres:", error)
       toast({
         title: "Erreur",
-        description: "Impossible de charger les paramètres",
+        description: "Impossible de charger les paramètres: " + error.message,
         variant: "destructive",
       })
     }
@@ -108,11 +153,16 @@ function AdminContent() {
       }
 
       for (const [key, value] of Object.entries(settingsToSave)) {
-        await fetch("/api/admin/settings", {
+        const response = await fetch("/api/admin/settings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ key, value }),
         })
+
+        const result = await response.json()
+        if (!result.success) {
+          throw new Error(result.error || `Erreur sauvegarde ${key}`)
+        }
       }
 
       toast({
@@ -123,7 +173,7 @@ function AdminContent() {
       console.error("Erreur sauvegarde:", error)
       toast({
         title: "Erreur",
-        description: "Erreur lors de la sauvegarde",
+        description: "Erreur lors de la sauvegarde: " + error.message,
         variant: "destructive",
       })
     }
@@ -145,23 +195,24 @@ function AdminContent() {
       })
 
       const result = await response.json()
-      if (result.success) {
-        setLogos((prev) => ({
-          ...prev,
-          [logoType]: result.data.url,
-        }))
-        toast({
-          title: "Succès",
-          description: `Logo ${logoType} uploadé avec succès`,
-        })
-      } else {
-        throw new Error(result.error)
+      if (!result.success) {
+        throw new Error(result.error || "Erreur upload")
       }
+
+      setLogos((prev) => ({
+        ...prev,
+        [logoType]: result.data.url,
+      }))
+
+      toast({
+        title: "Succès",
+        description: `Logo ${logoType} uploadé avec succès`,
+      })
     } catch (error) {
       console.error("Erreur upload:", error)
       toast({
         title: "Erreur",
-        description: "Erreur lors de l'upload du logo",
+        description: "Erreur lors de l'upload du logo: " + error.message,
         variant: "destructive",
       })
     } finally {
@@ -169,10 +220,89 @@ function AdminContent() {
     }
   }
 
-  // Charger les paramètres au montage du composant
-  React.useEffect(() => {
-    loadSettings()
-  }, [])
+  // Fonction pour inviter un admin
+  const handleInviteAdmin = async () => {
+    if (!inviteEmail) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez saisir un email",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const response = await fetch("/api/admin/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: inviteEmail }),
+      })
+
+      const result = await response.json()
+      if (!result.success) {
+        throw new Error(result.error || "Erreur invitation")
+      }
+
+      toast({
+        title: "Succès",
+        description: `Invitation envoyée à ${inviteEmail}`,
+      })
+
+      setInviteEmail("")
+    } catch (error) {
+      console.error("Erreur invitation:", error)
+      toast({
+        title: "Erreur",
+        description: "Erreur lors de l'invitation: " + error.message,
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Fonction de déconnexion
+  const handleLogout = async () => {
+    try {
+      await authService.logout()
+      toast({
+        title: "Déconnexion",
+        description: "Vous avez été déconnecté avec succès",
+      })
+      router.push("/login")
+    } catch (error) {
+      console.error("Erreur déconnexion:", error)
+      toast({
+        title: "Erreur",
+        description: "Erreur lors de la déconnexion",
+        variant: "destructive",
+      })
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p>Vérification des permissions...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!currentUser || currentUser.user_type !== "admin") {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <Shield className="h-16 w-16 text-red-500 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold mb-2">Accès refusé</h1>
+          <p className="text-gray-600 mb-4">Vous n'avez pas les permissions d'administrateur</p>
+          <Button onClick={() => router.push("/")} variant="outline">
+            Retour à l'accueil
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   // Prévisualisation des types de header
   const headerPreviews = {
@@ -251,9 +381,11 @@ function AdminContent() {
       <Sidebar className="border-r">
         <SidebarHeader className="border-b px-6 py-3">
           <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-md bg-blue-600"></div>
+            <div className="h-8 w-8 rounded-md bg-blue-600 flex items-center justify-center">
+              <Shield className="h-4 w-4 text-white" />
+            </div>
             <div>
-              <h2 className="text-lg font-bold">Louer Ici</h2>
+              <h2 className="text-lg font-bold">{siteTitle}</h2>
               <p className="text-xs text-muted-foreground">Administration</p>
             </div>
           </div>
@@ -297,6 +429,14 @@ function AdminContent() {
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={activeTab === "admins"} onClick={() => setActiveTab("admins")}>
+                <button>
+                  <Shield className="h-4 w-4" />
+                  <span>Administrateurs</span>
+                </button>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={activeTab === "settings"} onClick={() => setActiveTab("settings")}>
                 <button>
                   <Settings className="h-4 w-4" />
@@ -307,15 +447,24 @@ function AdminContent() {
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter className="border-t p-4">
-          <div className="flex items-center gap-2">
-            <Avatar className="h-8 w-8">
-              <AvatarImage src="/placeholder.svg?height=32&width=32" alt="Admin" />
-              <AvatarFallback>AD</AvatarFallback>
-            </Avatar>
-            <div>
-              <p className="text-sm font-medium">Admin</p>
-              <p className="text-xs text-muted-foreground">admin@louerici.fr</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Avatar className="h-8 w-8">
+                <AvatarFallback className="bg-blue-600 text-white">
+                  {currentUser?.first_name?.[0]}
+                  {currentUser?.last_name?.[0]}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="text-sm font-medium">
+                  {currentUser?.first_name} {currentUser?.last_name}
+                </p>
+                <p className="text-xs text-muted-foreground">Administrateur</p>
+              </div>
             </div>
+            <Button variant="ghost" size="sm" onClick={handleLogout}>
+              Déconnexion
+            </Button>
           </div>
         </SidebarFooter>
       </Sidebar>
@@ -479,6 +628,82 @@ function AdminContent() {
                   </CardContent>
                 </Card>
               </div>
+            </div>
+          )}
+
+          {activeTab === "admins" && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold">Gestion des Administrateurs</h2>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <UserPlus className="h-5 w-5" />
+                    Inviter un nouvel administrateur
+                  </CardTitle>
+                  <CardDescription>
+                    Envoyez une invitation pour ajouter un nouvel administrateur à la plateforme
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex gap-4">
+                    <div className="flex-1">
+                      <Label htmlFor="invite-email">Email de l'administrateur</Label>
+                      <Input
+                        id="invite-email"
+                        type="email"
+                        placeholder="admin@example.com"
+                        value={inviteEmail}
+                        onChange={(e) => setInviteEmail(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <Button onClick={handleInviteAdmin} disabled={!inviteEmail}>
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        Envoyer l'invitation
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    L'utilisateur recevra un lien d'invitation pour créer son compte administrateur.
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Administrateurs actuels</CardTitle>
+                  <CardDescription>Liste des administrateurs de la plateforme</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <Avatar>
+                          <AvatarFallback className="bg-blue-600 text-white">
+                            {currentUser?.first_name?.[0]}
+                            {currentUser?.last_name?.[0]}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-medium">
+                            {currentUser?.first_name} {currentUser?.last_name}
+                          </p>
+                          <p className="text-sm text-muted-foreground">{currentUser?.email}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                          Administrateur principal
+                        </span>
+                        <span className="text-sm text-muted-foreground">Vous</span>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           )}
 

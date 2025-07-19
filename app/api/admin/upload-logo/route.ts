@@ -6,6 +6,30 @@ export async function POST(request: NextRequest) {
   try {
     console.log("📤 POST /api/admin/upload-logo")
 
+    // Vérifier l'authentification admin
+    const supabase = createServerClient()
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      console.log("❌ Pas d'utilisateur authentifié")
+      return NextResponse.json({ success: false, error: "Non authentifié" }, { status: 401 })
+    }
+
+    // Vérifier si l'utilisateur est admin
+    const { data: profile, error: profileError } = await supabase
+      .from("users")
+      .select("user_type")
+      .eq("id", user.id)
+      .single()
+
+    if (profileError || !profile || profile.user_type !== "admin") {
+      console.log("❌ Utilisateur non admin tente d'uploader un logo")
+      return NextResponse.json({ success: false, error: "Accès non autorisé" }, { status: 403 })
+    }
+
     const formData = await request.formData()
     const file = formData.get("file") as File
     const logoType = formData.get("logoType") as string
@@ -29,96 +53,79 @@ export async function POST(request: NextRequest) {
 
     console.log("✅ Validation OK, upload vers Supabase...")
 
-    // Upload vers Supabase Storage avec fallback sur plusieurs buckets
-    const uploadResult = await SupabaseStorageService.uploadFile(file, "logos", "admin")
-    console.log("✅ Upload Supabase terminé:", uploadResult)
+    // Upload vers Supabase Storage
+    let uploadResult
+    try {
+      uploadResult = await SupabaseStorageService.uploadFile(file, "logos", "admin")
+      console.log("✅ Upload vers logos réussi:", uploadResult)
+    } catch (logoError) {
+      console.log("⚠️ Échec upload vers logos, tentative vers documents...")
+      try {
+        uploadResult = await SupabaseStorageService.uploadFile(file, "documents", "admin")
+        console.log("✅ Upload vers documents réussi:", uploadResult)
+      } catch (documentsError) {
+        console.error("❌ Échec upload vers tous les buckets:", documentsError)
+        return NextResponse.json(
+          { success: false, error: "Erreur upload fichier", details: documentsError.message },
+          { status: 500 },
+        )
+      }
+    }
 
-    // Utiliser le client serveur pour les opérations admin
-    const supabase = createServerClient()
+    // Enregistrer dans uploaded_files (optionnel)
+    try {
+      const { data: fileRecord } = await supabase
+        .from("uploaded_files")
+        .insert({
+          filename: uploadResult.path.split("/").pop(),
+          original_name: file.name,
+          file_type: file.type,
+          file_size: file.size,
+          storage_url: uploadResult.url,
+          category: `logo_${logoType}`,
+        })
+        .select()
+        .single()
 
-    // Enregistrer dans la base de données
-    const { data: fileRecord, error: dbError } = await supabase
-      .from("uploaded_files")
-      .insert({
-        filename: uploadResult.path.split("/").pop(),
-        original_name: file.name,
-        file_type: file.type,
-        file_size: file.size,
-        storage_url: uploadResult.url,
-        category: `logo_${logoType}`,
-      })
-      .select()
-      .single()
-
-    if (dbError) {
-      console.error("❌ Erreur DB uploaded_files:", dbError)
-      // Continuer même si l'enregistrement dans uploaded_files échoue
-    } else {
       console.log("✅ Fichier enregistré en DB:", fileRecord)
+    } catch (dbError) {
+      console.warn("⚠️ Erreur enregistrement DB (non critique):", dbError)
     }
 
-    // Vérifier si la table site_settings existe
-    const { data: tableExists, error: tableError } = await supabase
-      .from("information_schema.tables")
-      .select("table_name")
-      .eq("table_schema", "public")
-      .eq("table_name", "site_settings")
-      .single()
+    // Mettre à jour les paramètres du site
+    try {
+      // Récupérer les logos actuels
+      const { data: currentLogos } = await supabase
+        .from("site_settings")
+        .select("setting_value")
+        .eq("setting_key", "logos")
+        .single()
 
-    if (tableError || !tableExists) {
-      console.error("❌ Table site_settings n'existe pas:", tableError)
+      const logos = currentLogos?.setting_value || {}
+      logos[logoType] = uploadResult.url
+
+      const { error: updateError } = await supabase.from("site_settings").upsert({
+        setting_key: "logos",
+        setting_value: logos,
+        updated_at: new Date().toISOString(),
+      })
+
+      if (updateError) {
+        console.error("❌ Erreur update settings:", updateError)
+        return NextResponse.json(
+          { success: false, error: "Erreur mise à jour paramètres", details: updateError.message },
+          { status: 500 },
+        )
+      }
+
+      console.log("✅ Paramètres mis à jour")
+    } catch (settingsError) {
+      console.error("❌ Erreur gestion paramètres:", settingsError)
       return NextResponse.json(
-        {
-          success: false,
-          error: "Table site_settings manquante. Exécutez le script de création.",
-          details: "Veuillez exécuter scripts/create-site-settings-table.sql",
-        },
+        { success: false, error: "Erreur paramètres", details: settingsError.message },
         { status: 500 },
       )
     }
-
-    // Récupérer les logos actuels
-    const { data: currentLogos, error: getError } = await supabase
-      .from("site_settings")
-      .select("setting_value")
-      .eq("setting_key", "logos")
-      .single()
-
-    if (getError && getError.code !== "PGRST116") {
-      console.error("❌ Erreur récupération logos:", getError)
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Erreur récupération paramètres",
-          details: getError.message,
-        },
-        { status: 500 },
-      )
-    }
-
-    // Mettre à jour les logos
-    const logos = currentLogos?.setting_value || {}
-    logos[logoType] = uploadResult.url
-
-    const { error: updateError } = await supabase.from("site_settings").upsert({
-      setting_key: "logos",
-      setting_value: logos,
-      updated_at: new Date().toISOString(),
-    })
-
-    if (updateError) {
-      console.error("❌ Erreur update settings:", updateError)
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Erreur mise à jour paramètres",
-          details: updateError.message,
-        },
-        { status: 500 },
-      )
-    }
-
-    console.log("✅ Paramètres mis à jour")
 
     return NextResponse.json({
       success: true,
