@@ -41,7 +41,7 @@ import { notificationsService } from "@/lib/notifications-service"
 import { useToast } from "@/hooks/use-toast"
 
 const navigation = [
-  { name: "Tableau de bord", href: "/tenant/dashboard", icon: Home },
+  { name: "Tableau de bord!", href: "/tenant/dashboard", icon: Home },
   { name: "Rechercher", href: "/tenant/search", icon: Search },
   { name: "Mes recherches", href: "/tenant/searches", icon: Bookmark },
   { name: "Favoris", href: "/tenant/favorites", icon: Heart },
