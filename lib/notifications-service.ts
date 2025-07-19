@@ -4,9 +4,9 @@ export interface Notification {
   id: string
   user_id: string
   title: string
-  content: string // Changé de 'message' à 'content'
+  content: string
   type: string
-  read: boolean | null // Changé de 'read_at' à 'read'
+  read: boolean | null
   action_url: string | null
   created_at: string
 }
@@ -23,18 +23,25 @@ export const notificationsService = {
         .order("created_at", { ascending: false })
 
       if (unreadOnly) {
-        query = query.eq("read", false)
+        query = query.or("read.is.null,read.eq.false")
       }
 
       const { data, error } = await query
 
       if (error) {
         console.error("❌ Erreur récupération notifications:", error)
-        throw new Error(error.message)
+        throw new Error(`Erreur base de données: ${error.message}`)
       }
 
-      console.log(`✅ ${data?.length || 0} notifications récupérées`)
-      return data as Notification[]
+      console.log(`✅ ${data?.length || 0} notifications récupérées pour l'utilisateur ${userId}`)
+
+      // Transformer les données pour s'assurer que read est un boolean
+      const transformedData = (data || []).map((notification) => ({
+        ...notification,
+        read: notification.read === true,
+      }))
+
+      return transformedData as Notification[]
     } catch (error) {
       console.error("❌ Erreur dans getUserNotifications:", error)
       throw error
@@ -49,13 +56,14 @@ export const notificationsService = {
         .from("notifications")
         .select("id", { count: "exact", head: true })
         .eq("user_id", userId)
-        .eq("read", false)
+        .or("read.is.null,read.eq.false")
 
       if (error) {
         console.error("❌ Erreur comptage non lues:", error)
-        throw new Error(error.message)
+        throw new Error(`Erreur comptage: ${error.message}`)
       }
 
+      console.log(`✅ ${count || 0} notifications non lues pour l'utilisateur ${userId}`)
       return count || 0
     } catch (error) {
       console.error("❌ Erreur dans getUnreadCount:", error)
@@ -83,10 +91,10 @@ export const notificationsService = {
 
       if (error) {
         console.error("❌ Erreur création notification:", error)
-        throw new Error(error.message)
+        throw new Error(`Erreur création: ${error.message}`)
       }
 
-      console.log("✅ Notification créée:", data)
+      console.log("✅ Notification créée:", data.id)
       return data as Notification
     } catch (error) {
       console.error("❌ Erreur dans createNotification:", error)
@@ -102,7 +110,7 @@ export const notificationsService = {
 
       if (error) {
         console.error("❌ Erreur marquage notification:", error)
-        throw new Error(error.message)
+        throw new Error(`Erreur marquage: ${error.message}`)
       }
 
       console.log("✅ Notification marquée comme lue")
@@ -120,11 +128,11 @@ export const notificationsService = {
         .from("notifications")
         .update({ read: true })
         .eq("user_id", userId)
-        .eq("read", false)
+        .or("read.is.null,read.eq.false")
 
       if (error) {
         console.error("❌ Erreur marquage toutes notifications:", error)
-        throw new Error(error.message)
+        throw new Error(`Erreur marquage toutes: ${error.message}`)
       }
 
       console.log("✅ Toutes les notifications marquées comme lues")
@@ -142,7 +150,7 @@ export const notificationsService = {
 
       if (error) {
         console.error("❌ Erreur suppression notification:", error)
-        throw new Error(error.message)
+        throw new Error(`Erreur suppression: ${error.message}`)
       }
 
       console.log("✅ Notification supprimée")

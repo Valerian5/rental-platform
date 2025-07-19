@@ -12,10 +12,10 @@ interface Notification {
   id: string
   type: "application_received" | "visit_scheduled" | "payment_received" | "message_received" | "document_uploaded"
   title: string
-  message: string
+  content: string
   read: boolean
-  createdAt: string
-  data?: any
+  created_at: string
+  action_url?: string | null
 }
 
 const getNotificationIcon = (type: string) => {
@@ -51,6 +51,7 @@ export function NotificationCenter() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     loadNotifications()
@@ -61,81 +62,53 @@ export function NotificationCenter() {
 
   const loadNotifications = async () => {
     try {
+      setError(null)
+
       // Récupérer l'utilisateur depuis localStorage
       const userStr = localStorage.getItem("user")
       if (!userStr) {
-        console.log("Pas d'utilisateur dans localStorage")
+        console.log("❌ NotificationCenter - Pas d'utilisateur dans localStorage")
         setLoading(false)
+        setError("Utilisateur non connecté")
         return
       }
 
       const user = JSON.parse(userStr)
       if (!user.id) {
-        console.log("Pas d'ID utilisateur")
+        console.log("❌ NotificationCenter - Pas d'ID utilisateur")
         setLoading(false)
+        setError("ID utilisateur manquant")
         return
       }
 
-      console.log("Chargement notifications pour utilisateur:", user.id)
+      console.log("🔔 NotificationCenter - Chargement notifications pour utilisateur:", user.id)
 
       const response = await fetch(`/api/notifications?user_id=${user.id}`)
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
 
       const data = await response.json()
-      console.log("Données notifications reçues:", data)
+      console.log("📨 NotificationCenter - Réponse API:", data)
 
       if (data.success) {
         setNotifications(data.notifications || [])
         setUnreadCount(data.unreadCount || 0)
+        console.log(
+          `✅ NotificationCenter - ${data.notifications?.length || 0} notifications chargées, ${data.unreadCount || 0} non lues`,
+        )
       } else {
-        console.error("Erreur API notifications:", data.error)
-        // Créer des notifications de test si l'API échoue
-        const testNotifications = [
-          {
-            id: "test-1",
-            type: "application_received",
-            title: "Nouvelle candidature",
-            message: "Une nouvelle candidature a été reçue pour votre propriété",
-            read: false,
-            createdAt: new Date().toISOString(),
-          },
-          {
-            id: "test-2",
-            type: "message_received",
-            title: "Nouveau message",
-            message: "Vous avez reçu un nouveau message",
-            read: true,
-            createdAt: new Date(Date.now() - 3600000).toISOString(),
-          },
-        ]
-        setNotifications(testNotifications)
-        setUnreadCount(1)
+        console.error("❌ NotificationCenter - Erreur API:", data.error)
+        setError(data.error || "Erreur lors du chargement")
+        setNotifications([])
+        setUnreadCount(0)
       }
-    } catch (error) {
-      console.error("Erreur chargement notifications:", error)
-      // Créer des notifications de test en cas d'erreur
-      const testNotifications = [
-        {
-          id: "test-1",
-          type: "application_received",
-          title: "Nouvelle candidature",
-          message: "Une nouvelle candidature a été reçue pour votre propriété",
-          read: false,
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: "test-2",
-          type: "visit_scheduled",
-          title: "Visite programmée",
-          message: "Une visite a été programmée pour demain à 14h",
-          read: false,
-          createdAt: new Date(Date.now() - 1800000).toISOString(),
-        },
-      ]
-      setNotifications(testNotifications)
-      setUnreadCount(2)
+    } catch (error: any) {
+      console.error("❌ NotificationCenter - Erreur chargement:", error)
+      setError(error.message || "Erreur de connexion")
+      setNotifications([])
+      setUnreadCount(0)
     } finally {
       setLoading(false)
     }
@@ -143,26 +116,32 @@ export function NotificationCenter() {
 
   const markAsRead = async (notificationId: string) => {
     try {
+      console.log("🔔 NotificationCenter - Marquage notification comme lue:", notificationId)
+
       const response = await fetch("/api/notifications", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ notificationId, read: true }),
       })
 
-      if (response.ok) {
+      const result = await response.json()
+
+      if (result.success) {
         setNotifications((prev) => prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n)))
         setUnreadCount((prev) => Math.max(0, prev - 1))
+        console.log("✅ NotificationCenter - Notification marquée comme lue")
+      } else {
+        console.error("❌ NotificationCenter - Erreur marquage:", result.error)
       }
     } catch (error) {
-      console.error("Erreur marquage notification:", error)
-      // Marquer comme lu localement même si l'API échoue
-      setNotifications((prev) => prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n)))
-      setUnreadCount((prev) => Math.max(0, prev - 1))
+      console.error("❌ NotificationCenter - Erreur marquage notification:", error)
     }
   }
 
   const markAllAsRead = async () => {
     try {
+      console.log("🔔 NotificationCenter - Marquage toutes notifications comme lues")
+
       const unreadNotifications = notifications.filter((n) => !n.read)
 
       await Promise.all(
@@ -177,11 +156,9 @@ export function NotificationCenter() {
 
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
       setUnreadCount(0)
+      console.log("✅ NotificationCenter - Toutes les notifications marquées comme lues")
     } catch (error) {
-      console.error("Erreur marquage toutes notifications:", error)
-      // Marquer comme lu localement même si l'API échoue
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
-      setUnreadCount(0)
+      console.error("❌ NotificationCenter - Erreur marquage toutes notifications:", error)
     }
   }
 
@@ -215,7 +192,18 @@ export function NotificationCenter() {
 
         <ScrollArea className="h-96">
           {loading ? (
-            <div className="p-4 text-center text-muted-foreground">Chargement...</div>
+            <div className="p-4 text-center text-muted-foreground">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
+              <p>Chargement...</p>
+            </div>
+          ) : error ? (
+            <div className="p-4 text-center text-red-600">
+              <AlertCircle className="h-8 w-8 mx-auto mb-2" />
+              <p className="text-sm">{error}</p>
+              <Button variant="ghost" size="sm" onClick={loadNotifications} className="mt-2">
+                Réessayer
+              </Button>
+            </div>
           ) : notifications.length === 0 ? (
             <div className="p-4 text-center text-muted-foreground">
               <Bell className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -247,8 +235,8 @@ export function NotificationCenter() {
                           <div className="h-2 w-2 bg-blue-600 rounded-full ml-2 mt-1 flex-shrink-0" />
                         )}
                       </div>
-                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{notification.message}</p>
-                      <p className="text-xs text-muted-foreground mt-2">{formatTimeAgo(notification.createdAt)}</p>
+                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{notification.content}</p>
+                      <p className="text-xs text-muted-foreground mt-2">{formatTimeAgo(notification.created_at)}</p>
                     </div>
                   </div>
                 </div>
