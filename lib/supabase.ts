@@ -35,5 +35,3 @@ export const isSupabaseConfigured = () => {
 
 // Réexporter createClient pour les cas où on en a besoin directement
 export { createClient }
-
-

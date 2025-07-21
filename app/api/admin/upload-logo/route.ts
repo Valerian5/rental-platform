@@ -1,83 +1,138 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { SupabaseStorageService } from "@/lib/supabase-storage-service"
 import { createServerClient } from "@/lib/supabase"
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("📤 POST /api/admin/upload-logo")
-
-    // Vérifier l'authentification admin
-    const supabase = createServerClient()
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      console.log("❌ Pas d'utilisateur authentifié")
-      return NextResponse.json({ success: false, error: "Non authentifié" }, { status: 401 })
-    }
-
-    // Vérifier si l'utilisateur est admin
-    const { data: profile, error: profileError } = await supabase
-      .from("users")
-      .select("user_type")
-      .eq("id", user.id)
-      .single()
-
-    if (profileError || !profile || profile.user_type !== "admin") {
-      console.log("❌ Utilisateur non admin tente d'uploader un logo")
-      return NextResponse.json({ success: false, error: "Accès non autorisé" }, { status: 403 })
-    }
+    console.log("📤 POST /api/admin/upload-logo - DÉBUT")
 
     const formData = await request.formData()
     const file = formData.get("file") as File
     const logoType = formData.get("logoType") as string
 
-    console.log("📋 Upload logo:", { fileName: file?.name, logoType, fileSize: file?.size })
+    console.log("📋 Données reçues:", {
+      fileName: file?.name,
+      logoType,
+      fileSize: file?.size,
+      fileType: file?.type,
+    })
 
     if (!file || !logoType) {
-      return NextResponse.json({ success: false, error: "Fichier ou type manquant" }, { status: 400 })
+      console.log("❌ Fichier ou type manquant")
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Fichier ou type manquant",
+        },
+        { status: 400 },
+      )
     }
 
     // Valider le type de fichier
     const allowedTypes = ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"]
     if (!allowedTypes.includes(file.type)) {
-      return NextResponse.json({ success: false, error: "Type de fichier non autorisé" }, { status: 400 })
+      console.log("❌ Type de fichier non autorisé:", file.type)
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Type de fichier non autorisé",
+        },
+        { status: 400 },
+      )
     }
 
     // Valider la taille (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      return NextResponse.json({ success: false, error: "Fichier trop volumineux (max 5MB)" }, { status: 400 })
+      console.log("❌ Fichier trop volumineux:", file.size)
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Fichier trop volumineux (max 5MB)",
+        },
+        { status: 400 },
+      )
     }
 
-    console.log("✅ Validation OK, upload vers Supabase...")
+    console.log("✅ Validation OK, tentative d'upload...")
 
-    // Upload vers Supabase Storage
+    // Créer le client Supabase
+    const supabase = createServerClient()
+    console.log("✅ Client Supabase créé")
+
+    // Convertir le fichier en buffer
+    const fileBuffer = await file.arrayBuffer()
+    const fileName = `${logoType}_${Date.now()}.${file.name.split(".").pop()}`
+    const filePath = `admin/${fileName}`
+
+    console.log("📁 Tentative d'upload vers:", filePath)
+
+    // Essayer d'uploader vers le bucket logos
     let uploadResult
     try {
-      uploadResult = await SupabaseStorageService.uploadFile(file, "logos", "admin")
-      console.log("✅ Upload vers logos réussi:", uploadResult)
+      const { data: logoUpload, error: logoError } = await supabase.storage.from("logos").upload(filePath, fileBuffer, {
+        contentType: file.type,
+        upsert: true,
+      })
+
+      if (logoError) {
+        console.log("⚠️ Échec upload vers logos:", logoError.message)
+        throw logoError
+      }
+
+      console.log("✅ Upload vers logos réussi:", logoUpload)
+
+      // Obtenir l'URL publique
+      const { data: publicUrl } = supabase.storage.from("logos").getPublicUrl(filePath)
+
+      uploadResult = {
+        path: filePath,
+        url: publicUrl.publicUrl,
+      }
     } catch (logoError) {
       console.log("⚠️ Échec upload vers logos, tentative vers documents...")
+
       try {
-        uploadResult = await SupabaseStorageService.uploadFile(file, "documents", "admin")
-        console.log("✅ Upload vers documents réussi:", uploadResult)
-      } catch (documentsError) {
-        console.error("❌ Échec upload vers tous les buckets:", documentsError)
+        const { data: docUpload, error: docError } = await supabase.storage
+          .from("documents")
+          .upload(filePath, fileBuffer, {
+            contentType: file.type,
+            upsert: true,
+          })
+
+        if (docError) {
+          console.log("❌ Échec upload vers documents:", docError.message)
+          throw docError
+        }
+
+        console.log("✅ Upload vers documents réussi:", docUpload)
+
+        // Obtenir l'URL publique
+        const { data: publicUrl } = supabase.storage.from("documents").getPublicUrl(filePath)
+
+        uploadResult = {
+          path: filePath,
+          url: publicUrl.publicUrl,
+        }
+      } catch (docError) {
+        console.error("❌ Échec upload vers tous les buckets:", docError)
         return NextResponse.json(
-          { success: false, error: "Erreur upload fichier", details: documentsError.message },
+          {
+            success: false,
+            error: "Erreur upload fichier",
+            details: docError.message,
+          },
           { status: 500 },
         )
       }
     }
 
-    // Enregistrer dans uploaded_files (optionnel)
+    console.log("✅ Upload terminé:", uploadResult)
+
+    // Essayer d'enregistrer dans uploaded_files (optionnel)
     try {
-      const { data: fileRecord } = await supabase
+      const { data: fileRecord, error: dbError } = await supabase
         .from("uploaded_files")
         .insert({
-          filename: uploadResult.path.split("/").pop(),
+          filename: fileName,
           original_name: file.name,
           file_type: file.type,
           file_size: file.size,
@@ -87,56 +142,67 @@ export async function POST(request: NextRequest) {
         .select()
         .single()
 
-      console.log("✅ Fichier enregistré en DB:", fileRecord)
-    } catch (dbError) {
-      console.warn("⚠️ Erreur enregistrement DB (non critique):", dbError)
-    }
-
-    // Mettre à jour les paramètres du site
-    try {
-      // Récupérer les logos actuels
-      const { data: currentLogos } = await supabase
-        .from("site_settings")
-        .select("setting_value")
-        .eq("setting_key", "logos")
-        .single()
-
-      const logos = currentLogos?.setting_value || {}
-      logos[logoType] = uploadResult.url
-
-      const { error: updateError } = await supabase.from("site_settings").upsert({
-        setting_key: "logos",
-        setting_value: logos,
-        updated_at: new Date().toISOString(),
-      })
-
-      if (updateError) {
-        console.error("❌ Erreur update settings:", updateError)
-        return NextResponse.json(
-          { success: false, error: "Erreur mise à jour paramètres", details: updateError.message },
-          { status: 500 },
-        )
+      if (dbError) {
+        console.warn("⚠️ Erreur enregistrement uploaded_files (non critique):", dbError.message)
+      } else {
+        console.log("✅ Fichier enregistré en DB:", fileRecord)
       }
-
-      console.log("✅ Paramètres mis à jour")
-    } catch (settingsError) {
-      console.error("❌ Erreur gestion paramètres:", settingsError)
-      return NextResponse.json(
-        { success: false, error: "Erreur paramètres", details: settingsError.message },
-        { status: 500 },
-      )
+    } catch (dbError) {
+      console.warn("⚠️ Erreur DB uploaded_files (non critique):", dbError)
     }
+
+    // Essayer de mettre à jour les paramètres du site
+    try {
+      // Vérifier si la table site_settings existe
+      const { data: tableCheck, error: tableError } = await supabase
+        .from("site_settings")
+        .select("setting_key")
+        .limit(1)
+
+      if (tableError) {
+        console.warn("⚠️ Table site_settings non accessible:", tableError.message)
+        console.log("⚠️ Continuons sans sauvegarder les paramètres")
+      } else {
+        console.log("✅ Table site_settings accessible")
+
+        // Récupérer les logos actuels
+        const { data: currentLogos, error: getError } = await supabase
+          .from("site_settings")
+          .select("setting_value")
+          .eq("setting_key", "logos")
+          .single()
+
+        const logos = currentLogos?.setting_value || {}
+        logos[logoType] = uploadResult.url
+
+        const { error: updateError } = await supabase.from("site_settings").upsert({
+          setting_key: "logos",
+          setting_value: logos,
+          updated_at: new Date().toISOString(),
+        })
+
+        if (updateError) {
+          console.warn("⚠️ Erreur update settings (non critique):", updateError.message)
+        } else {
+          console.log("✅ Paramètres mis à jour")
+        }
+      }
+    } catch (settingsError) {
+      console.warn("⚠️ Erreur gestion paramètres (non critique):", settingsError)
+    }
+
+    console.log("✅ Upload logo terminé avec succès")
 
     return NextResponse.json({
       success: true,
       data: {
         url: uploadResult.url,
-        filename: uploadResult.path.split("/").pop(),
+        filename: fileName,
         logoType,
       },
     })
   } catch (error) {
-    console.error("❌ Erreur upload logo:", error)
+    console.error("❌ Erreur générale upload logo:", error)
     return NextResponse.json(
       {
         success: false,

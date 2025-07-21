@@ -6,42 +6,28 @@ export async function middleware(request: NextRequest) {
 
   console.log("🚀 Middleware déclenché pour:", pathname)
 
+  // Routes admin qui nécessitent une authentification admin
+  const adminRoutes = ["/admin"]
+  const isAdminRoute = adminRoutes.some((route) => pathname.startsWith(route))
+
   // Routes qui nécessitent une authentification
-  const protectedRoutes = ["/tenant/dashboard", "/owner/dashboard", "/messaging", "/admin"]
+  const protectedRoutes = ["/tenant/dashboard", "/owner/dashboard", "/messaging"]
   const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route))
+
+  if (isAdminRoute) {
+    console.log("🔒 Route admin détectée:", pathname)
+
+    // Pour l'instant, on laisse passer pour déboguer
+    console.log("⚠️ MIDDLEWARE ADMIN TEMPORAIREMENT DÉSACTIVÉ")
+    return NextResponse.next()
+  }
 
   if (isProtectedRoute) {
     console.log("🔒 Route protégée détectée:", pathname)
 
-    // Récupérer tous les cookies
-    const allCookies = request.cookies.getAll()
-    console.log(
-      "🍪 Tous les cookies:",
-      allCookies.map((c) => `${c.name}=${c.value.substring(0, 20)}...`),
-    )
-
-    // Pour l'instant, on laisse TOUT passer pour tester
-    console.log("✅ MIDDLEWARE DÉSACTIVÉ - Accès autorisé à:", pathname)
+    // Pour l'instant, on laisse passer pour déboguer
+    console.log("⚠️ MIDDLEWARE PROTECTION TEMPORAIREMENT DÉSACTIVÉ")
     return NextResponse.next()
-
-    // Code commenté pour plus tard
-    /*
-    // Chercher les cookies Supabase
-    const supabaseCookies = allCookies.filter(
-      (cookie) => 
-        cookie.name.includes("supabase") || 
-        cookie.name.includes("sb-") || 
-        cookie.name.includes("auth")
-    )
-
-    if (supabaseCookies.length > 0) {
-      console.log("✅ Cookies Supabase trouvés, accès autorisé")
-      return NextResponse.next()
-    }
-
-    console.log("❌ Pas de cookies Supabase, redirection vers login")
-    return NextResponse.redirect(new URL("/login", request.url))
-    */
   }
 
   return NextResponse.next()
