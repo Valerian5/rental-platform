@@ -2,131 +2,116 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { Eye, EyeOff, Mail, Lock, ArrowRight, Home } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { useToast } from "@/hooks/use-toast"
+import { ArrowLeft, Eye, EyeOff } from "lucide-react"
+import Link from "next/link"
 import { authService } from "@/lib/auth-service"
+import { toast } from "sonner"
 
 export default function LoginPage() {
   const router = useRouter()
-  const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   })
-  const [errors, setErrors] = useState({})
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Vérifier si l'utilisateur est déjà connecté
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const currentUser = await authService.getCurrentUser()
+        console.log("🔍 Login page - Vérification auth:", currentUser)
+
+        if (currentUser) {
+          console.log("✅ Login page - Utilisateur déjà connecté, redirection...")
+          switch (currentUser.user_type) {
+            case "owner":
+              router.push("/owner/dashboard")
+              break
+            case "tenant":
+              router.push("/tenant/dashboard")
+              break
+            case "admin":
+              router.push("/admin")
+              break
+            default:
+              router.push("/")
+          }
+        }
+      } catch (error) {
+        console.log("❌ Login page - Pas d'utilisateur connecté")
+      }
+    }
+
+    checkAuth()
+  }, [router])
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }))
-    // Effacer l'erreur quand l'utilisateur tape
-    if (errors[name]) {
-      setErrors((prev) => ({
-        ...prev,
-        [name]: "",
-      }))
-    }
+    setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
-  const validateForm = () => {
-    const newErrors = {}
-
-    if (!formData.email) {
-      newErrors.email = "L'email est requis"
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = "L'email n'est pas valide"
-    }
-
-    if (!formData.password) {
-      newErrors.password = "Le mot de passe est requis"
-    } else if (formData.password.length < 6) {
-      newErrors.password = "Le mot de passe doit contenir au moins 6 caractères"
-    }
-
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
-
+  // Améliorer la gestion de la connexion
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    if (!validateForm()) {
-      return
-    }
-
     setIsLoading(true)
 
     try {
-      console.log("🔐 Tentative de connexion pour:", formData.email)
+      console.log("🔐 Tentative de connexion avec:", formData.email)
 
-      const result = await authService.login(formData.email, formData.password)
+      // Connexion avec Supabase
+      const { user, session } = await authService.login(formData.email, formData.password)
 
-      if (!result.success) {
-        throw new Error(result.error || "Erreur de connexion")
+      console.log("✅ Résultat connexion:", { user: !!user, session: !!session })
+
+      if (!user || !session) {
+        throw new Error("Erreur lors de la connexion")
       }
 
-      console.log("✅ Connexion réussie:", result.user)
+      toast.success("Connexion réussie !")
 
-      toast({
-        title: "Connexion réussie",
-        description: `Bienvenue ${result.user.first_name} !`,
-      })
+      // Attendre que la session soit bien établie
+      await new Promise((resolve) => setTimeout(resolve, 1000))
 
-      // Redirection basée sur le type d'utilisateur
-      const userType = result.user.user_type
-      console.log("🔄 Redirection pour type:", userType)
+      console.log("🎯 Redirection vers:", user.user_type)
 
-      switch (userType) {
-        case "admin":
-          console.log("➡️ Redirection vers /admin")
-          router.push("/admin")
-          break
+      // Redirection selon le type d'utilisateur
+      switch (user.user_type) {
         case "owner":
-          console.log("➡️ Redirection vers /owner/dashboard")
-          router.push("/owner/dashboard")
+          window.location.href = "/owner/dashboard"
           break
         case "tenant":
-          console.log("➡️ Redirection vers /tenant/dashboard")
-          router.push("/tenant/dashboard")
+          window.location.href = "/tenant/dashboard"
+          break
+        case "admin":
+          window.location.href = "/admin"
           break
         default:
-          console.log("➡️ Redirection par défaut vers /")
-          router.push("/")
+          window.location.href = "/"
       }
-    } catch (error) {
-      console.error("❌ Erreur connexion:", error)
+    } catch (error: any) {
+      console.error("❌ Erreur lors de la connexion:", error)
 
+      // Messages d'erreur plus spécifiques
       let errorMessage = "Erreur de connexion"
-
       if (error.message.includes("Invalid login credentials")) {
         errorMessage = "Email ou mot de passe incorrect"
       } else if (error.message.includes("Email not confirmed")) {
         errorMessage = "Veuillez confirmer votre email avant de vous connecter"
-      } else if (error.message) {
+      } else if (error.message.includes("Too many requests")) {
+        errorMessage = "Trop de tentatives. Veuillez réessayer plus tard"
+      } else {
         errorMessage = error.message
       }
 
-      toast({
-        title: "Erreur de connexion",
-        description: errorMessage,
-        variant: "destructive",
-      })
-
-      setErrors({
-        general: errorMessage,
-      })
+      toast.error(errorMessage)
     } finally {
       setIsLoading(false)
     }
