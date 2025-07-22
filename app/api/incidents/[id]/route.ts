@@ -18,7 +18,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           address,
           city,
           postal_code,
-          type,
+          property_type,
           surface
         ),
         lease:leases(
