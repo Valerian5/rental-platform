@@ -61,10 +61,7 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
   const { toast } = useToast()
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [siteSettings, setSiteSettings] = useState<any>({
-    title: "RentalPlatform",
-    logo: null,
-  })
+  const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -81,47 +78,25 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
           return
         }
 
-        // Récupérer les paramètres du site
+        // Récupérer le logo
         try {
-          console.log("🔍 Récupération paramètres tenant layout...")
-
+          console.log("🔍 Tenant Layout - Récupération logo...")
           const logoResponse = await fetch("/api/admin/settings?key=logos")
           const logoResult = await logoResponse.json()
-
-          console.log("📋 Résultat logos tenant:", logoResult)
-
-          const siteInfoResponse = await fetch("/api/admin/settings?key=site_info")
-          const siteInfoResult = await siteInfoResponse.json()
-
-          console.log("📋 Résultat site_info tenant:", siteInfoResult)
-
-          let logoUrl = null
-          let siteTitle = "RentalPlatform"
+          console.log("📋 Tenant Layout - Résultat logos:", logoResult)
 
           if (logoResult.success && logoResult.data) {
+            let logoUrl = null
             if (typeof logoResult.data === "object" && logoResult.data.main) {
               logoUrl = logoResult.data.main
             } else if (typeof logoResult.data === "string") {
               logoUrl = logoResult.data
             }
+            console.log("✅ Tenant Layout - Logo défini:", logoUrl)
+            setLogoUrl(logoUrl)
           }
-
-          if (siteInfoResult.success && siteInfoResult.data) {
-            if (typeof siteInfoResult.data === "object" && siteInfoResult.data.title) {
-              siteTitle = siteInfoResult.data.title
-            } else if (typeof siteInfoResult.data === "string") {
-              siteTitle = siteInfoResult.data
-            }
-          }
-
-          setSiteSettings({
-            title: siteTitle,
-            logo: logoUrl,
-          })
-
-          console.log("✅ Paramètres tenant définis:", { title: siteTitle, logo: logoUrl })
         } catch (settingsError) {
-          console.error("❌ Erreur récupération paramètres tenant:", settingsError)
+          console.error("❌ Tenant Layout - Erreur récupération logo:", settingsError)
         }
       } catch (error) {
         console.error("Erreur récupération utilisateur:", error)
@@ -176,16 +151,16 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar Desktop */}
       <div className="hidden lg:flex lg:w-64 lg:flex-col lg:border-r lg:bg-white">
-        <div className="flex h-16 items-center border-b px-6">
-          <Link href="/tenant/dashboard" className="flex items-center space-x-2">
-            {siteSettings.logo ? (
+        <div className="flex h-16 items-center justify-center border-b px-6">
+          <Link href="/tenant/dashboard" className="flex items-center">
+            {logoUrl ? (
               <img
-                src={siteSettings.logo || "/placeholder.svg"}
+                src={logoUrl || "/placeholder.svg"}
                 alt="Logo"
-                className="h-8 w-8 object-contain"
+                className="h-10 w-auto object-contain max-w-[200px]"
                 onError={(e) => {
-                  console.error("❌ Erreur chargement logo tenant:", siteSettings.logo)
-                  setSiteSettings((prev) => ({ ...prev, logo: null }))
+                  console.error("❌ Erreur chargement logo tenant:", logoUrl)
+                  setLogoUrl(null)
                 }}
               />
             ) : (
@@ -193,7 +168,6 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
                 <Home className="h-5 w-5 text-white" />
               </div>
             )}
-            <span className="text-xl font-bold">{siteSettings.title}</span>
           </Link>
         </div>
         <nav className="flex-1 space-y-1 px-4 py-4 overflow-y-auto">
@@ -210,114 +184,114 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
                     : "text-gray-600 hover:text-gray-900 hover:bg-gray-100",
                 )}
               >
-                <Icon className="h-4 w-4 mr-3" />
-                {item.name}
+                <Icon className="h-4 w-4 mr-3 flex-shrink-0" />
+                <span className="truncate">{item.name}</span>
               </Link>
             )
           })}
         </nav>
       </div>
 
-      {/* Sidebar Mobile */}
-      <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-        <SheetContent side="left" className="w-80 p-0">
-          <div className="flex flex-col h-full">
-            <div className="flex h-16 items-center border-b px-6">
-              <Link href="/tenant/dashboard" className="flex items-center space-x-2">
-                {siteSettings.logo ? (
-                  <img
-                    src={siteSettings.logo || "/placeholder.svg"}
-                    alt="Logo"
-                    className="h-8 w-8 object-contain"
-                    onError={(e) => {
-                      console.error("❌ Erreur chargement logo tenant:", siteSettings.logo)
-                      setSiteSettings((prev) => ({ ...prev, logo: null }))
-                    }}
-                  />
-                ) : (
-                  <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                    <Home className="h-5 w-5 text-white" />
-                  </div>
-                )}
-                <span className="text-xl font-bold">{siteSettings.title}</span>
-              </Link>
-            </div>
-            <nav className="flex-1 space-y-1 px-4 py-4 overflow-y-auto">
-              {/* Navigation header en mobile */}
-              <div className="pb-4 border-b mb-4">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Navigation rapide</h3>
-                {headerNavigation.map((item) => {
-                  const Icon = item.icon
-                  return (
-                    <Link
-                      key={item.name}
-                      href={item.href}
-                      className={cn(
-                        "flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                        isActive(item.href)
-                          ? "bg-blue-100 text-blue-700"
-                          : "text-gray-600 hover:text-gray-900 hover:bg-gray-100",
-                      )}
-                      onClick={() => setMobileMenuOpen(false)}
-                    >
-                      <Icon className="h-4 w-4 mr-3" />
-                      {item.name}
-                    </Link>
-                  )
-                })}
-              </div>
-              {/* Navigation sidebar */}
-              <div>
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Menu principal</h3>
-                {sidebarNavigation.map((item) => {
-                  const Icon = item.icon
-                  return (
-                    <Link
-                      key={item.name}
-                      href={item.href}
-                      className={cn(
-                        "flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                        isActive(item.href)
-                          ? "bg-blue-100 text-blue-700"
-                          : "text-gray-600 hover:text-gray-900 hover:bg-gray-100",
-                      )}
-                      onClick={() => setMobileMenuOpen(false)}
-                    >
-                      <Icon className="h-4 w-4 mr-3" />
-                      {item.name}
-                    </Link>
-                  )
-                })}
-              </div>
-            </nav>
-          </div>
-        </SheetContent>
-      </Sheet>
-
       {/* Main Content */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Header */}
         <header className="bg-white shadow-sm border-b">
-          <div className="flex justify-between items-center h-16 px-6">
+          <div className="flex justify-between items-center h-16 px-4 lg:px-6">
             {/* Logo et navigation principale */}
-            <div className="flex items-center space-x-6">
+            <div className="flex items-center space-x-4 lg:space-x-6 min-w-0">
               <div className="flex items-center space-x-4">
-                <Sheet>
+                <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                   <SheetTrigger asChild>
                     <Button variant="ghost" size="icon" className="lg:hidden">
                       <Menu className="h-5 w-5" />
                     </Button>
                   </SheetTrigger>
+                  <SheetContent side="left" className="w-80 p-0">
+                    <div className="flex flex-col h-full">
+                      <div className="flex h-16 items-center justify-center border-b px-6">
+                        <Link href="/tenant/dashboard" className="flex items-center">
+                          {logoUrl ? (
+                            <img
+                              src={logoUrl || "/placeholder.svg"}
+                              alt="Logo"
+                              className="h-10 w-auto object-contain max-w-[200px]"
+                              onError={(e) => {
+                                console.error("❌ Erreur chargement logo tenant mobile:", logoUrl)
+                                setLogoUrl(null)
+                              }}
+                            />
+                          ) : (
+                            <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                              <Home className="h-5 w-5 text-white" />
+                            </div>
+                          )}
+                        </Link>
+                      </div>
+                      <nav className="flex-1 space-y-1 px-4 py-4 overflow-y-auto">
+                        {/* Navigation header en mobile */}
+                        <div className="pb-4 border-b mb-4">
+                          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                            Navigation rapide
+                          </h3>
+                          {headerNavigation.map((item) => {
+                            const Icon = item.icon
+                            return (
+                              <Link
+                                key={item.name}
+                                href={item.href}
+                                className={cn(
+                                  "flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                                  isActive(item.href)
+                                    ? "bg-blue-100 text-blue-700"
+                                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-100",
+                                )}
+                                onClick={() => setMobileMenuOpen(false)}
+                              >
+                                <Icon className="h-4 w-4 mr-3 flex-shrink-0" />
+                                <span className="truncate">{item.name}</span>
+                              </Link>
+                            )
+                          })}
+                        </div>
+                        {/* Navigation sidebar */}
+                        <div>
+                          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                            Menu principal
+                          </h3>
+                          {sidebarNavigation.map((item) => {
+                            const Icon = item.icon
+                            return (
+                              <Link
+                                key={item.name}
+                                href={item.href}
+                                className={cn(
+                                  "flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                                  isActive(item.href)
+                                    ? "bg-blue-100 text-blue-700"
+                                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-100",
+                                )}
+                                onClick={() => setMobileMenuOpen(false)}
+                              >
+                                <Icon className="h-4 w-4 mr-3 flex-shrink-0" />
+                                <span className="truncate">{item.name}</span>
+                              </Link>
+                            )
+                          })}
+                        </div>
+                      </nav>
+                    </div>
+                  </SheetContent>
                 </Sheet>
-                <Link href="/tenant/dashboard" className="flex items-center space-x-2">
-                  {siteSettings.logo ? (
+
+                <Link href="/tenant/dashboard" className="flex items-center">
+                  {logoUrl ? (
                     <img
-                      src={siteSettings.logo || "/placeholder.svg"}
+                      src={logoUrl || "/placeholder.svg"}
                       alt="Logo"
-                      className="h-8 w-8 object-contain"
+                      className="h-8 w-auto object-contain max-w-[150px]"
                       onError={(e) => {
-                        console.error("❌ Erreur chargement logo tenant:", siteSettings.logo)
-                        setSiteSettings((prev) => ({ ...prev, logo: null }))
+                        console.error("❌ Erreur chargement logo tenant header:", logoUrl)
+                        setLogoUrl(null)
                       }}
                     />
                   ) : (
@@ -325,12 +299,11 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
                       <Home className="h-5 w-5 text-white" />
                     </div>
                   )}
-                  <span className="text-xl font-bold text-gray-900">{siteSettings.title}</span>
                 </Link>
               </div>
 
               {/* Navigation header desktop */}
-              <nav className="hidden lg:flex space-x-1">
+              <nav className="hidden xl:flex space-x-1 overflow-x-auto">
                 {headerNavigation.map((item) => {
                   const Icon = item.icon
                   return (
@@ -338,14 +311,14 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
                       key={item.name}
                       href={item.href}
                       className={cn(
-                        "flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                        "flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap",
                         isActive(item.href)
                           ? "bg-blue-100 text-blue-700"
                           : "text-gray-600 hover:text-gray-900 hover:bg-gray-100",
                       )}
                     >
-                      <Icon className="h-4 w-4 mr-2" />
-                      {item.name}
+                      <Icon className="h-4 w-4 mr-2 flex-shrink-0" />
+                      <span className="hidden 2xl:inline">{item.name}</span>
                     </Link>
                   )
                 })}
@@ -353,12 +326,12 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
             </div>
 
             {/* Profil utilisateur */}
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 lg:space-x-4">
               <NotificationCenter />
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="flex items-center space-x-2">
+                  <Button variant="ghost" className="flex items-center space-x-2 px-2 lg:px-3">
                     <Avatar className="h-8 w-8">
                       <AvatarImage
                         src="/placeholder.svg?height=32&width=32&text=User"
@@ -370,12 +343,12 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
                       </AvatarFallback>
                     </Avatar>
                     <div className="hidden md:block text-left">
-                      <p className="text-sm font-medium text-gray-900">
+                      <p className="text-sm font-medium text-gray-900 truncate max-w-[120px]">
                         {currentUser.first_name} {currentUser.last_name}
                       </p>
                       <p className="text-xs text-gray-500">Locataire</p>
                     </div>
-                    <ChevronDown className="h-4 w-4" />
+                    <ChevronDown className="h-4 w-4 hidden sm:block" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
@@ -405,7 +378,9 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+          <div className="max-w-full overflow-x-auto">{children}</div>
+        </main>
       </div>
     </div>
   )
