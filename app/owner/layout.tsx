@@ -79,7 +79,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [expandedItems, setExpandedItems] = useState<string[]>([])
   const [siteSettings, setSiteSettings] = useState<any>({
-    title: "RentalPlatform",
+    title: "Louer Ici",
     logo: null,
   })
   const [loading, setLoading] = useState(true)
@@ -109,7 +109,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
           const siteInfoResult = await siteInfoResponse.json()
 
           setSiteSettings({
-            title: siteInfoResult.success ? siteInfoResult.data?.title || "RentalPlatform" : "RentalPlatform",
+            title: siteInfoResult.success ? siteInfoResult.data?.title || "Louer Ici" : "Louer Ici",
             logo: logoResult.success ? logoResult.data?.main : null,
           })
         } catch (settingsError) {
@@ -261,10 +261,10 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
             <div className="flex h-16 items-center border-b px-6">
               <Link href="/owner/dashboard" className="flex items-center space-x-2">
                 {siteSettings.logo ? (
-                  <img src={siteSettings.logo || "/placeholder.svg"} alt="Logo" className="h-8 w-8 object-contain" />
-                ) : (
-                  <Building2 className="h-6 w-6 text-blue-600" />
-                )}
+				<img src={siteSettings.logo} alt="Logo" className="h-8 w-8 object-contain" />
+			  ) : (
+				<Building2 className="h-6 w-6 text-blue-600" />
+			  )}
                 <span className="text-xl font-bold">{siteSettings.title}</span>
               </Link>
             </div>
@@ -288,11 +288,11 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
               </SheetTrigger>
             </Sheet>
             <div className="lg:hidden flex items-center space-x-2">
-              {siteSettings.logo ? (
-                <img src={siteSettings.logo || "/placeholder.svg"} alt="Logo" className="h-8 w-8 object-contain" />
-              ) : (
-                <Building2 className="h-6 w-6 text-blue-600" />
-              )}
+              {{siteSettings.logo ? (
+				<img src={siteSettings.logo} alt="Logo" className="h-8 w-8 object-contain" />
+			  ) : (
+				<Building2 className="h-6 w-6 text-blue-600" />
+			  )}
               <span className="text-xl font-bold">{siteSettings.title}</span>
             </div>
           </div>
