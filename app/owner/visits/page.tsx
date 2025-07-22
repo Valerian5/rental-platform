@@ -15,7 +15,6 @@ import { toast } from "sonner"
 import {
   CalendarIcon,
   Clock,
-  MapPin,
   User,
   Phone,
   Mail,
@@ -204,7 +203,7 @@ export default function OwnerVisitsPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-full overflow-x-hidden">
+    <div className="space-y-6 p-4 max-w-full overflow-x-hidden">
       <PageHeader title="Visites" description="Gérez les visites de vos propriétés" />
 
       {/* Statistiques */}
@@ -336,34 +335,42 @@ export default function OwnerVisitsPage() {
                 return (
                   <Card key={visit.id} className="hover:shadow-md transition-shadow">
                     <CardContent className="p-4 sm:p-6">
-                      <div className="flex flex-col lg:flex-row gap-4">
+                      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                         {/* Image de la propriété */}
-                        <div className="flex-shrink-0">
+                        {/* <div className="flex-shrink-0">
                           <img
                             src={getPropertyImage(visit.property) || "/placeholder.svg"}
                             alt={visit.property.title}
                             className="w-full lg:w-20 h-48 lg:h-20 object-cover rounded-lg"
                           />
-                        </div>
+                        </div> */}
 
                         {/* Informations principales */}
-                        <div className="flex-1 min-w-0 space-y-3">
-                          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-                            <div className="min-w-0 flex-1">
-                              <h3 className="font-semibold text-lg truncate">{visit.property.title}</h3>
-                              <p className="text-sm text-muted-foreground flex items-center gap-1">
-                                <MapPin className="h-4 w-4 flex-shrink-0" />
-                                <span className="truncate">
-                                  {visit.property.address}, {visit.property.city}
-                                </span>
-                              </p>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
+                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                              <User className="h-6 w-6 text-white" />
                             </div>
-                            <div className="flex-shrink-0">{getStatusBadge(visit.status)}</div>
+                            <div className="min-w-0 flex-1">
+                              <h3 className="text-lg font-semibold truncate">
+                                {visit.tenant.first_name} {visit.tenant.last_name}
+                              </h3>
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-muted-foreground">
+                                <div className="flex items-center min-w-0">
+                                  <Mail className="h-4 w-4 mr-1 flex-shrink-0" />
+                                  <span className="truncate">{visit.tenant.email}</span>
+                                </div>
+                                <div className="flex items-center">
+                                  <Phone className="h-4 w-4 mr-1 flex-shrink-0" />
+                                  <span className="truncate">{visit.tenant.phone}</span>
+                                </div>
+                              </div>
+                            </div>
                           </div>
 
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {/* Informations visiteur */}
-                            <div className="space-y-2">
+                            {/* <div className="space-y-2">
                               <h4 className="font-medium text-sm text-muted-foreground">Visiteur</h4>
                               <div className="space-y-1">
                                 <p className="flex items-center gap-2 text-sm">
@@ -383,7 +390,7 @@ export default function OwnerVisitsPage() {
                                   </p>
                                 )}
                               </div>
-                            </div>
+                            </div> */}
 
                             {/* Informations visite */}
                             <div className="space-y-2">
@@ -402,7 +409,7 @@ export default function OwnerVisitsPage() {
                           </div>
 
                           {/* Actions */}
-                          <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                          <div className="flex flex-col sm:flex-row lg:flex-col gap-2 w-full lg:w-auto">
                             <Button variant="outline" size="sm" className="w-full sm:w-auto bg-transparent">
                               <Eye className="h-4 w-4 mr-2 flex-shrink-0" />
                               Voir détails

@@ -18,7 +18,6 @@ import {
   CheckCircle,
   XCircle,
   MapPin,
-  Euro,
   Calendar,
   Eye,
   MessageSquare,
@@ -61,6 +60,12 @@ export default function TenantApplicationsPage() {
     rejected: { label: "Refusée", variant: "destructive" as const, icon: XCircle, color: "text-red-600" },
     visit_scheduled: {
       label: "Visite programmée",
+      variant: "outline" as const,
+      icon: Calendar,
+      color: "text-blue-600",
+    },
+    visit_proposed: {
+      label: "Visite proposée",
       variant: "outline" as const,
       icon: Calendar,
       color: "text-blue-600",
@@ -156,6 +161,7 @@ export default function TenantApplicationsPage() {
     accepted: getApplicationsByStatus("accepted").length,
     rejected: getApplicationsByStatus("rejected").length,
     visit_scheduled: getApplicationsByStatus("visit_scheduled").length,
+    visit_proposed: getApplicationsByStatus("visit_proposed").length,
   }
 
   if (loading) {
@@ -169,8 +175,40 @@ export default function TenantApplicationsPage() {
     )
   }
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "pending":
+        return "bg-yellow-100 text-yellow-800"
+      case "accepted":
+        return "bg-green-100 text-green-800"
+      case "rejected":
+        return "bg-red-100 text-red-800"
+      case "visit_proposed":
+      case "visit_scheduled":
+        return "bg-blue-100 text-blue-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "pending":
+        return "En analyse"
+      case "accepted":
+        return "Acceptée"
+      case "rejected":
+        return "Refusée"
+      case "visit_proposed":
+      case "visit_scheduled":
+        return "Visite"
+      default:
+        return "Inconnu"
+    }
+  }
+
   return (
-    <div className="space-y-6 max-w-full overflow-x-hidden">
+    <div className="space-y-6 p-4 max-w-full overflow-x-hidden">
       <PageHeader title="Mes candidatures" description="Suivez l'état de vos candidatures">
         <Button asChild className="w-full sm:w-auto">
           <Link href="/tenant/search">
@@ -182,7 +220,7 @@ export default function TenantApplicationsPage() {
       </PageHeader>
 
       {/* Statistiques */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between">
@@ -288,22 +326,12 @@ export default function TenantApplicationsPage() {
 
       {/* Onglets par statut */}
       <Tabs value={statusFilter} onValueChange={setStatusFilter}>
-        <TabsList className="grid grid-cols-2 lg:grid-cols-5 w-full">
-          <TabsTrigger value="all" className="text-xs sm:text-sm">
-            Toutes ({stats.total})
-          </TabsTrigger>
-          <TabsTrigger value="pending" className="text-xs sm:text-sm">
-            En attente ({stats.pending})
-          </TabsTrigger>
-          <TabsTrigger value="accepted" className="text-xs sm:text-sm">
-            Acceptées ({stats.accepted})
-          </TabsTrigger>
-          <TabsTrigger value="visit_scheduled" className="text-xs sm:text-sm">
-            Visites ({stats.visit_scheduled})
-          </TabsTrigger>
-          <TabsTrigger value="rejected" className="text-xs sm:text-sm">
-            Refusées ({stats.rejected})
-          </TabsTrigger>
+        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5">
+          <TabsTrigger value="all">Toutes</TabsTrigger>
+          <TabsTrigger value="pending">En analyse</TabsTrigger>
+          <TabsTrigger value="visit_proposed">Visite</TabsTrigger>
+          <TabsTrigger value="accepted">Acceptées</TabsTrigger>
+          <TabsTrigger value="rejected">Refusées</TabsTrigger>
         </TabsList>
 
         <TabsContent value={statusFilter} className="space-y-4">
@@ -332,35 +360,38 @@ export default function TenantApplicationsPage() {
               {filteredApplications.map((application) => (
                 <Card key={application.id} className="hover:shadow-md transition-shadow">
                   <CardContent className="p-4 sm:p-6">
-                    <div className="flex flex-col lg:flex-row gap-4">
-                      {/* Image de la propriété */}
-                      <div className="flex-shrink-0">
+                    <div className="flex flex-col lg:flex-row">
+                      {/* Image */}
+                      <div className="w-full lg:w-1/3 h-48 lg:h-auto">
                         <img
-                          src={getPropertyImage(application.property) || "/placeholder.svg"}
-                          alt={application.property.title}
-                          className="w-full lg:w-32 h-48 lg:h-32 object-cover rounded-lg"
+                          src={
+                            application.property?.property_images?.find((img: any) => img.is_primary)?.url ||
+                            application.property?.property_images?.[0]?.url ||
+                            "/placeholder.svg?height=200&width=300" ||
+                            "/placeholder.svg"
+                          }
+                          alt={application.property?.title || "Propriété"}
+                          className="w-full h-full object-cover"
                         />
                       </div>
 
-                      {/* Informations principales */}
-                      <div className="flex-1 min-w-0 space-y-3">
-                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                      {/* Contenu */}
+                      <div className="flex-1 p-4 sm:p-6">
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
                           <div className="min-w-0 flex-1">
-                            <h3 className="font-semibold text-lg truncate">{application.property.title}</h3>
-                            <p className="text-sm text-muted-foreground flex items-center gap-1">
-                              <MapPin className="h-4 w-4 flex-shrink-0" />
+                            <h2 className="text-xl font-semibold truncate">
+                              {application.property?.title || "Propriété"}
+                            </h2>
+                            <div className="flex items-center text-muted-foreground mt-1 min-w-0">
+                              <MapPin className="h-4 w-4 mr-1 flex-shrink-0" />
                               <span className="truncate">
-                                {application.property.address}, {application.property.city}
+                                {application.property?.address || "Adresse non disponible"}
                               </span>
-                            </p>
-                            {application.property.rent && (
-                              <p className="text-lg font-semibold text-blue-600 flex items-center gap-1 mt-1">
-                                <Euro className="h-4 w-4 flex-shrink-0" />
-                                <span>{application.property.rent.toLocaleString()} €/mois</span>
-                              </p>
-                            )}
+                            </div>
                           </div>
-                          <div className="flex-shrink-0">{getStatusBadge(application.status)}</div>
+                          <Badge className={`${getStatusColor(application.status)} whitespace-nowrap flex-shrink-0`}>
+                            {getStatusText(application.status)}
+                          </Badge>
                         </div>
 
                         {/* Informations candidature */}
@@ -394,10 +425,10 @@ export default function TenantApplicationsPage() {
                         )}
 
                         {/* Actions */}
-                        <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                        <div className="flex flex-col sm:flex-row gap-2">
                           <Button variant="outline" size="sm" asChild className="w-full sm:w-auto bg-transparent">
-                            <Link href={`/properties/${application.property.id}`}>
-                              <Eye className="h-4 w-4 mr-2 flex-shrink-0" />
+                            <Link href={`/properties/${application.property_id}`}>
+                              <Eye className="h-4 w-4 mr-1 flex-shrink-0" />
                               Voir l'annonce
                             </Link>
                           </Button>
