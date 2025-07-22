@@ -240,14 +240,14 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
       {/* Sidebar Desktop */}
       <div className="hidden lg:flex lg:w-64 lg:flex-col lg:border-r lg:bg-white">
         <div className="flex h-16 items-center border-b px-6">
-          <Link href="/owner/dashboard" className="flex items-center space-x-2">
-            {siteSettings.logo ? (
-              <img src={siteSettings.logo || "/placeholder.svg"} alt="Logo" className="h-8 w-8 object-contain" />
-            ) : (
-              <Building2 className="h-6 w-6 text-blue-600" />
-            )}
-            <span className="text-xl font-bold">{siteSettings.title}</span>
-          </Link>
+			<Link href="/owner/dashboard" className="flex items-center space-x-2">
+			  {siteSettings.logo ? (
+				<img src={siteSettings.logo} alt="Logo" className="h-8 w-8 object-contain" />
+			  ) : (
+				<Building2 className="h-6 w-6 text-blue-600" />
+			  )}
+			  <span className="text-xl font-bold">{siteSettings.title}</span>
+			</Link>
         </div>
         <nav className="flex-1 space-y-1 px-4 py-4 overflow-y-auto">
           {navigation.map((item) => renderNavigationItem(item))}

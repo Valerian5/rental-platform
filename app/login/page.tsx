@@ -21,16 +21,24 @@ export default function LoginPage() {
     email: "",
     password: "",
   })
+  const [logoUrl, setLogoUrl] = useState<string | null>(null)
+
+  // Fetch logo depuis Supabase Settings
+  useEffect(() => {
+    fetch("/api/admin/settings?key=logos")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.data?.main) setLogoUrl(data.data.main)
+      })
+      .catch(() => setLogoUrl(null))
+  }, [])
 
   // Vérifier si l'utilisateur est déjà connecté
   useEffect(() => {
     const checkAuth = async () => {
       try {
         const currentUser = await authService.getCurrentUser()
-        console.log("🔍 Login page - Vérification auth:", currentUser)
-
         if (currentUser) {
-          console.log("✅ Login page - Utilisateur déjà connecté, redirection...")
           switch (currentUser.user_type) {
             case "owner":
               router.push("/owner/dashboard")
@@ -46,10 +54,9 @@ export default function LoginPage() {
           }
         }
       } catch (error) {
-        console.log("❌ Login page - Pas d'utilisateur connecté")
+        // Not connected
       }
     }
-
     checkAuth()
   }, [router])
 
@@ -58,31 +65,14 @@ export default function LoginPage() {
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
-  // Améliorer la gestion de la connexion
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-
     try {
-      console.log("🔐 Tentative de connexion avec:", formData.email)
-
-      // Connexion avec Supabase
       const { user, session } = await authService.login(formData.email, formData.password)
-
-      console.log("✅ Résultat connexion:", { user: !!user, session: !!session })
-
-      if (!user || !session) {
-        throw new Error("Erreur lors de la connexion")
-      }
-
+      if (!user || !session) throw new Error("Erreur lors de la connexion")
       toast.success("Connexion réussie !")
-
-      // Attendre que la session soit bien établie
       await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      console.log("🎯 Redirection vers:", user.user_type)
-
-      // Redirection selon le type d'utilisateur
       switch (user.user_type) {
         case "owner":
           window.location.href = "/owner/dashboard"
@@ -97,20 +87,16 @@ export default function LoginPage() {
           window.location.href = "/"
       }
     } catch (error: any) {
-      console.error("❌ Erreur lors de la connexion:", error)
-
-      // Messages d'erreur plus spécifiques
       let errorMessage = "Erreur de connexion"
-      if (error.message.includes("Invalid login credentials")) {
+      if (error.message?.includes("Invalid login credentials")) {
         errorMessage = "Email ou mot de passe incorrect"
-      } else if (error.message.includes("Email not confirmed")) {
+      } else if (error.message?.includes("Email not confirmed")) {
         errorMessage = "Veuillez confirmer votre email avant de vous connecter"
-      } else if (error.message.includes("Too many requests")) {
+      } else if (error.message?.includes("Too many requests")) {
         errorMessage = "Trop de tentatives. Veuillez réessayer plus tard"
-      } else {
+      } else if (error.message) {
         errorMessage = error.message
       }
-
       toast.error(errorMessage)
     } finally {
       setIsLoading(false)
@@ -123,7 +109,12 @@ export default function LoginPage() {
         <ArrowLeft className="h-4 w-4 mr-1" />
         Retour à l'accueil
       </Link>
-
+      {/* Affichage du logo */}
+      {logoUrl && (
+        <div className="flex justify-center mb-6">
+          <img src={logoUrl} alt="Logo" className="h-16 object-contain" />
+        </div>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>Se connecter</CardTitle>
@@ -143,7 +134,6 @@ export default function LoginPage() {
                 required
               />
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="password">Mot de passe</Label>
               <div className="relative">
@@ -167,7 +157,6 @@ export default function LoginPage() {
                 </Button>
               </div>
             </div>
-
             <div className="flex items-center justify-between">
               <Link href="/forgot-password" className="text-sm text-blue-600 hover:underline">
                 Mot de passe oublié ?
@@ -176,11 +165,9 @@ export default function LoginPage() {
                 Debug
               </Link>
             </div>
-
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? "Connexion en cours..." : "Se connecter"}
             </Button>
-
             <div className="text-center text-sm text-muted-foreground">
               Pas encore inscrit ?{" "}
               <Link href="/register" className="text-blue-600 hover:underline">
