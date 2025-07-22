@@ -5,18 +5,17 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    console.log("🔍 API incidents/tenant - Récupération incidents pour tenant:", params.id)
+    console.log("🔍 API incidents/tenant/[id] - Récupération incidents locataire:", params.id)
 
-    // Récupérer les incidents du locataire via ses baux
+    // Récupérer tous les incidents du locataire via ses baux
     const { data: incidents, error } = await supabase
       .from("incidents")
       .select(`
         *,
         lease:leases!inner(
           id,
-          tenant_id,
           property:properties(id, title, address, city),
-          owner:users!owner_id(id, first_name, last_name, email, phone)
+          tenant:users!tenant_id(id, first_name, last_name)
         )
       `)
       .eq("lease.tenant_id", params.id)
@@ -28,7 +27,6 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         {
           success: false,
           error: "Erreur lors de la récupération des incidents",
-          details: error.message,
         },
         { status: 500 },
       )
@@ -46,13 +44,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         return {
           ...incident,
           property: incident.lease.property,
-          owner: incident.lease.owner,
           responses: responses || [],
         }
       }),
     )
 
-    console.log("✅ Incidents récupérés:", incidentsWithResponses.length)
+    console.log("✅ Incidents récupérés avec succès:", incidentsWithResponses.length)
 
     return NextResponse.json({
       success: true,

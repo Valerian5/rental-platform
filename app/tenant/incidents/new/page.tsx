@@ -2,111 +2,229 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { ArrowLeft, Upload, AlertTriangle, Camera } from "lucide-react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Label } from "@/components/ui/label"
+import { AlertTriangle, Upload, X, ArrowLeft } from "lucide-react"
+import { authService } from "@/lib/auth-service"
+import { rentalManagementService } from "@/lib/rental-management-service"
+import { toast } from "sonner"
+import Link from "next/link"
 
 export default function NewIncidentPage() {
   const router = useRouter()
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [activeLease, setActiveLease] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [formData, setFormData] = useState({
+  const [photos, setPhotos] = useState<File[]>([])
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([])
+
+  const [incident, setIncident] = useState({
     title: "",
     description: "",
     category: "",
     priority: "medium",
-    photos: [] as File[],
   })
+
+  useEffect(() => {
+    const initializeData = async () => {
+      try {
+        const user = await authService.getCurrentUser()
+        if (!user || user.user_type !== "tenant") {
+          router.push("/login")
+          return
+        }
+
+        setCurrentUser(user)
+
+        // Récupérer le bail actif du locataire
+        const res = await fetch(`/api/leases/tenant/${user.id}/active`)
+        const data = await res.json()
+
+        if (data.success && data.lease) {
+          setActiveLease(data.lease)
+        } else {
+          toast.error("Aucun bail actif trouvé")
+          router.push("/tenant/dashboard")
+        }
+      } catch (error) {
+        console.error("Erreur initialisation:", error)
+        toast.error("Erreur lors du chargement")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    initializeData()
+  }, [router])
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+
+    if (photos.length + files.length > 5) {
+      toast.error("Maximum 5 photos autorisées")
+      return
+    }
+
+    const validFiles = files.filter((file) => {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(`${file.name} est trop volumineux (max 5MB)`)
+        return false
+      }
+      if (!file.type.startsWith("image/")) {
+        toast.error(`${file.name} n'est pas une image`)
+        return false
+      }
+      return true
+    })
+
+    setPhotos((prev) => [...prev, ...validFiles])
+
+    // Créer les aperçus
+    validFiles.forEach((file) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setPhotoPreviews((prev) => [...prev, e.target?.result as string])
+      }
+      reader.readAsDataURL(file)
+    })
+  }
+
+  const removePhoto = (index: number) => {
+    setPhotos((prev) => prev.filter((_, i) => i !== index))
+    setPhotoPreviews((prev) => prev.filter((_, i) => i !== index))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!incident.title || !incident.description || !incident.category) {
+      toast.error("Veuillez remplir tous les champs obligatoires")
+      return
+    }
+
     setIsSubmitting(true)
 
     try {
-      // Simuler l'envoi
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      // Upload des photos si nécessaire
+      let photoUrls: string[] = []
+      if (photos.length > 0) {
+        const formData = new FormData()
+        photos.forEach((photo, index) => {
+          formData.append(`photo_${index}`, photo)
+        })
 
-      // Rediriger vers la page de gestion locative
-      router.push("/tenant/rental-management?tab=incidents&success=incident-reported")
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        })
+
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json()
+          photoUrls = uploadData.urls || []
+        }
+      }
+
+      // Créer l'incident
+      const incidentData = {
+        ...incident,
+        property_id: activeLease.property.id,
+        lease_id: activeLease.id,
+        reported_by: currentUser.id,
+        photos: photoUrls,
+      }
+
+      await rentalManagementService.reportIncident(incidentData)
+
+      toast.success("Incident signalé avec succès")
+      router.push("/tenant/incidents")
     } catch (error) {
-      console.error("Erreur lors du signalement:", error)
+      console.error("Erreur signalement:", error)
+      toast.error("Erreur lors du signalement")
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const newFiles = Array.from(e.target.files)
-      setFormData((prev) => ({
-        ...prev,
-        photos: [...prev.photos, ...newFiles].slice(0, 5), // Max 5 photos
-      }))
-    }
-  }
-
-  const removePhoto = (index: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      photos: prev.photos.filter((_, i) => i !== index),
-    }))
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="text-gray-600">Chargement...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="container mx-auto py-8 max-w-2xl">
-      <div className="mb-8">
-        <Link href="/tenant/rental-management" className="text-blue-600 hover:underline flex items-center mb-4">
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          Retour à mon espace locataire
+    <div className="max-w-2xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex items-center gap-4">
+        <Link href="/tenant/incidents">
+          <Button variant="outline" size="sm">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Retour
+          </Button>
         </Link>
-        <h1 className="text-3xl font-bold mb-2">Signaler un incident</h1>
-        <p className="text-muted-foreground">Décrivez le problème rencontré dans votre logement</p>
+        <div>
+          <h1 className="text-2xl font-bold">Signaler un incident</h1>
+          <p className="text-gray-600">Décrivez le problème rencontré dans votre logement</p>
+        </div>
       </div>
 
-      <Alert className="mb-6">
-        <AlertTriangle className="h-4 w-4" />
-        <AlertDescription>
-          <strong>Urgence :</strong> En cas d'urgence (fuite importante, panne électrique, etc.), contactez
-          immédiatement votre propriétaire par téléphone.
-        </AlertDescription>
-      </Alert>
+      {/* Informations du logement */}
+      {activeLease && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Logement concerné</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <p className="font-medium">{activeLease.property.title}</p>
+              <p className="text-gray-600">
+                {activeLease.property.address}, {activeLease.property.city}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
+      {/* Formulaire */}
       <Card>
         <CardHeader>
           <CardTitle>Détails de l'incident</CardTitle>
-          <CardDescription>
-            Plus vous fournirez d'informations, plus votre propriétaire pourra intervenir rapidement
-          </CardDescription>
+          <CardDescription>Fournissez le maximum d'informations pour permettre une résolution rapide</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Titre */}
             <div className="space-y-2">
               <Label htmlFor="title">Titre de l'incident *</Label>
               <Input
                 id="title"
+                value={incident.title}
+                onChange={(e) => setIncident({ ...incident, title: e.target.value })}
                 placeholder="Ex: Fuite d'eau dans la salle de bain"
-                value={formData.title}
-                onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
                 required
               />
             </div>
 
+            {/* Catégorie */}
             <div className="space-y-2">
               <Label htmlFor="category">Catégorie *</Label>
               <Select
-                value={formData.category}
-                onValueChange={(value) => setFormData((prev) => ({ ...prev, category: value }))}
+                value={incident.category}
+                onValueChange={(value) => setIncident({ ...incident, category: value })}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Sélectionnez une catégorie" />
+                  <SelectValue placeholder="Sélectionner une catégorie" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="plumbing">Plomberie</SelectItem>
@@ -118,120 +236,119 @@ export default function NewIncidentPage() {
               </Select>
             </div>
 
-            <div className="space-y-3">
-              <Label>Niveau de priorité *</Label>
-              <RadioGroup
-                value={formData.priority}
-                onValueChange={(value) => setFormData((prev) => ({ ...prev, priority: value }))}
+            {/* Priorité */}
+            <div className="space-y-2">
+              <Label htmlFor="priority">Priorité</Label>
+              <Select
+                value={incident.priority}
+                onValueChange={(value) => setIncident({ ...incident, priority: value })}
               >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="low" id="low" />
-                  <Label htmlFor="low" className="flex items-center">
-                    <span className="w-3 h-3 bg-green-500 rounded-full mr-2"></span>
-                    Faible - Peut attendre quelques jours
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="medium" id="medium" />
-                  <Label htmlFor="medium" className="flex items-center">
-                    <span className="w-3 h-3 bg-yellow-500 rounded-full mr-2"></span>
-                    Moyen - À traiter dans la semaine
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="high" id="high" />
-                  <Label htmlFor="high" className="flex items-center">
-                    <span className="w-3 h-3 bg-orange-500 rounded-full mr-2"></span>
-                    Élevé - À traiter rapidement
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="urgent" id="urgent" />
-                  <Label htmlFor="urgent" className="flex items-center">
-                    <span className="w-3 h-3 bg-red-500 rounded-full mr-2"></span>
-                    Urgent - Intervention immédiate requise
-                  </Label>
-                </div>
-              </RadioGroup>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Faible - Peut attendre</SelectItem>
+                  <SelectItem value="medium">Moyen - À traiter prochainement</SelectItem>
+                  <SelectItem value="high">Élevé - Urgent</SelectItem>
+                  <SelectItem value="urgent">Urgent - Intervention immédiate</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
+            {/* Description */}
             <div className="space-y-2">
               <Label htmlFor="description">Description détaillée *</Label>
               <Textarea
                 id="description"
-                placeholder="Décrivez le problème en détail : où se situe-t-il, depuis quand, dans quelles circonstances..."
-                rows={4}
-                value={formData.description}
-                onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                value={incident.description}
+                onChange={(e) => setIncident({ ...incident, description: e.target.value })}
+                placeholder="Décrivez le problème en détail : quand est-il apparu, où se situe-t-il, quelle est son ampleur..."
+                rows={5}
                 required
               />
             </div>
 
-            <div className="space-y-3">
+            {/* Photos */}
+            <div className="space-y-2">
               <Label>Photos (optionnel)</Label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                <Camera className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                <p className="text-sm text-muted-foreground mb-3">
-                  Ajoutez des photos pour aider à comprendre le problème
-                </p>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handlePhotoUpload}
-                  className="hidden"
-                  id="photo-upload"
-                />
-                <Button type="button" variant="outline" size="sm" asChild>
+              <div className="space-y-4">
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={handlePhotoUpload}
+                    className="hidden"
+                    id="photo-upload"
+                  />
                   <label htmlFor="photo-upload" className="cursor-pointer">
-                    <Upload className="h-4 w-4 mr-2" />
-                    Choisir des photos
+                    <Upload className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                    <p className="text-gray-600">Cliquez pour ajouter des photos</p>
+                    <p className="text-sm text-gray-500 mt-1">Maximum 5 photos, 5MB chacune</p>
                   </label>
-                </Button>
-                <p className="text-xs text-muted-foreground mt-2">Maximum 5 photos, formats JPG, PNG</p>
-              </div>
-
-              {formData.photos.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {formData.photos.map((photo, index) => (
-                    <div key={index} className="relative">
-                      <img
-                        src={URL.createObjectURL(photo) || "/placeholder.svg"}
-                        alt={`Photo ${index + 1}`}
-                        className="w-full h-24 object-cover rounded-lg"
-                      />
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="sm"
-                        className="absolute top-1 right-1 h-6 w-6 p-0"
-                        onClick={() => removePhoto(index)}
-                      >
-                        ×
-                      </Button>
-                    </div>
-                  ))}
                 </div>
-              )}
+
+                {photoPreviews.length > 0 && (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {photoPreviews.map((preview, index) => (
+                      <div key={index} className="relative">
+                        <img
+                          src={preview || "/placeholder.svg"}
+                          alt={`Aperçu ${index + 1}`}
+                          className="w-full h-32 object-cover rounded-lg border"
+                        />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          className="absolute top-2 right-2 h-6 w-6 p-0"
+                          onClick={() => removePhoto(index)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <h4 className="font-semibold mb-2">Que se passe-t-il après ?</h4>
-              <ul className="text-sm space-y-1">
-                <li>• Votre propriétaire sera immédiatement notifié</li>
-                <li>• Vous recevrez une confirmation par email</li>
-                <li>• Le propriétaire vous contactera pour organiser l'intervention</li>
-                <li>• Vous pourrez suivre l'avancement dans votre espace locataire</li>
-              </ul>
+            {/* Conseils */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-blue-600 mt-0.5" />
+                <div className="text-sm text-blue-800">
+                  <p className="font-medium mb-2">Conseils pour un signalement efficace :</p>
+                  <ul className="space-y-1 list-disc list-inside">
+                    <li>Soyez précis dans votre description</li>
+                    <li>Indiquez si le problème s'aggrave</li>
+                    <li>Ajoutez des photos si possible</li>
+                    <li>Mentionnez si cela affecte votre sécurité</li>
+                  </ul>
+                </div>
+              </div>
             </div>
 
-            <div className="flex gap-4">
-              <Button type="button" variant="outline" className="flex-1" asChild>
-                <Link href="/tenant/rental-management">Annuler</Link>
+            {/* Actions */}
+            <div className="flex gap-4 pt-4">
+              <Button type="submit" disabled={isSubmitting} className="flex-1">
+                {isSubmitting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Signalement en cours...
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle className="h-4 w-4 mr-2" />
+                    Signaler l'incident
+                  </>
+                )}
               </Button>
-              <Button type="submit" className="flex-1" disabled={isSubmitting}>
-                {isSubmitting ? "Envoi en cours..." : "Signaler l'incident"}
-              </Button>
+              <Link href="/tenant/incidents">
+                <Button type="button" variant="outline">
+                  Annuler
+                </Button>
+              </Link>
             </div>
           </form>
         </CardContent>
