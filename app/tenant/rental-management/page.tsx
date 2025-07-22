@@ -1,836 +1,814 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Textarea } from "@/components/ui/textarea"
-import {
-  AlertTriangle,
-  Plus,
-  Clock,
-  CheckCircle,
-  AlertCircle,
-  Eye,
-  MessageSquare,
-  Calendar,
-  User,
-  Building,
-} from "lucide-react"
-import { authService } from "@/lib/auth-service"
-import { rentalManagementService } from "@/lib/rental-management-service"
-import { toast } from "sonner"
-import { PageHeader } from "@/components/page-header"
 import Link from "next/link"
+import {
+  Home,
+  Euro,
+  FileText,
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  CreditCard,
+  Download,
+  MessageSquare,
+  Bell,
+  TrendingUp,
+  Receipt,
+  Plus,
+  Eye,
+} from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Progress } from "@/components/ui/progress"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { authService } from "@/lib/auth-service"
+import { toast } from "sonner"
 
-export default function IncidentsPage() {
+interface Lease {
+  id: string
+  property: {
+    id: string
+    title: string
+    address: string
+    city: string
+  }
+  owner: {
+    id: string
+    first_name: string
+    last_name: string
+    email: string
+    phone: string
+  }
+  start_date: string
+  end_date: string
+  monthly_rent: number
+  charges: number
+  deposit: number
+  status: string
+}
+
+interface RentReceipt {
+  id: string
+  month: string
+  year: number
+  rent_amount: number
+  charges_amount: number
+  total_amount: number
+  payment_date: string | null
+  status: string
+  receipt_url: string | null
+}
+
+interface Incident {
+  id: string
+  title: string
+  description: string
+  category: string
+  priority: string
+  status: string
+  photos?: string[]
+  resolution_notes?: string
+  cost?: number
+  resolved_date?: string
+  created_at: string
+  updated_at?: string
+  responses?: IncidentResponse[]
+}
+
+interface IncidentResponse {
+  id: string
+  incident_id: string
+  message: string
+  author_type: "owner" | "tenant"
+  author_name: string
+  created_at: string
+  attachments?: string[]
+}
+
+export default function TenantRentalManagementPage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
-  const [leases, setLeases] = useState<any[]>([])
-  const [incidents, setIncidents] = useState<any[]>([])
-  const [filteredIncidents, setFilteredIncidents] = useState<any[]>([])
-  const [selectedIncident, setSelectedIncident] = useState<any>(null)
+  const [activeLease, setActiveLease] = useState<Lease | null>(null)
+  const [rentReceipts, setRentReceipts] = useState<RentReceipt[]>([])
+  const [incidents, setIncidents] = useState<Incident[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [showNewIncidentDialog, setShowNewIncidentDialog] = useState(false)
-  const [showResponseDialog, setShowResponseDialog] = useState(false)
-  const [showInterventionDialog, setShowInterventionDialog] = useState(false)
-
-  const [filters, setFilters] = useState({
-    status: "all",
-    priority: "all",
-    category: "all",
-    property: "all",
-    search: "",
-  })
-
-  // Formulaire nouvel incident
-  const [newIncident, setNewIncident] = useState({
-    title: "",
-    description: "",
-    category: "other",
-    priority: "medium",
-    property_id: "",
-    lease_id: "",
-  })
-
-  // Formulaire réponse
-  const [response, setResponse] = useState({
-    message: "",
-    status: "",
-    cost: "",
-  })
-
-  // Formulaire intervention
-  const [intervention, setIntervention] = useState({
-    type: "owner", // owner ou professional
-    scheduled_date: "",
-    description: "",
-    provider_name: "",
-    provider_contact: "",
-    estimated_cost: "",
-  })
+  const [activeTab, setActiveTab] = useState("overview")
 
   useEffect(() => {
-    const initializeData = async () => {
+    const fetchData = async () => {
       try {
         const user = await authService.getCurrentUser()
-        if (!user || user.user_type !== "owner") return
+        if (!user || user.user_type !== "tenant") {
+          toast.error("Accès non autorisé")
+          window.location.href = "/login"
+          return
+        }
 
         setCurrentUser(user)
-        const leasesData = await rentalManagementService.getOwnerLeases(user.id)
-        setLeases(leasesData)
 
-        // Charger tous les incidents de toutes les propriétés
-        const allIncidents = []
-        for (const lease of leasesData) {
-          const propertyIncidents = await rentalManagementService.getPropertyIncidents(lease.property.id)
-          allIncidents.push(
-            ...propertyIncidents.map((incident) => ({
-              ...incident,
-              property: lease.property,
-              tenant: lease.tenant,
-              lease_id: lease.id,
-            })),
-          )
+        // Récupérer le bail actif
+        const leaseResponse = await fetch(`/api/leases/tenant/${user.id}/active`)
+        const leaseData = await leaseResponse.json()
+
+        if (leaseData.success && leaseData.lease) {
+          setActiveLease(leaseData.lease)
+
+          // Récupérer les quittances
+          const receiptsResponse = await fetch(`/api/rent-receipts/lease/${leaseData.lease.id}`)
+          const receiptsData = await receiptsResponse.json()
+          if (receiptsData.success) {
+            setRentReceipts(receiptsData.receipts || [])
+          }
+
+          // Récupérer les incidents
+          const incidentsResponse = await fetch(`/api/incidents/tenant/${user.id}`)
+          const incidentsData = await incidentsResponse.json()
+          if (incidentsData.success) {
+            setIncidents(incidentsData.incidents || [])
+          }
         }
-        setIncidents(allIncidents)
       } catch (error) {
-        console.error("Erreur initialisation:", error)
-        toast.error("Erreur lors du chargement des données")
+        console.error("Erreur:", error)
+        toast.error("Erreur lors du chargement")
       } finally {
         setIsLoading(false)
       }
     }
 
-    initializeData()
+    fetchData()
   }, [])
 
-  useEffect(() => {
-    applyFilters()
-  }, [incidents, filters])
-
-  const applyFilters = () => {
-    let filtered = incidents
-
-    if (filters.status !== "all") {
-      filtered = filtered.filter((incident) => incident.status === filters.status)
-    }
-
-    if (filters.priority !== "all") {
-      filtered = filtered.filter((incident) => incident.priority === filters.priority)
-    }
-
-    if (filters.category !== "all") {
-      filtered = filtered.filter((incident) => incident.category === filters.category)
-    }
-
-    if (filters.property !== "all") {
-      filtered = filtered.filter((incident) => incident.property_id === filters.property)
-    }
-
-    if (filters.search) {
-      filtered = filtered.filter(
-        (incident) =>
-          incident.title.toLowerCase().includes(filters.search.toLowerCase()) ||
-          incident.description.toLowerCase().includes(filters.search.toLowerCase()),
-      )
-    }
-
-    setFilteredIncidents(filtered)
-  }
-
-  const handleCreateIncident = async () => {
-    if (!newIncident.title || !newIncident.description || !newIncident.category || !newIncident.property_id) {
-      toast.error("Veuillez remplir tous les champs obligatoires")
-      return
-    }
-
-    try {
-      const selectedLease = leases.find((lease) => lease.property.id === newIncident.property_id)
-      if (!selectedLease) {
-        toast.error("Bail non trouvé pour cette propriété")
-        return
-      }
-
-      await rentalManagementService.reportIncident({
-        ...newIncident,
-        lease_id: selectedLease.id,
-        reported_by: currentUser.id,
-      })
-
-      toast.success("Incident signalé avec succès")
-      setNewIncident({
-        title: "",
-        description: "",
-        category: "other",
-        priority: "medium",
-        property_id: "",
-        lease_id: "",
-      })
-      setShowNewIncidentDialog(false)
-
-      // Recharger les incidents
-      window.location.reload()
-    } catch (error) {
-      toast.error("Erreur lors du signalement")
-    }
-  }
-
-  const handleSendResponse = async () => {
-    if (!response.message) {
-      toast.error("Veuillez saisir un message")
-      return
-    }
-
-    try {
-      // Envoyer la réponse
-      const responseData = {
-        incident_id: selectedIncident.id,
-        user_id: currentUser.id,
-        message: response.message,
-        user_type: "owner",
-      }
-
-      const res = await fetch(`/api/incidents/${selectedIncident.id}/respond`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(responseData),
-      })
-
-      if (!res.ok) throw new Error("Erreur envoi réponse")
-
-      // Mettre à jour le statut si spécifié
-      if (response.status) {
-        await rentalManagementService.updateIncidentStatus(
-          selectedIncident.id,
-          response.status,
-          response.message,
-          response.cost ? Number(response.cost) : undefined,
-        )
-      }
-
-      toast.success("Réponse envoyée avec succès")
-      setResponse({ message: "", status: "", cost: "" })
-      setShowResponseDialog(false)
-      setSelectedIncident(null)
-
-      // Recharger les incidents
-      window.location.reload()
-    } catch (error) {
-      toast.error("Erreur lors de l'envoi de la réponse")
-    }
-  }
-
-  const handleScheduleIntervention = async () => {
-    if (!intervention.scheduled_date || !intervention.description) {
-      toast.error("Veuillez remplir les champs obligatoires")
-      return
-    }
-
-    try {
-      const workData = {
-        property_id: selectedIncident.property_id,
-        lease_id: selectedIncident.lease_id,
-        title: `Intervention - ${selectedIncident.title}`,
-        description: intervention.description,
-        type: "corrective",
-        category: selectedIncident.category,
-        scheduled_date: intervention.scheduled_date,
-        cost: intervention.estimated_cost ? Number(intervention.estimated_cost) : 0,
-        provider_name: intervention.type === "professional" ? intervention.provider_name : null,
-        provider_contact: intervention.type === "professional" ? intervention.provider_contact : null,
-      }
-
-      await rentalManagementService.scheduleMaintenanceWork(workData)
-
-      // Mettre à jour le statut de l'incident
-      await rentalManagementService.updateIncidentStatus(
-        selectedIncident.id,
-        "in_progress",
-        `Intervention programmée le ${new Date(intervention.scheduled_date).toLocaleDateString("fr-FR")}`,
-      )
-
-      toast.success("Intervention programmée avec succès")
-      setIntervention({
-        type: "owner",
-        scheduled_date: "",
-        description: "",
-        provider_name: "",
-        provider_contact: "",
-        estimated_cost: "",
-      })
-      setShowInterventionDialog(false)
-      setSelectedIncident(null)
-
-      // Recharger les incidents
-      window.location.reload()
-    } catch (error) {
-      toast.error("Erreur lors de la programmation")
-    }
-  }
-
-  const getPriorityIcon = (priority: string) => {
+  const getPriorityColor = (priority: string) => {
     switch (priority) {
       case "urgent":
-        return <AlertTriangle className="h-4 w-4 text-red-600" />
+        return "bg-red-100 text-red-800 border-red-200"
       case "high":
-        return <AlertCircle className="h-4 w-4 text-orange-600" />
+        return "bg-orange-100 text-orange-800 border-orange-200"
       case "medium":
-        return <Clock className="h-4 w-4 text-yellow-600" />
+        return "bg-yellow-100 text-yellow-800 border-yellow-200"
       case "low":
-        return <CheckCircle className="h-4 w-4 text-green-600" />
+        return "bg-green-100 text-green-800 border-green-200"
       default:
-        return <Clock className="h-4 w-4 text-gray-600" />
+        return "bg-gray-100 text-gray-800 border-gray-200"
     }
   }
 
-  const getStatusBadge = (status: string) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
       case "resolved":
-        return <Badge className="bg-green-600">Résolu</Badge>
+        return "bg-green-100 text-green-800 border-green-200"
       case "in_progress":
-        return <Badge className="bg-orange-600">En cours</Badge>
+        return "bg-blue-100 text-blue-800 border-blue-200"
       case "reported":
-        return <Badge variant="secondary">Signalé</Badge>
+        return "bg-yellow-100 text-yellow-800 border-yellow-200"
       case "closed":
-        return <Badge variant="outline">Fermé</Badge>
+        return "bg-gray-100 text-gray-800 border-gray-200"
       default:
-        return <Badge variant="outline">{status}</Badge>
+        return "bg-gray-100 text-gray-800 border-gray-200"
     }
   }
 
-  const getPriorityBadge = (priority: string) => {
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "resolved":
+        return "Résolu"
+      case "in_progress":
+        return "En cours"
+      case "reported":
+        return "Signalé"
+      case "closed":
+        return "Fermé"
+      default:
+        return status
+    }
+  }
+
+  const getPriorityLabel = (priority: string) => {
     switch (priority) {
       case "urgent":
-        return <Badge variant="destructive">Urgent</Badge>
+        return "Urgent"
       case "high":
-        return <Badge className="bg-orange-600">Élevé</Badge>
+        return "Élevé"
       case "medium":
-        return <Badge variant="secondary">Moyen</Badge>
+        return "Moyen"
       case "low":
-        return <Badge variant="outline">Faible</Badge>
+        return "Faible"
       default:
-        return <Badge variant="outline">{priority}</Badge>
+        return priority
     }
   }
 
   const getCategoryLabel = (category: string) => {
-    const categories = {
-      plumbing: "Plomberie",
-      electrical: "Électricité",
-      heating: "Chauffage",
-      security: "Sécurité",
-      other: "Autre",
+    switch (category) {
+      case "plumbing":
+        return "Plomberie"
+      case "electrical":
+        return "Électricité"
+      case "heating":
+        return "Chauffage"
+      case "security":
+        return "Sécurité"
+      case "other":
+        return "Autre"
+      default:
+        return category
     }
-    return categories[category as keyof typeof categories] || category
-  }
-
-  const getIncidentStats = () => {
-    const reported = incidents.filter((i) => i.status === "reported").length
-    const inProgress = incidents.filter((i) => i.status === "in_progress").length
-    const resolved = incidents.filter((i) => i.status === "resolved").length
-    const urgent = incidents.filter((i) => i.priority === "urgent").length
-
-    return { reported, inProgress, resolved, urgent }
   }
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="text-gray-600">Chargement des incidents...</p>
+      <div className="container mx-auto py-6">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center space-y-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="text-gray-600">Chargement de votre espace locataire...</p>
+          </div>
         </div>
       </div>
     )
   }
 
-  const stats = getIncidentStats()
-
-  return (
-    <div className="space-y-6">
-      <PageHeader title="Gestion des Incidents" description="Gérez les incidents signalés par vos locataires">
-        <Dialog open={showNewIncidentDialog} onOpenChange={setShowNewIncidentDialog}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Signaler un incident
+  if (!activeLease) {
+    return (
+      <div className="container mx-auto py-6">
+        <Card>
+          <CardContent className="text-center py-12">
+            <Home className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+            <h3 className="text-lg font-semibold mb-2">Aucun bail actif</h3>
+            <p className="text-muted-foreground mb-4">Vous n'avez actuellement aucun bail de location actif.</p>
+            <Button asChild>
+              <Link href="/tenant/search">Rechercher un logement</Link>
             </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Nouveau signalement</DialogTitle>
-              <DialogDescription>Signaler un incident sur une de vos propriétés</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium">Propriété *</label>
-                <Select
-                  value={newIncident.property_id}
-                  onValueChange={(value) => setNewIncident({ ...newIncident, property_id: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner une propriété" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {leases.map((lease) => (
-                      <SelectItem key={lease.property.id} value={lease.property.id}>
-                        {lease.property.title} - {lease.property.address}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Titre *</label>
-                <Input
-                  value={newIncident.title}
-                  onChange={(e) => setNewIncident({ ...newIncident, title: e.target.value })}
-                  placeholder="Titre de l'incident"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Catégorie *</label>
-                <Select
-                  value={newIncident.category}
-                  onValueChange={(value) => setNewIncident({ ...newIncident, category: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="plumbing">Plomberie</SelectItem>
-                    <SelectItem value="electrical">Électricité</SelectItem>
-                    <SelectItem value="heating">Chauffage</SelectItem>
-                    <SelectItem value="security">Sécurité</SelectItem>
-                    <SelectItem value="other">Autre</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Priorité</label>
-                <Select
-                  value={newIncident.priority}
-                  onValueChange={(value) => setNewIncident({ ...newIncident, priority: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Faible</SelectItem>
-                    <SelectItem value="medium">Moyen</SelectItem>
-                    <SelectItem value="high">Élevé</SelectItem>
-                    <SelectItem value="urgent">Urgent</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Description *</label>
-                <Textarea
-                  value={newIncident.description}
-                  onChange={(e) => setNewIncident({ ...newIncident, description: e.target.value })}
-                  placeholder="Description détaillée de l'incident"
-                  rows={3}
-                />
-              </div>
-              <div className="flex gap-2 pt-4">
-                <Button onClick={handleCreateIncident} className="flex-1">
-                  Signaler
-                </Button>
-                <Button variant="outline" onClick={() => setShowNewIncidentDialog(false)}>
-                  Annuler
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </PageHeader>
-
-      {/* Statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Signalés</p>
-                <p className="text-2xl font-bold text-orange-600">{stats.reported}</p>
-              </div>
-              <AlertTriangle className="h-8 w-8 text-orange-600" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">En cours</p>
-                <p className="text-2xl font-bold text-blue-600">{stats.inProgress}</p>
-              </div>
-              <Clock className="h-8 w-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Résolus</p>
-                <p className="text-2xl font-bold text-green-600">{stats.resolved}</p>
-              </div>
-              <CheckCircle className="h-8 w-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Urgents</p>
-                <p className="text-2xl font-bold text-red-600">{stats.urgent}</p>
-              </div>
-              <AlertCircle className="h-8 w-8 text-red-600" />
-            </div>
           </CardContent>
         </Card>
       </div>
+    )
+  }
 
-      {/* Filtres */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filtres</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-            <Input
-              placeholder="Rechercher..."
-              value={filters.search}
-              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-            />
-            <Select value={filters.status} onValueChange={(value) => setFilters({ ...filters, status: value })}>
-              <SelectTrigger>
-                <SelectValue placeholder="Statut" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les statuts</SelectItem>
-                <SelectItem value="reported">Signalé</SelectItem>
-                <SelectItem value="in_progress">En cours</SelectItem>
-                <SelectItem value="resolved">Résolu</SelectItem>
-                <SelectItem value="closed">Fermé</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filters.priority} onValueChange={(value) => setFilters({ ...filters, priority: value })}>
-              <SelectTrigger>
-                <SelectValue placeholder="Priorité" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Toutes priorités</SelectItem>
-                <SelectItem value="urgent">Urgent</SelectItem>
-                <SelectItem value="high">Élevé</SelectItem>
-                <SelectItem value="medium">Moyen</SelectItem>
-                <SelectItem value="low">Faible</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filters.category} onValueChange={(value) => setFilters({ ...filters, category: value })}>
-              <SelectTrigger>
-                <SelectValue placeholder="Catégorie" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Toutes catégories</SelectItem>
-                <SelectItem value="plumbing">Plomberie</SelectItem>
-                <SelectItem value="electrical">Électricité</SelectItem>
-                <SelectItem value="heating">Chauffage</SelectItem>
-                <SelectItem value="security">Sécurité</SelectItem>
-                <SelectItem value="other">Autre</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filters.property} onValueChange={(value) => setFilters({ ...filters, property: value })}>
-              <SelectTrigger>
-                <SelectValue placeholder="Propriété" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Toutes propriétés</SelectItem>
-                {leases.map((lease) => (
-                  <SelectItem key={lease.property.id} value={lease.property.id}>
-                    {lease.property.title}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              variant="outline"
-              onClick={() =>
-                setFilters({ status: "all", priority: "all", category: "all", property: "all", search: "" })
-              }
-            >
-              Réinitialiser
-            </Button>
+  // Calculs pour les métriques
+  const currentMonth = new Date().getMonth() + 1
+  const currentYear = new Date().getFullYear()
+  const currentMonthReceipt = rentReceipts.find(
+    (r) => r.year === currentYear && Number.parseInt(r.month) === currentMonth,
+  )
+
+  const overdueReceipts = rentReceipts.filter((r) => r.status === "overdue")
+  const paidReceipts = rentReceipts.filter((r) => r.status === "paid")
+  const totalPaid = paidReceipts.reduce((sum, r) => sum + r.total_amount, 0)
+  const paymentRate = rentReceipts.length > 0 ? (paidReceipts.length / rentReceipts.length) * 100 : 0
+
+  // Statistiques incidents
+  const openIncidents = incidents.filter((i) => i.status !== "resolved" && i.status !== "closed")
+  const urgentIncidents = incidents.filter((i) => i.priority === "urgent" && i.status !== "resolved")
+
+  return (
+    <div className="container mx-auto py-6">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold mb-2">Mon espace locataire</h1>
+        <p className="text-muted-foreground">Gérez votre location - {activeLease.property.title}</p>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-6">
+          <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
+          <TabsTrigger value="payments">
+            Paiements
+            {overdueReceipts.length > 0 && (
+              <Badge variant="destructive" className="ml-2">
+                {overdueReceipts.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="receipts">Quittances</TabsTrigger>
+          <TabsTrigger value="incidents">
+            Incidents
+            {openIncidents.length > 0 && (
+              <Badge variant="secondary" className="ml-2">
+                {openIncidents.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="documents">Documents</TabsTrigger>
+          <TabsTrigger value="contact">Contact</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
+          {/* Alertes importantes */}
+          {urgentIncidents.length > 0 && (
+            <Alert className="border-red-200 bg-red-50">
+              <AlertTriangle className="h-4 w-4 text-red-600" />
+              <AlertDescription className="text-red-800">
+                <strong>Urgent :</strong> Vous avez {urgentIncidents.length} incident(s) urgent(s) en cours.
+                <Button
+                  variant="link"
+                  className="p-0 ml-2 text-red-600 underline"
+                  onClick={() => setActiveTab("incidents")}
+                >
+                  Voir les détails
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {overdueReceipts.length > 0 && (
+            <Alert className="border-red-200 bg-red-50">
+              <AlertTriangle className="h-4 w-4 text-red-600" />
+              <AlertDescription className="text-red-800">
+                <strong>Attention :</strong> Vous avez {overdueReceipts.length} paiement(s) en retard.
+                <Button
+                  variant="link"
+                  className="p-0 ml-2 text-red-600 underline"
+                  onClick={() => setActiveTab("payments")}
+                >
+                  Voir les détails
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {currentMonthReceipt && currentMonthReceipt.status === "pending" && (
+            <Alert className="border-blue-200 bg-blue-50">
+              <Clock className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-800">
+                <strong>Rappel :</strong> Votre loyer de {currentMonthReceipt.month}/{currentMonthReceipt.year}(
+                {currentMonthReceipt.total_amount}€) est à payer.
+                <Button
+                  variant="link"
+                  className="p-0 ml-2 text-blue-600 underline"
+                  onClick={() => setActiveTab("payments")}
+                >
+                  Effectuer le paiement
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Métriques principales */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Loyer mensuel</CardTitle>
+                <Euro className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{activeLease.monthly_rent}€</div>
+                <p className="text-xs text-muted-foreground">+ {activeLease.charges}€ de charges</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total payé</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{totalPaid.toFixed(2)}€</div>
+                <p className="text-xs text-muted-foreground">Sur {rentReceipts.length} quittances</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Taux de paiement</CardTitle>
+                <CheckCircle className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{paymentRate.toFixed(0)}%</div>
+                <Progress value={paymentRate} className="mt-2" />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Incidents ouverts</CardTitle>
+                <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{openIncidents.length}</div>
+                <p className="text-xs text-muted-foreground">
+                  {urgentIncidents.length > 0 ? `${urgentIncidents.length} urgent(s)` : "Aucun urgent"}
+                </p>
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Liste des incidents */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Incidents ({filteredIncidents.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {filteredIncidents.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-              <p>Aucun incident trouvé</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {filteredIncidents.map((incident) => (
-                <div key={incident.id} className="border rounded-lg p-4 hover:bg-gray-50">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        {getPriorityIcon(incident.priority)}
-                        <h3 className="font-semibold">{incident.title}</h3>
-                        {getStatusBadge(incident.status)}
-                        {getPriorityBadge(incident.priority)}
-                        <Badge variant="outline">{getCategoryLabel(incident.category)}</Badge>
+          {/* Informations du bail */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Informations du bail</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Logement</p>
+                  <p className="font-medium">{activeLease.property.title}</p>
+                  <p className="text-sm text-muted-foreground">{activeLease.property.address}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Propriétaire</p>
+                  <p className="font-medium">
+                    {activeLease.owner.first_name} {activeLease.owner.last_name}
+                  </p>
+                  <p className="text-sm text-muted-foreground">{activeLease.owner.email}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Période du bail</p>
+                  <p className="font-medium">
+                    Du {new Date(activeLease.start_date).toLocaleDateString("fr-FR")}
+                    au {new Date(activeLease.end_date).toLocaleDateString("fr-FR")}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Dépôt de garantie</p>
+                  <p className="font-medium">{activeLease.deposit}€</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Actions rapides */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Actions rapides</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Button
+                  variant="outline"
+                  className="h-20 flex-col bg-transparent"
+                  onClick={() => setActiveTab("payments")}
+                >
+                  <CreditCard className="h-6 w-6 mb-2" />
+                  Payer le loyer
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-20 flex-col bg-transparent"
+                  onClick={() => setActiveTab("receipts")}
+                >
+                  <Receipt className="h-6 w-6 mb-2" />
+                  Mes quittances
+                </Button>
+                <Button variant="outline" className="h-20 flex-col bg-transparent" asChild>
+                  <Link href="/tenant/incidents/new">
+                    <Bell className="h-6 w-6 mb-2" />
+                    Signaler incident
+                  </Link>
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-20 flex-col bg-transparent"
+                  onClick={() => setActiveTab("contact")}
+                >
+                  <MessageSquare className="h-6 w-6 mb-2" />
+                  Contacter
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="payments" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Gestion des paiements</CardTitle>
+              <CardDescription>Suivez vos paiements et téléchargez vos justificatifs</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {rentReceipts.map((receipt) => (
+                  <div key={receipt.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center space-x-4">
+                      <div
+                        className={`w-3 h-3 rounded-full ${
+                          receipt.status === "paid"
+                            ? "bg-green-500"
+                            : receipt.status === "overdue"
+                              ? "bg-red-500"
+                              : "bg-yellow-500"
+                        }`}
+                      />
+                      <div>
+                        <p className="font-medium">
+                          Loyer {receipt.month}/{receipt.year}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {receipt.total_amount}€
+                          {receipt.payment_date &&
+                            ` - Payé le ${new Date(receipt.payment_date).toLocaleDateString("fr-FR")}`}
+                        </p>
                       </div>
-
-                      <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
-                        <div className="flex items-center gap-1">
-                          <Building className="h-4 w-4" />
-                          {incident.property?.title}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <User className="h-4 w-4" />
-                          {incident.tenant?.first_name} {incident.tenant?.last_name}
-                        </div>
-                        <span>{new Date(incident.created_at).toLocaleDateString("fr-FR")}</span>
-                      </div>
-
-                      <p className="text-gray-700 mb-3">{incident.description}</p>
-
-                      {incident.photos && incident.photos.length > 0 && (
-                        <div className="flex gap-2 mb-3">
-                          {incident.photos.slice(0, 3).map((photo: string, index: number) => (
-                            <img
-                              key={index}
-                              src={photo || "/placeholder.svg"}
-                              alt={`Photo ${index + 1}`}
-                              className="w-16 h-16 object-cover rounded border"
-                            />
-                          ))}
-                          {incident.photos.length > 3 && (
-                            <div className="w-16 h-16 bg-gray-100 rounded border flex items-center justify-center text-sm text-gray-600">
-                              +{incident.photos.length - 3}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {incident.resolution_notes && (
-                        <div className="bg-green-50 border border-green-200 rounded p-3 mb-3">
-                          <p className="text-sm text-green-800">
-                            <strong>Résolution :</strong> {incident.resolution_notes}
-                          </p>
-                          {incident.cost && (
-                            <p className="text-sm text-green-800 mt-1">
-                              <strong>Coût :</strong> {incident.cost}€
-                            </p>
-                          )}
-                        </div>
-                      )}
                     </div>
-
-                    <div className="flex gap-2 ml-4">
-                      <Link href={`/owner/rental-management/incidents/${incident.id}`}>
-                        <Button variant="outline" size="sm">
-                          <Eye className="h-4 w-4 mr-1" />
-                          Voir
+                    <div className="flex items-center space-x-2">
+                      <Badge
+                        variant={
+                          receipt.status === "paid"
+                            ? "default"
+                            : receipt.status === "overdue"
+                              ? "destructive"
+                              : "secondary"
+                        }
+                      >
+                        {receipt.status === "paid" ? "Payé" : receipt.status === "overdue" ? "En retard" : "En attente"}
+                      </Badge>
+                      {receipt.status === "pending" && (
+                        <Button size="sm">
+                          <CreditCard className="h-4 w-4 mr-2" />
+                          Payer
                         </Button>
-                      </Link>
-
-                      {incident.status !== "resolved" && incident.status !== "closed" && (
-                        <>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedIncident(incident)
-                              setShowResponseDialog(true)
-                            }}
-                          >
-                            <MessageSquare className="h-4 w-4 mr-1" />
-                            Répondre
-                          </Button>
-
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedIncident(incident)
-                              setShowInterventionDialog(true)
-                            }}
-                          >
-                            <Calendar className="h-4 w-4 mr-1" />
-                            Programmer
-                          </Button>
-                        </>
+                      )}
+                      {receipt.receipt_url && (
+                        <Button size="sm" variant="outline">
+                          <Download className="h-4 w-4 mr-2" />
+                          Télécharger
+                        </Button>
                       )}
                     </div>
                   </div>
-                </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="receipts" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Mes quittances de loyer</CardTitle>
+              <CardDescription>Téléchargez et consultez toutes vos quittances</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {rentReceipts.map((receipt) => (
+                  <div key={receipt.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center space-x-4">
+                      <Receipt className="h-8 w-8 text-muted-foreground" />
+                      <div>
+                        <p className="font-medium">
+                          Quittance {receipt.month}/{receipt.year}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Loyer: {receipt.rent_amount}€ + Charges: {receipt.charges_amount}€ = {receipt.total_amount}€
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      {receipt.status === "paid" && <Badge className="bg-green-600">Payé</Badge>}
+                      {receipt.receipt_url ? (
+                        <Button size="sm" variant="outline">
+                          <Download className="h-4 w-4 mr-2" />
+                          Télécharger
+                        </Button>
+                      ) : (
+                        <Button size="sm" variant="outline" disabled>
+                          Non disponible
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="incidents" className="space-y-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-2xl font-bold">Mes incidents</h2>
+              <p className="text-muted-foreground">Suivez l'état de vos signalements</p>
+            </div>
+            <Button asChild>
+              <Link href="/tenant/incidents/new">
+                <Plus className="h-4 w-4 mr-2" />
+                Signaler un incident
+              </Link>
+            </Button>
+          </div>
+
+          {incidents.length === 0 ? (
+            <Card>
+              <CardContent className="text-center py-12">
+                <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <h3 className="text-lg font-semibold mb-2">Aucun incident signalé</h3>
+                <p className="text-muted-foreground mb-4">
+                  Vous n'avez encore signalé aucun incident dans votre logement.
+                </p>
+                <Button asChild>
+                  <Link href="/tenant/incidents/new">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Signaler un incident
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {incidents.map((incident) => (
+                <Card key={incident.id}>
+                  <CardHeader>
+                    <div className="flex justify-between items-start">
+                      <div className="space-y-1">
+                        <CardTitle className="text-lg">{incident.title}</CardTitle>
+                        <div className="flex items-center space-x-2">
+                          <Badge className={getPriorityColor(incident.priority)}>
+                            {getPriorityLabel(incident.priority)}
+                          </Badge>
+                          <Badge className={getStatusColor(incident.status)}>{getStatusLabel(incident.status)}</Badge>
+                          <span className="text-sm text-muted-foreground">{getCategoryLabel(incident.category)}</span>
+                        </div>
+                      </div>
+                      <div className="text-right text-sm text-muted-foreground">
+                        <p>Signalé le</p>
+                        <p>{new Date(incident.created_at).toLocaleDateString("fr-FR")}</p>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <h4 className="font-medium mb-2">Description</h4>
+                      <p className="text-sm text-muted-foreground">{incident.description}</p>
+                    </div>
+
+                    {incident.photos && incident.photos.length > 0 && (
+                      <div>
+                        <h4 className="font-medium mb-2">Photos</h4>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                          {incident.photos.map((photo, index) => (
+                            <div key={index} className="relative aspect-square">
+                              <img
+                                src={photo || "/placeholder.svg"}
+                                alt={`Photo ${index + 1}`}
+                                className="w-full h-full object-cover rounded-lg border"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {incident.status === "resolved" && incident.resolution_notes && (
+                      <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                        <h4 className="font-medium text-green-800 mb-2">Résolution</h4>
+                        <p className="text-sm text-green-700">{incident.resolution_notes}</p>
+                        {incident.cost && (
+                          <p className="text-sm text-green-700 mt-2">
+                            <strong>Coût des réparations :</strong> {incident.cost}€
+                          </p>
+                        )}
+                        {incident.resolved_date && (
+                          <p className="text-sm text-green-700 mt-1">
+                            Résolu le {new Date(incident.resolved_date).toLocaleDateString("fr-FR")}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {incident.responses && incident.responses.length > 0 && (
+                      <div>
+                        <h4 className="font-medium mb-3">Échanges</h4>
+                        <div className="space-y-3">
+                          {incident.responses.map((response) => (
+                            <div
+                              key={response.id}
+                              className={`p-3 rounded-lg ${
+                                response.author_type === "owner"
+                                  ? "bg-blue-50 border border-blue-200"
+                                  : "bg-gray-50 border border-gray-200"
+                              }`}
+                            >
+                              <div className="flex justify-between items-start mb-2">
+                                <span className="font-medium text-sm">
+                                  {response.author_type === "owner" ? "Propriétaire" : "Vous"}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  {new Date(response.created_at).toLocaleDateString("fr-FR")} à{" "}
+                                  {new Date(response.created_at).toLocaleTimeString("fr-FR", {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </span>
+                              </div>
+                              <p className="text-sm">{response.message}</p>
+                              {response.attachments && response.attachments.length > 0 && (
+                                <div className="mt-2 grid grid-cols-2 gap-2">
+                                  {response.attachments.map((attachment, index) => (
+                                    <img
+                                      key={index}
+                                      src={attachment || "/placeholder.svg"}
+                                      alt={`Pièce jointe ${index + 1}`}
+                                      className="w-full h-20 object-cover rounded border"
+                                    />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end space-x-2">
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/tenant/incidents/${incident.id}`}>
+                          <Eye className="h-4 w-4 mr-2" />
+                          Voir détails
+                        </Link>
+                      </Button>
+                      {incident.status !== "resolved" && incident.status !== "closed" && (
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/tenant/incidents/${incident.id}/respond`}>
+                            <MessageSquare className="h-4 w-4 mr-2" />
+                            Répondre
+                          </Link>
+                        </Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </TabsContent>
 
-      {/* Dialog Réponse */}
-      <Dialog open={showResponseDialog} onOpenChange={setShowResponseDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Répondre à l'incident</DialogTitle>
-            <DialogDescription>{selectedIncident?.title}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">Message *</label>
-              <Textarea
-                value={response.message}
-                onChange={(e) => setResponse({ ...response, message: e.target.value })}
-                placeholder="Votre réponse au locataire..."
-                rows={4}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Changer le statut</label>
-              <Select value={response.status} onValueChange={(value) => setResponse({ ...response, status: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Garder le statut actuel" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="in_progress">En cours</SelectItem>
-                  <SelectItem value="resolved">Résolu</SelectItem>
-                  <SelectItem value="closed">Fermé</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {response.status === "resolved" && (
-              <div>
-                <label className="text-sm font-medium">Coût (€)</label>
-                <Input
-                  type="number"
-                  value={response.cost}
-                  onChange={(e) => setResponse({ ...response, cost: e.target.value })}
-                  placeholder="Coût de la réparation"
-                />
+        <TabsContent value="documents" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Mes documents</CardTitle>
+              <CardDescription>Accédez à tous vos documents de location</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center space-x-4">
+                    <FileText className="h-8 w-8 text-muted-foreground" />
+                    <div>
+                      <p className="font-medium">Contrat de bail</p>
+                      <p className="text-sm text-muted-foreground">Document principal de location</p>
+                    </div>
+                  </div>
+                  <Button size="sm" variant="outline" asChild>
+                    <Link href={`/tenant/leases/${activeLease.id}`}>
+                      <Download className="h-4 w-4 mr-2" />
+                      Consulter
+                    </Link>
+                  </Button>
+                </div>
+
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center space-x-4">
+                    <FileText className="h-8 w-8 text-muted-foreground" />
+                    <div>
+                      <p className="font-medium">État des lieux d'entrée</p>
+                      <p className="text-sm text-muted-foreground">Constat de l'état du logement</p>
+                    </div>
+                  </div>
+                  <Button size="sm" variant="outline" disabled>
+                    Non disponible
+                  </Button>
+                </div>
               </div>
-            )}
-            <div className="flex gap-2 pt-4">
-              <Button onClick={handleSendResponse} className="flex-1">
-                Envoyer
-              </Button>
-              <Button variant="outline" onClick={() => setShowResponseDialog(false)}>
-                Annuler
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      {/* Dialog Intervention */}
-      <Dialog open={showInterventionDialog} onOpenChange={setShowInterventionDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Programmer une intervention</DialogTitle>
-            <DialogDescription>{selectedIncident?.title}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">Type d'intervention *</label>
-              <Select
-                value={intervention.type}
-                onValueChange={(value) => setIntervention({ ...intervention, type: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="owner">Par moi-même</SelectItem>
-                  <SelectItem value="professional">Par un professionnel</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+        <TabsContent value="contact" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Contact propriétaire</CardTitle>
+              <CardDescription>Communiquez avec votre propriétaire</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="p-4 bg-muted rounded-lg">
+                <h4 className="font-medium mb-2">
+                  {activeLease.owner.first_name} {activeLease.owner.last_name}
+                </h4>
+                <p className="text-sm text-muted-foreground mb-1">Email: {activeLease.owner.email}</p>
+                {activeLease.owner.phone && (
+                  <p className="text-sm text-muted-foreground">Téléphone: {activeLease.owner.phone}</p>
+                )}
+              </div>
 
-            {intervention.type === "professional" && (
-              <>
-                <div>
-                  <label className="text-sm font-medium">Nom du prestataire</label>
-                  <Input
-                    value={intervention.provider_name}
-                    onChange={(e) => setIntervention({ ...intervention, provider_name: e.target.value })}
-                    placeholder="Nom de l'entreprise/artisan"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Contact</label>
-                  <Input
-                    value={intervention.provider_contact}
-                    onChange={(e) => setIntervention({ ...intervention, provider_contact: e.target.value })}
-                    placeholder="Téléphone ou email"
-                  />
-                </div>
-              </>
-            )}
-
-            <div>
-              <label className="text-sm font-medium">Date prévue *</label>
-              <Input
-                type="datetime-local"
-                value={intervention.scheduled_date}
-                onChange={(e) => setIntervention({ ...intervention, scheduled_date: e.target.value })}
-              />
-            </div>
-
-            <div>
-              <label className="text-sm font-medium">Description *</label>
-              <Textarea
-                value={intervention.description}
-                onChange={(e) => setIntervention({ ...intervention, description: e.target.value })}
-                placeholder="Description de l'intervention prévue"
-                rows={3}
-              />
-            </div>
-
-            <div>
-              <label className="text-sm font-medium">Coût estimé (€)</label>
-              <Input
-                type="number"
-                value={intervention.estimated_cost}
-                onChange={(e) => setIntervention({ ...intervention, estimated_cost: e.target.value })}
-                placeholder="Coût estimé"
-              />
-            </div>
-
-            <div className="flex gap-2 pt-4">
-              <Button onClick={handleScheduleIntervention} className="flex-1">
-                <Calendar className="h-4 w-4 mr-2" />
-                Programmer
-              </Button>
-              <Button variant="outline" onClick={() => setShowInterventionDialog(false)}>
-                Annuler
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+              <div className="flex gap-3">
+                <Button asChild>
+                  <Link href={`/tenant/messaging?owner=${activeLease.owner.id}`}>
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    Envoyer un message
+                  </Link>
+                </Button>
+                <Button variant="outline" asChild>
+                  <Link href="/tenant/incidents/new">
+                    <Bell className="h-4 w-4 mr-2" />
+                    Signaler un incident
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
