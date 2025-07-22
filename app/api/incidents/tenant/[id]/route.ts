@@ -7,7 +7,22 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   try {
     const tenantId = params.id
 
-    // Récupérer tous les incidents du locataire avec les informations des propriétés
+    // D'abord, récupérer les baux du locataire pour obtenir les property_ids
+    const { data: leases, error: leasesError } = await supabase
+      .from("leases")
+      .select("id, property_id, property:properties(id, title, address, city)")
+      .eq("tenant_id", tenantId)
+
+    if (leasesError) {
+      console.error("Erreur récupération baux:", leasesError)
+      return NextResponse.json({ success: false, error: "Erreur lors du chargement des baux" }, { status: 500 })
+    }
+
+    if (!leases || leases.length === 0) {
+      return NextResponse.json({ success: true, incidents: [] })
+    }
+
+    // Récupérer tous les incidents du locataire
     const { data: incidents, error } = await supabase
       .from("incidents")
       .select(`
@@ -20,16 +35,6 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           postal_code,
           property_type,
           surface
-        ),
-        lease:leases(
-          id,
-          owner:users!leases_owner_id_fkey(
-            id,
-            first_name,
-            last_name,
-            email,
-            phone
-          )
         )
       `)
       .eq("reported_by", tenantId)
@@ -42,11 +47,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     // Pour chaque incident, récupérer le nombre de réponses
     const incidentsWithResponses = await Promise.all(
-      incidents.map(async (incident) => {
+      (incidents || []).map(async (incident) => {
         const { data: responses } = await supabase
           .from("incident_responses")
-          .select("id")
+          .select("id, message, user_type, created_at")
           .eq("incident_id", incident.id)
+          .order("created_at", { ascending: true })
 
         return {
           ...incident,

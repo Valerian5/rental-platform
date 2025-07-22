@@ -3,18 +3,17 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import { useParams, useRouter } from "next/navigation"
-import Link from "next/link"
-import { ArrowLeft, Send, Upload, X, Camera } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { ArrowLeft, Send, Upload, X } from "lucide-react"
 import { authService } from "@/lib/auth-service"
 import { toast } from "sonner"
+import Link from "next/link"
 
-export default function RespondToIncidentPage() {
-  const params = useParams()
+export default function RespondIncidentPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [incident, setIncident] = useState<any>(null)
@@ -22,80 +21,82 @@ export default function RespondToIncidentPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [message, setMessage] = useState("")
   const [attachments, setAttachments] = useState<File[]>([])
-  const [uploadingFiles, setUploadingFiles] = useState(false)
+  const [attachmentPreviews, setAttachmentPreviews] = useState<string[]>([])
 
   useEffect(() => {
-    const fetchData = async () => {
+    const initializeData = async () => {
       try {
         const user = await authService.getCurrentUser()
         if (!user || user.user_type !== "tenant") {
-          toast.error("Accès non autorisé")
           router.push("/login")
           return
         }
 
         setCurrentUser(user)
-
-        // Récupérer les détails de l'incident
-        const response = await fetch(`/api/incidents/${params.id}`)
-        const data = await response.json()
-
-        if (data.success) {
-          setIncident(data.incident)
-        } else {
-          toast.error("Incident non trouvé")
-          router.push("/tenant/rental-management?tab=incidents")
-        }
+        await loadIncident(params.id)
       } catch (error) {
-        console.error("Erreur:", error)
+        console.error("Erreur initialisation:", error)
         toast.error("Erreur lors du chargement")
       } finally {
         setIsLoading(false)
       }
     }
 
-    fetchData()
+    initializeData()
   }, [params.id, router])
 
-  const handleFileUpload = async (files: FileList | null) => {
-    if (!files) return
-
-    setUploadingFiles(true)
+  const loadIncident = async (incidentId: string) => {
     try {
-      const newFiles = Array.from(files)
+      const res = await fetch(`/api/incidents/${incidentId}`)
+      const data = await res.json()
 
-      // Vérifier la taille et le type des fichiers
-      for (const file of newFiles) {
-        if (file.size > 10 * 1024 * 1024) {
-          // 10MB max
-          toast.error(`Le fichier ${file.name} est trop volumineux (max 10MB)`)
-          return
-        }
-        if (!file.type.startsWith("image/")) {
-          toast.error(`Le fichier ${file.name} n'est pas une image`)
-          return
-        }
+      if (data.success) {
+        setIncident(data.incident)
+      } else {
+        toast.error("Incident non trouvé")
+        router.push("/tenant/rental-management")
       }
-
-      // Limiter à 5 fichiers au total
-      const totalFiles = attachments.length + newFiles.length
-      if (totalFiles > 5) {
-        toast.error("Maximum 5 fichiers autorisés")
-        return
-      }
-
-      setAttachments((prev) => [...prev, ...newFiles])
-      toast.success(`${newFiles.length} fichier(s) ajouté(s)`)
     } catch (error) {
-      console.error("Erreur upload:", error)
-      toast.error("Erreur lors de l'ajout des fichiers")
-    } finally {
-      setUploadingFiles(false)
+      console.error("Erreur chargement incident:", error)
+      toast.error("Erreur lors du chargement")
     }
+  }
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+
+    if (attachments.length + files.length > 3) {
+      toast.error("Maximum 3 fichiers autorisés")
+      return
+    }
+
+    const validFiles = files.filter((file) => {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(`${file.name} est trop volumineux (max 5MB)`)
+        return false
+      }
+      return true
+    })
+
+    setAttachments((prev) => [...prev, ...validFiles])
+
+    // Créer les aperçus pour les images
+    validFiles.forEach((file) => {
+      if (file.type.startsWith("image/")) {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          setAttachmentPreviews((prev) => [...prev, e.target?.result as string])
+        }
+        reader.readAsDataURL(file)
+      } else {
+        setAttachmentPreviews((prev) => [...prev, file.name])
+      }
+    })
   }
 
   const removeAttachment = (index: number) => {
     setAttachments((prev) => prev.filter((_, i) => i !== index))
+    setAttachmentPreviews((prev) => prev.filter((_, i) => i !== index))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -109,49 +110,46 @@ export default function RespondToIncidentPage() {
     setIsSubmitting(true)
 
     try {
-      // Upload des fichiers d'abord si nécessaire
-      const attachmentUrls: string[] = []
-
+      // Upload des fichiers si nécessaire
+      let attachmentUrls: string[] = []
       if (attachments.length > 0) {
-        for (const file of attachments) {
-          const formData = new FormData()
+        const formData = new FormData()
+        attachments.forEach((file) => {
           formData.append("file", file)
-          formData.append("folder", "incident-responses")
+        })
 
-          const uploadResponse = await fetch("/api/upload-blob", {
-            method: "POST",
-            body: formData,
-          })
+        const uploadRes = await fetch("/api/upload-supabase", {
+          method: "POST",
+          body: formData,
+        })
 
-          if (uploadResponse.ok) {
-            const uploadData = await uploadResponse.json()
-            attachmentUrls.push(uploadData.url)
-          }
+        const uploadData = await uploadRes.json()
+        if (uploadRes.ok && uploadData.success) {
+          attachmentUrls = uploadData.urls || []
         }
       }
 
       // Envoyer la réponse
-      const response = await fetch(`/api/incidents/${params.id}/respond`, {
+      const responseData = {
+        incident_id: params.id,
+        user_id: currentUser.id,
+        message: message.trim(),
+        user_type: "tenant",
+        attachments: attachmentUrls.length > 0 ? attachmentUrls : null,
+      }
+
+      const res = await fetch(`/api/incidents/${params.id}/respond`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: message.trim(),
-          attachments: attachmentUrls,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(responseData),
       })
 
-      const data = await response.json()
+      if (!res.ok) throw new Error("Erreur envoi réponse")
 
-      if (data.success) {
-        toast.success("Réponse envoyée avec succès")
-        router.push(`/tenant/incidents/${params.id}`)
-      } else {
-        toast.error(data.error || "Erreur lors de l'envoi")
-      }
+      toast.success("Réponse envoyée avec succès")
+      router.push(`/tenant/incidents/${params.id}`)
     } catch (error) {
-      console.error("Erreur:", error)
+      console.error("Erreur envoi réponse:", error)
       toast.error("Erreur lors de l'envoi de la réponse")
     } finally {
       setIsSubmitting(false)
@@ -160,128 +158,102 @@ export default function RespondToIncidentPage() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto py-8 max-w-2xl">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center space-y-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="text-gray-600">Chargement...</p>
-          </div>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="text-gray-600">Chargement...</p>
         </div>
       </div>
     )
   }
 
-  if (!incident) {
-    return (
-      <div className="container mx-auto py-8 max-w-2xl">
-        <Card>
-          <CardContent className="text-center py-12">
-            <h3 className="text-lg font-semibold mb-2">Incident non trouvé</h3>
-            <Button asChild>
-              <Link href="/tenant/rental-management?tab=incidents">Retour aux incidents</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
   return (
-    <div className="container mx-auto py-8 max-w-2xl">
-      <div className="mb-8">
-        <Link href={`/tenant/incidents/${params.id}`} className="text-blue-600 hover:underline flex items-center mb-4">
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          Retour à l'incident
+    <div className="max-w-2xl mx-auto space-y-6 p-4">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+        <Link href={`/tenant/incidents/${params.id}`}>
+          <Button variant="outline" size="sm">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Retour
+          </Button>
         </Link>
-        <h1 className="text-3xl font-bold mb-2">Répondre à l'incident</h1>
-        <p className="text-muted-foreground">{incident.title}</p>
+        <div className="flex-1">
+          <h1 className="text-xl sm:text-2xl font-bold">Répondre à l'incident</h1>
+          <p className="text-sm sm:text-base text-gray-600">{incident?.title}</p>
+        </div>
       </div>
 
+      {/* Formulaire de réponse */}
       <Card>
         <CardHeader>
-          <CardTitle>Ajouter un message</CardTitle>
-          <CardDescription>Communiquez avec votre propriétaire concernant cet incident</CardDescription>
+          <CardTitle>Votre réponse</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Message */}
             <div className="space-y-2">
               <Label htmlFor="message">Message *</Label>
               <Textarea
                 id="message"
-                placeholder="Décrivez l'évolution de la situation, posez vos questions ou apportez des précisions..."
-                rows={6}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
+                placeholder="Ajoutez des informations complémentaires, des précisions ou des questions..."
+                rows={6}
                 required
               />
-              <p className="text-sm text-muted-foreground">Soyez précis et courtois dans votre communication</p>
             </div>
 
-            <div className="space-y-3">
+            {/* Pièces jointes */}
+            <div className="space-y-2">
               <Label>Pièces jointes (optionnel)</Label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                <Camera className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                <p className="text-sm text-muted-foreground mb-3">Ajoutez des photos pour illustrer votre message</p>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={(e) => handleFileUpload(e.target.files)}
-                  className="hidden"
-                  id="file-upload"
-                  disabled={uploadingFiles}
-                />
-                <Button type="button" variant="outline" size="sm" asChild disabled={uploadingFiles}>
+              <div className="space-y-4">
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*,.pdf,.doc,.docx"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    id="file-upload"
+                  />
                   <label htmlFor="file-upload" className="cursor-pointer">
-                    <Upload className="h-4 w-4 mr-2" />
-                    {uploadingFiles ? "Ajout en cours..." : "Choisir des photos"}
+                    <Upload className="h-6 w-6 mx-auto mb-2 text-gray-400" />
+                    <p className="text-sm text-gray-600">Cliquez pour ajouter des fichiers</p>
+                    <p className="text-xs text-gray-500 mt-1">Images, PDF, Word - Maximum 3 fichiers, 5MB chacun</p>
                   </label>
-                </Button>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Maximum 5 photos, formats JPG, PNG (max 10MB chacune)
-                </p>
-              </div>
-
-              {attachments.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {attachments.map((file, index) => (
-                    <div key={index} className="relative">
-                      <img
-                        src={URL.createObjectURL(file) || "/placeholder.svg"}
-                        alt={`Pièce jointe ${index + 1}`}
-                        className="w-full h-24 object-cover rounded-lg border"
-                      />
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="sm"
-                        className="absolute top-1 right-1 h-6 w-6 p-0"
-                        onClick={() => removeAttachment(index)}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                      <p className="text-xs text-center mt-1 truncate">{file.name}</p>
-                    </div>
-                  ))}
                 </div>
-              )}
+
+                {attachmentPreviews.length > 0 && (
+                  <div className="space-y-2">
+                    {attachmentPreviews.map((preview, index) => (
+                      <div key={index} className="flex items-center justify-between p-2 border rounded">
+                        <div className="flex items-center gap-2">
+                          {attachments[index].type.startsWith("image/") ? (
+                            <img
+                              src={preview || "/placeholder.svg"}
+                              alt="Aperçu"
+                              className="w-8 h-8 object-cover rounded"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center text-xs">
+                              📄
+                            </div>
+                          )}
+                          <span className="text-sm truncate">{attachments[index].name}</span>
+                        </div>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeAttachment(index)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <h4 className="font-semibold mb-2">À savoir</h4>
-              <ul className="text-sm space-y-1">
-                <li>• Votre propriétaire sera notifié de votre message</li>
-                <li>• Vous recevrez une notification de sa réponse</li>
-                <li>• Restez courtois et professionnel</li>
-                <li>• Les photos peuvent aider à mieux comprendre la situation</li>
-              </ul>
-            </div>
-
-            <div className="flex gap-4">
-              <Button type="button" variant="outline" className="flex-1 bg-transparent" asChild>
-                <Link href={`/tenant/incidents/${params.id}`}>Annuler</Link>
-              </Button>
-              <Button type="submit" className="flex-1" disabled={isSubmitting || !message.trim()}>
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row gap-4 pt-4">
+              <Button type="submit" disabled={isSubmitting} className="flex-1">
                 {isSubmitting ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
@@ -294,6 +266,11 @@ export default function RespondToIncidentPage() {
                   </>
                 )}
               </Button>
+              <Link href={`/tenant/incidents/${params.id}`} className="sm:w-auto">
+                <Button type="button" variant="outline" className="w-full sm:w-auto bg-transparent">
+                  Annuler
+                </Button>
+              </Link>
             </div>
           </form>
         </CardContent>

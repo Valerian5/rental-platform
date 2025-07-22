@@ -1,37 +1,59 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { SupabaseStorageService } from "@/lib/supabase-storage-service"
+import { createClient } from "@supabase/supabase-js"
+
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("📤 API Upload Supabase - Début")
-
-    // Récupérer les données du formulaire
     const formData = await request.formData()
-    const file = formData.get("file") as File
-    const bucket = (formData.get("bucket") as string) || "documents"
-    const folder = (formData.get("folder") as string) || "general"
+    const files = formData.getAll("file") as File[]
 
-    if (!file) {
-      return NextResponse.json({ error: "Aucun fichier fourni" }, { status: 400 })
+    if (!files || files.length === 0) {
+      return NextResponse.json({ success: false, error: "Aucun fichier fourni" }, { status: 400 })
     }
 
-    console.log("📁 Fichier reçu:", file.name, "Taille:", file.size)
-    console.log("🪣 Bucket:", bucket, "Dossier:", folder)
+    const uploadedUrls: string[] = []
 
-    // Upload vers Supabase Storage
-    const result = await SupabaseStorageService.uploadFile(file, bucket, folder)
+    for (const file of files) {
+      if (!file.type.startsWith("image/")) {
+        continue
+      }
 
-    console.log("✅ Upload réussi:", result.url)
+      // Générer un nom unique pour le fichier
+      const fileExt = file.name.split(".").pop()
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
+      const filePath = `incidents/${fileName}`
+
+      // Convertir le fichier en ArrayBuffer
+      const arrayBuffer = await file.arrayBuffer()
+      const fileBuffer = new Uint8Array(arrayBuffer)
+
+      // Upload vers Supabase Storage
+      const { data, error } = await supabase.storage.from("documents").upload(filePath, fileBuffer, {
+        contentType: file.type,
+        upsert: false,
+      })
+
+      if (error) {
+        console.error("Erreur upload Supabase:", error)
+        continue
+      }
+
+      // Obtenir l'URL publique
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("documents").getPublicUrl(filePath)
+
+      uploadedUrls.push(publicUrl)
+    }
 
     return NextResponse.json({
       success: true,
-      url: result.url,
-      path: result.path,
-      size: result.size,
-      uploadedAt: result.uploadedAt.toISOString(),
+      urls: uploadedUrls,
+      message: `${uploadedUrls.length} fichier(s) uploadé(s)`,
     })
   } catch (error) {
-    console.error("❌ Erreur API upload:", error)
-    return NextResponse.json({ error: `Erreur serveur: ${error.message}` }, { status: 500 })
+    console.error("Erreur API upload:", error)
+    return NextResponse.json({ success: false, error: "Erreur serveur" }, { status: 500 })
   }
 }

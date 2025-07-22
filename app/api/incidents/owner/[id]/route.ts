@@ -7,6 +7,23 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   try {
     const ownerId = params.id
 
+    // D'abord, récupérer les propriétés du propriétaire
+    const { data: properties, error: propertiesError } = await supabase
+      .from("properties")
+      .select("id, title, address, city")
+      .eq("owner_id", ownerId)
+
+    if (propertiesError) {
+      console.error("Erreur récupération propriétés:", propertiesError)
+      return NextResponse.json({ success: false, error: "Erreur lors du chargement des propriétés" }, { status: 500 })
+    }
+
+    if (!properties || properties.length === 0) {
+      return NextResponse.json({ success: true, incidents: [] })
+    }
+
+    const propertyIds = properties.map((p) => p.id)
+
     // Récupérer tous les incidents des propriétés du propriétaire
     const { data: incidents, error } = await supabase
       .from("incidents")
@@ -21,25 +38,15 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           property_type,
           surface
         ),
-        lease:leases(
+        reporter:users!incidents_reported_by_fkey(
           id,
-          tenant:users!leases_tenant_id_fkey(
-            id,
-            first_name,
-            last_name,
-            email,
-            phone
-          ),
-          owner:users!leases_owner_id_fkey(
-            id,
-            first_name,
-            last_name,
-            email,
-            phone
-          )
+          first_name,
+          last_name,
+          email,
+          phone
         )
       `)
-      .eq("lease.owner_id", ownerId)
+      .in("property_id", propertyIds)
       .order("created_at", { ascending: false })
 
     if (error) {
@@ -47,24 +54,48 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ success: false, error: "Erreur lors du chargement" }, { status: 500 })
     }
 
-    // Pour chaque incident, récupérer le nombre de réponses
-    const incidentsWithResponses = await Promise.all(
-      incidents.map(async (incident) => {
+    // Pour chaque incident, récupérer les réponses et les informations du bail
+    const incidentsWithDetails = await Promise.all(
+      (incidents || []).map(async (incident) => {
+        // Récupérer les réponses
         const { data: responses } = await supabase
           .from("incident_responses")
-          .select("id")
+          .select("id, message, user_type, created_at")
           .eq("incident_id", incident.id)
+          .order("created_at", { ascending: true })
+
+        // Récupérer les informations du bail si disponible
+        let lease = null
+        if (incident.lease_id) {
+          const { data: leaseData } = await supabase
+            .from("leases")
+            .select(`
+              id,
+              tenant:users!leases_tenant_id_fkey(
+                id,
+                first_name,
+                last_name,
+                email,
+                phone
+              )
+            `)
+            .eq("id", incident.lease_id)
+            .single()
+
+          lease = leaseData
+        }
 
         return {
           ...incident,
           responses: responses || [],
+          lease: lease,
         }
       }),
     )
 
     return NextResponse.json({
       success: true,
-      incidents: incidentsWithResponses,
+      incidents: incidentsWithDetails,
     })
   } catch (error) {
     console.error("Erreur API incidents propriétaire:", error)

@@ -115,19 +115,27 @@ export default function NewIncidentPage() {
       // Upload des photos si nécessaire
       let photoUrls: string[] = []
       if (photos.length > 0) {
+        console.log("📸 Upload de", photos.length, "photos...")
+
         const formData = new FormData()
-        photos.forEach((photo, index) => {
-          formData.append(`photo_${index}`, photo)
+        photos.forEach((photo) => {
+          formData.append("file", photo)
         })
 
-        const uploadRes = await fetch("/api/upload", {
+        const uploadRes = await fetch("/api/upload-supabase", {
           method: "POST",
           body: formData,
         })
 
-        if (uploadRes.ok) {
-          const uploadData = await uploadRes.json()
+        const uploadData = await uploadRes.json()
+        console.log("📸 Résultat upload:", uploadData)
+
+        if (uploadRes.ok && uploadData.success) {
           photoUrls = uploadData.urls || []
+          console.log("✅ Photos uploadées:", photoUrls)
+        } else {
+          console.error("❌ Erreur upload photos:", uploadData)
+          toast.error("Erreur lors de l'upload des photos")
         }
       }
 
@@ -137,13 +145,15 @@ export default function NewIncidentPage() {
         property_id: activeLease.property.id,
         lease_id: activeLease.id,
         reported_by: currentUser.id,
-        photos: photoUrls,
+        photos: photoUrls.length > 0 ? photoUrls : null,
       }
+
+      console.log("📝 Données incident:", incidentData)
 
       await rentalManagementService.reportIncident(incidentData)
 
       toast.success("Incident signalé avec succès")
-      router.push("/tenant/incidents")
+      router.push("/tenant/rental-management")
     } catch (error) {
       console.error("Erreur signalement:", error)
       toast.error("Erreur lors du signalement")
@@ -164,18 +174,18 @@ export default function NewIncidentPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-2xl mx-auto space-y-6 p-4">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Link href="/tenant/incidents">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+        <Link href="/tenant/rental-management">
           <Button variant="outline" size="sm">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Retour
           </Button>
         </Link>
-        <div>
-          <h1 className="text-2xl font-bold">Signaler un incident</h1>
-          <p className="text-gray-600">Décrivez le problème rencontré dans votre logement</p>
+        <div className="flex-1">
+          <h1 className="text-xl sm:text-2xl font-bold">Signaler un incident</h1>
+          <p className="text-sm sm:text-base text-gray-600">Décrivez le problème rencontré dans votre logement</p>
         </div>
       </div>
 
@@ -188,7 +198,7 @@ export default function NewIncidentPage() {
           <CardContent>
             <div className="space-y-2">
               <p className="font-medium">{activeLease.property.title}</p>
-              <p className="text-gray-600">
+              <p className="text-gray-600 text-sm">
                 {activeLease.property.address}, {activeLease.property.city}
               </p>
             </div>
@@ -272,7 +282,7 @@ export default function NewIncidentPage() {
             <div className="space-y-2">
               <Label>Photos (optionnel)</Label>
               <div className="space-y-4">
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 sm:p-6 text-center">
                   <input
                     type="file"
                     multiple
@@ -282,29 +292,29 @@ export default function NewIncidentPage() {
                     id="photo-upload"
                   />
                   <label htmlFor="photo-upload" className="cursor-pointer">
-                    <Upload className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                    <p className="text-gray-600">Cliquez pour ajouter des photos</p>
-                    <p className="text-sm text-gray-500 mt-1">Maximum 5 photos, 5MB chacune</p>
+                    <Upload className="h-6 sm:h-8 w-6 sm:w-8 mx-auto mb-2 text-gray-400" />
+                    <p className="text-sm sm:text-base text-gray-600">Cliquez pour ajouter des photos</p>
+                    <p className="text-xs sm:text-sm text-gray-500 mt-1">Maximum 5 photos, 5MB chacune</p>
                   </label>
                 </div>
 
                 {photoPreviews.length > 0 && (
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                     {photoPreviews.map((preview, index) => (
                       <div key={index} className="relative">
                         <img
                           src={preview || "/placeholder.svg"}
                           alt={`Aperçu ${index + 1}`}
-                          className="w-full h-32 object-cover rounded-lg border"
+                          className="w-full h-24 sm:h-32 object-cover rounded-lg border"
                         />
                         <Button
                           type="button"
                           variant="destructive"
                           size="sm"
-                          className="absolute top-2 right-2 h-6 w-6 p-0"
+                          className="absolute top-1 right-1 h-6 w-6 p-0"
                           onClick={() => removePhoto(index)}
                         >
-                          <X className="h-4 w-4" />
+                          <X className="h-3 w-3" />
                         </Button>
                       </div>
                     ))}
@@ -316,10 +326,10 @@ export default function NewIncidentPage() {
             {/* Conseils */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-blue-600 mt-0.5" />
+                <AlertTriangle className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
                 <div className="text-sm text-blue-800">
                   <p className="font-medium mb-2">Conseils pour un signalement efficace :</p>
-                  <ul className="space-y-1 list-disc list-inside">
+                  <ul className="space-y-1 list-disc list-inside text-xs sm:text-sm">
                     <li>Soyez précis dans votre description</li>
                     <li>Indiquez si le problème s'aggrave</li>
                     <li>Ajoutez des photos si possible</li>
@@ -330,7 +340,7 @@ export default function NewIncidentPage() {
             </div>
 
             {/* Actions */}
-            <div className="flex gap-4 pt-4">
+            <div className="flex flex-col sm:flex-row gap-4 pt-4">
               <Button type="submit" disabled={isSubmitting} className="flex-1">
                 {isSubmitting ? (
                   <>
@@ -344,8 +354,8 @@ export default function NewIncidentPage() {
                   </>
                 )}
               </Button>
-              <Link href="/tenant/incidents">
-                <Button type="button" variant="outline">
+              <Link href="/tenant/rental-management" className="sm:w-auto">
+                <Button type="button" variant="outline" className="w-full sm:w-auto bg-transparent">
                   Annuler
                 </Button>
               </Link>

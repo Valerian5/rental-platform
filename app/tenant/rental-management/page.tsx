@@ -82,10 +82,8 @@ interface IncidentResponse {
   id: string
   incident_id: string
   message: string
-  author_type: "owner" | "tenant"
-  author_name: string
+  user_type: "owner" | "tenant"
   created_at: string
-  attachments?: string[]
 }
 
 export default function TenantRentalManagementPage() {
@@ -121,13 +119,13 @@ export default function TenantRentalManagementPage() {
           if (receiptsData.success) {
             setRentReceipts(receiptsData.receipts || [])
           }
+        }
 
-          // Récupérer les incidents
-          const incidentsResponse = await fetch(`/api/incidents/tenant/${user.id}`)
-          const incidentsData = await incidentsResponse.json()
-          if (incidentsData.success) {
-            setIncidents(incidentsData.incidents || [])
-          }
+        // Récupérer les incidents
+        const incidentsResponse = await fetch(`/api/incidents/tenant/${user.id}`)
+        const incidentsData = await incidentsResponse.json()
+        if (incidentsData.success) {
+          setIncidents(incidentsData.incidents || [])
         }
       } catch (error) {
         console.error("Erreur:", error)
@@ -674,14 +672,14 @@ export default function TenantRentalManagementPage() {
                             <div
                               key={response.id}
                               className={`p-3 rounded-lg ${
-                                response.author_type === "owner"
+                                response.user_type === "owner"
                                   ? "bg-blue-50 border border-blue-200"
                                   : "bg-gray-50 border border-gray-200"
                               }`}
                             >
                               <div className="flex justify-between items-start mb-2">
                                 <span className="font-medium text-sm">
-                                  {response.author_type === "owner" ? "Propriétaire" : "Vous"}
+                                  {response.user_type === "owner" ? "Propriétaire" : "Vous"}
                                 </span>
                                 <span className="text-xs text-muted-foreground">
                                   {new Date(response.created_at).toLocaleDateString("fr-FR")} à{" "}
@@ -692,18 +690,6 @@ export default function TenantRentalManagementPage() {
                                 </span>
                               </div>
                               <p className="text-sm">{response.message}</p>
-                              {response.attachments && response.attachments.length > 0 && (
-                                <div className="mt-2 grid grid-cols-2 gap-2">
-                                  {response.attachments.map((attachment, index) => (
-                                    <img
-                                      key={index}
-                                      src={attachment || "/placeholder.svg"}
-                                      alt={`Pièce jointe ${index + 1}`}
-                                      className="w-full h-20 object-cover rounded border"
-                                    />
-                                  ))}
-                                </div>
-                              )}
                             </div>
                           ))}
                         </div>
