@@ -37,11 +37,11 @@ export default function TenantDashboard() {
         setCurrentUser(user)
 
         // Récupérer les statistiques
-        const [applicationsRes, visitsRes, favoritesRes, messagesRes] = await Promise.all([
+        const [applicationsRes, visitsRes, favoritesRes, conversationsRes] = await Promise.all([
           fetch(`/api/applications/tenant?tenant_id=${user.id}&limit=5`),
           fetch(`/api/visits/tenant?tenant_id=${user.id}&limit=5`),
           fetch(`/api/favorites?user_id=${user.id}&limit=5`),
-          fetch(`/api/messages?user_id=${user.id}&limit=5`),
+          fetch(`/api/conversations?user_id=${user.id}&limit=5`),
         ])
 
         if (applicationsRes.ok) {
@@ -79,13 +79,24 @@ export default function TenantDashboard() {
           }))
         }
 
-        if (messagesRes.ok) {
-          const messagesData = await messagesRes.json()
+        if (conversationsRes.ok) {
+          const conversationsData = await conversationsRes.json()
+          const totalMessages =
+            conversationsData.conversations?.reduce(
+              (acc: number, conv: any) => acc + (conv.messages?.length || 0),
+              0,
+            ) || 0
+          const unreadMessages =
+            conversationsData.conversations?.reduce((acc: number, conv: any) => {
+              const unread = conv.messages?.filter((msg: any) => !msg.is_read && msg.sender_id !== user.id).length || 0
+              return acc + unread
+            }, 0) || 0
+
           setStats((prev) => ({
             ...prev,
             messages: {
-              total: messagesData.total || 0,
-              unread: messagesData.unread || 0,
+              total: totalMessages,
+              unread: unreadMessages,
             },
           }))
         }
@@ -107,7 +118,7 @@ export default function TenantDashboard() {
           <div className="h-8 bg-gray-200 rounded w-1/4 mb-2"></div>
           <div className="h-4 bg-gray-200 rounded w-1/2"></div>
         </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
           {[...Array(4)].map((_, i) => (
             <Card key={i} className="animate-pulse">
               <CardContent className="p-6">
@@ -125,11 +136,11 @@ export default function TenantDashboard() {
     <div className="space-y-6">
       <PageHeader
         title="Tableau de bord"
-        description={`Bonjour ${currentUser?.first_name} ! Trouvez votre logement idéal`}
+        description={`Bonjour ${currentUser?.first_name || ""} ! Trouvez votre logement idéal`}
       >
         <Button asChild className="w-full sm:w-auto">
           <Link href="/tenant/search">
-            <Search className="h-4 w-4 mr-2" />
+            <Search className="h-4 w-4 mr-2 flex-shrink-0" />
             <span className="hidden sm:inline">Rechercher un logement</span>
             <span className="sm:hidden">Rechercher</span>
           </Link>
@@ -137,11 +148,11 @@ export default function TenantDashboard() {
       </PageHeader>
 
       {/* Statistiques principales */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Candidatures</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
+            <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.applications.total}</div>
@@ -152,7 +163,7 @@ export default function TenantDashboard() {
         <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Visites</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.visits.total}</div>
@@ -163,7 +174,7 @@ export default function TenantDashboard() {
         <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Favoris</CardTitle>
-            <Heart className="h-4 w-4 text-muted-foreground" />
+            <Heart className="h-4 w-4 text-muted-foreground flex-shrink-0" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.favorites.total}</div>
@@ -174,7 +185,7 @@ export default function TenantDashboard() {
         <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Messages</CardTitle>
-            <MessageSquare className="h-4 w-4 text-muted-foreground" />
+            <MessageSquare className="h-4 w-4 text-muted-foreground flex-shrink-0" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.messages.total}</div>
@@ -194,19 +205,19 @@ export default function TenantDashboard() {
           <CardContent className="space-y-3">
             <Button asChild variant="outline" className="w-full justify-start bg-transparent">
               <Link href="/tenant/search">
-                <Search className="h-4 w-4 mr-2" />
+                <Search className="h-4 w-4 mr-2 flex-shrink-0" />
                 Rechercher un logement
               </Link>
             </Button>
             <Button asChild variant="outline" className="w-full justify-start bg-transparent">
               <Link href="/tenant/applications">
-                <FileText className="h-4 w-4 mr-2" />
+                <FileText className="h-4 w-4 mr-2 flex-shrink-0" />
                 Mes candidatures
               </Link>
             </Button>
             <Button asChild variant="outline" className="w-full justify-start bg-transparent">
               <Link href="/tenant/visits">
-                <Calendar className="h-4 w-4 mr-2" />
+                <Calendar className="h-4 w-4 mr-2 flex-shrink-0" />
                 Mes visites
               </Link>
             </Button>
@@ -219,7 +230,7 @@ export default function TenantDashboard() {
             <CardTitle className="text-lg">Mes candidatures</CardTitle>
             <Button asChild variant="ghost" size="sm">
               <Link href="/tenant/applications">
-                <Eye className="h-4 w-4 mr-1" />
+                <Eye className="h-4 w-4 mr-1 flex-shrink-0" />
                 Tout voir
               </Link>
             </Button>
@@ -231,11 +242,11 @@ export default function TenantDashboard() {
                   <div key={application.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{application.property?.title || "Logement"}</p>
-                      <p className="text-xs text-gray-500 truncate">{application.property?.address}</p>
+                      <p className="text-xs text-gray-500 truncate">{application.property?.address || ""}</p>
                     </div>
                     <Badge
                       variant={application.status === "pending" ? "secondary" : "outline"}
-                      className="ml-2 text-xs"
+                      className="ml-2 text-xs flex-shrink-0"
                     >
                       {application.status === "pending" ? "En attente" : application.status}
                     </Badge>
@@ -254,7 +265,7 @@ export default function TenantDashboard() {
             <CardTitle className="text-lg">Visites à venir</CardTitle>
             <Button asChild variant="ghost" size="sm">
               <Link href="/tenant/visits">
-                <Eye className="h-4 w-4 mr-1" />
+                <Eye className="h-4 w-4 mr-1 flex-shrink-0" />
                 Tout voir
               </Link>
             </Button>
@@ -267,11 +278,14 @@ export default function TenantDashboard() {
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{visit.property?.title || "Logement"}</p>
                       <p className="text-xs text-gray-500 flex items-center">
-                        <Clock className="h-3 w-3 mr-1" />
-                        {new Date(visit.visit_date).toLocaleDateString()} à {visit.visit_time}
+                        <Clock className="h-3 w-3 mr-1 flex-shrink-0" />
+                        <span className="truncate">
+                          {visit.visit_date ? new Date(visit.visit_date).toLocaleDateString() : ""}
+                          {visit.visit_time ? ` à ${visit.visit_time}` : ""}
+                        </span>
                       </p>
                     </div>
-                    <Badge variant="outline" className="ml-2 text-xs">
+                    <Badge variant="outline" className="ml-2 text-xs flex-shrink-0">
                       {visit.status === "scheduled" ? "Programmée" : visit.status}
                     </Badge>
                   </div>
@@ -291,7 +305,7 @@ export default function TenantDashboard() {
             <CardTitle className="text-lg">Mes favoris récents</CardTitle>
             <Button asChild variant="ghost" size="sm">
               <Link href="/tenant/favorites">
-                <Eye className="h-4 w-4 mr-1" />
+                <Eye className="h-4 w-4 mr-1 flex-shrink-0" />
                 Tout voir
               </Link>
             </Button>
@@ -304,7 +318,7 @@ export default function TenantDashboard() {
                     {favorite.property?.property_images?.[0] ? (
                       <img
                         src={favorite.property.property_images[0].url || "/placeholder.svg"}
-                        alt={favorite.property.title}
+                        alt={favorite.property.title || "Propriété"}
                         className="w-full h-full object-cover"
                       />
                     ) : (
@@ -313,13 +327,15 @@ export default function TenantDashboard() {
                       </div>
                     )}
                   </div>
-                  <h4 className="font-medium text-sm truncate">{favorite.property?.title}</h4>
+                  <h4 className="font-medium text-sm truncate">{favorite.property?.title || "Propriété"}</h4>
                   <p className="text-xs text-gray-500 flex items-center mt-1">
-                    <MapPin className="h-3 w-3 mr-1" />
-                    <span className="truncate">{favorite.property?.address}</span>
+                    <MapPin className="h-3 w-3 mr-1 flex-shrink-0" />
+                    <span className="truncate">{favorite.property?.address || ""}</span>
                   </p>
                   <p className="text-sm font-semibold text-blue-600 mt-1">
-                    {favorite.property?.rent?.toLocaleString()} €/mois
+                    {favorite.property?.rent
+                      ? `${favorite.property.rent.toLocaleString()} €/mois`
+                      : "Prix non disponible"}
                   </p>
                 </div>
               ))}

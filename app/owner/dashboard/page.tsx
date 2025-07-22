@@ -36,11 +36,11 @@ export default function OwnerDashboard() {
         setCurrentUser(user)
 
         // Récupérer les statistiques
-        const [propertiesRes, applicationsRes, visitsRes, messagesRes] = await Promise.all([
+        const [propertiesRes, applicationsRes, visitsRes, conversationsRes] = await Promise.all([
           fetch(`/api/properties?owner_id=${user.id}`),
           fetch(`/api/applications?owner_id=${user.id}&limit=5`),
           fetch(`/api/visits?owner_id=${user.id}&limit=5`),
-          fetch(`/api/messages?user_id=${user.id}&limit=5`),
+          fetch(`/api/conversations?user_id=${user.id}&limit=5`),
         ])
 
         if (propertiesRes.ok) {
@@ -78,13 +78,24 @@ export default function OwnerDashboard() {
           }))
         }
 
-        if (messagesRes.ok) {
-          const messagesData = await messagesRes.json()
+        if (conversationsRes.ok) {
+          const conversationsData = await conversationsRes.json()
+          const totalMessages =
+            conversationsData.conversations?.reduce(
+              (acc: number, conv: any) => acc + (conv.messages?.length || 0),
+              0,
+            ) || 0
+          const unreadMessages =
+            conversationsData.conversations?.reduce((acc: number, conv: any) => {
+              const unread = conv.messages?.filter((msg: any) => !msg.is_read && msg.sender_id !== user.id).length || 0
+              return acc + unread
+            }, 0) || 0
+
           setStats((prev) => ({
             ...prev,
             messages: {
-              total: messagesData.total || 0,
-              unread: messagesData.unread || 0,
+              total: totalMessages,
+              unread: unreadMessages,
             },
           }))
         }
@@ -124,7 +135,7 @@ export default function OwnerDashboard() {
     <div className="space-y-6">
       <PageHeader
         title="Tableau de bord"
-        description={`Bonjour ${currentUser?.first_name} ! Vue d'ensemble de votre activité immobilière`}
+        description={`Bonjour ${currentUser?.first_name || ""} ! Vue d'ensemble de votre activité immobilière`}
       >
         <Button asChild className="w-full sm:w-auto">
           <Link href="/owner/properties/new">
@@ -136,11 +147,11 @@ export default function OwnerDashboard() {
       </PageHeader>
 
       {/* Statistiques principales */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Propriétés</CardTitle>
-            <Building2 className="h-4 w-4 text-muted-foreground" />
+            <Building2 className="h-4 w-4 text-muted-foreground flex-shrink-0" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.properties.total}</div>
@@ -153,18 +164,18 @@ export default function OwnerDashboard() {
         <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Candidatures</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <Users className="h-4 w-4 text-muted-foreground flex-shrink-0" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.applications.total}</div>
-            <p className="text-xs text-muted-foreground">{stats.applications.pending} en attente de traitement</p>
+            <p className="text-xs text-muted-foreground">{stats.applications.pending} en attente</p>
           </CardContent>
         </Card>
 
         <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Visites</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.visits.total}</div>
@@ -175,7 +186,7 @@ export default function OwnerDashboard() {
         <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Messages</CardTitle>
-            <MessageSquare className="h-4 w-4 text-muted-foreground" />
+            <MessageSquare className="h-4 w-4 text-muted-foreground flex-shrink-0" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.messages.total}</div>
@@ -195,19 +206,19 @@ export default function OwnerDashboard() {
           <CardContent className="space-y-3">
             <Button asChild variant="outline" className="w-full justify-start bg-transparent">
               <Link href="/owner/properties/new">
-                <Plus className="h-4 w-4 mr-2" />
+                <Plus className="h-4 w-4 mr-2 flex-shrink-0" />
                 Créer une annonce
               </Link>
             </Button>
             <Button asChild variant="outline" className="w-full justify-start bg-transparent">
               <Link href="/owner/applications">
-                <Users className="h-4 w-4 mr-2" />
+                <Users className="h-4 w-4 mr-2 flex-shrink-0" />
                 Voir les candidatures
               </Link>
             </Button>
             <Button asChild variant="outline" className="w-full justify-start bg-transparent">
               <Link href="/owner/visits">
-                <Calendar className="h-4 w-4 mr-2" />
+                <Calendar className="h-4 w-4 mr-2 flex-shrink-0" />
                 Gérer les visites
               </Link>
             </Button>
@@ -220,7 +231,7 @@ export default function OwnerDashboard() {
             <CardTitle className="text-lg">Candidatures récentes</CardTitle>
             <Button asChild variant="ghost" size="sm">
               <Link href="/owner/applications">
-                <Eye className="h-4 w-4 mr-1" />
+                <Eye className="h-4 w-4 mr-1 flex-shrink-0" />
                 Tout voir
               </Link>
             </Button>
@@ -231,12 +242,14 @@ export default function OwnerDashboard() {
                 {recentApplications.slice(0, 3).map((application: any) => (
                   <div key={application.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{application.tenant?.name || "Candidat"}</p>
-                      <p className="text-xs text-gray-500 truncate">{application.property?.title}</p>
+                      <p className="text-sm font-medium truncate">
+                        {application.tenant?.first_name || ""} {application.tenant?.last_name || "Candidat"}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">{application.property?.title || "Propriété"}</p>
                     </div>
                     <Badge
                       variant={application.status === "pending" ? "secondary" : "outline"}
-                      className="ml-2 text-xs"
+                      className="ml-2 text-xs flex-shrink-0"
                     >
                       {application.status === "pending" ? "En attente" : application.status}
                     </Badge>
@@ -255,7 +268,7 @@ export default function OwnerDashboard() {
             <CardTitle className="text-lg">Visites à venir</CardTitle>
             <Button asChild variant="ghost" size="sm">
               <Link href="/owner/visits">
-                <Eye className="h-4 w-4 mr-1" />
+                <Eye className="h-4 w-4 mr-1 flex-shrink-0" />
                 Tout voir
               </Link>
             </Button>
@@ -268,11 +281,14 @@ export default function OwnerDashboard() {
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{visit.visitor_name || "Visiteur"}</p>
                       <p className="text-xs text-gray-500 flex items-center">
-                        <Clock className="h-3 w-3 mr-1" />
-                        {new Date(visit.visit_date).toLocaleDateString()} à {visit.visit_time}
+                        <Clock className="h-3 w-3 mr-1 flex-shrink-0" />
+                        <span className="truncate">
+                          {visit.visit_date ? new Date(visit.visit_date).toLocaleDateString() : ""}
+                          {visit.visit_time ? ` à ${visit.visit_time}` : ""}
+                        </span>
                       </p>
                     </div>
-                    <Badge variant="outline" className="ml-2 text-xs">
+                    <Badge variant="outline" className="ml-2 text-xs flex-shrink-0">
                       {visit.status === "scheduled" ? "Programmée" : visit.status}
                     </Badge>
                   </div>
