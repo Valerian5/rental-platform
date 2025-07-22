@@ -30,23 +30,40 @@ export default function LoginPage() {
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const [logoResponse, siteInfoResponse] = await Promise.all([
-          fetch("/api/admin/settings?key=logos"),
-          fetch("/api/admin/settings?key=site_info"),
-        ])
+        console.log("🔍 Récupération des paramètres...")
 
+        const logoResponse = await fetch("/api/admin/settings?key=logos")
         const logoResult = await logoResponse.json()
+
+        console.log("📋 Résultat logos:", logoResult)
+
+        if (logoResult.success && logoResult.data) {
+          // Si c'est un objet JSON, extraire le main
+          if (typeof logoResult.data === "object" && logoResult.data.main) {
+            console.log("✅ Logo trouvé:", logoResult.data.main)
+            setLogoUrl(logoResult.data.main)
+          }
+          // Si c'est directement une URL
+          else if (typeof logoResult.data === "string") {
+            console.log("✅ Logo URL directe:", logoResult.data)
+            setLogoUrl(logoResult.data)
+          }
+        }
+
+        const siteInfoResponse = await fetch("/api/admin/settings?key=site_info")
         const siteInfoResult = await siteInfoResponse.json()
 
-        if (logoResult.success && logoResult.data?.main) {
-          setLogoUrl(logoResult.data.main)
-        }
+        console.log("📋 Résultat site_info:", siteInfoResult)
 
-        if (siteInfoResult.success && siteInfoResult.data?.title) {
-          setSiteTitle(siteInfoResult.data.title)
+        if (siteInfoResult.success && siteInfoResult.data) {
+          if (typeof siteInfoResult.data === "object" && siteInfoResult.data.title) {
+            setSiteTitle(siteInfoResult.data.title)
+          } else if (typeof siteInfoResult.data === "string") {
+            setSiteTitle(siteInfoResult.data)
+          }
         }
       } catch (error) {
-        console.error("Erreur récupération paramètres:", error)
+        console.error("❌ Erreur récupération paramètres:", error)
       }
     }
 
@@ -195,7 +212,17 @@ export default function LoginPage() {
         <div className="text-center mb-8">
           <div className="flex items-center justify-center mb-4">
             {logoUrl ? (
-              <img src={logoUrl || "/placeholder.svg"} alt={siteTitle} className="h-16 object-contain" />
+              <div className="h-16 flex items-center justify-center">
+                <img
+                  src={logoUrl || "/placeholder.svg"}
+                  alt={siteTitle}
+                  className="max-h-16 max-w-48 object-contain"
+                  onError={(e) => {
+                    console.error("❌ Erreur chargement logo:", logoUrl)
+                    setLogoUrl(null)
+                  }}
+                />
+              </div>
             ) : (
               <div className="h-12 w-12 rounded-xl bg-blue-600 flex items-center justify-center">
                 <Home className="h-6 w-6 text-white" />

@@ -83,20 +83,45 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
 
         // Récupérer les paramètres du site
         try {
-          const [logoResponse, siteInfoResponse] = await Promise.all([
-            fetch("/api/admin/settings?key=logos"),
-            fetch("/api/admin/settings?key=site_info"),
-          ])
+          console.log("🔍 Récupération paramètres tenant layout...")
 
+          const logoResponse = await fetch("/api/admin/settings?key=logos")
           const logoResult = await logoResponse.json()
+
+          console.log("📋 Résultat logos tenant:", logoResult)
+
+          const siteInfoResponse = await fetch("/api/admin/settings?key=site_info")
           const siteInfoResult = await siteInfoResponse.json()
 
+          console.log("📋 Résultat site_info tenant:", siteInfoResult)
+
+          let logoUrl = null
+          let siteTitle = "RentalPlatform"
+
+          if (logoResult.success && logoResult.data) {
+            if (typeof logoResult.data === "object" && logoResult.data.main) {
+              logoUrl = logoResult.data.main
+            } else if (typeof logoResult.data === "string") {
+              logoUrl = logoResult.data
+            }
+          }
+
+          if (siteInfoResult.success && siteInfoResult.data) {
+            if (typeof siteInfoResult.data === "object" && siteInfoResult.data.title) {
+              siteTitle = siteInfoResult.data.title
+            } else if (typeof siteInfoResult.data === "string") {
+              siteTitle = siteInfoResult.data
+            }
+          }
+
           setSiteSettings({
-            title: siteInfoResult.success ? siteInfoResult.data?.title || "RentalPlatform" : "RentalPlatform",
-            logo: logoResult.success ? logoResult.data?.main : null,
+            title: siteTitle,
+            logo: logoUrl,
           })
+
+          console.log("✅ Paramètres tenant définis:", { title: siteTitle, logo: logoUrl })
         } catch (settingsError) {
-          console.error("Erreur récupération paramètres:", settingsError)
+          console.error("❌ Erreur récupération paramètres tenant:", settingsError)
         }
       } catch (error) {
         console.error("Erreur récupération utilisateur:", error)
@@ -154,7 +179,15 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
         <div className="flex h-16 items-center border-b px-6">
           <Link href="/tenant/dashboard" className="flex items-center space-x-2">
             {siteSettings.logo ? (
-              <img src={siteSettings.logo || "/placeholder.svg"} alt="Logo" className="h-8 w-8 object-contain" />
+              <img
+                src={siteSettings.logo || "/placeholder.svg"}
+                alt="Logo"
+                className="h-8 w-8 object-contain"
+                onError={(e) => {
+                  console.error("❌ Erreur chargement logo tenant:", siteSettings.logo)
+                  setSiteSettings((prev) => ({ ...prev, logo: null }))
+                }}
+              />
             ) : (
               <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
                 <Home className="h-5 w-5 text-white" />
@@ -192,7 +225,15 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
             <div className="flex h-16 items-center border-b px-6">
               <Link href="/tenant/dashboard" className="flex items-center space-x-2">
                 {siteSettings.logo ? (
-                  <img src={siteSettings.logo || "/placeholder.svg"} alt="Logo" className="h-8 w-8 object-contain" />
+                  <img
+                    src={siteSettings.logo || "/placeholder.svg"}
+                    alt="Logo"
+                    className="h-8 w-8 object-contain"
+                    onError={(e) => {
+                      console.error("❌ Erreur chargement logo tenant:", siteSettings.logo)
+                      setSiteSettings((prev) => ({ ...prev, logo: null }))
+                    }}
+                  />
                 ) : (
                   <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
                     <Home className="h-5 w-5 text-white" />
@@ -270,7 +311,15 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
                 </Sheet>
                 <Link href="/tenant/dashboard" className="flex items-center space-x-2">
                   {siteSettings.logo ? (
-                    <img src={siteSettings.logo || "/placeholder.svg"} alt="Logo" className="h-8 w-8 object-contain" />
+                    <img
+                      src={siteSettings.logo || "/placeholder.svg"}
+                      alt="Logo"
+                      className="h-8 w-8 object-contain"
+                      onError={(e) => {
+                        console.error("❌ Erreur chargement logo tenant:", siteSettings.logo)
+                        setSiteSettings((prev) => ({ ...prev, logo: null }))
+                      }}
+                    />
                   ) : (
                     <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
                       <Home className="h-5 w-5 text-white" />

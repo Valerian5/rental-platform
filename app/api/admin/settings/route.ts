@@ -1,33 +1,40 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     console.log("📤 GET /api/admin/settings")
 
+    const { searchParams } = new URL(request.url)
+    const key = searchParams.get("key")
+
     const supabase = createServerClient()
 
-    // Vérifier si la table site_settings existe
-    const { data: tableCheck, error: tableError } = await supabase.from("site_settings").select("setting_key").limit(1)
+    if (key) {
+      // Récupérer un paramètre spécifique
+      const { data: setting, error } = await supabase
+        .from("site_settings")
+        .select("setting_value")
+        .eq("setting_key", key)
+        .single()
 
-    if (tableError) {
-      console.warn("⚠️ Table site_settings non accessible:", tableError.message)
+      if (error && error.code !== "PGRST116") {
+        console.error("❌ Erreur récupération setting:", error)
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Erreur récupération paramètre",
+            details: error.message,
+          },
+          { status: 500 },
+        )
+      }
 
-      // Retourner des paramètres par défaut
+      console.log(`✅ Paramètre ${key} récupéré:`, setting?.setting_value)
+
       return NextResponse.json({
         success: true,
-        data: {
-          logos: {},
-          colors: {
-            primary: "#0066FF",
-            secondary: "#FF6B00",
-            accent: "#00C48C",
-          },
-          site_info: {
-            title: "Louer Ici",
-            description: "Plateforme de gestion locative intelligente",
-          },
-        },
+        data: setting?.setting_value || null,
       })
     }
 
