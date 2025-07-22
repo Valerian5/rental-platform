@@ -5,64 +5,77 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    console.log("🔍 API incidents/tenant/[id] - Récupération incidents locataire:", params.id)
+    const tenantId = params.id
 
-    // Récupérer tous les incidents du locataire via ses baux
+    // Récupérer tous les incidents du locataire avec les informations des propriétés
     const { data: incidents, error } = await supabase
       .from("incidents")
       .select(`
         *,
-        lease:leases!inner(
+        property:properties(
           id,
-          property:properties(id, title, address, city),
-          tenant:users!tenant_id(id, first_name, last_name)
+          title,
+          address,
+          city,
+          postal_code
+        ),
+        lease:leases(
+          id,
+          tenant:users!leases_tenant_id_fkey(
+            id,
+            first_name,
+            last_name,
+            email,
+            phone
+          ),
+          owner:users!leases_owner_id_fkey(
+            id,
+            first_name,
+            last_name,
+            email,
+            phone
+          )
+        ),
+        responses:incident_responses(
+          id,
+          message,
+          user_type,
+          attachments,
+          created_at,
+          user:users(
+            id,
+            first_name,
+            last_name
+          )
         )
       `)
-      .eq("lease.tenant_id", params.id)
+      .eq("reported_by", tenantId)
       .order("created_at", { ascending: false })
 
     if (error) {
-      console.error("❌ Erreur Supabase:", error)
+      console.error("Erreur récupération incidents:", error)
       return NextResponse.json(
-        {
-          success: false,
-          error: "Erreur lors de la récupération des incidents",
-        },
+        { success: false, error: "Erreur lors de la récupération des incidents" },
         { status: 500 },
       )
     }
 
-    // Récupérer les réponses pour chaque incident
-    const incidentsWithResponses = await Promise.all(
-      (incidents || []).map(async (incident) => {
-        const { data: responses } = await supabase
-          .from("incident_responses")
-          .select("*")
-          .eq("incident_id", incident.id)
-          .order("created_at", { ascending: true })
-
-        return {
-          ...incident,
-          property: incident.lease.property,
-          responses: responses || [],
-        }
-      }),
-    )
-
-    console.log("✅ Incidents récupérés avec succès:", incidentsWithResponses.length)
+    // Trier les réponses par date
+    const incidentsWithSortedResponses =
+      incidents?.map((incident) => ({
+        ...incident,
+        responses:
+          incident.responses?.sort(
+            (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+          ) || [],
+      })) || []
 
     return NextResponse.json({
       success: true,
-      incidents: incidentsWithResponses,
+      incidents: incidentsWithSortedResponses,
     })
   } catch (error) {
-    console.error("❌ Erreur serveur:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Erreur interne du serveur",
-      },
-      { status: 500 },
-    )
+    console.error("Erreur API incidents tenant:", error)
+    return NextResponse.json({ success: false, error: "Erreur serveur" }, { status: 500 })
   }
 }

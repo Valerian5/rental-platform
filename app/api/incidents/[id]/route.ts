@@ -5,61 +5,105 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    console.log("🔍 API incidents/[id] - Récupération incident:", params.id)
+    const incidentId = params.id
 
-    // Récupérer l'incident avec les informations du bail, propriété et propriétaire
+    // Récupérer l'incident avec toutes les informations liées
     const { data: incident, error } = await supabase
       .from("incidents")
       .select(`
         *,
-        lease:leases!inner(
+        property:properties(
           id,
-          property:properties(id, title, address, city),
-          owner:users!owner_id(id, first_name, last_name, email, phone)
+          title,
+          address,
+          city,
+          postal_code,
+          type,
+          surface
+        ),
+        lease:leases(
+          id,
+          tenant:users!leases_tenant_id_fkey(
+            id,
+            first_name,
+            last_name,
+            email,
+            phone
+          ),
+          owner:users!leases_owner_id_fkey(
+            id,
+            first_name,
+            last_name,
+            email,
+            phone
+          )
+        ),
+        responses:incident_responses(
+          id,
+          message,
+          user_type,
+          attachments,
+          created_at,
+          user:users(
+            id,
+            first_name,
+            last_name
+          )
         )
       `)
-      .eq("id", params.id)
+      .eq("id", incidentId)
       .single()
 
     if (error) {
-      console.error("❌ Erreur Supabase:", error)
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Incident non trouvé",
-        },
-        { status: 404 },
-      )
+      console.error("Erreur récupération incident:", error)
+      return NextResponse.json({ success: false, error: "Incident non trouvé" }, { status: 404 })
     }
 
-    // Récupérer les réponses
-    const { data: responses } = await supabase
-      .from("incident_responses")
-      .select("*")
-      .eq("incident_id", params.id)
-      .order("created_at", { ascending: true })
-
-    const incidentWithDetails = {
+    // Trier les réponses par date
+    const incidentWithSortedResponses = {
       ...incident,
-      property: incident.lease.property,
-      owner: incident.lease.owner,
-      responses: responses || [],
+      responses:
+        incident.responses?.sort(
+          (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+        ) || [],
     }
-
-    console.log("✅ Incident récupéré avec succès")
 
     return NextResponse.json({
       success: true,
-      incident: incidentWithDetails,
+      incident: incidentWithSortedResponses,
     })
   } catch (error) {
-    console.error("❌ Erreur serveur:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Erreur interne du serveur",
-      },
-      { status: 500 },
-    )
+    console.error("Erreur API incident:", error)
+    return NextResponse.json({ success: false, error: "Erreur serveur" }, { status: 500 })
+  }
+}
+
+export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const incidentId = params.id
+    const body = await request.json()
+    const { status, resolution_notes, cost } = body
+
+    const updateData: any = {}
+
+    if (status) updateData.status = status
+    if (resolution_notes) updateData.resolution_notes = resolution_notes
+    if (cost !== undefined) updateData.cost = cost
+    if (status === "resolved") updateData.resolved_date = new Date().toISOString()
+
+    const { data, error } = await supabase.from("incidents").update(updateData).eq("id", incidentId).select().single()
+
+    if (error) {
+      console.error("Erreur mise à jour incident:", error)
+      return NextResponse.json({ success: false, error: "Erreur lors de la mise à jour" }, { status: 500 })
+    }
+
+    return NextResponse.json({
+      success: true,
+      incident: data,
+    })
+  } catch (error) {
+    console.error("Erreur API mise à jour incident:", error)
+    return NextResponse.json({ success: false, error: "Erreur serveur" }, { status: 500 })
   }
 }

@@ -16,12 +16,14 @@ export default function TenantIncidentsPage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [incidents, setIncidents] = useState<any[]>([])
   const [filteredIncidents, setFilteredIncidents] = useState<any[]>([])
+  const [properties, setProperties] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   const [filters, setFilters] = useState({
     status: "all",
     priority: "all",
     category: "all",
+    property: "all",
     search: "",
   })
 
@@ -55,6 +57,15 @@ export default function TenantIncidentsPage() {
 
       if (data.success) {
         setIncidents(data.incidents)
+
+        // Extraire les propriétés uniques pour le filtre
+        const uniqueProperties = data.incidents
+          .map((incident: any) => incident.property)
+          .filter(
+            (property: any, index: number, self: any[]) =>
+              property && self.findIndex((p) => p?.id === property?.id) === index,
+          )
+        setProperties(uniqueProperties)
       } else {
         toast.error("Erreur lors du chargement des incidents")
       }
@@ -79,11 +90,16 @@ export default function TenantIncidentsPage() {
       filtered = filtered.filter((incident) => incident.category === filters.category)
     }
 
+    if (filters.property !== "all") {
+      filtered = filtered.filter((incident) => incident.property?.id === filters.property)
+    }
+
     if (filters.search) {
       filtered = filtered.filter(
         (incident) =>
           incident.title.toLowerCase().includes(filters.search.toLowerCase()) ||
-          incident.description.toLowerCase().includes(filters.search.toLowerCase()),
+          incident.description.toLowerCase().includes(filters.search.toLowerCase()) ||
+          incident.property?.title?.toLowerCase().includes(filters.search.toLowerCase()),
       )
     }
 
@@ -108,9 +124,6 @@ export default function TenantIncidentsPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "resolved":
-        return <Badge className="bg-green-600">Résolu</Badge>
-      case '\
-      case "resolved':
         return <Badge className="bg-green-600">Résolu</Badge>
       case "in_progress":
         return <Badge className="bg-orange-600">En cours</Badge>
@@ -236,7 +249,7 @@ export default function TenantIncidentsPage() {
           <CardTitle>Filtres</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
             <Input
               placeholder="Rechercher..."
               value={filters.search}
@@ -279,9 +292,24 @@ export default function TenantIncidentsPage() {
                 <SelectItem value="other">Autre</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={filters.property} onValueChange={(value) => setFilters({ ...filters, property: value })}>
+              <SelectTrigger>
+                <SelectValue placeholder="Bien" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les biens</SelectItem>
+                {properties.map((property) => (
+                  <SelectItem key={property.id} value={property.id}>
+                    {property.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               variant="outline"
-              onClick={() => setFilters({ status: "all", priority: "all", category: "all", search: "" })}
+              onClick={() =>
+                setFilters({ status: "all", priority: "all", category: "all", property: "all", search: "" })
+              }
             >
               Réinitialiser
             </Button>
@@ -323,8 +351,11 @@ export default function TenantIncidentsPage() {
                       <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
                         <div className="flex items-center gap-1">
                           <Building className="h-4 w-4" />
-                          {incident.property?.title}
+                          <span className="font-medium">{incident.property?.title || "Bien non spécifié"}</span>
                         </div>
+                        {incident.property?.address && (
+                          <span className="text-gray-500">{incident.property.address}</span>
+                        )}
                         <span>{new Date(incident.created_at).toLocaleDateString("fr-FR")}</span>
                       </div>
 
@@ -335,9 +366,15 @@ export default function TenantIncidentsPage() {
                           {incident.photos.slice(0, 3).map((photo: string, index: number) => (
                             <img
                               key={index}
-                              src={photo || "/placeholder.svg"}
+                              src={photo.startsWith("http") ? photo : `/api/documents/${photo}`}
                               alt={`Photo ${index + 1}`}
-                              className="w-16 h-16 object-cover rounded border"
+                              className="w-16 h-16 object-cover rounded border cursor-pointer hover:opacity-80"
+                              onClick={() =>
+                                window.open(photo.startsWith("http") ? photo : `/api/documents/${photo}`, "_blank")
+                              }
+                              onError={(e) => {
+                                e.currentTarget.src = "/placeholder.svg?height=64&width=64&text=Image"
+                              }}
                             />
                           ))}
                           {incident.photos.length > 3 && (

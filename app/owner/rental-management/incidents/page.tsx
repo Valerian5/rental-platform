@@ -1,12 +1,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
@@ -16,10 +14,24 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { AlertTriangle, Plus, Search, Clock, CheckCircle, AlertCircle, Eye } from "lucide-react"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  AlertTriangle,
+  Plus,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  Eye,
+  MessageSquare,
+  Calendar,
+  User,
+  Building,
+} from "lucide-react"
 import { authService } from "@/lib/auth-service"
 import { rentalManagementService } from "@/lib/rental-management-service"
 import { toast } from "sonner"
+import { PageHeader } from "@/components/page-header"
+import Link from "next/link"
 
 export default function IncidentsPage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
@@ -28,6 +40,10 @@ export default function IncidentsPage() {
   const [filteredIncidents, setFilteredIncidents] = useState<any[]>([])
   const [selectedIncident, setSelectedIncident] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [showNewIncidentDialog, setShowNewIncidentDialog] = useState(false)
+  const [showResponseDialog, setShowResponseDialog] = useState(false)
+  const [showInterventionDialog, setShowInterventionDialog] = useState(false)
+
   const [filters, setFilters] = useState({
     status: "all",
     priority: "all",
@@ -40,17 +56,27 @@ export default function IncidentsPage() {
   const [newIncident, setNewIncident] = useState({
     title: "",
     description: "",
-    category: "",
+    category: "other",
     priority: "medium",
     property_id: "",
     lease_id: "",
   })
 
-  // Formulaire résolution
-  const [resolution, setResolution] = useState({
+  // Formulaire réponse
+  const [response, setResponse] = useState({
+    message: "",
     status: "",
-    notes: "",
     cost: "",
+  })
+
+  // Formulaire intervention
+  const [intervention, setIntervention] = useState({
+    type: "owner", // owner ou professional
+    scheduled_date: "",
+    description: "",
+    provider_name: "",
+    provider_contact: "",
+    estimated_cost: "",
   })
 
   useEffect(() => {
@@ -67,11 +93,19 @@ export default function IncidentsPage() {
         const allIncidents = []
         for (const lease of leasesData) {
           const propertyIncidents = await rentalManagementService.getPropertyIncidents(lease.property.id)
-          allIncidents.push(...propertyIncidents)
+          allIncidents.push(
+            ...propertyIncidents.map((incident) => ({
+              ...incident,
+              property: lease.property,
+              tenant: lease.tenant,
+              lease_id: lease.id,
+            })),
+          )
         }
         setIncidents(allIncidents)
       } catch (error) {
         console.error("Erreur initialisation:", error)
+        toast.error("Erreur lors du chargement des données")
       } finally {
         setIsLoading(false)
       }
@@ -137,51 +171,110 @@ export default function IncidentsPage() {
       setNewIncident({
         title: "",
         description: "",
-        category: "",
+        category: "other",
         priority: "medium",
         property_id: "",
         lease_id: "",
       })
+      setShowNewIncidentDialog(false)
 
       // Recharger les incidents
-      const allIncidents = []
-      for (const lease of leases) {
-        const propertyIncidents = await rentalManagementService.getPropertyIncidents(lease.property.id)
-        allIncidents.push(...propertyIncidents)
-      }
-      setIncidents(allIncidents)
+      window.location.reload()
     } catch (error) {
       toast.error("Erreur lors du signalement")
     }
   }
 
-  const handleUpdateIncidentStatus = async (incidentId: string) => {
-    if (!resolution.status) {
-      toast.error("Veuillez sélectionner un statut")
+  const handleSendResponse = async () => {
+    if (!response.message) {
+      toast.error("Veuillez saisir un message")
       return
     }
 
     try {
-      await rentalManagementService.updateIncidentStatus(
-        incidentId,
-        resolution.status,
-        resolution.notes,
-        resolution.cost ? Number(resolution.cost) : undefined,
-      )
+      // Envoyer la réponse
+      const responseData = {
+        incident_id: selectedIncident.id,
+        user_id: currentUser.id,
+        message: response.message,
+        user_type: "owner",
+      }
 
-      toast.success("Incident mis à jour avec succès")
+      const res = await fetch(`/api/incidents/${selectedIncident.id}/respond`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(responseData),
+      })
+
+      if (!res.ok) throw new Error("Erreur envoi réponse")
+
+      // Mettre à jour le statut si spécifié
+      if (response.status) {
+        await rentalManagementService.updateIncidentStatus(
+          selectedIncident.id,
+          response.status,
+          response.message,
+          response.cost ? Number(response.cost) : undefined,
+        )
+      }
+
+      toast.success("Réponse envoyée avec succès")
+      setResponse({ message: "", status: "", cost: "" })
+      setShowResponseDialog(false)
       setSelectedIncident(null)
-      setResolution({ status: "", notes: "", cost: "" })
 
       // Recharger les incidents
-      const allIncidents = []
-      for (const lease of leases) {
-        const propertyIncidents = await rentalManagementService.getPropertyIncidents(lease.property.id)
-        allIncidents.push(...propertyIncidents)
-      }
-      setIncidents(allIncidents)
+      window.location.reload()
     } catch (error) {
-      toast.error("Erreur lors de la mise à jour")
+      toast.error("Erreur lors de l'envoi de la réponse")
+    }
+  }
+
+  const handleScheduleIntervention = async () => {
+    if (!intervention.scheduled_date || !intervention.description) {
+      toast.error("Veuillez remplir les champs obligatoires")
+      return
+    }
+
+    try {
+      const workData = {
+        property_id: selectedIncident.property_id,
+        lease_id: selectedIncident.lease_id,
+        title: `Intervention - ${selectedIncident.title}`,
+        description: intervention.description,
+        type: "corrective",
+        category: selectedIncident.category,
+        scheduled_date: intervention.scheduled_date,
+        cost: intervention.estimated_cost ? Number(intervention.estimated_cost) : 0,
+        provider_name: intervention.type === "professional" ? intervention.provider_name : null,
+        provider_contact: intervention.type === "professional" ? intervention.provider_contact : null,
+      }
+
+      await rentalManagementService.scheduleMaintenanceWork(workData)
+
+      // Mettre à jour le statut de l'incident
+      await rentalManagementService.updateIncidentStatus(
+        selectedIncident.id,
+        "in_progress",
+        `Intervention programmée le ${new Date(intervention.scheduled_date).toLocaleDateString("fr-FR")}`,
+      )
+
+      toast.success("Intervention programmée avec succès")
+      setIntervention({
+        type: "owner",
+        scheduled_date: "",
+        description: "",
+        provider_name: "",
+        provider_contact: "",
+        estimated_cost: "",
+      })
+      setShowInterventionDialog(false)
+      setSelectedIncident(null)
+
+      // Recharger les incidents
+      window.location.reload()
+    } catch (error) {
+      toast.error("Erreur lors de la programmation")
     }
   }
 
@@ -230,6 +323,17 @@ export default function IncidentsPage() {
     }
   }
 
+  const getCategoryLabel = (category: string) => {
+    const categories = {
+      plumbing: "Plomberie",
+      electrical: "Électricité",
+      heating: "Chauffage",
+      security: "Sécurité",
+      other: "Autre",
+    }
+    return categories[category as keyof typeof categories] || category
+  }
+
   const getIncidentStats = () => {
     const reported = incidents.filter((i) => i.status === "reported").length
     const inProgress = incidents.filter((i) => i.status === "in_progress").length
@@ -254,155 +358,144 @@ export default function IncidentsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Gestion des Incidents</h1>
-          <p className="text-gray-600">Suivez et résolvez les problèmes signalés</p>
-        </div>
-        <Dialog>
+      <PageHeader title="Gestion des Incidents" description="Gérez les incidents signalés par vos locataires">
+        <Dialog open={showNewIncidentDialog} onOpenChange={setShowNewIncidentDialog}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
               Signaler un incident
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Signaler un nouvel incident</DialogTitle>
-              <DialogDescription>Créez un signalement pour un problème dans une de vos propriétés</DialogDescription>
+              <DialogTitle>Nouveau signalement</DialogTitle>
+              <DialogDescription>Signaler un incident sur une de vos propriétés</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="incident-property">Propriété *</Label>
-                  <Select
-                    value={newIncident.property_id}
-                    onValueChange={(value) => setNewIncident((prev) => ({ ...prev, property_id: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionner une propriété" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {leases.map((lease) => (
-                        <SelectItem key={lease.property.id} value={lease.property.id}>
-                          {lease.property.title} - {lease.tenant.first_name} {lease.tenant.last_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="incident-category">Catégorie *</Label>
-                  <Select
-                    value={newIncident.category}
-                    onValueChange={(value) => setNewIncident((prev) => ({ ...prev, category: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionner" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="plumbing">Plomberie</SelectItem>
-                      <SelectItem value="electrical">Électricité</SelectItem>
-                      <SelectItem value="heating">Chauffage</SelectItem>
-                      <SelectItem value="security">Sécurité</SelectItem>
-                      <SelectItem value="other">Autre</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
               <div>
-                <Label htmlFor="incident-title">Titre *</Label>
+                <label className="text-sm font-medium">Propriété *</label>
+                <Select
+                  value={newIncident.property_id}
+                  onValueChange={(value) => setNewIncident({ ...newIncident, property_id: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner une propriété" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {leases.map((lease) => (
+                      <SelectItem key={lease.property.id} value={lease.property.id}>
+                        {lease.property.title} - {lease.property.address}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Titre *</label>
                 <Input
-                  id="incident-title"
                   value={newIncident.title}
-                  onChange={(e) => setNewIncident((prev) => ({ ...prev, title: e.target.value }))}
-                  placeholder="Ex: Fuite d'eau salle de bain"
+                  onChange={(e) => setNewIncident({ ...newIncident, title: e.target.value })}
+                  placeholder="Titre de l'incident"
                 />
               </div>
-
               <div>
-                <Label htmlFor="incident-description">Description *</Label>
-                <Textarea
-                  id="incident-description"
-                  value={newIncident.description}
-                  onChange={(e) => setNewIncident((prev) => ({ ...prev, description: e.target.value }))}
-                  placeholder="Décrivez le problème en détail..."
-                  rows={3}
-                />
+                <label className="text-sm font-medium">Catégorie *</label>
+                <Select
+                  value={newIncident.category}
+                  onValueChange={(value) => setNewIncident({ ...newIncident, category: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="plumbing">Plomberie</SelectItem>
+                    <SelectItem value="electrical">Électricité</SelectItem>
+                    <SelectItem value="heating">Chauffage</SelectItem>
+                    <SelectItem value="security">Sécurité</SelectItem>
+                    <SelectItem value="other">Autre</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-
               <div>
-                <Label htmlFor="incident-priority">Priorité</Label>
+                <label className="text-sm font-medium">Priorité</label>
                 <Select
                   value={newIncident.priority}
-                  onValueChange={(value) => setNewIncident((prev) => ({ ...prev, priority: value }))}
+                  onValueChange={(value) => setNewIncident({ ...newIncident, priority: value })}
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="low">Faible</SelectItem>
-                    <SelectItem value="medium">Moyenne</SelectItem>
-                    <SelectItem value="high">Élevée</SelectItem>
-                    <SelectItem value="urgent">Urgente</SelectItem>
+                    <SelectItem value="medium">Moyen</SelectItem>
+                    <SelectItem value="high">Élevé</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-
-              <div className="flex justify-end space-x-2">
-                <Button variant="outline">Annuler</Button>
-                <Button onClick={handleCreateIncident}>Signaler l'incident</Button>
+              <div>
+                <label className="text-sm font-medium">Description *</label>
+                <Textarea
+                  value={newIncident.description}
+                  onChange={(e) => setNewIncident({ ...newIncident, description: e.target.value })}
+                  placeholder="Description détaillée de l'incident"
+                  rows={3}
+                />
+              </div>
+              <div className="flex gap-2 pt-4">
+                <Button onClick={handleCreateIncident} className="flex-1">
+                  Signaler
+                </Button>
+                <Button variant="outline" onClick={() => setShowNewIncidentDialog(false)}>
+                  Annuler
+                </Button>
               </div>
             </div>
           </DialogContent>
         </Dialog>
-      </div>
+      </PageHeader>
 
       {/* Statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Signalés</p>
-                <p className="text-3xl font-bold text-orange-600">{stats.reported}</p>
+                <p className="text-sm text-gray-600">Signalés</p>
+                <p className="text-2xl font-bold text-orange-600">{stats.reported}</p>
               </div>
               <AlertTriangle className="h-8 w-8 text-orange-600" />
             </div>
           </CardContent>
         </Card>
-
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">En cours</p>
-                <p className="text-3xl font-bold text-blue-600">{stats.inProgress}</p>
+                <p className="text-sm text-gray-600">En cours</p>
+                <p className="text-2xl font-bold text-blue-600">{stats.inProgress}</p>
               </div>
               <Clock className="h-8 w-8 text-blue-600" />
             </div>
           </CardContent>
         </Card>
-
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Résolus</p>
-                <p className="text-3xl font-bold text-green-600">{stats.resolved}</p>
+                <p className="text-sm text-gray-600">Résolus</p>
+                <p className="text-2xl font-bold text-green-600">{stats.resolved}</p>
               </div>
               <CheckCircle className="h-8 w-8 text-green-600" />
             </div>
           </CardContent>
         </Card>
-
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Urgents</p>
-                <p className="text-3xl font-bold text-red-600">{stats.urgent}</p>
+                <p className="text-sm text-gray-600">Urgents</p>
+                <p className="text-2xl font-bold text-red-600">{stats.urgent}</p>
               </div>
               <AlertCircle className="h-8 w-8 text-red-600" />
             </div>
@@ -412,79 +505,74 @@ export default function IncidentsPage() {
 
       {/* Filtres */}
       <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-wrap gap-4 items-end">
-            <div className="flex-1 min-w-[200px]">
-              <Label htmlFor="search">Rechercher</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  id="search"
-                  placeholder="Rechercher dans les incidents..."
-                  value={filters.search}
-                  onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="status">Statut</Label>
-              <Select
-                value={filters.status}
-                onValueChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}
-              >
-                <SelectTrigger className="w-[150px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous</SelectItem>
-                  <SelectItem value="reported">Signalé</SelectItem>
-                  <SelectItem value="in_progress">En cours</SelectItem>
-                  <SelectItem value="resolved">Résolu</SelectItem>
-                  <SelectItem value="closed">Fermé</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="priority">Priorité</Label>
-              <Select
-                value={filters.priority}
-                onValueChange={(value) => setFilters((prev) => ({ ...prev, priority: value }))}
-              >
-                <SelectTrigger className="w-[150px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Toutes</SelectItem>
-                  <SelectItem value="urgent">Urgent</SelectItem>
-                  <SelectItem value="high">Élevé</SelectItem>
-                  <SelectItem value="medium">Moyen</SelectItem>
-                  <SelectItem value="low">Faible</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="category">Catégorie</Label>
-              <Select
-                value={filters.category}
-                onValueChange={(value) => setFilters((prev) => ({ ...prev, category: value }))}
-              >
-                <SelectTrigger className="w-[150px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Toutes</SelectItem>
-                  <SelectItem value="plumbing">Plomberie</SelectItem>
-                  <SelectItem value="electrical">Électricité</SelectItem>
-                  <SelectItem value="heating">Chauffage</SelectItem>
-                  <SelectItem value="security">Sécurité</SelectItem>
-                  <SelectItem value="other">Autre</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+        <CardHeader>
+          <CardTitle>Filtres</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+            <Input
+              placeholder="Rechercher..."
+              value={filters.search}
+              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+            />
+            <Select value={filters.status} onValueChange={(value) => setFilters({ ...filters, status: value })}>
+              <SelectTrigger>
+                <SelectValue placeholder="Statut" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les statuts</SelectItem>
+                <SelectItem value="reported">Signalé</SelectItem>
+                <SelectItem value="in_progress">En cours</SelectItem>
+                <SelectItem value="resolved">Résolu</SelectItem>
+                <SelectItem value="closed">Fermé</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filters.priority} onValueChange={(value) => setFilters({ ...filters, priority: value })}>
+              <SelectTrigger>
+                <SelectValue placeholder="Priorité" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes priorités</SelectItem>
+                <SelectItem value="urgent">Urgent</SelectItem>
+                <SelectItem value="high">Élevé</SelectItem>
+                <SelectItem value="medium">Moyen</SelectItem>
+                <SelectItem value="low">Faible</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filters.category} onValueChange={(value) => setFilters({ ...filters, category: value })}>
+              <SelectTrigger>
+                <SelectValue placeholder="Catégorie" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes catégories</SelectItem>
+                <SelectItem value="plumbing">Plomberie</SelectItem>
+                <SelectItem value="electrical">Électricité</SelectItem>
+                <SelectItem value="heating">Chauffage</SelectItem>
+                <SelectItem value="security">Sécurité</SelectItem>
+                <SelectItem value="other">Autre</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filters.property} onValueChange={(value) => setFilters({ ...filters, property: value })}>
+              <SelectTrigger>
+                <SelectValue placeholder="Propriété" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes propriétés</SelectItem>
+                {leases.map((lease) => (
+                  <SelectItem key={lease.property.id} value={lease.property.id}>
+                    {lease.property.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              onClick={() =>
+                setFilters({ status: "all", priority: "all", category: "all", property: "all", search: "" })
+              }
+            >
+              Réinitialiser
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -492,132 +580,263 @@ export default function IncidentsPage() {
       {/* Liste des incidents */}
       <Card>
         <CardHeader>
-          <CardTitle>Incidents signalés</CardTitle>
-          <CardDescription>Gérez tous les incidents de vos propriétés</CardDescription>
+          <CardTitle>Incidents ({filteredIncidents.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {filteredIncidents.length > 0 ? (
-              filteredIncidents.map((incident) => (
-                <div key={incident.id} className="p-4 border rounded-lg">
+          {filteredIncidents.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+              <p>Aucun incident trouvé</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredIncidents.map((incident) => (
+                <div key={incident.id} className="border rounded-lg p-4 hover:bg-gray-50">
                   <div className="flex items-start justify-between">
-                    <div className="flex items-start space-x-3">
-                      {getPriorityIcon(incident.priority)}
-                      <div className="space-y-2 flex-1">
-                        <div className="flex items-center space-x-2">
-                          <h3 className="font-medium">{incident.title}</h3>
-                          {getPriorityBadge(incident.priority)}
-                        </div>
-                        <p className="text-sm text-gray-600">{incident.description}</p>
-                        <div className="flex items-center space-x-4 text-sm text-gray-500">
-                          <span>Catégorie: {incident.category}</span>
-                          <span>Signalé le {new Date(incident.created_at).toLocaleDateString("fr-FR")}</span>
-                          {incident.cost && <span>Coût: {incident.cost}€</span>}
-                        </div>
-                        {incident.resolution_notes && (
-                          <div className="mt-2 p-3 bg-green-50 rounded-lg">
-                            <p className="text-sm text-green-800">
-                              <strong>Résolution:</strong> {incident.resolution_notes}
-                            </p>
-                          </div>
-                        )}
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        {getPriorityIcon(incident.priority)}
+                        <h3 className="font-semibold">{incident.title}</h3>
+                        {getStatusBadge(incident.status)}
+                        {getPriorityBadge(incident.priority)}
+                        <Badge variant="outline">{getCategoryLabel(incident.category)}</Badge>
                       </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      {getStatusBadge(incident.status)}
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button size="sm" variant="outline" onClick={() => setSelectedIncident(incident)}>
-                            <Eye className="h-4 w-4 mr-1" />
-                            Gérer
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-2xl">
-                          <DialogHeader>
-                            <DialogTitle>Gestion de l'incident</DialogTitle>
-                            <DialogDescription>{selectedIncident?.title}</DialogDescription>
-                          </DialogHeader>
-                          {selectedIncident && (
-                            <div className="space-y-4">
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <Label>Statut actuel</Label>
-                                  <div className="mt-1">{getStatusBadge(selectedIncident.status)}</div>
-                                </div>
-                                <div>
-                                  <Label>Priorité</Label>
-                                  <div className="mt-1">{getPriorityBadge(selectedIncident.priority)}</div>
-                                </div>
-                              </div>
 
-                              <div>
-                                <Label>Description</Label>
-                                <p className="text-sm text-gray-600 mt-1">{selectedIncident.description}</p>
-                              </div>
+                      <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
+                        <div className="flex items-center gap-1">
+                          <Building className="h-4 w-4" />
+                          {incident.property?.title}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <User className="h-4 w-4" />
+                          {incident.tenant?.first_name} {incident.tenant?.last_name}
+                        </div>
+                        <span>{new Date(incident.created_at).toLocaleDateString("fr-FR")}</span>
+                      </div>
 
-                              <div>
-                                <Label htmlFor="resolution-status">Nouveau statut</Label>
-                                <Select
-                                  value={resolution.status}
-                                  onValueChange={(value) => setResolution((prev) => ({ ...prev, status: value }))}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Changer le statut" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="in_progress">En cours</SelectItem>
-                                    <SelectItem value="resolved">Résolu</SelectItem>
-                                    <SelectItem value="closed">Fermé</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
+                      <p className="text-gray-700 mb-3">{incident.description}</p>
 
-                              <div>
-                                <Label htmlFor="resolution-notes">Notes de résolution</Label>
-                                <Textarea
-                                  id="resolution-notes"
-                                  value={resolution.notes}
-                                  onChange={(e) => setResolution((prev) => ({ ...prev, notes: e.target.value }))}
-                                  placeholder="Décrivez les actions entreprises..."
-                                  rows={3}
-                                />
-                              </div>
-
-                              <div>
-                                <Label htmlFor="resolution-cost">Coût de l'intervention (€)</Label>
-                                <Input
-                                  id="resolution-cost"
-                                  type="number"
-                                  value={resolution.cost}
-                                  onChange={(e) => setResolution((prev) => ({ ...prev, cost: e.target.value }))}
-                                  placeholder="0"
-                                />
-                              </div>
-
-                              <div className="flex justify-end space-x-2">
-                                <Button variant="outline">Annuler</Button>
-                                <Button onClick={() => handleUpdateIncidentStatus(selectedIncident.id)}>
-                                  Mettre à jour
-                                </Button>
-                              </div>
+                      {incident.photos && incident.photos.length > 0 && (
+                        <div className="flex gap-2 mb-3">
+                          {incident.photos.slice(0, 3).map((photo: string, index: number) => (
+                            <img
+                              key={index}
+                              src={photo.startsWith("http") ? photo : `/api/documents/${photo}`}
+                              alt={`Photo ${index + 1}`}
+                              className="w-16 h-16 object-cover rounded border cursor-pointer hover:opacity-80"
+                              onClick={() =>
+                                window.open(photo.startsWith("http") ? photo : `/api/documents/${photo}`, "_blank")
+                              }
+                              onError={(e) => {
+                                e.currentTarget.src = "/placeholder.svg?height=64&width=64&text=Image"
+                              }}
+                            />
+                          ))}
+                          {incident.photos.length > 3 && (
+                            <div className="w-16 h-16 bg-gray-100 rounded border flex items-center justify-center text-sm text-gray-600">
+                              +{incident.photos.length - 3}
                             </div>
                           )}
-                        </DialogContent>
-                      </Dialog>
+                        </div>
+                      )}
+
+                      {incident.resolution_notes && (
+                        <div className="bg-green-50 border border-green-200 rounded p-3 mb-3">
+                          <p className="text-sm text-green-800">
+                            <strong>Résolution :</strong> {incident.resolution_notes}
+                          </p>
+                          {incident.cost && (
+                            <p className="text-sm text-green-800 mt-1">
+                              <strong>Coût :</strong> {incident.cost}€
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2 ml-4">
+                      <Link href={`/owner/rental-management/incidents/${incident.id}`}>
+                        <Button variant="outline" size="sm">
+                          <Eye className="h-4 w-4 mr-1" />
+                          Voir
+                        </Button>
+                      </Link>
+
+                      {incident.status !== "resolved" && incident.status !== "closed" && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedIncident(incident)
+                              setShowResponseDialog(true)
+                            }}
+                          >
+                            <MessageSquare className="h-4 w-4 mr-1" />
+                            Répondre
+                          </Button>
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedIncident(incident)
+                              setShowInterventionDialog(true)
+                            }}
+                          >
+                            <Calendar className="h-4 w-4 mr-1" />
+                            Programmer
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
-              ))
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                <p>Aucun incident trouvé</p>
-                <p className="text-sm">Les incidents signalés apparaîtront ici</p>
-              </div>
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* Dialog Réponse */}
+      <Dialog open={showResponseDialog} onOpenChange={setShowResponseDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Répondre à l'incident</DialogTitle>
+            <DialogDescription>{selectedIncident?.title}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Message *</label>
+              <Textarea
+                value={response.message}
+                onChange={(e) => setResponse({ ...response, message: e.target.value })}
+                placeholder="Votre réponse au locataire..."
+                rows={4}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Changer le statut</label>
+              <Select value={response.status} onValueChange={(value) => setResponse({ ...response, status: value })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Garder le statut actuel" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="in_progress">En cours</SelectItem>
+                  <SelectItem value="resolved">Résolu</SelectItem>
+                  <SelectItem value="closed">Fermé</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {response.status === "resolved" && (
+              <div>
+                <label className="text-sm font-medium">Coût (€)</label>
+                <Input
+                  type="number"
+                  value={response.cost}
+                  onChange={(e) => setResponse({ ...response, cost: e.target.value })}
+                  placeholder="Coût de la réparation"
+                />
+              </div>
+            )}
+            <div className="flex gap-2 pt-4">
+              <Button onClick={handleSendResponse} className="flex-1">
+                Envoyer
+              </Button>
+              <Button variant="outline" onClick={() => setShowResponseDialog(false)}>
+                Annuler
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Intervention */}
+      <Dialog open={showInterventionDialog} onOpenChange={setShowInterventionDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Programmer une intervention</DialogTitle>
+            <DialogDescription>{selectedIncident?.title}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Type d'intervention *</label>
+              <Select
+                value={intervention.type}
+                onValueChange={(value) => setIntervention({ ...intervention, type: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="owner">Par moi-même</SelectItem>
+                  <SelectItem value="professional">Par un professionnel</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {intervention.type === "professional" && (
+              <>
+                <div>
+                  <label className="text-sm font-medium">Nom du prestataire</label>
+                  <Input
+                    value={intervention.provider_name}
+                    onChange={(e) => setIntervention({ ...intervention, provider_name: e.target.value })}
+                    placeholder="Nom de l'entreprise/artisan"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Contact</label>
+                  <Input
+                    value={intervention.provider_contact}
+                    onChange={(e) => setIntervention({ ...intervention, provider_contact: e.target.value })}
+                    placeholder="Téléphone ou email"
+                  />
+                </div>
+              </>
+            )}
+
+            <div>
+              <label className="text-sm font-medium">Date prévue *</label>
+              <Input
+                type="datetime-local"
+                value={intervention.scheduled_date}
+                onChange={(e) => setIntervention({ ...intervention, scheduled_date: e.target.value })}
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">Description *</label>
+              <Textarea
+                value={intervention.description}
+                onChange={(e) => setIntervention({ ...intervention, description: e.target.value })}
+                placeholder="Description de l'intervention prévue"
+                rows={3}
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">Coût estimé (€)</label>
+              <Input
+                type="number"
+                value={intervention.estimated_cost}
+                onChange={(e) => setIntervention({ ...intervention, estimated_cost: e.target.value })}
+                placeholder="Coût estimé"
+              />
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <Button onClick={handleScheduleIntervention} className="flex-1">
+                <Calendar className="h-4 w-4 mr-2" />
+                Programmer
+              </Button>
+              <Button variant="outline" onClick={() => setShowInterventionDialog(false)}>
+                Annuler
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

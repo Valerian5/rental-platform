@@ -343,10 +343,15 @@ export default function IncidentDetailPage() {
                   {incident.photos.map((photo: string, index: number) => (
                     <div key={index} className="aspect-square">
                       <img
-                        src={photo || "/placeholder.svg"}
+                        src={photo.startsWith("http") ? photo : `/api/documents/${photo}`}
                         alt={`Photo ${index + 1}`}
                         className="w-full h-full object-cover rounded-lg border cursor-pointer hover:opacity-80"
-                        onClick={() => window.open(photo, "_blank")}
+                        onClick={() =>
+                          window.open(photo.startsWith("http") ? photo : `/api/documents/${photo}`, "_blank")
+                        }
+                        onError={(e) => {
+                          e.currentTarget.src = "/placeholder.svg?height=200&width=200&text=Image+non+disponible"
+                        }}
                       />
                     </div>
                   ))}
