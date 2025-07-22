@@ -249,6 +249,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
 			  <span className="text-xl font-bold">{siteSettings.title}</span>
 			</Link>
         </div>
+		</div>
         <nav className="flex-1 space-y-1 px-4 py-4 overflow-y-auto">
           {navigation.map((item) => renderNavigationItem(item))}
         </nav>
