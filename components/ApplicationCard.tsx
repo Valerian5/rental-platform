@@ -63,81 +63,74 @@ export default function ApplicationCard({ application }: ApplicationCardProps) {
   return (
     <Card className="hover:shadow-lg transition-shadow">
       <CardHeader className="pb-3">
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
-          <CardTitle className="text-base sm:text-lg font-semibold truncate">
-            Candidature #{application.id.slice(0, 8)}
-          </CardTitle>
-          <Badge className={`${getStatusColor(application.status)} text-xs whitespace-nowrap`}>
-            {getStatusText(application.status)}
-          </Badge>
+        <div className="flex justify-between items-start">
+          <CardTitle className="text-lg font-semibold">Candidature #{application.id.slice(0, 8)}</CardTitle>
+          <Badge className={getStatusColor(application.status)}>{getStatusText(application.status)}</Badge>
         </div>
       </CardHeader>
 
       <CardContent className="space-y-3">
         {application.property && (
           <div className="p-3 bg-gray-50 rounded-md">
-            <h4 className="font-medium text-sm truncate">{application.property.title}</h4>
-            <p className="text-xs text-gray-600 truncate">{application.property.address}</p>
+            <h4 className="font-medium text-sm">{application.property.title}</h4>
+            <p className="text-xs text-gray-600">{application.property.address}</p>
           </div>
         )}
 
         <div className="space-y-2">
           {application.tenant && (
             <>
-              <div className="flex items-center text-sm min-w-0">
-                <User className="h-4 w-4 mr-2 text-gray-500 flex-shrink-0" />
-                <span className="font-medium truncate">{application.tenant.name}</span>
+              <div className="flex items-center text-sm">
+                <User className="h-4 w-4 mr-2 text-gray-500" />
+                <span className="font-medium">{application.tenant.name}</span>
               </div>
 
-              <div className="flex items-center text-sm text-gray-600 min-w-0">
-                <Mail className="h-4 w-4 mr-2 flex-shrink-0" />
-                <span className="truncate">{application.tenant.email}</span>
+              <div className="flex items-center text-sm text-gray-600">
+                <Mail className="h-4 w-4 mr-2" />
+                <span>{application.tenant.email}</span>
               </div>
 
               {application.tenant.phone && (
-                <div className="flex items-center text-sm text-gray-600 min-w-0">
-                  <Phone className="h-4 w-4 mr-2 flex-shrink-0" />
-                  <span className="truncate">{application.tenant.phone}</span>
+                <div className="flex items-center text-sm text-gray-600">
+                  <Phone className="h-4 w-4 mr-2" />
+                  <span>{application.tenant.phone}</span>
                 </div>
               )}
             </>
           )}
 
           <div className="flex items-center text-sm text-gray-600">
-            <Euro className="h-4 w-4 mr-2 flex-shrink-0" />
-            <span className="truncate">Revenus: {application.income?.toLocaleString()} €/mois</span>
+            <Euro className="h-4 w-4 mr-2" />
+            <span>Revenus: {application.income?.toLocaleString()} €/mois</span>
           </div>
 
           {application.profession && (
-            <div className="flex items-center text-sm text-gray-600 min-w-0">
-              <FileText className="h-4 w-4 mr-2 flex-shrink-0" />
-              <span className="truncate">{application.profession}</span>
+            <div className="flex items-center text-sm text-gray-600">
+              <FileText className="h-4 w-4 mr-2" />
+              <span>{application.profession}</span>
             </div>
           )}
 
-          <div className="flex flex-wrap items-center gap-2">
-            {application.has_guarantor && (
-              <Badge variant="outline" className="text-xs">
-                Avec garant
-              </Badge>
-            )}
-            <div className="flex items-center text-xs text-gray-500">
-              <Calendar className="h-3 w-3 mr-1 flex-shrink-0" />
-              <span className="whitespace-nowrap">
-                Reçue le {new Date(application.created_at).toLocaleDateString()}
-              </span>
-            </div>
+          {application.has_guarantor && (
+            <Badge variant="outline" className="text-xs">
+              Avec garant
+            </Badge>
+          )}
+
+          <div className="flex items-center text-xs text-gray-500">
+            <Calendar className="h-3 w-3 mr-1" />
+            <span>Reçue le {new Date(application.created_at).toLocaleDateString()}</span>
           </div>
         </div>
 
         {application.message && (
           <div className="p-2 bg-gray-50 rounded text-sm">
-            <p className="line-clamp-2 break-words">{application.message}</p>
+            <p className="line-clamp-2">{application.message}</p>
           </div>
         )}
 
-        <div className="flex flex-col sm:flex-row gap-2 pt-2">
-          <Button asChild size="sm" className="w-full sm:w-auto">
+        <div className="flex gap-2 pt-2">
+          <Button asChild size="sm" className="flex-1">
             <Link href={`/owner/applications/${application.id}`}>Examiner</Link>
           </Button>
         </div>
