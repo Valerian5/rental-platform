@@ -3,276 +3,115 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
-import { toast } from "sonner"
-import { authService } from "@/lib/auth-service"
-import {
-  Building2,
-  Users,
-  Calendar,
-  Euro,
-  TrendingUp,
-  AlertCircle,
-  Plus,
-  Eye,
-  MessageSquare,
-  Clock,
-} from "lucide-react"
 import { PageHeader } from "@/components/page-header"
-
-interface DashboardStats {
-  totalProperties: number
-  activeProperties: number
-  pendingApplications: number
-  scheduledVisits: number
-  monthlyRevenue: number
-  occupancyRate: number
-  pendingPayments: number
-  unreadMessages: number
-}
-
-interface RecentActivity {
-  id: string
-  type: "application" | "visit" | "payment" | "message"
-  title: string
-  description: string
-  time: string
-  status?: string
-}
+import { Building2, Users, Calendar, MessageSquare, Plus, Eye, Clock } from "lucide-react"
+import { authService } from "@/lib/auth-service"
+import { toast } from "sonner"
 
 export default function OwnerDashboard() {
   const router = useRouter()
-  const [loading, setLoading] = useState(true)
-  const [user, setUser] = useState<any>(null)
-  const [stats, setStats] = useState<DashboardStats>({
-    totalProperties: 0,
-    activeProperties: 0,
-    pendingApplications: 0,
-    scheduledVisits: 0,
-    monthlyRevenue: 0,
-    occupancyRate: 0,
-    pendingPayments: 0,
-    unreadMessages: 0,
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [stats, setStats] = useState({
+    properties: { total: 0, active: 0 },
+    applications: { total: 0, pending: 0 },
+    visits: { total: 0, upcoming: 0 },
+    messages: { total: 0, unread: 0 },
   })
-  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([])
-  const [recentProperties, setRecentProperties] = useState([])
+  const [recentApplications, setRecentApplications] = useState([])
+  const [upcomingVisits, setUpcomingVisits] = useState([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    checkAuthAndLoadData()
-  }, [])
+    const fetchData = async () => {
+      try {
+        const user = await authService.getCurrentUser()
+        if (!user || user.user_type !== "owner") {
+          router.push("/login")
+          return
+        }
 
-  const checkAuthAndLoadData = async () => {
-    try {
-      console.log("🔍 Dashboard Owner - Vérification auth...")
-      setLoading(true)
+        setCurrentUser(user)
 
-      const currentUser = await authService.getCurrentUser()
-      console.log("👤 Dashboard Owner - Utilisateur:", currentUser)
+        // Récupérer les statistiques
+        const [propertiesRes, applicationsRes, visitsRes, messagesRes] = await Promise.all([
+          fetch(`/api/properties?owner_id=${user.id}`),
+          fetch(`/api/applications?owner_id=${user.id}&limit=5`),
+          fetch(`/api/visits?owner_id=${user.id}&limit=5`),
+          fetch(`/api/messages?user_id=${user.id}&limit=5`),
+        ])
 
-      if (!currentUser) {
-        console.log("❌ Dashboard Owner - Pas d'utilisateur, redirection login")
-        toast.error("Vous devez être connecté pour accéder à cette page")
-        router.push("/login")
-        return
+        if (propertiesRes.ok) {
+          const propertiesData = await propertiesRes.json()
+          setStats((prev) => ({
+            ...prev,
+            properties: {
+              total: propertiesData.properties?.length || 0,
+              active: propertiesData.properties?.filter((p: any) => p.status === "active").length || 0,
+            },
+          }))
+        }
+
+        if (applicationsRes.ok) {
+          const applicationsData = await applicationsRes.json()
+          setRecentApplications(applicationsData.applications || [])
+          setStats((prev) => ({
+            ...prev,
+            applications: {
+              total: applicationsData.total || 0,
+              pending: applicationsData.applications?.filter((a: any) => a.status === "pending").length || 0,
+            },
+          }))
+        }
+
+        if (visitsRes.ok) {
+          const visitsData = await visitsRes.json()
+          setUpcomingVisits(visitsData.visits || [])
+          setStats((prev) => ({
+            ...prev,
+            visits: {
+              total: visitsData.total || 0,
+              upcoming: visitsData.visits?.filter((v: any) => new Date(v.visit_date) > new Date()).length || 0,
+            },
+          }))
+        }
+
+        if (messagesRes.ok) {
+          const messagesData = await messagesRes.json()
+          setStats((prev) => ({
+            ...prev,
+            messages: {
+              total: messagesData.total || 0,
+              unread: messagesData.unread || 0,
+            },
+          }))
+        }
+      } catch (error) {
+        console.error("Erreur chargement dashboard:", error)
+        toast.error("Erreur lors du chargement du tableau de bord")
+      } finally {
+        setLoading(false)
       }
-
-      if (currentUser.user_type !== "owner") {
-        console.log("❌ Dashboard Owner - Pas propriétaire, type:", currentUser.user_type)
-        toast.error("Accès réservé aux propriétaires")
-        router.push("/")
-        return
-      }
-
-      console.log("✅ Dashboard Owner - Utilisateur propriétaire authentifié")
-      setUser(currentUser)
-      await loadDashboardData(currentUser.id)
-    } catch (error) {
-      console.error("❌ Dashboard Owner - Erreur auth:", error)
-      toast.error("Erreur d'authentification")
-      router.push("/login")
-    } finally {
-      setLoading(false)
     }
-  }
 
-  const loadDashboardData = async (userId: string) => {
-    try {
-      console.log("📊 Dashboard - Chargement données pour:", userId)
+    fetchData()
+  }, [router])
 
-      // Charger les données en parallèle
-      await Promise.all([loadProperties(userId), loadApplications(userId), loadVisits(userId), loadMessages(userId)])
-
-      console.log("✅ Dashboard - Données chargées")
-    } catch (error) {
-      console.error("❌ Dashboard - Erreur chargement:", error)
-      toast.error("Erreur lors du chargement des données")
-    }
-  }
-
-  const loadProperties = async (userId: string) => {
-    try {
-      const response = await fetch(`/api/properties?owner_id=${userId}`)
-      if (response.ok) {
-        const data = await response.json()
-        const properties = data.properties || []
-        setRecentProperties(properties.slice(0, 3))
-
-        setStats((prev) => ({
-          ...prev,
-          totalProperties: properties.length,
-          activeProperties: properties.filter((p: any) => p.status === "active").length,
-          occupancyRate:
-            properties.length > 0
-              ? (properties.filter((p: any) => p.status === "rented").length / properties.length) * 100
-              : 0,
-        }))
-      }
-    } catch (error) {
-      console.error("Erreur chargement propriétés:", error)
-    }
-  }
-
-  const loadApplications = async (userId: string) => {
-    try {
-      const response = await fetch(`/api/applications?owner_id=${userId}`)
-      if (response.ok) {
-        const data = await response.json()
-        const applications = data.applications || []
-
-        setStats((prev) => ({
-          ...prev,
-          pendingApplications: applications.filter((a: any) => a.status === "pending").length,
-        }))
-
-        // Ajouter aux activités récentes avec gestion des valeurs undefined
-        const recentApps = applications.slice(0, 2).map((app: any) => {
-          // Récupérer les informations du locataire et de la propriété de manière sécurisée
-          const tenantName = app.tenant?.first_name
-            ? `${app.tenant.first_name} ${app.tenant.last_name || ""}`
-            : "Candidat"
-
-          const propertyTitle = app.property?.title || "Propriété"
-
-          return {
-            id: app.id,
-            type: "application" as const,
-            title: "Nouvelle candidature",
-            description: `${tenantName} pour ${propertyTitle}`,
-            time: app.created_at ? new Date(app.created_at).toLocaleDateString() : "Date inconnue",
-            status: app.status || "pending",
-          }
-        })
-
-        setRecentActivity((prev) => [...prev, ...recentApps])
-      }
-    } catch (error) {
-      console.error("Erreur chargement candidatures:", error)
-    }
-  }
-
-  const loadVisits = async (userId: string) => {
-    try {
-      const response = await fetch(`/api/visits?owner_id=${userId}`)
-      if (response.ok) {
-        const data = await response.json()
-        const visits = data.visits || []
-
-        setStats((prev) => ({
-          ...prev,
-          scheduledVisits: visits.filter((v: any) => v.status === "scheduled").length,
-        }))
-
-        // Ajouter aux activités récentes avec gestion des valeurs undefined
-        const recentVisits = visits.slice(0, 2).map((visit: any) => {
-          const propertyTitle = visit.property_title || "Propriété"
-          const visitorName = visit.visitor_name || "Visiteur"
-
-          return {
-            id: visit.id,
-            type: "visit" as const,
-            title: "Visite programmée",
-            description: `${propertyTitle} - ${visitorName}`,
-            time: visit.visit_date ? new Date(visit.visit_date).toLocaleDateString() : "Date inconnue",
-            status: visit.status || "scheduled",
-          }
-        })
-
-        setRecentActivity((prev) => [...prev, ...recentVisits])
-      }
-    } catch (error) {
-      console.error("Erreur chargement visites:", error)
-    }
-  }
-
-  const loadMessages = async (userId: string) => {
-    try {
-      const response = await fetch(`/api/conversations?user_id=${userId}`)
-      if (response.ok) {
-        const data = await response.json()
-        const conversations = data.conversations || []
-
-        setStats((prev) => ({
-          ...prev,
-          unreadMessages: conversations.filter((c: any) => c.unread_count > 0).length,
-        }))
-      }
-    } catch (error) {
-      console.error("Erreur chargement messages:", error)
-    }
-  }
-
-  const getActivityIcon = (type: string) => {
-    switch (type) {
-      case "application":
-        return <Users className="h-4 w-4" />
-      case "visit":
-        return <Calendar className="h-4 w-4" />
-      case "payment":
-        return <Euro className="h-4 w-4" />
-      case "message":
-        return <MessageSquare className="h-4 w-4" />
-      default:
-        return <AlertCircle className="h-4 w-4" />
-    }
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "pending":
-        return "bg-yellow-100 text-yellow-800"
-      case "approved":
-        return "bg-green-100 text-green-800"
-      case "rejected":
-        return "bg-red-100 text-red-800"
-      case "scheduled":
-        return "bg-blue-100 text-blue-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
-  }
-
-  // Affichage de chargement
   if (loading) {
     return (
-      <div className="space-y-6 p-6">
-        <div>
-          <Skeleton className="h-8 w-64 mb-2" />
-          <Skeleton className="h-4 w-96" />
+      <div className="space-y-6">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-1/4 mb-2"></div>
+          <div className="h-4 bg-gray-200 rounded w-1/2"></div>
         </div>
-
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {[...Array(4)].map((_, i) => (
-            <Card key={i}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-4 w-4" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-8 w-16 mb-2" />
-                <Skeleton className="h-3 w-32" />
+            <Card key={i} className="animate-pulse">
+              <CardContent className="p-6">
+                <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
+                <div className="h-8 bg-gray-200 rounded w-1/4"></div>
               </CardContent>
             </Card>
           ))}
@@ -281,201 +120,170 @@ export default function OwnerDashboard() {
     )
   }
 
-  // Contenu principal du dashboard
   return (
-    <div className="space-y-6 p-6">
-      {/* Header */}
+    <div className="space-y-6">
       <PageHeader
         title="Tableau de bord"
-        description={`Bonjour ${user?.first_name || "Propriétaire"} ! Vue d'ensemble de votre activité immobilière`}
+        description={`Bonjour ${currentUser?.first_name} ! Vue d'ensemble de votre activité immobilière`}
       >
-        <Button asChild>
+        <Button asChild className="w-full sm:w-auto">
           <Link href="/owner/properties/new">
             <Plus className="h-4 w-4 mr-2" />
-            Nouvelle annonce
+            <span className="hidden sm:inline">Nouvelle annonce</span>
+            <span className="sm:hidden">Nouvelle</span>
           </Link>
         </Button>
       </PageHeader>
 
-      {/* Stats Cards */}
+      {/* Statistiques principales */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Propriétés</CardTitle>
             <Building2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalProperties}</div>
-            <p className="text-xs text-muted-foreground">{stats.activeProperties} actives</p>
+            <div className="text-2xl font-bold">{stats.properties.total}</div>
+            <p className="text-xs text-muted-foreground">
+              {stats.properties.active} active{stats.properties.active > 1 ? "s" : ""}
+            </p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Candidatures</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.pendingApplications}</div>
-            <p className="text-xs text-muted-foreground">En attente de traitement</p>
+            <div className="text-2xl font-bold">{stats.applications.total}</div>
+            <p className="text-xs text-muted-foreground">{stats.applications.pending} en attente de traitement</p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Visites</CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.scheduledVisits}</div>
-            <p className="text-xs text-muted-foreground">Programmées ce mois</p>
+            <div className="text-2xl font-bold">{stats.visits.total}</div>
+            <p className="text-xs text-muted-foreground">{stats.visits.upcoming} à venir</p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Taux d'occupation</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Messages</CardTitle>
+            <MessageSquare className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.occupancyRate.toFixed(1)}%</div>
-            <p className="text-xs text-muted-foreground">De vos propriétés</p>
+            <div className="text-2xl font-bold">{stats.messages.total}</div>
+            <p className="text-xs text-muted-foreground">
+              {stats.messages.unread} non lu{stats.messages.unread > 1 ? "s" : ""}
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Main Content Grid */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Recent Activity */}
-        <Card className="lg:col-span-2">
+      {/* Actions rapides */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <Card className="hover:shadow-md transition-shadow">
           <CardHeader>
-            <CardTitle>Activité récente</CardTitle>
-            <CardDescription>Dernières actions sur vos propriétés</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {recentActivity.length > 0 ? (
-                recentActivity.map((activity) => (
-                  <div key={activity.id} className="flex items-center space-x-4">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
-                      {getActivityIcon(activity.type)}
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      <p className="text-sm font-medium">{activity.title}</p>
-                      <p className="text-sm text-muted-foreground">{activity.description}</p>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      {activity.status && (
-                        <Badge variant="secondary" className={getStatusColor(activity.status)}>
-                          {activity.status}
-                        </Badge>
-                      )}
-                      <div className="flex items-center text-xs text-muted-foreground">
-                        <Clock className="h-3 w-3 mr-1" />
-                        {activity.time}
-                      </div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground">Aucune activité récente</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Quick Actions */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Actions rapides</CardTitle>
-            <CardDescription>Accès direct aux fonctions principales</CardDescription>
+            <CardTitle className="text-lg">Actions rapides</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Button asChild variant="outline" className="w-full justify-start">
-              <Link href="/owner/properties">
-                <Building2 className="h-4 w-4 mr-2" />
-                Gérer mes annonces
+            <Button asChild variant="outline" className="w-full justify-start bg-transparent">
+              <Link href="/owner/properties/new">
+                <Plus className="h-4 w-4 mr-2" />
+                Créer une annonce
               </Link>
             </Button>
-            <Button asChild variant="outline" className="w-full justify-start">
+            <Button asChild variant="outline" className="w-full justify-start bg-transparent">
               <Link href="/owner/applications">
                 <Users className="h-4 w-4 mr-2" />
                 Voir les candidatures
               </Link>
             </Button>
-            <Button asChild variant="outline" className="w-full justify-start">
+            <Button asChild variant="outline" className="w-full justify-start bg-transparent">
               <Link href="/owner/visits">
                 <Calendar className="h-4 w-4 mr-2" />
-                Planning des visites
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="w-full justify-start">
-              <Link href="/messaging">
-                <MessageSquare className="h-4 w-4 mr-2" />
-                Messages
-                {stats.unreadMessages > 0 && (
-                  <Badge variant="destructive" className="ml-auto">
-                    {stats.unreadMessages}
-                  </Badge>
-                )}
+                Gérer les visites
               </Link>
             </Button>
           </CardContent>
         </Card>
-      </div>
 
-      {/* Recent Properties */}
-      {recentProperties.length > 0 && (
-        <Card>
+        {/* Candidatures récentes */}
+        <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Mes dernières annonces</CardTitle>
-              <CardDescription>Propriétés récemment ajoutées</CardDescription>
-            </div>
-            <Button asChild variant="outline">
-              <Link href="/owner/properties">
-                <Eye className="h-4 w-4 mr-2" />
-                Voir tout
+            <CardTitle className="text-lg">Candidatures récentes</CardTitle>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/owner/applications">
+                <Eye className="h-4 w-4 mr-1" />
+                Tout voir
               </Link>
             </Button>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 md:grid-cols-3">
-              {recentProperties.map((property: any) => (
-                <Card key={property.id} className="overflow-hidden">
-                  <div className="aspect-video bg-muted">
-                    {property.images && property.images[0] ? (
-                      <img
-                        src={property.images[0] || "/placeholder.svg"}
-                        alt={property.title}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center">
-                        <Building2 className="h-8 w-8 text-muted-foreground" />
-                      </div>
-                    )}
-                  </div>
-                  <CardContent className="p-4">
-                    <h3 className="font-semibold truncate">{property.title || "Sans titre"}</h3>
-                    <p className="text-sm text-muted-foreground truncate">
-                      {property.address || "Adresse non spécifiée"}
-                    </p>
-                    <div className="flex items-center justify-between mt-2">
-                      <span className="font-bold text-lg">
-                        {property.price ? `${property.price}€` : "Prix non défini"}
-                      </span>
-                      <Badge variant={property.status === "active" ? "default" : "secondary"}>
-                        {property.status || "inconnu"}
-                      </Badge>
+            {recentApplications.length > 0 ? (
+              <div className="space-y-3">
+                {recentApplications.slice(0, 3).map((application: any) => (
+                  <div key={application.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{application.tenant?.name || "Candidat"}</p>
+                      <p className="text-xs text-gray-500 truncate">{application.property?.title}</p>
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                    <Badge
+                      variant={application.status === "pending" ? "secondary" : "outline"}
+                      className="ml-2 text-xs"
+                    >
+                      {application.status === "pending" ? "En attente" : application.status}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">Aucune candidature récente</p>
+            )}
           </CardContent>
         </Card>
-      )}
+
+        {/* Visites à venir */}
+        <Card className="hover:shadow-md transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-lg">Visites à venir</CardTitle>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/owner/visits">
+                <Eye className="h-4 w-4 mr-1" />
+                Tout voir
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {upcomingVisits.length > 0 ? (
+              <div className="space-y-3">
+                {upcomingVisits.slice(0, 3).map((visit: any) => (
+                  <div key={visit.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{visit.visitor_name || "Visiteur"}</p>
+                      <p className="text-xs text-gray-500 flex items-center">
+                        <Clock className="h-3 w-3 mr-1" />
+                        {new Date(visit.visit_date).toLocaleDateString()} à {visit.visit_time}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="ml-2 text-xs">
+                      {visit.status === "scheduled" ? "Programmée" : visit.status}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">Aucune visite programmée</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

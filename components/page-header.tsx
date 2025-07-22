@@ -8,12 +8,12 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, children }: PageHeaderProps) {
   return (
-    <div className="flex items-center justify-between mb-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">{title}</h1>
-        {description && <p className="text-gray-600 mt-1">{description}</p>}
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <div className="min-w-0 flex-1">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 truncate">{title}</h1>
+        {description && <p className="mt-1 text-sm sm:text-base text-gray-600 break-words">{description}</p>}
       </div>
-      {children && <div className="flex items-center space-x-2">{children}</div>}
+      {children && <div className="flex-shrink-0 w-full sm:w-auto">{children}</div>}
     </div>
   )
 }
