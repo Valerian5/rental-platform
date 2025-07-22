@@ -456,7 +456,7 @@ export default function IncidentsPage() {
       </PageHeader>
 
       {/* Statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -592,38 +592,42 @@ export default function IncidentsPage() {
             <div className="space-y-4">
               {filteredIncidents.map((incident) => (
                 <div key={incident.id} className="border rounded-lg p-4 hover:bg-gray-50">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
+                  <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
                         {getPriorityIcon(incident.priority)}
-                        <h3 className="font-semibold">{incident.title}</h3>
+                        <h3 className="font-semibold truncate">{incident.title}</h3>
                         {getStatusBadge(incident.status)}
                         {getPriorityBadge(incident.priority)}
                         <Badge variant="outline">{getCategoryLabel(incident.category)}</Badge>
                       </div>
 
-                      <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-gray-600 mb-2">
                         <div className="flex items-center gap-1">
-                          <Building className="h-4 w-4" />
-                          {incident.property?.title}
+                          <Building className="h-4 w-4 flex-shrink-0" />
+                          <span className="truncate">{incident.property?.title}</span>
                         </div>
                         <div className="flex items-center gap-1">
-                          <User className="h-4 w-4" />
-                          {incident.tenant?.first_name} {incident.tenant?.last_name}
+                          <User className="h-4 w-4 flex-shrink-0" />
+                          <span className="truncate">
+                            {incident.tenant?.first_name} {incident.tenant?.last_name}
+                          </span>
                         </div>
-                        <span>{new Date(incident.created_at).toLocaleDateString("fr-FR")}</span>
+                        <span className="flex-shrink-0">
+                          {new Date(incident.created_at).toLocaleDateString("fr-FR")}
+                        </span>
                       </div>
 
-                      <p className="text-gray-700 mb-3">{incident.description}</p>
+                      <p className="text-gray-700 mb-3 line-clamp-2">{incident.description}</p>
 
                       {incident.photos && incident.photos.length > 0 && (
-                        <div className="flex gap-2 mb-3">
+                        <div className="flex gap-2 mb-3 overflow-x-auto">
                           {incident.photos.slice(0, 3).map((photo: string, index: number) => (
                             <img
                               key={index}
                               src={photo.startsWith("http") ? photo : `/api/documents/${photo}`}
                               alt={`Photo ${index + 1}`}
-                              className="w-16 h-16 object-cover rounded border cursor-pointer hover:opacity-80"
+                              className="w-16 h-16 flex-shrink-0 object-cover rounded border cursor-pointer hover:opacity-80"
                               onClick={() =>
                                 window.open(photo.startsWith("http") ? photo : `/api/documents/${photo}`, "_blank")
                               }
@@ -633,7 +637,7 @@ export default function IncidentsPage() {
                             />
                           ))}
                           {incident.photos.length > 3 && (
-                            <div className="w-16 h-16 bg-gray-100 rounded border flex items-center justify-center text-sm text-gray-600">
+                            <div className="w-16 h-16 flex-shrink-0 bg-gray-100 rounded border flex items-center justify-center text-sm text-gray-600">
                               +{incident.photos.length - 3}
                             </div>
                           )}
@@ -654,11 +658,11 @@ export default function IncidentsPage() {
                       )}
                     </div>
 
-                    <div className="flex gap-2 ml-4">
-                      <Link href={`/owner/rental-management/incidents/${incident.id}`}>
-                        <Button variant="outline" size="sm">
+                    <div className="flex flex-row lg:flex-col gap-2 lg:ml-4">
+                      <Link href={`/owner/rental-management/incidents/${incident.id}`} className="flex-1 lg:flex-none">
+                        <Button variant="outline" size="sm" className="w-full bg-transparent">
                           <Eye className="h-4 w-4 mr-1" />
-                          Voir
+                          <span className="hidden sm:inline">Voir</span>
                         </Button>
                       </Link>
 
@@ -667,25 +671,27 @@ export default function IncidentsPage() {
                           <Button
                             variant="outline"
                             size="sm"
+                            className="flex-1 lg:flex-none bg-transparent"
                             onClick={() => {
                               setSelectedIncident(incident)
                               setShowResponseDialog(true)
                             }}
                           >
                             <MessageSquare className="h-4 w-4 mr-1" />
-                            Répondre
+                            <span className="hidden sm:inline">Répondre</span>
                           </Button>
 
                           <Button
                             variant="outline"
                             size="sm"
+                            className="flex-1 lg:flex-none bg-transparent"
                             onClick={() => {
                               setSelectedIncident(incident)
                               setShowInterventionDialog(true)
                             }}
                           >
                             <Calendar className="h-4 w-4 mr-1" />
-                            Programmer
+                            <span className="hidden sm:inline">Programmer</span>
                           </Button>
                         </>
                       )}

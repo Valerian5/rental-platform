@@ -17,17 +17,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           title,
           address,
           city,
-          postal_code
+          postal_code,
+          type,
+          surface
         ),
         lease:leases(
           id,
-          tenant:users!leases_tenant_id_fkey(
-            id,
-            first_name,
-            last_name,
-            email,
-            phone
-          ),
           owner:users!leases_owner_id_fkey(
             id,
             first_name,
@@ -35,47 +30,37 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
             email,
             phone
           )
-        ),
-        responses:incident_responses(
-          id,
-          message,
-          user_type,
-          attachments,
-          created_at,
-          user:users(
-            id,
-            first_name,
-            last_name
-          )
         )
       `)
       .eq("reported_by", tenantId)
       .order("created_at", { ascending: false })
 
     if (error) {
-      console.error("Erreur récupération incidents:", error)
-      return NextResponse.json(
-        { success: false, error: "Erreur lors de la récupération des incidents" },
-        { status: 500 },
-      )
+      console.error("Erreur récupération incidents locataire:", error)
+      return NextResponse.json({ success: false, error: "Erreur lors du chargement" }, { status: 500 })
     }
 
-    // Trier les réponses par date
-    const incidentsWithSortedResponses =
-      incidents?.map((incident) => ({
-        ...incident,
-        responses:
-          incident.responses?.sort(
-            (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-          ) || [],
-      })) || []
+    // Pour chaque incident, récupérer le nombre de réponses
+    const incidentsWithResponses = await Promise.all(
+      incidents.map(async (incident) => {
+        const { data: responses } = await supabase
+          .from("incident_responses")
+          .select("id")
+          .eq("incident_id", incident.id)
+
+        return {
+          ...incident,
+          responses: responses || [],
+        }
+      }),
+    )
 
     return NextResponse.json({
       success: true,
-      incidents: incidentsWithSortedResponses,
+      incidents: incidentsWithResponses,
     })
   } catch (error) {
-    console.error("Erreur API incidents tenant:", error)
+    console.error("Erreur API incidents locataire:", error)
     return NextResponse.json({ success: false, error: "Erreur serveur" }, { status: 500 })
   }
 }

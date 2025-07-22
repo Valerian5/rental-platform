@@ -16,14 +16,12 @@ export default function TenantIncidentsPage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [incidents, setIncidents] = useState<any[]>([])
   const [filteredIncidents, setFilteredIncidents] = useState<any[]>([])
-  const [properties, setProperties] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   const [filters, setFilters] = useState({
     status: "all",
     priority: "all",
     category: "all",
-    property: "all",
     search: "",
   })
 
@@ -57,15 +55,6 @@ export default function TenantIncidentsPage() {
 
       if (data.success) {
         setIncidents(data.incidents)
-
-        // Extraire les propriétés uniques pour le filtre
-        const uniqueProperties = data.incidents
-          .map((incident: any) => incident.property)
-          .filter(
-            (property: any, index: number, self: any[]) =>
-              property && self.findIndex((p) => p?.id === property?.id) === index,
-          )
-        setProperties(uniqueProperties)
       } else {
         toast.error("Erreur lors du chargement des incidents")
       }
@@ -88,10 +77,6 @@ export default function TenantIncidentsPage() {
 
     if (filters.category !== "all") {
       filtered = filtered.filter((incident) => incident.category === filters.category)
-    }
-
-    if (filters.property !== "all") {
-      filtered = filtered.filter((incident) => incident.property?.id === filters.property)
     }
 
     if (filters.search) {
@@ -196,7 +181,7 @@ export default function TenantIncidentsPage() {
       </PageHeader>
 
       {/* Statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -249,7 +234,7 @@ export default function TenantIncidentsPage() {
           <CardTitle>Filtres</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <Input
               placeholder="Rechercher..."
               value={filters.search}
@@ -292,24 +277,9 @@ export default function TenantIncidentsPage() {
                 <SelectItem value="other">Autre</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={filters.property} onValueChange={(value) => setFilters({ ...filters, property: value })}>
-              <SelectTrigger>
-                <SelectValue placeholder="Bien" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les biens</SelectItem>
-                {properties.map((property) => (
-                  <SelectItem key={property.id} value={property.id}>
-                    {property.title}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             <Button
               variant="outline"
-              onClick={() =>
-                setFilters({ status: "all", priority: "all", category: "all", property: "all", search: "" })
-              }
+              onClick={() => setFilters({ status: "all", priority: "all", category: "all", search: "" })}
             >
               Réinitialiser
             </Button>
@@ -338,37 +308,41 @@ export default function TenantIncidentsPage() {
             <div className="space-y-4">
               {filteredIncidents.map((incident) => (
                 <div key={incident.id} className="border rounded-lg p-4 hover:bg-gray-50">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
+                  <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
                         {getPriorityIcon(incident.priority)}
-                        <h3 className="font-semibold">{incident.title}</h3>
+                        <h3 className="font-semibold truncate">{incident.title}</h3>
                         {getStatusBadge(incident.status)}
                         {getPriorityBadge(incident.priority)}
                         <Badge variant="outline">{getCategoryLabel(incident.category)}</Badge>
                       </div>
 
-                      <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-gray-600 mb-2">
                         <div className="flex items-center gap-1">
-                          <Building className="h-4 w-4" />
-                          <span className="font-medium">{incident.property?.title || "Bien non spécifié"}</span>
+                          <Building className="h-4 w-4 flex-shrink-0" />
+                          <span className="font-medium truncate">
+                            {incident.property?.title || "Bien non spécifié"}
+                          </span>
                         </div>
                         {incident.property?.address && (
-                          <span className="text-gray-500">{incident.property.address}</span>
+                          <span className="text-gray-500 truncate">{incident.property.address}</span>
                         )}
-                        <span>{new Date(incident.created_at).toLocaleDateString("fr-FR")}</span>
+                        <span className="flex-shrink-0">
+                          {new Date(incident.created_at).toLocaleDateString("fr-FR")}
+                        </span>
                       </div>
 
-                      <p className="text-gray-700 mb-3">{incident.description}</p>
+                      <p className="text-gray-700 mb-3 line-clamp-2">{incident.description}</p>
 
                       {incident.photos && incident.photos.length > 0 && (
-                        <div className="flex gap-2 mb-3">
+                        <div className="flex gap-2 mb-3 overflow-x-auto">
                           {incident.photos.slice(0, 3).map((photo: string, index: number) => (
                             <img
                               key={index}
                               src={photo.startsWith("http") ? photo : `/api/documents/${photo}`}
                               alt={`Photo ${index + 1}`}
-                              className="w-16 h-16 object-cover rounded border cursor-pointer hover:opacity-80"
+                              className="w-16 h-16 flex-shrink-0 object-cover rounded border cursor-pointer hover:opacity-80"
                               onClick={() =>
                                 window.open(photo.startsWith("http") ? photo : `/api/documents/${photo}`, "_blank")
                               }
@@ -378,7 +352,7 @@ export default function TenantIncidentsPage() {
                             />
                           ))}
                           {incident.photos.length > 3 && (
-                            <div className="w-16 h-16 bg-gray-100 rounded border flex items-center justify-center text-sm text-gray-600">
+                            <div className="w-16 h-16 flex-shrink-0 bg-gray-100 rounded border flex items-center justify-center text-sm text-gray-600">
                               +{incident.photos.length - 3}
                             </div>
                           )}
@@ -405,19 +379,19 @@ export default function TenantIncidentsPage() {
                       )}
                     </div>
 
-                    <div className="flex gap-2 ml-4">
-                      <Link href={`/tenant/incidents/${incident.id}`}>
-                        <Button variant="outline" size="sm">
+                    <div className="flex flex-row lg:flex-col gap-2 lg:ml-4">
+                      <Link href={`/tenant/incidents/${incident.id}`} className="flex-1 lg:flex-none">
+                        <Button variant="outline" size="sm" className="w-full bg-transparent">
                           <Eye className="h-4 w-4 mr-1" />
-                          Voir
+                          <span className="hidden sm:inline">Voir</span>
                         </Button>
                       </Link>
 
                       {incident.status !== "resolved" && incident.status !== "closed" && (
-                        <Link href={`/tenant/incidents/${incident.id}/respond`}>
-                          <Button variant="outline" size="sm">
+                        <Link href={`/tenant/incidents/${incident.id}/respond`} className="flex-1 lg:flex-none">
+                          <Button variant="outline" size="sm" className="w-full bg-transparent">
                             <MessageSquare className="h-4 w-4 mr-1" />
-                            Répondre
+                            <span className="hidden sm:inline">Répondre</span>
                           </Button>
                         </Link>
                       )}

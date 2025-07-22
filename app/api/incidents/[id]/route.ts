@@ -37,18 +37,6 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
             email,
             phone
           )
-        ),
-        responses:incident_responses(
-          id,
-          message,
-          user_type,
-          attachments,
-          created_at,
-          user:users(
-            id,
-            first_name,
-            last_name
-          )
         )
       `)
       .eq("id", incidentId)
@@ -59,18 +47,38 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ success: false, error: "Incident non trouvé" }, { status: 404 })
     }
 
-    // Trier les réponses par date
-    const incidentWithSortedResponses = {
+    // Récupérer les réponses séparément pour éviter l'ambiguïté
+    const { data: responses, error: responsesError } = await supabase
+      .from("incident_responses")
+      .select(`
+        id,
+        message,
+        user_type,
+        attachments,
+        created_at,
+        user_id,
+        user:users!incident_responses_user_id_fkey(
+          id,
+          first_name,
+          last_name
+        )
+      `)
+      .eq("incident_id", incidentId)
+      .order("created_at", { ascending: true })
+
+    if (responsesError) {
+      console.error("Erreur récupération réponses:", responsesError)
+    }
+
+    // Combiner les données
+    const incidentWithResponses = {
       ...incident,
-      responses:
-        incident.responses?.sort(
-          (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-        ) || [],
+      responses: responses || [],
     }
 
     return NextResponse.json({
       success: true,
-      incident: incidentWithSortedResponses,
+      incident: incidentWithResponses,
     })
   } catch (error) {
     console.error("Erreur API incident:", error)

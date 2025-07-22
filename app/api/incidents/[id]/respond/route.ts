@@ -14,36 +14,29 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     // Insérer la réponse
-    const { data: response, error: responseError } = await supabase
+    const { data: response, error } = await supabase
       .from("incident_responses")
       .insert({
         incident_id: incidentId,
-        user_id,
-        message,
-        user_type,
+        user_id: user_id,
+        message: message,
+        user_type: user_type,
         attachments: attachments || [],
       })
       .select()
       .single()
 
-    if (responseError) {
-      console.error("Erreur insertion réponse:", responseError)
-      return NextResponse.json({ success: false, error: "Erreur lors de l'envoi de la réponse" }, { status: 500 })
+    if (error) {
+      console.error("Erreur insertion réponse:", error)
+      return NextResponse.json({ success: false, error: "Erreur lors de l'envoi" }, { status: 500 })
     }
 
     // Mettre à jour la date de dernière activité de l'incident
-    const { error: updateError } = await supabase
-      .from("incidents")
-      .update({ updated_at: new Date().toISOString() })
-      .eq("id", incidentId)
-
-    if (updateError) {
-      console.error("Erreur mise à jour incident:", updateError)
-    }
+    await supabase.from("incidents").update({ updated_at: new Date().toISOString() }).eq("id", incidentId)
 
     return NextResponse.json({
       success: true,
-      response,
+      response: response,
     })
   } catch (error) {
     console.error("Erreur API réponse incident:", error)
