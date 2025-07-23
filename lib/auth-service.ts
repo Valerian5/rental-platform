@@ -1,6 +1,6 @@
 import { supabase } from "./supabase"
 import { cookies } from "next/headers"
-import { createServerClient } from "@supabase/auth-helpers-nextjs"
+import { createServerClient } from "@supabase/auth-helpers-nextjs/server"
 import { type NextRequest } from "next/server"
 
 export interface UserProfile {
