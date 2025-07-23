@@ -241,6 +241,14 @@ export function ModernApplicationCard({
       case "analyzing":
         return (
           <>
+          <Button
+          size="sm"
+          variant="outline"
+          onClick={() => router.push(`/owner/applications/${application.id}`)}
+        >
+          <Eye className="h-4 w-4 mr-1" />
+          Voir
+        </Button>
             <Button size="sm" variant="default" onClick={() => onAction("propose_visit")}>
               <Calendar className="h-4 w-4 mr-1" />
               Proposer une visite
@@ -347,9 +355,14 @@ export function ModernApplicationCard({
               />
             )}
             <div>
-              <h3 className="font-medium">
-                {application.tenant.first_name} {application.tenant.last_name}
-              </h3>
+            <h3 className="font-medium">
+            <Link
+              href={`/owner/applications/${application.id}`}
+              className="hover:text-blue-600 transition-colors underline"
+            >
+              {application.tenant.first_name} {application.tenant.last_name}
+            </Link>
+          </h3>
               <p className="text-sm text-muted-foreground">{application.tenant.email}</p>
             </div>
           </div>
