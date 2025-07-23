@@ -1,13 +1,11 @@
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
+import { createClient } from "@/lib/supabase-server"
 import { NextResponse } from "next/server"
 
 export const dynamic = "force-dynamic"
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const applicationId = params.id
-  const cookieStore = cookies()
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const supabase = createClient()
 
   try {
     const { slots } = await request.json()
@@ -19,9 +17,20 @@ export async function POST(request: Request, { params }: { params: { id: string 
       })
     }
 
+    // Filtrer les créneaux futurs uniquement
+    const now = new Date()
+    const futureSlots = slots.filter((slot) => new Date(slot.start_time) > now)
+
+    if (futureSlots.length === 0) {
+      return new NextResponse(JSON.stringify({ message: "Aucun créneau futur fourni" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+
     // Insérer les créneaux de visite
     const { error } = await supabase.from("visit_slots").insert(
-      slots.map((slot: any) => ({
+      futureSlots.map((slot: any) => ({
         application_id: applicationId,
         start_time: slot.start_time,
         end_time: slot.end_time,
@@ -55,10 +64,16 @@ export async function POST(request: Request, { params }: { params: { id: string 
       })
     }
 
-    return new NextResponse(JSON.stringify({ message: "Créneaux de visite proposés avec succès" }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    })
+    return new NextResponse(
+      JSON.stringify({
+        message: "Créneaux de visite proposés avec succès",
+        slotsCount: futureSlots.length,
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    )
   } catch (e) {
     console.error("Erreur inattendue:", e)
     return new NextResponse(JSON.stringify({ message: "Erreur inattendue" }), {
