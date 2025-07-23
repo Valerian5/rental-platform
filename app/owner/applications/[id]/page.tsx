@@ -11,6 +11,7 @@ import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { CircularScore } from "@/components/circular-score"
+import { VisitProposalManager } from "@/components/visit-proposal-manager"
 import {
   ArrowLeft,
   User,
@@ -457,6 +458,60 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
         )
       default:
         return <Badge variant="outline">Statut inconnu</Badge>
+    }
+  }
+
+  const handleProposeVisit = () => {
+    if (application && application.property) {
+      setCurrentApplicationForVisit({
+        id: application.id,
+        property_id: application.property.id,
+        property: application.property,
+        tenant: application.tenant,
+      })
+      setShowVisitDialog(true)
+    }
+  }
+
+  const handleVisitProposed = async (slots) => {
+    if (!currentApplicationForVisit) return
+
+    try {
+      // Mettre à jour le statut de la candidature
+      const success = await updateApplicationStatus("visit_proposed")
+      if (success) {
+        // Fermer le dialogue
+        setShowVisitDialog(false)
+        setCurrentApplicationForVisit(null)
+        toast.success("Créneaux de visite proposés avec succès")
+      }
+    } catch (error) {
+      console.error("Erreur lors de la proposition de visite:", error)
+      toast.error("Erreur lors de la proposition de visite")
+    }
+  }
+
+  const updateApplicationStatus = async (newStatus: string) => {
+    try {
+      const response = await fetch(`/api/applications/${params.id}/status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        toast.error(errorData.message || "Erreur lors de la mise à jour du statut")
+        return false
+      }
+
+      // Recharger l'application pour mettre à jour le statut
+      loadApplication()
+      return true
+    } catch (error) {
+      console.error("Erreur:", error)
+      toast.error("Erreur lors de la mise à jour du statut")
+      return false
     }
   }
 
@@ -1337,6 +1392,24 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             </Card>
           </TabsContent>
         </Tabs>
+      {/* Dialogue de proposition de visite */}
+      {showVisitDialog && currentApplicationForVisit && (
+        <VisitProposalManager
+          isOpen={showVisitDialog}
+          onClose={() => {
+            setShowVisitDialog(false)
+            setCurrentApplicationForVisit(null)
+          }}
+          propertyId={currentApplicationForVisit.property_id}
+          propertyTitle={currentApplicationForVisit.property?.title || "Propriété"}
+          applicationId={currentApplicationForVisit.id}
+          tenantName={
+            `${currentApplicationForVisit.tenant?.first_name || ""} ${currentApplicationForVisit.tenant?.last_name || ""}`.trim() ||
+            "Candidat"
+          }
+          onSlotsProposed={handleVisitProposed}
+        />
+      )}
       </div>
     </>
   )
