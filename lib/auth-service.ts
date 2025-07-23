@@ -1,6 +1,5 @@
 import { supabase } from "./supabase"
-import { cookies } from "next/headers"
-import { createServerClient } from "@supabase/auth-helpers-nextjs/server"
+import { createServerClient } from "@supabase/ssr"
 import { type NextRequest } from "next/server"
 
 export interface UserProfile {
@@ -25,17 +24,19 @@ export interface RegisterData {
 
 // Fonction ajoutée pour API routes
 export async function getCurrentUserFromRequest(request: NextRequest): Promise<UserProfile | null> {
-  // Créer le client Supabase server-side
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: request.cookies }
   )
-  // Récupérer l'utilisateur à partir des cookies de la requête
   const { data: { user }, error } = await supabase.auth.getUser()
   if (error || !user) return null
 
-  // Récupérer le profil utilisateur
-  const { data: profile, error: profileError } = await supabase.from("users").select("*").eq("id", user.id).single()
+  const { data: profile, error: profileError } = await supabase
+    .from("users")
+    .select("*")
+    .eq("id", user.id)
+    .single()
   if (profileError) return null
   return profile
 }
