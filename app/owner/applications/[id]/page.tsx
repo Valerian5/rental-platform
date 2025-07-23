@@ -12,6 +12,7 @@ import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { CircularScore } from "@/components/circular-score"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { VisitProposalManager } from "@/components/visit-proposal-manager"
 import {
   ArrowLeft,
   User,
@@ -29,6 +30,8 @@ import {
   BarChart3,
   AlertCircle,
 } from "lucide-react"
+
+const [showVisitDialog, setShowVisitDialog] = useState(false)
 
 const DocumentPreview = ({ doc, type, index }: { doc: any; type: string; index: number }) => {
   const getDocTypeColor = (type: string) => {
@@ -476,10 +479,10 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       case "analyzing":
         return (
           <>
-            <Button onClick={handleProposeVisit}>
-              <Calendar className="h-4 w-4 mr-2" />
-              Proposer une visite
-            </Button>
+          <Button onClick={() => setShowVisitDialog(true)}>
+          <Calendar className="h-4 w-4 mr-2" />
+          Proposer une visite
+        </Button>
             <Button variant="destructive" onClick={handleRefuse}>
               <XCircle className="h-4 w-4 mr-2" />
               Refuser
@@ -1338,24 +1341,21 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             </Card>
           </TabsContent>
         </Tabs>
-        <Dialog open={showVisitDialog} onOpenChange={setShowVisitDialog}>
-  <DialogContent>
-    <DialogHeader>
-      <DialogTitle>Proposer une visite</DialogTitle>
-    </DialogHeader>
-    <div className="space-y-2 py-2">
-      <p>Fonctionnalité à compléter : sélection du créneau de visite.</p>
-    </div>
-    <DialogFooter>
-      <Button onClick={() => handleVisitProposed([])}>
-        Envoyer la proposition
-      </Button>
-      <Button variant="outline" onClick={() => setShowVisitDialog(false)}>
-        Annuler
-      </Button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
+        {showVisitDialog && application && (
+          <VisitProposalManager
+            isOpen={showVisitDialog}
+            onClose={() => setShowVisitDialog(false)}
+            propertyId={application.property_id}
+            propertyTitle={application.property?.title || "Propriété"}
+            applicationId={application.id}
+            tenantName={`${application.tenant?.first_name || ""} ${application.tenant?.last_name || ""}`.trim() || "Candidat"}
+            onSlotsProposed={async (slots) => {
+              await updateApplicationStatus("visit_proposed")
+              setShowVisitDialog(false)
+              toast.success("Créneaux de visite proposés avec succès")
+            }}
+          />
+        )}
       </div>
     </>
   )
