@@ -11,6 +11,7 @@ import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { CircularScore } from "@/components/circular-score"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import {
   ArrowLeft,
   User,
@@ -1337,6 +1338,24 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             </Card>
           </TabsContent>
         </Tabs>
+        <Dialog open={showVisitDialog} onOpenChange={setShowVisitDialog}>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>Proposer une visite</DialogTitle>
+    </DialogHeader>
+    <div className="space-y-2 py-2">
+      <p>Fonctionnalité à compléter : sélection du créneau de visite.</p>
+    </div>
+    <DialogFooter>
+      <Button onClick={() => handleVisitProposed([])}>
+        Envoyer la proposition
+      </Button>
+      <Button variant="outline" onClick={() => setShowVisitDialog(false)}>
+        Annuler
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
       </div>
     </>
   )
