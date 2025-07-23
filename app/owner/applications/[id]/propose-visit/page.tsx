@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
-import { format, addDays, setHours, setMinutes } from "date-fns"
+import { format, addDays, setHours, setMinutes, isAfter, startOfDay } from "date-fns"
 import { fr } from "date-fns/locale"
 import { Clock, ArrowLeft, Send } from "lucide-react"
 import { PageHeader } from "@/components/page-header"
@@ -41,31 +41,46 @@ export default function ProposeVisitPage() {
   const generateAvailableSlots = () => {
     const slots = []
     const today = new Date()
+    const todayStart = startOfDay(today)
 
-    // Générer des créneaux pour les 14 prochains jours
-    for (let i = 1; i <= 14; i++) {
-      const date = addDays(today, i)
+    // Générer des créneaux pour les 14 prochains jours (à partir d'aujourd'hui)
+    for (let i = 0; i <= 14; i++) {
+      const date = addDays(todayStart, i)
 
       // Créneaux matin (9h-12h)
       for (let hour = 9; hour <= 11; hour++) {
-        slots.push({
-          id: `${format(date, "yyyy-MM-dd")}-${hour}:00`,
-          date: format(date, "yyyy-MM-dd"),
-          time: `${hour}:00`,
-          datetime: setMinutes(setHours(date, hour), 0),
-          period: "Matin",
-        })
+        const slotDateTime = setMinutes(setHours(date, hour), 0)
+
+        // Ne garder que les créneaux futurs
+        if (isAfter(slotDateTime, today)) {
+          slots.push({
+            id: `${format(date, "yyyy-MM-dd")}-${hour}:00`,
+            date: format(date, "yyyy-MM-dd"),
+            time: `${hour}:00`,
+            datetime: slotDateTime,
+            period: "Matin",
+            start_time: `${hour}:00`,
+            end_time: `${hour + 1}:00`,
+          })
+        }
       }
 
       // Créneaux après-midi (14h-18h)
       for (let hour = 14; hour <= 17; hour++) {
-        slots.push({
-          id: `${format(date, "yyyy-MM-dd")}-${hour}:00`,
-          date: format(date, "yyyy-MM-dd"),
-          time: `${hour}:00`,
-          datetime: setMinutes(setHours(date, hour), 0),
-          period: "Après-midi",
-        })
+        const slotDateTime = setMinutes(setHours(date, hour), 0)
+
+        // Ne garder que les créneaux futurs
+        if (isAfter(slotDateTime, today)) {
+          slots.push({
+            id: `${format(date, "yyyy-MM-dd")}-${hour}:00`,
+            date: format(date, "yyyy-MM-dd"),
+            time: `${hour}:00`,
+            datetime: slotDateTime,
+            period: "Après-midi",
+            start_time: `${hour}:00`,
+            end_time: `${hour + 1}:00`,
+          })
+        }
       }
     }
 
@@ -93,14 +108,20 @@ export default function ProposeVisitPage() {
       const response = await fetch(`/api/applications/${params.id}/propose-visit-slots`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slots: selectedSlots }),
+        body: JSON.stringify({
+          slots: selectedSlots.map((slot) => ({
+            start_time: `${slot.date}T${slot.start_time}:00`,
+            end_time: `${slot.date}T${slot.end_time}:00`,
+          })),
+        }),
       })
 
       if (response.ok) {
         toast.success("Créneaux de visite proposés avec succès")
         router.push(`/owner/applications/${params.id}`)
       } else {
-        toast.error("Erreur lors de la proposition")
+        const errorData = await response.json()
+        toast.error(errorData.message || "Erreur lors de la proposition")
       }
     } catch (error) {
       console.error("Erreur:", error)
