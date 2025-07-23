@@ -294,7 +294,7 @@ export default function ApplicationsPage() {
                       {/* Nom cliquable */}
                       <Link
                         href={`/owner/applications/${application.id}`}
-                        className="block hover:text-blue-600 transition-colors"
+                        className="hover:text-blue-600 transition-colors"
                       >
                         <CardTitle className="text-lg font-semibold truncate cursor-pointer">
                           {application.tenant_name}
@@ -320,12 +320,14 @@ export default function ApplicationsPage() {
 
                   {/* Bouton "Voir" après analyse */}
                   {application.status !== "pending" && (
-                    <Button variant="outline" size="sm" asChild>
-                      <Link href={`/owner/applications/${application.id}`}>
-                        <Eye className="h-4 w-4 mr-1" />
-                        Voir
-                      </Link>
-                    </Button>
+                    <div className="absolute top-4 right-4">
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/owner/applications/${application.id}`}>
+                          <Eye className="h-4 w-4 mr-1" />
+                          Voir
+                        </Link>
+                      </Button>
+                    </div>
                   )}
                 </div>
 
