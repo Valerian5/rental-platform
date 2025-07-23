@@ -11,7 +11,6 @@ import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { CircularScore } from "@/components/circular-score"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { VisitProposalManager } from "@/components/visit-proposal-manager"
 import {
   ArrowLeft,
@@ -1350,9 +1349,11 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             applicationId={application.id}
             tenantName={`${application.tenant?.first_name || ""} ${application.tenant?.last_name || ""}`.trim() || "Candidat"}
             onSlotsProposed={async (slots) => {
-              await updateApplicationStatus("visit_proposed")
-              setShowVisitDialog(false)
-              toast.success("Créneaux de visite proposés avec succès")
+              const success = await updateApplicationStatus("visit_proposed")
+              if (success) {
+                setShowVisitDialog(false)
+                toast.success("Créneaux de visite proposés avec succès")
+              }
             }}
           />
         )}
