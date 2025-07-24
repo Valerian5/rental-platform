@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -14,8 +14,10 @@ import { toast } from "sonner"
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -50,28 +52,50 @@ export default function LoginPage() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
+        console.log("🔍 Vérification authentification existante...")
         const currentUser = await authService.getCurrentUser()
+
         if (currentUser) {
-          switch (currentUser.user_type) {
-            case "owner":
-              router.push("/owner/dashboard")
-              break
-            case "tenant":
-              router.push("/tenant/dashboard")
-              break
-            case "admin":
-              router.push("/admin")
-              break
-            default:
-              router.push("/")
+          console.log("✅ Utilisateur déjà connecté:", currentUser.user_type)
+
+          // Récupérer l'URL de redirection
+          const redirectUrl = searchParams.get("redirect")
+
+          if (redirectUrl) {
+            console.log("🔄 Redirection vers:", redirectUrl)
+            router.push(redirectUrl)
+          } else {
+            // Redirection par défaut selon le type d'utilisateur
+            switch (currentUser.user_type) {
+              case "owner":
+                router.push("/owner/dashboard")
+                break
+              case "tenant":
+                router.push("/tenant/dashboard")
+                break
+              case "admin":
+                router.push("/admin")
+                break
+              case "agency":
+                router.push("/agency/dashboard")
+                break
+              default:
+                router.push("/")
+            }
           }
+        } else {
+          console.log("❌ Pas d'utilisateur connecté")
         }
       } catch (error) {
-        // Not connected
+        console.log("❌ Erreur vérification auth:", error)
+        // Pas connecté, on reste sur la page login
+      } finally {
+        setIsCheckingAuth(false)
       }
     }
+
     checkAuth()
-  }, [router])
+  }, [router, searchParams])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -81,6 +105,7 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+
     try {
       console.log("🔐 Tentative de connexion pour:", formData.email)
       const { user, session } = await authService.login(formData.email, formData.password)
@@ -95,19 +120,30 @@ export default function LoginPage() {
       // Attendre un peu pour que le toast s'affiche
       await new Promise((resolve) => setTimeout(resolve, 1000))
 
-      // Redirection selon le type d'utilisateur
-      switch (user.user_type) {
-        case "owner":
-          window.location.href = "/owner/dashboard"
-          break
-        case "tenant":
-          window.location.href = "/tenant/dashboard"
-          break
-        case "admin":
-          window.location.href = "/admin"
-          break
-        default:
-          window.location.href = "/"
+      // Récupérer l'URL de redirection
+      const redirectUrl = searchParams.get("redirect")
+
+      if (redirectUrl) {
+        console.log("🔄 Redirection vers:", redirectUrl)
+        window.location.href = redirectUrl
+      } else {
+        // Redirection selon le type d'utilisateur
+        switch (user.user_type) {
+          case "owner":
+            window.location.href = "/owner/dashboard"
+            break
+          case "tenant":
+            window.location.href = "/tenant/dashboard"
+            break
+          case "admin":
+            window.location.href = "/admin"
+            break
+          case "agency":
+            window.location.href = "/agency/dashboard"
+            break
+          default:
+            window.location.href = "/"
+        }
       }
     } catch (error: any) {
       console.error("❌ Erreur connexion:", error)
@@ -127,6 +163,18 @@ export default function LoginPage() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  // Afficher un loader pendant la vérification d'auth
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Vérification...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
