@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
-import { authService } from "@/lib/auth-service"
+import { getCurrentUserFromRequest } from "@/lib/auth-service"
 
 // Create a Supabase client with environment variables
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     console.log("🏢 API Agencies GET")
 
     // Check authentication
-    const user = await authService.getCurrentUserFromRequest(request)
+    const user = await getCurrentUserFromRequest(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     console.log("🏢 API Agencies POST")
 
     // Check authentication
-    const user = await authService.getCurrentUserFromRequest(request)
+    const user = await getCurrentUserFromRequest(request)
     if (!user || user.user_type !== "admin") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }

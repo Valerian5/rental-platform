@@ -1,6 +1,6 @@
 import { supabase } from "./supabase"
+import type { NextRequest } from "next/server"
 import { createServerClient } from "@supabase/ssr"
-import { type NextRequest } from "next/server"
 
 export interface UserProfile {
   id: string
@@ -22,23 +22,56 @@ export interface RegisterData {
   userType: "tenant" | "owner"
 }
 
-// Fonction ajoutée pour API routes
+// Fonction pour API routes - version corrigée
 export async function getCurrentUserFromRequest(request: NextRequest): Promise<UserProfile | null> {
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: request.cookies }
-  )
-  const { data: { user }, error } = await supabase.auth.getUser()
-  if (error || !user) return null
+  try {
+    console.log("🔍 getCurrentUserFromRequest - Début")
 
-  const { data: profile, error: profileError } = await supabase
-    .from("users")
-    .select("*")
-    .eq("id", user.id)
-    .single()
-  if (profileError) return null
-  return profile
+    // Créer un client Supabase pour les API routes
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return request.cookies.get(name)?.value
+          },
+        },
+      },
+    )
+
+    // Récupérer l'utilisateur authentifié
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
+
+    if (authError) {
+      console.error("❌ Erreur auth:", authError)
+      return null
+    }
+
+    if (!user) {
+      console.log("❌ Pas d'utilisateur authentifié")
+      return null
+    }
+
+    console.log("👤 Utilisateur trouvé:", user.id)
+
+    // Récupérer le profil utilisateur
+    const { data: profile, error: profileError } = await supabase.from("users").select("*").eq("id", user.id).single()
+
+    if (profileError) {
+      console.error("❌ Erreur profil:", profileError)
+      return null
+    }
+
+    console.log("✅ Profil récupéré:", profile)
+    return profile
+  } catch (error) {
+    console.error("❌ Erreur dans getCurrentUserFromRequest:", error)
+    return null
+  }
 }
 
 export const authService = {
