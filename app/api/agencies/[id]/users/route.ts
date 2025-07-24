@@ -181,7 +181,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       user_metadata: {
         first_name: firstName,
         last_name: lastName,
-        user_type: "agency",
+        user_type: "owner", // Utiliser "owner" au lieu de "agency"
       },
     })
 
@@ -190,7 +190,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: authError?.message || "Error creating user" }, { status: 500 })
     }
 
-    // Create the user profile
+    // Create the user profile - utiliser "owner" comme user_type
     const { data: newUser, error: userError } = await supabase
       .from("users")
       .insert({
@@ -198,7 +198,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         email,
         first_name: firstName,
         last_name: lastName,
-        user_type: "agency",
+        user_type: "owner", // Utiliser "owner" au lieu de "agency"
         agency_id: params.id,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),

@@ -1,55 +1,72 @@
 "use client"
+
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Building2, Users, Settings, Edit } from "lucide-react"
-import { agencyApi } from "@/lib/api-client"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "@/hooks/use-toast"
+import { Building, Users, Home, FileText, Settings, ArrowLeft, Calendar, TrendingUp } from "lucide-react"
 
 interface Agency {
   id: string
   name: string
-  logo_url?: string
-  primary_color: string
-  secondary_color: string
-  accent_color: string
+  description: string
+  address: string
+  phone: string
+  email: string
+  website: string
   created_at: string
-  updated_at: string
+}
+
+interface AgencyStats {
+  agency: Agency
+  counts: {
+    users: number
+    properties: number
+    applications: number
+    active_leases: number
+    recent_applications: number
+  }
 }
 
 export default function AgencyDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const { toast } = useToast()
-  const [agency, setAgency] = useState<Agency | null>(null)
+  const agencyId = params.id as string
+
+  const [stats, setStats] = useState<AgencyStats | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (params.id) {
-      fetchAgency(params.id as string)
-    }
-  }, [params.id])
+    fetchAgencyStats()
+  }, [agencyId])
 
-  const fetchAgency = async (id: string) => {
+  const fetchAgencyStats = async () => {
     try {
-      setLoading(true)
-      console.log("🔍 Récupération de l'agence:", id)
-      const result = await agencyApi.getById(id)
-      console.log("📊 Résultat API:", result)
-
-      if (!result.success) {
-        throw new Error(result.error || "Failed to fetch agency")
+      const token = localStorage.getItem("auth_token")
+      if (!token) {
+        router.push("/login")
+        return
       }
 
-      setAgency(result.agency)
-      console.log("✅ Agence chargée:", result.agency.name)
+      const response = await fetch(`/api/agencies/${agencyId}/stats`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch agency stats")
+      }
+
+      const data = await response.json()
+      setStats(data.stats)
     } catch (error) {
-      console.error("Error fetching agency:", error)
+      console.error("Error fetching agency stats:", error)
       toast({
-        title: "Error",
-        description: "Failed to load agency details",
+        title: "Erreur",
+        description: "Impossible de charger les statistiques de l'agence",
         variant: "destructive",
       })
     } finally {
@@ -57,24 +74,37 @@ export default function AgencyDetailPage() {
     }
   }
 
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("fr-FR", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    })
+  }
+
   if (loading) {
     return (
-      <div className="container mx-auto py-6">
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+            <p className="mt-2 text-muted-foreground">Chargement des informations...</p>
+          </div>
         </div>
       </div>
     )
   }
 
-  if (!agency) {
+  if (!stats) {
     return (
-      <div className="container mx-auto py-6">
-        <div className="text-center py-12">
-          <h3 className="text-lg font-semibold">Agency not found</h3>
+      <div className="container mx-auto p-6">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold">Agence introuvable</h1>
+          <p className="text-muted-foreground mt-2">
+            Cette agence n'existe pas ou vous n'avez pas les permissions pour la voir.
+          </p>
           <Button onClick={() => router.push("/admin/agencies")} className="mt-4">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Agencies
+            Retour aux agences
           </Button>
         </div>
       </div>
@@ -82,120 +112,179 @@ export default function AgencyDetailPage() {
   }
 
   return (
-    <div className="container mx-auto py-6">
+    <div className="container mx-auto p-6">
       <div className="flex items-center gap-4 mb-6">
-        <Button variant="outline" onClick={() => router.push("/admin/agencies")}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
+        <Button variant="outline" size="sm" onClick={() => router.push("/admin/agencies")}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Retour
         </Button>
-        <div>
-          <h1 className="text-3xl font-bold">{agency.name}</h1>
-          <p className="text-muted-foreground">Agency Management</p>
+        <div className="flex-1">
+          <h1 className="text-3xl font-bold">{stats.agency.name}</h1>
+          <p className="text-muted-foreground">Créée le {formatDate(stats.agency.created_at)}</p>
         </div>
+        <Button onClick={() => router.push(`/admin/agencies/${agencyId}/settings`)}>
+          <Settings className="h-4 w-4 mr-2" />
+          Paramètres
+        </Button>
       </div>
 
       <div className="grid gap-6">
+        {/* Informations générales */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                {agency.logo_url ? (
-                  <img
-                    src={agency.logo_url || "/placeholder.svg"}
-                    alt={agency.name}
-                    className="h-12 w-12 object-contain rounded"
-                  />
-                ) : (
-                  <div
-                    className="h-12 w-12 rounded flex items-center justify-center text-white font-bold text-lg"
-                    style={{ backgroundColor: agency.primary_color }}
-                  >
-                    {agency.name.charAt(0)}
-                  </div>
-                )}
-                <div>
-                  <CardTitle className="text-2xl">{agency.name}</CardTitle>
-                  <CardDescription>
-                    Created on {new Date(agency.created_at).toLocaleDateString()} • Last updated{" "}
-                    {new Date(agency.updated_at).toLocaleDateString()}
-                  </CardDescription>
-                </div>
-              </div>
-              <Badge variant="secondary">Active</Badge>
-            </div>
+            <CardTitle>Informations générales</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4">
-              <div>
-                <h4 className="font-semibold mb-2">Brand Colors</h4>
-                <div className="flex gap-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded" style={{ backgroundColor: agency.primary_color }}></div>
-                    <span className="text-sm">Primary: {agency.primary_color}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded" style={{ backgroundColor: agency.secondary_color }}></div>
-                    <span className="text-sm">Secondary: {agency.secondary_color}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded" style={{ backgroundColor: agency.accent_color }}></div>
-                    <span className="text-sm">Accent: {agency.accent_color}</span>
-                  </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {stats.agency.description && (
+                <div className="md:col-span-2">
+                  <h3 className="font-semibold mb-2">Description</h3>
+                  <p className="text-muted-foreground">{stats.agency.description}</p>
                 </div>
-              </div>
+              )}
+              {stats.agency.address && (
+                <div>
+                  <h3 className="font-semibold mb-2">Adresse</h3>
+                  <p className="text-muted-foreground">{stats.agency.address}</p>
+                </div>
+              )}
+              {stats.agency.phone && (
+                <div>
+                  <h3 className="font-semibold mb-2">Téléphone</h3>
+                  <p className="text-muted-foreground">{stats.agency.phone}</p>
+                </div>
+              )}
+              {stats.agency.email && (
+                <div>
+                  <h3 className="font-semibold mb-2">Email</h3>
+                  <p className="text-muted-foreground">{stats.agency.email}</p>
+                </div>
+              )}
+              {stats.agency.website && (
+                <div>
+                  <h3 className="font-semibold mb-2">Site web</h3>
+                  <a
+                    href={stats.agency.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    {stats.agency.website}
+                  </a>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Statistiques */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Building2 className="h-5 w-5" />
-                Properties
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">0</div>
-              <p className="text-sm text-muted-foreground">Total properties managed</p>
-              <Button variant="outline" className="w-full mt-4 bg-transparent">
-                View Properties
-              </Button>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <Users className="h-8 w-8 text-muted-foreground" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-muted-foreground">Utilisateurs</p>
+                  <p className="text-2xl font-bold">{stats.counts.users}</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
-
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                Users
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">0</div>
-              <p className="text-sm text-muted-foreground">Active users</p>
-              <Button variant="outline" className="w-full mt-4 bg-transparent">
-                Manage Users
-              </Button>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <Home className="h-8 w-8 text-muted-foreground" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-muted-foreground">Propriétés</p>
+                  <p className="text-2xl font-bold">{stats.counts.properties}</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
-
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings className="h-5 w-5" />
-                Settings
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground mb-4">Configure agency settings and preferences</p>
-              <Button variant="outline" className="w-full bg-transparent">
-                <Edit className="mr-2 h-4 w-4" />
-                Edit Agency
-              </Button>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <FileText className="h-8 w-8 text-muted-foreground" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-muted-foreground">Candidatures</p>
+                  <p className="text-2xl font-bold">{stats.counts.applications}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <TrendingUp className="h-8 w-8 text-muted-foreground" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-muted-foreground">Baux actifs</p>
+                  <p className="text-2xl font-bold">{stats.counts.active_leases}</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
+
+        {/* Activité récente */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Activité récente</CardTitle>
+            <CardDescription>Aperçu de l'activité des 30 derniers jours</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">30 derniers jours</span>
+              </div>
+              <Badge variant="secondary">{stats.counts.recent_applications} nouvelles candidatures</Badge>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Actions rapides */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Actions rapides</CardTitle>
+            <CardDescription>Accédez rapidement aux différentes sections de gestion</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Button
+                variant="outline"
+                className="h-20 flex-col bg-transparent"
+                onClick={() => router.push(`/admin/agencies/${agencyId}/users`)}
+              >
+                <Users className="h-6 w-6 mb-2" />
+                Gérer les utilisateurs
+              </Button>
+              <Button
+                variant="outline"
+                className="h-20 flex-col bg-transparent"
+                onClick={() => router.push(`/admin/agencies/${agencyId}/properties`)}
+              >
+                <Home className="h-6 w-6 mb-2" />
+                Voir les propriétés
+              </Button>
+              <Button
+                variant="outline"
+                className="h-20 flex-col bg-transparent"
+                onClick={() => router.push(`/admin/agencies/${agencyId}/settings`)}
+              >
+                <Settings className="h-6 w-6 mb-2" />
+                Paramètres
+              </Button>
+              <Button
+                variant="outline"
+                className="h-20 flex-col bg-transparent"
+                onClick={() => router.push(`/admin/agencies`)}
+              >
+                <Building className="h-6 w-6 mb-2" />
+                Toutes les agences
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
