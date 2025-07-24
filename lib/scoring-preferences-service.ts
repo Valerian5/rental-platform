@@ -1,4 +1,4 @@
-// Interface pour les critères de scoring (nouvelle structure)
+// Interface pour les critères de scoring (nouvelle structure simplifiée)
 export interface ScoringCriteria {
   income_ratio: {
     weight: number
@@ -50,13 +50,12 @@ export interface ScoringCriteria {
   }
   application_quality: {
     weight: number
-    presentation_length: {
-      excellent: number
-      good: number
-      basic: number
+    file_completeness: {
+      required: boolean
+      bonus_points: number
     }
-    completeness_bonus: {
-      enabled: boolean
+    verified_documents: {
+      required: boolean
       bonus_points: number
     }
   }
@@ -68,6 +67,7 @@ export interface ScoringPreferences {
   name: string
   is_default: boolean
   criteria: ScoringCriteria
+  system_preference_id?: string
   created_at?: string
   updated_at?: string
 }
@@ -164,14 +164,13 @@ export const scoringPreferencesService = {
         },
         application_quality: {
           weight: 10,
-          presentation_length: {
-            excellent: 200,
-            good: 100,
-            basic: 50,
+          file_completeness: {
+            required: false,
+            bonus_points: 50,
           },
-          completeness_bonus: {
-            enabled: true,
-            bonus_points: 20,
+          verified_documents: {
+            required: false,
+            bonus_points: 50,
           },
         },
       },
@@ -332,25 +331,46 @@ export const scoringPreferencesService = {
     }
 
     // 4. Évaluation de la qualité du dossier
-    const presentationLength = application.presentation?.length || 0
+    let fileScore = 0
+    const fileDetails = []
 
-    if (presentationLength >= criteria.application_quality.presentation_length.excellent) {
-      result.breakdown.application_quality.score = criteria.application_quality.weight
-      result.breakdown.application_quality.details = `Présentation excellente (${presentationLength} caractères)`
-      result.breakdown.application_quality.compatible = true
-    } else if (presentationLength >= criteria.application_quality.presentation_length.good) {
-      result.breakdown.application_quality.score = Math.round(criteria.application_quality.weight * 0.75)
-      result.breakdown.application_quality.details = `Bonne présentation (${presentationLength} caractères)`
-      result.breakdown.application_quality.compatible = true
-    } else if (presentationLength >= criteria.application_quality.presentation_length.basic) {
-      result.breakdown.application_quality.score = Math.round(criteria.application_quality.weight * 0.5)
-      result.breakdown.application_quality.details = `Présentation basique (${presentationLength} caractères)`
-      result.breakdown.application_quality.compatible = true
-    } else {
-      result.breakdown.application_quality.score = Math.round(criteria.application_quality.weight * 0.25)
-      result.breakdown.application_quality.details = `Présentation insuffisante (${presentationLength} caractères)`
-      result.breakdown.application_quality.compatible = false
+    // Vérifier la complétude du dossier
+    const isComplete = application.file_complete || false
+    if (criteria.application_quality.file_completeness.required) {
+      if (isComplete) {
+        fileScore += criteria.application_quality.file_completeness.bonus_points
+        fileDetails.push("dossier complet")
+      } else {
+        result.warnings.push("Dossier incomplet requis")
+        fileDetails.push("dossier incomplet")
+      }
+    } else if (isComplete) {
+      fileScore += criteria.application_quality.file_completeness.bonus_points
+      fileDetails.push("dossier complet (bonus)")
     }
+
+    // Vérifier les documents vérifiés
+    const hasVerifiedDocs = application.has_verified_documents || false
+    if (criteria.application_quality.verified_documents.required) {
+      if (hasVerifiedDocs) {
+        fileScore += criteria.application_quality.verified_documents.bonus_points
+        fileDetails.push("documents vérifiés")
+      } else {
+        result.warnings.push("Documents vérifiés requis")
+        fileDetails.push("documents non vérifiés")
+      }
+    } else if (hasVerifiedDocs) {
+      fileScore += criteria.application_quality.verified_documents.bonus_points
+      fileDetails.push("documents vérifiés (bonus)")
+    }
+
+    result.breakdown.application_quality.score = Math.round(
+      (Math.min(100, fileScore) / 100) * criteria.application_quality.weight,
+    )
+    result.breakdown.application_quality.details = fileDetails.length > 0 ? fileDetails.join(", ") : "Dossier standard"
+    result.breakdown.application_quality.compatible =
+      (!criteria.application_quality.file_completeness.required || isComplete) &&
+      (!criteria.application_quality.verified_documents.required || hasVerifiedDocs)
 
     // Calcul du score total
     result.totalScore = Math.min(
@@ -365,7 +385,8 @@ export const scoringPreferencesService = {
     result.compatible =
       result.totalScore >= 60 &&
       result.breakdown.income_ratio.compatible &&
-      result.breakdown.professional_stability.compatible
+      result.breakdown.professional_stability.compatible &&
+      result.breakdown.application_quality.compatible
 
     // Ajouter des recommandations
     if (result.totalScore < 60) {
@@ -374,8 +395,11 @@ export const scoringPreferencesService = {
     if (!result.breakdown.income_ratio.compatible) {
       result.recommendations.push("Augmenter les revenus ou trouver un garant")
     }
-    if (!result.breakdown.guarantor.compatible) {
+    if (!result.breakdown.guarantor.compatible && criteria.guarantor.weight > 15) {
       result.recommendations.push("Ajouter un garant pour sécuriser le dossier")
+    }
+    if (!result.breakdown.application_quality.compatible) {
+      result.recommendations.push("Compléter le dossier et faire vérifier les documents")
     }
 
     return result

@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Switch } from "@/components/ui/switch"
+import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
-import { Save, RefreshCw, Star, CheckCircle } from "lucide-react"
+import { Save, RefreshCw, Star, CheckCircle, FileCheck, Shield, Euro, Briefcase, AlertCircle } from "lucide-react"
 
 export default function ScoringPreferencesSimplePage() {
   const router = useRouter()
@@ -33,18 +35,24 @@ export default function ScoringPreferencesSimplePage() {
       contract: "CDI",
       guarantor: true,
       guarantorIncome: 4000,
+      completeFile: true,
+      verifiedDocs: true,
     },
     good: {
       income: 2800,
       contract: "CDD",
       guarantor: true,
       guarantorIncome: 3000,
+      completeFile: true,
+      verifiedDocs: false,
     },
     acceptable: {
       income: 2200,
       contract: "freelance",
       guarantor: false,
       guarantorIncome: 0,
+      completeFile: false,
+      verifiedDocs: false,
     },
   })
 
@@ -134,7 +142,7 @@ export default function ScoringPreferencesSimplePage() {
       } else {
         const errorData = await response.json()
         console.error("Erreur API:", errorData)
-        toast.error("Erreur lors de l'application du modèle")
+        toast.error(errorData.error || "Erreur lors de l'application du modèle")
       }
     } catch (error) {
       console.error("Erreur application modèle:", error)
@@ -208,14 +216,13 @@ export default function ScoringPreferencesSimplePage() {
           },
           application_quality: {
             weight: 10,
-            presentation_length: {
-              excellent: 200,
-              good: 100,
-              basic: 50,
+            file_completeness: {
+              required: sampleProfiles.acceptable.completeFile,
+              bonus_points: 50,
             },
-            completeness_bonus: {
-              enabled: true,
-              bonus_points: 20,
+            verified_documents: {
+              required: sampleProfiles.excellent.verifiedDocs,
+              bonus_points: 50,
             },
           },
         },
@@ -253,6 +260,45 @@ export default function ScoringPreferencesSimplePage() {
   const handleTabChange = (value: string) => {
     setActiveTab(value)
     router.push(`/owner/scoring-preferences-simple?tab=${value}`)
+  }
+
+  const getModelDescription = (criteria: any) => {
+    if (!criteria) return "Modèle non configuré"
+
+    const descriptions = []
+
+    // Revenus
+    if (criteria.income_ratio?.thresholds?.minimum) {
+      descriptions.push(`Revenus minimum: ${criteria.income_ratio.thresholds.minimum}x le loyer`)
+    }
+
+    // Contrats acceptés
+    const contracts = criteria.professional_stability?.contract_types
+    if (contracts) {
+      const acceptedContracts = Object.entries(contracts)
+        .filter(([_, score]: [string, any]) => score >= 50)
+        .map(([type, _]) => type.toUpperCase())
+      if (acceptedContracts.length > 0) {
+        descriptions.push(`Contrats: ${acceptedContracts.join(", ")}`)
+      }
+    }
+
+    // Garants
+    if (criteria.guarantor?.presence_points >= 80) {
+      descriptions.push("Garant fortement valorisé")
+    } else if (criteria.guarantor?.presence_points >= 50) {
+      descriptions.push("Garant valorisé")
+    }
+
+    // Documents
+    if (criteria.application_quality?.verified_documents?.required) {
+      descriptions.push("Documents vérifiés requis")
+    }
+    if (criteria.application_quality?.file_completeness?.required) {
+      descriptions.push("Dossier complet requis")
+    }
+
+    return descriptions.length > 0 ? descriptions.join(" • ") : "Critères standards"
   }
 
   if (loading) {
@@ -297,10 +343,13 @@ export default function ScoringPreferencesSimplePage() {
                 Configurez facilement vos critères d'évaluation en définissant des exemples concrets
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-8">
               {/* Loyer de référence */}
-              <div className="space-y-2">
-                <Label>Pour un bien à ce loyer mensuel</Label>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <Label className="text-base font-medium">Loyer de référence</Label>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Définissez le loyer mensuel pour calculer les ratios de revenus
+                </p>
                 <div className="flex items-center gap-2">
                   <Input
                     type="number"
@@ -310,294 +359,467 @@ export default function ScoringPreferencesSimplePage() {
                     }
                     className="w-32"
                   />
-                  <span>€/mois</span>
+                  <span className="font-medium">€/mois</span>
                 </div>
               </div>
 
               {/* Profil excellent */}
-              <div className="space-y-4 border-l-4 border-green-500 pl-4">
-                <h3 className="font-medium text-lg">Profil excellent</h3>
+              <div className="border-l-4 border-green-500 pl-6 bg-green-50 p-4 rounded-r-lg">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                  <h3 className="font-semibold text-lg text-green-800">Profil excellent</h3>
+                  <Badge variant="secondary" className="bg-green-100 text-green-800">
+                    Candidat idéal
+                  </Badge>
+                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Revenus mensuels</Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        value={sampleProfiles.excellent.income}
-                        onChange={(e) =>
-                          setSampleProfiles({
-                            ...sampleProfiles,
-                            excellent: {
-                              ...sampleProfiles.excellent,
-                              income: Number.parseInt(e.target.value) || 0,
-                            },
-                          })
-                        }
-                        className="w-32"
-                      />
-                      <span>€/mois</span>
-                      <span className="text-xs text-muted-foreground ml-2">
-                        ({(sampleProfiles.excellent.income / sampleProperty.price).toFixed(1)}x le loyer)
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Type de contrat</Label>
-                    <select
-                      className="w-full border rounded-md p-2"
-                      value={sampleProfiles.excellent.contract}
-                      onChange={(e) =>
-                        setSampleProfiles({
-                          ...sampleProfiles,
-                          excellent: {
-                            ...sampleProfiles.excellent,
-                            contract: e.target.value,
-                          },
-                        })
-                      }
-                    >
-                      <option value="CDI">CDI</option>
-                      <option value="CDD">CDD</option>
-                      <option value="freelance">Freelance</option>
-                      <option value="student">Étudiant</option>
-                      <option value="retired">Retraité</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label>Garant</Label>
-                      <input
-                        type="checkbox"
-                        checked={sampleProfiles.excellent.guarantor}
-                        onChange={(e) =>
-                          setSampleProfiles({
-                            ...sampleProfiles,
-                            excellent: {
-                              ...sampleProfiles.excellent,
-                              guarantor: e.target.checked,
-                            },
-                          })
-                        }
-                        className="ml-2"
-                      />
-                    </div>
-                    {sampleProfiles.excellent.guarantor && (
-                      <div className="flex items-center gap-2">
-                        <Label className="text-sm">Revenus garant</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="flex items-center gap-2">
+                        <Euro className="h-4 w-4" />
+                        Revenus mensuels nets
+                      </Label>
+                      <div className="flex items-center gap-2 mt-1">
                         <Input
                           type="number"
-                          value={sampleProfiles.excellent.guarantorIncome}
+                          value={sampleProfiles.excellent.income}
                           onChange={(e) =>
                             setSampleProfiles({
                               ...sampleProfiles,
                               excellent: {
                                 ...sampleProfiles.excellent,
-                                guarantorIncome: Number.parseInt(e.target.value) || 0,
+                                income: Number.parseInt(e.target.value) || 0,
                               },
                             })
                           }
                           className="w-32"
                         />
                         <span>€/mois</span>
+                        <Badge variant="outline" className="text-xs">
+                          {(sampleProfiles.excellent.income / sampleProperty.price).toFixed(1)}x le loyer
+                        </Badge>
                       </div>
-                    )}
+                    </div>
+
+                    <div>
+                      <Label className="flex items-center gap-2">
+                        <Briefcase className="h-4 w-4" />
+                        Type de contrat
+                      </Label>
+                      <select
+                        className="w-full border rounded-md p-2 mt-1"
+                        value={sampleProfiles.excellent.contract}
+                        onChange={(e) =>
+                          setSampleProfiles({
+                            ...sampleProfiles,
+                            excellent: {
+                              ...sampleProfiles.excellent,
+                              contract: e.target.value,
+                            },
+                          })
+                        }
+                      >
+                        <option value="CDI">CDI</option>
+                        <option value="CDD">CDD</option>
+                        <option value="freelance">Freelance</option>
+                        <option value="student">Étudiant</option>
+                        <option value="retired">Retraité</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label className="flex items-center gap-2">
+                          <Shield className="h-4 w-4" />
+                          Garant
+                        </Label>
+                        <Switch
+                          checked={sampleProfiles.excellent.guarantor}
+                          onCheckedChange={(checked) =>
+                            setSampleProfiles({
+                              ...sampleProfiles,
+                              excellent: {
+                                ...sampleProfiles.excellent,
+                                guarantor: checked,
+                              },
+                            })
+                          }
+                        />
+                      </div>
+                      {sampleProfiles.excellent.guarantor && (
+                        <div className="flex items-center gap-2">
+                          <Label className="text-sm">Revenus garant</Label>
+                          <Input
+                            type="number"
+                            value={sampleProfiles.excellent.guarantorIncome}
+                            onChange={(e) =>
+                              setSampleProfiles({
+                                ...sampleProfiles,
+                                excellent: {
+                                  ...sampleProfiles.excellent,
+                                  guarantorIncome: Number.parseInt(e.target.value) || 0,
+                                },
+                              })
+                            }
+                            className="w-32"
+                          />
+                          <span>€/mois</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="flex items-center gap-2">
+                          <FileCheck className="h-4 w-4" />
+                          Dossier complet
+                        </Label>
+                        <Switch
+                          checked={sampleProfiles.excellent.completeFile}
+                          onCheckedChange={(checked) =>
+                            setSampleProfiles({
+                              ...sampleProfiles,
+                              excellent: {
+                                ...sampleProfiles.excellent,
+                                completeFile: checked,
+                              },
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm text-muted-foreground">Documents vérifiés (DossierFacile)</Label>
+                        <Switch
+                          checked={sampleProfiles.excellent.verifiedDocs}
+                          onCheckedChange={(checked) =>
+                            setSampleProfiles({
+                              ...sampleProfiles,
+                              excellent: {
+                                ...sampleProfiles.excellent,
+                                verifiedDocs: checked,
+                              },
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Profil bon */}
-              <div className="space-y-4 border-l-4 border-blue-500 pl-4">
-                <h3 className="font-medium text-lg">Profil bon</h3>
+              <div className="border-l-4 border-blue-500 pl-6 bg-blue-50 p-4 rounded-r-lg">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                  <h3 className="font-semibold text-lg text-blue-800">Profil bon</h3>
+                  <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                    Candidat solide
+                  </Badge>
+                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Revenus mensuels</Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        value={sampleProfiles.good.income}
-                        onChange={(e) =>
-                          setSampleProfiles({
-                            ...sampleProfiles,
-                            good: {
-                              ...sampleProfiles.good,
-                              income: Number.parseInt(e.target.value) || 0,
-                            },
-                          })
-                        }
-                        className="w-32"
-                      />
-                      <span>€/mois</span>
-                      <span className="text-xs text-muted-foreground ml-2">
-                        ({(sampleProfiles.good.income / sampleProperty.price).toFixed(1)}x le loyer)
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Type de contrat</Label>
-                    <select
-                      className="w-full border rounded-md p-2"
-                      value={sampleProfiles.good.contract}
-                      onChange={(e) =>
-                        setSampleProfiles({
-                          ...sampleProfiles,
-                          good: {
-                            ...sampleProfiles.good,
-                            contract: e.target.value,
-                          },
-                        })
-                      }
-                    >
-                      <option value="CDI">CDI</option>
-                      <option value="CDD">CDD</option>
-                      <option value="freelance">Freelance</option>
-                      <option value="student">Étudiant</option>
-                      <option value="retired">Retraité</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label>Garant</Label>
-                      <input
-                        type="checkbox"
-                        checked={sampleProfiles.good.guarantor}
-                        onChange={(e) =>
-                          setSampleProfiles({
-                            ...sampleProfiles,
-                            good: {
-                              ...sampleProfiles.good,
-                              guarantor: e.target.checked,
-                            },
-                          })
-                        }
-                        className="ml-2"
-                      />
-                    </div>
-                    {sampleProfiles.good.guarantor && (
-                      <div className="flex items-center gap-2">
-                        <Label className="text-sm">Revenus garant</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="flex items-center gap-2">
+                        <Euro className="h-4 w-4" />
+                        Revenus mensuels nets
+                      </Label>
+                      <div className="flex items-center gap-2 mt-1">
                         <Input
                           type="number"
-                          value={sampleProfiles.good.guarantorIncome}
+                          value={sampleProfiles.good.income}
                           onChange={(e) =>
                             setSampleProfiles({
                               ...sampleProfiles,
                               good: {
                                 ...sampleProfiles.good,
-                                guarantorIncome: Number.parseInt(e.target.value) || 0,
+                                income: Number.parseInt(e.target.value) || 0,
                               },
                             })
                           }
                           className="w-32"
                         />
                         <span>€/mois</span>
+                        <Badge variant="outline" className="text-xs">
+                          {(sampleProfiles.good.income / sampleProperty.price).toFixed(1)}x le loyer
+                        </Badge>
                       </div>
-                    )}
+                    </div>
+
+                    <div>
+                      <Label className="flex items-center gap-2">
+                        <Briefcase className="h-4 w-4" />
+                        Type de contrat
+                      </Label>
+                      <select
+                        className="w-full border rounded-md p-2 mt-1"
+                        value={sampleProfiles.good.contract}
+                        onChange={(e) =>
+                          setSampleProfiles({
+                            ...sampleProfiles,
+                            good: {
+                              ...sampleProfiles.good,
+                              contract: e.target.value,
+                            },
+                          })
+                        }
+                      >
+                        <option value="CDI">CDI</option>
+                        <option value="CDD">CDD</option>
+                        <option value="freelance">Freelance</option>
+                        <option value="student">Étudiant</option>
+                        <option value="retired">Retraité</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label className="flex items-center gap-2">
+                          <Shield className="h-4 w-4" />
+                          Garant
+                        </Label>
+                        <Switch
+                          checked={sampleProfiles.good.guarantor}
+                          onCheckedChange={(checked) =>
+                            setSampleProfiles({
+                              ...sampleProfiles,
+                              good: {
+                                ...sampleProfiles.good,
+                                guarantor: checked,
+                              },
+                            })
+                          }
+                        />
+                      </div>
+                      {sampleProfiles.good.guarantor && (
+                        <div className="flex items-center gap-2">
+                          <Label className="text-sm">Revenus garant</Label>
+                          <Input
+                            type="number"
+                            value={sampleProfiles.good.guarantorIncome}
+                            onChange={(e) =>
+                              setSampleProfiles({
+                                ...sampleProfiles,
+                                good: {
+                                  ...sampleProfiles.good,
+                                  guarantorIncome: Number.parseInt(e.target.value) || 0,
+                                },
+                              })
+                            }
+                            className="w-32"
+                          />
+                          <span>€/mois</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="flex items-center gap-2">
+                          <FileCheck className="h-4 w-4" />
+                          Dossier complet
+                        </Label>
+                        <Switch
+                          checked={sampleProfiles.good.completeFile}
+                          onCheckedChange={(checked) =>
+                            setSampleProfiles({
+                              ...sampleProfiles,
+                              good: {
+                                ...sampleProfiles.good,
+                                completeFile: checked,
+                              },
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm text-muted-foreground">Documents vérifiés (DossierFacile)</Label>
+                        <Switch
+                          checked={sampleProfiles.good.verifiedDocs}
+                          onCheckedChange={(checked) =>
+                            setSampleProfiles({
+                              ...sampleProfiles,
+                              good: {
+                                ...sampleProfiles.good,
+                                verifiedDocs: checked,
+                              },
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Profil acceptable */}
-              <div className="space-y-4 border-l-4 border-amber-500 pl-4">
-                <h3 className="font-medium text-lg">Profil acceptable</h3>
+              <div className="border-l-4 border-amber-500 pl-6 bg-amber-50 p-4 rounded-r-lg">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-3 h-3 bg-amber-500 rounded-full"></div>
+                  <h3 className="font-semibold text-lg text-amber-800">Profil acceptable</h3>
+                  <Badge variant="secondary" className="bg-amber-100 text-amber-800">
+                    Candidat minimum
+                  </Badge>
+                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Revenus mensuels</Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        value={sampleProfiles.acceptable.income}
-                        onChange={(e) =>
-                          setSampleProfiles({
-                            ...sampleProfiles,
-                            acceptable: {
-                              ...sampleProfiles.acceptable,
-                              income: Number.parseInt(e.target.value) || 0,
-                            },
-                          })
-                        }
-                        className="w-32"
-                      />
-                      <span>€/mois</span>
-                      <span className="text-xs text-muted-foreground ml-2">
-                        ({(sampleProfiles.acceptable.income / sampleProperty.price).toFixed(1)}x le loyer)
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Type de contrat</Label>
-                    <select
-                      className="w-full border rounded-md p-2"
-                      value={sampleProfiles.acceptable.contract}
-                      onChange={(e) =>
-                        setSampleProfiles({
-                          ...sampleProfiles,
-                          acceptable: {
-                            ...sampleProfiles.acceptable,
-                            contract: e.target.value,
-                          },
-                        })
-                      }
-                    >
-                      <option value="CDI">CDI</option>
-                      <option value="CDD">CDD</option>
-                      <option value="freelance">Freelance</option>
-                      <option value="student">Étudiant</option>
-                      <option value="retired">Retraité</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label>Garant</Label>
-                      <input
-                        type="checkbox"
-                        checked={sampleProfiles.acceptable.guarantor}
-                        onChange={(e) =>
-                          setSampleProfiles({
-                            ...sampleProfiles,
-                            acceptable: {
-                              ...sampleProfiles.acceptable,
-                              guarantor: e.target.checked,
-                            },
-                          })
-                        }
-                        className="ml-2"
-                      />
-                    </div>
-                    {sampleProfiles.acceptable.guarantor && (
-                      <div className="flex items-center gap-2">
-                        <Label className="text-sm">Revenus garant</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="flex items-center gap-2">
+                        <Euro className="h-4 w-4" />
+                        Revenus mensuels nets
+                      </Label>
+                      <div className="flex items-center gap-2 mt-1">
                         <Input
                           type="number"
-                          value={sampleProfiles.acceptable.guarantorIncome}
+                          value={sampleProfiles.acceptable.income}
                           onChange={(e) =>
                             setSampleProfiles({
                               ...sampleProfiles,
                               acceptable: {
                                 ...sampleProfiles.acceptable,
-                                guarantorIncome: Number.parseInt(e.target.value) || 0,
+                                income: Number.parseInt(e.target.value) || 0,
                               },
                             })
                           }
                           className="w-32"
                         />
                         <span>€/mois</span>
+                        <Badge variant="outline" className="text-xs">
+                          {(sampleProfiles.acceptable.income / sampleProperty.price).toFixed(1)}x le loyer
+                        </Badge>
                       </div>
-                    )}
+                    </div>
+
+                    <div>
+                      <Label className="flex items-center gap-2">
+                        <Briefcase className="h-4 w-4" />
+                        Type de contrat
+                      </Label>
+                      <select
+                        className="w-full border rounded-md p-2 mt-1"
+                        value={sampleProfiles.acceptable.contract}
+                        onChange={(e) =>
+                          setSampleProfiles({
+                            ...sampleProfiles,
+                            acceptable: {
+                              ...sampleProfiles.acceptable,
+                              contract: e.target.value,
+                            },
+                          })
+                        }
+                      >
+                        <option value="CDI">CDI</option>
+                        <option value="CDD">CDD</option>
+                        <option value="freelance">Freelance</option>
+                        <option value="student">Étudiant</option>
+                        <option value="retired">Retraité</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label className="flex items-center gap-2">
+                          <Shield className="h-4 w-4" />
+                          Garant
+                        </Label>
+                        <Switch
+                          checked={sampleProfiles.acceptable.guarantor}
+                          onCheckedChange={(checked) =>
+                            setSampleProfiles({
+                              ...sampleProfiles,
+                              acceptable: {
+                                ...sampleProfiles.acceptable,
+                                guarantor: checked,
+                              },
+                            })
+                          }
+                        />
+                      </div>
+                      {sampleProfiles.acceptable.guarantor && (
+                        <div className="flex items-center gap-2">
+                          <Label className="text-sm">Revenus garant</Label>
+                          <Input
+                            type="number"
+                            value={sampleProfiles.acceptable.guarantorIncome}
+                            onChange={(e) =>
+                              setSampleProfiles({
+                                ...sampleProfiles,
+                                acceptable: {
+                                  ...sampleProfiles.acceptable,
+                                  guarantorIncome: Number.parseInt(e.target.value) || 0,
+                                },
+                              })
+                            }
+                            className="w-32"
+                          />
+                          <span>€/mois</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="flex items-center gap-2">
+                          <FileCheck className="h-4 w-4" />
+                          Dossier complet
+                        </Label>
+                        <Switch
+                          checked={sampleProfiles.acceptable.completeFile}
+                          onCheckedChange={(checked) =>
+                            setSampleProfiles({
+                              ...sampleProfiles,
+                              acceptable: {
+                                ...sampleProfiles.acceptable,
+                                completeFile: checked,
+                              },
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm text-muted-foreground">Documents vérifiés (DossierFacile)</Label>
+                        <Switch
+                          checked={sampleProfiles.acceptable.verifiedDocs}
+                          onCheckedChange={(checked) =>
+                            setSampleProfiles({
+                              ...sampleProfiles,
+                              acceptable: {
+                                ...sampleProfiles.acceptable,
+                                verifiedDocs: checked,
+                              },
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
+                  <div>
+                    <h4 className="font-medium text-blue-900 mb-1">Comment ça fonctionne ?</h4>
+                    <p className="text-sm text-blue-800">
+                      Ces profils définissent vos critères d'acceptation. Le système calculera automatiquement un score
+                      pour chaque candidature en fonction de ces exemples. Plus un candidat se rapproche du profil
+                      "excellent", plus son score sera élevé.
+                    </p>
                   </div>
                 </div>
               </div>
 
               <div className="flex justify-end">
-                <Button onClick={handleSaveFromAssistant} disabled={saving}>
+                <Button onClick={handleSaveFromAssistant} disabled={saving} size="lg">
                   {saving ? (
                     <>
                       <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
@@ -630,7 +852,7 @@ export default function ScoringPreferencesSimplePage() {
                   </Button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-4">
                   {systemPreferences.map((pref) => (
                     <Card
                       key={pref.id}
@@ -639,39 +861,71 @@ export default function ScoringPreferencesSimplePage() {
                       }`}
                       onClick={() => handleUseSystemPreference(pref.id)}
                     >
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <h3 className="font-medium">{pref.name}</h3>
-                          {selectedSystemPreference === pref.id ? (
-                            <CheckCircle className="h-5 w-5 text-blue-500" />
-                          ) : pref.is_default ? (
-                            <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                          ) : null}
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-3">{pref.description || "Modèle prédéfini"}</p>
+                      <CardContent className="p-6">
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <h3 className="font-semibold text-lg">{pref.name}</h3>
+                              {selectedSystemPreference === pref.id ? (
+                                <CheckCircle className="h-5 w-5 text-blue-500" />
+                              ) : pref.is_default ? (
+                                <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                              ) : null}
+                            </div>
+                            <p className="text-muted-foreground mb-3">{pref.description || "Modèle prédéfini"}</p>
 
-                        {/* Aperçu des critères */}
-                        <div className="space-y-1 text-xs">
-                          <div className="flex justify-between">
-                            <span>Revenus:</span>
-                            <span>{pref.criteria?.income_ratio?.weight || 0}%</span>
+                            {/* Description détaillée des critères */}
+                            <div className="text-sm text-gray-600">{getModelDescription(pref.criteria)}</div>
                           </div>
-                          <div className="flex justify-between">
-                            <span>Stabilité:</span>
-                            <span>{pref.criteria?.professional_stability?.weight || 0}%</span>
+                        </div>
+
+                        {/* Répartition des critères */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 pt-4 border-t">
+                          <div className="text-center">
+                            <div className="flex items-center justify-center gap-1 mb-1">
+                              <Euro className="h-4 w-4 text-green-600" />
+                              <span className="text-sm font-medium">Revenus</span>
+                            </div>
+                            <div className="text-lg font-bold text-green-600">
+                              {pref.criteria?.income_ratio?.weight || 0}%
+                            </div>
                           </div>
-                          <div className="flex justify-between">
-                            <span>Garants:</span>
-                            <span>{pref.criteria?.guarantor?.weight || 0}%</span>
+                          <div className="text-center">
+                            <div className="flex items-center justify-center gap-1 mb-1">
+                              <Briefcase className="h-4 w-4 text-blue-600" />
+                              <span className="text-sm font-medium">Stabilité</span>
+                            </div>
+                            <div className="text-lg font-bold text-blue-600">
+                              {pref.criteria?.professional_stability?.weight || 0}%
+                            </div>
                           </div>
-                          <div className="flex justify-between">
-                            <span>Dossier:</span>
-                            <span>{pref.criteria?.application_quality?.weight || 0}%</span>
+                          <div className="text-center">
+                            <div className="flex items-center justify-center gap-1 mb-1">
+                              <Shield className="h-4 w-4 text-purple-600" />
+                              <span className="text-sm font-medium">Garants</span>
+                            </div>
+                            <div className="text-lg font-bold text-purple-600">
+                              {pref.criteria?.guarantor?.weight || 0}%
+                            </div>
+                          </div>
+                          <div className="text-center">
+                            <div className="flex items-center justify-center gap-1 mb-1">
+                              <FileCheck className="h-4 w-4 text-orange-600" />
+                              <span className="text-sm font-medium">Dossier</span>
+                            </div>
+                            <div className="text-lg font-bold text-orange-600">
+                              {pref.criteria?.application_quality?.weight || 0}%
+                            </div>
                           </div>
                         </div>
 
                         {selectedSystemPreference === pref.id && (
-                          <div className="mt-3 text-xs text-blue-600 font-medium">✓ Modèle actuellement utilisé</div>
+                          <div className="mt-4 p-3 bg-blue-100 rounded-lg">
+                            <div className="flex items-center gap-2 text-blue-800 font-medium">
+                              <CheckCircle className="h-4 w-4" />
+                              Modèle actuellement utilisé
+                            </div>
+                          </div>
                         )}
                       </CardContent>
                     </Card>
@@ -680,9 +934,9 @@ export default function ScoringPreferencesSimplePage() {
               )}
 
               {currentUserPreference && !currentUserPreference.system_preference_id && (
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <div className="flex items-center">
-                    <Star className="h-5 w-5 text-blue-600 mr-2" />
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <div className="flex items-center gap-2">
+                    <Star className="h-5 w-5 text-blue-600" />
                     <p className="text-blue-800">
                       Vous utilisez actuellement un modèle personnalisé : <strong>{currentUserPreference.name}</strong>
                     </p>
