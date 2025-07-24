@@ -2,263 +2,264 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
+import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { CircularScore } from "@/components/circular-score"
-import { VisitProposalDialog } from "@/components/visit-proposal-dialog"
 import {
-  FileText,
-  Download,
   ArrowLeft,
   User,
   Briefcase,
-  Euro,
   Shield,
-  CheckCircle,
-  Home,
-  Phone,
-  Mail,
-  MapPin,
-  Calendar,
-  XCircle,
+  FileText,
   MessageSquare,
-  Eye,
+  CheckCircle,
+  XCircle,
+  Calendar,
+  AlertTriangle,
+  Clock,
+  Building,
+  CreditCard,
+  BarChart3,
+  AlertCircle,
 } from "lucide-react"
-import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
-import { convertBlobUrlToApiUrl, openDocument } from "@/lib/document-utils"
-import { VisitProposalManager } from "@/components/visit-proposal-manager"
 
-// Fonction formatCurrency définie localement pour éviter l'erreur d'importation
-const formatCurrency = (amount: number): string => {
-  return new Intl.NumberFormat("fr-FR", {
-    style: "currency",
-    currency: "EUR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount)
-}
+const DocumentPreview = ({ doc, type, index }: { doc: any; type: string; index: number }) => {
+  const getDocTypeColor = (type: string) => {
+    switch (type) {
+      case 'identity': return 'text-blue-500';
+      case 'professional': return 'text-green-500';
+      case 'financial': return 'text-purple-500';
+      case 'tax': return 'text-orange-500';
+      case 'housing': return 'text-red-500';
+      default: return 'text-gray-500';
+    }
+  };
 
-// Fonction formatDate définie localement
-const formatDate = (dateString?: string): string => {
-  if (!dateString) return "Non spécifié"
-  try {
-    return new Date(dateString).toLocaleDateString("fr-FR", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    })
-  } catch (e) {
-    return "Date invalide"
-  }
-}
+  const getDocTypeLabel = (type: string) => {
+    switch (type) {
+      case 'identity': return 'Pièce d\'identité';
+      case 'professional': return 'Document pro';
+      case 'financial': return 'Document financier';
+      case 'tax': return 'Document fiscal';
+      case 'housing': return 'Justificatif de domicile';
+      default: return 'Document';
+    }
+  };
 
-export default function ApplicationDetailPage({ params }: { params: { id: string } }) {
+  const colorClass = getDocTypeColor(type);
+  const docType = getDocTypeLabel(type);
+
+  return (
+    <div className="border rounded-lg p-3">
+      <div className={`flex items-center gap-2 mb-2 ${colorClass}`}>
+        <FileText className={`h-4 w-4 ${colorClass}`} />
+        <span className="text-sm font-medium">{docType} {index + 1}</span>
+      </div>
+      {doc.file_type?.startsWith('image/') ? (
+        <img
+          src={doc.url}
+          alt={`${docType} ${index + 1}`}
+          className="w-full h-32 object-contain rounded border bg-gray-50"
+          onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            target.style.display = 'none';
+            const fallback = target.nextElementSibling as HTMLElement;
+            if (fallback) fallback.style.display = 'flex';
+          }}
+        />
+      ) : (
+        <div className="w-full h-32 flex items-center justify-center bg-gray-100 rounded border">
+          <FileText className="h-8 w-8 text-gray-400" />
+        </div>
+      )}
+      <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
+        <div className="text-center">
+          <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
+          <p className="text-xs text-gray-500">{doc.name || 'Document'}</p>
+        </div>
+      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        className="w-full mt-2"
+        onClick={() => window.open(doc.url, '_blank')}
+      >
+        Voir le document
+      </Button>
+    </div>
+  );
+};
+
+export default function ApplicationDetailsPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [application, setApplication] = useState<any>(null)
-  const [property, setProperty] = useState<any>(null)
-  const [scoringPreferences, setScoringPreferences] = useState<any>(null)
-  const [matchScore, setMatchScore] = useState<any>({ score: 0, breakdown: {} })
   const [rentalFile, setRentalFile] = useState<any>(null)
-  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
+  const [user, setUser] = useState<any>(null)
+  const [activeTab, setActiveTab] = useState("overview")
   const [showVisitDialog, setShowVisitDialog] = useState(false)
-  const [currentApplicationForVisit, setCurrentApplicationForVisit] = useState(null)
+  const [showRefuseDialog, setShowRefuseDialog] = useState(false)
+  const [scoringPreferences, setScoringPreferences] = useState<any>(null)
 
   useEffect(() => {
-    loadApplication()
+    checkAuthAndLoadData()
   }, [])
 
-  const loadApplication = async () => {
+  const checkAuthAndLoadData = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/applications/${params.id}`)
+      const currentUser = await authService.getCurrentUser()
 
+      if (!currentUser) {
+        toast.error("Vous devez être connecté pour accéder à cette page")
+        router.push("/login")
+        return
+      }
+
+      if (currentUser.user_type !== "owner") {
+        toast.error("Accès réservé aux propriétaires")
+        router.push("/")
+        return
+      }
+
+      setUser(currentUser)
+      await loadApplicationDetails()
+    } catch (error) {
+      console.error("Erreur auth:", error)
+      toast.error("Erreur d'authentification")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadApplicationDetails = async () => {
+    try {
+      console.log("🔍 Chargement détails candidature:", params.id)
+
+      const response = await fetch(`/api/applications/${params.id}`)
       if (!response.ok) {
         toast.error("Erreur lors du chargement de la candidature")
         return
       }
 
       const data = await response.json()
-      console.log("Application chargée:", data)
+      console.log("✅ Candidature chargée:", data.application)
+
+      if (data.application.status === "pending") {
+        await updateApplicationStatus("analyzing")
+        data.application.status = "analyzing"
+      }
 
       setApplication(data.application)
-      setProperty(data.property)
 
-      // Charger le dossier de location
-      if (data.application.rental_file_id) {
-        await loadRentalFile(data.application.rental_file_id)
+      if (data.application?.tenant_id) {
+        try {
+          const rentalFileResponse = await fetch(`/api/rental-files?tenant_id=${data.application.tenant_id}`)
+          if (rentalFileResponse.ok) {
+            const rentalFileData = await rentalFileResponse.json()
+            const rentalFile = rentalFileData.rental_file
+
+            if (rentalFile) {
+              console.log("✅ Dossier de location chargé:", {
+                id: rentalFile.id,
+                main_tenant: rentalFile.main_tenant?.first_name + " " + rentalFile.main_tenant?.last_name,
+                income: rentalFile.main_tenant?.income_sources?.work_income?.amount,
+                guarantors_count: rentalFile.guarantors?.length || 0,
+              })
+              setRentalFile(rentalFile)
+            }
+          }
+        } catch (error) {
+          console.error("Erreur chargement dossier location:", error)
+        }
       }
 
-      // Charger les préférences de scoring
-      await loadScoringPreferences(data.application.property_owner_id)
-
-      // Calculer le score
-      if (data.application && data.property) {
-        calculateMatchScore(data.application, data.property)
+      if (data.application?.property?.owner_id) {
+        try {
+          const prefsResponse = await fetch(
+            `/api/scoring-preferences?owner_id=${data.application.property.owner_id}&default_only=true`,
+            {
+              cache: "no-store",
+              headers: {
+                "Cache-Control": "no-cache",
+              },
+            },
+          )
+          if (prefsResponse.ok) {
+            const prefsData = await prefsResponse.json()
+            if (prefsData.preferences && prefsData.preferences.length > 0) {
+              console.log("Préférences de scoring récupérées:", prefsData.preferences[0].name)
+              setScoringPreferences(prefsData.preferences[0])
+            } else {
+              setScoringPreferences({
+                min_income_ratio: 2.5,
+                good_income_ratio: 3,
+                excellent_income_ratio: 3.5,
+                weights: {
+                  income: 40,
+                  stability: 25,
+                  guarantor: 20,
+                  file_quality: 15,
+                },
+              })
+            }
+          }
+        } catch (error) {
+          console.error("Erreur chargement préférences scoring:", error)
+          setScoringPreferences({
+            min_income_ratio: 2.5,
+            good_income_ratio: 3,
+            excellent_income_ratio: 3.5,
+            weights: {
+              income: 40,
+              stability: 25,
+              guarantor: 20,
+              file_quality: 15,
+            },
+          })
+        }
       }
     } catch (error) {
       console.error("Erreur:", error)
-      toast.error("Erreur lors du chargement des données")
-    } finally {
-      setLoading(false)
+      toast.error("Erreur lors du chargement des détails")
     }
   }
 
-  const loadRentalFile = async (rentalFileId: string) => {
+  const updateApplicationStatus = async (newStatus: string, notes?: string) => {
     try {
-      const response = await fetch(`/api/rental-files?id=${rentalFileId}`)
+      const response = await fetch(`/api/applications/${params.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status: newStatus,
+          notes: notes || undefined,
+        }),
+      })
 
-      if (!response.ok) {
-        console.error("Erreur lors du chargement du dossier de location")
-        return
-      }
+      if (response.ok) {
+        const statusMessages: { [key: string]: string } = {
+          analyzing: "Candidature en cours d'analyse",
+          accepted: "Candidature acceptée",
+          rejected: "Candidature refusée",
+          visit_scheduled: "Visite proposée au candidat",
+          waiting_tenant_confirmation: "En attente de confirmation du locataire",
+        }
 
-      const data = await response.json()
-      console.log("Dossier de location chargé:", data)
-      setRentalFile(data.rental_file)
-    } catch (error) {
-      console.error("Erreur chargement dossier:", error)
-    }
-  }
-
-  const loadScoringPreferences = async (ownerId: string) => {
-    try {
-      const response = await fetch(`/api/scoring-preferences?owner_id=${ownerId}&default_only=true`)
-
-      if (!response.ok) {
-        console.error("Erreur lors du chargement des préférences de scoring")
-        return
-      }
-
-      const data = await response.json()
-      console.log("Préférences de scoring récupérées:", data.preferences?.[0]?.name || "Modèle standard")
-
-      if (data.preferences && data.preferences.length > 0) {
-        setScoringPreferences(data.preferences[0])
+        toast.success(statusMessages[newStatus] || "Statut mis à jour")
+        setApplication({ ...application, status: newStatus })
+        return true
       } else {
-        // Utiliser les préférences par défaut du service
-        setScoringPreferences(scoringPreferencesService.getDefaultPreferences(ownerId))
-      }
-    } catch (error) {
-      console.error("Erreur chargement préférences:", error)
-    }
-  }
-
-  const calculateMatchScore = (application: any, property: any) => {
-    try {
-      if (!application || !property) return
-
-      console.log("Calcul du score avec les préférences:", scoringPreferences?.name || "Modèle standard")
-
-      // Utiliser les préférences chargées ou les préférences par défaut
-      const preferences =
-        scoringPreferences || scoringPreferencesService.getDefaultPreferences(application.property_owner_id)
-
-      const score = scoringPreferencesService.calculateCustomScore(application, property, preferences)
-      console.log("Score calculé:", score)
-
-      setMatchScore(score)
-    } catch (error) {
-      console.error("Erreur calcul score:", error)
-      toast.error("Erreur lors du calcul du score")
-    }
-  }
-
-  const generatePDF = async () => {
-    if (!rentalFile) {
-      toast.error("Dossier de location non disponible")
-      return
-    }
-
-    setIsGeneratingPDF(true)
-    try {
-      // Importer dynamiquement le générateur PDF
-      const { generateRentalFilePDF } = await import("@/lib/pdf-generator-corrected")
-
-      // Générer le PDF
-      await generateRentalFilePDF(rentalFile)
-      toast.success("Dossier PDF téléchargé avec succès")
-    } catch (error) {
-      console.error("Erreur génération PDF:", error)
-      toast.error("Erreur lors de la génération du PDF")
-    } finally {
-      setIsGeneratingPDF(false)
-    }
-  }
-
-  const handleStatusChange = async (newStatus: string) => {
-    try {
-      const response = await fetch(`/api/applications/${params.id}/status`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
-      })
-
-      if (!response.ok) {
         toast.error("Erreur lors de la mise à jour du statut")
-        return
-      }
-
-      toast.success("Statut mis à jour avec succès")
-      loadApplication() // Recharger l'application
-    } catch (error) {
-      console.error("Erreur:", error)
-      toast.error("Erreur lors de la mise à jour du statut")
-    }
-  }
-
-  const handleProposeVisit = () => {
-    if (application && application.property) {
-      setCurrentApplicationForVisit({
-        id: application.id,
-        property_id: application.property.id,
-        property: application.property,
-        tenant: application.tenant,
-      })
-      setShowVisitDialog(true)
-    }
-  }
-
-  const handleVisitProposed = async (slots) => {
-    if (!currentApplicationForVisit) return
-
-    try {
-      // Mettre à jour le statut de la candidature
-      const success = await updateApplicationStatus("visit_proposed")
-      if (success) {
-        // Fermer le dialogue
-        setShowVisitDialog(false)
-        setCurrentApplicationForVisit(null)
-        toast.success("Créneaux de visite proposés avec succès")
-      }
-    } catch (error) {
-      console.error("Erreur lors de la proposition de visite:", error)
-      toast.error("Erreur lors de la proposition de visite")
-    }
-  }
-
-  const updateApplicationStatus = async (newStatus: string) => {
-    try {
-      const response = await fetch(`/api/applications/${params.id}/status`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        toast.error(errorData.message || "Erreur lors de la mise à jour du statut")
         return false
       }
-
-      // Recharger l'application pour mettre à jour le statut
-      loadApplication()
-      return true
     } catch (error) {
       console.error("Erreur:", error)
       toast.error("Erreur lors de la mise à jour du statut")
@@ -266,106 +267,311 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
     }
   }
 
-  const handleVisitProposal = async (slots: any[]) => {
+  const handleProposeVisit = () => {
+    setShowVisitDialog(true)
+  }
+
+  const handleVisitProposed = async (slots: any[]) => {
+    const success = await updateApplicationStatus("visit_proposed")
+    if (success) {
+      setShowVisitDialog(false)
+    }
+  }
+
+  const handleRefuse = () => {
+    setShowRefuseDialog(true)
+  }
+
+  const handleRefuseConfirm = async (reason: string, type: string) => {
+    let notes = ""
+
+    const refusalReasons: { [key: string]: string } = {
+      insufficient_income: "Revenus insuffisants",
+      incomplete_file: "Dossier incomplet",
+      missing_guarantor: "Absence de garant",
+      unstable_situation: "Situation professionnelle instable",
+      other: reason,
+    }
+
+    notes = refusalReasons[type] || reason
+
+    const success = await updateApplicationStatus("rejected", notes)
+    if (success) {
+      setShowRefuseDialog(false)
+    }
+  }
+
+  const handleAccept = async () => {
+    await updateApplicationStatus("accepted")
+  }
+
+  const handleContact = async () => {
+    if (!application?.tenant_id || !application?.property_id) {
+      toast.error("Impossible de contacter ce locataire")
+      return
+    }
+
     try {
-      const response = await fetch(`/api/applications/${params.id}/propose-visit-slots`, {
+      const response = await fetch("/api/conversations", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slots }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          tenant_id: application.tenant_id,
+          owner_id: user.id,
+          property_id: application.property_id,
+          subject: `Candidature pour ${application.property?.title || "le bien"}`,
+        }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        toast.error(errorData.message || "Erreur lors de la proposition de visite")
-        return
+      if (response.ok) {
+        const data = await response.json()
+        router.push(`/owner/messaging?conversation_id=${data.conversation.id}`)
+      } else {
+        router.push(`/owner/messaging?tenant_id=${application.tenant_id}`)
       }
-
-      const data = await response.json()
-      toast.success(data.message || "Créneaux de visite proposés avec succès")
-      setShowVisitDialog(false)
-
-      // Recharger l'application pour mettre à jour le statut
-      loadApplication()
     } catch (error) {
-      console.error("Erreur:", error)
-      toast.error("Erreur lors de la proposition de visite")
+      console.error("Erreur création conversation:", error)
+      router.push(`/owner/messaging?tenant_id=${application.tenant_id}`)
     }
   }
 
-  // Helper pour vérifier si un tableau existe et a des éléments
+  const handleViewAnalysis = () => {
+    setActiveTab("financial")
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
+  const formatDate = (dateString: string | undefined) => {
+    if (!dateString) return "Non spécifié"
+    try {
+      return new Date(dateString).toLocaleDateString("fr-FR", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      })
+    } catch (e) {
+      return "Date invalide"
+    }
+  }
+
+  const formatAmount = (amount: number | undefined) => {
+    if (amount === null || amount === undefined) return "Non spécifié"
+    try {
+      return new Intl.NumberFormat("fr-FR", {
+        style: "currency",
+        currency: "EUR",
+        maximumFractionDigits: 0,
+      }).format(amount)
+    } catch (e) {
+      return "Montant invalide"
+    }
+  }
+
+  const calculateMatchScore = () => {
+    if (!application || !application.property || !scoringPreferences) return 50
+
+    const property = application.property
+    const mainTenant = rentalFile?.main_tenant || {}
+    const income = mainTenant.income_sources?.work_income?.amount || application.income || 0
+    const hasGuarantor =
+      (rentalFile?.guarantors && rentalFile.guarantors.length > 0) || application.has_guarantor || false
+    const contractType = (mainTenant.main_activity || application.contract_type || "").toLowerCase()
+
+    let score = 0
+
+    if (income && property.price) {
+      const rentRatio = income / property.price
+
+      if (rentRatio >= scoringPreferences.excellent_income_ratio) {
+        score += scoringPreferences.weights.income
+      } else if (rentRatio >= scoringPreferences.good_income_ratio) {
+        const points = Math.round(scoringPreferences.weights.income * 0.8)
+        score += points
+      } else if (rentRatio >= scoringPreferences.min_income_ratio) {
+        const points = Math.round(scoringPreferences.weights.income * 0.6)
+        score += points
+      } else {
+        const points = Math.round(scoringPreferences.weights.income * 0.3)
+        score += points
+      }
+    }
+
+    if (contractType === "cdi" || contractType === "fonctionnaire") {
+      score += scoringPreferences.weights.stability
+    } else if (contractType === "cdd") {
+      const points = Math.round(scoringPreferences.weights.stability * 0.7)
+      score += points
+    } else {
+      const points = Math.round(scoringPreferences.weights.stability * 0.5)
+      score += points
+    }
+
+    if (hasGuarantor) {
+      score += scoringPreferences.weights.guarantor
+    }
+
+    let fileQualityScore = 0
+    const profession = mainTenant.profession || application.profession
+    const company = mainTenant.company || application.company
+
+    if (profession && profession !== "Non spécifié") {
+      fileQualityScore += Math.round(scoringPreferences.weights.file_quality * 0.5)
+    }
+    if (company && company !== "Non spécifié") {
+      fileQualityScore += Math.round(scoringPreferences.weights.file_quality * 0.5)
+    }
+    score += fileQualityScore
+
+    return Math.min(Math.round(score), 100)
+  }
+
+  const getStatusBadge = () => {
+    if (!application) return null
+
+    switch (application.status) {
+      case "pending":
+        return <Badge variant="outline">En attente</Badge>
+      case "analyzing":
+        return <Badge variant="secondary">En analyse</Badge>
+      case "visit_scheduled":
+        return (
+          <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200">
+            Visite planifiée
+          </Badge>
+        )
+      case "accepted":
+      case "approved":
+        return (
+          <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-200">
+            Acceptée
+          </Badge>
+        )
+      case "rejected":
+        return <Badge variant="destructive">Refusée</Badge>
+      case "waiting_tenant_confirmation":
+        return (
+          <Badge variant="outline" className="bg-amber-100 text-amber-800 hover:bg-amber-200">
+            En attente de confirmation
+          </Badge>
+        )
+      default:
+        return <Badge variant="outline">Statut inconnu</Badge>
+    }
+  }
+
+  const getActionButtons = () => {
+    if (!application) return null
+
+    const viewAnalysisButton =
+      application.status !== "analyzing" ? (
+        <Button variant="outline" onClick={handleViewAnalysis}>
+          <BarChart3 className="h-4 w-4 mr-2" />
+          Voir analyse
+        </Button>
+      ) : null
+
+    switch (application.status) {
+      case "analyzing":
+        return (
+          <>
+            <Button onClick={handleProposeVisit}>
+              <Calendar className="h-4 w-4 mr-2" />
+              Proposer une visite
+            </Button>
+            <Button variant="destructive" onClick={handleRefuse}>
+              <XCircle className="h-4 w-4 mr-2" />
+              Refuser
+            </Button>
+            <Button variant="outline" onClick={handleContact}>
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Contacter
+            </Button>
+          </>
+        )
+      case "visit_scheduled":
+        return (
+          <>
+            <Button onClick={handleAccept}>
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Accepter le dossier
+            </Button>
+            <Button variant="destructive" onClick={handleRefuse}>
+              <XCircle className="h-4 w-4 mr-2" />
+              Refuser
+            </Button>
+            <Button variant="outline" onClick={handleContact}>
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Contacter
+            </Button>
+            {viewAnalysisButton}
+          </>
+        )
+      case "waiting_tenant_confirmation":
+        return (
+          <>
+            <Button variant="outline" disabled>
+              <Clock className="h-4 w-4 mr-2" />
+              En attente du locataire
+            </Button>
+            <Button variant="outline" onClick={handleContact}>
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Contacter
+            </Button>
+            {viewAnalysisButton}
+          </>
+        )
+      case "accepted":
+      case "approved":
+        return (
+          <>
+            <Button onClick={() => router.push(`/owner/leases/new?application=${application.id}`)}>
+              <FileText className="h-4 w-4 mr-2" />
+              Générer le bail
+            </Button>
+            <Button variant="outline" onClick={handleContact}>
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Contacter
+            </Button>
+            {viewAnalysisButton}
+          </>
+        )
+      case "rejected":
+        return (
+          <>
+            <Button variant="outline" onClick={handleContact}>
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Contacter
+            </Button>
+            {viewAnalysisButton}
+          </>
+        )
+      default:
+        return (
+          <>
+            <Button variant="outline" onClick={handleContact}>
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Contacter
+            </Button>
+            {viewAnalysisButton}
+          </>
+        )
+    }
+  }
+
   const hasDocuments = (docs: any) => {
-    return docs && Array.isArray(docs) && docs.length > 0
-  }
-
-  // Composant pour afficher un document
-  const DocumentCard = ({ doc, title, color = "blue" }: { doc: any; title: string; color?: string }) => {
-    const docUrl = doc?.url || doc
-    const colorClasses = {
-      blue: "text-blue-500 border-blue-200 bg-blue-50",
-      green: "text-green-500 border-green-200 bg-green-50",
-      purple: "text-purple-500 border-purple-200 bg-purple-50",
-      orange: "text-orange-500 border-orange-200 bg-orange-50",
-      red: "text-red-500 border-red-200 bg-red-50",
-      teal: "text-teal-500 border-teal-200 bg-teal-50",
-      indigo: "text-indigo-500 border-indigo-200 bg-indigo-50",
-    }
-
-    return (
-      <div className={`border rounded-lg p-4 ${colorClasses[color]} hover:shadow-md transition-shadow`}>
-        <div className="flex items-center gap-2 mb-3">
-          <FileText className={`h-5 w-5 ${colorClasses[color].split(" ")[0]}`} />
-          <span className="font-medium text-gray-900">{title}</span>
-        </div>
-
-        {/* Aperçu du document */}
-        <div className="mb-3">
-          <img
-            src={convertBlobUrlToApiUrl(docUrl) || "/placeholder.svg"}
-            alt={title}
-            className="w-full h-32 object-cover rounded border bg-white"
-            onError={(e) => {
-              e.currentTarget.style.display = "none"
-              e.currentTarget.nextElementSibling.style.display = "flex"
-            }}
-          />
-          <div className="hidden items-center justify-center h-32 bg-white rounded border">
-            <div className="text-center">
-              <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
-              <p className="text-xs text-gray-500">Document PDF</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="flex-1 bg-transparent" onClick={() => openDocument(docUrl)}>
-            <Eye className="h-4 w-4 mr-1" />
-            Consulter
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const link = document.createElement("a")
-              link.href = convertBlobUrlToApiUrl(docUrl)
-              link.download = title
-              link.click()
-            }}
-          >
-            <Download className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-    )
+    return docs && Array.isArray(docs) && docs.length > 0 && docs[0].url
   }
 
   if (loading) {
     return (
-      <div className="container mx-auto py-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-gray-200 rounded w-1/3"></div>
-          <div className="h-64 bg-gray-200 rounded"></div>
+      <div className="container mx-auto py-6 space-y-6">
+        <Skeleton className="h-8 w-64" />
+        <div className="grid gap-6 md:grid-cols-2">
+          <Skeleton className="h-64" />
+          <Skeleton className="h-64" />
         </div>
+        <Skeleton className="h-96" />
       </div>
     )
   }
@@ -373,907 +579,750 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
   if (!application) {
     return (
       <div className="container mx-auto py-6">
-        <Card>
+        <Button variant="ghost" onClick={() => router.back()}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Retour
+        </Button>
+        <Card className="mt-6">
           <CardContent className="flex flex-col items-center justify-center py-10">
-            <FileText className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-medium">Candidature introuvable</h3>
             <p className="text-sm text-muted-foreground mt-1">
               La candidature demandée n'existe pas ou vous n'avez pas les permissions nécessaires.
             </p>
-            <Button variant="outline" onClick={() => router.back()} className="mt-4">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Retour
-            </Button>
           </CardContent>
         </Card>
       </div>
     )
   }
 
-  const statusColors: Record<string, string> = {
-    pending: "bg-amber-100 text-amber-800",
-    approved: "bg-green-100 text-green-800",
-    rejected: "bg-red-100 text-red-800",
-    visit_scheduled: "bg-blue-100 text-blue-800",
-  }
+  const tenant = application.tenant || {}
+  const property = application.property || {}
+  const mainTenant = rentalFile?.main_tenant || {}
 
-  const statusLabels: Record<string, string> = {
-    pending: "En attente",
-    analyzing: "En cours d'analyse",
-    visit_proposed: "Visite proposée",
-    visit_scheduled: "Visite programmée",
-    visit_completed: "Visite effectuée",
-    accepted: "Acceptée - En attente confirmation",
-    approved: "Approuvée",
-    rejected: "Refusée",
-    lease_signed: "Bail signé",
-  }
+  const income = mainTenant.income_sources?.work_income?.amount || application.income || 0
+  const hasGuarantor =
+    (rentalFile?.guarantors && rentalFile.guarantors.length > 0) || application.has_guarantor || false
+  const profession = mainTenant.profession || application.profession || "Non spécifié"
+  const company = mainTenant.company || application.company || "Non spécifié"
+  const contractType = mainTenant.main_activity || application.contract_type || "Non spécifié"
 
-  const handleAccept = async () => {
-    try {
-      const response = await fetch(`/api/applications/${params.id}/status`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "accepted" }),
-      })
-
-      if (!response.ok) {
-        toast.error("Erreur lors de l'acceptation")
-        return
-      }
-
-      toast.success("Candidature acceptée - En attente de confirmation du locataire")
-      loadApplication()
-    } catch (error) {
-      console.error("Erreur:", error)
-      toast.error("Erreur lors de l'acceptation")
-    }
-  }
-
-  const handleRefuse = async () => {
-    try {
-      const response = await fetch(`/api/applications/${params.id}/status`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "rejected" }),
-      })
-
-      if (!response.ok) {
-        toast.error("Erreur lors du refus")
-        return
-      }
-
-      toast.success("Candidature refusée")
-      loadApplication()
-    } catch (error) {
-      console.error("Erreur:", error)
-      toast.error("Erreur lors du refus")
-    }
-  }
-
-  const handleContact = () => {
-    router.push(`/owner/messaging?application=${application.id}`)
-  }
+  const matchScore = calculateMatchScore()
+  const rentRatio = income && property.price ? (income / property.price).toFixed(1) : "N/A"
 
   return (
-    <div className="space-y-6">
+    <>
       <PageHeader
-        title="Analyse de candidature"
-        description={`Candidature de ${application.tenant_name || "Candidat"} pour ${property?.title || "Propriété"}`}
-        backButton={{
-          href: "/owner/applications",
-          label: "Retour aux candidatures",
-        }}
+        title={`Candidature de ${tenant.first_name} ${tenant.last_name}`}
+        description={`Pour ${property.title}`}
       >
-        <div className="flex gap-2">
-          {application.status === "analyzing" && (
-            <>
-              <Button onClick={handleProposeVisit}>
-                <Calendar className="h-4 w-4 mr-2" />
-                Proposer une visite
-              </Button>
-              <Button variant="destructive" onClick={handleRefuse}>
-                <XCircle className="h-4 w-4 mr-2" />
-                Refuser
-              </Button>
-              <Button variant="outline" onClick={handleContact}>
-                <MessageSquare className="h-4 w-4 mr-2" />
-                Contacter
-              </Button>
-            </>
-          )}
-          {application.status === "visit_scheduled" && (
-            <>
-              <Button onClick={handleAccept}>
-                <CheckCircle className="h-4 w-4 mr-2" />
-                Accepter le dossier
-              </Button>
-              <Button variant="destructive" onClick={handleRefuse}>
-                <XCircle className="h-4 w-4 mr-2" />
-                Refuser
-              </Button>
-              <Button variant="outline" onClick={handleContact}>
-                <MessageSquare className="h-4 w-4 mr-2" />
-                Contacter
-              </Button>
-            </>
-          )}
-          {application.status === "accepted" && (
-            <>
-              <Button onClick={() => router.push(`/owner/leases/new?application=${application.id}`)}>
-                <FileText className="h-4 w-4 mr-2" />
-                Générer le bail
-              </Button>
-              <Button variant="outline" onClick={handleContact}>
-                <MessageSquare className="h-4 w-4 mr-2" />
-                Contacter
-              </Button>
-            </>
-          )}
-
-          {/* Bouton de téléchargement PDF toujours visible si dossier disponible */}
-          {rentalFile && (
-            <Button variant="outline" onClick={generatePDF} disabled={isGeneratingPDF}>
-              {isGeneratingPDF ? (
-                <div className="flex items-center">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900 mr-2"></div>
-                  Génération...
-                </div>
-              ) : (
-                <>
-                  <Download className="h-4 w-4 mr-2" />
-                  Télécharger le dossier PDF
-                </>
-              )}
-            </Button>
-          )}
+        <div className="flex items-center gap-2">
+          {getStatusBadge()}
+          <Button variant="ghost" onClick={() => router.back()}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Retour
+          </Button>
         </div>
       </PageHeader>
-      </div>
 
-      <div className="space-y-6">
-        {/* Score et actions */}
+      <div className="p-6 space-y-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex items-center gap-4">
-            <CircularScore score={matchScore.totalScore || 0} compatible={matchScore.totalScore >= 60} />
+            <CircularScore score={matchScore} size="lg" customPreferences={scoringPreferences} />
             <div>
-              <h2 className="text-xl font-bold">Score de compatibilité</h2>
+              <h2 className="text-xl font-semibold">Score de compatibilité</h2>
               <p className="text-sm text-muted-foreground">
-                Basé sur {scoringPreferences?.name || "le modèle standard"}
+                Basé sur les revenus, la stabilité professionnelle et les garants
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge className={statusColors[application.status] || "bg-gray-100 text-gray-800"}>
-              {statusLabels[application.status] || "Statut inconnu"}
-            </Badge>
-          </div>
+          <div className="flex flex-wrap gap-2">{getActionButtons()}</div>
         </div>
 
-        <Tabs defaultValue="analysis" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="analysis">Analyse</TabsTrigger>
-            <TabsTrigger value="profile">Profil</TabsTrigger>
+        <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid grid-cols-3 mb-4">
+            <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
+            <TabsTrigger value="financial">Analyse financière</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="analysis" className="space-y-4">
+		{/* Vue d'ensemble */}
+          <TabsContent value="overview" className="space-y-6">
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Informations du candidat */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <User className="h-5 w-5" />
+                    Informations du candidat
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Nom complet</label>
+                    <p className="text-lg">
+                      {tenant.first_name} {tenant.last_name}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Email</label>
+                    <p>{tenant.email}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Téléphone</label>
+                    <p>{tenant.phone || "Non renseigné"}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Date de candidature</label>
+                    <p>{formatDate(application.created_at)}</p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Informations du bien */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Building className="h-5 w-5" />
+                    Bien concerné
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Titre</label>
+                    <p className="text-lg">{property.title}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Adresse</label>
+                    <p>{property.address}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Loyer</label>
+                    <p>{formatAmount(property.price)}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Type</label>
+                    <p>{property.type || "Non spécifié"}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Informations professionnelles et financières */}
             <Card>
               <CardHeader>
-                <CardTitle>Détail du score</CardTitle>
-                <CardDescription>Analyse détaillée des critères d'évaluation</CardDescription>
+                <CardTitle className="flex items-center gap-2">
+                  <Briefcase className="h-5 w-5" />
+                  Situation professionnelle et financière
+                </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {matchScore && matchScore.breakdown ? (
+              <CardContent className="grid gap-4 md:grid-cols-3">
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Profession</label>
+                  <p>{profession}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Entreprise</label>
+                  <p>{company}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Type de contrat</label>
+                  <p>{contractType}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Revenus mensuels</label>
+                  <p className="text-lg font-semibold text-green-600">{formatAmount(income)}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Ratio revenus/loyer</label>
+                  <p className="text-lg font-semibold">
+                    {rentRatio !== "N/A" ? (
+                      <>
+                        {rentRatio}x
+                        {Number(rentRatio) >= 3 ? (
+                          <Badge className="ml-2 bg-green-100 text-green-800 hover:bg-green-200">Excellent</Badge>
+                        ) : Number(rentRatio) >= 2.5 ? (
+                          <Badge className="ml-2 bg-green-100 text-green-800 hover:bg-green-200">Bon</Badge>
+                        ) : Number(rentRatio) >= 2 ? (
+                          <Badge className="ml-2 bg-amber-100 text-amber-800 hover:bg-amber-200">Acceptable</Badge>
+                        ) : (
+                          <Badge className="ml-2 bg-red-100 text-red-800 hover:bg-red-200">Insuffisant</Badge>
+                        )}
+                      </>
+                    ) : (
+                      "N/A"
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Garants</label>
+                  {hasGuarantor ? (
+                    <Badge className="bg-green-100 text-green-800 hover:bg-green-200">
+                      {rentalFile?.guarantors?.length || 1} garant(s)
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary">Sans garant</Badge>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Message de candidature */}
+            {(application.message || application.presentation || rentalFile?.presentation_message) && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    Message de candidature
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="whitespace-pre-wrap">
+                    {rentalFile?.presentation_message || application.presentation || application.message}
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Informations sur les garants */}
+            {rentalFile?.guarantors && rentalFile.guarantors.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Shield className="h-5 w-5" />
+                    Garants ({rentalFile.guarantors.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
                   <div className="space-y-4">
-                    {/* Revenus */}
-                    <div className="border rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center">
-                          <Euro className="h-5 w-5 text-green-600 mr-2" />
-                          <h3 className="font-medium">Revenus</h3>
-                        </div>
-                        <div className="text-right">
-                          <span className="font-bold">
-                            {Math.round(matchScore.breakdown.income_ratio?.score || 0)}/
-                            {matchScore.breakdown.income_ratio?.max || 100}
-                          </span>
+                    {rentalFile.guarantors.map((guarantor: any, index: number) => (
+                      <div key={index} className="border rounded-lg p-4">
+                        <h4 className="font-medium mb-2">Garant {index + 1}</h4>
+                        <div className="grid gap-2 md:grid-cols-3">
+                          <div>
+                            <label className="text-sm font-medium text-muted-foreground">Type</label>
+                            <p>{guarantor.type === "physical" ? "Personne physique" : "Personne morale"}</p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-muted-foreground">Nom</label>
+                            <p>
+                              {guarantor.personal_info?.first_name} {guarantor.personal_info?.last_name}
+                            </p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-muted-foreground">Revenus</label>
+                            <p>{formatAmount(guarantor.personal_info?.income_sources?.work_income?.amount)}</p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-muted-foreground">Activité</label>
+                            <p>{guarantor.personal_info?.main_activity || "Non spécifié"}</p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-muted-foreground">Situation logement</label>
+                            <p>{guarantor.personal_info?.current_housing_situation || "Non spécifié"}</p>
+                          </div>
                         </div>
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        {matchScore.breakdown.income_ratio?.details || "Aucun détail disponible"}
-                      </p>
-                      <div className="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-green-500 rounded-full"
-                          style={{
-                            width: `${
-                              ((matchScore.breakdown.income_ratio?.score || 0) /
-                                (matchScore.breakdown.income_ratio?.max || 100)) *
-                              100
-                            }%`,
-                          }}
-                        ></div>
-                      </div>
-                    </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
 
-                    {/* Stabilité professionnelle */}
-                    <div className="border rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center">
-                          <Briefcase className="h-5 w-5 text-blue-600 mr-2" />
-                          <h3 className="font-medium">Stabilité professionnelle</h3>
-                        </div>
-                        <div className="text-right">
-                          <span className="font-bold">
-                            {Math.round(matchScore.breakdown.professional_stability?.score || 0)}/
-                            {matchScore.breakdown.professional_stability?.max || 100}
-                          </span>
-                        </div>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {matchScore.breakdown.professional_stability?.details || "Aucun détail disponible"}
-                      </p>
-                      <div className="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-blue-500 rounded-full"
-                          style={{
-                            width: `${
-                              ((matchScore.breakdown.professional_stability?.score || 0) /
-                                (matchScore.breakdown.professional_stability?.max || 100)) *
-                              100
-                            }%`,
-                          }}
-                        ></div>
-                      </div>
+		{/* Analyse financière */}
+          <TabsContent value="financial" className="space-y-6">
+            <div className="grid gap-6 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CreditCard className="h-5 w-5" />
+                    Revenus et charges
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Revenus mensuels</span>
+                      <span className="font-medium">{formatAmount(income)}</span>
                     </div>
-
-                    {/* Garants */}
-                    <div className="border rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center">
-                          <Shield className="h-5 w-5 text-purple-600 mr-2" />
-                          <h3 className="font-medium">Garants</h3>
-                        </div>
-                        <div className="text-right">
-                          <span className="font-bold">
-                            {Math.round(matchScore.breakdown.guarantor?.score || 0)}/
-                            {matchScore.breakdown.guarantor?.max || 100}
-                          </span>
-                        </div>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {matchScore.breakdown.guarantor?.details || "Aucun détail disponible"}
-                      </p>
-                      <div className="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-purple-500 rounded-full"
-                          style={{
-                            width: `${
-                              ((matchScore.breakdown.guarantor?.score || 0) /
-                                (matchScore.breakdown.guarantor?.max || 100)) *
-                              100
-                            }%`,
-                          }}
-                        ></div>
-                      </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Loyer proposé</span>
+                      <span className="font-medium">{formatAmount(property.price)}</span>
                     </div>
-
-                    {/* Qualité du dossier */}
-                    <div className="border rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center">
-                          <CheckCircle className="h-5 w-5 text-amber-600 mr-2" />
-                          <h3 className="font-medium">Qualité du dossier</h3>
-                        </div>
-                        <div className="text-right">
-                          <span className="font-bold">
-                            {Math.round(matchScore.breakdown.application_quality?.score || 0)}/
-                            {matchScore.breakdown.application_quality?.max || 100}
-                          </span>
-                        </div>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {matchScore.breakdown.application_quality?.details || "Aucun détail disponible"}
-                      </p>
-                      <div className="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-amber-500 rounded-full"
-                          style={{
-                            width: `${
-                              ((matchScore.breakdown.application_quality?.score || 0) /
-                                (matchScore.breakdown.application_quality?.max || 100)) *
-                              100
-                            }%`,
-                          }}
-                        ></div>
-                      </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Charges estimées</span>
+                      <span className="font-medium">{formatAmount(property.charges || 0)}</span>
+                    </div>
+                    <div className="flex justify-between pt-2 border-t">
+                      <span className="font-medium">Ratio revenus/loyer</span>
+                      <span className="font-bold">{rentRatio !== "N/A" ? `${rentRatio}x` : "N/A"}</span>
                     </div>
                   </div>
+
+                  <div className="pt-4">
+                    <h4 className="font-medium mb-2">Analyse du ratio</h4>
+                    {rentRatio !== "N/A" ? (
+                      <div className="space-y-2">
+                        {Number(rentRatio) >= 3 ? (
+                          <div className="flex items-start gap-2">
+                            <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+                            <div>
+                              <p className="font-medium text-green-700">Excellent ratio (≥ 3)</p>
+                              <p className="text-sm text-muted-foreground">
+                                Le candidat dispose de revenus largement suffisants pour assumer le loyer.
+                              </p>
+                            </div>
+                          </div>
+                        ) : Number(rentRatio) >= 2.5 ? (
+                          <div className="flex items-start gap-2">
+                            <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+                            <div>
+                              <p className="font-medium text-green-700">Bon ratio (≥ 2.5)</p>
+                              <p className="text-sm text-muted-foreground">
+                                Le candidat dispose de revenus confortables par rapport au loyer demandé.
+                              </p>
+                            </div>
+                          </div>
+                        ) : Number(rentRatio) >= 2 ? (
+                          <div className="flex items-start gap-2">
+                            <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
+                            <div>
+                              <p className="font-medium text-amber-700">Ratio acceptable (≥ 2)</p>
+                              <p className="text-sm text-muted-foreground">
+                                Le candidat dispose de revenus suffisants mais sa marge financière est limitée.
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
+                            <div>
+                              <p className="font-medium text-red-700">Ratio insuffisant ({"<"} 2)</p>
+                              <p className="text-sm text-muted-foreground">
+                                Le candidat risque d'avoir des difficultés à assumer le loyer sur la durée.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Impossible de calculer le ratio (revenus ou loyer non spécifiés).
+                      </p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Shield className="h-5 w-5" />
+                    Stabilité financière
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Type de contrat</span>
+                      <span className="font-medium">{contractType}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Ancienneté professionnelle</span>
+                      <span className="font-medium">{mainTenant.professional_info?.seniority || "Non spécifié"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Période d'essai</span>
+                      <span className="font-medium">{mainTenant.professional_info?.trial_period ? "Oui" : "Non"}</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-4">
+                    <h4 className="font-medium mb-2">Analyse de la stabilité</h4>
+                    <div className="space-y-2">
+                      {contractType?.toLowerCase() === "cdi" ? (
+                        <div className="flex items-start gap-2">
+                          <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+                          <div>
+                            <p className="font-medium text-green-700">Contrat stable (CDI)</p>
+                            <p className="text-sm text-muted-foreground">
+                              Le candidat bénéficie d'une stabilité professionnelle optimale.
+                            </p>
+                          </div>
+                        </div>
+                      ) : contractType?.toLowerCase() === "cdd" ? (
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
+                          <div>
+                            <p className="font-medium text-amber-700">Contrat à durée déterminée (CDD)</p>
+                            <p className="text-sm text-muted-foreground">
+                              Stabilité limitée dans le temps. Vérifier la durée restante du contrat.
+                            </p>
+                          </div>
+                        </div>
+                      ) : contractType?.toLowerCase() === "freelance" ||
+                        contractType?.toLowerCase() === "indépendant" ? (
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
+                          <div>
+                            <p className="font-medium text-amber-700">Travailleur indépendant</p>
+                            <p className="text-sm text-muted-foreground">
+                              Revenus potentiellement variables. Vérifier l'historique des revenus.
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
+                          <div>
+                            <p className="font-medium text-red-700">Situation à clarifier</p>
+                            <p className="text-sm text-muted-foreground">
+                              Le type de contrat n'est pas clairement identifié ou présente des risques
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {mainTenant.professional_info?.trial_period && (
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
+                          <div>
+                            <p className="font-medium text-red-700">Période d'essai en cours</p>
+                            <p className="text-sm text-muted-foreground">
+                              Le candidat est encore en période d'essai, ce qui représente un risque.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="h-5 w-5" />
+                  Garanties
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {hasGuarantor ? (
+                  <div className="space-y-4">
+                    <div className="flex items-start gap-2">
+                      <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+                      <div>
+                        <p className="font-medium text-green-700">
+                          {rentalFile?.guarantors?.length || 1} garant(s) disponible(s)
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          La présence de garant(s) renforce considérablement la sécurité financière du dossier.
+                        </p>
+                      </div>
+                    </div>
+
+                    {rentalFile?.guarantors?.map((guarantor: any, index: number) => {
+                      const guarantorIncome = guarantor.personal_info?.income_sources?.work_income?.amount || 0
+                      const guarantorRatio =
+                        guarantorIncome && property.price ? (guarantorIncome / property.price).toFixed(1) : "N/A"
+
+                      return (
+                        <div key={index} className="border rounded-lg p-4">
+                          <h4 className="font-medium mb-2">Garant {index + 1}</h4>
+                          <div className="space-y-2">
+                            <div className="flex justify-between">
+                              <span className="text-sm text-muted-foreground">Revenus mensuels</span>
+                              <span className="font-medium">{formatAmount(guarantorIncome)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm text-muted-foreground">Ratio revenus/loyer</span>
+                              <span className="font-medium">
+                                {guarantorRatio !== "N/A" ? `${guarantorRatio}x` : "N/A"}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm text-muted-foreground">Type de contrat</span>
+                              <span className="font-medium">
+                                {guarantor.personal_info?.main_activity || "Non spécifié"}
+                              </span>
+                            </div>
+                          </div>
+
+                          {guarantorRatio !== "N/A" && (
+                            <div className="mt-2 pt-2 border-t">
+                              {Number(guarantorRatio) >= 3 ? (
+                                <Badge className="bg-green-100 text-green-800">Excellent garant</Badge>
+                              ) : Number(guarantorRatio) >= 2 ? (
+                                <Badge className="bg-green-100 text-green-800">Bon garant</Badge>
+                              ) : (
+                                <Badge className="bg-amber-100 text-amber-800">Garant limité</Badge>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
                 ) : (
-                  <p>Aucune donnée d'analyse disponible</p>
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-red-700">Aucun garant</p>
+                      <p className="text-sm text-muted-foreground">
+                        L'absence de garant augmente le risque financier, surtout si le ratio revenus/loyer est faible.
+                      </p>
+                    </div>
+                  </div>
                 )}
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle>Informations sur le bien</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Synthèse et recommandation
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <h3 className="font-medium mb-2">{property?.title || "Propriété"}</h3>
-                    <div className="flex items-center text-sm text-muted-foreground mb-1">
-                      <MapPin className="h-4 w-4 mr-1" />
-                      <span>{property?.address || "Adresse non spécifiée"}</span>
-                    </div>
-                    <div className="flex items-center text-sm text-muted-foreground">
-                      <Home className="h-4 w-4 mr-1" />
-                      <span>
-                        {property?.surface || "?"} m² - {property?.rooms || "?"} pièces
-                      </span>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-green-600 mb-1">{formatCurrency(property?.price || 0)}</div>
-                    <div className="text-sm text-muted-foreground">
-                      Disponible à partir du {formatDate(property?.availability_date)}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="profile" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Profil du candidat</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
+                <div className="space-y-4">
                   <div className="flex items-center gap-4">
-                    <div className="bg-gray-100 rounded-full p-4">
-                      <User className="h-8 w-8 text-gray-600" />
-                    </div>
+                    <CircularScore score={matchScore} size="md" />
                     <div>
-                      <h3 className="text-xl font-medium">{application.tenant_name || "Nom non spécifié"}</h3>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                        {application.tenant_email && (
-                          <div className="flex items-center">
-                            <Mail className="h-4 w-4 mr-1" />
-                            <span>{application.tenant_email}</span>
-                          </div>
-                        )}
-                        {application.tenant_phone && (
-                          <div className="flex items-center">
-                            <Phone className="h-4 w-4 mr-1" />
-                            <span>{application.tenant_phone}</span>
-                          </div>
-                        )}
-                      </div>
+                      <h3 className="font-medium">Score global: {matchScore}/100</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Évaluation basée sur les revenus, la stabilité professionnelle et les garanties
+                      </p>
                     </div>
                   </div>
 
-                  <Separator />
+                  <div className="space-y-2">
+                    <h4 className="font-medium">Points forts</h4>
+                    <ul className="space-y-1">
+                      {Number(rentRatio) >= 2.5 && (
+                        <li className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span>Ratio revenus/loyer favorable ({rentRatio}x)</span>
+                        </li>
+                      )}
+                      {contractType?.toLowerCase() === "cdi" && (
+                        <li className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span>Stabilité professionnelle (CDI)</span>
+                        </li>
+                      )}
+                      {hasGuarantor && (
+                        <li className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span>Présence de {rentalFile?.guarantors?.length || 1} garant(s)</span>
+                        </li>
+                      )}
+                      {mainTenant.professional_info?.seniority && (
+                        <li className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span>Ancienneté professionnelle: {mainTenant.professional_info.seniority}</span>
+                        </li>
+                      )}
+                    </ul>
+                  </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <h4 className="font-medium mb-2">Situation professionnelle</h4>
-                      <div className="space-y-2">
+                  <div className="space-y-2">
+                    <h4 className="font-medium">Points d'attention</h4>
+                    <ul className="space-y-1">
+                      {Number(rentRatio) < 2.5 && (
+                        <li className="flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4 text-amber-500" />
+                          <span>Ratio revenus/loyer limité ({rentRatio}x)</span>
+                        </li>
+                      )}
+                      {contractType?.toLowerCase() !== "cdi" && (
+                        <li className="flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4 text-amber-500" />
+                          <span>Type de contrat: {contractType}</span>
+                        </li>
+                      )}
+                      {!hasGuarantor && (
+                        <li className="flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4 text-amber-500" />
+                          <span>Absence de garant</span>
+                        </li>
+                      )}
+                      {mainTenant.professional_info?.trial_period && (
+                        <li className="flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4 text-amber-500" />
+                          <span>Période d'essai en cours</span>
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+
+                  <div className="pt-4 border-t">
+                    <h4 className="font-medium mb-2">Recommandation</h4>
+                    {matchScore >= 80 ? (
+                      <div className="flex items-start gap-2">
+                        <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
                         <div>
-                          <span className="text-sm text-muted-foreground">Profession</span>
-                          <p>{application.profession || "Non spécifié"}</p>
-                        </div>
-                        <div>
-                          <span className="text-sm text-muted-foreground">Type de contrat</span>
-                          <p>{application.contract_type || "Non spécifié"}</p>
-                        </div>
-                        <div>
-                          <span className="text-sm text-muted-foreground">Entreprise</span>
-                          <p>{application.company || "Non spécifié"}</p>
-                        </div>
-                        <div>
-                          <span className="text-sm text-muted-foreground">Ancienneté</span>
-                          <p>
-                            {application.seniority_months ? `${application.seniority_months} mois` : "Non spécifié"}
+                          <p className="font-medium text-green-700">Dossier solide</p>
+                          <p className="text-sm text-muted-foreground">
+                            Ce dossier présente d'excellentes garanties financières. Candidature à privilégier.
                           </p>
                         </div>
-                        <div>
-                          <span className="text-sm text-muted-foreground">Période d'essai</span>
-                          <p>{application.trial_period ? "Oui" : "Non"}</p>
-                        </div>
                       </div>
-                    </div>
-
-                    <div>
-                      <h4 className="font-medium mb-2">Situation financière</h4>
-                      <div className="space-y-2">
+                    ) : matchScore >= 60 ? (
+                      <div className="flex items-start gap-2">
+                        <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
                         <div>
-                          <span className="text-sm text-muted-foreground">Revenus mensuels</span>
-                          <p className="text-green-600 font-medium">{formatCurrency(application.income || 0)}</p>
-                        </div>
-                        <div>
-                          <span className="text-sm text-muted-foreground">Ratio revenus/loyer</span>
-                          <p>
-                            {property && property.price && application.income
-                              ? `${(application.income / property.price).toFixed(1)}x le loyer`
-                              : "Non calculable"}
+                          <p className="font-medium text-green-700">Dossier satisfaisant</p>
+                          <p className="text-sm text-muted-foreground">
+                            Ce dossier présente des garanties financières satisfaisantes. Candidature recommandée.
                           </p>
                         </div>
+                      </div>
+                    ) : matchScore >= 40 ? (
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
                         <div>
-                          <span className="text-sm text-muted-foreground">Garant</span>
-                          <p>{application.has_guarantor ? "Oui" : "Non"}</p>
+                          <p className="font-medium text-amber-700">Dossier à surveiller</p>
+                          <p className="text-sm text-muted-foreground">
+                            Ce dossier présente quelques fragilités. Une garantie complémentaire pourrait être demandée.
+                          </p>
                         </div>
-                        {application.has_guarantor && (
-                          <div>
-                            <span className="text-sm text-muted-foreground">Revenus du garant</span>
-                            <p>{formatCurrency(application.guarantor_income || 0)}</p>
-                          </div>
-                        )}
                       </div>
-                    </div>
-                  </div>
-
-                  <Separator />
-
-                  <div>
-                    <h4 className="font-medium mb-2">Présentation</h4>
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <p className="whitespace-pre-wrap">{application.presentation || "Aucune présentation"}</p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="font-medium mb-2">Informations complémentaires</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <span className="text-sm text-muted-foreground">Date de candidature</span>
-                        <p>{formatDate(application.created_at)}</p>
+                    ) : (
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-red-700">Dossier fragile</p>
+                          <p className="text-sm text-muted-foreground">
+                            Ce dossier présente des risques financiers importants. Candidature à considérer avec
+                            prudence.
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <span className="text-sm text-muted-foreground">Dernière mise à jour</span>
-                        <p>{formatDate(application.updated_at)}</p>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Documents */}
           <TabsContent value="documents" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-5 w-5" />
-                    Documents fournis
-                  </div>
-                  {rentalFile && (
-                    <Button onClick={generatePDF} disabled={isGeneratingPDF} variant="outline">
-                      {isGeneratingPDF ? (
-                        <div className="flex items-center">
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900 mr-2"></div>
-                          Génération...
-                        </div>
-                      ) : (
-                        <>
-                          <Download className="h-4 w-4 mr-2" />
-                          Télécharger le dossier PDF
-                        </>
-                      )}
-                    </Button>
-                  )}
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Documents fournis
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {rentalFile ? (
                   <div className="space-y-6">
-                    {/* Documents du locataire principal */}
+                    {/* Documents d'identité */}
                     {hasDocuments(rentalFile.main_tenant?.identity_documents) && (
                       <div>
                         <h4 className="font-medium mb-3">Pièces d'identité du locataire</h4>
                         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                          {rentalFile.main_tenant.identity_documents.map((doc, index) => (
-                            <div key={index} className="border rounded-lg p-3">
-                              <div className="flex items-center gap-2 mb-2">
-                                <FileText className="h-4 w-4 text-blue-500" />
-                                <span className="text-sm font-medium">Pièce d'identité {index + 1}</span>
-                              </div>
-                              <img
-                                src={convertBlobUrlToApiUrl(doc.url || doc) || "/placeholder.svg"}
-                                alt={`Pièce d'identité ${index + 1}`}
-                                className="w-full h-32 object-cover rounded border"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = "none"
-                                  e.currentTarget.nextElementSibling.style.display = "flex"
-                                }}
-                              />
-                              <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
-                                <div className="text-center">
-                                  <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
-                                  <p className="text-xs text-gray-500">Document</p>
-                                </div>
-                              </div>
-                              <div className="flex gap-2 mt-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="flex-1 bg-transparent"
-                                  onClick={() => window.open(convertBlobUrlToApiUrl(doc.url || doc), "_blank")}
-                                >
-                                  Consulter
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    const link = document.createElement("a")
-                                    link.href = convertBlobUrlToApiUrl(doc.url || doc)
-                                    link.download = `piece-identite-${index + 1}`
-                                    link.click()
-                                  }}
-                                >
-                                  <Download className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
+                          {rentalFile.main_tenant.identity_documents.map((doc: any, index: number) => (
+                            <DocumentPreview 
+                              key={index}
+                              doc={doc}
+                              type="identity"
+                              index={index}
+                            />
                           ))}
                         </div>
                       </div>
                     )}
 
-                    {/* Documents d'activité */}
-                    {hasDocuments(rentalFile.main_tenant?.activity_documents) && (
+                    {/* Documents professionnels */}
+                    {hasDocuments(rentalFile.main_tenant?.professional_documents) && (
                       <div>
-                        <h4 className="font-medium mb-3">Justificatifs d'activité</h4>
+                        <h4 className="font-medium mb-3">Documents professionnels</h4>
                         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                          {rentalFile.main_tenant.activity_documents.map((doc, index) => (
-                            <div key={index} className="border rounded-lg p-3">
-                              <div className="flex items-center gap-2 mb-2">
-                                <FileText className="h-4 w-4 text-green-500" />
-                                <span className="text-sm font-medium">Justificatif {index + 1}</span>
-                              </div>
-                              <img
-                                src={convertBlobUrlToApiUrl(doc.url || doc) || "/placeholder.svg"}
-                                alt={`Justificatif d'activité ${index + 1}`}
-                                className="w-full h-32 object-cover rounded border"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = "none"
-                                  e.currentTarget.nextElementSibling.style.display = "flex"
-                                }}
-                              />
-                              <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
-                                <div className="text-center">
-                                  <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
-                                  <p className="text-xs text-gray-500">Document</p>
-                                </div>
-                              </div>
-                              <div className="flex gap-2 mt-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="flex-1 bg-transparent"
-                                  onClick={() => window.open(convertBlobUrlToApiUrl(doc.url || doc), "_blank")}
-                                >
-                                  Consulter
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    const link = document.createElement("a")
-                                    link.href = convertBlobUrlToApiUrl(doc.url || doc)
-                                    link.download = `justificatif-activite-${index + 1}`
-                                    link.click()
-                                  }}
-                                >
-                                  <Download className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
+                          {rentalFile.main_tenant.professional_documents.map((doc: any, index: number) => (
+                            <DocumentPreview
+                              key={index}
+                              doc={doc}
+                              type="professional"
+                              index={index}
+                            />
                           ))}
                         </div>
                       </div>
                     )}
 
-                    {/* Documents de revenus */}
-                    {hasDocuments(rentalFile.main_tenant?.income_sources?.work_income?.documents) && (
+                    {/* Documents financiers */}
+                    {hasDocuments(rentalFile.main_tenant?.financial_documents) && (
                       <div>
-                        <h4 className="font-medium mb-3">Justificatifs de revenus</h4>
+                        <h4 className="font-medium mb-3">Documents financiers</h4>
                         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                          {rentalFile.main_tenant.income_sources.work_income.documents.map((doc, index) => (
-                            <div key={index} className="border rounded-lg p-3">
-                              <div className="flex items-center gap-2 mb-2">
-                                <FileText className="h-4 w-4 text-purple-500" />
-                                <span className="text-sm font-medium">Justificatif revenus {index + 1}</span>
-                              </div>
-                              <img
-                                src={convertBlobUrlToApiUrl(doc.url || doc) || "/placeholder.svg"}
-                                alt={`Justificatif de revenus ${index + 1}`}
-                                className="w-full h-32 object-cover rounded border"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = "none"
-                                  e.currentTarget.nextElementSibling.style.display = "flex"
-                                }}
-                              />
-                              <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
-                                <div className="text-center">
-                                  <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
-                                  <p className="text-xs text-gray-500">Document</p>
-                                </div>
-                              </div>
-                              <div className="flex gap-2 mt-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="flex-1 bg-transparent"
-                                  onClick={() => window.open(convertBlobUrlToApiUrl(doc.url || doc), "_blank")}
-                                >
-                                  Consulter
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    const link = document.createElement("a")
-                                    link.href = convertBlobUrlToApiUrl(doc.url || doc)
-                                    link.download = `justificatif-revenus-${index + 1}`
-                                    link.click()
-                                  }}
-                                >
-                                  <Download className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
+                          {rentalFile.main_tenant.financial_documents.map((doc: any, index: number) => (
+                            <DocumentPreview
+                              key={index}
+                              doc={doc}
+                              type="financial"
+                              index={index}
+                            />
                           ))}
                         </div>
                       </div>
                     )}
 
                     {/* Documents fiscaux */}
-                    {hasDocuments(rentalFile.main_tenant?.tax_situation?.documents) && (
+                    {hasDocuments(rentalFile.main_tenant?.tax_documents) && (
                       <div>
                         <h4 className="font-medium mb-3">Documents fiscaux</h4>
                         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                          {rentalFile.main_tenant.tax_situation.documents.map((doc, index) => (
-                            <div key={index} className="border rounded-lg p-3">
-                              <div className="flex items-center gap-2 mb-2">
-                                <FileText className="h-4 w-4 text-orange-500" />
-                                <span className="text-sm font-medium">Document fiscal {index + 1}</span>
-                              </div>
-                              <img
-                                src={convertBlobUrlToApiUrl(doc.url || doc) || "/placeholder.svg"}
-                                alt={`Document fiscal ${index + 1}`}
-                                className="w-full h-32 object-cover rounded border"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = "none"
-                                  e.currentTarget.nextElementSibling.style.display = "flex"
-                                }}
-                              />
-                              <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
-                                <div className="text-center">
-                                  <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
-                                  <p className="text-xs text-gray-500">Document</p>
-                                </div>
-                              </div>
-                              <div className="flex gap-2 mt-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="flex-1 bg-transparent"
-                                  onClick={() => window.open(convertBlobUrlToApiUrl(doc.url || doc), "_blank")}
-                                >
-                                  Consulter
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    const link = document.createElement("a")
-                                    link.href = convertBlobUrlToApiUrl(doc.url || doc)
-                                    link.download = `document-fiscal-${index + 1}`
-                                    link.click()
-                                  }}
-                                >
-                                  <Download className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
+                          {rentalFile.main_tenant.tax_documents.map((doc: any, index: number) => (
+                            <DocumentPreview
+                              key={index}
+                              doc={doc}
+                              type="tax"
+                              index={index}
+                            />
                           ))}
                         </div>
                       </div>
                     )}
 
-                    {/* Documents de logement actuel */}
-                    {hasDocuments(rentalFile.main_tenant?.current_housing_documents?.quittances_loyer) && (
+                    {/* Documents de logement */}
+                    {hasDocuments(rentalFile.main_tenant?.housing_documents) && (
                       <div>
-                        <h4 className="font-medium mb-3">Quittances de loyer</h4>
+                        <h4 className="font-medium mb-3">Justificatifs de domicile</h4>
                         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                          {rentalFile.main_tenant.current_housing_documents.quittances_loyer.map((doc, index) => (
-                            <div key={index} className="border rounded-lg p-3">
-                              <div className="flex items-center gap-2 mb-2">
-                                <FileText className="h-4 w-4 text-red-500" />
-                                <span className="text-sm font-medium">Quittance {index + 1}</span>
-                              </div>
-                              <img
-                                src={convertBlobUrlToApiUrl(doc.url || doc) || "/placeholder.svg"}
-                                alt={`Quittance de loyer ${index + 1}`}
-                                className="w-full h-32 object-cover rounded border"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = "none"
-                                  e.currentTarget.nextElementSibling.style.display = "flex"
-                                }}
-                              />
-                              <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
-                                <div className="text-center">
-                                  <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
-                                  <p className="text-xs text-gray-500">Document</p>
-                                </div>
-                              </div>
-                              <div className="flex gap-2 mt-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="flex-1 bg-transparent"
-                                  onClick={() => window.open(convertBlobUrlToApiUrl(doc.url || doc), "_blank")}
-                                >
-                                  Consulter
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    const link = document.createElement("a")
-                                    link.href = convertBlobUrlToApiUrl(doc.url || doc)
-                                    link.download = `quittance-loyer-${index + 1}`
-                                    link.click()
-                                  }}
-                                >
-                                  <Download className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
+                          {rentalFile.main_tenant.housing_documents.map((doc: any, index: number) => (
+                            <DocumentPreview
+                              key={index}
+                              doc={doc}
+                              type="housing"
+                              index={index}
+                            />
                           ))}
                         </div>
                       </div>
                     )}
-
-                    {/* Documents des colocataires */}
-                    {rentalFile.cotenants &&
-                      rentalFile.cotenants.length > 0 &&
-                      rentalFile.cotenants.some((c) => hasDocuments(c.identity_documents)) && (
-                        <div>
-                          <h4 className="font-medium mb-3">Documents des colocataires</h4>
-                          {rentalFile.cotenants.map(
-                            (cotenant, cIndex) =>
-                              hasDocuments(cotenant.identity_documents) && (
-                                <div key={cIndex} className="mb-4">
-                                  <h5 className="font-medium mb-3">
-                                    Colocataire {cIndex + 1} - {cotenant.first_name} {cotenant.last_name}
-                                  </h5>
-                                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                                    {cotenant.identity_documents.map((doc, index) => (
-                                      <div key={index} className="border rounded-lg p-3">
-                                        <div className="flex items-center gap-2 mb-2">
-                                          <FileText className="h-4 w-4 text-teal-500" />
-                                          <span className="text-sm font-medium">Pièce d'identité {index + 1}</span>
-                                        </div>
-                                        <img
-                                          src={convertBlobUrlToApiUrl(doc.url || doc) || "/placeholder.svg"}
-                                          alt={`Pièce d'identité colocataire ${index + 1}`}
-                                          className="w-full h-32 object-cover rounded border"
-                                          onError={(e) => {
-                                            e.currentTarget.style.display = "none"
-                                            e.currentTarget.nextElementSibling.style.display = "flex"
-                                          }}
-                                        />
-                                        <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
-                                          <div className="text-center">
-                                            <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
-                                            <p className="text-xs text-gray-500">Document</p>
-                                          </div>
-                                        </div>
-                                        <div className="flex gap-2 mt-2">
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="flex-1 bg-transparent"
-                                            onClick={() => window.open(convertBlobUrlToApiUrl(doc.url || doc), "_blank")}
-                                          >
-                                            Consulter
-                                          </Button>
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => {
-                                              const link = document.createElement("a")
-                                              link.href = convertBlobUrlToApiUrl(doc.url || doc)
-                                              link.download = `colocataire-${cIndex + 1}-identite-${index + 1}`
-                                              link.click()
-                                            }}
-                                          >
-                                            <Download className="h-4 w-4" />
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              ),
-                          )}
-                        </div>
-                      )}
 
                     {/* Documents des garants */}
-                    {rentalFile.guarantors &&
-                      rentalFile.guarantors.length > 0 &&
-                      rentalFile.guarantors.some((g) => hasDocuments(g.personal_info?.identity_documents)) && (
-                        <div>
-                          <h4 className="font-medium mb-3">Documents des garants</h4>
-                          {rentalFile.guarantors.map(
-                            (guarantor, gIndex) =>
-                              hasDocuments(guarantor.personal_info?.identity_documents) && (
-                                <div key={gIndex} className="mb-4">
-                                  <h5 className="font-medium mb-3">
-                                    Garant {gIndex + 1} - {guarantor.personal_info.first_name}{" "}
-                                    {guarantor.personal_info.last_name}
-                                  </h5>
-                                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                                    {guarantor.personal_info.identity_documents.map((doc, index) => (
-                                      <div key={index} className="border rounded-lg p-3">
-                                        <div className="flex items-center gap-2 mb-2">
-                                          <FileText className="h-4 w-4 text-indigo-500" />
-                                          <span className="text-sm font-medium">Pièce d'identité {index + 1}</span>
-                                        </div>
-                                        <img
-                                          src={convertBlobUrlToApiUrl(doc.url || doc) || "/placeholder.svg"}
-                                          alt={`Pièce d'identité garant ${index + 1}`}
-                                          className="w-full h-32 object-cover rounded border"
-                                          onError={(e) => {
-                                            e.currentTarget.style.display = "none"
-                                            e.currentTarget.nextElementSibling.style.display = "flex"
-                                          }}
-                                        />
-                                        <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
-                                          <div className="text-center">
-                                            <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
-                                            <p className="text-xs text-gray-500">Document</p>
-                                          </div>
-                                        </div>
-                                        <div className="flex gap-2 mt-2">
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="flex-1 bg-transparent"
-                                            onClick={() => window.open(convertBlobUrlToApiUrl(doc.url || doc), "_blank")}
-                                          >
-                                            Consulter
-                                          </Button>
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => {
-                                              const link = document.createElement("a")
-                                              link.href = convertBlobUrlToApiUrl(doc.url || doc)
-                                              link.download = `garant-${gIndex + 1}-identite-${index + 1}`
-                                              link.click()
-                                            }}
-                                          >
-                                            <Download className="h-4 w-4" />
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              ),
-                          )}
+                    {rentalFile.guarantors?.map((guarantor: any, gIndex: number) => (
+                      hasDocuments(guarantor.documents) && (
+                        <div key={gIndex}>
+                          <h4 className="font-medium mb-3">
+                            Documents du garant {gIndex + 1}: {guarantor.first_name} {guarantor.last_name}
+                          </h4>
+                          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                            {guarantor.documents.map((doc: any, index: number) => (
+                              <DocumentPreview
+                                key={index}
+                                doc={doc}
+                                type={`guarantor-${gIndex}`}
+                                index={index}
+                              />
+                            ))}
+                          </div>
                         </div>
-                      )}
+                      )
+                    ))}
                   </div>
                 ) : (
                   <div className="text-center py-8">
@@ -1288,31 +1337,7 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
             </Card>
           </TabsContent>
         </Tabs>
-        {/* Dialog de proposition de visite */}
-        <VisitProposalDialog
-          open={showVisitDialog}
-          onClose={() => setShowVisitDialog(false)}
-          onConfirm={handleVisitProposal}
-          propertyId={property?.id || ""}
-        />
-        {/* Dialogue de proposition de visite */}
-        {showVisitDialog && currentApplicationForVisit && (
-          <VisitProposalManager
-            isOpen={showVisitDialog}
-            onClose={() => {
-              setShowVisitDialog(false)
-              setCurrentApplicationForVisit(null)
-            }}
-            propertyId={currentApplicationForVisit.property_id}
-            propertyTitle={currentApplicationForVisit.property?.title || "Propriété"}
-            applicationId={currentApplicationForVisit.id}
-            tenantName={
-              `${currentApplicationForVisit.tenant?.first_name || ""} ${currentApplicationForVisit.tenant?.last_name || ""}`.trim() ||
-              "Candidat"
-            }
-            onSlotsProposed={handleVisitProposed}
-          />
-        )}
       </div>
-      )
-  }
+    </>
+  )
+}
