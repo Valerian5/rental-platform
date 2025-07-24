@@ -62,35 +62,65 @@ export async function middleware(request: NextRequest) {
   )
 
   // Rafraîchir la session si nécessaire
-  await supabase.auth.getUser()
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser()
 
   // Routes admin qui nécessitent une authentification admin
   const adminRoutes = ["/admin"]
   const isAdminRoute = adminRoutes.some((route) => pathname.startsWith(route))
 
   // Routes qui nécessitent une authentification
-  const protectedRoutes = ["/tenant/dashboard", "/owner/dashboard", "/messaging"]
+  const protectedRoutes = ["/tenant/dashboard", "/owner/dashboard", "/agency/dashboard", "/messaging"]
   const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route))
 
   if (isAdminRoute) {
     console.log("🔒 Route admin détectée:", pathname)
 
-    // Pour l'instant, on laisse passer pour déboguer
-    console.log("⚠️ MIDDLEWARE ADMIN TEMPORAIREMENT DÉSACTIVÉ")
-    return response
+    if (error || !user) {
+      console.log("❌ Pas d'utilisateur authentifié pour route admin")
+      const loginUrl = new URL("/login", request.url)
+      loginUrl.searchParams.set("redirect", pathname)
+      return NextResponse.redirect(loginUrl)
+    }
+
+    // Vérifier si l'utilisateur est admin
+    try {
+      const { data: profile, error: profileError } = await supabase
+        .from("users")
+        .select("user_type")
+        .eq("id", user.id)
+        .single()
+
+      if (profileError || !profile || profile.user_type !== "admin") {
+        console.log("❌ Utilisateur non admin pour route admin")
+        return NextResponse.redirect(new URL("/", request.url))
+      }
+
+      console.log("✅ Utilisateur admin autorisé")
+    } catch (authError) {
+      console.error("❌ Erreur vérification admin:", authError)
+      return NextResponse.redirect(new URL("/login", request.url))
+    }
   }
 
   if (isProtectedRoute) {
     console.log("🔒 Route protégée détectée:", pathname)
 
-    // Pour l'instant, on laisse passer pour déboguer
-    console.log("⚠️ MIDDLEWARE PROTECTION TEMPORAIREMENT DÉSACTIVÉ")
-    return response
+    if (error || !user) {
+      console.log("❌ Pas d'utilisateur authentifié pour route protégée")
+      const loginUrl = new URL("/login", request.url)
+      loginUrl.searchParams.set("redirect", pathname)
+      return NextResponse.redirect(loginUrl)
+    }
+
+    console.log("✅ Utilisateur authentifié pour route protégée")
   }
 
   return response
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|login|register).*)"],
 }

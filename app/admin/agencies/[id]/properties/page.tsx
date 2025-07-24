@@ -1,129 +1,122 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useParams, useRouter } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
+import {
+  Home,
+  ChevronLeft,
+  Search,
+  Plus,
+  MoreHorizontal,
+  Edit,
+  Eye,
+  Trash2,
+  Loader2,
+  Building2,
+  MapPin,
+  Euro,
+  Bed,
+  Bath,
+  Square,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
-import { toast } from "@/hooks/use-toast"
-import { Search, Eye, Edit, Trash2, MapPin, Home, Euro } from "lucide-react"
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Badge } from "@/components/ui/badge"
+import { useToast } from "@/hooks/use-toast"
+import { authService } from "@/lib/auth-service"
+import { agencyApi, authenticatedFetch } from "@/lib/api-client"
+
+interface Agency {
+  id: string
+  name: string
+  logo_url?: string
+}
 
 interface Property {
   id: string
   title: string
-  description: string
-  address: string
+  description?: string
+  address?: string
   city: string
-  postal_code: string
+  postal_code?: string
+  property_type: string
   price: number
-  surface_area: number
-  rooms: number
+  area: number
   bedrooms: number
   bathrooms: number
-  property_type: string
   status: string
+  agency_reference?: string
   created_at: string
-  owner: {
+  owner?: {
+    id: string
     first_name: string
     last_name: string
     email: string
   }
 }
 
-interface Agency {
-  id: string
-  name: string
-}
-
-export default function AgencyPropertiesPage() {
-  const params = useParams()
+export default function AgencyPropertiesPage({ params }: { params: { id: string } }) {
   const router = useRouter()
-  const agencyId = params.id as string
-
+  const { toast } = useToast()
   const [agency, setAgency] = useState<Agency | null>(null)
   const [properties, setProperties] = useState<Property[]>([])
-  const [filteredProperties, setFilteredProperties] = useState<Property[]>([])
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
+  const [searchQuery, setSearchQuery] = useState("")
 
   useEffect(() => {
-    fetchAgencyData()
-    fetchProperties()
-  }, [agencyId])
+    checkAdminAuth()
+    fetchAgencyProperties()
+  }, [params.id])
 
-  useEffect(() => {
-    filterProperties()
-  }, [properties, searchTerm, statusFilter])
-
-  const fetchAgencyData = async () => {
+  const checkAdminAuth = async () => {
     try {
-      const token = localStorage.getItem("auth_token")
-      if (!token) {
-        router.push("/login")
-        return
+      const user = await authService.getCurrentUser()
+      if (!user || user.user_type !== "admin") {
+        toast({
+          title: "Access denied",
+          description: "You don't have administrator permissions",
+          variant: "destructive",
+        })
+        router.push("/")
       }
-
-      const response = await fetch(`/api/agencies/${agencyId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch agency")
-      }
-
-      const data = await response.json()
-      setAgency(data.agency)
     } catch (error) {
-      console.error("Error fetching agency:", error)
-      toast({
-        title: "Erreur",
-        description: "Impossible de charger les informations de l'agence",
-        variant: "destructive",
-      })
+      console.error("Error checking admin auth:", error)
+      router.push("/login")
     }
   }
 
-  const fetchProperties = async () => {
+  const fetchAgencyProperties = async () => {
     try {
-      const token = localStorage.getItem("auth_token")
-      if (!token) {
-        router.push("/login")
-        return
+      setLoading(true)
+
+      // Fetch agency details
+      const agencyResult = await agencyApi.getById(params.id)
+      if (!agencyResult.success) {
+        throw new Error(agencyResult.error || "Failed to fetch agency details")
       }
+      setAgency(agencyResult.agency)
 
-      const response = await fetch(`/api/agencies/${agencyId}/properties`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch properties")
+      // Fetch agency properties
+      const propertiesResult = await authenticatedFetch(`/api/agencies/${params.id}/properties`)
+      if (!propertiesResult.success) {
+        throw new Error(propertiesResult.error || "Failed to fetch agency properties")
       }
-
-      const data = await response.json()
-      setProperties(data.properties || [])
+      setProperties(propertiesResult.properties || [])
     } catch (error) {
-      console.error("Error fetching properties:", error)
+      console.error("Error fetching agency properties:", error)
       toast({
-        title: "Erreur",
-        description: "Impossible de charger les propriétés",
+        title: "Error",
+        description: "Failed to load agency properties",
         variant: "destructive",
       })
     } finally {
@@ -131,288 +124,221 @@ export default function AgencyPropertiesPage() {
     }
   }
 
-  const filterProperties = () => {
-    let filtered = properties
-
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (property) =>
-          property.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          property.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          property.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          property.owner.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          property.owner.last_name.toLowerCase().includes(searchTerm.toLowerCase()),
-      )
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "available":
+        return "bg-green-100 text-green-800"
+      case "rented":
+        return "bg-blue-100 text-blue-800"
+      case "maintenance":
+        return "bg-yellow-100 text-yellow-800"
+      case "unavailable":
+        return "bg-red-100 text-red-800"
+      default:
+        return "bg-gray-100 text-gray-800"
     }
-
-    if (statusFilter !== "all") {
-      filtered = filtered.filter((property) => property.status === statusFilter)
-    }
-
-    setFilteredProperties(filtered)
-  }
-
-  const handleDeleteProperty = async (propertyId: string) => {
-    try {
-      const token = localStorage.getItem("auth_token")
-      if (!token) {
-        router.push("/login")
-        return
-      }
-
-      const response = await fetch(`/api/properties/${propertyId}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to delete property")
-      }
-
-      toast({
-        title: "Succès",
-        description: "Propriété supprimée avec succès",
-      })
-
-      fetchProperties()
-    } catch (error) {
-      console.error("Error deleting property:", error)
-      toast({
-        title: "Erreur",
-        description: "Impossible de supprimer la propriété",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      available: { label: "Disponible", variant: "default" as const },
-      rented: { label: "Loué", variant: "secondary" as const },
-      maintenance: { label: "Maintenance", variant: "destructive" as const },
-      draft: { label: "Brouillon", variant: "outline" as const },
-    }
-
-    const config = statusConfig[status as keyof typeof statusConfig] || {
-      label: status,
-      variant: "outline" as const,
-    }
-
-    return <Badge variant={config.variant}>{config.label}</Badge>
   }
 
   const getPropertyTypeLabel = (type: string) => {
-    const types = {
-      apartment: "Appartement",
-      house: "Maison",
-      studio: "Studio",
-      loft: "Loft",
-      duplex: "Duplex",
-      villa: "Villa",
+    switch (type) {
+      case "apartment":
+        return "Apartment"
+      case "house":
+        return "House"
+      case "studio":
+        return "Studio"
+      case "loft":
+        return "Loft"
+      case "duplex":
+        return "Duplex"
+      default:
+        return type
     }
-    return types[type as keyof typeof types] || type
   }
+
+  const filteredProperties = properties.filter(
+    (property) =>
+      property.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      property.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      property.property_type.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      property.agency_reference?.toLowerCase().includes(searchQuery.toLowerCase()),
+  )
 
   if (loading) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-2 text-muted-foreground">Chargement des propriétés...</p>
-          </div>
+      <div className="container mx-auto py-6 flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  if (!agency) {
+    return (
+      <div className="container mx-auto py-6">
+        <div className="text-center py-12">
+          <Building2 className="mx-auto h-12 w-12 text-muted-foreground" />
+          <h3 className="mt-4 text-lg font-semibold">Agency not found</h3>
+          <p className="text-muted-foreground mb-4">The requested agency could not be found</p>
+          <Button asChild>
+            <Link href="/admin/agencies">
+              <ChevronLeft className="mr-2 h-4 w-4" />
+              Back to Agencies
+            </Link>
+          </Button>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto p-6">
+    <div className="container mx-auto py-6">
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">Propriétés de l'agence</h1>
-          <p className="text-muted-foreground">{agency?.name}</p>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" asChild>
+            <Link href={`/admin/agencies/${params.id}`}>
+              <ChevronLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold flex items-center gap-2">
+              <Home className="h-6 w-6" />
+              Agency Properties
+            </h1>
+            <p className="text-muted-foreground">Properties managed by {agency.name}</p>
+          </div>
         </div>
-        <Button onClick={() => router.push(`/admin/agencies/${agencyId}`)}>Retour à l'agence</Button>
+        <Button asChild>
+          <Link href={`/admin/agencies/${params.id}/properties/new`}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Property
+          </Link>
+        </Button>
       </div>
 
-      <div className="grid gap-6">
-        {/* Filtres et recherche */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Filtres</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Rechercher par titre, adresse, ville ou propriétaire..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-              </div>
-              <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-auto">
-                <TabsList>
-                  <TabsTrigger value="all">Tous</TabsTrigger>
-                  <TabsTrigger value="available">Disponible</TabsTrigger>
-                  <TabsTrigger value="rented">Loué</TabsTrigger>
-                  <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
-                  <TabsTrigger value="draft">Brouillon</TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Statistiques */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <Home className="h-8 w-8 text-muted-foreground" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-muted-foreground">Total</p>
-                  <p className="text-2xl font-bold">{properties.length}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <Badge variant="default" className="h-8 w-8 rounded-full flex items-center justify-center p-0">
-                  <span className="text-xs">D</span>
-                </Badge>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-muted-foreground">Disponibles</p>
-                  <p className="text-2xl font-bold">{properties.filter((p) => p.status === "available").length}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <Badge variant="secondary" className="h-8 w-8 rounded-full flex items-center justify-center p-0">
-                  <span className="text-xs">L</span>
-                </Badge>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-muted-foreground">Loués</p>
-                  <p className="text-2xl font-bold">{properties.filter((p) => p.status === "rented").length}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <Euro className="h-8 w-8 text-muted-foreground" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-muted-foreground">Loyer moyen</p>
-                  <p className="text-2xl font-bold">
-                    {properties.length > 0
-                      ? Math.round(properties.reduce((sum, p) => sum + p.price, 0) / properties.length)
-                      : 0}
-                    €
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+      <div className="mb-6">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search properties..."
+            className="pl-10"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
         </div>
+      </div>
 
-        {/* Liste des propriétés */}
+      {filteredProperties.length === 0 ? (
         <Card>
-          <CardHeader>
-            <CardTitle>Propriétés ({filteredProperties.length})</CardTitle>
-            <CardDescription>Gérez les propriétés de cette agence</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {filteredProperties.length === 0 ? (
-              <div className="text-center py-8">
-                <Home className="mx-auto h-12 w-12 text-muted-foreground" />
-                <h3 className="mt-2 text-sm font-semibold">Aucune propriété</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {searchTerm || statusFilter !== "all"
-                    ? "Aucune propriété ne correspond aux critères de recherche."
-                    : "Cette agence n'a pas encore de propriétés."}
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {filteredProperties.map((property) => (
-                  <div
-                    key={property.id}
-                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50"
-                  >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="font-semibold">{property.title}</h3>
-                        {getStatusBadge(property.status)}
-                        <Badge variant="outline">{getPropertyTypeLabel(property.property_type)}</Badge>
-                      </div>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
-                        <div className="flex items-center gap-1">
-                          <MapPin className="h-4 w-4" />
-                          {property.address}, {property.city} {property.postal_code}
-                        </div>
-                        <div>{property.surface_area}m²</div>
-                        <div>{property.rooms} pièces</div>
-                        <div className="font-semibold text-foreground">{property.price}€/mois</div>
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Propriétaire: {property.owner.first_name} {property.owner.last_name} ({property.owner.email})
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={() => router.push(`/properties/${property.id}`)}>
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => router.push(`/owner/properties/${property.id}/edit`)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="outline" size="sm">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Supprimer la propriété</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Êtes-vous sûr de vouloir supprimer cette propriété ? Cette action est irréversible.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Annuler</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDeleteProperty(property.id)}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            >
-                              Supprimer
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </div>
-                ))}
-              </div>
+          <CardContent className="text-center py-12">
+            <Home className="mx-auto h-12 w-12 text-muted-foreground" />
+            <h3 className="mt-4 text-lg font-semibold">No properties found</h3>
+            <p className="text-muted-foreground">
+              {searchQuery ? "Try a different search term" : "This agency doesn't have any properties yet"}
+            </p>
+            {!searchQuery && (
+              <Button className="mt-4" asChild>
+                <Link href={`/admin/agencies/${params.id}/properties/new`}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add First Property
+                </Link>
+              </Button>
             )}
           </CardContent>
         </Card>
-      </div>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {filteredProperties.map((property) => (
+            <Card key={property.id} className="hover:shadow-md transition-shadow">
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <CardTitle className="text-lg line-clamp-1">{property.title}</CardTitle>
+                    <CardDescription className="flex items-center gap-1 mt-1">
+                      <MapPin className="h-3 w-3" />
+                      {property.city}
+                      {property.agency_reference && (
+                        <span className="ml-2 text-xs bg-gray-100 px-2 py-1 rounded">
+                          Ref: {property.agency_reference}
+                        </span>
+                      )}
+                    </CardDescription>
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <MoreHorizontal className="h-4 w-4" />
+                        <span className="sr-only">Open menu</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                      <DropdownMenuItem asChild>
+                        <Link href={`/properties/${property.id}`}>
+                          <Eye className="mr-2 h-4 w-4" />
+                          View Property
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link href={`/admin/properties/${property.id}/edit`}>
+                          <Edit className="mr-2 h-4 w-4" />
+                          Edit Property
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem className="text-red-600">
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete Property
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Badge className={getStatusColor(property.status)}>{property.status}</Badge>
+                  <span className="text-sm text-muted-foreground">{getPropertyTypeLabel(property.property_type)}</span>
+                </div>
+
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-1">
+                    <Euro className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-semibold">€{property.price.toLocaleString()}/month</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Square className="h-4 w-4 text-muted-foreground" />
+                    <span>{property.area}m²</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-1">
+                    <Bed className="h-4 w-4" />
+                    <span>{property.bedrooms}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Bath className="h-4 w-4" />
+                    <span>{property.bathrooms}</span>
+                  </div>
+                </div>
+
+                {property.owner && (
+                  <div className="pt-2 border-t">
+                    <p className="text-xs text-muted-foreground">Owner</p>
+                    <p className="text-sm font-medium">
+                      {property.owner.first_name} {property.owner.last_name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{property.owner.email}</p>
+                  </div>
+                )}
+
+                <div className="text-xs text-muted-foreground">
+                  Added {new Date(property.created_at).toLocaleDateString()}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

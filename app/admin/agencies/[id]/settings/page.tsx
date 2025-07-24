@@ -1,177 +1,130 @@
 "use client"
 
+import type React from "react"
 import { useState, useEffect } from "react"
-import { useParams, useRouter } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
+import {
+  Settings,
+  ChevronLeft,
+  Save,
+  Loader2,
+  Building2,
+  Palette,
+  Globe,
+  Mail,
+  MapPin,
+  Eye,
+  EyeOff,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { toast } from "@/hooks/use-toast"
-import { Plus, Edit, Trash2, Shield, Building } from "lucide-react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useToast } from "@/hooks/use-toast"
+import { authService } from "@/lib/auth-service"
+import { agencyApi } from "@/lib/api-client"
 
 interface Agency {
   id: string
   name: string
-  description: string
-  address: string
-  phone: string
-  email: string
-  website: string
+  description?: string
+  logo_url?: string
+  website?: string
+  phone?: string
+  email?: string
+  address?: string
+  city?: string
+  postal_code?: string
+  country?: string
+  primary_color: string
+  secondary_color: string
+  accent_color: string
+  is_active: boolean
   created_at: string
+  updated_at: string
 }
 
-interface Role {
-  id: string
-  name: string
-  description: string
-  permissions: string[]
-  is_default: boolean
-  created_at: string
-}
-
-const AVAILABLE_PERMISSIONS = [
-  {
-    key: "manage_properties",
-    label: "Gérer les propriétés",
-    description: "Créer, modifier et supprimer des propriétés",
-  },
-  { key: "manage_applications", label: "Gérer les candidatures", description: "Voir et traiter les candidatures" },
-  { key: "manage_leases", label: "Gérer les baux", description: "Créer et gérer les contrats de bail" },
-  {
-    key: "manage_users",
-    label: "Gérer les utilisateurs",
-    description: "Inviter et gérer les utilisateurs de l'agence",
-  },
-  { key: "view_analytics", label: "Voir les statistiques", description: "Accéder aux rapports et statistiques" },
-  { key: "manage_settings", label: "Gérer les paramètres", description: "Modifier les paramètres de l'agence" },
-]
-
-export default function AgencySettingsPage() {
-  const params = useParams()
+export default function AgencySettingsPage({ params }: { params: { id: string } }) {
   const router = useRouter()
-  const agencyId = params.id as string
-
+  const { toast } = useToast()
   const [agency, setAgency] = useState<Agency | null>(null)
-  const [roles, setRoles] = useState<Role[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-
-  // Form states
-  const [agencyForm, setAgencyForm] = useState({
+  const [showApiKeys, setShowApiKeys] = useState(false)
+  const [formData, setFormData] = useState({
     name: "",
     description: "",
-    address: "",
+    logo_url: "",
+    website: "",
     phone: "",
     email: "",
-    website: "",
+    address: "",
+    city: "",
+    postal_code: "",
+    country: "",
+    primary_color: "#3b82f6",
+    secondary_color: "#64748b",
+    accent_color: "#10b981",
+    is_active: true,
   })
 
-  const [roleForm, setRoleForm] = useState({
-    name: "",
-    description: "",
-    permissions: [] as string[],
-  })
-
-  const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false)
-  const [editingRole, setEditingRole] = useState<Role | null>(null)
-
   useEffect(() => {
-    fetchAgencyData()
-    fetchRoles()
-  }, [agencyId])
+    checkAdminAuth()
+    fetchAgencySettings()
+  }, [params.id])
 
-  useEffect(() => {
-    if (agency) {
-      setAgencyForm({
-        name: agency.name || "",
-        description: agency.description || "",
-        address: agency.address || "",
-        phone: agency.phone || "",
-        email: agency.email || "",
-        website: agency.website || "",
-      })
-    }
-  }, [agency])
-
-  const fetchAgencyData = async () => {
+  const checkAdminAuth = async () => {
     try {
-      const token = localStorage.getItem("auth_token")
-      if (!token) {
-        router.push("/login")
-        return
+      const user = await authService.getCurrentUser()
+      if (!user || user.user_type !== "admin") {
+        toast({
+          title: "Access denied",
+          description: "You don't have administrator permissions",
+          variant: "destructive",
+        })
+        router.push("/")
       }
-
-      const response = await fetch(`/api/agencies/${agencyId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch agency")
-      }
-
-      const data = await response.json()
-      setAgency(data.agency)
     } catch (error) {
-      console.error("Error fetching agency:", error)
-      toast({
-        title: "Erreur",
-        description: "Impossible de charger les informations de l'agence",
-        variant: "destructive",
-      })
+      console.error("Error checking admin auth:", error)
+      router.push("/login")
     }
   }
 
-  const fetchRoles = async () => {
+  const fetchAgencySettings = async () => {
     try {
-      const token = localStorage.getItem("auth_token")
-      if (!token) {
-        router.push("/login")
-        return
+      setLoading(true)
+
+      const result = await agencyApi.getById(params.id)
+      if (!result.success) {
+        throw new Error(result.error || "Failed to fetch agency settings")
       }
 
-      const response = await fetch(`/api/agencies/${agencyId}/roles`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      const agencyData = result.agency
+      setAgency(agencyData)
+      setFormData({
+        name: agencyData.name || "",
+        description: agencyData.description || "",
+        logo_url: agencyData.logo_url || "",
+        website: agencyData.website || "",
+        phone: agencyData.phone || "",
+        email: agencyData.email || "",
+        address: agencyData.address || "",
+        city: agencyData.city || "",
+        postal_code: agencyData.postal_code || "",
+        country: agencyData.country || "",
+        primary_color: agencyData.primary_color || "#3b82f6",
+        secondary_color: agencyData.secondary_color || "#64748b",
+        accent_color: agencyData.accent_color || "#10b981",
+        is_active: agencyData.is_active ?? true,
       })
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch roles")
-      }
-
-      const data = await response.json()
-      setRoles(data.roles || [])
     } catch (error) {
-      console.error("Error fetching roles:", error)
+      console.error("Error fetching agency settings:", error)
       toast({
-        title: "Erreur",
-        description: "Impossible de charger les rôles",
+        title: "Error",
+        description: "Failed to load agency settings",
         variant: "destructive",
       })
     } finally {
@@ -179,39 +132,26 @@ export default function AgencySettingsPage() {
     }
   }
 
-  const handleSaveAgency = async () => {
-    setSaving(true)
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault()
     try {
-      const token = localStorage.getItem("auth_token")
-      if (!token) {
-        router.push("/login")
-        return
+      setSaving(true)
+
+      const result = await agencyApi.update(params.id, formData)
+      if (!result.success) {
+        throw new Error(result.error || "Failed to update agency settings")
       }
 
-      const response = await fetch(`/api/agencies/${agencyId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(agencyForm),
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to update agency")
-      }
-
+      setAgency(result.agency)
       toast({
-        title: "Succès",
-        description: "Informations de l'agence mises à jour",
+        title: "Success",
+        description: "Agency settings updated successfully",
       })
-
-      fetchAgencyData()
     } catch (error) {
-      console.error("Error updating agency:", error)
+      console.error("Error updating agency settings:", error)
       toast({
-        title: "Erreur",
-        description: "Impossible de mettre à jour l'agence",
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update agency settings",
         variant: "destructive",
       })
     } finally {
@@ -219,408 +159,342 @@ export default function AgencySettingsPage() {
     }
   }
 
-  const handleCreateRole = async () => {
-    if (!roleForm.name.trim()) {
-      toast({
-        title: "Erreur",
-        description: "Le nom du rôle est requis",
-        variant: "destructive",
-      })
-      return
-    }
-
-    try {
-      const token = localStorage.getItem("auth_token")
-      if (!token) {
-        router.push("/login")
-        return
-      }
-
-      const response = await fetch(`/api/agencies/${agencyId}/roles`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(roleForm),
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to create role")
-      }
-
-      toast({
-        title: "Succès",
-        description: "Rôle créé avec succès",
-      })
-
-      setRoleForm({ name: "", description: "", permissions: [] })
-      setIsRoleDialogOpen(false)
-      fetchRoles()
-    } catch (error) {
-      console.error("Error creating role:", error)
-      toast({
-        title: "Erreur",
-        description: "Impossible de créer le rôle",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const handleUpdateRole = async () => {
-    if (!editingRole || !roleForm.name.trim()) {
-      return
-    }
-
-    try {
-      const token = localStorage.getItem("auth_token")
-      if (!token) {
-        router.push("/login")
-        return
-      }
-
-      const response = await fetch(`/api/agencies/${agencyId}/roles/${editingRole.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(roleForm),
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to update role")
-      }
-
-      toast({
-        title: "Succès",
-        description: "Rôle mis à jour avec succès",
-      })
-
-      setRoleForm({ name: "", description: "", permissions: [] })
-      setEditingRole(null)
-      setIsRoleDialogOpen(false)
-      fetchRoles()
-    } catch (error) {
-      console.error("Error updating role:", error)
-      toast({
-        title: "Erreur",
-        description: "Impossible de mettre à jour le rôle",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const handleDeleteRole = async (roleId: string) => {
-    try {
-      const token = localStorage.getItem("auth_token")
-      if (!token) {
-        router.push("/login")
-        return
-      }
-
-      const response = await fetch(`/api/agencies/${agencyId}/roles/${roleId}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to delete role")
-      }
-
-      toast({
-        title: "Succès",
-        description: "Rôle supprimé avec succès",
-      })
-
-      fetchRoles()
-    } catch (error) {
-      console.error("Error deleting role:", error)
-      toast({
-        title: "Erreur",
-        description: "Impossible de supprimer le rôle",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const openRoleDialog = (role?: Role) => {
-    if (role) {
-      setEditingRole(role)
-      setRoleForm({
-        name: role.name,
-        description: role.description || "",
-        permissions: role.permissions || [],
-      })
-    } else {
-      setEditingRole(null)
-      setRoleForm({ name: "", description: "", permissions: [] })
-    }
-    setIsRoleDialogOpen(true)
-  }
-
-  const togglePermission = (permission: string) => {
-    setRoleForm((prev) => ({
-      ...prev,
-      permissions: prev.permissions.includes(permission)
-        ? prev.permissions.filter((p) => p !== permission)
-        : [...prev.permissions, permission],
-    }))
+  const handleInputChange = (field: string, value: string | boolean) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
   if (loading) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-2 text-muted-foreground">Chargement des paramètres...</p>
-          </div>
+      <div className="container mx-auto py-6 flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  if (!agency) {
+    return (
+      <div className="container mx-auto py-6">
+        <div className="text-center py-12">
+          <Building2 className="mx-auto h-12 w-12 text-muted-foreground" />
+          <h3 className="mt-4 text-lg font-semibold">Agency not found</h3>
+          <p className="text-muted-foreground mb-4">The requested agency could not be found</p>
+          <Button asChild>
+            <Link href="/admin/agencies">
+              <ChevronLeft className="mr-2 h-4 w-4" />
+              Back to Agencies
+            </Link>
+          </Button>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto p-6">
+    <div className="container mx-auto py-6">
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">Paramètres de l'agence</h1>
-          <p className="text-muted-foreground">{agency?.name}</p>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" asChild>
+            <Link href={`/admin/agencies/${params.id}`}>
+              <ChevronLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold flex items-center gap-2">
+              <Settings className="h-6 w-6" />
+              Agency Settings
+            </h1>
+            <p className="text-muted-foreground">Configure settings for {agency.name}</p>
+          </div>
         </div>
-        <Button onClick={() => router.push(`/admin/agencies/${agencyId}`)}>Retour à l'agence</Button>
       </div>
 
-      <Tabs defaultValue="general" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="general">
-            <Building className="h-4 w-4 mr-2" />
-            Général
-          </TabsTrigger>
-          <TabsTrigger value="roles">
-            <Shield className="h-4 w-4 mr-2" />
-            Rôles et permissions
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="general">
-          <Card>
-            <CardHeader>
-              <CardTitle>Informations générales</CardTitle>
-              <CardDescription>Modifiez les informations de base de l'agence</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nom de l'agence</Label>
-                  <Input
-                    id="name"
-                    value={agencyForm.name}
-                    onChange={(e) => setAgencyForm({ ...agencyForm, name: e.target.value })}
-                    placeholder="Nom de l'agence"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={agencyForm.email}
-                    onChange={(e) => setAgencyForm({ ...agencyForm, email: e.target.value })}
-                    placeholder="contact@agence.com"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Téléphone</Label>
-                  <Input
-                    id="phone"
-                    value={agencyForm.phone}
-                    onChange={(e) => setAgencyForm({ ...agencyForm, phone: e.target.value })}
-                    placeholder="01 23 45 67 89"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="website">Site web</Label>
-                  <Input
-                    id="website"
-                    value={agencyForm.website}
-                    onChange={(e) => setAgencyForm({ ...agencyForm, website: e.target.value })}
-                    placeholder="https://www.agence.com"
-                  />
-                </div>
-              </div>
+      <form onSubmit={handleSave} className="space-y-6">
+        {/* Basic Information */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              Basic Information
+            </CardTitle>
+            <CardDescription>Update the basic information about your agency</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="address">Adresse</Label>
+                <Label htmlFor="name">Agency Name *</Label>
                 <Input
-                  id="address"
-                  value={agencyForm.address}
-                  onChange={(e) => setAgencyForm({ ...agencyForm, address: e.target.value })}
-                  placeholder="123 Rue de la Paix, 75001 Paris"
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => handleInputChange("name", e.target.value)}
+                  placeholder="Enter agency name"
+                  required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={agencyForm.description}
-                  onChange={(e) => setAgencyForm({ ...agencyForm, description: e.target.value })}
-                  placeholder="Description de l'agence..."
-                  rows={4}
+                <Label htmlFor="logo_url">Logo URL</Label>
+                <Input
+                  id="logo_url"
+                  value={formData.logo_url}
+                  onChange={(e) => handleInputChange("logo_url", e.target.value)}
+                  placeholder="https://example.com/logo.png"
                 />
               </div>
-              <Button onClick={handleSaveAgency} disabled={saving}>
-                {saving ? "Enregistrement..." : "Enregistrer les modifications"}
-              </Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) => handleInputChange("description", e.target.value)}
+                placeholder="Describe your agency..."
+                rows={3}
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="is_active"
+                checked={formData.is_active}
+                onCheckedChange={(checked) => handleInputChange("is_active", checked)}
+              />
+              <Label htmlFor="is_active">Agency is active</Label>
+            </div>
+          </CardContent>
+        </Card>
 
-        <TabsContent value="roles">
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Rôles et permissions</CardTitle>
-                    <CardDescription>Gérez les rôles et permissions des utilisateurs de l'agence</CardDescription>
-                  </div>
-                  <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button onClick={() => openRoleDialog()}>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Nouveau rôle
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-2xl">
-                      <DialogHeader>
-                        <DialogTitle>{editingRole ? "Modifier le rôle" : "Créer un nouveau rôle"}</DialogTitle>
-                        <DialogDescription>
-                          Définissez le nom, la description et les permissions du rôle
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="roleName">Nom du rôle</Label>
-                          <Input
-                            id="roleName"
-                            value={roleForm.name}
-                            onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })}
-                            placeholder="Ex: Gestionnaire de biens"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="roleDescription">Description</Label>
-                          <Textarea
-                            id="roleDescription"
-                            value={roleForm.description}
-                            onChange={(e) => setRoleForm({ ...roleForm, description: e.target.value })}
-                            placeholder="Description du rôle..."
-                            rows={3}
-                          />
-                        </div>
-                        <div className="space-y-3">
-                          <Label>Permissions</Label>
-                          <div className="space-y-3">
-                            {AVAILABLE_PERMISSIONS.map((permission) => (
-                              <div key={permission.key} className="flex items-start space-x-3">
-                                <Switch
-                                  checked={roleForm.permissions.includes(permission.key)}
-                                  onCheckedChange={() => togglePermission(permission.key)}
-                                />
-                                <div className="flex-1">
-                                  <div className="font-medium">{permission.label}</div>
-                                  <div className="text-sm text-muted-foreground">{permission.description}</div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsRoleDialogOpen(false)}>
-                          Annuler
-                        </Button>
-                        <Button onClick={editingRole ? handleUpdateRole : handleCreateRole}>
-                          {editingRole ? "Mettre à jour" : "Créer"}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
+        {/* Contact Information */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5" />
+              Contact Information
+            </CardTitle>
+            <CardDescription>Contact details for your agency</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => handleInputChange("email", e.target.value)}
+                  placeholder="contact@agency.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">Phone</Label>
+                <Input
+                  id="phone"
+                  value={formData.phone}
+                  onChange={(e) => handleInputChange("phone", e.target.value)}
+                  placeholder="+33 1 23 45 67 89"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="website">Website</Label>
+              <Input
+                id="website"
+                value={formData.website}
+                onChange={(e) => handleInputChange("website", e.target.value)}
+                placeholder="https://www.agency.com"
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Address */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5" />
+              Address
+            </CardTitle>
+            <CardDescription>Physical address of your agency</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="address">Street Address</Label>
+              <Input
+                id="address"
+                value={formData.address}
+                onChange={(e) => handleInputChange("address", e.target.value)}
+                placeholder="123 Main Street"
+              />
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="city">City</Label>
+                <Input
+                  id="city"
+                  value={formData.city}
+                  onChange={(e) => handleInputChange("city", e.target.value)}
+                  placeholder="Paris"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="postal_code">Postal Code</Label>
+                <Input
+                  id="postal_code"
+                  value={formData.postal_code}
+                  onChange={(e) => handleInputChange("postal_code", e.target.value)}
+                  placeholder="75001"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="country">Country</Label>
+                <Input
+                  id="country"
+                  value={formData.country}
+                  onChange={(e) => handleInputChange("country", e.target.value)}
+                  placeholder="France"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Brand Colors */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Palette className="h-5 w-5" />
+              Brand Colors
+            </CardTitle>
+            <CardDescription>Customize your agency's brand colors</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="primary_color">Primary Color</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="primary_color"
+                    type="color"
+                    value={formData.primary_color}
+                    onChange={(e) => handleInputChange("primary_color", e.target.value)}
+                    className="w-16 h-10 p-1 border rounded"
+                  />
+                  <Input
+                    value={formData.primary_color}
+                    onChange={(e) => handleInputChange("primary_color", e.target.value)}
+                    placeholder="#3b82f6"
+                    className="flex-1"
+                  />
                 </div>
-              </CardHeader>
-              <CardContent>
-                {roles.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Shield className="mx-auto h-12 w-12 text-muted-foreground" />
-                    <h3 className="mt-2 text-sm font-semibold">Aucun rôle</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Créez votre premier rôle pour commencer à gérer les permissions.
-                    </p>
-                  </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="secondary_color">Secondary Color</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="secondary_color"
+                    type="color"
+                    value={formData.secondary_color}
+                    onChange={(e) => handleInputChange("secondary_color", e.target.value)}
+                    className="w-16 h-10 p-1 border rounded"
+                  />
+                  <Input
+                    value={formData.secondary_color}
+                    onChange={(e) => handleInputChange("secondary_color", e.target.value)}
+                    placeholder="#64748b"
+                    className="flex-1"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="accent_color">Accent Color</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="accent_color"
+                    type="color"
+                    value={formData.accent_color}
+                    onChange={(e) => handleInputChange("accent_color", e.target.value)}
+                    className="w-16 h-10 p-1 border rounded"
+                  />
+                  <Input
+                    value={formData.accent_color}
+                    onChange={(e) => handleInputChange("accent_color", e.target.value)}
+                    placeholder="#10b981"
+                    className="flex-1"
+                  />
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* API Configuration */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Globe className="h-5 w-5" />
+              API Configuration
+            </CardTitle>
+            <CardDescription>API keys and integration settings</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-medium">API Keys</h4>
+                <p className="text-sm text-muted-foreground">Manage API keys for third-party integrations</p>
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={() => setShowApiKeys(!showApiKeys)}>
+                {showApiKeys ? (
+                  <>
+                    <EyeOff className="mr-2 h-4 w-4" />
+                    Hide
+                  </>
                 ) : (
-                  <div className="space-y-4">
-                    {roles.map((role) => (
-                      <div key={role.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h3 className="font-semibold">{role.name}</h3>
-                            {role.is_default && <Badge variant="secondary">Par défaut</Badge>}
-                          </div>
-                          {role.description && <p className="text-sm text-muted-foreground mb-2">{role.description}</p>}
-                          <div className="flex flex-wrap gap-1">
-                            {role.permissions?.map((permission) => {
-                              const permissionInfo = AVAILABLE_PERMISSIONS.find((p) => p.key === permission)
-                              return (
-                                <Badge key={permission} variant="outline" className="text-xs">
-                                  {permissionInfo?.label || permission}
-                                </Badge>
-                              )
-                            })}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button variant="outline" size="sm" onClick={() => openRoleDialog(role)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          {!role.is_default && (
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="outline" size="sm">
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Supprimer le rôle</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Êtes-vous sûr de vouloir supprimer ce rôle ? Les utilisateurs ayant ce rôle perdront
-                                    leurs permissions associées.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Annuler</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleDeleteRole(role.id)}
-                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                  >
-                                    Supprimer
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <>
+                    <Eye className="mr-2 h-4 w-4" />
+                    Show
+                  </>
                 )}
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-      </Tabs>
+              </Button>
+            </div>
+            {showApiKeys && (
+              <div className="space-y-3 p-4 bg-muted rounded-lg">
+                <div className="space-y-2">
+                  <Label>Public API Key</Label>
+                  <Input value="pk_live_xxxxxxxxxxxxxxxxxxxxxxxx" readOnly className="font-mono text-sm" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Secret API Key</Label>
+                  <Input
+                    type="password"
+                    value="sk_live_xxxxxxxxxxxxxxxxxxxxxxxx"
+                    readOnly
+                    className="font-mono text-sm"
+                  />
+                </div>
+                <Button type="button" variant="outline" size="sm">
+                  Regenerate Keys
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" asChild>
+            <Link href={`/admin/agencies/${params.id}`}>Cancel</Link>
+          </Button>
+          <Button type="submit" disabled={saving}>
+            {saving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="mr-2 h-4 w-4" />
+                Save Settings
+              </>
+            )}
+          </Button>
+        </div>
+      </form>
     </div>
   )
 }
