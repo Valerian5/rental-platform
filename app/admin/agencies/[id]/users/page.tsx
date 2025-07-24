@@ -31,6 +31,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useToast } from "@/hooks/use-toast"
 import { authService } from "@/lib/auth-service"
+import { agencyApi, authenticatedFetch } from "@/lib/api-client"
 
 interface Agency {
   id: string
@@ -98,33 +99,24 @@ export default function AgencyUsersPage({ params }: { params: { id: string } }) 
       setLoading(true)
 
       // Fetch agency details
-      const agencyResponse = await fetch(`/api/agencies/${params.id}`)
-      const agencyResult = await agencyResponse.json()
-
+      const agencyResult = await agencyApi.getById(params.id)
       if (!agencyResult.success) {
         throw new Error(agencyResult.error || "Failed to fetch agency details")
       }
-
       setAgency(agencyResult.agency)
 
       // Fetch agency roles
-      const rolesResponse = await fetch(`/api/agencies/${params.id}/roles`)
-      const rolesResult = await rolesResponse.json()
-
+      const rolesResult = await authenticatedFetch(`/api/agencies/${params.id}/roles`)
       if (!rolesResult.success) {
         throw new Error(rolesResult.error || "Failed to fetch agency roles")
       }
-
       setRoles(rolesResult.roles || [])
 
       // Fetch agency users
-      const usersResponse = await fetch(`/api/agencies/${params.id}/users`)
-      const usersResult = await usersResponse.json()
-
+      const usersResult = await authenticatedFetch(`/api/agencies/${params.id}/users`)
       if (!usersResult.success) {
         throw new Error(usersResult.error || "Failed to fetch agency users")
       }
-
       setUsers(usersResult.users || [])
     } catch (error) {
       console.error("Error fetching agency users:", error)
@@ -143,7 +135,6 @@ export default function AgencyUsersPage({ params }: { params: { id: string } }) 
     try {
       setIsSubmitting(true)
 
-      // Validate form data
       if (!formData.email || !formData.firstName || !formData.lastName || !formData.password || !formData.roleId) {
         toast({
           title: "Error",
@@ -153,15 +144,10 @@ export default function AgencyUsersPage({ params }: { params: { id: string } }) 
         return
       }
 
-      const response = await fetch(`/api/agencies/${params.id}/users`, {
+      const result = await authenticatedFetch(`/api/agencies/${params.id}/users`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify(formData),
       })
-
-      const result = await response.json()
 
       if (!result.success) {
         throw new Error(result.error || "Failed to create user")
@@ -198,11 +184,9 @@ export default function AgencyUsersPage({ params }: { params: { id: string } }) 
 
     try {
       setIsSubmitting(true)
-      const response = await fetch(`/api/agencies/${params.id}/users/${selectedUser.id}`, {
+      const result = await authenticatedFetch(`/api/agencies/${params.id}/users/${selectedUser.id}`, {
         method: "DELETE",
       })
-
-      const result = await response.json()
 
       if (!result.success) {
         throw new Error(result.error || "Failed to delete user")
