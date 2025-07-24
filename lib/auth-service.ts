@@ -1,6 +1,6 @@
 import { supabase } from "./supabase"
 import type { NextRequest } from "next/server"
-import { createServerClient } from "@supabase/ssr"
+import { createApiSupabaseClient, createServiceSupabaseClient } from "./supabase-server-client"
 
 export interface UserProfile {
   id: string
@@ -23,25 +23,27 @@ export interface RegisterData {
   userType: "tenant" | "owner"
 }
 
-// Fonction pour API routes - version corrigée avec meilleure gestion des cookies
+// Fonction pour API routes - version corrigée
 export async function getCurrentUserFromRequest(request: NextRequest): Promise<UserProfile | null> {
   try {
     console.log("🔍 getCurrentUserFromRequest - Début")
 
-    // Créer un client Supabase pour les API routes avec gestion complète des cookies
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            const cookie = request.cookies.get(name)
-            console.log(`🍪 Getting cookie ${name}:`, cookie?.value ? "found" : "not found")
-            return cookie?.value
-          },
-        },
-      },
+    // Lister tous les cookies disponibles
+    const allCookies = request.cookies.getAll()
+    console.log(
+      "🍪 Tous les cookies:",
+      allCookies.map((c) => ({ name: c.name, hasValue: !!c.value })),
     )
+
+    // Chercher spécifiquement les cookies Supabase
+    const supabaseCookies = allCookies.filter((c) => c.name.includes("supabase") || c.name.includes("sb-"))
+    console.log(
+      "🔑 Cookies Supabase:",
+      supabaseCookies.map((c) => ({ name: c.name, hasValue: !!c.value })),
+    )
+
+    // Créer le client Supabase pour API
+    const supabase = createApiSupabaseClient(request)
 
     // Récupérer l'utilisateur authentifié
     const {
@@ -61,19 +63,8 @@ export async function getCurrentUserFromRequest(request: NextRequest): Promise<U
 
     console.log("👤 Utilisateur trouvé:", user.id)
 
-    // Récupérer le profil utilisateur avec le client service role pour éviter les problèmes RLS
-    const serviceSupabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        cookies: {
-          get() {
-            return undefined
-          },
-        },
-      },
-    )
-
+    // Utiliser le client service pour récupérer le profil (évite les problèmes RLS)
+    const serviceSupabase = createServiceSupabaseClient()
     const { data: profile, error: profileError } = await serviceSupabase
       .from("users")
       .select("*")
@@ -85,7 +76,7 @@ export async function getCurrentUserFromRequest(request: NextRequest): Promise<U
       return null
     }
 
-    console.log("✅ Profil récupéré:", profile)
+    console.log("✅ Profil récupéré:", profile.user_type)
     return profile
   } catch (error) {
     console.error("❌ Erreur dans getCurrentUserFromRequest:", error)

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
+import { getCurrentUserFromRequest } from "@/lib/auth-service"
+import { createApiSupabaseClient } from "@/lib/supabase-server-client"
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,26 +9,21 @@ export async function GET(request: NextRequest) {
     // Récupérer tous les cookies
     const cookies = request.cookies.getAll()
     console.log(
-      "🍪 Cookies disponibles:",
+      "🍪 Tous les cookies:",
       cookies.map((c) => ({ name: c.name, hasValue: !!c.value })),
     )
 
-    // Créer le client Supabase avec la bonne configuration
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            const cookie = request.cookies.get(name)
-            console.log(`🍪 Getting cookie ${name}:`, cookie?.value ? "found" : "not found")
-            return cookie?.value
-          },
-        },
-      },
+    // Chercher les cookies Supabase spécifiquement
+    const supabaseCookies = cookies.filter(
+      (c) => c.name.includes("supabase") || c.name.includes("sb-") || c.name.includes("auth-token"),
+    )
+    console.log(
+      "🔑 Cookies Supabase trouvés:",
+      supabaseCookies.map((c) => ({ name: c.name, hasValue: !!c.value })),
     )
 
-    // Tester l'authentification
+    // Tester avec le client API
+    const supabase = createApiSupabaseClient(request)
     const {
       data: { user },
       error: authError,
@@ -35,44 +31,16 @@ export async function GET(request: NextRequest) {
 
     console.log("👤 Auth result:", { user: user?.id, error: authError?.message })
 
-    if (authError) {
-      console.error("❌ Erreur auth:", authError)
-      return NextResponse.json({
-        success: false,
-        error: authError.message,
-        user: null,
-        cookies: cookies.map((c) => ({ name: c.name, hasValue: !!c.value })),
-        timestamp: new Date().toISOString(),
-      })
-    }
-
-    if (!user) {
-      return NextResponse.json({
-        success: true,
-        user: null,
-        cookies: cookies.map((c) => ({ name: c.name, hasValue: !!c.value })),
-        timestamp: new Date().toISOString(),
-      })
-    }
-
-    // Récupérer le profil utilisateur
-    const { data: profile, error: profileError } = await supabase.from("users").select("*").eq("id", user.id).single()
-
-    if (profileError) {
-      console.error("❌ Erreur profil:", profileError)
-      return NextResponse.json({
-        success: false,
-        error: profileError.message,
-        user: null,
-        cookies: cookies.map((c) => ({ name: c.name, hasValue: !!c.value })),
-        timestamp: new Date().toISOString(),
-      })
-    }
+    // Tester avec notre fonction d'auth
+    const userProfile = await getCurrentUserFromRequest(request)
 
     return NextResponse.json({
       success: true,
-      user: profile,
+      user: userProfile,
+      authUser: user ? { id: user.id, email: user.email } : null,
+      authError: authError?.message,
       cookies: cookies.map((c) => ({ name: c.name, hasValue: !!c.value })),
+      supabaseCookies: supabaseCookies.map((c) => ({ name: c.name, hasValue: !!c.value })),
       timestamp: new Date().toISOString(),
     })
   } catch (error) {
