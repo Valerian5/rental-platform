@@ -2,124 +2,88 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getCurrentUserFromRequest } from "@/lib/auth-token-service"
 import { createServerClient } from "@supabase/ssr"
 
-// Create a Supabase client with service role
-const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-  cookies: {
-    get() {
-      return undefined
+// Client service pour les opérations admin
+function createServiceSupabaseClient() {
+  return createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+    cookies: {
+      get() {
+        return undefined
+      },
+      set() {},
+      remove() {},
     },
-    set() {},
-    remove() {},
-  },
-})
+  })
+}
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest) {
   try {
-    console.log("🏢 API Agencies GET ID:", params.id)
+    console.log("🏢 API Agencies GET - Début")
 
-    // Check authentication using token
+    // Check authentication
     const user = await getCurrentUserFromRequest(request)
     if (!user) {
       console.log("❌ Utilisateur non authentifié")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    console.log("👤 Utilisateur authentifié:", user.user_type, user.id)
+    console.log("✅ Utilisateur authentifié:", user.user_type, user.id)
 
-    // Check if user is admin or belongs to the requested agency
-    if (user.user_type !== "admin" && user.agency_id !== params.id) {
-      console.log("❌ Utilisateur non autorisé pour cette agence")
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // Use service client for database operations
+    const supabase = createServiceSupabaseClient()
+
+    // Check if user is admin
+    if (user.user_type !== "admin") {
+      console.log("❌ Utilisateur non admin:", user.user_type)
+      // If not admin, only return the user's agency
+      if (user.agency_id) {
+        const { data: agency, error } = await supabase.from("agencies").select("*").eq("id", user.agency_id).single()
+
+        if (error) {
+          console.error("❌ Error fetching agency:", error)
+          return NextResponse.json({ error: error.message }, { status: 500 })
+        }
+
+        return NextResponse.json({ success: true, agencies: [agency] })
+      } else {
+        return NextResponse.json({ success: true, agencies: [] })
+      }
     }
 
-    // Get the agency
-    const { data: agency, error } = await supabase.from("agencies").select("*").eq("id", params.id).single()
+    console.log("✅ Admin confirmé, récupération des agences...")
+
+    // Admin can see all agencies
+    const { data: agencies, error } = await supabase.from("agencies").select("*").order("name")
 
     if (error) {
-      console.error("❌ Error fetching agency:", error)
+      console.error("❌ Error fetching agencies:", error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    if (!agency) {
-      return NextResponse.json({ error: "Agency not found" }, { status: 404 })
-    }
-
-    // Get agency roles
-    const { data: roles, error: rolesError } = await supabase
-      .from("agency_roles")
-      .select("*")
-      .eq("agency_id", params.id)
-
-    if (rolesError) {
-      console.error("❌ Error fetching agency roles:", rolesError)
-      // Don't fail the request if roles fetch fails
-    }
-
-    // Get agency users
-    const { data: users, error: usersError } = await supabase
-      .from("users")
-      .select("id, email, first_name, last_name, user_type, created_at")
-      .eq("agency_id", params.id)
-
-    if (usersError) {
-      console.error("❌ Error fetching agency users:", usersError)
-      // Don't fail the request if users fetch fails
-    }
-
-    console.log("✅ Agency retrieved:", agency.name)
-    return NextResponse.json({
-      success: true,
-      agency,
-      roles: roles || [],
-      users: users || [],
-    })
+    console.log(`✅ ${agencies?.length || 0} agencies retrieved`)
+    return NextResponse.json({ success: true, agencies: agencies || [] })
   } catch (error) {
     console.error("❌ Server error:", error)
     return NextResponse.json({ error: "Server error" }, { status: 500 })
   }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest) {
   try {
-    console.log("🏢 API Agencies PUT ID:", params.id)
+    console.log("🏢 API Agencies POST - Début")
 
-    // Check authentication using token
+    // Check authentication
     const user = await getCurrentUserFromRequest(request)
     if (!user) {
       console.log("❌ Utilisateur non authentifié")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    console.log("👤 Utilisateur authentifié:", user.user_type, user.id)
-
-    // Check if user is admin or agency director
     if (user.user_type !== "admin") {
-      // Check if user is agency director
-      const { data: userRole, error: userRoleError } = await supabase
-        .from("user_agency_roles")
-        .select("agency_role_id")
-        .eq("user_id", user.id)
-        .single()
-
-      if (userRoleError || !userRole) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-      }
-
-      const { data: role, error: roleError } = await supabase
-        .from("agency_roles")
-        .select("name, permissions")
-        .eq("id", userRole.agency_role_id)
-        .single()
-
-      if (roleError || !role || role.name !== "Agency Director") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-      }
-
-      // Check if user belongs to the requested agency
-      if (user.agency_id !== params.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-      }
+      console.log("❌ Utilisateur non admin:", user.user_type)
+      return NextResponse.json({ error: "Unauthorized - Admin required" }, { status: 401 })
     }
+
+    console.log("✅ Admin authentifié:", user.id)
 
     const body = await request.json()
     const { name, logo_url, primary_color, secondary_color, accent_color } = body
@@ -129,80 +93,80 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Agency name is required" }, { status: 400 })
     }
 
-    // Update the agency
+    // Use service client for database operations
+    const supabase = createServiceSupabaseClient()
+
+    // Create the agency
     const { data: agency, error } = await supabase
       .from("agencies")
-      .update({
+      .insert({
         name,
         logo_url,
-        primary_color,
-        secondary_color,
-        accent_color,
+        primary_color: primary_color || "#0066FF",
+        secondary_color: secondary_color || "#FF6B00",
+        accent_color: accent_color || "#00C48C",
+        created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .eq("id", params.id)
       .select()
       .single()
 
     if (error) {
-      console.error("❌ Error updating agency:", error)
+      console.error("❌ Error creating agency:", error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    console.log("✅ Agency updated:", agency.name)
-    return NextResponse.json({ success: true, agency })
-  } catch (error) {
-    console.error("❌ Server error:", error)
-    return NextResponse.json({ error: "Server error" }, { status: 500 })
-  }
-}
+    // Create default roles for the agency
+    const defaultRoles = [
+      {
+        name: "Agency Director",
+        permissions: JSON.stringify({
+          manage_users: true,
+          manage_properties: true,
+          manage_applications: true,
+          manage_visits: true,
+          manage_leases: true,
+          manage_settings: true,
+        }),
+        agency_id: agency.id,
+      },
+      {
+        name: "Property Manager",
+        permissions: JSON.stringify({
+          manage_properties: true,
+          manage_applications: true,
+          manage_visits: true,
+          manage_leases: true,
+        }),
+        agency_id: agency.id,
+      },
+      {
+        name: "Visit Manager",
+        permissions: JSON.stringify({
+          view_properties: true,
+          manage_visits: true,
+        }),
+        agency_id: agency.id,
+      },
+      {
+        name: "Application Manager",
+        permissions: JSON.stringify({
+          view_properties: true,
+          manage_applications: true,
+        }),
+        agency_id: agency.id,
+      },
+    ]
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    console.log("🏢 API Agencies DELETE ID:", params.id)
-
-    // Check authentication using token
-    const user = await getCurrentUserFromRequest(request)
-    if (!user || user.user_type !== "admin") {
-      console.log("❌ Utilisateur non autorisé pour suppression")
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    console.log("👤 Admin authentifié:", user.id)
-
-    // Check if agency has users
-    const { data: users, error: usersError } = await supabase.from("users").select("id").eq("agency_id", params.id)
-
-    if (usersError) {
-      console.error("❌ Error checking agency users:", usersError)
-      return NextResponse.json({ error: usersError.message }, { status: 500 })
-    }
-
-    if (users && users.length > 0) {
-      return NextResponse.json(
-        { error: "Cannot delete agency with users. Please reassign or delete users first." },
-        { status: 400 },
-      )
-    }
-
-    // Delete agency roles
-    const { error: rolesError } = await supabase.from("agency_roles").delete().eq("agency_id", params.id)
+    const { error: rolesError } = await supabase.from("agency_roles").insert(defaultRoles)
 
     if (rolesError) {
-      console.error("❌ Error deleting agency roles:", rolesError)
-      return NextResponse.json({ error: rolesError.message }, { status: 500 })
+      console.error("❌ Error creating default roles:", rolesError)
+      // Don't fail the request if roles creation fails
     }
 
-    // Delete the agency
-    const { error } = await supabase.from("agencies").delete().eq("id", params.id)
-
-    if (error) {
-      console.error("❌ Error deleting agency:", error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    console.log("✅ Agency deleted:", params.id)
-    return NextResponse.json({ success: true })
+    console.log("✅ Agency created:", agency.name)
+    return NextResponse.json({ success: true, agency }, { status: 201 })
   } catch (error) {
     console.error("❌ Server error:", error)
     return NextResponse.json({ error: "Server error" }, { status: 500 })

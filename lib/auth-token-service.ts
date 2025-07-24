@@ -13,22 +13,19 @@ export interface UserProfile {
   updated_at: string
 }
 
-// Fonction pour récupérer le token depuis les headers Authorization
-export async function getCurrentUserFromToken(request: NextRequest): Promise<UserProfile | null> {
+export async function getCurrentUserFromRequest(request: NextRequest): Promise<UserProfile | null> {
   try {
-    console.log("🔍 getCurrentUserFromToken - Début")
+    console.log("🔍 getCurrentUserFromRequest - Début")
 
-    // Récupérer le token depuis les headers
+    // Récupérer le token d'authentification depuis les headers
     const authHeader = request.headers.get("authorization")
-    console.log("🔑 Auth header:", authHeader ? "présent" : "absent")
-
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       console.log("❌ Pas de token Bearer dans les headers")
       return null
     }
 
-    const token = authHeader.replace("Bearer ", "")
-    console.log("🎫 Token récupéré:", token.substring(0, 20) + "...")
+    const token = authHeader.substring(7) // Enlever "Bearer "
+    console.log("🔑 Token trouvé:", token.substring(0, 20) + "...")
 
     // Créer un client Supabase avec le token
     const supabase = createServerClient(
@@ -50,119 +47,29 @@ export async function getCurrentUserFromToken(request: NextRequest): Promise<Use
       },
     )
 
-    // Récupérer l'utilisateur avec le token
+    // Vérifier le token et récupérer l'utilisateur
     const {
       data: { user },
       error: authError,
-    } = await supabase.auth.getUser()
+    } = await supabase.auth.getUser(token)
 
-    if (authError) {
-      console.error("❌ Erreur auth avec token:", authError)
+    if (authError || !user) {
+      console.log("❌ Token invalide:", authError?.message)
       return null
     }
 
-    if (!user) {
-      console.log("❌ Pas d'utilisateur trouvé avec le token")
-      return null
-    }
+    console.log("✅ Utilisateur authentifié:", user.id)
 
-    console.log("👤 Utilisateur trouvé avec token:", user.id)
-
-    // Utiliser le service role pour récupérer le profil
-    const serviceSupabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        cookies: {
-          get() {
-            return undefined
-          },
-          set() {},
-          remove() {},
-        },
-      },
-    )
-
-    const { data: profile, error: profileError } = await serviceSupabase
-      .from("users")
-      .select("*")
-      .eq("id", user.id)
-      .single()
+    // Récupérer le profil utilisateur depuis la base de données
+    const { data: profile, error: profileError } = await supabase.from("users").select("*").eq("id", user.id).single()
 
     if (profileError) {
-      console.error("❌ Erreur profil:", profileError)
+      console.error("❌ Erreur récupération profil:", profileError)
       return null
     }
 
-    console.log("✅ Profil récupéré avec token:", profile.user_type)
+    console.log("✅ Profil récupéré:", profile.user_type)
     return profile
-  } catch (error) {
-    console.error("❌ Erreur dans getCurrentUserFromToken:", error)
-    return null
-  }
-}
-
-// Fonction hybride qui essaie cookies puis token
-export async function getCurrentUserFromRequest(request: NextRequest): Promise<UserProfile | null> {
-  try {
-    console.log("🔍 getCurrentUserFromRequest - Début (hybride)")
-
-    // 1. Essayer avec les cookies d'abord
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            const cookie = request.cookies.get(name)
-            console.log(`🍪 Cookie ${name}:`, cookie?.value ? "trouvé" : "absent")
-            return cookie?.value
-          },
-          set() {},
-          remove() {},
-        },
-      },
-    )
-
-    const {
-      data: { user: cookieUser },
-      error: cookieError,
-    } = await supabase.auth.getUser()
-
-    if (!cookieError && cookieUser) {
-      console.log("✅ Utilisateur trouvé via cookies:", cookieUser.id)
-
-      // Récupérer le profil avec service role
-      const serviceSupabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!,
-        {
-          cookies: {
-            get() {
-              return undefined
-            },
-            set() {},
-            remove() {},
-          },
-        },
-      )
-
-      const { data: profile, error: profileError } = await serviceSupabase
-        .from("users")
-        .select("*")
-        .eq("id", cookieUser.id)
-        .single()
-
-      if (!profileError && profile) {
-        console.log("✅ Profil récupéré via cookies:", profile.user_type)
-        return profile
-      }
-    }
-
-    console.log("⚠️ Cookies échoués, essai avec token...")
-
-    // 2. Si les cookies échouent, essayer avec le token
-    return await getCurrentUserFromToken(request)
   } catch (error) {
     console.error("❌ Erreur dans getCurrentUserFromRequest:", error)
     return null
