@@ -1,9 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
 import { getCurrentUserFromRequest } from "@/lib/auth-service"
-
-// Create a Supabase client with environment variables
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+import { createSupabaseServiceClient } from "@/lib/supabase-server-utils"
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,8 +9,14 @@ export async function GET(request: NextRequest) {
     // Check authentication
     const user = await getCurrentUserFromRequest(request)
     if (!user) {
+      console.log("❌ Utilisateur non authentifié")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    console.log("✅ Utilisateur authentifié:", user.user_type)
+
+    // Use service client for database operations
+    const supabase = createSupabaseServiceClient()
 
     // Check if user is admin
     if (user.user_type !== "admin") {
@@ -55,8 +58,11 @@ export async function POST(request: NextRequest) {
     // Check authentication
     const user = await getCurrentUserFromRequest(request)
     if (!user || user.user_type !== "admin") {
+      console.log("❌ Utilisateur non autorisé:", user?.user_type)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    console.log("✅ Admin authentifié:", user.id)
 
     const body = await request.json()
     const { name, logo_url, primary_color, secondary_color, accent_color } = body
@@ -65,6 +71,9 @@ export async function POST(request: NextRequest) {
     if (!name) {
       return NextResponse.json({ error: "Agency name is required" }, { status: 400 })
     }
+
+    // Use service client for database operations
+    const supabase = createSupabaseServiceClient()
 
     // Create the agency
     const { data: agency, error } = await supabase

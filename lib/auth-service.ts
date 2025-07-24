@@ -9,6 +9,7 @@ export interface UserProfile {
   last_name: string
   phone?: string
   user_type: "tenant" | "owner" | "admin"
+  agency_id?: string
   created_at: string
   updated_at: string
 }
@@ -22,19 +23,21 @@ export interface RegisterData {
   userType: "tenant" | "owner"
 }
 
-// Fonction pour API routes - version corrigée
+// Fonction pour API routes - version corrigée avec meilleure gestion des cookies
 export async function getCurrentUserFromRequest(request: NextRequest): Promise<UserProfile | null> {
   try {
     console.log("🔍 getCurrentUserFromRequest - Début")
 
-    // Créer un client Supabase pour les API routes
+    // Créer un client Supabase pour les API routes avec gestion complète des cookies
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
           get(name: string) {
-            return request.cookies.get(name)?.value
+            const cookie = request.cookies.get(name)
+            console.log(`🍪 Getting cookie ${name}:`, cookie?.value ? "found" : "not found")
+            return cookie?.value
           },
         },
       },
@@ -58,8 +61,24 @@ export async function getCurrentUserFromRequest(request: NextRequest): Promise<U
 
     console.log("👤 Utilisateur trouvé:", user.id)
 
-    // Récupérer le profil utilisateur
-    const { data: profile, error: profileError } = await supabase.from("users").select("*").eq("id", user.id).single()
+    // Récupérer le profil utilisateur avec le client service role pour éviter les problèmes RLS
+    const serviceSupabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        cookies: {
+          get() {
+            return undefined
+          },
+        },
+      },
+    )
+
+    const { data: profile, error: profileError } = await serviceSupabase
+      .from("users")
+      .select("*")
+      .eq("id", user.id)
+      .single()
 
     if (profileError) {
       console.error("❌ Erreur profil:", profileError)
