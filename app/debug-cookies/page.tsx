@@ -1,109 +1,70 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabase"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 export default function DebugCookiesPage() {
   const [cookies, setCookies] = useState<string[]>([])
-  const [session, setSession] = useState<any>(null)
-  const [user, setUser] = useState<any>(null)
+  const [apiResult, setApiResult] = useState<any>(null)
 
   useEffect(() => {
-    // Récupérer tous les cookies
+    // Récupérer tous les cookies côté client
     const allCookies = document.cookie.split(";").map((cookie) => cookie.trim())
     setCookies(allCookies)
-
-    // Récupérer la session Supabase
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-    })
-
-    // Récupérer l'utilisateur
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user)
-    })
   }, [])
 
   const testApiAuth = async () => {
     try {
       const response = await fetch("/api/debug/auth")
-      const data = await response.json()
-      console.log("API Auth Test:", data)
-      alert(JSON.stringify(data, null, 2))
+      const result = await response.json()
+      setApiResult(result)
+      console.log("API Auth test:", result)
     } catch (error) {
       console.error("Error testing API auth:", error)
-      alert("Error: " + error)
-    }
-  }
-
-  const refreshSession = async () => {
-    try {
-      const { data, error } = await supabase.auth.refreshSession()
-      if (error) {
-        console.error("Error refreshing session:", error)
-        alert("Error: " + error.message)
-      } else {
-        console.log("Session refreshed:", data)
-        alert("Session refreshed successfully")
-        window.location.reload()
-      }
-    } catch (error) {
-      console.error("Error:", error)
-      alert("Error: " + error)
+      setApiResult({ error: error instanceof Error ? error.message : "Unknown error" })
     }
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <h1 className="text-3xl font-bold">Debug Cookies & Auth</h1>
+    <div className="container mx-auto py-6">
+      <h1 className="text-3xl font-bold mb-6">Debug Cookies</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Cookies du navigateur</CardTitle>
+            <CardTitle>Cookies côté client</CardTitle>
+            <CardDescription>Tous les cookies disponibles dans le navigateur</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {cookies.map((cookie, index) => (
-                <div key={index} className="text-sm font-mono bg-gray-100 p-2 rounded">
-                  {cookie}
-                </div>
-              ))}
+              {cookies.length > 0 ? (
+                cookies.map((cookie, index) => (
+                  <div key={index} className="p-2 bg-gray-100 rounded text-sm">
+                    {cookie}
+                  </div>
+                ))
+              ) : (
+                <p>Aucun cookie trouvé</p>
+              )}
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Session Supabase</CardTitle>
+            <CardTitle>Test API Authentication</CardTitle>
+            <CardDescription>Tester l'authentification côté serveur</CardDescription>
           </CardHeader>
           <CardContent>
-            <pre className="text-xs bg-gray-100 p-4 rounded overflow-auto">{JSON.stringify(session, null, 2)}</pre>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Utilisateur Supabase</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <pre className="text-xs bg-gray-100 p-4 rounded overflow-auto">{JSON.stringify(user, null, 2)}</pre>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Actions</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Button onClick={testApiAuth} className="w-full">
-              Tester API Auth
-            </Button>
-            <Button onClick={refreshSession} className="w-full bg-transparent" variant="outline">
-              Rafraîchir Session
-            </Button>
+            <div className="space-y-4">
+              <Button onClick={testApiAuth}>Tester API Auth</Button>
+              {apiResult && (
+                <pre className="bg-gray-100 p-4 rounded text-sm overflow-auto">
+                  {JSON.stringify(apiResult, null, 2)}
+                </pre>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>

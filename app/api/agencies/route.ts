@@ -1,10 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getCurrentUserFromRequest } from "@/lib/auth-service"
-import { createSupabaseServiceClient } from "@/lib/supabase-server-utils"
+import { getCurrentUserFromRequest } from "@/lib/auth-service-fixed"
+import { createServiceSupabaseClient } from "@/lib/supabase-server-client"
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("🏢 API Agencies GET")
+    console.log("🏢 API Agencies GET - Début")
 
     // Check authentication
     const user = await getCurrentUserFromRequest(request)
@@ -13,13 +13,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    console.log("✅ Utilisateur authentifié:", user.user_type)
+    console.log("✅ Utilisateur authentifié:", user.user_type, user.id)
 
     // Use service client for database operations
-    const supabase = createSupabaseServiceClient()
+    const supabase = createServiceSupabaseClient()
 
     // Check if user is admin
     if (user.user_type !== "admin") {
+      console.log("❌ Utilisateur non admin:", user.user_type)
       // If not admin, only return the user's agency
       if (user.agency_id) {
         const { data: agency, error } = await supabase.from("agencies").select("*").eq("id", user.agency_id).single()
@@ -34,6 +35,8 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ success: true, agencies: [] })
       }
     }
+
+    console.log("✅ Admin confirmé, récupération des agences...")
 
     // Admin can see all agencies
     const { data: agencies, error } = await supabase.from("agencies").select("*").order("name")
@@ -53,13 +56,18 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🏢 API Agencies POST")
+    console.log("🏢 API Agencies POST - Début")
 
     // Check authentication
     const user = await getCurrentUserFromRequest(request)
-    if (!user || user.user_type !== "admin") {
-      console.log("❌ Utilisateur non autorisé:", user?.user_type)
+    if (!user) {
+      console.log("❌ Utilisateur non authentifié")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    if (user.user_type !== "admin") {
+      console.log("❌ Utilisateur non admin:", user.user_type)
+      return NextResponse.json({ error: "Unauthorized - Admin required" }, { status: 401 })
     }
 
     console.log("✅ Admin authentifié:", user.id)
@@ -73,7 +81,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Use service client for database operations
-    const supabase = createSupabaseServiceClient()
+    const supabase = createServiceSupabaseClient()
 
     // Create the agency
     const { data: agency, error } = await supabase

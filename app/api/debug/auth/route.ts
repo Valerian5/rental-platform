@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getCurrentUserFromRequest } from "@/lib/auth-service"
-import { createApiSupabaseClient } from "@/lib/supabase-server-client"
+import { getCurrentUserFromRequest } from "@/lib/auth-service-fixed"
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,23 +21,12 @@ export async function GET(request: NextRequest) {
       supabaseCookies.map((c) => ({ name: c.name, hasValue: !!c.value })),
     )
 
-    // Tester avec le client API
-    const supabase = createApiSupabaseClient(request)
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    console.log("👤 Auth result:", { user: user?.id, error: authError?.message })
-
     // Tester avec notre fonction d'auth
     const userProfile = await getCurrentUserFromRequest(request)
 
     return NextResponse.json({
       success: true,
       user: userProfile,
-      authUser: user ? { id: user.id, email: user.email } : null,
-      authError: authError?.message,
       cookies: cookies.map((c) => ({ name: c.name, hasValue: !!c.value })),
       supabaseCookies: supabaseCookies.map((c) => ({ name: c.name, hasValue: !!c.value })),
       timestamp: new Date().toISOString(),
