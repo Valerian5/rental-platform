@@ -529,6 +529,7 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
           )}
         </div>
       </PageHeader>
+      </div>
 
       <div className="space-y-6">
         {/* Score et actions */}
