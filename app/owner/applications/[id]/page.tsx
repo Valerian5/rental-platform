@@ -849,7 +849,7 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
                 <CardTitle className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <FileText className="h-5 w-5" />
-                    Documents du dossier de location
+                    Documents fournis
                   </div>
                   {rentalFile && (
                     <Button onClick={generatePDF} disabled={isGeneratingPDF} variant="outline">
@@ -861,29 +861,65 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
                       ) : (
                         <>
                           <Download className="h-4 w-4 mr-2" />
-                          Télécharger le dossier complet
+                          Télécharger le dossier PDF
                         </>
                       )}
                     </Button>
                   )}
                 </CardTitle>
-                <CardDescription>
-                  Consultez tous les documents fournis par le candidat dans son dossier de location
-                </CardDescription>
               </CardHeader>
               <CardContent>
                 {rentalFile ? (
-                  <div className="space-y-8">
+                  <div className="space-y-6">
                     {/* Documents du locataire principal */}
                     {hasDocuments(rentalFile.main_tenant?.identity_documents) && (
                       <div>
-                        <h4 className="font-semibold mb-4 text-lg flex items-center gap-2">
-                          <User className="h-5 w-5 text-blue-600" />
-                          Pièces d'identité du locataire principal
-                        </h4>
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        <h4 className="font-medium mb-3">Pièces d'identité du locataire</h4>
+                        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                           {rentalFile.main_tenant.identity_documents.map((doc, index) => (
-                            <DocumentCard key={index} doc={doc} title={`Pièce d'identité ${index + 1}`} color="blue" />
+                            <div key={index} className="border rounded-lg p-3">
+                              <div className="flex items-center gap-2 mb-2">
+                                <FileText className="h-4 w-4 text-blue-500" />
+                                <span className="text-sm font-medium">Pièce d'identité {index + 1}</span>
+                              </div>
+                              <img
+                                src={convertBlobUrlToApiUrl(doc.url || doc) || "/placeholder.svg"}
+                                alt={`Pièce d'identité ${index + 1}`}
+                                className="w-full h-32 object-cover rounded border"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none"
+                                  e.currentTarget.nextElementSibling.style.display = "flex"
+                                }}
+                              />
+                              <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
+                                <div className="text-center">
+                                  <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
+                                  <p className="text-xs text-gray-500">Document</p>
+                                </div>
+                              </div>
+                              <div className="flex gap-2 mt-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="flex-1 bg-transparent"
+                                  onClick={() => window.open(convertBlobUrlToApiUrl(doc.url || doc), "_blank")}
+                                >
+                                  Consulter
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    const link = document.createElement("a")
+                                    link.href = convertBlobUrlToApiUrl(doc.url || doc)
+                                    link.download = `piece-identite-${index + 1}`
+                                    link.click()
+                                  }}
+                                >
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -892,18 +928,52 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
                     {/* Documents d'activité */}
                     {hasDocuments(rentalFile.main_tenant?.activity_documents) && (
                       <div>
-                        <h4 className="font-semibold mb-4 text-lg flex items-center gap-2">
-                          <Briefcase className="h-5 w-5 text-green-600" />
-                          Justificatifs d'activité professionnelle
-                        </h4>
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        <h4 className="font-medium mb-3">Justificatifs d'activité</h4>
+                        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                           {rentalFile.main_tenant.activity_documents.map((doc, index) => (
-                            <DocumentCard
-                              key={index}
-                              doc={doc}
-                              title={`Justificatif d'activité ${index + 1}`}
-                              color="green"
-                            />
+                            <div key={index} className="border rounded-lg p-3">
+                              <div className="flex items-center gap-2 mb-2">
+                                <FileText className="h-4 w-4 text-green-500" />
+                                <span className="text-sm font-medium">Justificatif {index + 1}</span>
+                              </div>
+                              <img
+                                src={convertBlobUrlToApiUrl(doc.url || doc) || "/placeholder.svg"}
+                                alt={`Justificatif d'activité ${index + 1}`}
+                                className="w-full h-32 object-cover rounded border"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none"
+                                  e.currentTarget.nextElementSibling.style.display = "flex"
+                                }}
+                              />
+                              <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
+                                <div className="text-center">
+                                  <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
+                                  <p className="text-xs text-gray-500">Document</p>
+                                </div>
+                              </div>
+                              <div className="flex gap-2 mt-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="flex-1 bg-transparent"
+                                  onClick={() => window.open(convertBlobUrlToApiUrl(doc.url || doc), "_blank")}
+                                >
+                                  Consulter
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    const link = document.createElement("a")
+                                    link.href = convertBlobUrlToApiUrl(doc.url || doc)
+                                    link.download = `justificatif-activite-${index + 1}`
+                                    link.click()
+                                  }}
+                                >
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -912,18 +982,52 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
                     {/* Documents de revenus */}
                     {hasDocuments(rentalFile.main_tenant?.income_sources?.work_income?.documents) && (
                       <div>
-                        <h4 className="font-semibold mb-4 text-lg flex items-center gap-2">
-                          <Euro className="h-5 w-5 text-purple-600" />
-                          Justificatifs de revenus
-                        </h4>
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        <h4 className="font-medium mb-3">Justificatifs de revenus</h4>
+                        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                           {rentalFile.main_tenant.income_sources.work_income.documents.map((doc, index) => (
-                            <DocumentCard
-                              key={index}
-                              doc={doc}
-                              title={`Justificatif de revenus ${index + 1}`}
-                              color="purple"
-                            />
+                            <div key={index} className="border rounded-lg p-3">
+                              <div className="flex items-center gap-2 mb-2">
+                                <FileText className="h-4 w-4 text-purple-500" />
+                                <span className="text-sm font-medium">Justificatif revenus {index + 1}</span>
+                              </div>
+                              <img
+                                src={convertBlobUrlToApiUrl(doc.url || doc) || "/placeholder.svg"}
+                                alt={`Justificatif de revenus ${index + 1}`}
+                                className="w-full h-32 object-cover rounded border"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none"
+                                  e.currentTarget.nextElementSibling.style.display = "flex"
+                                }}
+                              />
+                              <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
+                                <div className="text-center">
+                                  <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
+                                  <p className="text-xs text-gray-500">Document</p>
+                                </div>
+                              </div>
+                              <div className="flex gap-2 mt-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="flex-1 bg-transparent"
+                                  onClick={() => window.open(convertBlobUrlToApiUrl(doc.url || doc), "_blank")}
+                                >
+                                  Consulter
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    const link = document.createElement("a")
+                                    link.href = convertBlobUrlToApiUrl(doc.url || doc)
+                                    link.download = `justificatif-revenus-${index + 1}`
+                                    link.click()
+                                  }}
+                                >
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -932,18 +1036,52 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
                     {/* Documents fiscaux */}
                     {hasDocuments(rentalFile.main_tenant?.tax_situation?.documents) && (
                       <div>
-                        <h4 className="font-semibold mb-4 text-lg flex items-center gap-2">
-                          <FileText className="h-5 w-5 text-orange-600" />
-                          Documents fiscaux
-                        </h4>
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        <h4 className="font-medium mb-3">Documents fiscaux</h4>
+                        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                           {rentalFile.main_tenant.tax_situation.documents.map((doc, index) => (
-                            <DocumentCard
-                              key={index}
-                              doc={doc}
-                              title={`Avis d'imposition ${index + 1}`}
-                              color="orange"
-                            />
+                            <div key={index} className="border rounded-lg p-3">
+                              <div className="flex items-center gap-2 mb-2">
+                                <FileText className="h-4 w-4 text-orange-500" />
+                                <span className="text-sm font-medium">Document fiscal {index + 1}</span>
+                              </div>
+                              <img
+                                src={convertBlobUrlToApiUrl(doc.url || doc) || "/placeholder.svg"}
+                                alt={`Document fiscal ${index + 1}`}
+                                className="w-full h-32 object-cover rounded border"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none"
+                                  e.currentTarget.nextElementSibling.style.display = "flex"
+                                }}
+                              />
+                              <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
+                                <div className="text-center">
+                                  <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
+                                  <p className="text-xs text-gray-500">Document</p>
+                                </div>
+                              </div>
+                              <div className="flex gap-2 mt-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="flex-1 bg-transparent"
+                                  onClick={() => window.open(convertBlobUrlToApiUrl(doc.url || doc), "_blank")}
+                                >
+                                  Consulter
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    const link = document.createElement("a")
+                                    link.href = convertBlobUrlToApiUrl(doc.url || doc)
+                                    link.download = `document-fiscal-${index + 1}`
+                                    link.click()
+                                  }}
+                                >
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -952,13 +1090,52 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
                     {/* Documents de logement actuel */}
                     {hasDocuments(rentalFile.main_tenant?.current_housing_documents?.quittances_loyer) && (
                       <div>
-                        <h4 className="font-semibold mb-4 text-lg flex items-center gap-2">
-                          <Home className="h-5 w-5 text-red-600" />
-                          Quittances de loyer actuelles
-                        </h4>
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        <h4 className="font-medium mb-3">Quittances de loyer</h4>
+                        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                           {rentalFile.main_tenant.current_housing_documents.quittances_loyer.map((doc, index) => (
-                            <DocumentCard key={index} doc={doc} title={`Quittance de loyer ${index + 1}`} color="red" />
+                            <div key={index} className="border rounded-lg p-3">
+                              <div className="flex items-center gap-2 mb-2">
+                                <FileText className="h-4 w-4 text-red-500" />
+                                <span className="text-sm font-medium">Quittance {index + 1}</span>
+                              </div>
+                              <img
+                                src={convertBlobUrlToApiUrl(doc.url || doc) || "/placeholder.svg"}
+                                alt={`Quittance de loyer ${index + 1}`}
+                                className="w-full h-32 object-cover rounded border"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none"
+                                  e.currentTarget.nextElementSibling.style.display = "flex"
+                                }}
+                              />
+                              <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
+                                <div className="text-center">
+                                  <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
+                                  <p className="text-xs text-gray-500">Document</p>
+                                </div>
+                              </div>
+                              <div className="flex gap-2 mt-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="flex-1 bg-transparent"
+                                  onClick={() => window.open(convertBlobUrlToApiUrl(doc.url || doc), "_blank")}
+                                >
+                                  Consulter
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    const link = document.createElement("a")
+                                    link.href = convertBlobUrlToApiUrl(doc.url || doc)
+                                    link.download = `quittance-loyer-${index + 1}`
+                                    link.click()
+                                  }}
+                                >
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -969,25 +1146,59 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
                       rentalFile.cotenants.length > 0 &&
                       rentalFile.cotenants.some((c) => hasDocuments(c.identity_documents)) && (
                         <div>
-                          <h4 className="font-semibold mb-4 text-lg flex items-center gap-2">
-                            <User className="h-5 w-5 text-teal-600" />
-                            Documents des colocataires
-                          </h4>
+                          <h4 className="font-medium mb-3">Documents des colocataires</h4>
                           {rentalFile.cotenants.map(
                             (cotenant, cIndex) =>
                               hasDocuments(cotenant.identity_documents) && (
-                                <div key={cIndex} className="mb-6">
-                                  <h5 className="font-medium mb-3 text-gray-700">
-                                    {cotenant.first_name} {cotenant.last_name}
+                                <div key={cIndex} className="mb-4">
+                                  <h5 className="font-medium mb-3">
+                                    Colocataire {cIndex + 1} - {cotenant.first_name} {cotenant.last_name}
                                   </h5>
-                                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                                     {cotenant.identity_documents.map((doc, index) => (
-                                      <DocumentCard
-                                        key={index}
-                                        doc={doc}
-                                        title={`Pièce d'identité ${index + 1}`}
-                                        color="teal"
-                                      />
+                                      <div key={index} className="border rounded-lg p-3">
+                                        <div className="flex items-center gap-2 mb-2">
+                                          <FileText className="h-4 w-4 text-teal-500" />
+                                          <span className="text-sm font-medium">Pièce d'identité {index + 1}</span>
+                                        </div>
+                                        <img
+                                          src={convertBlobUrlToApiUrl(doc.url || doc) || "/placeholder.svg"}
+                                          alt={`Pièce d'identité colocataire ${index + 1}`}
+                                          className="w-full h-32 object-cover rounded border"
+                                          onError={(e) => {
+                                            e.currentTarget.style.display = "none"
+                                            e.currentTarget.nextElementSibling.style.display = "flex"
+                                          }}
+                                        />
+                                        <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
+                                          <div className="text-center">
+                                            <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
+                                            <p className="text-xs text-gray-500">Document</p>
+                                          </div>
+                                        </div>
+                                        <div className="flex gap-2 mt-2">
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="flex-1 bg-transparent"
+                                            onClick={() => window.open(convertBlobUrlToApiUrl(doc.url || doc), "_blank")}
+                                          >
+                                            Consulter
+                                          </Button>
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                              const link = document.createElement("a")
+                                              link.href = convertBlobUrlToApiUrl(doc.url || doc)
+                                              link.download = `colocataire-${cIndex + 1}-identite-${index + 1}`
+                                              link.click()
+                                            }}
+                                          >
+                                            <Download className="h-4 w-4" />
+                                          </Button>
+                                        </div>
+                                      </div>
                                     ))}
                                   </div>
                                 </div>
@@ -1001,25 +1212,60 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
                       rentalFile.guarantors.length > 0 &&
                       rentalFile.guarantors.some((g) => hasDocuments(g.personal_info?.identity_documents)) && (
                         <div>
-                          <h4 className="font-semibold mb-4 text-lg flex items-center gap-2">
-                            <Shield className="h-5 w-5 text-indigo-600" />
-                            Documents des garants
-                          </h4>
+                          <h4 className="font-medium mb-3">Documents des garants</h4>
                           {rentalFile.guarantors.map(
                             (guarantor, gIndex) =>
                               hasDocuments(guarantor.personal_info?.identity_documents) && (
-                                <div key={gIndex} className="mb-6">
-                                  <h5 className="font-medium mb-3 text-gray-700">
-                                    {guarantor.personal_info.first_name} {guarantor.personal_info.last_name}
+                                <div key={gIndex} className="mb-4">
+                                  <h5 className="font-medium mb-3">
+                                    Garant {gIndex + 1} - {guarantor.personal_info.first_name}{" "}
+                                    {guarantor.personal_info.last_name}
                                   </h5>
-                                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                                     {guarantor.personal_info.identity_documents.map((doc, index) => (
-                                      <DocumentCard
-                                        key={index}
-                                        doc={doc}
-                                        title={`Pièce d'identité ${index + 1}`}
-                                        color="indigo"
-                                      />
+                                      <div key={index} className="border rounded-lg p-3">
+                                        <div className="flex items-center gap-2 mb-2">
+                                          <FileText className="h-4 w-4 text-indigo-500" />
+                                          <span className="text-sm font-medium">Pièce d'identité {index + 1}</span>
+                                        </div>
+                                        <img
+                                          src={convertBlobUrlToApiUrl(doc.url || doc) || "/placeholder.svg"}
+                                          alt={`Pièce d'identité garant ${index + 1}`}
+                                          className="w-full h-32 object-cover rounded border"
+                                          onError={(e) => {
+                                            e.currentTarget.style.display = "none"
+                                            e.currentTarget.nextElementSibling.style.display = "flex"
+                                          }}
+                                        />
+                                        <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
+                                          <div className="text-center">
+                                            <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
+                                            <p className="text-xs text-gray-500">Document</p>
+                                          </div>
+                                        </div>
+                                        <div className="flex gap-2 mt-2">
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="flex-1 bg-transparent"
+                                            onClick={() => window.open(convertBlobUrlToApiUrl(doc.url || doc), "_blank")}
+                                          >
+                                            Consulter
+                                          </Button>
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                              const link = document.createElement("a")
+                                              link.href = convertBlobUrlToApiUrl(doc.url || doc)
+                                              link.download = `garant-${gIndex + 1}-identite-${index + 1}`
+                                              link.click()
+                                            }}
+                                          >
+                                            <Download className="h-4 w-4" />
+                                          </Button>
+                                        </div>
+                                      </div>
                                     ))}
                                   </div>
                                 </div>
@@ -1027,71 +1273,45 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
                           )}
                         </div>
                       )}
-
-                    {/* Aide pour les propriétaires */}
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <div className="flex items-start gap-3">
-                        <div className="bg-blue-100 rounded-full p-2">
-                          <FileText className="h-5 w-5 text-blue-600" />
-                        </div>
-                        <div>
-                          <h5 className="font-medium text-blue-900 mb-1">Comment consulter les documents ?</h5>
-                          <ul className="text-sm text-blue-800 space-y-1">
-                            <li>• Cliquez sur "Consulter" pour ouvrir le document dans un nouvel onglet</li>
-                            <li>• Utilisez le bouton de téléchargement pour sauvegarder un document</li>
-                            <li>• Le bouton "Télécharger le dossier complet" génère un PDF avec tous les documents</li>
-                          </ul>
-                        </div>
-                      </div>
-                    </div>
                   </div>
                 ) : (
-                  <div className="text-center py-12">
-                    <div className="bg-gray-100 rounded-full p-6 w-24 h-24 mx-auto mb-4 flex items-center justify-center">
-                      <FileText className="h-12 w-12 text-gray-400" />
-                    </div>
-                    <h3 className="text-lg font-semibold mb-2 text-gray-900">Aucun dossier de location disponible</h3>
-                    <p className="text-gray-600 max-w-md mx-auto">
-                      Le candidat n'a pas encore créé son dossier de location complet ou celui-ci n'est pas accessible.
-                      Contactez le candidat pour qu'il complète son dossier.
+                  <div className="text-center py-8">
+                    <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                    <h3 className="text-lg font-semibold mb-2">Aucun document disponible</h3>
+                    <p className="text-muted-foreground">
+                      Le candidat n'a pas encore fourni de documents ou le dossier n'est pas accessible.
                     </p>
-                    <Button variant="outline" onClick={handleContact} className="mt-4 bg-transparent">
-                      <MessageSquare className="h-4 w-4 mr-2" />
-                      Contacter le candidat
-                    </Button>
                   </div>
                 )}
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
-      </div>
-
-      {/* Dialog de proposition de visite */}
-      <VisitProposalDialog
-        open={showVisitDialog}
-        onClose={() => setShowVisitDialog(false)}
-        onConfirm={handleVisitProposal}
-        propertyId={property?.id || ""}
-      />
-      {/* Dialogue de proposition de visite */}
-      {showVisitDialog && currentApplicationForVisit && (
-        <VisitProposalManager
-          isOpen={showVisitDialog}
-          onClose={() => {
-            setShowVisitDialog(false)
-            setCurrentApplicationForVisit(null)
-          }}
-          propertyId={currentApplicationForVisit.property_id}
-          propertyTitle={currentApplicationForVisit.property?.title || "Propriété"}
-          applicationId={currentApplicationForVisit.id}
-          tenantName={
-            `${currentApplicationForVisit.tenant?.first_name || ""} ${currentApplicationForVisit.tenant?.last_name || ""}`.trim() ||
-            "Candidat"
-          }
-          onSlotsProposed={handleVisitProposed}
+        {/* Dialog de proposition de visite */}
+        <VisitProposalDialog
+          open={showVisitDialog}
+          onClose={() => setShowVisitDialog(false)}
+          onConfirm={handleVisitProposal}
+          propertyId={property?.id || ""}
         />
-      )}
-    </div>
-  )
-}
+        {/* Dialogue de proposition de visite */}
+        {showVisitDialog && currentApplicationForVisit && (
+          <VisitProposalManager
+            isOpen={showVisitDialog}
+            onClose={() => {
+              setShowVisitDialog(false)
+              setCurrentApplicationForVisit(null)
+            }}
+            propertyId={currentApplicationForVisit.property_id}
+            propertyTitle={currentApplicationForVisit.property?.title || "Propriété"}
+            applicationId={currentApplicationForVisit.id}
+            tenantName={
+              `${currentApplicationForVisit.tenant?.first_name || ""} ${currentApplicationForVisit.tenant?.last_name || ""}`.trim() ||
+              "Candidat"
+            }
+            onSlotsProposed={handleVisitProposed}
+          />
+        )}
+      </div>
+    )\
+  }
