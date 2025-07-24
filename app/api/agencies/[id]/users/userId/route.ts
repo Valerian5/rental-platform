@@ -1,22 +1,34 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
-import { authService } from "@/lib/auth-service"
+import { getCurrentUserFromRequest } from "@/lib/auth-token-service"
+import { createServerClient } from "@supabase/ssr"
 
-// Create a Supabase client with environment variables
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+// Create a Supabase client with service role
+const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+  cookies: {
+    get() {
+      return undefined
+    },
+    set() {},
+    remove() {},
+  },
+})
 
 export async function GET(request: NextRequest, { params }: { params: { id: string; userId: string } }) {
   try {
     console.log("🏢 API Agency User GET:", params.userId)
 
-    // Check authentication
-    const user = await authService.getCurrentUserFromRequest(request)
+    // Check authentication using token
+    const user = await getCurrentUserFromRequest(request)
     if (!user) {
+      console.log("❌ Utilisateur non authentifié")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    console.log("👤 Utilisateur authentifié:", user.user_type, user.id)
+
     // Check if user is admin or belongs to the requested agency
     if (user.user_type !== "admin" && user.agency_id !== params.id) {
+      console.log("❌ Utilisateur non autorisé pour cette agence")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -83,11 +95,14 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   try {
     console.log("🏢 API Agency User PUT:", params.userId)
 
-    // Check authentication
-    const user = await authService.getCurrentUserFromRequest(request)
+    // Check authentication using token
+    const user = await getCurrentUserFromRequest(request)
     if (!user) {
+      console.log("❌ Utilisateur non authentifié")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    console.log("👤 Utilisateur authentifié:", user.user_type, user.id)
 
     // Check if user is admin or agency director
     if (user.user_type !== "admin") {
@@ -200,11 +215,14 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   try {
     console.log("🏢 API Agency User DELETE:", params.userId)
 
-    // Check authentication
-    const user = await authService.getCurrentUserFromRequest(request)
+    // Check authentication using token
+    const user = await getCurrentUserFromRequest(request)
     if (!user) {
+      console.log("❌ Utilisateur non authentifié")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    console.log("👤 Utilisateur authentifié:", user.user_type, user.id)
 
     // Check if user is admin or agency director
     if (user.user_type !== "admin") {
