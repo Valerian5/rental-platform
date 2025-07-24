@@ -27,6 +27,8 @@ export async function apiRequest(url: string, options: RequestInit = {}) {
     })
 
     if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`❌ API Error ${response.status}:`, errorText)
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
 
@@ -40,6 +42,7 @@ export async function apiRequest(url: string, options: RequestInit = {}) {
 // Fonctions spécifiques pour les agences
 export const agencyApi = {
   async getAll() {
+    console.log("📋 Récupération de toutes les agences")
     return apiRequest("/api/agencies")
   },
 
@@ -50,6 +53,7 @@ export const agencyApi = {
     secondary_color?: string
     accent_color?: string
   }) {
+    console.log("➕ Création d'une nouvelle agence:", agencyData.name)
     return apiRequest("/api/agencies", {
       method: "POST",
       body: JSON.stringify(agencyData),
@@ -57,10 +61,12 @@ export const agencyApi = {
   },
 
   async getById(id: string) {
+    console.log("🔍 Récupération de l'agence:", id)
     return apiRequest(`/api/agencies/${id}`)
   },
 
   async update(id: string, updates: any) {
+    console.log("✏️ Mise à jour de l'agence:", id)
     return apiRequest(`/api/agencies/${id}`, {
       method: "PUT",
       body: JSON.stringify(updates),
@@ -68,8 +74,28 @@ export const agencyApi = {
   },
 
   async delete(id: string) {
+    console.log("🗑️ Suppression de l'agence:", id)
     return apiRequest(`/api/agencies/${id}`, {
       method: "DELETE",
     })
   },
+}
+
+// Fonctions pour d'autres entités (à étendre selon les besoins)
+export const userApi = {
+  async getProfile() {
+    return apiRequest("/api/user/profile")
+  },
+
+  async updateProfile(updates: any) {
+    return apiRequest("/api/user/profile", {
+      method: "PUT",
+      body: JSON.stringify(updates),
+    })
+  },
+}
+
+// Fonction générique pour les requêtes authentifiées
+export async function authenticatedFetch(url: string, options: RequestInit = {}) {
+  return apiRequest(url, options)
 }

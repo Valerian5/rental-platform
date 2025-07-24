@@ -29,6 +29,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
 import { authService } from "@/lib/auth-service"
+import { agencyApi } from "@/lib/api-client"
 
 interface Agency {
   id: string
@@ -52,7 +53,8 @@ interface AgencyUser {
   email: string
   first_name: string
   last_name: string
-  roles: { id: string; name: string }[]
+  user_type: string
+  created_at: string
 }
 
 export default function AgencyDetailPage({ params }: { params: { id: string } }) {
@@ -78,26 +80,40 @@ export default function AgencyDetailPage({ params }: { params: { id: string } })
 
   const checkAdminAuth = async () => {
     try {
+      console.log("🔐 Vérification des droits admin...")
       const user = await authService.getCurrentUser()
+      console.log("👤 Utilisateur actuel:", user)
+
       if (!user || user.user_type !== "admin") {
+        console.log("❌ Accès refusé - pas admin")
         toast({
           title: "Access denied",
           description: "You don't have administrator permissions",
           variant: "destructive",
         })
         router.push("/")
+        return
       }
+
+      console.log("✅ Utilisateur admin confirmé")
     } catch (error) {
-      console.error("Error checking admin auth:", error)
+      console.error("❌ Error checking admin auth:", error)
+      toast({
+        title: "Authentication error",
+        description: "Please log in again",
+        variant: "destructive",
+      })
       router.push("/login")
     }
   }
 
   const fetchAgencyDetails = async () => {
     try {
+      console.log("📋 Récupération des détails de l'agence:", params.id)
       setLoading(true)
-      const response = await fetch(`/api/agencies/${params.id}`)
-      const result = await response.json()
+
+      const result = await agencyApi.getById(params.id)
+      console.log("📊 Résultat API:", result)
 
       if (!result.success) {
         throw new Error(result.error || "Failed to fetch agency details")
@@ -115,11 +131,13 @@ export default function AgencyDetailPage({ params }: { params: { id: string } })
         secondary_color: result.agency.secondary_color,
         accent_color: result.agency.accent_color,
       })
+
+      console.log("✅ Détails de l'agence chargés")
     } catch (error) {
-      console.error("Error fetching agency details:", error)
+      console.error("❌ Error fetching agency details:", error)
       toast({
         title: "Error",
-        description: "Failed to load agency details",
+        description: error instanceof Error ? error.message : "Failed to load agency details",
         variant: "destructive",
       })
     } finally {
@@ -141,15 +159,8 @@ export default function AgencyDetailPage({ params }: { params: { id: string } })
         return
       }
 
-      const response = await fetch(`/api/agencies/${params.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(formData),
-      })
-
-      const result = await response.json()
+      console.log("💾 Mise à jour de l'agence:", formData)
+      const result = await agencyApi.update(params.id, formData)
 
       if (!result.success) {
         throw new Error(result.error || "Failed to update agency")
@@ -166,8 +177,10 @@ export default function AgencyDetailPage({ params }: { params: { id: string } })
         ...formData,
         updated_at: new Date().toISOString(),
       })
+
+      console.log("✅ Agence mise à jour avec succès")
     } catch (error) {
-      console.error("Error updating agency:", error)
+      console.error("❌ Error updating agency:", error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to update agency",
