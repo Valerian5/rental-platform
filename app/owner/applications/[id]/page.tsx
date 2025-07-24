@@ -27,10 +27,9 @@ import {
   Calendar,
   XCircle,
   MessageSquare,
-  Eye,
 } from "lucide-react"
 import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
-import { convertBlobUrlToApiUrl, openDocument } from "@/lib/document-utils"
+import { convertBlobUrlToApiUrl } from "@/lib/document-utils"
 import { VisitProposalManager } from "@/components/visit-proposal-manager"
 
 // Fonction formatCurrency définie localement pour éviter l'erreur d'importation
@@ -297,66 +296,50 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
     return docs && Array.isArray(docs) && docs.length > 0
   }
 
-  // Composant pour afficher un document
-  const DocumentCard = ({ doc, title, color = "blue" }: { doc: any; title: string; color?: string }) => {
-    const docUrl = doc?.url || doc
-    const colorClasses = {
-      blue: "text-blue-500 border-blue-200 bg-blue-50",
-      green: "text-green-500 border-green-200 bg-green-50",
-      purple: "text-purple-500 border-purple-200 bg-purple-50",
-      orange: "text-orange-500 border-orange-200 bg-orange-50",
-      red: "text-red-500 border-red-200 bg-red-50",
-      teal: "text-teal-500 border-teal-200 bg-teal-50",
-      indigo: "text-indigo-500 border-indigo-200 bg-indigo-50",
+  const handleAccept = async () => {
+    try {
+      const response = await fetch(`/api/applications/${params.id}/status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "accepted" }),
+      })
+
+      if (!response.ok) {
+        toast.error("Erreur lors de l'acceptation")
+        return
+      }
+
+      toast.success("Candidature acceptée - En attente de confirmation du locataire")
+      loadApplication()
+    } catch (error) {
+      console.error("Erreur:", error)
+      toast.error("Erreur lors de l'acceptation")
     }
+  }
 
-    return (
-      <div className={`border rounded-lg p-4 ${colorClasses[color]} hover:shadow-md transition-shadow`}>
-        <div className="flex items-center gap-2 mb-3">
-          <FileText className={`h-5 w-5 ${colorClasses[color].split(" ")[0]}`} />
-          <span className="font-medium text-gray-900">{title}</span>
-        </div>
+  const handleRefuse = async () => {
+    try {
+      const response = await fetch(`/api/applications/${params.id}/status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "rejected" }),
+      })
 
-        {/* Aperçu du document */}
-        <div className="mb-3">
-          <img
-            src={convertBlobUrlToApiUrl(docUrl) || "/placeholder.svg"}
-            alt={title}
-            className="w-full h-32 object-cover rounded border bg-white"
-            onError={(e) => {
-              e.currentTarget.style.display = "none"
-              e.currentTarget.nextElementSibling.style.display = "flex"
-            }}
-          />
-          <div className="hidden items-center justify-center h-32 bg-white rounded border">
-            <div className="text-center">
-              <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
-              <p className="text-xs text-gray-500">Document PDF</p>
-            </div>
-          </div>
-        </div>
+      if (!response.ok) {
+        toast.error("Erreur lors du refus")
+        return
+      }
 
-        {/* Actions */}
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="flex-1 bg-transparent" onClick={() => openDocument(docUrl)}>
-            <Eye className="h-4 w-4 mr-1" />
-            Consulter
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const link = document.createElement("a")
-              link.href = convertBlobUrlToApiUrl(docUrl)
-              link.download = title
-              link.click()
-            }}
-          >
-            <Download className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-    )
+      toast.success("Candidature refusée")
+      loadApplication()
+    } catch (error) {
+      console.error("Erreur:", error)
+      toast.error("Erreur lors du refus")
+    }
+  }
+
+  const handleContact = () => {
+    router.push(`/owner/messaging?application=${application.id}`)
   }
 
   if (loading) {
@@ -407,52 +390,6 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
     approved: "Approuvée",
     rejected: "Refusée",
     lease_signed: "Bail signé",
-  }
-
-  const handleAccept = async () => {
-    try {
-      const response = await fetch(`/api/applications/${params.id}/status`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "accepted" }),
-      })
-
-      if (!response.ok) {
-        toast.error("Erreur lors de l'acceptation")
-        return
-      }
-
-      toast.success("Candidature acceptée - En attente de confirmation du locataire")
-      loadApplication()
-    } catch (error) {
-      console.error("Erreur:", error)
-      toast.error("Erreur lors de l'acceptation")
-    }
-  }
-
-  const handleRefuse = async () => {
-    try {
-      const response = await fetch(`/api/applications/${params.id}/status`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "rejected" }),
-      })
-
-      if (!response.ok) {
-        toast.error("Erreur lors du refus")
-        return
-      }
-
-      toast.success("Candidature refusée")
-      loadApplication()
-    } catch (error) {
-      console.error("Erreur:", error)
-      toast.error("Erreur lors du refus")
-    }
-  }
-
-  const handleContact = () => {
-    router.push(`/owner/messaging?application=${application.id}`)
   }
 
   return (
@@ -529,7 +466,6 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
           )}
         </div>
       </PageHeader>
-      </div>
 
       <div className="space-y-6">
         {/* Score et actions */}
@@ -1182,7 +1118,9 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
                                             variant="outline"
                                             size="sm"
                                             className="flex-1 bg-transparent"
-                                            onClick={() => window.open(convertBlobUrlToApiUrl(doc.url || doc), "_blank")}
+                                            onClick={() =>
+                                              window.open(convertBlobUrlToApiUrl(doc.url || doc), "_blank")
+                                            }
                                           >
                                             Consulter
                                           </Button>
@@ -1249,7 +1187,9 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
                                             variant="outline"
                                             size="sm"
                                             className="flex-1 bg-transparent"
-                                            onClick={() => window.open(convertBlobUrlToApiUrl(doc.url || doc), "_blank")}
+                                            onClick={() =>
+                                              window.open(convertBlobUrlToApiUrl(doc.url || doc), "_blank")
+                                            }
                                           >
                                             Consulter
                                           </Button>
@@ -1288,6 +1228,7 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
             </Card>
           </TabsContent>
         </Tabs>
+
         {/* Dialog de proposition de visite */}
         <VisitProposalDialog
           open={showVisitDialog}
@@ -1314,5 +1255,6 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
           />
         )}
       </div>
-    )\
-  }
+    </div>
+  )
+}
