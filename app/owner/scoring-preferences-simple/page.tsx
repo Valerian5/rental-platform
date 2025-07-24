@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
-import { Save, RefreshCw, Star } from "lucide-react"
+import { Save, RefreshCw, Star, CheckCircle } from "lucide-react"
 
 export default function ScoringPreferencesSimplePage() {
   const router = useRouter()
@@ -72,13 +72,19 @@ export default function ScoringPreferencesSimplePage() {
 
   const loadSystemPreferences = async () => {
     try {
+      console.log("🔍 Chargement des modèles système...")
       const response = await fetch("/api/admin/scoring-preferences")
       if (response.ok) {
         const data = await response.json()
+        console.log("📊 Modèles système reçus:", data.preferences?.length || 0)
         setSystemPreferences(data.preferences || [])
+      } else {
+        console.error("Erreur HTTP:", response.status, response.statusText)
+        toast.error("Erreur lors du chargement des modèles")
       }
     } catch (error) {
       console.error("Erreur chargement préférences système:", error)
+      toast.error("Erreur lors du chargement des modèles")
     }
   }
 
@@ -108,7 +114,7 @@ export default function ScoringPreferencesSimplePage() {
 
     try {
       setSaving(true)
-      console.log("Utilisation du modèle système:", systemPreferenceId)
+      console.log("🔄 Utilisation du modèle système:", systemPreferenceId)
 
       const response = await fetch("/api/scoring-preferences/use-system", {
         method: "POST",
@@ -120,8 +126,10 @@ export default function ScoringPreferencesSimplePage() {
       })
 
       if (response.ok) {
+        const data = await response.json()
         toast.success("Modèle appliqué avec succès")
         setSelectedSystemPreference(systemPreferenceId)
+        setCurrentUserPreference(data.preference)
         await loadUserPreference(user.id)
       } else {
         const errorData = await response.json()
@@ -213,7 +221,7 @@ export default function ScoringPreferencesSimplePage() {
         },
       }
 
-      console.log("Sauvegarde des préférences:", newPreferences)
+      console.log("💾 Sauvegarde des préférences:", newPreferences)
 
       const response = await fetch("/api/scoring-preferences", {
         method: "POST",
@@ -222,7 +230,9 @@ export default function ScoringPreferencesSimplePage() {
       })
 
       if (response.ok) {
+        const data = await response.json()
         toast.success("Préférences sauvegardées avec succès")
+        setCurrentUserPreference(data.preferences || data.preference)
         await loadUserPreference(user.id)
 
         // Conserver l'onglet actif après la sauvegarde
@@ -612,27 +622,62 @@ export default function ScoringPreferencesSimplePage() {
               <CardDescription>Choisissez un modèle prédéfini pour évaluer vos candidatures</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {systemPreferences.map((pref) => (
-                  <Card
-                    key={pref.id}
-                    className={`cursor-pointer transition-all ${
-                      selectedSystemPreference === pref.id ? "border-2 border-blue-500" : ""
-                    }`}
-                    onClick={() => handleUseSystemPreference(pref.id)}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-medium">{pref.name}</h3>
+              {systemPreferences.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground mb-4">Aucun modèle prédéfini disponible</p>
+                  <Button onClick={loadSystemPreferences} variant="outline">
+                    Recharger les modèles
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {systemPreferences.map((pref) => (
+                    <Card
+                      key={pref.id}
+                      className={`cursor-pointer transition-all hover:shadow-md ${
+                        selectedSystemPreference === pref.id ? "border-2 border-blue-500 bg-blue-50" : ""
+                      }`}
+                      onClick={() => handleUseSystemPreference(pref.id)}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="font-medium">{pref.name}</h3>
+                          {selectedSystemPreference === pref.id ? (
+                            <CheckCircle className="h-5 w-5 text-blue-500" />
+                          ) : pref.is_default ? (
+                            <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                          ) : null}
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-3">{pref.description || "Modèle prédéfini"}</p>
+
+                        {/* Aperçu des critères */}
+                        <div className="space-y-1 text-xs">
+                          <div className="flex justify-between">
+                            <span>Revenus:</span>
+                            <span>{pref.criteria?.income_ratio?.weight || 0}%</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Stabilité:</span>
+                            <span>{pref.criteria?.professional_stability?.weight || 0}%</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Garants:</span>
+                            <span>{pref.criteria?.guarantor?.weight || 0}%</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Dossier:</span>
+                            <span>{pref.criteria?.application_quality?.weight || 0}%</span>
+                          </div>
+                        </div>
+
                         {selectedSystemPreference === pref.id && (
-                          <Star className="h-4 w-4 text-blue-500 fill-blue-500" />
+                          <div className="mt-3 text-xs text-blue-600 font-medium">✓ Modèle actuellement utilisé</div>
                         )}
-                      </div>
-                      <p className="text-sm text-muted-foreground">{pref.description || "Modèle prédéfini"}</p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
 
               {currentUserPreference && !currentUserPreference.system_preference_id && (
                 <div className="bg-blue-50 p-4 rounded-lg">

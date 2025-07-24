@@ -125,6 +125,13 @@ export default function ScoringPreferencesPage() {
     } catch (error) {
       console.error("Erreur chargement préférences:", error)
       toast.error("Erreur lors du chargement")
+
+      // En cas d'erreur, utiliser les préférences par défaut
+      if (user) {
+        const defaultPrefs = scoringPreferencesService.getDefaultPreferences(user.id)
+        setCurrentPreferences(defaultPrefs)
+        setSelectedProfileId(null)
+      }
     }
   }
 
@@ -188,6 +195,13 @@ export default function ScoringPreferencesPage() {
   const savePreferences = async () => {
     if (!currentPreferences || !user) return
 
+    // Valider les préférences
+    const validation = scoringPreferencesService.validatePreferences(currentPreferences)
+    if (!validation.valid) {
+      toast.error(`Erreur de validation: ${validation.errors.join(", ")}`)
+      return
+    }
+
     try {
       setSaving(true)
 
@@ -227,8 +241,8 @@ export default function ScoringPreferencesPage() {
         if (response.ok) {
           const data = await response.json()
           toast.success("Préférences sauvegardées")
-          setSelectedProfileId(data.preferences.id)
-          setCurrentPreferences(data.preferences)
+          setSelectedProfileId(data.preferences?.id || data.preference?.id)
+          setCurrentPreferences(data.preferences || data.preference)
           await loadPreferences(user.id, true) // Garder le profil sélectionné
         } else {
           const errorData = await response.json()
@@ -252,6 +266,9 @@ export default function ScoringPreferencesPage() {
     let current = newPreferences.criteria as any
 
     for (let i = 0; i < pathArray.length - 1; i++) {
+      if (!current[pathArray[i]]) {
+        current[pathArray[i]] = {}
+      }
       current = current[pathArray[i]]
     }
     current[pathArray[pathArray.length - 1]] = value
@@ -263,13 +280,13 @@ export default function ScoringPreferencesPage() {
   }
 
   const getTotalWeight = () => {
-    if (!currentPreferences) return 0
+    if (!currentPreferences?.criteria) return 0
     const criteria = currentPreferences.criteria
     return (
-      criteria.income_ratio.weight +
-      criteria.professional_stability.weight +
-      criteria.guarantor.weight +
-      criteria.application_quality.weight
+      (criteria.income_ratio?.weight || 0) +
+      (criteria.professional_stability?.weight || 0) +
+      (criteria.guarantor?.weight || 0) +
+      (criteria.application_quality?.weight || 0)
     )
   }
 
@@ -463,8 +480,8 @@ export default function ScoringPreferencesPage() {
 
       if (response.ok) {
         const data = await response.json()
-        setSelectedProfileId(data.preferences.id)
-        setCurrentPreferences(data.preferences)
+        setSelectedProfileId(data.preferences?.id || data.preference?.id)
+        setCurrentPreferences(data.preferences || data.preference)
         await loadPreferences(user.id, true)
         toast.success("Critères appliqués et profil sauvegardé")
       } else {
@@ -525,6 +542,17 @@ export default function ScoringPreferencesPage() {
         <Card>
           <CardContent className="text-center py-8">
             <p>Erreur lors du chargement des préférences</p>
+            <Button
+              onClick={() => {
+                if (user) {
+                  const defaultPrefs = scoringPreferencesService.getDefaultPreferences(user.id)
+                  setCurrentPreferences(defaultPrefs)
+                }
+              }}
+              className="mt-4"
+            >
+              Utiliser les préférences par défaut
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -533,6 +561,36 @@ export default function ScoringPreferencesPage() {
 
   const totalWeight = getTotalWeight()
   const criteria = currentPreferences.criteria
+
+  // Vérifier que les critères existent
+  if (
+    !criteria ||
+    !criteria.income_ratio ||
+    !criteria.professional_stability ||
+    !criteria.guarantor ||
+    !criteria.application_quality
+  ) {
+    return (
+      <div className="container mx-auto py-6">
+        <Card>
+          <CardContent className="text-center py-8">
+            <p>Critères de scoring incomplets</p>
+            <Button
+              onClick={() => {
+                if (user) {
+                  const defaultPrefs = scoringPreferencesService.getDefaultPreferences(user.id)
+                  setCurrentPreferences(defaultPrefs)
+                }
+              }}
+              className="mt-4"
+            >
+              Réinitialiser avec les critères par défaut
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -558,7 +616,7 @@ export default function ScoringPreferencesPage() {
             <Eye className="h-4 w-4 mr-2" />
             Aperçu
           </Button>
-          <Button onClick={savePreferences} disabled={saving}>
+          <Button onClick={savePreferences} disabled={saving || totalWeight !== 100}>
             {saving ? (
               <>
                 <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
@@ -1114,7 +1172,7 @@ export default function ScoringPreferencesPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => setAsDefault(pref.id)}
+                          onClick={() => setAsDefault(pref.id!)}
                           disabled={saving}
                           title="Définir comme défaut"
                         >
@@ -1124,7 +1182,7 @@ export default function ScoringPreferencesPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => deleteProfile(pref.id)}
+                        onClick={() => deleteProfile(pref.id!)}
                         disabled={saving || pref.is_default}
                         title="Supprimer le profil"
                         className="text-red-600 hover:text-red-700"
@@ -1142,13 +1200,28 @@ export default function ScoringPreferencesPage() {
                 <CardTitle className="text-sm">Profils prédéfinis</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                <Button variant="outline" size="sm" className="w-full" onClick={() => loadPreset("balanced")}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full bg-transparent"
+                  onClick={() => loadPreset("balanced")}
+                >
                   Équilibré
                 </Button>
-                <Button variant="outline" size="sm" className="w-full" onClick={() => loadPreset("strict")}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full bg-transparent"
+                  onClick={() => loadPreset("strict")}
+                >
                   Strict
                 </Button>
-                <Button variant="outline" size="sm" className="w-full" onClick={() => loadPreset("flexible")}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full bg-transparent"
+                  onClick={() => loadPreset("flexible")}
+                >
                   Flexible
                 </Button>
               </CardContent>
