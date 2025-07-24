@@ -1,6 +1,19 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getCurrentUserFromRequest } from "@/lib/auth-service-fixed"
-import { createServiceSupabaseClient } from "@/lib/supabase-server-client"
+import { getCurrentUserFromRequest } from "@/lib/auth-token-service"
+import { createServerClient } from "@supabase/ssr"
+
+// Client service pour les opérations admin
+function createServiceSupabaseClient() {
+  return createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+    cookies: {
+      get() {
+        return undefined
+      },
+      set() {},
+      remove() {},
+    },
+  })
+}
 
 export async function GET(request: NextRequest) {
   try {

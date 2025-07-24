@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getCurrentUserFromRequest } from "@/lib/auth-service-fixed"
+import { getCurrentUserFromRequest } from "@/lib/auth-token-service"
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,14 +12,9 @@ export async function GET(request: NextRequest) {
       cookies.map((c) => ({ name: c.name, hasValue: !!c.value })),
     )
 
-    // Chercher les cookies Supabase spécifiquement
-    const supabaseCookies = cookies.filter(
-      (c) => c.name.includes("supabase") || c.name.includes("sb-") || c.name.includes("auth-token"),
-    )
-    console.log(
-      "🔑 Cookies Supabase trouvés:",
-      supabaseCookies.map((c) => ({ name: c.name, hasValue: !!c.value })),
-    )
+    // Récupérer les headers d'authentification
+    const authHeader = request.headers.get("authorization")
+    console.log("🔑 Auth header:", authHeader ? "présent" : "absent")
 
     // Tester avec notre fonction d'auth
     const userProfile = await getCurrentUserFromRequest(request)
@@ -27,8 +22,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       user: userProfile,
+      hasAuthHeader: !!authHeader,
       cookies: cookies.map((c) => ({ name: c.name, hasValue: !!c.value })),
-      supabaseCookies: supabaseCookies.map((c) => ({ name: c.name, hasValue: !!c.value })),
       timestamp: new Date().toISOString(),
     })
   } catch (error) {

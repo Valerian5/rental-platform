@@ -3,32 +3,22 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { Building2, Plus, Search, Edit, Trash2, Users, Home, Settings, ChevronRight, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Label } from "@/components/ui/label"
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Label } from "@/components/ui/label"
-import { useToast } from "@/hooks/use-toast"
-import { authService } from "@/lib/auth-service"
+import { Badge } from "@/components/ui/badge"
+import { Plus, Building2, Users, Settings } from "lucide-react"
+import { agencyApi } from "@/lib/api-client"
+import { toast } from "@/hooks/use-toast"
 
 interface Agency {
   id: string
@@ -38,17 +28,14 @@ interface Agency {
   secondary_color: string
   accent_color: string
   created_at: string
+  updated_at: string
 }
 
-export default function AgenciesPage() {
-  const router = useRouter()
-  const { toast } = useToast()
+export default function AdminAgenciesPage() {
   const [agencies, setAgencies] = useState<Agency[]>([])
   const [loading, setLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [selectedAgency, setSelectedAgency] = useState<Agency | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
     logo_url: "",
@@ -56,46 +43,23 @@ export default function AgenciesPage() {
     secondary_color: "#FF6B00",
     accent_color: "#00C48C",
   })
-  const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
-    checkAdminAuth()
-    fetchAgencies()
+    loadAgencies()
   }, [])
 
-  const checkAdminAuth = async () => {
-    try {
-      const user = await authService.getCurrentUser()
-      if (!user || user.user_type !== "admin") {
-        toast({
-          title: "Access denied",
-          description: "You don't have administrator permissions",
-          variant: "destructive",
-        })
-        router.push("/")
-      }
-    } catch (error) {
-      console.error("Error checking admin auth:", error)
-      router.push("/login")
-    }
-  }
-
-  const fetchAgencies = async () => {
+  const loadAgencies = async () => {
     try {
       setLoading(true)
-      const response = await fetch("/api/agencies")
-      const result = await response.json()
-
-      if (!result.success) {
-        throw new Error(result.error || "Failed to fetch agencies")
-      }
-
-      setAgencies(result.agencies)
+      console.log("🔄 Chargement des agences...")
+      const response = await agencyApi.getAll()
+      console.log("✅ Agences chargées:", response)
+      setAgencies(response.agencies || [])
     } catch (error) {
-      console.error("Error fetching agencies:", error)
+      console.error("❌ Erreur chargement agences:", error)
       toast({
-        title: "Error",
-        description: "Failed to load agencies",
+        title: "Erreur",
+        description: "Impossible de charger les agences",
         variant: "destructive",
       })
     } finally {
@@ -106,36 +70,17 @@ export default function AgenciesPage() {
   const handleCreateAgency = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      setIsSubmitting(true)
-
-      if (!formData.name.trim()) {
-        toast({
-          title: "Error",
-          description: "Agency name is required",
-          variant: "destructive",
-        })
-        return
-      }
-
-      const response = await fetch("/api/agencies", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(formData),
-      })
-
-      const result = await response.json()
-
-      if (!result.success) {
-        throw new Error(result.error || "Failed to create agency")
-      }
+      setCreating(true)
+      console.log("🏢 Création agence:", formData)
+      const response = await agencyApi.create(formData)
+      console.log("✅ Agence créée:", response)
 
       toast({
-        title: "Success",
-        description: "Agency created successfully",
+        title: "Succès",
+        description: "Agence créée avec succès",
       })
 
+      setIsDialogOpen(false)
       setFormData({
         name: "",
         logo_url: "",
@@ -143,329 +88,190 @@ export default function AgenciesPage() {
         secondary_color: "#FF6B00",
         accent_color: "#00C48C",
       })
-      setIsCreateDialogOpen(false)
-      fetchAgencies()
+      await loadAgencies()
     } catch (error) {
-      console.error("Error creating agency:", error)
+      console.error("❌ Erreur création agence:", error)
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create agency",
+        title: "Erreur",
+        description: error instanceof Error ? error.message : "Erreur lors de la création",
         variant: "destructive",
       })
     } finally {
-      setIsSubmitting(false)
+      setCreating(false)
     }
   }
 
-  const handleDeleteAgency = async () => {
-    if (!selectedAgency) return
-
-    try {
-      setIsSubmitting(true)
-      const response = await fetch(`/api/agencies/${selectedAgency.id}`, {
-        method: "DELETE",
-      })
-
-      const result = await response.json()
-
-      if (!result.success) {
-        throw new Error(result.error || "Failed to delete agency")
-      }
-
-      toast({
-        title: "Success",
-        description: "Agency deleted successfully",
-      })
-
-      setIsDeleteDialogOpen(false)
-      setSelectedAgency(null)
-      fetchAgencies()
-    } catch (error) {
-      console.error("Error deleting agency:", error)
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to delete agency",
-        variant: "destructive",
-      })
-    } finally {
-      setIsSubmitting(false)
-    }
+  if (loading) {
+    return (
+      <div className="container mx-auto py-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p>Chargement des agences...</p>
+          </div>
+        </div>
+      </div>
+    )
   }
-
-  const filteredAgencies = agencies.filter((agency) => agency.name.toLowerCase().includes(searchQuery.toLowerCase()))
 
   return (
     <div className="container mx-auto py-6">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold">Agencies</h1>
-          <p className="text-muted-foreground">Manage real estate agencies on the platform</p>
+          <h1 className="text-3xl font-bold">Gestion des Agences</h1>
+          <p className="text-gray-600">Gérez les agences immobilières de la plateforme</p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Agency
+              <Plus className="h-4 w-4 mr-2" />
+              Nouvelle Agence
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent>
             <DialogHeader>
-              <DialogTitle>Create New Agency</DialogTitle>
-              <DialogDescription>Add a new real estate agency to the platform.</DialogDescription>
+              <DialogTitle>Créer une nouvelle agence</DialogTitle>
+              <DialogDescription>Ajoutez une nouvelle agence immobilière à la plateforme</DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleCreateAgency}>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="name">Agency Name *</Label>
+            <form onSubmit={handleCreateAgency} className="space-y-4">
+              <div>
+                <Label htmlFor="name">Nom de l'agence *</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Ex: Immobilier Central"
+                  required
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="logo_url">URL du logo (optionnel)</Label>
+                <Input
+                  id="logo_url"
+                  type="url"
+                  value={formData.logo_url}
+                  onChange={(e) => setFormData({ ...formData, logo_url: e.target.value })}
+                  placeholder="https://example.com/logo.png"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="primary_color">Couleur primaire</Label>
                   <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="Enter agency name"
-                    required
+                    id="primary_color"
+                    type="color"
+                    value={formData.primary_color}
+                    onChange={(e) => setFormData({ ...formData, primary_color: e.target.value })}
                   />
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="logo_url">Logo URL</Label>
+                <div>
+                  <Label htmlFor="secondary_color">Couleur secondaire</Label>
                   <Input
-                    id="logo_url"
-                    value={formData.logo_url}
-                    onChange={(e) => setFormData({ ...formData, logo_url: e.target.value })}
-                    placeholder="https://example.com/logo.png"
+                    id="secondary_color"
+                    type="color"
+                    value={formData.secondary_color}
+                    onChange={(e) => setFormData({ ...formData, secondary_color: e.target.value })}
                   />
                 </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="primary_color">Primary Color</Label>
-                    <div className="flex gap-2 items-center">
-                      <div
-                        className="w-6 h-6 rounded-full border"
-                        style={{ backgroundColor: formData.primary_color }}
-                      />
-                      <Input
-                        id="primary_color"
-                        type="text"
-                        value={formData.primary_color}
-                        onChange={(e) => setFormData({ ...formData, primary_color: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="secondary_color">Secondary Color</Label>
-                    <div className="flex gap-2 items-center">
-                      <div
-                        className="w-6 h-6 rounded-full border"
-                        style={{ backgroundColor: formData.secondary_color }}
-                      />
-                      <Input
-                        id="secondary_color"
-                        type="text"
-                        value={formData.secondary_color}
-                        onChange={(e) => setFormData({ ...formData, secondary_color: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="accent_color">Accent Color</Label>
-                    <div className="flex gap-2 items-center">
-                      <div className="w-6 h-6 rounded-full border" style={{ backgroundColor: formData.accent_color }} />
-                      <Input
-                        id="accent_color"
-                        type="text"
-                        value={formData.accent_color}
-                        onChange={(e) => setFormData({ ...formData, accent_color: e.target.value })}
-                      />
-                    </div>
-                  </div>
+                <div>
+                  <Label htmlFor="accent_color">Couleur d'accent</Label>
+                  <Input
+                    id="accent_color"
+                    type="color"
+                    value={formData.accent_color}
+                    onChange={(e) => setFormData({ ...formData, accent_color: e.target.value })}
+                  />
                 </div>
               </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                  Cancel
+
+              <div className="flex justify-end space-x-2">
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  Annuler
                 </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    "Create Agency"
-                  )}
+                <Button type="submit" disabled={creating}>
+                  {creating ? "Création..." : "Créer l'agence"}
                 </Button>
-              </DialogFooter>
+              </div>
             </form>
           </DialogContent>
         </Dialog>
       </div>
 
-      <div className="mb-6">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search agencies..."
-            className="pl-10"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {agencies.map((agency) => (
+          <Card key={agency.id} className="hover:shadow-lg transition-shadow">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  {agency.logo_url ? (
+                    <img
+                      src={agency.logo_url || "/placeholder.svg"}
+                      alt={agency.name}
+                      className="h-10 w-10 rounded-lg object-cover"
+                    />
+                  ) : (
+                    <div
+                      className="h-10 w-10 rounded-lg flex items-center justify-center text-white font-bold"
+                      style={{ backgroundColor: agency.primary_color }}
+                    >
+                      {agency.name.charAt(0)}
+                    </div>
+                  )}
+                  <div>
+                    <CardTitle className="text-lg">{agency.name}</CardTitle>
+                    <CardDescription>Créée le {new Date(agency.created_at).toLocaleDateString()}</CardDescription>
+                  </div>
+                </div>
+                <Badge variant="secondary">Active</Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="flex items-center">
+                    <Building2 className="h-4 w-4 mr-2" />
+                    Propriétés
+                  </span>
+                  <Badge variant="outline">0</Badge>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="flex items-center">
+                    <Users className="h-4 w-4 mr-2" />
+                    Utilisateurs
+                  </span>
+                  <Badge variant="outline">0</Badge>
+                </div>
+                <div className="flex space-x-2 pt-2">
+                  <div className="w-4 h-4 rounded" style={{ backgroundColor: agency.primary_color }}></div>
+                  <div className="w-4 h-4 rounded" style={{ backgroundColor: agency.secondary_color }}></div>
+                  <div className="w-4 h-4 rounded" style={{ backgroundColor: agency.accent_color }}></div>
+                </div>
+                <div className="flex space-x-2 pt-2">
+                  <Button size="sm" variant="outline" className="flex-1 bg-transparent">
+                    <Settings className="h-4 w-4 mr-2" />
+                    Gérer
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      {loading ? (
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      ) : filteredAgencies.length === 0 ? (
+      {agencies.length === 0 && (
         <div className="text-center py-12">
-          <Building2 className="mx-auto h-12 w-12 text-muted-foreground" />
-          <h3 className="mt-4 text-lg font-semibold">No agencies found</h3>
-          <p className="text-muted-foreground">
-            {searchQuery ? "Try a different search term" : "Get started by adding a new agency"}
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredAgencies.map((agency) => (
-            <Card key={agency.id} className="overflow-hidden">
-              <CardHeader className="pb-3" style={{ backgroundColor: agency.primary_color + "10" }}>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      {agency.logo_url ? (
-                        <img
-                          src={agency.logo_url || "/placeholder.svg"}
-                          alt={agency.name}
-                          className="h-8 w-8 object-contain rounded"
-                          onError={(e) => {
-                            e.currentTarget.src = "/placeholder.svg?height=32&width=32&text=A"
-                          }}
-                        />
-                      ) : (
-                        <div
-                          className="h-8 w-8 rounded flex items-center justify-center text-white"
-                          style={{ backgroundColor: agency.primary_color }}
-                        >
-                          {agency.name.charAt(0)}
-                        </div>
-                      )}
-                      {agency.name}
-                    </CardTitle>
-                    <CardDescription>Created on {new Date(agency.created_at).toLocaleDateString()}</CardDescription>
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <Settings className="h-4 w-4" />
-                        <span className="sr-only">Open menu</span>
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                      <DropdownMenuItem asChild>
-                        <Link href={`/admin/agencies/${agency.id}`}>
-                          <Settings className="mr-2 h-4 w-4" />
-                          Manage Agency
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <Link href={`/admin/agencies/${agency.id}/users`}>
-                          <Users className="mr-2 h-4 w-4" />
-                          Manage Users
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <Link href={`/admin/agencies/${agency.id}/properties`}>
-                          <Home className="mr-2 h-4 w-4" />
-                          View Properties
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem asChild>
-                        <Link href={`/admin/agencies/${agency.id}/edit`}>
-                          <Edit className="mr-2 h-4 w-4" />
-                          Edit Agency
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="text-red-600"
-                        onClick={() => {
-                          setSelectedAgency(agency)
-                          setIsDeleteDialogOpen(true)
-                        }}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete Agency
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="flex gap-1">
-                    <div
-                      className="h-4 w-4 rounded-full"
-                      style={{ backgroundColor: agency.primary_color }}
-                      title="Primary color"
-                    />
-                    <div
-                      className="h-4 w-4 rounded-full"
-                      style={{ backgroundColor: agency.secondary_color }}
-                      title="Secondary color"
-                    />
-                    <div
-                      className="h-4 w-4 rounded-full"
-                      style={{ backgroundColor: agency.accent_color }}
-                      title="Accent color"
-                    />
-                  </div>
-                  <span className="text-xs text-muted-foreground">Brand colors</span>
-                </div>
-              </CardContent>
-              <CardFooter className="border-t pt-4 flex justify-between">
-                <Button variant="outline" asChild>
-                  <Link href={`/admin/agencies/${agency.id}`}>
-                    Manage
-                    <ChevronRight className="ml-1 h-4 w-4" />
-                  </Link>
-                </Button>
-                <Button variant="outline" asChild>
-                  <Link href={`/admin/agencies/${agency.id}/users`}>
-                    <Users className="mr-2 h-4 w-4" />
-                    Users
-                  </Link>
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
+          <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Aucune agence</h3>
+          <p className="text-gray-500 mb-4">Commencez par créer votre première agence immobilière</p>
+          <Button onClick={() => setIsDialogOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Créer une agence
+          </Button>
         </div>
       )}
-
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Agency</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete {selectedAgency?.name}? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleDeleteAgency} disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                "Delete Agency"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
