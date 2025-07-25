@@ -1,73 +1,23 @@
 "use client"
 
 import { useState, useCallback } from "react"
-import { createWorker } from "tesseract.js"
-import * as pdfjsLib from "pdfjs-dist"
-
-// Configuration PDF.js
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+import { advancedOCRService, type DocumentFieldsResult } from "@/lib/advanced-ocr-service"
 
 interface OCRClientProps {
-  onTextExtracted: (text: string, confidence: number) => void
+  onTextExtracted: (text: string, confidence: number, fields?: DocumentFieldsResult) => void
   onError: (error: string) => void
   documentType: string
+  useAdvancedExtraction?: boolean
 }
 
-export function DocumentOCRClient({ onTextExtracted, onError, documentType }: OCRClientProps) {
+export function DocumentOCRClient({
+  onTextExtracted,
+  onError,
+  documentType,
+  useAdvancedExtraction = true,
+}: OCRClientProps) {
   const [isProcessing, setIsProcessing] = useState(false)
   const [progress, setProgress] = useState(0)
-
-  const convertPdfToImages = async (file: File): Promise<string[]> => {
-    try {
-      console.log("📄 Conversion PDF en images...")
-
-      const arrayBuffer = await file.arrayBuffer()
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
-      const images: string[] = []
-
-      for (let pageNum = 1; pageNum <= Math.min(pdf.numPages, 3); pageNum++) {
-        const page = await pdf.getPage(pageNum)
-        const viewport = page.getViewport({ scale: 2.0 }) // Haute résolution pour OCR
-
-        const canvas = document.createElement("canvas")
-        const context = canvas.getContext("2d")!
-        canvas.height = viewport.height
-        canvas.width = viewport.width
-
-        await page.render({
-          canvasContext: context,
-          viewport: viewport,
-        }).promise
-
-        // Convertir en image base64
-        const imageDataUrl = canvas.toDataURL("image/png", 0.95)
-        images.push(imageDataUrl)
-
-        console.log(`✅ Page ${pageNum}/${pdf.numPages} convertie`)
-      }
-
-      return images
-    } catch (error) {
-      console.error("❌ Erreur conversion PDF:", error)
-      throw new Error("Impossible de convertir le PDF en images")
-    }
-  }
-
-  const processImageWithOCR = async (
-    imageSource: string | File,
-    worker: any,
-  ): Promise<{ text: string; confidence: number }> => {
-    try {
-      const result = await worker.recognize(imageSource)
-      return {
-        text: result.data.text,
-        confidence: result.data.confidence,
-      }
-    } catch (error) {
-      console.error("❌ Erreur OCR sur image:", error)
-      throw error
-    }
-  }
 
   const processDocument = useCallback(
     async (file: File) => {
@@ -75,8 +25,6 @@ export function DocumentOCRClient({ onTextExtracted, onError, documentType }: OC
 
       setIsProcessing(true)
       setProgress(0)
-
-      let worker: any = null
 
       try {
         console.log(`🔧 Traitement du fichier: ${file.name} (${file.type})`)
@@ -91,82 +39,57 @@ export function DocumentOCRClient({ onTextExtracted, onError, documentType }: OC
           )
         }
 
-        console.log("🔧 Initialisation du worker OCR côté client...")
+        if (useAdvancedExtraction) {
+          // Utiliser l'extraction avancée de champs
+          console.log("🧠 Utilisation de l'extraction avancée de champs...")
 
-        // Créer le worker Tesseract.js côté client
-        worker = await createWorker("fra+eng", 1, {
-          logger: (m) => {
-            if (m.status === "recognizing text") {
-              const progressPercent = Math.round(m.progress * 100)
-              setProgress(progressPercent)
-              console.log(`OCR Progress: ${progressPercent}%`)
-            }
-          },
-        })
+          const fieldsResult = await advancedOCRService.extractDocumentFields(file, documentType, (progressPercent) => {
+            setProgress(progressPercent)
+          })
 
-        // Configuration optimisée pour les documents administratifs
-        await worker.setParameters({
-          tessedit_char_whitelist:
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789àáâãäåæçèéêëìíîïðñòóôõöøùúûüýþÿÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝÞŸ .,;:!?()[]{}/-€$%",
-          tessedit_pageseg_mode: "1", // Automatic page segmentation with OSD
-          preserve_interword_spaces: "1",
-        })
+          console.log(`✅ Extraction avancée terminée:`, fieldsResult)
 
-        let allText = ""
-        let totalConfidence = 0
-        let processedItems = 0
+          // Convertir les champs extraits en données structurées
+          const extractedData = fieldsResult.fields.reduce(
+            (acc, field) => {
+              if (field.value) {
+                acc[field.field] = field.value
+              }
+              return acc
+            },
+            {} as Record<string, any>,
+          )
 
-        if (isPDF) {
-          // Traitement PDF
-          console.log("📄 Traitement PDF détecté")
-          const images = await convertPdfToImages(file)
+          // Ajouter les métadonnées
+          extractedData.raw_text = fieldsResult.rawText
+          extractedData.ocr_confidence = fieldsResult.overallConfidence
+          extractedData.extraction_timestamp = new Date().toISOString()
+          extractedData.extraction_method = "advanced_fields"
+          extractedData.fields_extracted = fieldsResult.fields.length
+          extractedData.processing_time = fieldsResult.processingTime
 
-          for (const [index, imageDataUrl] of images.entries()) {
-            console.log(`🔍 OCR sur page ${index + 1}/${images.length}...`)
-
-            const result = await processImageWithOCR(imageDataUrl, worker)
-            allText += result.text + "\n\n"
-            totalConfidence += result.confidence
-            processedItems++
-
-            // Mise à jour du progrès
-            const overallProgress = Math.round(((index + 1) / images.length) * 100)
-            setProgress(overallProgress)
-          }
+          onTextExtracted(fieldsResult.rawText, fieldsResult.overallConfidence, fieldsResult)
         } else {
-          // Traitement image directe
-          console.log("🖼️ Traitement image détecté")
-          console.log("🔍 Lancement de l'OCR...")
+          // Utiliser l'extraction basique (fallback)
+          console.log("📝 Utilisation de l'extraction basique...")
 
-          const result = await processImageWithOCR(file, worker)
-          allText = result.text
-          totalConfidence = result.confidence
-          processedItems = 1
+          // Ici on pourrait implémenter l'ancienne méthode comme fallback
+          // Pour l'instant, on utilise quand même l'extraction avancée
+          const fieldsResult = await advancedOCRService.extractDocumentFields(file, documentType, (progressPercent) => {
+            setProgress(progressPercent)
+          })
+
+          onTextExtracted(fieldsResult.rawText, fieldsResult.overallConfidence, fieldsResult)
         }
-
-        const averageConfidence = totalConfidence / processedItems
-
-        console.log(`✅ OCR terminé avec confiance moyenne: ${Math.round(averageConfidence)}%`)
-        console.log(`📝 Texte extrait (${allText.length} caractères):`, allText.substring(0, 200) + "...")
-
-        if (averageConfidence < 50) {
-          console.warn("⚠️ Confiance OCR faible, résultats potentiellement inexacts")
-        }
-
-        onTextExtracted(allText, averageConfidence)
       } catch (error) {
         console.error("❌ Erreur OCR côté client:", error)
         onError(error instanceof Error ? error.message : "Erreur inconnue lors de l'OCR")
       } finally {
-        // Nettoyer le worker
-        if (worker) {
-          await worker.terminate()
-        }
         setIsProcessing(false)
         setProgress(0)
       }
     },
-    [onTextExtracted, onError, documentType],
+    [onTextExtracted, onError, documentType, useAdvancedExtraction],
   )
 
   return {

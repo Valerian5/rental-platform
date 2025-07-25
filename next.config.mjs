@@ -1,38 +1,49 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    serverComponentsExternalPackages: ['tesseract.js'],
+    serverComponentsExternalPackages: ['sharp', 'tesseract.js'],
   },
   webpack: (config, { isServer }) => {
-    // Configuration pour PDF.js
+    // Configuration pour Tesseract.js
     if (!isServer) {
-      config.resolve.alias = {
-        ...config.resolve.alias,
-        canvas: false,
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        crypto: false,
       }
     }
 
-    // Configuration pour Tesseract.js
+    // Configuration pour PDF.js
     config.resolve.alias = {
       ...config.resolve.alias,
-      'tesseract.js': 'tesseract.js/dist/tesseract.min.js',
+      'pdfjs-dist/build/pdf.worker.entry': 'pdfjs-dist/build/pdf.worker.min.js',
     }
+
+    // Ignorer les warnings de modules
+    config.ignoreWarnings = [
+      { module: /node_modules\/tesseract\.js/ },
+      { module: /node_modules\/pdfjs-dist/ },
+    ]
 
     return config
   },
-  // Permettre les ressources externes pour PDF.js et Tesseract.js
-  async headers() {
+  images: {
+    domains: ['blob.vercel-storage.com', 'cdnjs.cloudflare.com'],
+    unoptimized: true,
+  },
+  headers: async () => {
     return [
       {
         source: '/(.*)',
         headers: [
           {
             key: 'Cross-Origin-Embedder-Policy',
-            value: 'credentialless',
+            value: 'unsafe-none',
           },
           {
             key: 'Cross-Origin-Opener-Policy',
-            value: 'same-origin',
+            value: 'same-origin-allow-popups',
           },
         ],
       },
@@ -43,9 +54,6 @@ const nextConfig = {
   },
   typescript: {
     ignoreBuildErrors: true,
-  },
-  images: {
-    unoptimized: true,
   },
 }
 

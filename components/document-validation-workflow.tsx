@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { DocumentOCRClient } from "./document-ocr-client"
 import { documentValidationService } from "@/lib/document-validation-service"
+import type { DocumentFieldsResult } from "@/lib/advanced-ocr-service"
 import {
   Upload,
   FileText,
@@ -18,6 +19,8 @@ import {
   RefreshCw,
   FileImage,
   FileIcon as FilePdf,
+  Brain,
+  Target,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -36,6 +39,7 @@ interface DocumentStep {
   file?: File
   extractedText?: string
   ocrConfidence?: number
+  fieldsResult?: DocumentFieldsResult
   validationResult?: any
   error?: string
 }
@@ -81,16 +85,22 @@ export function DocumentValidationWorkflow({ tenantId, onValidationComplete }: D
 
   const [currentStep, setCurrentStep] = useState(0)
   const [isValidating, setIsValidating] = useState(false)
+  const [useAdvancedExtraction, setUseAdvancedExtraction] = useState(true)
 
   // Hook OCR pour le document actuel
   const { processDocument, isProcessing, progress } = DocumentOCRClient({
     onTextExtracted: handleTextExtracted,
     onError: handleOCRError,
     documentType: documents[currentStep]?.type || "",
+    useAdvancedExtraction,
   })
 
-  function handleTextExtracted(text: string, confidence: number) {
+  function handleTextExtracted(text: string, confidence: number, fieldsResult?: DocumentFieldsResult) {
     console.log("📝 Texte extrait reçu:", text.substring(0, 100) + "...")
+
+    if (fieldsResult) {
+      console.log("🧠 Champs extraits:", fieldsResult.fields)
+    }
 
     setDocuments((prev) =>
       prev.map((doc, index) =>
@@ -99,6 +109,7 @@ export function DocumentValidationWorkflow({ tenantId, onValidationComplete }: D
               ...doc,
               extractedText: text,
               ocrConfidence: confidence,
+              fieldsResult,
               status: "completed",
             }
           : doc,
@@ -106,7 +117,7 @@ export function DocumentValidationWorkflow({ tenantId, onValidationComplete }: D
     )
 
     // Lancer la validation automatiquement
-    validateDocument(text, confidence)
+    validateDocument(text, confidence, fieldsResult)
   }
 
   function handleOCRError(error: string) {
@@ -126,17 +137,44 @@ export function DocumentValidationWorkflow({ tenantId, onValidationComplete }: D
     )
   }
 
-  const validateDocument = async (extractedText: string, ocrConfidence: number) => {
+  const validateDocument = async (
+    extractedText: string,
+    ocrConfidence: number,
+    fieldsResult?: DocumentFieldsResult,
+  ) => {
     const currentDoc = documents[currentStep]
     if (!currentDoc) return
 
     setIsValidating(true)
 
     try {
-      // Parser le texte selon le type de document
-      const extractedData = documentValidationService.parseDocumentText(extractedText, currentDoc.type, ocrConfidence)
+      let extractedData: Record<string, any>
 
-      console.log("🔍 Données extraites:", extractedData)
+      if (fieldsResult && useAdvancedExtraction) {
+        // Utiliser les données des champs extraits
+        extractedData = fieldsResult.fields.reduce(
+          (acc, field) => {
+            if (field.value) {
+              acc[field.field] = field.value
+            }
+            return acc
+          },
+          {} as Record<string, any>,
+        )
+
+        // Ajouter les métadonnées
+        extractedData.raw_text = fieldsResult.rawText
+        extractedData.ocr_confidence = fieldsResult.overallConfidence
+        extractedData.extraction_timestamp = new Date().toISOString()
+        extractedData.extraction_method = "advanced_fields"
+        extractedData.fields_extracted = fieldsResult.fields.length
+        extractedData.processing_time = fieldsResult.processingTime
+      } else {
+        // Parser le texte selon le type de document (méthode classique)
+        extractedData = documentValidationService.parseDocumentText(extractedText, currentDoc.type, ocrConfidence)
+      }
+
+      console.log("🔍 Données extraites pour validation:", extractedData)
 
       // Appeler l'API de validation
       const response = await fetch("/api/documents/validate", {
@@ -151,6 +189,12 @@ export function DocumentValidationWorkflow({ tenantId, onValidationComplete }: D
           documentUrl: currentDoc.file ? URL.createObjectURL(currentDoc.file) : undefined,
         }),
       })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("❌ Erreur API:", response.status, errorText)
+        throw new Error(`Erreur API ${response.status}: ${errorText}`)
+      }
 
       const result = await response.json()
 
@@ -288,6 +332,7 @@ export function DocumentValidationWorkflow({ tenantId, onValidationComplete }: D
               file: undefined,
               extractedText: undefined,
               ocrConfidence: undefined,
+              fieldsResult: undefined,
               validationResult: undefined,
               status: "pending",
               error: undefined,
@@ -298,15 +343,66 @@ export function DocumentValidationWorkflow({ tenantId, onValidationComplete }: D
   }
 
   const viewDocumentDetails = (doc: DocumentStep) => {
-    if (!doc.validationResult) return
+    if (!doc.fieldsResult && !doc.validationResult) return
 
-    // Afficher les détails dans un modal ou une nouvelle page
-    console.log("Détails du document:", doc.validationResult)
-    toast.info("Fonctionnalité à implémenter: voir les détails")
+    console.log("Détails du document:", {
+      fieldsResult: doc.fieldsResult,
+      validationResult: doc.validationResult,
+    })
+
+    // Afficher les champs extraits
+    if (doc.fieldsResult) {
+      const fieldsInfo = doc.fieldsResult.fields
+        .filter((f) => f.value)
+        .map((f) => `${f.field}: ${f.value} (${Math.round(f.confidence * 100)}%)`)
+        .join("\n")
+
+      toast.info(`Champs extraits:\n${fieldsInfo}`, { duration: 5000 })
+    }
   }
 
   return (
     <div className="space-y-8">
+      {/* Options d'extraction */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Brain className="h-5 w-5" />
+            Mode d'extraction
+          </CardTitle>
+          <CardDescription>Choisissez le mode d'extraction de données</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-4">
+            <Button
+              variant={useAdvancedExtraction ? "default" : "outline"}
+              onClick={() => setUseAdvancedExtraction(true)}
+              className="flex items-center gap-2"
+            >
+              <Target className="h-4 w-4" />
+              Extraction avancée (champs spécifiques)
+            </Button>
+            <Button
+              variant={!useAdvancedExtraction ? "default" : "outline"}
+              onClick={() => setUseAdvancedExtraction(false)}
+              className="flex items-center gap-2"
+            >
+              <FileText className="h-4 w-4" />
+              Extraction basique (texte complet)
+            </Button>
+          </div>
+          {useAdvancedExtraction && (
+            <Alert className="mt-4">
+              <Brain className="h-4 w-4" />
+              <AlertDescription>
+                L'extraction avancée utilise des patterns spécialisés pour identifier automatiquement les champs
+                importants (nom, prénom, numéro fiscal, etc.)
+              </AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Progression globale */}
       <Card>
         <CardHeader>
@@ -347,6 +443,11 @@ export function DocumentValidationWorkflow({ tenantId, onValidationComplete }: D
                 {doc.ocrConfidence && (
                   <div className="text-xs text-blue-600">Confiance: {Math.round(doc.ocrConfidence)}%</div>
                 )}
+                {doc.fieldsResult && (
+                  <div className="text-xs text-green-600">
+                    {doc.fieldsResult.fields.filter((f) => f.value).length} champs extraits
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -386,9 +487,11 @@ export function DocumentValidationWorkflow({ tenantId, onValidationComplete }: D
             {currentDoc.status === "processing" && (
               <div className="text-center py-8">
                 <RefreshCw className="h-12 w-12 mx-auto text-blue-500 animate-spin mb-4" />
-                <p className="text-lg font-medium mb-2">Traitement en cours...</p>
+                <p className="text-lg font-medium mb-2">
+                  {useAdvancedExtraction ? "Extraction avancée en cours..." : "Traitement en cours..."}
+                </p>
                 <p className="text-sm text-gray-500 mb-4">
-                  {isProcessing ? "Extraction OCR" : "Validation des données"}
+                  {isProcessing ? "Extraction OCR et analyse des champs" : "Validation des données"}
                 </p>
                 <Progress value={progress} className="max-w-xs mx-auto" />
                 <p className="text-xs text-gray-400 mt-2">{progress}%</p>
@@ -404,8 +507,40 @@ export function DocumentValidationWorkflow({ tenantId, onValidationComplete }: D
                     <br />
                     Confiance OCR: {Math.round(currentDoc.ocrConfidence || 0)}% • Confiance validation:{" "}
                     {Math.round(currentDoc.validationResult.confidence * 100)}%
+                    {currentDoc.fieldsResult && (
+                      <>
+                        <br />
+                        Champs extraits: {currentDoc.fieldsResult.fields.filter((f) => f.value).length} /{" "}
+                        {currentDoc.fieldsResult.fields.length}
+                      </>
+                    )}
                   </AlertDescription>
                 </Alert>
+
+                {/* Affichage des champs extraits */}
+                {currentDoc.fieldsResult && (
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h4 className="font-medium mb-3 flex items-center gap-2">
+                      <Target className="h-4 w-4" />
+                      Champs extraits automatiquement
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {currentDoc.fieldsResult.fields
+                        .filter((field) => field.value)
+                        .map((field, index) => (
+                          <div key={index} className="bg-white p-3 rounded border">
+                            <div className="text-sm font-medium text-gray-600 capitalize">
+                              {field.field.replace(/_/g, " ")}
+                            </div>
+                            <div className="text-lg">{field.value}</div>
+                            <div className="text-xs text-blue-600">
+                              Confiance: {Math.round(field.confidence * 100)}%
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={() => viewDocumentDetails(currentDoc)}>
