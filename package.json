@@ -67,16 +67,17 @@
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",
     "react-dom": "^18.3.1",
+    "react-dropzone": "^14.2.3",
     "react-hook-form": "^7.49.3",
     "react-resizable-panels": "^2.1.7",
     "recharts": "^2.15.0",
     "sonner": "^1.7.4",
     "tailwind-merge": "^2.2.1",
     "tailwindcss-animate": "^1.0.7",
+    "tesseract.js": "^5.0.4",
     "vaul": "^0.9.6",
     "zod": "^3.22.4",
     "handlebars": "^4.7.8",
-	 "@supabase/ssr": "^0.x.x",
     "@types/handlebars": "^4.1.0"
   },
   "devDependencies": {
