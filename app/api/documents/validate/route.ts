@@ -1,54 +1,75 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { documentValidationService } from "@/lib/document-validation-service"
-import { authService } from "@/lib/auth-service"
+import { supabase } from "@/lib/supabase"
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("📋 API Validation Document - Début")
-
-    // Vérifier l'authentification
-    const user = await authService.getCurrentUser()
-    if (!user) {
-      return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
-    }
-
-    // Parser les données de la requête
     const body = await request.json()
     const { documentUrl, documentType, tenantId } = body
 
     // Validation des paramètres
-    if (!documentUrl || !documentType) {
-      return NextResponse.json({ error: "URL du document et type requis" }, { status: 400 })
+    if (!documentUrl || !documentType || !tenantId) {
+      return NextResponse.json(
+        { error: "Paramètres manquants: documentUrl, documentType et tenantId sont requis" },
+        { status: 400 },
+      )
     }
 
-    // Utiliser l'ID de l'utilisateur connecté si tenantId n'est pas fourni
-    const targetTenantId = tenantId || user.id
-
-    // Vérifier les permissions
-    if (user.user_type !== "admin" && user.id !== targetTenantId) {
-      // Vérifier si l'utilisateur est propriétaire et peut valider ce document
-      if (user.user_type !== "owner") {
-        return NextResponse.json({ error: "Permissions insuffisantes" }, { status: 403 })
-      }
+    // Vérifier que le type de document est supporté
+    const supportedTypes = ["identity", "tax_notice", "payslip", "bank_statement"]
+    if (!supportedTypes.includes(documentType)) {
+      return NextResponse.json({ error: `Type de document non supporté: ${documentType}` }, { status: 400 })
     }
 
-    console.log(`🔍 Validation document ${documentType} pour tenant ${targetTenantId}`)
+    // Vérifier que l'utilisateur existe
+    const { data: user, error: userError } = await supabase
+      .from("users")
+      .select("id, user_type")
+      .eq("id", tenantId)
+      .single()
+
+    if (userError || !user) {
+      return NextResponse.json({ error: "Utilisateur non trouvé" }, { status: 404 })
+    }
+
+    // Vérifier les limites de validation (anti-spam)
+    const { data: recentValidations } = await supabase
+      .from("document_validations")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .gte("created_at", new Date(Date.now() - 60 * 60 * 1000).toISOString()) // Dernière heure
+
+    if (recentValidations && recentValidations.length >= 10) {
+      return NextResponse.json(
+        { error: "Limite de validations atteinte. Veuillez réessayer plus tard." },
+        { status: 429 },
+      )
+    }
+
+    console.log(`🚀 Démarrage validation pour ${documentType} - tenant: ${tenantId}`)
 
     // Lancer la validation
-    const validationResult = await documentValidationService.validateDocument(documentUrl, documentType, targetTenantId)
+    const result = await documentValidationService.validateDocument(
+      documentUrl,
+      documentType,
+      tenantId,
+      tenantId, // userId = tenantId pour l'audit
+    )
 
-    console.log(`✅ Validation terminée: ${validationResult.isValid ? "VALIDE" : "INVALIDE"}`)
+    console.log(`✅ Validation terminée - ID: ${result.documentId}, Valide: ${result.isValid}`)
 
     return NextResponse.json({
       success: true,
-      validation: validationResult,
+      data: result,
+      message: result.isValid
+        ? "Document validé avec succès"
+        : "Document invalide - voir les erreurs pour plus de détails",
     })
   } catch (error) {
     console.error("❌ Erreur API validation document:", error)
 
     return NextResponse.json(
       {
-        success: false,
         error: "Erreur lors de la validation du document",
         details: error instanceof Error ? error.message : "Erreur inconnue",
       },
@@ -59,41 +80,29 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("📋 API Récupération historique validations")
-
-    // Vérifier l'authentification
-    const user = await authService.getCurrentUser()
-    if (!user) {
-      return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
-    }
-
-    // Récupérer le tenantId depuis les paramètres de requête
     const { searchParams } = new URL(request.url)
-    const tenantId = searchParams.get("tenantId") || user.id
+    const tenantId = searchParams.get("tenantId")
 
-    // Vérifier les permissions
-    if (user.user_type !== "admin" && user.id !== tenantId) {
-      if (user.user_type !== "owner") {
-        return NextResponse.json({ error: "Permissions insuffisantes" }, { status: 403 })
-      }
+    if (!tenantId) {
+      return NextResponse.json({ error: "Paramètre tenantId requis" }, { status: 400 })
     }
 
-    // Récupérer l'historique
-    const validationHistory = await documentValidationService.getValidationHistory(tenantId)
+    // Récupérer l'historique des validations
+    const history = await documentValidationService.getValidationHistory(tenantId)
+
+    // Récupérer les statistiques
+    const stats = await documentValidationService.getValidationStats(tenantId)
 
     return NextResponse.json({
       success: true,
-      validations: validationHistory,
+      data: {
+        history,
+        stats,
+      },
     })
   } catch (error) {
     console.error("❌ Erreur récupération historique:", error)
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Erreur lors de la récupération de l'historique",
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: "Erreur lors de la récupération de l'historique" }, { status: 500 })
   }
 }

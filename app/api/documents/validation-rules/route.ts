@@ -1,138 +1,137 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
-import { authService } from "@/lib/auth-service"
+
+// Configuration des règles de validation par défaut
+const DEFAULT_VALIDATION_RULES = {
+  identity: {
+    required_fields: ["full_name", "birth_date", "expiration_date"],
+    optional_fields: ["document_number", "birth_place"],
+    validation_rules: [
+      {
+        field: "expiration_date",
+        type: "date_future",
+        message: "La pièce d'identité doit être valide",
+      },
+      {
+        field: "birth_date",
+        type: "date_past",
+        message: "La date de naissance doit être dans le passé",
+      },
+    ],
+  },
+  tax_notice: {
+    required_fields: ["taxpayer_name", "fiscal_year", "annual_revenue"],
+    optional_fields: ["tax_parts", "taxable_income"],
+    validation_rules: [
+      {
+        field: "fiscal_year",
+        type: "recent_year",
+        max_age_years: 2,
+        message: "L'avis d'imposition doit être récent",
+      },
+      {
+        field: "annual_revenue",
+        type: "positive_number",
+        message: "Le revenu doit être un nombre positif",
+      },
+    ],
+  },
+  payslip: {
+    required_fields: ["employee_name", "employer_name", "net_salary"],
+    optional_fields: ["gross_salary", "pay_period"],
+    validation_rules: [
+      {
+        field: "net_salary",
+        type: "positive_number",
+        message: "Le salaire net doit être positif",
+      },
+      {
+        field: "pay_period",
+        type: "recent_date",
+        max_age_months: 6,
+        message: "La fiche de paie doit être récente",
+      },
+    ],
+  },
+  bank_statement: {
+    required_fields: ["account_holder", "statement_period"],
+    optional_fields: ["balance", "account_number"],
+    validation_rules: [
+      {
+        field: "statement_period",
+        type: "recent_period",
+        max_age_months: 3,
+        message: "Le relevé bancaire doit être récent",
+      },
+    ],
+  },
+}
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("📋 API Récupération règles de validation")
-
-    // Vérifier l'authentification admin
-    const user = await authService.getCurrentUser()
-    if (!user || user.user_type !== "admin") {
-      return NextResponse.json({ error: "Accès admin requis" }, { status: 403 })
-    }
-
     const { searchParams } = new URL(request.url)
     const documentType = searchParams.get("documentType")
 
-    let query = supabase.from("validation_rules").select("*")
-
     if (documentType) {
-      query = query.eq("document_type", documentType)
+      // Retourner les règles pour un type spécifique
+      const rules = DEFAULT_VALIDATION_RULES[documentType as keyof typeof DEFAULT_VALIDATION_RULES]
+
+      if (!rules) {
+        return NextResponse.json({ error: `Type de document non supporté: ${documentType}` }, { status: 400 })
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          document_type: documentType,
+          ...rules,
+        },
+      })
     }
 
-    const { data: rules, error } = await query.order("document_type", { ascending: true })
-
-    if (error) {
-      throw error
-    }
-
+    // Retourner toutes les règles
     return NextResponse.json({
       success: true,
-      rules: rules || [],
+      data: DEFAULT_VALIDATION_RULES,
     })
   } catch (error) {
     console.error("❌ Erreur récupération règles:", error)
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Erreur lors de la récupération des règles",
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: "Erreur lors de la récupération des règles de validation" }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("📋 API Création règle de validation")
-
-    // Vérifier l'authentification admin
-    const user = await authService.getCurrentUser()
-    if (!user || user.user_type !== "admin") {
-      return NextResponse.json({ error: "Accès admin requis" }, { status: 403 })
-    }
-
     const body = await request.json()
-    const { id, document_type, field_name, rule_type, rule_config, threshold, enabled } = body
+    const { userId, documentType, customRules } = body
 
-    // Validation des données
-    if (!id || !document_type || !field_name || !rule_type) {
-      return NextResponse.json({ error: "Champs obligatoires manquants" }, { status: 400 })
+    // Vérifier que l'utilisateur est admin
+    const { data: user, error: userError } = await supabase.from("users").select("user_type").eq("id", userId).single()
+
+    if (userError || !user || user.user_type !== "admin") {
+      return NextResponse.json({ error: "Accès non autorisé" }, { status: 403 })
     }
 
-    const { data: rule, error } = await supabase
-      .from("validation_rules")
-      .insert({
-        id,
-        document_type,
-        field_name,
-        rule_type,
-        rule_config: rule_config || {},
-        threshold: threshold || 0.95,
-        enabled: enabled !== false,
-      })
-      .select()
-      .single()
+    // Sauvegarder les règles personnalisées
+    const { error: saveError } = await supabase.from("custom_validation_rules").upsert({
+      document_type: documentType,
+      rules: customRules,
+      updated_by: userId,
+      updated_at: new Date().toISOString(),
+    })
 
-    if (error) {
-      throw error
+    if (saveError) {
+      throw saveError
     }
 
     return NextResponse.json({
       success: true,
-      rule,
+      message: "Règles de validation mises à jour",
     })
   } catch (error) {
-    console.error("❌ Erreur création règle:", error)
+    console.error("❌ Erreur sauvegarde règles:", error)
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Erreur lors de la création de la règle",
-      },
-      { status: 500 },
-    )
-  }
-}
-
-export async function PUT(request: NextRequest) {
-  try {
-    console.log("📋 API Mise à jour règle de validation")
-
-    // Vérifier l'authentification admin
-    const user = await authService.getCurrentUser()
-    if (!user || user.user_type !== "admin") {
-      return NextResponse.json({ error: "Accès admin requis" }, { status: 403 })
-    }
-
-    const body = await request.json()
-    const { id, ...updates } = body
-
-    if (!id) {
-      return NextResponse.json({ error: "ID de la règle requis" }, { status: 400 })
-    }
-
-    const { data: rule, error } = await supabase.from("validation_rules").update(updates).eq("id", id).select().single()
-
-    if (error) {
-      throw error
-    }
-
-    return NextResponse.json({
-      success: true,
-      rule,
-    })
-  } catch (error) {
-    console.error("❌ Erreur mise à jour règle:", error)
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Erreur lors de la mise à jour de la règle",
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: "Erreur lors de la sauvegarde des règles" }, { status: 500 })
   }
 }

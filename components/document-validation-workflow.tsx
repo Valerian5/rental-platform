@@ -1,463 +1,615 @@
 "use client"
 
 import { useState, useCallback } from "react"
+import { useDropzone } from "react-dropzone"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Upload, FileText, CheckCircle, XCircle, AlertTriangle, Loader2, ArrowRight, Eye } from "lucide-react"
-import { toast } from "sonner"
-import { DocumentValidationDashboard } from "./document-validation-dashboard"
-
-interface DocumentStep {
-  id: string
-  type: string
-  label: string
-  description: string
-  required: boolean
-  status: "pending" | "uploading" | "validating" | "valid" | "invalid" | "error"
-  documentUrl?: string
-  validationResult?: any
-}
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Upload, CheckCircle, XCircle, AlertTriangle, FileText, Loader2, Eye, Download } from "lucide-react"
+import type { DocumentValidationResult } from "@/lib/document-validation-service"
 
 interface DocumentValidationWorkflowProps {
   tenantId: string
-  onComplete?: (results: any[]) => void
+  onComplete?: (results: DocumentValidationResult[]) => void
+  requiredDocuments?: string[]
+  optionalDocuments?: string[]
 }
 
-const DOCUMENT_STEPS: DocumentStep[] = [
-  {
-    id: "identity",
-    type: "identity",
+interface DocumentUpload {
+  file: File
+  type: string
+  status: "pending" | "uploading" | "processing" | "completed" | "error"
+  result?: DocumentValidationResult
+  error?: string
+  progress: number
+}
+
+const DOCUMENT_TYPES = {
+  identity: {
     label: "Pièce d'identité",
-    description: "Carte d'identité, passeport ou titre de séjour en cours de validité",
+    description: "Carte d'identité, passeport ou permis de conduire",
     required: true,
-    status: "pending",
+    acceptedFormats: ["image/jpeg", "image/png", "application/pdf"],
+    maxSize: 5 * 1024 * 1024, // 5MB
   },
-  {
-    id: "tax_notice",
-    type: "tax_notice",
+  tax_notice: {
     label: "Avis d'imposition",
-    description: "Dernier avis d'imposition ou de non-imposition",
+    description: "Dernier avis d'imposition sur le revenu",
     required: true,
-    status: "pending",
+    acceptedFormats: ["application/pdf", "image/jpeg", "image/png"],
+    maxSize: 10 * 1024 * 1024, // 10MB
   },
-  {
-    id: "payslip",
-    type: "payslip",
-    label: "Fiches de paie",
+  payslip: {
+    label: "Fiche de paie",
     description: "3 dernières fiches de paie",
     required: true,
-    status: "pending",
+    acceptedFormats: ["application/pdf", "image/jpeg", "image/png"],
+    maxSize: 5 * 1024 * 1024, // 5MB
   },
-  {
-    id: "bank_statement",
-    type: "bank_statement",
-    label: "Relevés bancaires",
+  bank_statement: {
+    label: "Relevé bancaire",
     description: "3 derniers relevés bancaires",
     required: false,
-    status: "pending",
+    acceptedFormats: ["application/pdf", "image/jpeg", "image/png"],
+    maxSize: 10 * 1024 * 1024, // 10MB
   },
-  {
-    id: "employment_certificate",
-    type: "employment_certificate",
-    label: "Attestation employeur",
-    description: "Attestation d'emploi de moins de 3 mois",
-    required: false,
-    status: "pending",
-  },
-]
+}
 
-export function DocumentValidationWorkflow({ tenantId, onComplete }: DocumentValidationWorkflowProps) {
-  const [steps, setSteps] = useState<DocumentStep[]>(DOCUMENT_STEPS)
+export function DocumentValidationWorkflow({
+  tenantId,
+  onComplete,
+  requiredDocuments = ["identity", "tax_notice", "payslip"],
+  optionalDocuments = ["bank_statement"],
+}: DocumentValidationWorkflowProps) {
   const [currentStep, setCurrentStep] = useState(0)
-  const [showDashboard, setShowDashboard] = useState(false)
+  const [uploads, setUploads] = useState<Record<string, DocumentUpload[]>>({})
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [completedValidations, setCompletedValidations] = useState<DocumentValidationResult[]>([])
 
-  const updateStepStatus = useCallback((stepId: string, updates: Partial<DocumentStep>) => {
-    setSteps((prev) => prev.map((step) => (step.id === stepId ? { ...step, ...updates } : step)))
+  const steps = [
+    { id: "upload", title: "Upload des documents", description: "Téléchargez vos documents" },
+    { id: "validation", title: "Validation", description: "Vérification automatique" },
+    { id: "results", title: "Résultats", description: "Analyse des résultats" },
+  ]
+
+  const requiredDropzones = requiredDocuments.map((docType) => createDropzone(docType))
+  const optionalDropzones = optionalDocuments.map((docType) => createDropzone(docType))
+
+  const onDrop = useCallback((acceptedFiles: File[], rejectedFiles: any[], documentType: string) => {
+    const docConfig = DOCUMENT_TYPES[documentType as keyof typeof DOCUMENT_TYPES]
+
+    // Traiter les fichiers acceptés
+    const newUploads = acceptedFiles.map((file) => ({
+      file,
+      type: documentType,
+      status: "pending" as const,
+      progress: 0,
+    }))
+
+    setUploads((prev) => ({
+      ...prev,
+      [documentType]: [...(prev[documentType] || []), ...newUploads],
+    }))
+
+    // Traiter les fichiers rejetés
+    rejectedFiles.forEach((rejection: any) => {
+      console.warn("Fichier rejeté:", rejection.file.name, rejection.errors)
+    })
   }, [])
 
-  const handleFileUpload = async (stepId: string, file: File) => {
-    try {
-      updateStepStatus(stepId, { status: "uploading" })
+  const createDropzone = (documentType: string) => {
+    const docConfig = DOCUMENT_TYPES[documentType as keyof typeof DOCUMENT_TYPES]
 
-      // Upload du fichier
-      const formData = new FormData()
-      formData.append("file", file)
-      formData.append("folder", "documents")
-
-      const uploadResponse = await fetch("/api/upload-blob", {
-        method: "POST",
-        body: formData,
-      })
-
-      if (!uploadResponse.ok) {
-        throw new Error("Erreur lors de l'upload")
-      }
-
-      const uploadResult = await uploadResponse.json()
-      const documentUrl = uploadResult.url
-
-      updateStepStatus(stepId, {
-        status: "validating",
-        documentUrl,
-      })
-
-      // Validation du document
-      const step = steps.find((s) => s.id === stepId)
-      if (!step) return
-
-      const validationResponse = await fetch("/api/documents/validate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+    return useDropzone({
+      onDrop: (accepted, rejected) => onDrop(accepted, rejected, documentType),
+      accept: docConfig.acceptedFormats.reduce(
+        (acc, format) => {
+          acc[format] = []
+          return acc
         },
-        body: JSON.stringify({
-          documentUrl,
-          documentType: step.type,
-          tenantId,
-        }),
-      })
+        {} as Record<string, string[]>,
+      ),
+      maxSize: docConfig.maxSize,
+      multiple: documentType === "payslip" || documentType === "bank_statement",
+    })
+  }
 
-      const validationResult = await validationResponse.json()
+  const uploadFile = async (upload: DocumentUpload): Promise<string> => {
+    const formData = new FormData()
+    formData.append("file", upload.file)
+    formData.append("type", upload.type)
+    formData.append("tenantId", tenantId)
 
-      if (validationResult.success) {
-        const validation = validationResult.validation
-        updateStepStatus(stepId, {
-          status: validation.isValid ? "valid" : "invalid",
-          validationResult: validation,
-        })
+    const response = await fetch("/api/upload", {
+      method: "POST",
+      body: formData,
+    })
 
-        if (validation.isValid) {
-          toast.success(`${step.label} validé avec succès`)
-        } else {
-          toast.warning(`${step.label} contient des erreurs`)
-        }
-      } else {
-        throw new Error(validationResult.error || "Erreur de validation")
-      }
+    if (!response.ok) {
+      throw new Error("Erreur lors de l'upload du fichier")
+    }
+
+    const data = await response.json()
+    return data.url
+  }
+
+  const validateDocument = async (documentUrl: string, documentType: string): Promise<DocumentValidationResult> => {
+    const response = await fetch("/api/documents/validate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        documentUrl,
+        documentType,
+        tenantId,
+      }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || "Erreur lors de la validation")
+    }
+
+    const data = await response.json()
+    return data.data
+  }
+
+  const processUpload = async (documentType: string, uploadIndex: number) => {
+    const upload = uploads[documentType][uploadIndex]
+
+    try {
+      // Étape 1: Upload du fichier
+      setUploads((prev) => ({
+        ...prev,
+        [documentType]: prev[documentType].map((u, i) =>
+          i === uploadIndex ? { ...u, status: "uploading", progress: 25 } : u,
+        ),
+      }))
+
+      const documentUrl = await uploadFile(upload)
+
+      // Étape 2: Validation
+      setUploads((prev) => ({
+        ...prev,
+        [documentType]: prev[documentType].map((u, i) =>
+          i === uploadIndex ? { ...u, status: "processing", progress: 75 } : u,
+        ),
+      }))
+
+      const result = await validateDocument(documentUrl, documentType)
+
+      // Étape 3: Résultat
+      setUploads((prev) => ({
+        ...prev,
+        [documentType]: prev[documentType].map((u, i) =>
+          i === uploadIndex
+            ? {
+                ...u,
+                status: "completed",
+                progress: 100,
+                result,
+              }
+            : u,
+        ),
+      }))
+
+      setCompletedValidations((prev) => [...prev, result])
     } catch (error) {
-      console.error("Erreur traitement document:", error)
-      updateStepStatus(stepId, { status: "error" })
-      toast.error(`Erreur lors du traitement de ${steps.find((s) => s.id === stepId)?.label}`)
+      console.error("Erreur traitement upload:", error)
+
+      setUploads((prev) => ({
+        ...prev,
+        [documentType]: prev[documentType].map((u, i) =>
+          i === uploadIndex
+            ? {
+                ...u,
+                status: "error",
+                error: error instanceof Error ? error.message : "Erreur inconnue",
+              }
+            : u,
+        ),
+      }))
     }
   }
 
-  const getStepIcon = (status: DocumentStep["status"]) => {
-    switch (status) {
-      case "pending":
-        return <FileText className="h-5 w-5 text-muted-foreground" />
-      case "uploading":
-      case "validating":
-        return <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
-      case "valid":
-        return <CheckCircle className="h-5 w-5 text-green-600" />
-      case "invalid":
-        return <XCircle className="h-5 w-5 text-red-600" />
-      case "error":
-        return <AlertTriangle className="h-5 w-5 text-orange-600" />
-      default:
-        return <FileText className="h-5 w-5 text-muted-foreground" />
+  const startValidation = async () => {
+    setIsProcessing(true)
+    setCurrentStep(1)
+
+    try {
+      const allUploads = Object.entries(uploads).flatMap(([type, typeUploads]) =>
+        typeUploads.map((upload, index) => ({ type, index, upload })),
+      )
+
+      // Traiter tous les uploads en parallèle
+      await Promise.all(allUploads.map(({ type, index }) => processUpload(type, index)))
+
+      setCurrentStep(2)
+      onComplete?.(completedValidations)
+    } catch (error) {
+      console.error("Erreur validation globale:", error)
+    } finally {
+      setIsProcessing(false)
     }
   }
 
-  const getStepBadge = (step: DocumentStep) => {
-    switch (step.status) {
-      case "pending":
-        return <Badge variant="outline">En attente</Badge>
-      case "uploading":
-        return <Badge className="bg-blue-100 text-blue-800">Upload...</Badge>
-      case "validating":
-        return <Badge className="bg-purple-100 text-purple-800">Validation...</Badge>
-      case "valid":
-        return <Badge className="bg-green-100 text-green-800">Valide</Badge>
-      case "invalid":
-        return <Badge variant="destructive">Invalide</Badge>
-      case "error":
-        return <Badge className="bg-orange-100 text-orange-800">Erreur</Badge>
-      default:
-        return <Badge variant="outline">En attente</Badge>
-    }
+  const removeUpload = (documentType: string, index: number) => {
+    setUploads((prev) => ({
+      ...prev,
+      [documentType]: prev[documentType].filter((_, i) => i !== index),
+    }))
   }
 
-  const getCompletionStats = () => {
-    const requiredSteps = steps.filter((s) => s.required)
-    const completedRequired = requiredSteps.filter((s) => s.status === "valid").length
-    const totalRequired = requiredSteps.length
-
-    const optionalSteps = steps.filter((s) => !s.required)
-    const completedOptional = optionalSteps.filter((s) => s.status === "valid").length
-    const totalOptional = optionalSteps.length
-
-    const overallProgress = ((completedRequired + completedOptional) / steps.length) * 100
-
-    return {
-      requiredComplete: completedRequired === totalRequired,
-      requiredProgress: (completedRequired / totalRequired) * 100,
-      optionalProgress: totalOptional > 0 ? (completedOptional / totalOptional) * 100 : 0,
-      overallProgress,
-      completedRequired,
-      totalRequired,
-      completedOptional,
-      totalOptional,
-    }
+  const canProceed = () => {
+    return requiredDocuments.every((docType) => uploads[docType] && uploads[docType].length > 0)
   }
 
-  const stats = getCompletionStats()
+  const calculateProgress = () => {
+    const totalUploads = Object.values(uploads).flat().length
+    if (totalUploads === 0) return 0
 
-  if (showDashboard) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold">Tableau de Bord de Validation</h2>
-            <p className="text-muted-foreground">Suivi détaillé des validations de documents</p>
-          </div>
-          <Button onClick={() => setShowDashboard(false)} variant="outline">
-            Retour au workflow
-          </Button>
-        </div>
-
-        <DocumentValidationDashboard
-          tenantId={tenantId}
-          onValidationComplete={(result) => {
-            // Mettre à jour le workflow si nécessaire
-            const step = steps.find((s) => s.type === result.documentType)
-            if (step) {
-              updateStepStatus(step.id, {
-                status: result.isValid ? "valid" : "invalid",
-                validationResult: result,
-              })
-            }
-          }}
-        />
-      </div>
-    )
+    const completedUploads = Object.values(uploads)
+      .flat()
+      .filter((u) => u.status === "completed").length
+    return (completedUploads / totalUploads) * 100
   }
 
   return (
-    <div className="space-y-6">
-      {/* En-tête avec progression */}
+    <div className="max-w-4xl mx-auto space-y-6">
+      {/* Indicateur de progression */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Validation Automatisée des Documents</CardTitle>
-              <CardDescription>Uploadez vos documents pour une validation automatique et sécurisée</CardDescription>
-            </div>
-            <Button onClick={() => setShowDashboard(true)} variant="outline">
-              <Eye className="h-4 w-4 mr-2" />
-              Tableau de bord
-            </Button>
-          </div>
+          <CardTitle>Validation de dossier locatif</CardTitle>
+          <CardDescription>
+            Étape {currentStep + 1} sur {steps.length}: {steps[currentStep].description}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div className="flex items-center justify-between text-sm">
-              <span>Progression globale</span>
-              <span>{Math.round(stats.overallProgress)}%</span>
+            <div className="flex items-center justify-between">
+              {steps.map((step, index) => (
+                <div key={step.id} className={`flex items-center ${index < steps.length - 1 ? "flex-1" : ""}`}>
+                  <div
+                    className={`flex items-center justify-center w-8 h-8 rounded-full border-2 ${
+                      index <= currentStep
+                        ? "bg-primary border-primary text-primary-foreground"
+                        : "border-muted-foreground text-muted-foreground"
+                    }`}
+                  >
+                    {index < currentStep ? (
+                      <CheckCircle className="h-4 w-4" />
+                    ) : (
+                      <span className="text-sm font-medium">{index + 1}</span>
+                    )}
+                  </div>
+                  <span className="ml-2 text-sm font-medium">{step.title}</span>
+                  {index < steps.length - 1 && <div className="flex-1 h-px bg-muted mx-4" />}
+                </div>
+              ))}
             </div>
-            <Progress value={stats.overallProgress} className="h-2" />
-
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-muted-foreground">Documents obligatoires:</span>
-                <span className="ml-2 font-medium">
-                  {stats.completedRequired}/{stats.totalRequired}
-                </span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Documents optionnels:</span>
-                <span className="ml-2 font-medium">
-                  {stats.completedOptional}/{stats.totalOptional}
-                </span>
-              </div>
-            </div>
+            {currentStep === 1 && <Progress value={calculateProgress()} className="w-full" />}
           </div>
         </CardContent>
       </Card>
 
-      {/* Liste des étapes */}
-      <div className="space-y-4">
-        {steps.map((step, index) => (
-          <Card
-            key={step.id}
-            className={`transition-all ${
-              step.status === "valid"
-                ? "border-green-200 bg-green-50/50"
-                : step.status === "invalid"
-                  ? "border-red-200 bg-red-50/50"
-                  : step.status === "error"
-                    ? "border-orange-200 bg-orange-50/50"
-                    : "border-border"
-            }`}
-          >
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex items-start space-x-4">
-                  <div className="flex-shrink-0 mt-1">{getStepIcon(step.status)}</div>
+      {/* Étape 1: Upload des documents */}
+      {currentStep === 0 && (
+        <div className="space-y-4">
+          <Tabs defaultValue="required">
+            <TabsList>
+              <TabsTrigger value="required">Documents obligatoires</TabsTrigger>
+              <TabsTrigger value="optional">Documents optionnels</TabsTrigger>
+            </TabsList>
 
-                  <div className="space-y-2 flex-1">
-                    <div className="flex items-center space-x-3">
-                      <h3 className="font-semibold">{step.label}</h3>
-                      {getStepBadge(step)}
-                      {step.required && (
-                        <Badge variant="outline" className="text-xs">
-                          Obligatoire
-                        </Badge>
-                      )}
-                    </div>
+            <TabsContent value="required" className="space-y-4">
+              {requiredDocuments.map((docType, index) => {
+                const docConfig = DOCUMENT_TYPES[docType as keyof typeof DOCUMENT_TYPES]
+                const dropzone = requiredDropzones[index]
+                const typeUploads = uploads[docType] || []
 
-                    <p className="text-sm text-muted-foreground">{step.description}</p>
-
-                    {/* Résultats de validation */}
-                    {step.validationResult && (
-                      <div className="space-y-2 mt-3">
-                        <div className="flex items-center space-x-2">
-                          <Badge variant="secondary">
-                            Confiance: {Math.round(step.validationResult.confidence * 100)}%
-                          </Badge>
-                          <Badge variant="outline">Traité en {step.validationResult.processingTime}ms</Badge>
-                        </div>
-
-                        {step.validationResult.errors?.length > 0 && (
-                          <Alert variant="destructive" className="mt-2">
-                            <AlertTriangle className="h-4 w-4" />
-                            <AlertDescription>
-                              <div className="space-y-1">
-                                <p className="font-medium">
-                                  {step.validationResult.errors.length} erreur(s) détectée(s):
-                                </p>
-                                {step.validationResult.errors.slice(0, 2).map((error: any, i: number) => (
-                                  <p key={i} className="text-sm">
-                                    • {error.message}
-                                  </p>
-                                ))}
-                                {step.validationResult.errors.length > 2 && (
-                                  <p className="text-sm text-muted-foreground">
-                                    +{step.validationResult.errors.length - 2} autres erreurs
-                                  </p>
-                                )}
-                              </div>
-                            </AlertDescription>
-                          </Alert>
-                        )}
-
-                        {step.validationResult.warnings?.length > 0 && (
-                          <Alert className="mt-2">
-                            <AlertTriangle className="h-4 w-4" />
-                            <AlertDescription>
-                              <p className="font-medium">{step.validationResult.warnings.length} avertissement(s)</p>
-                            </AlertDescription>
-                          </Alert>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  {step.status === "pending" && (
-                    <div>
-                      <input
-                        type="file"
-                        id={`file-${step.id}`}
-                        className="hidden"
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0]
-                          if (file) {
-                            handleFileUpload(step.id, file)
-                          }
-                        }}
-                      />
-                      <Button onClick={() => document.getElementById(`file-${step.id}`)?.click()} size="sm">
-                        <Upload className="h-4 w-4 mr-2" />
-                        Uploader
-                      </Button>
-                    </div>
-                  )}
-
-                  {step.documentUrl && (
-                    <Button variant="outline" size="sm" onClick={() => window.open(step.documentUrl, "_blank")}>
-                      <Eye className="h-4 w-4 mr-1" />
-                      Voir
-                    </Button>
-                  )}
-
-                  {step.status === "invalid" && (
-                    <div>
-                      <input
-                        type="file"
-                        id={`refile-${step.id}`}
-                        className="hidden"
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0]
-                          if (file) {
-                            handleFileUpload(step.id, file)
-                          }
-                        }}
-                      />
-                      <Button
-                        onClick={() => document.getElementById(`refile-${step.id}`)?.click()}
-                        size="sm"
-                        variant="outline"
+                return (
+                  <Card key={docType}>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        {docConfig.label}
+                        <Badge variant="destructive">Obligatoire</Badge>
+                      </CardTitle>
+                      <CardDescription>{docConfig.description}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div
+                        {...dropzone.getRootProps()}
+                        className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+                          dropzone.isDragActive
+                            ? "border-primary bg-primary/5"
+                            : "border-muted-foreground/25 hover:border-muted-foreground/50"
+                        }`}
                       >
-                        <Upload className="h-4 w-4 mr-2" />
-                        Remplacer
+                        <input {...dropzone.getInputProps()} />
+                        <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground">
+                          {dropzone.isDragActive
+                            ? "Déposez les fichiers ici..."
+                            : "Cliquez ou glissez-déposez vos fichiers"}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Formats acceptés: {docConfig.acceptedFormats.join(", ")}
+                          (max {Math.round(docConfig.maxSize / 1024 / 1024)}MB)
+                        </p>
+                      </div>
+
+                      {/* Liste des fichiers uploadés */}
+                      {typeUploads.length > 0 && (
+                        <div className="mt-4 space-y-2">
+                          {typeUploads.map((upload, index) => (
+                            <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                              <div className="flex items-center gap-3">
+                                <FileText className="h-4 w-4" />
+                                <div>
+                                  <p className="text-sm font-medium">{upload.file.name}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {Math.round(upload.file.size / 1024)} KB
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {upload.status === "pending" && <Badge variant="outline">En attente</Badge>}
+                                <Button variant="ghost" size="sm" onClick={() => removeUpload(docType, index)}>
+                                  ✕
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </TabsContent>
+
+            <TabsContent value="optional" className="space-y-4">
+              {optionalDocuments.map((docType, index) => {
+                const docConfig = DOCUMENT_TYPES[docType as keyof typeof DOCUMENT_TYPES]
+                const dropzone = optionalDropzones[index]
+                const typeUploads = uploads[docType] || []
+
+                return (
+                  <Card key={docType}>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        {docConfig.label}
+                        <Badge variant="secondary">Optionnel</Badge>
+                      </CardTitle>
+                      <CardDescription>{docConfig.description}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div
+                        {...dropzone.getRootProps()}
+                        className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+                          dropzone.isDragActive
+                            ? "border-primary bg-primary/5"
+                            : "border-muted-foreground/25 hover:border-muted-foreground/50"
+                        }`}
+                      >
+                        <input {...dropzone.getInputProps()} />
+                        <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground">
+                          {dropzone.isDragActive
+                            ? "Déposez les fichiers ici..."
+                            : "Cliquez ou glissez-déposez vos fichiers"}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Formats acceptés: {docConfig.acceptedFormats.join(", ")}
+                          (max {Math.round(docConfig.maxSize / 1024 / 1024)}MB)
+                        </p>
+                      </div>
+
+                      {/* Liste des fichiers uploadés */}
+                      {typeUploads.length > 0 && (
+                        <div className="mt-4 space-y-2">
+                          {typeUploads.map((upload, index) => (
+                            <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                              <div className="flex items-center gap-3">
+                                <FileText className="h-4 w-4" />
+                                <div>
+                                  <p className="text-sm font-medium">{upload.file.name}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {Math.round(upload.file.size / 1024)} KB
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {upload.status === "pending" && <Badge variant="outline">En attente</Badge>}
+                                <Button variant="ghost" size="sm" onClick={() => removeUpload(docType, index)}>
+                                  ✕
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </TabsContent>
+          </Tabs>
+
+          <div className="flex justify-end">
+            <Button onClick={startValidation} disabled={!canProceed() || isProcessing} size="lg">
+              {isProcessing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Validation en cours...
+                </>
+              ) : (
+                "Lancer la validation"
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Étape 2: Validation en cours */}
+      {currentStep === 1 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Validation en cours</CardTitle>
+            <CardDescription>Traitement et analyse de vos documents...</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {Object.entries(uploads).map(([docType, typeUploads]) => (
+                <div key={docType} className="space-y-2">
+                  <h4 className="font-medium">{DOCUMENT_TYPES[docType as keyof typeof DOCUMENT_TYPES].label}</h4>
+                  {typeUploads.map((upload, index) => (
+                    <div key={index} className="flex items-center gap-3 p-3 border rounded-lg">
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium">{upload.file.name}</span>
+                          <div className="flex items-center gap-2">
+                            {upload.status === "uploading" && <Loader2 className="h-4 w-4 animate-spin" />}
+                            {upload.status === "processing" && <Loader2 className="h-4 w-4 animate-spin" />}
+                            {upload.status === "completed" && <CheckCircle className="h-4 w-4 text-green-600" />}
+                            {upload.status === "error" && <XCircle className="h-4 w-4 text-red-600" />}
+                            <span className="text-sm text-muted-foreground">
+                              {upload.status === "uploading" && "Upload..."}
+                              {upload.status === "processing" && "Analyse OCR..."}
+                              {upload.status === "completed" && "Terminé"}
+                              {upload.status === "error" && "Erreur"}
+                            </span>
+                          </div>
+                        </div>
+                        <Progress value={upload.progress} className="h-2" />
+                        {upload.error && <p className="text-sm text-red-600 mt-1">{upload.error}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Étape 3: Résultats */}
+      {currentStep === 2 && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Résultats de la validation</CardTitle>
+              <CardDescription>Analyse terminée pour {completedValidations.length} document(s)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="text-center p-4 border rounded-lg">
+                  <div className="text-2xl font-bold text-green-600">
+                    {completedValidations.filter((v) => v.isValid).length}
+                  </div>
+                  <p className="text-sm text-muted-foreground">Documents valides</p>
+                </div>
+                <div className="text-center p-4 border rounded-lg">
+                  <div className="text-2xl font-bold text-red-600">
+                    {completedValidations.filter((v) => !v.isValid).length}
+                  </div>
+                  <p className="text-sm text-muted-foreground">Documents invalides</p>
+                </div>
+                <div className="text-center p-4 border rounded-lg">
+                  <div className="text-2xl font-bold">
+                    {Math.round(
+                      (completedValidations.reduce((sum, v) => sum + v.confidence, 0) / completedValidations.length) *
+                        100,
+                    )}
+                    %
+                  </div>
+                  <p className="text-sm text-muted-foreground">Confiance moyenne</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {completedValidations.map((result) => (
+                  <div key={result.documentId} className="border rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        {result.isValid ? (
+                          <CheckCircle className="h-5 w-5 text-green-600" />
+                        ) : (
+                          <XCircle className="h-5 w-5 text-red-600" />
+                        )}
+                        <h4 className="font-medium">
+                          {DOCUMENT_TYPES[result.documentType as keyof typeof DOCUMENT_TYPES]?.label ||
+                            result.documentType}
+                        </h4>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={result.isValid ? "default" : "destructive"}>
+                          {result.isValid ? "Valide" : "Invalide"}
+                        </Badge>
+                        <Badge variant="outline">{Math.round(result.confidence * 100)}% confiance</Badge>
+                      </div>
+                    </div>
+
+                    {result.errors.length > 0 && (
+                      <Alert variant="destructive" className="mb-3">
+                        <XCircle className="h-4 w-4" />
+                        <AlertDescription>
+                          <div className="space-y-1">
+                            {result.errors.map((error, index) => (
+                              <div key={index}>
+                                <strong>{error.message}</strong>
+                                {error.suggestion && <p className="text-sm mt-1">💡 {error.suggestion}</p>}
+                              </div>
+                            ))}
+                          </div>
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {result.warnings.length > 0 && (
+                      <Alert className="mb-3">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription>
+                          <div className="space-y-1">
+                            {result.warnings.map((warning, index) => (
+                              <div key={index}>{warning.message}</div>
+                            ))}
+                          </div>
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <span>Traité en {result.processingTime}ms</span>
+                      <Button variant="ghost" size="sm">
+                        <Eye className="h-4 w-4 mr-2" />
+                        Voir les détails
                       </Button>
                     </div>
-                  )}
-                </div>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
-        ))}
-      </div>
 
-      {/* Résumé et actions */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold mb-2">Résumé de la Validation</h3>
-              <div className="space-y-1 text-sm text-muted-foreground">
-                <p>
-                  Documents obligatoires: {stats.completedRequired}/{stats.totalRequired}
-                  {stats.requiredComplete && <CheckCircle className="inline h-4 w-4 ml-2 text-green-600" />}
-                </p>
-                <p>
-                  Documents optionnels: {stats.completedOptional}/{stats.totalOptional}
-                </p>
-                <p>Progression globale: {Math.round(stats.overallProgress)}%</p>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-3">
-              {stats.requiredComplete && (
-                <Button
-                  onClick={() => {
-                    const results = steps.filter((s) => s.validationResult)
-                    onComplete?.(results)
-                    toast.success("Validation terminée avec succès!")
-                  }}
-                  className="bg-green-600 hover:bg-green-700"
-                >
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Terminer la validation
-                </Button>
-              )}
-
-              <Button onClick={() => setShowDashboard(true)} variant="outline">
-                <ArrowRight className="h-4 w-4 mr-2" />
-                Voir le tableau de bord
+          <div className="flex justify-between">
+            <Button variant="outline" onClick={() => setCurrentStep(0)}>
+              Ajouter des documents
+            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline">
+                <Download className="h-4 w-4 mr-2" />
+                Télécharger le rapport
               </Button>
+              <Button onClick={() => onComplete?.(completedValidations)}>Terminer</Button>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
     </div>
   )
 }

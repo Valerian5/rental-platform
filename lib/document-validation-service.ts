@@ -180,6 +180,7 @@ const CROSS_VALIDATION_RULES: CrossValidationRule[] = [
 export class DocumentValidationService {
   private ocrWorker: any = null
   private cache = new Map<string, any>()
+  private isInitialized = false
 
   constructor() {
     this.initializeOCR()
@@ -187,10 +188,29 @@ export class DocumentValidationService {
 
   private async initializeOCR() {
     try {
-      this.ocrWorker = await createWorker("fra")
-      console.log("✅ OCR Worker initialisé")
+      console.log("🔧 Initialisation du worker OCR Tesseract.js...")
+
+      this.ocrWorker = await createWorker("fra+eng", 1, {
+        logger: (m) => {
+          if (m.status === "recognizing text") {
+            console.log(`OCR Progress: ${Math.round(m.progress * 100)}%`)
+          }
+        },
+      })
+
+      // Configuration optimisée pour les documents administratifs
+      await this.ocrWorker.setParameters({
+        tessedit_char_whitelist:
+          "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789àáâãäåæçèéêëìíîïðñòóôõöøùúûüýþÿÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝÞŸ .,;:!?()[]{}/-€$%",
+        tessedit_pageseg_mode: "1", // Automatic page segmentation with OSD
+        preserve_interword_spaces: "1",
+      })
+
+      this.isInitialized = true
+      console.log("✅ Worker OCR initialisé avec succès")
     } catch (error) {
       console.error("❌ Erreur initialisation OCR:", error)
+      throw new Error("Impossible d'initialiser le service OCR")
     }
   }
 
@@ -201,17 +221,30 @@ export class DocumentValidationService {
     documentUrl: string,
     documentType: string,
     tenantId: string,
+    userId: string,
   ): Promise<DocumentValidationResult> {
     const startTime = Date.now()
 
     try {
       console.log(`🔍 Validation document ${documentType} pour tenant ${tenantId}`)
 
+      // Audit log
+      await this.logAuditEvent(userId, "DOCUMENT_VALIDATION_START", {
+        documentType,
+        tenantId,
+        documentUrl,
+      })
+
       // Vérifier le cache
       const cacheKey = `${documentUrl}_${documentType}`
       if (this.cache.has(cacheKey)) {
         console.log("📋 Résultat trouvé en cache")
         return this.cache.get(cacheKey)
+      }
+
+      // S'assurer que l'OCR est initialisé
+      if (!this.isInitialized) {
+        await this.initializeOCR()
       }
 
       // Étape 1: Extraction OCR
@@ -241,12 +274,27 @@ export class DocumentValidationService {
 
       // Sauvegarder en cache et base de données
       this.cache.set(cacheKey, result)
-      await this.saveValidationResult(result, tenantId)
+      await this.saveValidationResult(result, tenantId, documentUrl)
+
+      // Audit log
+      await this.logAuditEvent(userId, "DOCUMENT_VALIDATION_COMPLETE", {
+        documentId: result.documentId,
+        isValid: result.isValid,
+        confidence: result.confidence,
+        processingTime: result.processingTime,
+      })
 
       console.log(`✅ Validation terminée en ${result.processingTime}ms`)
       return result
     } catch (error) {
       console.error("❌ Erreur validation document:", error)
+
+      // Audit log d'erreur
+      await this.logAuditEvent(userId, "DOCUMENT_VALIDATION_ERROR", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        documentType,
+        tenantId,
+      })
 
       return {
         documentId: this.generateDocumentId(),
@@ -269,57 +317,86 @@ export class DocumentValidationService {
   }
 
   /**
-   * Extraction de texte via OCR
+   * Extraction de texte via OCR Tesseract.js
    */
   private async extractTextFromDocument(documentUrl: string, documentType: string): Promise<Record<string, any>> {
     try {
       console.log("📄 Extraction OCR en cours...")
 
-      if (!this.ocrWorker) {
+      if (!this.ocrWorker || !this.isInitialized) {
         await this.initializeOCR()
       }
 
       // Télécharger le document
       const response = await fetch(documentUrl)
-      const blob = await response.blob()
+      if (!response.ok) {
+        throw new Error(`Impossible de télécharger le document: ${response.statusText}`)
+      }
 
-      // Extraction OCR
+      const blob = await response.blob()
+      console.log(`📥 Document téléchargé: ${blob.size} bytes, type: ${blob.type}`)
+
+      // Vérifier le type de fichier
+      if (!blob.type.startsWith("image/") && blob.type !== "application/pdf") {
+        throw new Error(`Type de fichier non supporté: ${blob.type}`)
+      }
+
+      // Extraction OCR avec Tesseract.js
+      console.log("🔍 Lancement de l'OCR...")
       const {
-        data: { text },
+        data: { text, confidence },
       } = await this.ocrWorker.recognize(blob)
 
-      // Parser selon le type de document
-      const extractedData = await this.parseDocumentText(text, documentType)
+      console.log(`✅ OCR terminé avec confiance: ${Math.round(confidence)}%`)
+      console.log(`📝 Texte extrait (${text.length} caractères):`, text.substring(0, 200) + "...")
 
-      console.log("✅ Extraction OCR terminée")
+      if (confidence < 50) {
+        console.warn("⚠️ Confiance OCR faible, résultats potentiellement inexacts")
+      }
+
+      // Parser selon le type de document
+      const extractedData = await this.parseDocumentText(text, documentType, confidence)
+
+      console.log("✅ Extraction et parsing terminés")
       return extractedData
     } catch (error) {
       console.error("❌ Erreur extraction OCR:", error)
-      throw new Error("Impossible d'extraire le texte du document")
+      throw new Error(
+        `Impossible d'extraire le texte du document: ${error instanceof Error ? error.message : "Erreur inconnue"}`,
+      )
     }
   }
 
   /**
    * Parser le texte selon le type de document
    */
-  private async parseDocumentText(text: string, documentType: string): Promise<Record<string, any>> {
+  private async parseDocumentText(
+    text: string,
+    documentType: string,
+    ocrConfidence: number,
+  ): Promise<Record<string, any>> {
     const cleanText = text.replace(/\s+/g, " ").trim()
+    const baseData = {
+      raw_text: cleanText,
+      ocr_confidence: ocrConfidence,
+      extraction_timestamp: new Date().toISOString(),
+    }
 
     switch (documentType) {
       case "identity":
-        return this.parseIdentityDocument(cleanText)
+        return { ...baseData, ...this.parseIdentityDocument(cleanText) }
 
       case "tax_notice":
-        return this.parseTaxNotice(cleanText)
+        return { ...baseData, ...this.parseTaxNotice(cleanText) }
 
       case "payslip":
-        return this.parsePayslip(cleanText)
+        return { ...baseData, ...this.parsePayslip(cleanText) }
 
       case "bank_statement":
-        return this.parseBankStatement(cleanText)
+        return { ...baseData, ...this.parseBankStatement(cleanText) }
 
       default:
-        return { raw_text: cleanText }
+        return baseData
     }
   }
 
@@ -327,44 +404,71 @@ export class DocumentValidationService {
    * Parser une pièce d'identité
    */
   private parseIdentityDocument(text: string): Record<string, any> {
-    const data: Record<string, any> = { raw_text: text }
+    const data: Record<string, any> = {}
 
-    // Extraction du nom complet
-    const nameMatch = text.match(/(?:NOM|SURNAME)[:\s]+([A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ\s-]+)/i)
-    if (nameMatch) {
-      data.last_name = nameMatch[1].trim()
+    // Patterns pour carte d'identité française
+    const patterns = {
+      // Nom de famille
+      lastName: [
+        /(?:NOM|SURNAME)[:\s]+([A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ\s-]+?)(?:\n|PRÉNOM|PRENOM|GIVEN)/i,
+        /^([A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ\s-]+)\n.*PRÉNOM/im,
+      ],
+
+      // Prénom
+      firstName: [
+        /(?:PRÉNOM|PRENOM|GIVEN\s+NAME)[:\s]+([A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ\s-]+?)(?:\n|NÉ|BORN)/i,
+        /PRÉNOM[:\s]+([A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ\s-]+)/i,
+      ],
+
+      // Date de naissance
+      birthDate: [
+        /(?:NÉ|NE|BORN)[:\s]+(?:LE\s+)?(\d{1,2}[/\-.]\d{1,2}[/\-.]\d{4})/i,
+        /(?:DATE\s+DE\s+NAISSANCE|BIRTH\s+DATE)[:\s]+(\d{1,2}[/\-.]\d{1,2}[/\-.]\d{4})/i,
+      ],
+
+      // Date d'expiration
+      expirationDate: [
+        /(?:EXPIRE|EXPIRY|VALABLE\s+JUSQU)[:\s]+(?:LE\s+)?(\d{1,2}[/\-.]\d{1,2}[/\-.]\d{4})/i,
+        /(?:FIN\s+DE\s+VALIDITÉ|VALID\s+UNTIL)[:\s]+(\d{1,2}[/\-.]\d{1,2}[/\-.]\d{4})/i,
+      ],
+
+      // Numéro de document
+      documentNumber: [/(?:N°|NO|NUMBER|NUMÉRO)[:\s]+([A-Z0-9]+)/i, /CARTE\s+N°[:\s]*([A-Z0-9]+)/i],
+
+      // Lieu de naissance
+      birthPlace: [/(?:À|A|AT)[:\s]+([A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ\s-]+?)(?:\n|\d|NATIONALITÉ)/i],
     }
 
-    // Extraction du prénom
-    const firstNameMatch = text.match(/(?:PRÉNOM|PRENOM|GIVEN NAME)[:\s]+([A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ\s-]+)/i)
-    if (firstNameMatch) {
-      data.first_name = firstNameMatch[1].trim()
+    // Extraction avec patterns multiples
+    for (const [field, fieldPatterns] of Object.entries(patterns)) {
+      for (const pattern of fieldPatterns) {
+        const match = text.match(pattern)
+        if (match && match[1]) {
+          data[field] = match[1].trim()
+          break
+        }
+      }
     }
 
-    // Nom complet
-    if (data.last_name && data.first_name) {
-      data.full_name = `${data.first_name} ${data.last_name}`
+    // Construction du nom complet
+    if (data.lastName && data.firstName) {
+      data.full_name = `${data.firstName} ${data.lastName}`
     }
 
-    // Date de naissance
-    const birthDateMatch = text.match(/(?:NÉ|NE|BORN)[:\s]+(?:LE\s+)?(\d{1,2}[/\-.]\d{1,2}[/\-.]\d{4})/i)
-    if (birthDateMatch) {
-      data.birth_date = this.normalizeDate(birthDateMatch[1])
+    // Normalisation des dates
+    if (data.birthDate) {
+      data.birth_date = this.normalizeDate(data.birthDate)
+    }
+    if (data.expirationDate) {
+      data.expiration_date = this.normalizeDate(data.expirationDate)
     }
 
-    // Date d'expiration
-    const expirationMatch = text.match(
-      /(?:EXPIRE|EXPIRY|VALABLE JUSQU)[:\s]+(?:LE\s+)?(\d{1,2}[/\-.]\d{1,2}[/\-.]\d{4})/i,
-    )
-    if (expirationMatch) {
-      data.expiration_date = this.normalizeDate(expirationMatch[1])
-    }
-
-    // Numéro de document
-    const docNumberMatch = text.match(/(?:N°|NO|NUMBER)[:\s]+([A-Z0-9]+)/i)
-    if (docNumberMatch) {
-      data.document_number = docNumberMatch[1]
-    }
+    // Nettoyage des données
+    Object.keys(data).forEach((key) => {
+      if (typeof data[key] === "string") {
+        data[key] = data[key].replace(/\s+/g, " ").trim()
+      }
+    })
 
     return data
   }
@@ -373,30 +477,59 @@ export class DocumentValidationService {
    * Parser un avis d'imposition
    */
   private parseTaxNotice(text: string): Record<string, any> {
-    const data: Record<string, any> = { raw_text: text }
+    const data: Record<string, any> = {}
 
-    // Année fiscale
-    const fiscalYearMatch = text.match(/(?:REVENUS|ANNÉE|YEAR)\s+(\d{4})/i)
-    if (fiscalYearMatch) {
-      data.fiscal_year = Number.parseInt(fiscalYearMatch[1])
+    const patterns = {
+      // Année fiscale
+      fiscalYear: [
+        /(?:REVENUS|ANNÉE|YEAR)\s+(\d{4})/i,
+        /AVIS\s+D'IMPOSITION\s+(\d{4})/i,
+        /IMPÔT\s+SUR\s+LE\s+REVENU\s+(\d{4})/i,
+      ],
+
+      // Nom du contribuable
+      taxpayerName: [
+        /(?:M\.|MME|MR|MRS)[:\s]+([A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ\s-]+?)(?:\n|ADRESSE)/i,
+        /CONTRIBUABLE[:\s]+([A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ\s-]+)/i,
+      ],
+
+      // Revenu fiscal de référence
+      annualRevenue: [
+        /(?:REVENU\s+FISCAL\s+DE\s+RÉFÉRENCE|RFR)[:\s]+([0-9\s]+)/i,
+        /RÉFÉRENCE\s+FISCALE[:\s]+([0-9\s]+)/i,
+      ],
+
+      // Revenu imposable
+      taxableIncome: [/(?:REVENU\s+IMPOSABLE|TAXABLE\s+INCOME)[:\s]+([0-9\s]+)/i],
+
+      // Nombre de parts
+      taxParts: [/(?:NOMBRE\s+DE\s+PARTS|PARTS)[:\s]+([0-9,.]+)/i],
+
+      // Impôt dû
+      taxDue: [/(?:IMPÔT\s+DÛ|TAX\s+DUE)[:\s]+([0-9\s,.]+)/i],
     }
 
-    // Nom du contribuable
-    const taxpayerMatch = text.match(/(?:M\.|MME|MR|MRS)[:\s]+([A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ\s-]+)/i)
-    if (taxpayerMatch) {
-      data.taxpayer_name = taxpayerMatch[1].trim()
-    }
+    // Extraction avec patterns
+    for (const [field, fieldPatterns] of Object.entries(patterns)) {
+      for (const pattern of fieldPatterns) {
+        const match = text.match(pattern)
+        if (match && match[1]) {
+          let value = match[1].trim()
 
-    // Revenu fiscal de référence
-    const revenueMatch = text.match(/(?:REVENU FISCAL DE RÉFÉRENCE|RFR)[:\s]+([0-9\s]+)/i)
-    if (revenueMatch) {
-      data.annual_revenue = Number.parseInt(revenueMatch[1].replace(/\s/g, ""))
-    }
-
-    // Nombre de parts
-    const partsMatch = text.match(/(?:NOMBRE DE PARTS|PARTS)[:\s]+([0-9,.]+)/i)
-    if (partsMatch) {
-      data.tax_parts = Number.parseFloat(partsMatch[1].replace(",", "."))
+          // Conversion numérique pour les montants
+          if (["annualRevenue", "taxableIncome", "taxDue"].includes(field)) {
+            value = value.replace(/\s/g, "").replace(",", ".")
+            data[field] = Number.parseFloat(value) || 0
+          } else if (field === "fiscalYear") {
+            data[field] = Number.parseInt(value)
+          } else if (field === "taxParts") {
+            data[field] = Number.parseFloat(value.replace(",", "."))
+          } else {
+            data[field] = value
+          }
+          break
+        }
+      }
     }
 
     return data
@@ -406,36 +539,57 @@ export class DocumentValidationService {
    * Parser une fiche de paie
    */
   private parsePayslip(text: string): Record<string, any> {
-    const data: Record<string, any> = { raw_text: text }
+    const data: Record<string, any> = {}
 
-    // Nom de l'employé
-    const employeeMatch = text.match(/(?:SALARIÉ|EMPLOYEE|NOM)[:\s]+([A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ\s-]+)/i)
-    if (employeeMatch) {
-      data.employee_name = employeeMatch[1].trim()
+    const patterns = {
+      // Nom de l'employé
+      employeeName: [
+        /(?:SALARIÉ|EMPLOYEE|NOM)[:\s]+([A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ\s-]+?)(?:\n|ADRESSE)/i,
+        /^([A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ\s-]+)\n.*(?:EMPLOYEUR|SOCIÉTÉ)/im,
+      ],
+
+      // Employeur
+      employerName: [
+        /(?:EMPLOYEUR|EMPLOYER|SOCIÉTÉ)[:\s]+([A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ\s-]+?)(?:\n|SIRET)/i,
+        /RAISON\s+SOCIALE[:\s]+([A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ\s-]+)/i,
+      ],
+
+      // Période de paie
+      payPeriod: [
+        /(?:PÉRIODE|PERIOD|MOIS)[:\s]+(\d{1,2}[/\-.]\d{4})/i,
+        /DU\s+(\d{1,2}[/\-.]\d{1,2}[/\-.]\d{4})\s+AU\s+(\d{1,2}[/\-.]\d{1,2}[/\-.]\d{4})/i,
+      ],
+
+      // Salaire brut
+      grossSalary: [/(?:SALAIRE\s+BRUT|BRUT|GROSS\s+PAY)[:\s]+([0-9\s,.]+)/i, /TOTAL\s+BRUT[:\s]+([0-9\s,.]+)/i],
+
+      // Salaire net
+      netSalary: [
+        /(?:NET\s+À\s+PAYER|SALAIRE\s+NET|NET\s+PAY)[:\s]+([0-9\s,.]+)/i,
+        /NET\s+IMPOSABLE[:\s]+([0-9\s,.]+)/i,
+      ],
+
+      // Cotisations
+      totalDeductions: [/(?:TOTAL\s+COTISATIONS|DEDUCTIONS)[:\s]+([0-9\s,.]+)/i],
     }
 
-    // Employeur
-    const employerMatch = text.match(/(?:EMPLOYEUR|EMPLOYER|SOCIÉTÉ)[:\s]+([A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ\s-]+)/i)
-    if (employerMatch) {
-      data.employer_name = employerMatch[1].trim()
-    }
+    // Extraction avec patterns
+    for (const [field, fieldPatterns] of Object.entries(patterns)) {
+      for (const pattern of fieldPatterns) {
+        const match = text.match(pattern)
+        if (match && match[1]) {
+          let value = match[1].trim()
 
-    // Période de paie
-    const periodMatch = text.match(/(?:PÉRIODE|PERIOD|MOIS)[:\s]+(\d{1,2}[/\-.]\d{4})/i)
-    if (periodMatch) {
-      data.pay_period = periodMatch[1]
-    }
-
-    // Salaire net
-    const netSalaryMatch = text.match(/(?:NET À PAYER|SALAIRE NET|NET PAY)[:\s]+([0-9\s,.]+)/i)
-    if (netSalaryMatch) {
-      data.net_salary = Number.parseFloat(netSalaryMatch[1].replace(/[\s,]/g, "").replace(".", "."))
-    }
-
-    // Salaire brut
-    const grossSalaryMatch = text.match(/(?:SALAIRE BRUT|GROSS PAY)[:\s]+([0-9\s,.]+)/i)
-    if (grossSalaryMatch) {
-      data.gross_salary = Number.parseFloat(grossSalaryMatch[1].replace(/[\s,]/g, "").replace(".", "."))
+          // Conversion numérique pour les montants
+          if (["grossSalary", "netSalary", "totalDeductions"].includes(field)) {
+            value = value.replace(/\s/g, "").replace(",", ".")
+            data[field] = Number.parseFloat(value) || 0
+          } else {
+            data[field] = value
+          }
+          break
+        }
+      }
     }
 
     return data
@@ -445,29 +599,56 @@ export class DocumentValidationService {
    * Parser un relevé bancaire
    */
   private parseBankStatement(text: string): Record<string, any> {
-    const data: Record<string, any> = { raw_text: text }
+    const data: Record<string, any> = {}
 
-    // Période du relevé
-    const periodMatch = text.match(
-      /(?:PÉRIODE|PERIOD|DU\s+)(\d{1,2}[/\-.]\d{1,2}[/\-.]\d{4})\s+(?:AU\s+)(\d{1,2}[/\-.]\d{1,2}[/\-.]\d{4})/i,
-    )
-    if (periodMatch) {
-      data.statement_period = {
-        start: this.normalizeDate(periodMatch[1]),
-        end: this.normalizeDate(periodMatch[2]),
+    const patterns = {
+      // Période du relevé
+      statementPeriod: [
+        /(?:PÉRIODE|PERIOD|DU\s+)(\d{1,2}[/\-.]\d{1,2}[/\-.]\d{4})\s+(?:AU\s+)(\d{1,2}[/\-.]\d{1,2}[/\-.]\d{4})/i,
+        /RELEVÉ\s+DU\s+(\d{1,2}[/\-.]\d{1,2}[/\-.]\d{4})\s+AU\s+(\d{1,2}[/\-.]\d{1,2}[/\-.]\d{4})/i,
+      ],
+
+      // Solde
+      balance: [/(?:SOLDE|BALANCE)[:\s]+(-?[0-9\s,.]+)/i, /NOUVEAU\s+SOLDE[:\s]+(-?[0-9\s,.]+)/i],
+
+      // Solde précédent
+      previousBalance: [/(?:ANCIEN\s+SOLDE|PREVIOUS\s+BALANCE)[:\s]+(-?[0-9\s,.]+)/i],
+
+      // Titulaire du compte
+      accountHolder: [
+        /(?:TITULAIRE|HOLDER)[:\s]+([A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ\s-]+?)(?:\n|COMPTE)/i,
+        /^([A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ\s-]+)\n.*COMPTE/im,
+      ],
+
+      // Numéro de compte
+      accountNumber: [/(?:COMPTE|ACCOUNT)[:\s]+([0-9\s-]+)/i, /N°\s+COMPTE[:\s]+([0-9\s-]+)/i],
+    }
+
+    // Extraction avec patterns
+    for (const [field, fieldPatterns] of Object.entries(patterns)) {
+      for (const pattern of fieldPatterns) {
+        const match = text.match(pattern)
+        if (match) {
+          if (field === "statementPeriod" && match[2]) {
+            // Période avec deux dates
+            data.statement_period = {
+              start: this.normalizeDate(match[1]),
+              end: this.normalizeDate(match[2]),
+            }
+          } else if (match[1]) {
+            let value = match[1].trim()
+
+            // Conversion numérique pour les montants
+            if (["balance", "previousBalance"].includes(field)) {
+              value = value.replace(/\s/g, "").replace(",", ".")
+              data[field] = Number.parseFloat(value) || 0
+            } else {
+              data[field] = value
+            }
+          }
+          break
+        }
       }
-    }
-
-    // Solde
-    const balanceMatch = text.match(/(?:SOLDE|BALANCE)[:\s]+(-?[0-9\s,.]+)/i)
-    if (balanceMatch) {
-      data.balance = Number.parseFloat(balanceMatch[1].replace(/[\s,]/g, "").replace(".", "."))
-    }
-
-    // Titulaire du compte
-    const holderMatch = text.match(/(?:TITULAIRE|HOLDER)[:\s]+([A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ\s-]+)/i)
-    if (holderMatch) {
-      data.account_holder = holderMatch[1].trim()
     }
 
     return data
@@ -492,6 +673,14 @@ export class DocumentValidationService {
     let totalConfidence = 0
     let validRules = 0
 
+    // Vérifier la confiance OCR
+    if (data.ocr_confidence && data.ocr_confidence < 70) {
+      warnings.push({
+        code: "LOW_OCR_CONFIDENCE",
+        message: `Confiance OCR faible (${Math.round(data.ocr_confidence)}%). Les données extraites peuvent être inexactes.`,
+      })
+    }
+
     for (const rule of rules.filter((r) => r.enabled)) {
       const fieldValue = data[rule.field]
       let ruleValid = true
@@ -505,6 +694,7 @@ export class DocumentValidationService {
               message: `Le champ ${rule.field} est obligatoire`,
               severity: "critical",
               field: rule.field,
+              suggestion: "Vérifiez que le document est lisible et complet",
             })
             ruleValid = false
             ruleConfidence = 0
@@ -520,6 +710,7 @@ export class DocumentValidationService {
                 message: `Le format du champ ${rule.field} est invalide`,
                 severity: "major",
                 field: rule.field,
+                suggestion: "Vérifiez que les données ont été correctement extraites",
               })
               ruleValid = false
               ruleConfidence = 0.3
@@ -536,6 +727,7 @@ export class DocumentValidationService {
                 message: `La date ${rule.field} est invalide`,
                 severity: "major",
                 field: rule.field,
+                suggestion: "Vérifiez le format de date dans le document",
               })
               ruleValid = false
               ruleConfidence = 0.2
@@ -604,6 +796,7 @@ export class DocumentValidationService {
               message: "La pièce d'identité est expirée",
               severity: "critical",
               field: "expiration_date",
+              suggestion: "Fournissez une pièce d'identité valide",
             })
             confidence = 0.1
           } else if (expirationDate.getTime() - now.getTime() < 30 * 24 * 60 * 60 * 1000) {
@@ -615,34 +808,112 @@ export class DocumentValidationService {
             confidence = 0.8
           }
         }
+
+        // Vérifier la cohérence âge/date de naissance
+        if (data.birth_date) {
+          const birthDate = new Date(data.birth_date)
+          const age = Math.floor((Date.now() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+          if (age < 18) {
+            warnings.push({
+              code: "MINOR_APPLICANT",
+              message: "Le demandeur semble être mineur",
+              field: "birth_date",
+            })
+            confidence = 0.7
+          } else if (age > 100) {
+            warnings.push({
+              code: "UNUSUAL_AGE",
+              message: "L'âge calculé semble inhabituel",
+              field: "birth_date",
+            })
+            confidence = 0.6
+          }
+        }
         break
 
       case "payslip":
         // Vérifier la cohérence salaire brut/net
-        if (data.gross_salary && data.net_salary) {
-          const ratio = data.net_salary / data.gross_salary
-          if (ratio > 0.9 || ratio < 0.5) {
+        if (data.grossSalary && data.netSalary) {
+          const ratio = data.netSalary / data.grossSalary
+          if (ratio > 0.9) {
             warnings.push({
-              code: "UNUSUAL_SALARY_RATIO",
-              message: "Le ratio salaire net/brut semble inhabituel",
-              field: "net_salary",
+              code: "HIGH_NET_GROSS_RATIO",
+              message: "Le ratio salaire net/brut semble élevé",
+              field: "netSalary",
             })
             confidence = 0.7
+          } else if (ratio < 0.5) {
+            warnings.push({
+              code: "LOW_NET_GROSS_RATIO",
+              message: "Le ratio salaire net/brut semble faible",
+              field: "netSalary",
+            })
+            confidence = 0.7
+          }
+        }
+
+        // Vérifier que la période n'est pas trop ancienne
+        if (data.payPeriod) {
+          const periodDate = new Date(data.payPeriod)
+          const monthsAgo = (Date.now() - periodDate.getTime()) / (30 * 24 * 60 * 60 * 1000)
+          if (monthsAgo > 6) {
+            warnings.push({
+              code: "OLD_PAYSLIP",
+              message: "Cette fiche de paie date de plus de 6 mois",
+              field: "payPeriod",
+            })
+            confidence = 0.6
           }
         }
         break
 
       case "tax_notice":
         // Vérifier que l'année fiscale est récente
-        if (data.fiscal_year) {
+        if (data.fiscalYear) {
           const currentYear = new Date().getFullYear()
-          if (data.fiscal_year < currentYear - 2) {
+          if (data.fiscalYear < currentYear - 2) {
             warnings.push({
               code: "OLD_TAX_NOTICE",
               message: "L'avis d'imposition est ancien",
-              field: "fiscal_year",
+              field: "fiscalYear",
             })
             confidence = 0.6
+          } else if (data.fiscalYear > currentYear) {
+            errors.push({
+              code: "FUTURE_TAX_YEAR",
+              message: "L'année fiscale est dans le futur",
+              severity: "major",
+              field: "fiscalYear",
+            })
+            confidence = 0.2
+          }
+        }
+
+        // Vérifier la cohérence des revenus
+        if (data.annualRevenue && data.taxableIncome) {
+          if (data.taxableIncome > data.annualRevenue) {
+            warnings.push({
+              code: "INCONSISTENT_INCOME",
+              message: "Le revenu imposable semble supérieur au revenu de référence",
+              field: "taxableIncome",
+            })
+            confidence = 0.7
+          }
+        }
+        break
+
+      case "bank_statement":
+        // Vérifier que la période n'est pas trop ancienne
+        if (data.statement_period && data.statement_period.end) {
+          const endDate = new Date(data.statement_period.end)
+          const monthsAgo = (Date.now() - endDate.getTime()) / (30 * 24 * 60 * 60 * 1000)
+          if (monthsAgo > 3) {
+            warnings.push({
+              code: "OLD_BANK_STATEMENT",
+              message: "Ce relevé bancaire date de plus de 3 mois",
+              field: "statement_period",
+            })
+            confidence = 0.7
           }
         }
         break
@@ -758,17 +1029,17 @@ export class DocumentValidationService {
     warnings: ValidationWarning[],
   ) {
     // Logique de validation des revenus entre fiche de paie et avis d'imposition
-    const currentIncome = currentData.net_salary || currentData.annual_revenue
+    const currentIncome = currentData.netSalary || currentData.annualRevenue
     if (!currentIncome) return
 
     for (const doc of existingDocs) {
       const docData = doc.extracted_data
-      const docIncome = docData.net_salary || docData.annual_revenue
+      const docIncome = docData.netSalary || docData.annualRevenue
 
       if (docIncome) {
         // Convertir en revenus annuels pour comparaison
-        const currentAnnual = currentData.net_salary ? currentIncome * 12 : currentIncome
-        const docAnnual = docData.net_salary ? docIncome * 12 : docIncome
+        const currentAnnual = currentData.netSalary ? currentIncome * 12 : currentIncome
+        const docAnnual = docData.netSalary ? docIncome * 12 : docIncome
 
         const ratio = Math.abs(currentAnnual - docAnnual) / Math.max(currentAnnual, docAnnual)
 
@@ -776,7 +1047,7 @@ export class DocumentValidationService {
           // Plus de 30% de différence
           warnings.push({
             code: "INCOME_DISCREPANCY",
-            message: `Écart important entre les revenus déclarés: ${currentAnnual}€ vs ${docAnnual}€`,
+            message: `Écart important entre les revenus déclarés: ${currentAnnual.toLocaleString()}€ vs ${docAnnual.toLocaleString()}€`,
             field: "income",
           })
         }
@@ -810,7 +1081,7 @@ export class DocumentValidationService {
           // Plus de 3 mois d'écart
           warnings.push({
             code: "DATE_INCONSISTENCY",
-            message: `Écart temporel important entre les documents: ${daysDiff.toFixed(0)} jours`,
+            message: `Écart temporel important entre les documents: ${Math.round(daysDiff)} jours`,
             field: "dates",
           })
         }
@@ -885,12 +1156,13 @@ export class DocumentValidationService {
   /**
    * Sauvegarder le résultat de validation
    */
-  private async saveValidationResult(result: DocumentValidationResult, tenantId: string) {
+  private async saveValidationResult(result: DocumentValidationResult, tenantId: string, documentUrl: string) {
     try {
       await supabase.from("document_validations").insert({
         id: result.documentId,
         tenant_id: tenantId,
         document_type: result.documentType,
+        document_url: documentUrl,
         is_valid: result.isValid,
         confidence: result.confidence,
         errors: result.errors,
@@ -901,6 +1173,22 @@ export class DocumentValidationService {
       })
     } catch (error) {
       console.error("❌ Erreur sauvegarde validation:", error)
+    }
+  }
+
+  /**
+   * Log d'audit pour traçabilité RGPD
+   */
+  private async logAuditEvent(userId: string, action: string, details: Record<string, any>) {
+    try {
+      await supabase.from("validation_audit_log").insert({
+        user_id: userId,
+        action,
+        details,
+        created_at: new Date().toISOString(),
+      })
+    } catch (error) {
+      console.error("❌ Erreur log audit:", error)
     }
   }
 
@@ -935,6 +1223,57 @@ export class DocumentValidationService {
   }
 
   /**
+   * Obtenir les statistiques de validation
+   */
+  async getValidationStats(tenantId?: string): Promise<{
+    totalDocuments: number
+    validDocuments: number
+    averageConfidence: number
+    errorsByType: Record<string, number>
+    processingTimeAvg: number
+  }> {
+    try {
+      let query = supabase.from("document_validations").select("*")
+
+      if (tenantId) {
+        query = query.eq("tenant_id", tenantId)
+      }
+
+      const { data, error } = await query
+
+      if (error) throw error
+
+      const stats = {
+        totalDocuments: data.length,
+        validDocuments: data.filter((d) => d.is_valid).length,
+        averageConfidence: data.reduce((sum, d) => sum + d.confidence, 0) / data.length || 0,
+        errorsByType: {} as Record<string, number>,
+        processingTimeAvg: data.reduce((sum, d) => sum + d.processing_time, 0) / data.length || 0,
+      }
+
+      // Compter les erreurs par type
+      data.forEach((doc) => {
+        if (doc.errors && Array.isArray(doc.errors)) {
+          doc.errors.forEach((error: any) => {
+            stats.errorsByType[error.code] = (stats.errorsByType[error.code] || 0) + 1
+          })
+        }
+      })
+
+      return stats
+    } catch (error) {
+      console.error("❌ Erreur récupération statistiques:", error)
+      return {
+        totalDocuments: 0,
+        validDocuments: 0,
+        averageConfidence: 0,
+        errorsByType: {},
+        processingTimeAvg: 0,
+      }
+    }
+  }
+
+  /**
    * Nettoyer le cache et libérer les ressources
    */
   async cleanup() {
@@ -942,6 +1281,7 @@ export class DocumentValidationService {
     if (this.ocrWorker) {
       await this.ocrWorker.terminate()
       this.ocrWorker = null
+      this.isInitialized = false
     }
   }
 }
