@@ -5,12 +5,12 @@ import { supabase } from "@/lib/supabase"
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { documentUrl, documentType, tenantId } = body
+    const { extractedData, documentType, tenantId, documentUrl } = body
 
     // Validation des paramètres
-    if (!documentUrl || !documentType || !tenantId) {
+    if (!extractedData || !documentType || !tenantId) {
       return NextResponse.json(
-        { error: "Paramètres manquants: documentUrl, documentType et tenantId sont requis" },
+        { error: "Paramètres manquants: extractedData, documentType et tenantId sont requis" },
         { status: 400 },
       )
     }
@@ -48,12 +48,13 @@ export async function POST(request: NextRequest) {
 
     console.log(`🚀 Démarrage validation pour ${documentType} - tenant: ${tenantId}`)
 
-    // Lancer la validation
+    // Lancer la validation avec les données extraites côté client
     const result = await documentValidationService.validateDocument(
-      documentUrl,
+      extractedData,
       documentType,
       tenantId,
       tenantId, // userId = tenantId pour l'audit
+      documentUrl,
     )
 
     console.log(`✅ Validation terminée - ID: ${result.documentId}, Valide: ${result.isValid}`)

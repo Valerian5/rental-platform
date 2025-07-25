@@ -1,5 +1,4 @@
 import { supabase } from "./supabase"
-import { createWorker } from "tesseract.js"
 
 export interface DocumentValidationResult {
   documentId: string
@@ -178,50 +177,22 @@ const CROSS_VALIDATION_RULES: CrossValidationRule[] = [
 ]
 
 export class DocumentValidationService {
-  private ocrWorker: any = null
   private cache = new Map<string, any>()
-  private isInitialized = false
 
   constructor() {
-    this.initializeOCR()
-  }
-
-  private async initializeOCR() {
-    try {
-      console.log("🔧 Initialisation du worker OCR Tesseract.js...")
-
-      this.ocrWorker = await createWorker("fra+eng", 1, {
-        logger: (m) => {
-          if (m.status === "recognizing text") {
-            console.log(`OCR Progress: ${Math.round(m.progress * 100)}%`)
-          }
-        },
-      })
-
-      // Configuration optimisée pour les documents administratifs
-      await this.ocrWorker.setParameters({
-        tessedit_char_whitelist:
-          "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789àáâãäåæçèéêëìíîïðñòóôõöøùúûüýþÿÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝÞŸ .,;:!?()[]{}/-€$%",
-        tessedit_pageseg_mode: "1", // Automatic page segmentation with OSD
-        preserve_interword_spaces: "1",
-      })
-
-      this.isInitialized = true
-      console.log("✅ Worker OCR initialisé avec succès")
-    } catch (error) {
-      console.error("❌ Erreur initialisation OCR:", error)
-      throw new Error("Impossible d'initialiser le service OCR")
-    }
+    // Pas d'initialisation OCR côté serveur
   }
 
   /**
    * Point d'entrée principal pour la validation d'un document
+   * Cette méthode est appelée côté serveur avec les données déjà extraites
    */
   async validateDocument(
-    documentUrl: string,
+    extractedData: Record<string, any>,
     documentType: string,
     tenantId: string,
     userId: string,
+    documentUrl?: string,
   ): Promise<DocumentValidationResult> {
     const startTime = Date.now()
 
@@ -236,27 +207,19 @@ export class DocumentValidationService {
       })
 
       // Vérifier le cache
-      const cacheKey = `${documentUrl}_${documentType}`
+      const cacheKey = `${JSON.stringify(extractedData)}_${documentType}`
       if (this.cache.has(cacheKey)) {
         console.log("📋 Résultat trouvé en cache")
         return this.cache.get(cacheKey)
       }
 
-      // S'assurer que l'OCR est initialisé
-      if (!this.isInitialized) {
-        await this.initializeOCR()
-      }
-
-      // Étape 1: Extraction OCR
-      const extractedData = await this.extractTextFromDocument(documentUrl, documentType)
-
-      // Étape 2: Validation basique
+      // Étape 1: Validation basique
       const basicValidation = await this.validateBasic(extractedData, documentType)
 
-      // Étape 3: Validation sémantique
+      // Étape 2: Validation sémantique
       const semanticValidation = await this.validateSemantic(extractedData, documentType)
 
-      // Étape 4: Validation croisée (si d'autres documents existent)
+      // Étape 3: Validation croisée (si d'autres documents existent)
       const crossValidation = await this.validateCross(extractedData, documentType, tenantId)
 
       // Compilation des résultats
@@ -274,7 +237,7 @@ export class DocumentValidationService {
 
       // Sauvegarder en cache et base de données
       this.cache.set(cacheKey, result)
-      await this.saveValidationResult(result, tenantId, documentUrl)
+      await this.saveValidationResult(result, tenantId, documentUrl || "")
 
       // Audit log
       await this.logAuditEvent(userId, "DOCUMENT_VALIDATION_COMPLETE", {
@@ -317,64 +280,9 @@ export class DocumentValidationService {
   }
 
   /**
-   * Extraction de texte via OCR Tesseract.js
-   */
-  private async extractTextFromDocument(documentUrl: string, documentType: string): Promise<Record<string, any>> {
-    try {
-      console.log("📄 Extraction OCR en cours...")
-
-      if (!this.ocrWorker || !this.isInitialized) {
-        await this.initializeOCR()
-      }
-
-      // Télécharger le document
-      const response = await fetch(documentUrl)
-      if (!response.ok) {
-        throw new Error(`Impossible de télécharger le document: ${response.statusText}`)
-      }
-
-      const blob = await response.blob()
-      console.log(`📥 Document téléchargé: ${blob.size} bytes, type: ${blob.type}`)
-
-      // Vérifier le type de fichier
-      if (!blob.type.startsWith("image/") && blob.type !== "application/pdf") {
-        throw new Error(`Type de fichier non supporté: ${blob.type}`)
-      }
-
-      // Extraction OCR avec Tesseract.js
-      console.log("🔍 Lancement de l'OCR...")
-      const {
-        data: { text, confidence },
-      } = await this.ocrWorker.recognize(blob)
-
-      console.log(`✅ OCR terminé avec confiance: ${Math.round(confidence)}%`)
-      console.log(`📝 Texte extrait (${text.length} caractères):`, text.substring(0, 200) + "...")
-
-      if (confidence < 50) {
-        console.warn("⚠️ Confiance OCR faible, résultats potentiellement inexacts")
-      }
-
-      // Parser selon le type de document
-      const extractedData = await this.parseDocumentText(text, documentType, confidence)
-
-      console.log("✅ Extraction et parsing terminés")
-      return extractedData
-    } catch (error) {
-      console.error("❌ Erreur extraction OCR:", error)
-      throw new Error(
-        `Impossible d'extraire le texte du document: ${error instanceof Error ? error.message : "Erreur inconnue"}`,
-      )
-    }
-  }
-
-  /**
    * Parser le texte selon le type de document
    */
-  private async parseDocumentText(
-    text: string,
-    documentType: string,
-    ocrConfidence: number,
-  ): Promise<Record<string, any>> {
+  parseDocumentText(text: string, documentType: string, ocrConfidence: number): Record<string, any> {
     const cleanText = text.replace(/\s+/g, " ").trim()
     const baseData = {
       raw_text: cleanText,
@@ -1278,11 +1186,6 @@ export class DocumentValidationService {
    */
   async cleanup() {
     this.cache.clear()
-    if (this.ocrWorker) {
-      await this.ocrWorker.terminate()
-      this.ocrWorker = null
-      this.isInitialized = false
-    }
   }
 }
 
