@@ -1,16 +1,43 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Configuration pour les API routes - gardons seulement les packages serveur ici
   experimental: {
-    serverComponentsExternalPackages: ['bcryptjs', 'jsonwebtoken'],
+    serverComponentsExternalPackages: ['tesseract.js'],
   },
-  
-  // Transpiler seulement Supabase pour le client
-  transpilePackages: ['@supabase/supabase-js'],
-  
-  // Autres configurations
-  reactStrictMode: true,
-  swcMinify: true,
+  webpack: (config, { isServer }) => {
+    // Configuration pour PDF.js
+    if (!isServer) {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        canvas: false,
+      }
+    }
+
+    // Configuration pour Tesseract.js
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'tesseract.js': 'tesseract.js/dist/tesseract.min.js',
+    }
+
+    return config
+  },
+  // Permettre les ressources externes pour PDF.js et Tesseract.js
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'Cross-Origin-Embedder-Policy',
+            value: 'credentialless',
+          },
+          {
+            key: 'Cross-Origin-Opener-Policy',
+            value: 'same-origin',
+          },
+        ],
+      },
+    ]
+  },
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -20,6 +47,6 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-};
+}
 
-export default nextConfig;
+export default nextConfig

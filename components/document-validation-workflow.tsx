@@ -2,14 +2,23 @@
 
 import { useState, useCallback } from "react"
 import { useDropzone } from "react-dropzone"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
+import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { DocumentOCRClient } from "./document-ocr-client"
-import { Upload, FileText, CheckCircle, XCircle, AlertTriangle, Eye } from "lucide-react"
+import { documentValidationService } from "@/lib/document-validation-service"
+import {
+  Upload,
+  FileText,
+  CheckCircle,
+  AlertCircle,
+  Eye,
+  RefreshCw,
+  FileImage,
+  FileIcon as FilePdf,
+} from "lucide-react"
 import { toast } from "sonner"
 
 interface DocumentValidationWorkflowProps {
@@ -17,107 +26,119 @@ interface DocumentValidationWorkflowProps {
   onValidationComplete?: (result: any) => void
 }
 
-interface ValidationResult {
-  documentId: string
-  documentType: string
-  isValid: boolean
-  confidence: number
-  errors: Array<{
-    code: string
-    message: string
-    severity: "critical" | "major" | "minor"
-    field?: string
-    suggestion?: string
-  }>
-  warnings: Array<{
-    code: string
-    message: string
-    field?: string
-  }>
-  extractedData: Record<string, any>
-  processingTime: number
-  timestamp: string
+interface DocumentStep {
+  id: string
+  type: string
+  label: string
+  description: string
+  required: boolean
+  status: "pending" | "processing" | "completed" | "error"
+  file?: File
+  extractedText?: string
+  ocrConfidence?: number
+  validationResult?: any
+  error?: string
 }
 
 const DOCUMENT_TYPES = [
-  { id: "identity", label: "Pièce d'identité", description: "Carte d'identité, passeport" },
-  { id: "tax_notice", label: "Avis d'imposition", description: "Avis d'imposition sur le revenu" },
-  { id: "payslip", label: "Fiche de paie", description: "Bulletin de salaire" },
-  { id: "bank_statement", label: "Relevé bancaire", description: "Relevé de compte bancaire" },
+  {
+    id: "identity",
+    label: "Pièce d'identité",
+    description: "Carte d'identité, passeport ou permis de conduire",
+    required: true,
+  },
+  {
+    id: "tax_notice",
+    label: "Avis d'imposition",
+    description: "Dernier avis d'imposition sur le revenu",
+    required: true,
+  },
+  {
+    id: "payslip",
+    label: "Fiche de paie",
+    description: "3 dernières fiches de paie",
+    required: true,
+  },
+  {
+    id: "bank_statement",
+    label: "Relevé bancaire",
+    description: "3 derniers relevés bancaires",
+    required: false,
+  },
 ]
 
 export function DocumentValidationWorkflow({ tenantId, onValidationComplete }: DocumentValidationWorkflowProps) {
-  const [selectedDocumentType, setSelectedDocumentType] = useState<string>("")
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
-  const [extractedText, setExtractedText] = useState<string>("")
-  const [ocrConfidence, setOcrConfidence] = useState<number>(0)
+  const [documents, setDocuments] = useState<DocumentStep[]>(
+    DOCUMENT_TYPES.map((type) => ({
+      id: type.id,
+      type: type.id,
+      label: type.label,
+      description: type.description,
+      required: type.required,
+      status: "pending",
+    })),
+  )
+
+  const [currentStep, setCurrentStep] = useState(0)
   const [isValidating, setIsValidating] = useState(false)
-  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
-  const [currentStep, setCurrentStep] = useState<"select" | "upload" | "extract" | "validate" | "result">("select")
 
-  // Hook OCR côté client
-  const ocrClient = DocumentOCRClient({
-    onTextExtracted: (text: string, confidence: number) => {
-      setExtractedText(text)
-      setOcrConfidence(confidence)
-      setCurrentStep("validate")
-      toast.success(`Texte extrait avec ${Math.round(confidence)}% de confiance`)
-    },
-    onError: (error: string) => {
-      toast.error(`Erreur OCR: ${error}`)
-      setCurrentStep("upload")
-    },
-    documentType: selectedDocumentType,
+  // Hook OCR pour le document actuel
+  const { processDocument, isProcessing, progress } = DocumentOCRClient({
+    onTextExtracted: handleTextExtracted,
+    onError: handleOCRError,
+    documentType: documents[currentStep]?.type || "",
   })
 
-  // Configuration dropzone
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: {
-      "image/*": [".png", ".jpg", ".jpeg", ".gif", ".bmp"],
-      "application/pdf": [".pdf"],
-    },
-    maxFiles: 1,
-    maxSize: 10 * 1024 * 1024, // 10MB
-    onDrop: useCallback(
-      (acceptedFiles: File[]) => {
-        if (acceptedFiles.length > 0) {
-          const file = acceptedFiles[0]
-          setUploadedFile(file)
-          setCurrentStep("extract")
+  function handleTextExtracted(text: string, confidence: number) {
+    console.log("📝 Texte extrait reçu:", text.substring(0, 100) + "...")
 
-          // Lancer l'OCR côté client
-          ocrClient.processDocument(file)
-          toast.info("Extraction du texte en cours...")
-        }
-      },
-      [ocrClient],
-    ),
-    onDropRejected: (rejectedFiles) => {
-      const rejection = rejectedFiles[0]
-      if (rejection.errors[0]?.code === "file-too-large") {
-        toast.error("Fichier trop volumineux (max 10MB)")
-      } else if (rejection.errors[0]?.code === "file-invalid-type") {
-        toast.error("Type de fichier non supporté")
-      }
-    },
-  })
+    setDocuments((prev) =>
+      prev.map((doc, index) =>
+        index === currentStep
+          ? {
+              ...doc,
+              extractedText: text,
+              ocrConfidence: confidence,
+              status: "completed",
+            }
+          : doc,
+      ),
+    )
 
-  // Validation du document
-  const handleValidation = async () => {
-    if (!extractedText || !selectedDocumentType) return
+    // Lancer la validation automatiquement
+    validateDocument(text, confidence)
+  }
+
+  function handleOCRError(error: string) {
+    console.error("❌ Erreur OCR:", error)
+    toast.error(`Erreur OCR: ${error}`)
+
+    setDocuments((prev) =>
+      prev.map((doc, index) =>
+        index === currentStep
+          ? {
+              ...doc,
+              status: "error",
+              error: error,
+            }
+          : doc,
+      ),
+    )
+  }
+
+  const validateDocument = async (extractedText: string, ocrConfidence: number) => {
+    const currentDoc = documents[currentStep]
+    if (!currentDoc) return
 
     setIsValidating(true)
 
     try {
-      // Parser les données extraites
-      const { documentValidationService } = await import("@/lib/document-validation-service")
-      const extractedData = documentValidationService.parseDocumentText(
-        extractedText,
-        selectedDocumentType,
-        ocrConfidence,
-      )
+      // Parser le texte selon le type de document
+      const extractedData = documentValidationService.parseDocumentText(extractedText, currentDoc.type, ocrConfidence)
 
-      // Envoyer à l'API pour validation
+      console.log("🔍 Données extraites:", extractedData)
+
+      // Appeler l'API de validation
       const response = await fetch("/api/documents/validate", {
         method: "POST",
         headers: {
@@ -125,143 +146,226 @@ export function DocumentValidationWorkflow({ tenantId, onValidationComplete }: D
         },
         body: JSON.stringify({
           extractedData,
-          documentType: selectedDocumentType,
+          documentType: currentDoc.type,
           tenantId,
-          documentUrl: uploadedFile ? URL.createObjectURL(uploadedFile) : undefined,
+          documentUrl: currentDoc.file ? URL.createObjectURL(currentDoc.file) : undefined,
         }),
       })
 
       const result = await response.json()
 
       if (result.success) {
-        setValidationResult(result.data)
-        setCurrentStep("result")
-        onValidationComplete?.(result.data)
+        setDocuments((prev) =>
+          prev.map((doc, index) =>
+            index === currentStep
+              ? {
+                  ...doc,
+                  validationResult: result.data,
+                  status: result.data.isValid ? "completed" : "error",
+                  error: result.data.isValid ? undefined : "Document invalide",
+                }
+              : doc,
+          ),
+        )
 
         if (result.data.isValid) {
-          toast.success("Document validé avec succès!")
+          toast.success(`${currentDoc.label} validé avec succès!`)
         } else {
-          toast.warning("Document invalide - voir les détails")
+          toast.error(`${currentDoc.label} invalide - voir les détails`)
+        }
+
+        // Passer au document suivant automatiquement si valide
+        if (result.data.isValid && currentStep < documents.length - 1) {
+          setTimeout(() => setCurrentStep(currentStep + 1), 1500)
         }
       } else {
         throw new Error(result.error || "Erreur de validation")
       }
     } catch (error) {
-      console.error("Erreur validation:", error)
-      toast.error(error instanceof Error ? error.message : "Erreur lors de la validation")
+      console.error("❌ Erreur validation:", error)
+      toast.error("Erreur lors de la validation")
+
+      setDocuments((prev) =>
+        prev.map((doc, index) =>
+          index === currentStep
+            ? {
+                ...doc,
+                status: "error",
+                error: error instanceof Error ? error.message : "Erreur de validation",
+              }
+            : doc,
+        ),
+      )
     } finally {
       setIsValidating(false)
     }
   }
 
-  // Reset du workflow
-  const resetWorkflow = () => {
-    setSelectedDocumentType("")
-    setUploadedFile(null)
-    setExtractedText("")
-    setOcrConfidence(0)
-    setValidationResult(null)
-    setCurrentStep("select")
+  const onDrop = useCallback(
+    (acceptedFiles: File[]) => {
+      const file = acceptedFiles[0]
+      if (!file) return
+
+      console.log("📁 Fichier sélectionné:", file.name, file.type)
+
+      // Vérifier le type de fichier
+      const isValidType = file.type.startsWith("image/") || file.type === "application/pdf"
+
+      if (!isValidType) {
+        toast.error("Type de fichier non supporté. Utilisez des images (PNG, JPG) ou des PDF.")
+        return
+      }
+
+      // Vérifier la taille (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error("Fichier trop volumineux. Taille maximum: 10MB")
+        return
+      }
+
+      // Mettre à jour le document actuel
+      setDocuments((prev) =>
+        prev.map((doc, index) =>
+          index === currentStep
+            ? {
+                ...doc,
+                file,
+                status: "processing",
+                error: undefined,
+              }
+            : doc,
+        ),
+      )
+
+      // Lancer l'OCR
+      processDocument(file)
+    },
+    [currentStep, processDocument],
+  )
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      "image/*": [".png", ".jpg", ".jpeg"],
+      "application/pdf": [".pdf"],
+    },
+    maxFiles: 1,
+    disabled: isProcessing || isValidating,
+  })
+
+  const currentDoc = documents[currentStep]
+  const completedDocs = documents.filter((doc) => doc.status === "completed")
+  const requiredDocs = documents.filter((doc) => doc.required)
+  const completedRequiredDocs = requiredDocs.filter((doc) => doc.status === "completed")
+
+  const canProceedToNext = currentDoc?.status === "completed" && currentStep < documents.length - 1
+  const canFinish = completedRequiredDocs.length === requiredDocs.length
+
+  const getFileIcon = (file?: File) => {
+    if (!file) return <Upload className="h-8 w-8" />
+    if (file.type === "application/pdf") return <FilePdf className="h-8 w-8 text-red-500" />
+    return <FileImage className="h-8 w-8 text-blue-500" />
+  }
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "completed":
+        return <CheckCircle className="h-5 w-5 text-green-500" />
+      case "processing":
+        return <RefreshCw className="h-5 w-5 text-blue-500 animate-spin" />
+      case "error":
+        return <AlertCircle className="h-5 w-5 text-red-500" />
+      default:
+        return <div className="h-5 w-5 rounded-full border-2 border-gray-300" />
+    }
+  }
+
+  const resetDocument = (index: number) => {
+    setDocuments((prev) =>
+      prev.map((doc, i) =>
+        i === index
+          ? {
+              ...doc,
+              file: undefined,
+              extractedText: undefined,
+              ocrConfidence: undefined,
+              validationResult: undefined,
+              status: "pending",
+              error: undefined,
+            }
+          : doc,
+      ),
+    )
+  }
+
+  const viewDocumentDetails = (doc: DocumentStep) => {
+    if (!doc.validationResult) return
+
+    // Afficher les détails dans un modal ou une nouvelle page
+    console.log("Détails du document:", doc.validationResult)
+    toast.info("Fonctionnalité à implémenter: voir les détails")
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {/* En-tête */}
+    <div className="space-y-8">
+      {/* Progression globale */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            Validation automatisée de documents
+            Progression de la validation
           </CardTitle>
           <CardDescription>
-            Uploadez vos documents pour une validation automatique avec OCR et vérifications croisées
+            {completedDocs.length} / {documents.length} documents traités
+            {canFinish && " - Validation complète!"}
           </CardDescription>
         </CardHeader>
+        <CardContent>
+          <Progress value={(completedDocs.length / documents.length) * 100} className="mb-4" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {documents.map((doc, index) => (
+              <div
+                key={doc.id}
+                className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                  index === currentStep
+                    ? "border-blue-500 bg-blue-50"
+                    : doc.status === "completed"
+                      ? "border-green-500 bg-green-50"
+                      : doc.status === "error"
+                        ? "border-red-500 bg-red-50"
+                        : "border-gray-200"
+                }`}
+                onClick={() => setCurrentStep(index)}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    {getStatusIcon(doc.status)}
+                    <span className="text-sm font-medium">{doc.label}</span>
+                  </div>
+                  {doc.required && <Badge variant="secondary">Requis</Badge>}
+                </div>
+                {doc.file && <div className="text-xs text-gray-500 truncate">{doc.file.name}</div>}
+                {doc.ocrConfidence && (
+                  <div className="text-xs text-blue-600">Confiance: {Math.round(doc.ocrConfidence)}%</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </CardContent>
       </Card>
 
-      {/* Étapes du workflow */}
-      <div className="flex items-center justify-between mb-6">
-        {[
-          { id: "select", label: "Type", icon: FileText },
-          { id: "upload", label: "Upload", icon: Upload },
-          { id: "extract", label: "OCR", icon: Eye },
-          { id: "validate", label: "Validation", icon: CheckCircle },
-          { id: "result", label: "Résultat", icon: CheckCircle },
-        ].map((step, index) => {
-          const Icon = step.icon
-          const isActive = currentStep === step.id
-          const isCompleted = ["select", "upload", "extract", "validate"].indexOf(currentStep) > index
-
-          return (
-            <div key={step.id} className="flex items-center">
-              <div
-                className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
-                  isActive
-                    ? "border-blue-500 bg-blue-50 text-blue-600"
-                    : isCompleted
-                      ? "border-green-500 bg-green-50 text-green-600"
-                      : "border-gray-300 bg-gray-50 text-gray-400"
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-              </div>
-              <span
-                className={`ml-2 text-sm font-medium ${
-                  isActive ? "text-blue-600" : isCompleted ? "text-green-600" : "text-gray-400"
-                }`}
-              >
-                {step.label}
-              </span>
-              {index < 4 && <div className={`w-12 h-0.5 mx-4 ${isCompleted ? "bg-green-500" : "bg-gray-300"}`} />}
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Contenu principal */}
-      <Tabs value={currentStep} className="w-full">
-        {/* Étape 1: Sélection du type de document */}
-        <TabsContent value="select">
-          <Card>
-            <CardHeader>
-              <CardTitle>Sélectionnez le type de document</CardTitle>
-              <CardDescription>Choisissez le type de document que vous souhaitez valider</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {DOCUMENT_TYPES.map((docType) => (
-                  <Card
-                    key={docType.id}
-                    className={`cursor-pointer transition-all hover:shadow-md ${
-                      selectedDocumentType === docType.id ? "ring-2 ring-blue-500 bg-blue-50" : "hover:bg-gray-50"
-                    }`}
-                    onClick={() => {
-                      setSelectedDocumentType(docType.id)
-                      setCurrentStep("upload")
-                    }}
-                  >
-                    <CardContent className="p-4">
-                      <h3 className="font-semibold text-lg">{docType.label}</h3>
-                      <p className="text-sm text-gray-600 mt-1">{docType.description}</p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Étape 2: Upload du document */}
-        <TabsContent value="upload">
-          <Card>
-            <CardHeader>
-              <CardTitle>Uploadez votre document</CardTitle>
-              <CardDescription>
-                Type sélectionné:{" "}
-                <Badge variant="secondary">{DOCUMENT_TYPES.find((t) => t.id === selectedDocumentType)?.label}</Badge>
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+      {/* Zone de téléchargement */}
+      {currentDoc && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              {getFileIcon(currentDoc.file)}
+              {currentDoc.label}
+              {currentDoc.required && <Badge variant="secondary">Requis</Badge>}
+            </CardTitle>
+            <CardDescription>{currentDoc.description}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {currentDoc.status === "pending" && (
               <div
                 {...getRootProps()}
                 className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
@@ -269,247 +373,101 @@ export function DocumentValidationWorkflow({ tenantId, onValidationComplete }: D
                 }`}
               >
                 <input {...getInputProps()} />
-                <Upload className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                {isDragActive ? (
-                  <p className="text-blue-600">Déposez le fichier ici...</p>
-                ) : (
-                  <div>
-                    <p className="text-lg font-medium mb-2">
-                      Glissez-déposez votre document ou cliquez pour sélectionner
-                    </p>
-                    <p className="text-sm text-gray-500">Formats supportés: PNG, JPG, PDF (max 10MB)</p>
-                  </div>
-                )}
+                <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                <p className="text-lg font-medium mb-2">
+                  {isDragActive
+                    ? "Déposez le fichier ici"
+                    : "Glissez-déposez votre document ou cliquez pour sélectionner"}
+                </p>
+                <p className="text-sm text-gray-500">Formats acceptés: PNG, JPG, PDF • Taille max: 10MB</p>
               </div>
+            )}
 
-              {uploadedFile && (
-                <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">{uploadedFile.name}</p>
-                      <p className="text-sm text-gray-500">{(uploadedFile.size / 1024 / 1024).toFixed(2)} MB</p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setUploadedFile(null)
-                        setCurrentStep("upload")
-                      }}
-                    >
-                      Changer
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-between mt-6">
-                <Button variant="outline" onClick={() => setCurrentStep("select")}>
-                  Retour
-                </Button>
+            {currentDoc.status === "processing" && (
+              <div className="text-center py-8">
+                <RefreshCw className="h-12 w-12 mx-auto text-blue-500 animate-spin mb-4" />
+                <p className="text-lg font-medium mb-2">Traitement en cours...</p>
+                <p className="text-sm text-gray-500 mb-4">
+                  {isProcessing ? "Extraction OCR" : "Validation des données"}
+                </p>
+                <Progress value={progress} className="max-w-xs mx-auto" />
+                <p className="text-xs text-gray-400 mt-2">{progress}%</p>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+            )}
 
-        {/* Étape 3: Extraction OCR */}
-        <TabsContent value="extract">
-          <Card>
-            <CardHeader>
-              <CardTitle>Extraction du texte en cours</CardTitle>
-              <CardDescription>Analyse OCR du document avec Tesseract.js</CardDescription>
-            </CardHeader>
-            <CardContent>
+            {currentDoc.status === "completed" && currentDoc.validationResult && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Progression OCR</span>
-                  <span className="text-sm text-gray-500">{ocrClient.progress}%</span>
-                </div>
-                <Progress value={ocrClient.progress} className="w-full" />
+                <Alert>
+                  <CheckCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>Document validé avec succès!</strong>
+                    <br />
+                    Confiance OCR: {Math.round(currentDoc.ocrConfidence || 0)}% • Confiance validation:{" "}
+                    {Math.round(currentDoc.validationResult.confidence * 100)}%
+                  </AlertDescription>
+                </Alert>
 
-                {ocrClient.isProcessing && (
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                    Extraction en cours...
-                  </div>
-                )}
-
-                {extractedText && (
-                  <div className="mt-4">
-                    <h4 className="font-medium mb-2">Texte extrait:</h4>
-                    <div className="bg-gray-50 p-4 rounded-lg max-h-40 overflow-y-auto">
-                      <pre className="text-sm whitespace-pre-wrap">{extractedText.substring(0, 500)}...</pre>
-                    </div>
-                    <div className="flex items-center gap-2 mt-2">
-                      <Badge
-                        variant={ocrConfidence > 80 ? "default" : ocrConfidence > 60 ? "secondary" : "destructive"}
-                      >
-                        Confiance: {Math.round(ocrConfidence)}%
-                      </Badge>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Étape 4: Validation */}
-        <TabsContent value="validate">
-          <Card>
-            <CardHeader>
-              <CardTitle>Validation du document</CardTitle>
-              <CardDescription>Vérification des données extraites et validation croisée</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {extractedText && (
-                  <Alert>
-                    <CheckCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      Texte extrait avec succès ({extractedText.length} caractères, {Math.round(ocrConfidence)}% de
-                      confiance)
-                    </AlertDescription>
-                  </Alert>
-                )}
-
-                <div className="flex gap-4">
-                  <Button onClick={handleValidation} disabled={isValidating || !extractedText} className="flex-1">
-                    {isValidating ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Validation en cours...
-                      </>
-                    ) : (
-                      "Valider le document"
-                    )}
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => viewDocumentDetails(currentDoc)}>
+                    <Eye className="h-4 w-4 mr-2" />
+                    Voir les détails
                   </Button>
-                  <Button variant="outline" onClick={() => setCurrentStep("upload")}>
-                    Retour
+                  <Button variant="outline" size="sm" onClick={() => resetDocument(currentStep)}>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Recommencer
                   </Button>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+            )}
 
-        {/* Étape 5: Résultats */}
-        <TabsContent value="result">
-          {validationResult && (
-            <div className="space-y-6">
-              {/* Résumé de validation */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    {validationResult.isValid ? (
-                      <CheckCircle className="h-5 w-5 text-green-600" />
-                    ) : (
-                      <XCircle className="h-5 w-5 text-red-600" />
-                    )}
-                    Résultat de la validation
-                  </CardTitle>
-                  <CardDescription>Document traité en {validationResult.processingTime}ms</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="text-center">
-                      <div
-                        className={`text-2xl font-bold ${validationResult.isValid ? "text-green-600" : "text-red-600"}`}
-                      >
-                        {validationResult.isValid ? "VALIDE" : "INVALIDE"}
-                      </div>
-                      <div className="text-sm text-gray-500">Statut</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-600">
-                        {Math.round(validationResult.confidence * 100)}%
-                      </div>
-                      <div className="text-sm text-gray-500">Confiance</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-orange-600">
-                        {validationResult.errors.length + validationResult.warnings.length}
-                      </div>
-                      <div className="text-sm text-gray-500">Problèmes détectés</div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+            {currentDoc.status === "error" && (
+              <div className="space-y-4">
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>Erreur de traitement</strong>
+                    <br />
+                    {currentDoc.error}
+                  </AlertDescription>
+                </Alert>
 
-              {/* Erreurs et avertissements */}
-              {(validationResult.errors.length > 0 || validationResult.warnings.length > 0) && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Problèmes détectés</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {validationResult.errors.map((error, index) => (
-                        <Alert key={`error-${index}`} variant="destructive">
-                          <XCircle className="h-4 w-4" />
-                          <AlertDescription>
-                            <div className="font-medium">{error.message}</div>
-                            {error.suggestion && <div className="text-sm mt-1 opacity-90">{error.suggestion}</div>}
-                          </AlertDescription>
-                        </Alert>
-                      ))}
-
-                      {validationResult.warnings.map((warning, index) => (
-                        <Alert key={`warning-${index}`}>
-                          <AlertTriangle className="h-4 w-4" />
-                          <AlertDescription>{warning.message}</AlertDescription>
-                        </Alert>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Données extraites */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Données extraites</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {Object.entries(validationResult.extractedData)
-                      .filter(([key]) => !["raw_text", "extraction_timestamp"].includes(key))
-                      .map(([key, value]) => (
-                        <div key={key} className="border rounded-lg p-3">
-                          <div className="text-sm font-medium text-gray-600 capitalize">{key.replace(/_/g, " ")}</div>
-                          <div className="text-lg">
-                            {typeof value === "object" ? JSON.stringify(value) : String(value)}
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Actions */}
-              <div className="flex gap-4">
-                <Button onClick={resetWorkflow} variant="outline">
-                  Valider un autre document
-                </Button>
-                <Button
-                  onClick={() => {
-                    const dataStr = JSON.stringify(validationResult, null, 2)
-                    const dataBlob = new Blob([dataStr], { type: "application/json" })
-                    const url = URL.createObjectURL(dataBlob)
-                    const link = document.createElement("a")
-                    link.href = url
-                    link.download = `validation-${validationResult.documentId}.json`
-                    link.click()
-                  }}
-                  variant="outline"
-                >
-                  Télécharger le rapport
+                <Button variant="outline" onClick={() => resetDocument(currentStep)}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Réessayer
                 </Button>
               </div>
-            </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Actions */}
+      <div className="flex justify-between">
+        <Button
+          variant="outline"
+          onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
+          disabled={currentStep === 0}
+        >
+          Précédent
+        </Button>
+
+        <div className="flex gap-2">
+          {canProceedToNext && <Button onClick={() => setCurrentStep(currentStep + 1)}>Suivant</Button>}
+
+          {canFinish && (
+            <Button
+              onClick={() => {
+                toast.success("Validation complète!")
+                onValidationComplete?.(documents)
+              }}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Terminer
+            </Button>
           )}
-        </TabsContent>
-      </Tabs>
+        </div>
+      </div>
     </div>
   )
 }
