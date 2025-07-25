@@ -78,6 +78,7 @@
     "vaul": "^0.9.6",
     "zod": "^3.22.4",
     "handlebars": "^4.7.8",
+	"@supabase/ssr": "^0.x.x",
     "@types/handlebars": "^4.1.0"
   },
   "devDependencies": {
