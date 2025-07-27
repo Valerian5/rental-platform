@@ -29,8 +29,20 @@ export function DocumentOCRClient({
       try {
         console.log(`🔍 Traitement document: ${file.name} (${documentType})`)
 
+        // Vérifier le type de fichier
+        const isImage = file.type.startsWith("image/")
+        const isPDF = file.type === "application/pdf"
+
+        if (!isImage && !isPDF) {
+          throw new Error(
+            `Type de fichier non supporté: ${file.type}. Seuls les images (PNG, JPG) et PDF sont acceptés.`,
+          )
+        }
+
         if (useAdvancedExtraction) {
           // Utiliser l'extraction avancée de champs
+          console.log("🧠 Utilisation de l'extraction avancée de champs...")
+
           const result = await advancedOCRService.extractDocumentFields(file, documentType, (progress) => {
             setProgress(progress)
           })
@@ -40,6 +52,8 @@ export function DocumentOCRClient({
           onTextExtracted(result.rawText, result.overallConfidence, result)
         } else {
           // Utiliser l'extraction basique (Tesseract simple)
+          console.log("📝 Utilisation de l'extraction basique...")
+
           const { createWorker } = await import("tesseract.js")
 
           const worker = await createWorker("fra+eng", 1, {

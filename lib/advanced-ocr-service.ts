@@ -374,31 +374,41 @@ export class AdvancedOCRService {
 
     // Tester chaque pattern
     for (const pattern of config.patterns) {
-      const matches = text.matchAll(new RegExp(pattern.source, pattern.flags + "g"))
+      try {
+        // Créer une nouvelle RegExp avec les flags corrects pour éviter les doublons
+        const flags = pattern.flags || ""
+        const globalFlags = flags.includes("g") ? flags : flags + "g"
+        const globalPattern = new RegExp(pattern.source, globalFlags)
 
-      for (const match of matches) {
-        const value = match[1]?.trim()
-        if (!value) continue
+        const matches = Array.from(text.matchAll(globalPattern))
 
-        // Valider la valeur
-        if (config.validation && !config.validation(value)) {
-          continue
+        for (const match of matches) {
+          const value = match[1]?.trim()
+          if (!value) continue
+
+          // Valider la valeur
+          if (config.validation && !config.validation(value)) {
+            continue
+          }
+
+          // Calculer la confiance basée sur la position et le contexte
+          let confidence = 0.7 // Confiance de base
+
+          // Bonus si le pattern est spécifique
+          if (pattern.source.includes(fieldName.toUpperCase())) {
+            confidence += 0.2
+          }
+
+          // Bonus si la valeur semble correcte
+          if (value.length >= 3 && value.length <= 50) {
+            confidence += 0.1
+          }
+
+          candidates.push({ value, confidence: Math.min(confidence, 1.0) })
         }
-
-        // Calculer la confiance basée sur la position et le contexte
-        let confidence = 0.7 // Confiance de base
-
-        // Bonus si le pattern est spécifique
-        if (pattern.source.includes(fieldName.toUpperCase())) {
-          confidence += 0.2
-        }
-
-        // Bonus si la valeur semble correcte
-        if (value.length >= 3 && value.length <= 50) {
-          confidence += 0.1
-        }
-
-        candidates.push({ value, confidence: Math.min(confidence, 1.0) })
+      } catch (error) {
+        console.warn(`⚠️ Erreur pattern pour ${fieldName}:`, error)
+        continue
       }
     }
 
