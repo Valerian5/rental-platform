@@ -8,6 +8,7 @@ export interface UserProfile {
   phone?: string
   user_type: "tenant" | "owner" | "admin" | "agency"
   agency_id?: string
+  is_active: boolean
   created_at: string
   updated_at: string
 }
@@ -40,6 +41,7 @@ export const authService = {
       last_name: userData.lastName,
       phone: userData.phone || null,
       user_type: userData.userType,
+      is_active: true,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }
@@ -73,24 +75,53 @@ export const authService = {
 
     if (profileError) throw new Error("Erreur profil: " + profileError.message)
 
+    console.log("✅ Connexion réussie:", profile.user_type, profile.email)
     return { user: profile, session: authData.session }
   },
 
   async getCurrentUser(): Promise<UserProfile | null> {
     try {
+      console.log("🔐 getCurrentUser - Début")
+
       const { data: sessionData } = await supabase.auth.getSession()
-      if (!sessionData.session?.user) return null
+      if (!sessionData.session?.user) {
+        console.log("❌ Pas de session active")
+        return null
+      }
 
-      const { data: profile } = await supabase.from("users").select("*").eq("id", sessionData.session.user.id).single()
+      console.log("✅ Session active pour:", sessionData.session.user.id)
 
+      const { data: profile, error: profileError } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", sessionData.session.user.id)
+        .single()
+
+      if (profileError) {
+        console.error("❌ Erreur récupération profil:", profileError)
+        return null
+      }
+
+      console.log("✅ Profil récupéré:", profile.user_type, profile.email)
       return profile
     } catch (error) {
-      console.error("Erreur getCurrentUser:", error)
+      console.error("❌ Erreur getCurrentUser:", error)
+      return null
+    }
+  },
+
+  async getAuthToken(): Promise<string | null> {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      return sessionData.session?.access_token || null
+    } catch (error) {
+      console.error("❌ Erreur getAuthToken:", error)
       return null
     }
   },
 
   async logout(): Promise<void> {
+    console.log("🔐 Logout")
     const { error } = await supabase.auth.signOut()
     if (error) throw new Error(error.message)
   },

@@ -1,77 +1,87 @@
-import { createServerClient } from "@supabase/ssr"
 import type { NextRequest } from "next/server"
+import { createServerClient } from "@supabase/ssr"
 
-export interface UserProfile {
+// Create a Supabase client with service role for server-side operations
+const supabaseAdmin = createServerClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    cookies: {
+      get() {
+        return undefined
+      },
+      set() {},
+      remove() {},
+    },
+  },
+)
+
+export interface AuthUser {
   id: string
   email: string
   first_name: string
   last_name: string
   phone?: string
-  user_type: "tenant" | "owner" | "admin"
+  user_type: "tenant" | "owner" | "admin" | "agency"
   agency_id?: string
+  is_active: boolean
   created_at: string
   updated_at: string
 }
 
-export async function getCurrentUserFromRequest(request: NextRequest): Promise<UserProfile | null> {
+export async function getCurrentUserFromRequest(request: NextRequest): Promise<AuthUser | null> {
   try {
-    console.log("🔍 getCurrentUserFromRequest - Début")
+    console.log("🔐 getCurrentUserFromRequest - Début")
 
-    // Récupérer le token d'authentification depuis les headers
+    // Get the authorization header
     const authHeader = request.headers.get("authorization")
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      console.log("❌ Pas de token Bearer dans les headers")
+      console.log("❌ Pas de token d'autorisation")
       return null
     }
 
-    const token = authHeader.substring(7) // Enlever "Bearer "
-    console.log("🔑 Token trouvé:", token.substring(0, 20) + "...")
+    const token = authHeader.substring(7) // Remove "Bearer " prefix
+    console.log("🎫 Token reçu:", token.substring(0, 20) + "...")
 
-    // Créer un client Supabase avec le token
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get() {
-            return undefined
-          },
-          set() {},
-          remove() {},
-        },
-        global: {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      },
-    )
+    // Verify the JWT token with Supabase
+    const { data: tokenData, error: tokenError } = await supabaseAdmin.auth.getUser(token)
 
-    // Vérifier le token et récupérer l'utilisateur
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser(token)
-
-    if (authError || !user) {
-      console.log("❌ Token invalide:", authError?.message)
+    if (tokenError || !tokenData.user) {
+      console.log("❌ Token invalide:", tokenError?.message)
       return null
     }
 
-    console.log("✅ Utilisateur authentifié:", user.id)
+    console.log("✅ Token valide pour utilisateur:", tokenData.user.id)
 
-    // Récupérer le profil utilisateur depuis la base de données
-    const { data: profile, error: profileError } = await supabase.from("users").select("*").eq("id", user.id).single()
+    // Get the user profile from our users table
+    const { data: userProfile, error: profileError } = await supabaseAdmin
+      .from("users")
+      .select("*")
+      .eq("id", tokenData.user.id)
+      .single()
 
-    if (profileError) {
-      console.error("❌ Erreur récupération profil:", profileError)
+    if (profileError || !userProfile) {
+      console.log("❌ Profil utilisateur non trouvé:", profileError?.message)
       return null
     }
 
-    console.log("✅ Profil récupéré:", profile.user_type)
-    return profile
+    console.log("✅ Profil utilisateur récupéré:", userProfile.user_type, userProfile.email)
+    return userProfile as AuthUser
   } catch (error) {
     console.error("❌ Erreur dans getCurrentUserFromRequest:", error)
+    return null
+  }
+}
+
+export async function getCurrentUserFromCookies(): Promise<AuthUser | null> {
+  try {
+    console.log("🔐 getCurrentUserFromCookies - Début")
+
+    // This would be used for server-side rendering with cookies
+    // For now, we'll return null as we're using token-based auth
+    return null
+  } catch (error) {
+    console.error("❌ Erreur dans getCurrentUserFromCookies:", error)
     return null
   }
 }

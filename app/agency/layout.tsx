@@ -49,7 +49,8 @@ interface User {
   first_name: string
   last_name: string
   agency_id: string
-  roles: { id: string; name: string }[]
+  user_type: string
+  roles?: { id: string; name: string }[]
 }
 
 const navigation = [
@@ -78,17 +79,23 @@ export default function AgencyLayout({ children }: { children: React.ReactNode }
 
   const checkAuth = async () => {
     try {
+      console.log("🔐 Vérification authentification agence...")
+
       const currentUser = await authService.getCurrentUser()
 
       if (!currentUser) {
+        console.log("❌ Pas d'utilisateur connecté")
         router.push("/login")
         return
       }
 
+      console.log("👤 Utilisateur connecté:", currentUser.user_type, currentUser.email)
+
       if (currentUser.user_type !== "agency" || !currentUser.agency_id) {
+        console.log("❌ Utilisateur n'est pas de type agence ou pas d'agency_id")
         toast({
-          title: "Access denied",
-          description: "You don't have agency access",
+          title: "Accès refusé",
+          description: "Vous n'avez pas accès à l'interface agence",
           variant: "destructive",
         })
         router.push("/")
@@ -97,18 +104,59 @@ export default function AgencyLayout({ children }: { children: React.ReactNode }
 
       setUser(currentUser as User)
 
-      // Fetch agency details
-      const agencyResponse = await fetch(`/api/agencies/${currentUser.agency_id}`)
-      const agencyResult = await agencyResponse.json()
-
-      if (agencyResult.success) {
-        setAgency(agencyResult.agency)
-      }
+      // Fetch agency details with auth token
+      await fetchAgencyDetails(currentUser.agency_id)
     } catch (error) {
-      console.error("Error checking auth:", error)
+      console.error("❌ Erreur vérification auth:", error)
+      toast({
+        title: "Erreur",
+        description: "Erreur lors de la vérification de l'authentification",
+        variant: "destructive",
+      })
       router.push("/login")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchAgencyDetails = async (agencyId: string) => {
+    try {
+      console.log("🏢 Récupération détails agence:", agencyId)
+
+      // Get auth token
+      const token = await authService.getAuthToken()
+      if (!token) {
+        throw new Error("Pas de token d'authentification")
+      }
+
+      const response = await fetch(`/api/agencies/${agencyId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error("❌ Erreur API agence:", response.status, errorData)
+        throw new Error(errorData.error || `HTTP ${response.status}`)
+      }
+
+      const result = await response.json()
+
+      if (!result.success) {
+        throw new Error(result.error || "Erreur récupération agence")
+      }
+
+      console.log("✅ Agence récupérée:", result.agency.name)
+      setAgency(result.agency)
+    } catch (error) {
+      console.error("❌ Erreur récupération agence:", error)
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les détails de l'agence",
+        variant: "destructive",
+      })
     }
   }
 
@@ -117,10 +165,10 @@ export default function AgencyLayout({ children }: { children: React.ReactNode }
       await authService.logout()
       router.push("/login")
     } catch (error) {
-      console.error("Error logging out:", error)
+      console.error("❌ Erreur déconnexion:", error)
       toast({
-        title: "Error",
-        description: "Failed to log out",
+        title: "Erreur",
+        description: "Erreur lors de la déconnexion",
         variant: "destructive",
       })
     }
@@ -135,11 +183,20 @@ export default function AgencyLayout({ children }: { children: React.ReactNode }
   }
 
   if (!user || !agency) {
-    return null
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center">
+          <Building2 className="mx-auto h-12 w-12 text-muted-foreground" />
+          <h3 className="mt-4 text-lg font-semibold">Agence non trouvée</h3>
+          <p className="text-muted-foreground mb-4">Impossible de charger l'interface agence</p>
+          <Button onClick={() => router.push("/login")}>Retour à la connexion</Button>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={<div>Chargement...</div>}>
       <div className="flex h-screen bg-gray-50">
         {/* Sidebar */}
         <div
@@ -207,7 +264,7 @@ export default function AgencyLayout({ children }: { children: React.ReactNode }
                 <p className="text-sm font-medium text-gray-900 truncate">
                   {user.first_name} {user.last_name}
                 </p>
-                <p className="text-xs text-gray-500 truncate">{user.roles?.[0]?.name || "Agency User"}</p>
+                <p className="text-xs text-gray-500 truncate">{user.roles?.[0]?.name || "Utilisateur Agence"}</p>
               </div>
             </div>
           </div>
@@ -225,7 +282,7 @@ export default function AgencyLayout({ children }: { children: React.ReactNode }
 
                 <div className="relative hidden md:block">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                  <Input placeholder="Search..." className="pl-10 w-64 bg-gray-50 border-gray-200" />
+                  <Input placeholder="Rechercher..." className="pl-10 w-64 bg-gray-50 border-gray-200" />
                 </div>
               </div>
 
@@ -258,13 +315,13 @@ export default function AgencyLayout({ children }: { children: React.ReactNode }
                     <DropdownMenuItem asChild>
                       <Link href="/agency/settings">
                         <Settings className="mr-2 h-4 w-4" />
-                        Settings
+                        Paramètres
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={handleLogout}>
                       <LogOut className="mr-2 h-4 w-4" />
-                      Log out
+                      Déconnexion
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
