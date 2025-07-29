@@ -227,7 +227,7 @@ export default function ApplicationsPage() {
     // Filtre par onglet
     if (activeTab !== "all") {
       const statusMap = {
-        pending: ["pending", "analyzing", "visit_scheduled", "waiting_tenant_confirmation"],
+        pending: ["pending", "analyzing", "visit_proposed", "visit_scheduled", "waiting_tenant_confirmation"],
         accepted: ["accepted", "approved"],
         rejected: ["rejected"],
       }
@@ -465,7 +465,7 @@ export default function ApplicationsPage() {
       all: applications.length,
       pending: applications.filter((app) => {
         const status = app.status || "pending"
-        return ["pending", "analyzing", "visit_scheduled", "waiting_tenant_confirmation"].includes(status)
+        return ["pending", "analyzing", "visit_proposed", "visit_scheduled", "waiting_tenant_confirmation"].includes(status)
       }).length,
       accepted: applications.filter((app) => {
         const status = app.status || "pending"
@@ -537,6 +537,9 @@ export default function ApplicationsPage() {
                 <SelectContent>
                   <SelectItem value="all">Tous les statuts</SelectItem>
                   <SelectItem value="pending">En attente</SelectItem>
+                  <SelectItem value="analyzing">En analyse</SelectItem>
+                  <SelectItem value="visit_proposed">Visite proposée</SelectItem>
+                  <SelectItem value="visit_scheduled">Visite planifiée</SelectItem>
                   <SelectItem value="accepted">Acceptée</SelectItem>
                   <SelectItem value="rejected">Refusée</SelectItem>
                 </SelectContent>
@@ -561,7 +564,7 @@ export default function ApplicationsPage() {
                 <SelectContent>
                   <SelectItem value="all">Tous les biens</SelectItem>
                   {properties.map((property) => (
-                    <SelectItem key={property.id} value={property.id}>
+                    <SelectItem key={property.id} value={property.id">
                       {property.title}
                     </SelectItem>
                   ))}
