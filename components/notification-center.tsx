@@ -55,16 +55,13 @@ export function NotificationCenter() {
 
   useEffect(() => {
     loadNotifications()
-    // Polling pour les nouvelles notifications
-    const interval = setInterval(loadNotifications, 30000) // Toutes les 30 secondes
+    const interval = setInterval(loadNotifications, 30000)
     return () => clearInterval(interval)
   }, [])
 
   const loadNotifications = async () => {
     try {
       setError(null)
-
-      // Récupérer l'utilisateur depuis localStorage
       const userStr = localStorage.getItem("user")
       if (!userStr) {
         console.log("❌ NotificationCenter - Pas d'utilisateur dans localStorage")
@@ -81,33 +78,54 @@ export function NotificationCenter() {
         return
       }
 
-      console.log("🔔 NotificationCenter - Chargement notifications pour utilisateur:", user.id)
-
       const response = await fetch(`/api/notifications?user_id=${user.id}`)
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
 
       const data = await response.json()
-      console.log("📨 NotificationCenter - Réponse API:", data)
-
       if (data.success) {
-        setNotifications(data.notifications || [])
-        // CORRECTION: Calculer le count des notifications non lues SEULEMENT pour les futures
-        const futureNotifications = (data.notifications || []).filter((notif: Notification) => {
-          // Si c'est une notification de visite, vérifier si elle est future
+        const now = new Date()
+        
+        // Filtrer les notifications pour ne garder que celles pertinentes
+        const filteredNotifications = (data.notifications || []).filter((notif: Notification) => {
+          // Pour les visites, vérifier si elles sont à venir
           if (notif.type === "visit_scheduled") {
-            // Extraire la date de la notification si possible
-            const dateMatch = notif.content.match(/(\d{1,2}\/\d{1,2}\/\d{4})/)
-            if (dateMatch) {
-              const [day, month, year] = dateMatch[1].split("/")
-              const notifDate = new Date(Number.parseInt(year), Number.parseInt(month) - 1, Number.parseInt(day))
-              return notifDate >= new Date()
+            // Extraire la date et l'heure de la notification si possible
+            const datetimeMatch = notif.content.match(/(\d{1,2}\/\d{1,2}\/\d{4}) à (\d{1,2}h\d{0,2})/)
+            if (datetimeMatch) {
+              const [day, month, year] = datetimeMatch[1].split("/")
+              const time = datetimeMatch[2].replace('h', ':')
+              const notifDate = new Date(`${year}-${month}-${day}T${time.padEnd(5, '0')}:00`)
+              return notifDate >= now
             }
+            return false // Si on ne peut pas parser la date, on exclut la notification
           }
           return true // Pour les autres types de notifications, les garder
         })
+
+        setNotifications(filteredNotifications)
+        
+        // Compter seulement les non lues parmi les notifications filtrées
+        const unreadCount = filteredNotifications.filter((notif: Notification) => !notif.read).length
+        setUnreadCount(unreadCount)
+
+        console.log(
+          `✅ NotificationCenter - ${filteredNotifications.length} notifications filtrées, ${unreadCount} non lues`,
+        )
+      } else {
+        console.error("❌ NotificationCenter - Erreur API:", data.error)
+        setError(data.error || "Erreur lors du chargement")
+        setNotifications([])
+        setUnreadCount(0)
+      }
+    } catch (error: any) {
+      console.error("❌ NotificationCenter - Erreur chargement:", error)
+      setError(error.message || "Erreur de connexion")
+      setNotifications([])
+      setUnreadCount(0)
+    } finally {
+      setLoading(false)
+    }
+  }
 
         const unreadFutureCount = futureNotifications.filter((notif: Notification) => !notif.read).length
         setUnreadCount(unreadFutureCount)
@@ -275,4 +293,5 @@ export function NotificationCenter() {
       </PopoverContent>
     </Popover>
   )
+}
 }
