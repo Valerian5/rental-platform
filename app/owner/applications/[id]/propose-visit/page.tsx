@@ -127,8 +127,8 @@ export default function ProposeVisitPage() {
 
     Object.values(daySlots).forEach((slots) => {
       slots.forEach((slot) => {
-        // CORRECTION: Filtrer SEULEMENT les créneaux futurs (à partir de maintenant)
-        if (new Date(slot.start_time) > now) {
+        const slotDate = new Date(slot.start_time)
+        if (slotDate > now) {
           allSlots.push(slot)
         }
       })

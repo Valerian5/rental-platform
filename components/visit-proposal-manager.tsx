@@ -38,6 +38,12 @@ interface VisitProposalManagerProps {
   onSlotsProposed: (slots: VisitSlot[]) => void
 }
 
+const isFutureSlot = (slot: VisitSlot) => {
+  const now = new Date()
+  const slotDate = new Date(`${slot.date}T${slot.start_time}`)
+  return slotDate > now
+}
+
 export function VisitProposalManager({
   isOpen,
   onClose,
@@ -66,10 +72,14 @@ export function VisitProposalManager({
   }
 
   const handleContinueToProposal = () => {
-    const availableSlots = visitSlots.filter((slot) => slot.is_available && slot.current_bookings < slot.max_capacity)
+    const availableSlots = visitSlots.filter(
+      (slot) => slot.is_available && 
+      slot.current_bookings < slot.max_capacity && 
+      isFutureSlot(slot)
+    )
 
     if (availableSlots.length === 0) {
-      toast.error("Vous devez configurer au moins un créneau disponible")
+      toast.error("Vous devez configurer au moins un créneau disponible dans le futur")
       return
     }
 
@@ -80,9 +90,12 @@ export function VisitProposalManager({
     try {
       setIsSending(true)
 
-      const availableSlots = visitSlots.filter((slot) => slot.is_available && slot.current_bookings < slot.max_capacity)
+      const availableSlots = visitSlots.filter(
+        (slot) => slot.is_available && 
+        slot.current_bookings < slot.max_capacity && 
+        isFutureSlot(slot)
+      )
 
-      // Extraire les IDs des créneaux disponibles
       const slotIds = availableSlots.map((slot) => slot.id).filter(Boolean)
 
       if (slotIds.length === 0) {
@@ -90,14 +103,13 @@ export function VisitProposalManager({
         return
       }
 
-      // Utiliser l'API pour proposer les créneaux avec le bon statut
       const response = await fetch(`/api/applications/${applicationId}/propose-visit-slots`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           slot_ids: slotIds,
           message: proposalMessage,
-          status: "visit_proposed", // Nouveau statut correct
+          status: "visit_proposed",
         }),
       })
 
@@ -117,8 +129,15 @@ export function VisitProposalManager({
     }
   }
 
-  const availableSlots = visitSlots.filter((slot) => slot.is_available && slot.current_bookings < slot.max_capacity)
-  const bookedSlots = visitSlots.filter((slot) => slot.current_bookings > 0)
+  const availableSlots = visitSlots.filter(
+    (slot) => slot.is_available && 
+    slot.current_bookings < slot.max_capacity && 
+    isFutureSlot(slot)
+  )
+  const bookedSlots = visitSlots.filter(
+    (slot) => slot.current_bookings > 0 && 
+    isFutureSlot(slot)
+  )
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -144,7 +163,9 @@ export function VisitProposalManager({
               <Card>
                 <CardContent className="pt-6">
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-600">{visitSlots.length}</div>
+                    <div className="text-2xl font-bold text-blue-600">
+                      {visitSlots.filter(isFutureSlot).length}
+                    </div>
                     <div className="text-sm text-muted-foreground">Créneaux total</div>
                   </div>
                 </CardContent>
@@ -184,7 +205,7 @@ export function VisitProposalManager({
                     <div>
                       <p className="font-medium text-orange-800">Aucun créneau disponible</p>
                       <p className="text-sm text-orange-700">
-                        Tous vos créneaux sont complets. Ajoutez de nouveaux créneaux ou augmentez la capacité des
+                        Tous vos créneaux sont complets ou expirés. Ajoutez de nouveaux créneaux ou augmentez la capacité des
                         existants.
                       </p>
                     </div>

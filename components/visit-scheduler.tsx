@@ -96,6 +96,12 @@ const formatDateForDisplay = (dateStr: string): string => {
   }
 }
 
+const isFutureSlot = (slot: VisitSlot) => {
+  const now = new Date()
+  const slotDate = new Date(`${slot.date}T${slot.start_time}`)
+  return slotDate > now
+}
+
 export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyId }: VisitSchedulerProps) {
   // Patch : robustesse - fallback sur visitSlots partout
   const safeVisitSlots: VisitSlot[] = Array.isArray(visitSlots) ? visitSlots : []
@@ -793,27 +799,37 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
               <div>
-                <div className="text-2xl font-bold text-blue-600">{totalSlots}</div>
+                <div className="text-2xl font-bold text-blue-600">
+                  {safeVisitSlots.filter(isFutureSlot).length}
+                </div>
                 <div className="text-sm text-muted-foreground">Créneaux total</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-green-600">
-                  {
-                    safeVisitSlots.filter((slot) => slot.is_available && slot.current_bookings < slot.max_capacity)
-                      .length
-                  }
+                  {safeVisitSlots.filter(
+                    (slot) => slot.is_available && 
+                    slot.current_bookings < slot.max_capacity && 
+                    isFutureSlot(slot)
+                  ).length}
                 </div>
                 <div className="text-sm text-muted-foreground">Disponibles</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-orange-600">
-                  {safeVisitSlots.filter((slot) => slot.current_bookings > 0).length}
+                  {safeVisitSlots.filter(
+                    (slot) => slot.current_bookings > 0 && 
+                    isFutureSlot(slot)
+                  ).length}
                 </div>
                 <div className="text-sm text-muted-foreground">Réservés</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-purple-600">
-                  {new Set(safeVisitSlots.map((slot) => slot.date)).size}
+                  {new Set(
+                    safeVisitSlots
+                      .filter(isFutureSlot)
+                      .map((slot) => slot.date)
+                  ).size}
                 </div>
                 <div className="text-sm text-muted-foreground">Jours configurés</div>
               </div>
