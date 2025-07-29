@@ -342,6 +342,46 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
     router.push(`/owner/messaging?application=${application.id}`)
   }
 
+  const getStatusBadge = () => {
+    if (!application) return null
+
+    switch (application.status) {
+      case "pending":
+        return <Badge variant="outline">En attente</Badge>
+      case "analyzing":
+        return <Badge variant="secondary">En analyse</Badge>
+      case "visite_proposée":
+        return (
+          <Badge variant="secondary" className="bg-purple-100 text-purple-800 hover:bg-purple-200">
+            Visite proposée
+          </Badge>
+        )
+      case "visit_scheduled":
+        return (
+          <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200">
+            Visite planifiée
+          </Badge>
+        )
+      case "accepted":
+      case "approved":
+        return (
+          <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-200">
+            Acceptée
+          </Badge>
+        )
+      case "rejected":
+        return <Badge variant="destructive">Refusée</Badge>
+      case "waiting_tenant_confirmation":
+        return (
+          <Badge variant="outline" className="bg-amber-100 text-amber-800 hover:bg-amber-200">
+            En attente de confirmation
+          </Badge>
+        )
+      default:
+        return <Badge variant="outline">Statut inconnu</Badge>
+    }
+  }
+
   if (loading) {
     return (
       <div className="container mx-auto py-6">
@@ -380,7 +420,6 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
     visit_scheduled: "bg-indigo-100 text-indigo-800",
     visit_completed: "bg-green-100 text-green-800",
     accepted: "bg-green-100 text-green-800",
-    approved: "bg-green-100 text-green-800",
     rejected: "bg-red-100 text-red-800",
     lease_signed: "bg-emerald-100 text-emerald-800",
   }
@@ -392,7 +431,6 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
     visit_scheduled: "Visite programmée",
     visit_completed: "Visite effectuée",
     accepted: "Acceptée - En attente confirmation",
-    approved: "Approuvée",
     rejected: "Refusée",
     lease_signed: "Bail signé",
   }
@@ -484,11 +522,7 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge className={statusColors[application.status] || "bg-gray-100 text-gray-800"}>
-              {statusLabels[application.status] || "Statut inconnu"}
-            </Badge>
-          </div>
+          <div className="flex items-center gap-2">{getStatusBadge()}</div>
         </div>
 
         <Tabs defaultValue="analysis" className="space-y-4">
