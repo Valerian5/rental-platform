@@ -353,13 +353,7 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
         // Garde tous les créneaux existants sélectionnés
         const selectedSlots = existingSlots.map(
           (slot) => `${formatTimeString(slot.start_time)}-${formatTimeString(slot.end_time)}`
-        )        
-
-        // CORRECTION: Utiliser les vraies heures de début et fin des créneaux existants
-        const allStartTimes = existingSlots.map((slot) => slot.start_time).sort()
-        const allEndTimes = existingSlots.map((slot) => slot.end_time).sort()
-        const earliestStart = allStartTimes[0]
-        const latestEnd = allEndTimes[allEndTimes.length - 1]
+        )
 
         setDayConfig({
           date: dateStr,
@@ -383,18 +377,18 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
     }
   }
 
- // Nouvelle fonction pour la configuration par défaut
- const setDefaultDayConfig = (dateStr: string) => {
-  setDayConfig({
-    date: dateStr,
-    slotDuration: 30,
-    startTime: "08:00",
-    endTime: "20:00",
-    isGroupVisit: false,
-    capacity: 1,
-    selectedSlots: [],
-  })
-}  
+  // Nouvelle fonction pour la configuration par défaut
+  const setDefaultDayConfig = (dateStr: string) => {
+    setDayConfig({
+      date: dateStr,
+      slotDuration: 30,
+      startTime: "08:00",
+      endTime: "20:00",
+      isGroupVisit: false,
+      capacity: 1,
+      selectedSlots: [],
+    })
+  }
 
   const toggleSlot = (slotKey: string) => {
     setDayConfig((prev) => ({
