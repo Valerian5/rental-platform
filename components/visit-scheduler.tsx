@@ -831,3 +831,4 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
     </div>
   )
 }
+}
