@@ -46,6 +46,37 @@ const formatTimeAgo = (dateString: string) => {
   return `Il y a ${Math.floor(diffInMinutes / 1440)} j`
 }
 
+const isFutureVisit = (notification: Notification): boolean => {
+  if (notification.type !== "visit_scheduled") return true
+
+  // Essayer plusieurs formats de date pour plus de robustesse
+  const dateFormats = [
+    // Format "JJ/MM/AAAA à HHhMM"
+    /(\d{1,2})\/(\d{1,2})\/(\d{4}) à (\d{1,2})h(\d{0,2})/,
+    // Format "JJ-MM-AAAA HH:MM"
+    /(\d{1,2})-(\d{1,2})-(\d{4}) (\d{1,2}):(\d{0,2})/,
+    // Format "AAAA-MM-JJTHH:MM"
+    /(\d{4})-(\d{1,2})-(\d{1,2})T(\d{1,2}):(\d{0,2})/
+  ]
+
+  for (const format of dateFormats) {
+    const match = notification.content.match(format)
+    if (match) {
+      const [, day, month, year, hour, minute] = match
+      const visitDate = new Date(
+        parseInt(year),
+        parseInt(month) - 1,
+        parseInt(day),
+        parseInt(hour),
+        parseInt(minute || '0')
+      )
+      return visitDate >= new Date()
+    }
+  }
+
+  return false // Si on ne peut pas parser la date, on exclut la notification
+}
+
 export function NotificationCenter() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
@@ -64,7 +95,6 @@ export function NotificationCenter() {
       setError(null)
       const userStr = localStorage.getItem("user")
       if (!userStr) {
-        console.log("❌ NotificationCenter - Pas d'utilisateur dans localStorage")
         setLoading(false)
         setError("Utilisateur non connecté")
         return
@@ -72,7 +102,6 @@ export function NotificationCenter() {
 
       const user = JSON.parse(userStr)
       if (!user.id) {
-        console.log("❌ NotificationCenter - Pas d'ID utilisateur")
         setLoading(false)
         setError("ID utilisateur manquant")
         return
@@ -83,64 +112,17 @@ export function NotificationCenter() {
 
       const data = await response.json()
       if (data.success) {
-        const now = new Date()
+        // Filtrer les notifications pour ne garder que les visites futures et autres notifications
+        const filteredNotifications = (data.notifications || []).filter(isFutureVisit)
         
-        // Filtrer les notifications pour ne garder que celles pertinentes
-        const filteredNotifications = (data.notifications || []).filter((notif: Notification) => {
-          // Pour les visites, vérifier si elles sont à venir
-          if (notif.type === "visit_scheduled") {
-            // Extraire la date et l'heure de la notification si possible
-            const datetimeMatch = notif.content.match(/(\d{1,2}\/\d{1,2}\/\d{4}) à (\d{1,2}h\d{0,2})/)
-            if (datetimeMatch) {
-              const [day, month, year] = datetimeMatch[1].split("/")
-              const time = datetimeMatch[2].replace('h', ':')
-              const notifDate = new Date(`${year}-${month}-${day}T${time.padEnd(5, '0')}:00`)
-              return notifDate >= now
-            }
-            return false // Si on ne peut pas parser la date, on exclut la notification
-          }
-          return true // Pour les autres types de notifications, les garder
-        })
-
         setNotifications(filteredNotifications)
-        
-        // Compter seulement les non lues parmi les notifications filtrées
-        const unreadCount = filteredNotifications.filter((notif: Notification) => !notif.read).length
-        setUnreadCount(unreadCount)
-
-        console.log(
-          `✅ NotificationCenter - ${filteredNotifications.length} notifications filtrées, ${unreadCount} non lues`,
-        )
+        setUnreadCount(filteredNotifications.filter(n => !n.read).length)
       } else {
-        console.error("❌ NotificationCenter - Erreur API:", data.error)
         setError(data.error || "Erreur lors du chargement")
         setNotifications([])
         setUnreadCount(0)
       }
     } catch (error: any) {
-      console.error("❌ NotificationCenter - Erreur chargement:", error)
-      setError(error.message || "Erreur de connexion")
-      setNotifications([])
-      setUnreadCount(0)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-        const unreadFutureCount = futureNotifications.filter((notif: Notification) => !notif.read).length
-        setUnreadCount(unreadFutureCount)
-
-        console.log(
-          `✅ NotificationCenter - ${data.notifications?.length || 0} notifications chargées, ${unreadFutureCount} non lues futures`,
-        )
-      } else {
-        console.error("❌ NotificationCenter - Erreur API:", data.error)
-        setError(data.error || "Erreur lors du chargement")
-        setNotifications([])
-        setUnreadCount(0)
-      }
-    } catch (error: any) {
-      console.error("❌ NotificationCenter - Erreur chargement:", error)
       setError(error.message || "Erreur de connexion")
       setNotifications([])
       setUnreadCount(0)
@@ -151,8 +133,6 @@ export function NotificationCenter() {
 
   const markAsRead = async (notificationId: string) => {
     try {
-      console.log("🔔 NotificationCenter - Marquage notification comme lue:", notificationId)
-
       const response = await fetch("/api/notifications", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -160,40 +140,31 @@ export function NotificationCenter() {
       })
 
       const result = await response.json()
-
       if (result.success) {
-        setNotifications((prev) => prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n)))
-        setUnreadCount((prev) => Math.max(0, prev - 1))
-        console.log("✅ NotificationCenter - Notification marquée comme lue")
-      } else {
-        console.error("❌ NotificationCenter - Erreur marquage:", result.error)
+        setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, read: true } : n))
+        setUnreadCount(prev => Math.max(0, prev - 1))
       }
     } catch (error) {
-      console.error("❌ NotificationCenter - Erreur marquage notification:", error)
+      console.error("Erreur marquage notification:", error)
     }
   }
 
   const markAllAsRead = async () => {
     try {
-      console.log("🔔 NotificationCenter - Marquage toutes notifications comme lues")
-
-      const unreadNotifications = notifications.filter((n) => !n.read)
-
+      const unreadNotifications = notifications.filter(n => !n.read)
       await Promise.all(
-        unreadNotifications.map((n) =>
+        unreadNotifications.map(n =>
           fetch("/api/notifications", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ notificationId: n.id, read: true }),
-          }),
-        ),
+          })
+        )
       )
-
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })))
       setUnreadCount(0)
-      console.log("✅ NotificationCenter - Toutes les notifications marquées comme lues")
     } catch (error) {
-      console.error("❌ NotificationCenter - Erreur marquage toutes notifications:", error)
+      console.error("Erreur marquage toutes notifications:", error)
     }
   }
 
@@ -246,16 +217,14 @@ export function NotificationCenter() {
             </div>
           ) : (
             <div className="divide-y">
-              {notifications.map((notification) => (
+              {notifications.map(notification => (
                 <div
                   key={notification.id}
                   className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${
                     !notification.read ? "bg-blue-50 border-l-4 border-l-blue-500" : ""
                   }`}
                   onClick={() => {
-                    if (!notification.read) {
-                      markAsRead(notification.id)
-                    }
+                    if (!notification.read) markAsRead(notification.id)
                     setOpen(false)
                   }}
                 >
@@ -293,5 +262,4 @@ export function NotificationCenter() {
       </PopoverContent>
     </Popover>
   )
-}
 }
