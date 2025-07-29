@@ -50,7 +50,8 @@ interface ApplicationCardProps {
   isSelected?: boolean
   onSelect?: (selected: boolean) => void
   onAction: (action: string) => void
-  rentalFile?: any // Dossier de location associé
+  rentalFile?: any
+  scoringPreferences?: any
 }
 
 export function ModernApplicationCard({
@@ -59,6 +60,7 @@ export function ModernApplicationCard({
   onSelect,
   onAction,
   rentalFile,
+  scoringPreferences,
 }: ApplicationCardProps) {
   const [expanded, setExpanded] = useState(false)
   const [calculatedScore, setCalculatedScore] = useState<number>(application.match_score)
@@ -71,19 +73,17 @@ export function ModernApplicationCard({
   const [scoreCompatible, setScoreCompatible] = useState<boolean | undefined>(undefined)
 
   useEffect(() => {
-    // Calculer le score personnalisé si on a un owner_id
     if (application.property?.owner_id) {
       calculateCustomScore()
     }
   }, [application, application.property?.owner_id])
 
-  // Ajouter un interval pour vérifier les changements de préférences
   useEffect(() => {
     const interval = setInterval(() => {
       if (application.property?.owner_id) {
         calculateCustomScore()
       }
-    }, 10000) // Vérifier toutes les 10 secondes
+    }, 10000)
 
     return () => clearInterval(interval)
   }, [application.property?.owner_id])
@@ -92,26 +92,18 @@ export function ModernApplicationCard({
     try {
       setScoreLoading(true)
 
-      // Préparer les données de l'application avec plus de détails
       const applicationData = {
-        // Données financières
         income: application.income,
         guarantor_income: rentalFile?.guarantor_income,
         has_guarantor: application.has_guarantor || rentalFile?.has_guarantor,
         guarantor_type: rentalFile?.guarantor_type || "individual",
-
-        // Données professionnelles
         profession: application.profession,
         contract_type: rentalFile?.contract_type || "cdi",
         professional_experience_months: rentalFile?.professional_experience_months || 0,
         trial_period: rentalFile?.trial_period || false,
-
-        // Qualité du dossier
         file_completion: rentalFile?.completion_percentage || 70,
         has_verified_documents: rentalFile?.has_verified_documents || false,
         documents_complete: application.documents_complete,
-
-        // Autres données
         presentation: rentalFile?.presentation || "",
         message: application.message || "",
       }
@@ -133,20 +125,15 @@ export function ModernApplicationCard({
 
       if (response.ok) {
         const data = await response.json()
-        console.log("Score calculé:", data)
-        setCalculatedScore(Math.min(100, Math.max(0, Math.round(data.score))))
-
-        // Stocker les détails pour l'affichage
+        setCalculatedScore(Math.min(100, Math.max(0, Math.round(data.score)))
         setScoreBreakdown(data.breakdown)
         setScoreRecommendations(data.recommendations || [])
         setScoreWarnings(data.warnings || [])
         setScoreCompatible(data.compatible)
       } else {
-        console.error("Erreur lors du calcul du score")
         setCalculatedScore(application.match_score)
       }
     } catch (error) {
-      console.error("Erreur calcul score personnalisé:", error)
       setCalculatedScore(application.match_score)
     } finally {
       setScoreLoading(false)
@@ -183,6 +170,12 @@ export function ModernApplicationCard({
         return <Badge variant="outline">En attente</Badge>
       case "analyzing":
         return <Badge variant="secondary">En analyse</Badge>
+      case "visit_proposed":
+        return (
+          <Badge variant="secondary" className="bg-purple-100 text-purple-800 hover:bg-purple-200">
+            Visite proposée
+          </Badge>
+        )
       case "visit_scheduled":
         return (
           <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200">
@@ -210,28 +203,24 @@ export function ModernApplicationCard({
   }
 
   const getActionButtons = () => {
-    // Bouton "Voir analyse" - disponible pour certains statuts
-    const viewAnalysisButton = ["visit_scheduled", "accepted", "approved", "rejected"].includes(application.status) ? (
+    const viewAnalysisButton = (
       <Button
         size="sm"
         variant="outline"
-        onClick={() => {
-          router.push(`/owner/applications/${application.id}`)
-        }}
+        onClick={() => router.push(`/owner/applications/${application.id}`)}
       >
         <BarChart3 className="h-4 w-4 mr-1" />
         Voir analyse
       </Button>
-    ) : null
+    )
 
-    // Définir les actions disponibles en fonction du statut
     switch (application.status) {
       case "pending":
         return (
           <>
             <Button size="sm" variant="default" onClick={() => onAction("analyze")}>
               <Eye className="h-4 w-4 mr-1" />
-              Analyser le dossier
+              Analyser
             </Button>
             <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
               <MessageSquare className="h-4 w-4 mr-1" />
@@ -242,17 +231,9 @@ export function ModernApplicationCard({
       case "analyzing":
         return (
           <>
-          <Button
-          size="sm"
-          variant="outline"
-          onClick={() => router.push(`/owner/applications/${application.id}`)}
-        >
-          <Eye className="h-4 w-4 mr-1" />
-          Voir
-        </Button>
             <Button size="sm" variant="default" onClick={() => onAction("propose_visit")}>
               <Calendar className="h-4 w-4 mr-1" />
-              Proposer une visite
+              Proposer visite
             </Button>
             <Button size="sm" variant="destructive" onClick={() => onAction("refuse")}>
               <XCircle className="h-4 w-4 mr-1" />
@@ -264,12 +245,26 @@ export function ModernApplicationCard({
             </Button>
           </>
         )
+      case "visit_proposed":
+        return (
+          <>
+            <Button size="sm" variant="outline" disabled>
+              <Clock className="h-4 w-4 mr-1" />
+              En attente
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
+              <MessageSquare className="h-4 w-4 mr-1" />
+              Contacter
+            </Button>
+            {viewAnalysisButton}
+          </>
+        )
       case "visit_scheduled":
         return (
           <>
             <Button size="sm" variant="default" onClick={() => onAction("accept")}>
               <CheckCircle className="h-4 w-4 mr-1" />
-              Accepter le dossier
+              Accepter
             </Button>
             <Button size="sm" variant="destructive" onClick={() => onAction("refuse")}>
               <XCircle className="h-4 w-4 mr-1" />
@@ -287,7 +282,7 @@ export function ModernApplicationCard({
           <>
             <Button size="sm" variant="outline" disabled>
               <Clock className="h-4 w-4 mr-1" />
-              En attente du locataire
+              En attente
             </Button>
             <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
               <MessageSquare className="h-4 w-4 mr-1" />
@@ -302,7 +297,7 @@ export function ModernApplicationCard({
           <>
             <Button size="sm" variant="default" onClick={() => onAction("generate_lease")}>
               <FileText className="h-4 w-4 mr-1" />
-              Générer le bail
+              Générer bail
             </Button>
             <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
               <MessageSquare className="h-4 w-4 mr-1" />
@@ -314,7 +309,7 @@ export function ModernApplicationCard({
       case "rejected":
         return (
           <>
-            <Button size="sm" variant="outline" onClick={() => onAction("view_details")}>
+            <Button size="sm" variant="outline" onClick={() => router.push(`/owner/applications/${application.id}`)}>
               <Eye className="h-4 w-4 mr-1" />
               Voir détails
             </Button>
@@ -328,7 +323,7 @@ export function ModernApplicationCard({
       default:
         return (
           <>
-            <Button size="sm" variant="outline" onClick={() => onAction("view_details")}>
+            <Button size="sm" variant="outline" onClick={() => router.push(`/owner/applications/${application.id}`)}>
               <Eye className="h-4 w-4 mr-1" />
               Voir détails
             </Button>
@@ -340,6 +335,10 @@ export function ModernApplicationCard({
           </>
         )
     }
+  }
+
+  const hasDocuments = (docs: any) => {
+    return docs && Array.isArray(docs) && docs.length > 0 && docs[0].url
   }
 
   return (
@@ -356,14 +355,14 @@ export function ModernApplicationCard({
               />
             )}
             <div>
-            <h3 className="font-medium">
-            <Link
-              href={`/owner/applications/${application.id}`}
-              className="hover:text-blue-600 transition-colors underline"
-            >
-              {application.tenant.first_name} {application.tenant.last_name}
-            </Link>
-          </h3>
+              <h3 className="font-medium">
+                <Link
+                  href={`/owner/applications/${application.id}`}
+                  className="hover:text-blue-600 transition-colors underline"
+                >
+                  {application.tenant.first_name} {application.tenant.last_name}
+                </Link>
+              </h3>
               <p className="text-sm text-muted-foreground">{application.tenant.email}</p>
             </div>
           </div>
