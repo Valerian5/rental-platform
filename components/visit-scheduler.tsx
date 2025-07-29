@@ -62,7 +62,6 @@ const MONTHS = [
 
 const DAYS_SHORT = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
 
-// Fonction pour formater l'heure
 const formatTimeString = (timeStr: string): string => {
   if (!timeStr) return "00:00"
   if (/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(timeStr)) {
@@ -74,17 +73,10 @@ const formatTimeString = (timeStr: string): string => {
   return "00:00"
 }
 
-// Fonction pour formater une date CORRECTEMENT
 const formatDateForDisplay = (dateStr: string): string => {
   try {
     const [year, month, day] = dateStr.split("-").map(Number)
     const date = new Date(year, month - 1, day)
-
-    if (isNaN(date.getTime())) {
-      console.error("Date invalide:", dateStr)
-      return "Date invalide"
-    }
-
     return date.toLocaleDateString("fr-FR", {
       weekday: "long",
       day: "numeric",
@@ -103,9 +95,7 @@ const isFutureSlot = (slot: VisitSlot) => {
 }
 
 export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyId }: VisitSchedulerProps) {
-  // Patch : robustesse - fallback sur visitSlots partout
   const safeVisitSlots: VisitSlot[] = Array.isArray(visitSlots) ? visitSlots : []
-
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [dayConfig, setDayConfig] = useState<DayConfiguration>({
@@ -121,127 +111,48 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [hasInitialLoad, setHasInitialLoad] = useState(false)
-
-  // Référence pour éviter les chargements multiples
   const loadingRef = useRef(false)
 
-  // Fonction de chargement des créneaux - SIMPLIFIÉE
   const loadSlotsFromDatabase = useCallback(async () => {
-    if (!propertyId || loadingRef.current) {
-      console.log("🚫 Chargement évité - pas de propertyId ou déjà en cours")
-      return
-    }
+    if (!propertyId || loadingRef.current) return
 
-    console.log("🔄 Chargement des créneaux depuis la DB pour:", propertyId)
     setIsLoading(true)
     loadingRef.current = true
 
     try {
       const headers = await getAuthHeaders()
-      const response = await fetch(`/api/properties/${propertyId}/visit-slots`, {
-        headers,
-      })
-
+      const response = await fetch(`/api/properties/${propertyId}/visit-slots`, { headers })
+      
       if (response.ok) {
         const data = await response.json()
-        console.log("✅ Créneaux chargés depuis la DB:", data.slots?.length || 0)
-
         const cleanedSlots = (Array.isArray(data.slots) ? data.slots : []).map((slot: any) => ({
           ...slot,
           start_time: formatTimeString(slot.start_time),
           end_time: formatTimeString(slot.end_time),
         }))
-
-        // Mettre à jour l'état local
         onSlotsChange(cleanedSlots)
         setHasInitialLoad(true)
-      } else {
-        const errorData = await response.json()
-        console.error("❌ Erreur chargement créneaux:", response.status, errorData)
-        if (response.status === 401) {
-          toast.error("Erreur d'authentification. Veuillez vous reconnecter.")
-        } else {
-          toast.error(errorData.error || "Erreur lors du chargement des créneaux")
-        }
       }
-    } catch (error) {
-      console.error("❌ Erreur chargement créneaux:", error)
-      toast.error("Erreur lors du chargement des créneaux")
     } finally {
       setIsLoading(false)
       loadingRef.current = false
     }
   }, [propertyId, onSlotsChange])
 
-  // Charger les créneaux au montage SEULEMENT si mode management et pas de créneaux existants
   useEffect(() => {
     if (mode === "management" && propertyId && !hasInitialLoad && safeVisitSlots.length === 0) {
-      console.log("🔄 Chargement initial des créneaux...")
       loadSlotsFromDatabase()
     } else if (safeVisitSlots.length > 0 && !hasInitialLoad) {
-      console.log("✅ Utilisation des créneaux existants:", safeVisitSlots.length)
       setHasInitialLoad(true)
     }
   }, [mode, propertyId, hasInitialLoad, safeVisitSlots.length, loadSlotsFromDatabase])
 
-  const saveSlotsToDatabase = async (slots: VisitSlot[]) => {
-    if (!propertyId || mode !== "management") return
-
-    setIsSaving(true)
-    try {
-      console.log("💾 Sauvegarde de", Array.isArray(slots) ? slots.length : 0, "créneaux...")
-
-      const headers = await getAuthHeaders()
-      const validatedSlots = (Array.isArray(slots) ? slots : []).map((slot) => ({
-        date: slot.date,
-        start_time: formatTimeString(slot.start_time),
-        end_time: formatTimeString(slot.end_time),
-        max_capacity: slot.max_capacity || 1,
-        is_group_visit: slot.is_group_visit || false,
-        current_bookings: slot.current_bookings || 0,
-        is_available: slot.is_available !== false,
-      }))
-
-      const response = await fetch(`/api/properties/${propertyId}/visit-slots`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ slots: validatedSlots }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        console.log("✅ Créneaux sauvegardés:", data.message)
-        toast.success(data.message || "Créneaux sauvegardés avec succès")
-
-        // CORRECTION: Recharger les créneaux depuis la DB après sauvegarde
-        await loadSlotsFromDatabase()
-      } else {
-        const errorData = await response.json()
-        console.error("❌ Erreur sauvegarde:", errorData)
-        if (response.status === 401) {
-          toast.error("Erreur d'authentification. Veuillez vous reconnecter.")
-        } else {
-          toast.error(errorData.error || `Erreur ${response.status}`)
-        }
-      }
-    } catch (error) {
-      console.error("❌ Erreur sauvegarde créneaux:", error)
-      toast.error("Erreur lors de la sauvegarde des créneaux")
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  // Générer les jours du calendrier
   const generateCalendarDays = () => {
     const year = currentDate.getFullYear()
     const month = currentDate.getMonth()
     const firstDay = new Date(year, month, 1)
     const startDate = new Date(firstDay)
-
-    const dayOfWeek = firstDay.getDay()
-    const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1
-    startDate.setDate(firstDay.getDate() - daysToSubtract)
+    startDate.setDate(firstDay.getDate() - (firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1))
 
     const days = []
     const today = new Date()
@@ -251,64 +162,41 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
       const date = new Date(startDate)
       date.setDate(startDate.getDate() + i)
 
-      const year = date.getFullYear()
-      const month = String(date.getMonth() + 1).padStart(2, "0")
-      const day = String(date.getDate()).padStart(2, "0")
-      const dateStr = `${year}-${month}-${day}`
-
+      const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
       const isCurrentMonth = date.getMonth() === currentDate.getMonth()
       const isToday = date.getTime() === today.getTime()
       const isPast = date < today
       const hasSlots = safeVisitSlots.some((slot) => slot.date === dateStr)
       const bookedSlots = safeVisitSlots.filter((slot) => slot.date === dateStr && slot.current_bookings > 0).length
 
-      days.push({
-        date: dateStr,
-        day: date.getDate(),
-        isCurrentMonth,
-        isToday,
-        isPast,
-        hasSlots,
-        bookedSlots,
-      })
+      days.push({ date: dateStr, day: date.getDate(), isCurrentMonth, isToday, isPast, hasSlots, bookedSlots })
     }
 
     return days
   }
 
-  // Générer TOUS les créneaux possibles
   const generateTimeSlots = (config: DayConfiguration) => {
     const slots = []
     const duration = config.slotDuration === 0 ? customDuration : config.slotDuration
-
     if (!duration || duration <= 0) return slots
 
     try {
       const startTime = new Date(`2000-01-01T${config.startTime}:00`)
       const endTime = new Date(`2000-01-01T${config.endTime}:00`)
-
-      if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
-        return slots
-      }
-
       let currentTime = new Date(startTime)
 
       while (currentTime < endTime) {
         const nextTime = new Date(currentTime.getTime() + duration * 60000)
-
         if (nextTime <= endTime) {
           const startTimeStr = currentTime.toTimeString().slice(0, 5)
           const endTimeStr = nextTime.toTimeString().slice(0, 5)
-          const slotKey = `${startTimeStr}-${endTimeStr}`
-
           slots.push({
-            key: slotKey,
+            key: `${startTimeStr}-${endTimeStr}`,
             startTime: startTimeStr,
             endTime: endTimeStr,
             label: `${startTimeStr} - ${endTimeStr}`,
           })
         }
-
         currentTime = nextTime
       }
     } catch (error) {
@@ -316,86 +204,54 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
     }
 
     return slots
+  }
 
   const navigateMonth = (direction: "prev" | "next") => {
     const newDate = new Date(currentDate)
-    if (direction === "prev") {
-      newDate.setMonth(newDate.getMonth() - 1)
-    } else {
-      newDate.setMonth(newDate.getMonth() + 1)
-    }
+    newDate.setMonth(newDate.getMonth() + (direction === "prev" ? -1 : 1))
     setCurrentDate(newDate)
   }
 
-  // Sélectionner un jour
   const selectDate = (dateStr: string) => {
-    console.log("📅 Date sélectionnée:", dateStr)
     setSelectedDate(dateStr)
-
     const existingSlots = safeVisitSlots.filter((slot) => slot.date === dateStr)
-    console.log("🔍 Créneaux existants pour", dateStr, ":", existingSlots.length)
 
     if (existingSlots.length > 0) {
-      // Prend le premier slot comme référence pour la configuration
       const firstSlot = existingSlots[0]
+      const duration = (new Date(`2000-01-01T${firstSlot.end_time}:00`).getTime() - 
+                       new Date(`2000-01-01T${firstSlot.start_time}:00`).getTime()) / 60000
+      
+      let commonDuration = DURATION_OPTIONS.some(opt => opt.value === duration) ? duration : 0
+      if (commonDuration === 0) setCustomDuration(duration)
 
-      try {
-        const startTime = new Date(`2000-01-01T${formatTimeString(firstSlot.start_time)}:00`)
-        const endTime = new Date(`2000-01-01T${formatTimeString(firstSlot.end_time)}:00`)
-        const duration = (endTime.getTime() - startTime.getTime()) / 60000
-
-        let commonDuration = duration
-        if (!DURATION_OPTIONS.some((opt) => opt.value === duration)) {
-          commonDuration = 0
-          setCustomDuration(duration)
-        }
-
-        // Garde tous les créneaux existants sélectionnés
-        const selectedSlots = existingSlots.map(
-          (slot) => `${formatTimeString(slot.start_time)}-${formatTimeString(slot.end_time)}`
-        )
-
-        setDayConfig({
-          date: dateStr,
-          slotDuration: commonDuration,
-          startTime: firstSlot.start_time,
-          endTime: firstSlot.end_time,
-          isGroupVisit: firstSlot.is_group_visit,
-          capacity: firstSlot.max_capacity,
-          selectedSlots: selectedSlots,
-        })
-
-        console.log("✅ Configuration restaurée avec", existingSlots.length, "créneaux sélectionnés")
-      } catch (error) {
-        console.error("Erreur parsing créneaux existants:", error)
-        // Fallback à la configuration par défaut
-        setDefaultDayConfig(dateStr)
-      }
+      setDayConfig({
+        date: dateStr,
+        slotDuration: commonDuration,
+        startTime: firstSlot.start_time,
+        endTime: firstSlot.end_time,
+        isGroupVisit: firstSlot.is_group_visit,
+        capacity: firstSlot.max_capacity,
+        selectedSlots: existingSlots.map(slot => `${slot.start_time}-${slot.end_time}`),
+      })
     } else {
-      // Pas de créneaux existants, configuration par défaut
-      setDefaultDayConfig(dateStr)
+      setDayConfig({
+        date: dateStr,
+        slotDuration: 30,
+        startTime: "08:00",
+        endTime: "20:00",
+        isGroupVisit: false,
+        capacity: 1,
+        selectedSlots: [],
+      })
     }
   }
 
-  // Nouvelle fonction pour la configuration par défaut
-  const setDefaultDayConfig = (dateStr: string) => {
-    setDayConfig({
-      date: dateStr,
-      slotDuration: 30,
-      startTime: "08:00",
-      endTime: "20:00",
-      isGroupVisit: false,
-      capacity: 1,
-      selectedSlots: [],
-    })
-  }
-
   const toggleSlot = (slotKey: string) => {
-    setDayConfig((prev) => ({
+    setDayConfig(prev => ({
       ...prev,
       selectedSlots: prev.selectedSlots.includes(slotKey)
-        ? prev.selectedSlots.filter((s) => s !== slotKey)
-        : [...prev.selectedSlots, slotKey],
+        ? prev.selectedSlots.filter(s => s !== slotKey)
+        : [...prev.selectedSlots, slotKey]
     }))
   }
 
@@ -405,14 +261,8 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
       return
     }
 
-    console.log("🚀 Application configuration pour", selectedDate)
-    console.log("🚀 Créneaux sélectionnés:", dayConfig.selectedSlots)
-    console.log("🚀 Mode:", mode)
-
-    const otherDaysSlots = safeVisitSlots.filter((slot) => slot.date !== selectedDate)
-    console.log("🚀 Créneaux autres jours:", otherDaysSlots.length)
-
-    const newSlots: VisitSlot[] = dayConfig.selectedSlots.map((slotKey) => {
+    const otherDaysSlots = safeVisitSlots.filter(slot => slot.date !== selectedDate)
+    const newSlots = dayConfig.selectedSlots.map(slotKey => {
       const [startTime, endTime] = slotKey.split("-")
       return {
         date: selectedDate,
@@ -425,48 +275,56 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
       }
     })
 
-    console.log("🚀 Nouveaux créneaux créés:", newSlots)
-
-    const allSlots = [...otherDaysSlots, ...newSlots]
-    console.log("🚀 Total créneaux après application:", allSlots.length)
-
-    // CORRECTION: Appeler onSlotsChange AVANT la sauvegarde pour mettre à jour l'état parent
-    onSlotsChange(allSlots)
+    onSlotsChange([...otherDaysSlots, ...newSlots])
 
     if (mode === "management") {
-      await saveSlotsToDatabase(allSlots)
+      setIsSaving(true)
+      try {
+        const headers = await getAuthHeaders()
+        await fetch(`/api/properties/${propertyId}/visit-slots`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ slots: [...otherDaysSlots, ...newSlots] }),
+        })
+        toast.success("Créneaux sauvegardés avec succès")
+      } finally {
+        setIsSaving(false)
+      }
     } else {
-      console.log("✅ Mode création - créneaux stockés temporairement")
-      toast.success(`${newSlots.length} créneaux configurés pour le ${formatDateForDisplay(selectedDate)}`)
+      toast.success(`${newSlots.length} créneaux configurés`)
     }
   }
 
   const clearDaySlots = async () => {
     if (!selectedDate) return
-
-    const otherDaysSlots = safeVisitSlots.filter((slot) => slot.date !== selectedDate)
+    const otherDaysSlots = safeVisitSlots.filter(slot => slot.date !== selectedDate)
     onSlotsChange(otherDaysSlots)
-
-    setDayConfig((prev) => ({ ...prev, selectedSlots: [] }))
+    setDayConfig(prev => ({ ...prev, selectedSlots: [] }))
 
     if (mode === "management") {
-      await saveSlotsToDatabase(otherDaysSlots)
-    } else {
-      toast.success("Créneaux supprimés pour ce jour")
+      setIsSaving(true)
+      try {
+        const headers = await getAuthHeaders()
+        await fetch(`/api/properties/${propertyId}/visit-slots`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ slots: otherDaysSlots }),
+        })
+        toast.success("Créneaux supprimés avec succès")
+      } finally {
+        setIsSaving(false)
+      }
     }
   }
 
   const calendarDays = generateCalendarDays()
   const timeSlots = generateTimeSlots(dayConfig)
-  const totalSlots = safeVisitSlots.length
+  const totalFutureSlots = safeVisitSlots.filter(isFutureSlot).length
 
   if (isLoading && !hasInitialLoad) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="text-center space-y-4">
-          <RefreshCw className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
-          <p className="text-muted-foreground">Chargement des créneaux...</p>
-        </div>
+        <RefreshCw className="h-8 w-8 animate-spin" />
       </div>
     )
   }
@@ -497,7 +355,7 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-7 gap-1 mb-2">
-              {DAYS_SHORT.map((day) => (
+              {DAYS_SHORT.map(day => (
                 <div key={day} className="text-center text-sm font-medium text-muted-foreground p-2">
                   {day}
                 </div>
@@ -530,24 +388,6 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
                 </Button>
               ))}
             </div>
-
-            <div className="mt-4 text-xs text-muted-foreground space-y-1">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-green-100 border border-green-300 rounded"></div>
-                <span>Jours avec créneaux configurés</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-blue-600 rounded"></div>
-                <span>Jour sélectionné</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex gap-1">
-                  <div className="w-1.5 h-1.5 bg-green-600 rounded-full"></div>
-                  <div className="w-1.5 h-1.5 bg-orange-600 rounded-full"></div>
-                </div>
-                <span>Créneaux disponibles et réservés</span>
-              </div>
-            </div>
           </CardContent>
         </Card>
 
@@ -561,199 +401,29 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
           <CardContent className="space-y-6">
             {selectedDate ? (
               <>
-                {/* Affichage des créneaux existants pour ce jour */}
-                {safeVisitSlots.filter((slot) => slot.date === selectedDate).length > 0 && (
-                  <div className="space-y-3">
-                    <Label className="text-base font-medium">Créneaux existants</Label>
-                    <div className="space-y-2">
-                      {safeVisitSlots
-                        .filter((slot) => slot.date === selectedDate)
-                        .map((slot, index) => (
-                          <div key={index} className="flex items-center justify-between p-2 border rounded">
-                            <span className="text-sm">
-                              {slot.start_time} - {slot.end_time}
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <Badge variant={slot.current_bookings > 0 ? "default" : "outline"}>
-                                {slot.current_bookings}/{slot.max_capacity}
-                              </Badge>
-                              {slot.is_group_visit && <Badge variant="secondary">Groupe</Badge>}
-                              {slot.current_bookings > 0 && <Badge variant="destructive">Réservé</Badge>}
-                            </div>
+                {/* Configuration des créneaux */}
+                <div className="space-y-3">
+                  <Label className="text-base font-medium">Créneaux disponibles</Label>
+                  <div className="border rounded-lg p-3 max-h-80 overflow-y-auto">
+                    <div className="grid grid-cols-2 gap-2">
+                      {timeSlots.map(slot => {
+                        const isSelected = dayConfig.selectedSlots.includes(slot.key)
+                        return (
+                          <div
+                            key={slot.key}
+                            className={`
+                              flex items-center justify-between p-2 rounded border cursor-pointer transition-colors
+                              ${isSelected ? "bg-blue-100 border-blue-300 text-blue-800" : "bg-gray-50 border-gray-200 hover:bg-gray-100"}
+                            `}
+                            onClick={() => toggleSlot(slot.key)}
+                          >
+                            <span className="text-sm font-medium">{slot.label}</span>
+                            {isSelected && <CheckCircle className="h-4 w-4 text-blue-600" />}
                           </div>
-                        ))}
+                        )
+                      })}
                     </div>
                   </div>
-                )}
-
-                {/* Durée des créneaux */}
-                <div className="space-y-3">
-                  <Label className="text-base font-medium">Durée des créneaux</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {DURATION_OPTIONS.map((option) => (
-                      <Button
-                        key={option.value}
-                        variant={dayConfig.slotDuration === option.value ? "default" : "outline"}
-                        onClick={() => setDayConfig((prev) => ({ ...prev, slotDuration: option.value }))}
-                        className="h-10"
-                      >
-                        {option.label}
-                      </Button>
-                    ))}
-                  </div>
-
-                  {dayConfig.slotDuration === 0 && (
-                    <div className="flex items-center gap-2">
-                      <Label>Durée personnalisée :</Label>
-                      <Input
-                        type="number"
-                        min="5"
-                        max="180"
-                        value={customDuration}
-                        onChange={(e) => setCustomDuration(Number(e.target.value))}
-                        className="w-20"
-                      />
-                      <span className="text-sm text-muted-foreground">minutes</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Amplitude horaire */}
-                <div className="space-y-3">
-                  <Label className="text-base font-medium">Amplitude horaire</Label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Début</Label>
-                      <Input
-                        type="time"
-                        value={dayConfig.startTime}
-                        onChange={(e) => setDayConfig((prev) => ({ ...prev, startTime: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Fin</Label>
-                      <Input
-                        type="time"
-                        value={dayConfig.endTime}
-                        onChange={(e) => setDayConfig((prev) => ({ ...prev, endTime: e.target.value }))}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Type de visite */}
-                <div className="space-y-3">
-                  <Label className="text-base font-medium">Type de visite</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      variant={!dayConfig.isGroupVisit ? "default" : "outline"}
-                      onClick={() => setDayConfig((prev) => ({ ...prev, isGroupVisit: false, capacity: 1 }))}
-                    >
-                      Individuelle
-                    </Button>
-                    <Button
-                      variant={dayConfig.isGroupVisit ? "default" : "outline"}
-                      onClick={() => setDayConfig((prev) => ({ ...prev, isGroupVisit: true }))}
-                    >
-                      Groupée
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Capacité */}
-                {dayConfig.isGroupVisit && (
-                  <div className="space-y-3">
-                    <Label className="text-base font-medium">Capacité par visite</Label>
-                    <div className="flex items-center justify-center gap-4 p-4 border rounded-lg">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setDayConfig((prev) => ({ ...prev, capacity: Math.max(1, prev.capacity - 1) }))}
-                        disabled={dayConfig.capacity <= 1}
-                      >
-                        <Minus className="h-4 w-4" />
-                      </Button>
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg font-medium">{dayConfig.capacity}</span>
-                        <span className="text-sm text-muted-foreground">
-                          {dayConfig.capacity === 1 ? "personne" : "personnes"}
-                        </span>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setDayConfig((prev) => ({ ...prev, capacity: Math.min(10, prev.capacity + 1) }))}
-                        disabled={dayConfig.capacity >= 10}
-                      >
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Créneaux */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-base font-medium">Créneaux disponibles</Label>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline">{timeSlots.length} générés</Badge>
-                      <Badge variant="default">{dayConfig.selectedSlots.length} sélectionnés</Badge>
-                    </div>
-                  </div>
-
-                  {timeSlots.length > 0 ? (
-                    <div className="border rounded-lg p-3 max-h-80 overflow-y-auto">
-                      <div className="grid grid-cols-2 gap-2">
-                        {timeSlots.map((slot) => {
-                          const isSelected = dayConfig.selectedSlots.includes(slot.key)
-                          return (
-                            <div
-                              key={slot.key}
-                              className={`
-                                flex items-center justify-between p-2 rounded border cursor-pointer transition-colors
-                                ${
-                                  isSelected
-                                    ? "bg-blue-100 border-blue-300 text-blue-800"
-                                    : "bg-gray-50 border-gray-200 hover:bg-gray-100"
-                                }
-                              `}
-                              onClick={() => toggleSlot(slot.key)}
-                            >
-                              <span className="text-sm font-medium">{slot.label}</span>
-                              {isSelected && <CheckCircle className="h-4 w-4 text-blue-600" />}
-                            </div>
-                          )
-                        })}
-                      </div>
-
-                      <div className="mt-3 pt-3 border-t flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setDayConfig((prev) => ({
-                              ...prev,
-                              selectedSlots: timeSlots.map((slot) => slot.key),
-                            }))
-                          }
-                        >
-                          Tout sélectionner
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setDayConfig((prev) => ({ ...prev, selectedSlots: [] }))}
-                        >
-                          Tout désélectionner
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-4 text-muted-foreground border rounded-lg">
-                      <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                      <p>Configurez la durée et l'amplitude pour générer les créneaux</p>
-                    </div>
-                  )}
                 </div>
 
                 {/* Actions */}
@@ -774,7 +444,7 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
             ) : (
               <div className="text-center py-8 text-muted-foreground">
                 <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Sélectionnez un jour dans le calendrier pour configurer les créneaux de visite</p>
+                <p>Sélectionnez un jour dans le calendrier</p>
               </div>
             )}
           </CardContent>
@@ -782,23 +452,21 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
       </div>
 
       {/* Résumé */}
-      {totalSlots > 0 && (
+      {totalFutureSlots > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Résumé de la configuration</CardTitle>
+            <CardTitle>Résumé des créneaux futurs</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+            <div className="grid grid-cols-3 gap-4 text-center">
               <div>
-                <div className="text-2xl font-bold text-blue-600">
-                  {safeVisitSlots.filter(isFutureSlot).length}
-                </div>
-                <div className="text-sm text-muted-foreground">Créneaux total</div>
+                <div className="text-2xl font-bold text-blue-600">{totalFutureSlots}</div>
+                <div className="text-sm text-muted-foreground">Total</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-green-600">
-                  {safeVisitSlots.filter(
-                    (slot) => slot.is_available && 
+                  {safeVisitSlots.filter(slot => 
+                    slot.is_available && 
                     slot.current_bookings < slot.max_capacity && 
                     isFutureSlot(slot)
                   ).length}
@@ -807,22 +475,12 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
               </div>
               <div>
                 <div className="text-2xl font-bold text-orange-600">
-                  {safeVisitSlots.filter(
-                    (slot) => slot.current_bookings > 0 && 
+                  {safeVisitSlots.filter(slot => 
+                    slot.current_bookings > 0 && 
                     isFutureSlot(slot)
                   ).length}
                 </div>
                 <div className="text-sm text-muted-foreground">Réservés</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-purple-600">
-                  {new Set(
-                    safeVisitSlots
-                      .filter(isFutureSlot)
-                      .map((slot) => slot.date)
-                  ).size}
-                </div>
-                <div className="text-sm text-muted-foreground">Jours configurés</div>
               </div>
             </div>
           </CardContent>
@@ -830,5 +488,4 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
       )}
     </div>
   )
-}
 }
