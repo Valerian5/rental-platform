@@ -27,13 +27,7 @@ import {
   CreditCard,
   BarChart3,
   AlertCircle,
-  Home,
-  Phone,
-  Mail,
-  MapPin,
-  Euro,
 } from "lucide-react"
-import { VisitProposalDialog } from "@/components/visit-proposal-dialog"
 
 const DocumentPreview = ({ doc, type, index }: { doc: any; type: string; index: number }) => {
   const getDocTypeColor = (type: string) => {
@@ -255,8 +249,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
           analyzing: "Candidature en cours d'analyse",
           accepted: "Candidature acceptée",
           rejected: "Candidature refusée",
-          visit_proposed: "Visite proposée au candidat",
-          visit_scheduled: "Visite planifiée",
+          visit_scheduled: "Visite proposée au candidat",
           waiting_tenant_confirmation: "En attente de confirmation du locataire",
         }
 
@@ -279,30 +272,9 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   }
 
   const handleVisitProposed = async (slots: any[]) => {
-    try {
-      const response = await fetch(`/api/applications/${params.id}/propose-visit-slots`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ slots }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        toast.error(errorData.message || "Erreur lors de la proposition de visite")
-        return
-      }
-
-      const data = await response.json()
-      toast.success(data.message || "Créneaux de visite proposés avec succès")
+    const success = await updateApplicationStatus("visit_proposed")
+    if (success) {
       setShowVisitDialog(false)
-
-      // Recharger l'application pour mettre à jour le statut
-      loadApplicationDetails()
-    } catch (error) {
-      console.error("Erreur:", error)
-      toast.error("Erreur lors de la proposition de visite")
     }
   }
 
@@ -462,12 +434,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
         return <Badge variant="outline">En attente</Badge>
       case "analyzing":
         return <Badge variant="secondary">En analyse</Badge>
-      case "visit_proposed":
-        return (
-          <Badge variant="secondary" className="bg-purple-100 text-purple-800 hover:bg-purple-200">
-            Visite proposée
-          </Badge>
-        )
       case "visit_scheduled":
         return (
           <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200">
@@ -521,20 +487,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               <MessageSquare className="h-4 w-4 mr-2" />
               Contacter
             </Button>
-          </>
-        )
-      case "visit_proposed":
-        return (
-          <>
-            <Button variant="outline" disabled>
-              <Clock className="h-4 w-4 mr-2" />
-              En attente de réponse
-            </Button>
-            <Button variant="outline" onClick={handleContact}>
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Contacter
-            </Button>
-            {viewAnalysisButton}
           </>
         )
       case "visit_scheduled":
@@ -1386,14 +1338,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
           </TabsContent>
         </Tabs>
       </div>
-
-      {/* Dialogue de proposition de visite */}
-      <VisitProposalDialog
-        open={showVisitDialog}
-        onClose={() => setShowVisitDialog(false)}
-        onConfirm={handleVisitProposed}
-        propertyId={property?.id || ""}
-      />
     </>
   )
 }
