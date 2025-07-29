@@ -6,7 +6,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, ChevronLeft, ChevronRight, Plus, Minus, Save, RefreshCw, CheckCircle, Clock } from "lucide-react"
+import {
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Minus,
+  Save,
+  RefreshCw,
+  CheckCircle,
+  Clock,
+  Star,
+} from "lucide-react"
 import { toast } from "sonner"
 import { getAuthHeaders } from "@/lib/auth-utils"
 
@@ -276,7 +287,7 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
     return days
   }
 
-  // Générer TOUS les créneaux possibles pour une configuration donnée
+  // CORRECTION: Générer TOUS les créneaux possibles sur une amplitude LARGE
   const generateTimeSlots = (config: DayConfiguration) => {
     const slots = []
     const duration = config.slotDuration === 0 ? customDuration : config.slotDuration
@@ -284,6 +295,7 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
     if (!duration || duration <= 0) return slots
 
     try {
+      // CORRECTION: Toujours utiliser une amplitude large pour voir tous les créneaux possibles
       const startTime = new Date(`2000-01-01T${config.startTime}:00`)
       const endTime = new Date(`2000-01-01T${config.endTime}:00`)
 
@@ -328,7 +340,7 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
     setCurrentDate(newDate)
   }
 
-  // CORRECTION: Sélectionner un jour avec possibilité d'ajouter des créneaux
+  // CORRECTION: Sélectionner un jour avec amplitude LARGE par défaut
   const selectDate = (dateStr: string) => {
     console.log("📅 Date sélectionnée:", dateStr)
     setSelectedDate(dateStr)
@@ -337,7 +349,7 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
     console.log("🔍 Créneaux existants pour", dateStr, ":", existingSlots.length)
 
     if (existingSlots.length > 0) {
-      // Il y a des créneaux existants - on utilise leurs paramètres comme base
+      // Il y a des créneaux existants
       const firstSlot = existingSlots[0]
 
       try {
@@ -351,18 +363,12 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
           setCustomDuration(duration)
         }
 
-        // CORRECTION: Utiliser une amplitude plus large pour permettre d'ajouter des créneaux
-        // On garde les paramètres du premier créneau mais on permet d'étendre l'amplitude
-        const allStartTimes = existingSlots.map((slot) => slot.start_time).sort()
-        const allEndTimes = existingSlots.map((slot) => slot.end_time).sort()
-        const earliestStart = allStartTimes[0]
-        const latestEnd = allEndTimes[allEndTimes.length - 1]
-
+        // CORRECTION: Toujours utiliser une amplitude LARGE pour permettre d'ajouter facilement
         setDayConfig({
           date: dateStr,
           slotDuration: commonDuration,
-          startTime: earliestStart || "08:00",
-          endTime: latestEnd || "20:00",
+          startTime: "08:00", // AMPLITUDE LARGE par défaut
+          endTime: "20:00", // AMPLITUDE LARGE par défaut
           isGroupVisit: firstSlot.is_group_visit,
           capacity: firstSlot.max_capacity,
           selectedSlots: existingSlots.map(
@@ -370,7 +376,7 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
           ),
         })
 
-        console.log("✅ Configuration restaurée avec", existingSlots.length, "créneaux sélectionnés")
+        console.log("✅ Configuration restaurée avec amplitude large et", existingSlots.length, "créneaux sélectionnés")
       } catch (error) {
         console.error("Erreur parsing créneaux existants:", error)
         setDayConfig({
@@ -384,8 +390,8 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
         })
       }
     } else {
-      // Pas de créneaux existants - configuration par défaut
-      console.log("🔄 Aucun créneau existant, configuration par défaut")
+      // Pas de créneaux existants - configuration par défaut avec amplitude large
+      console.log("🔄 Aucun créneau existant, configuration par défaut avec amplitude large")
       setDayConfig({
         date: dateStr,
         slotDuration: 30,
@@ -467,6 +473,23 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
   const calendarDays = generateCalendarDays()
   const timeSlots = generateTimeSlots(dayConfig)
   const totalSlots = safeVisitSlots.length
+
+  // CORRECTION: Fonction pour vérifier si un créneau existe déjà
+  const isExistingSlot = (slotKey: string) => {
+    if (!selectedDate) return false
+    return safeVisitSlots.some(
+      (slot) => slot.date === selectedDate && `${slot.start_time}-${slot.end_time}` === slotKey,
+    )
+  }
+
+  // CORRECTION: Fonction pour vérifier si un créneau est réservé
+  const isBookedSlot = (slotKey: string) => {
+    if (!selectedDate) return false
+    return safeVisitSlots.some(
+      (slot) =>
+        slot.date === selectedDate && `${slot.start_time}-${slot.end_time}` === slotKey && slot.current_bookings > 0,
+    )
+  }
 
   if (isLoading && !hasInitialLoad) {
     return (
@@ -699,7 +722,7 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
                   </div>
                 )}
 
-                {/* CORRECTION: Créneaux avec possibilité d'ajouter/modifier */}
+                {/* CORRECTION: Créneaux avec badges pour les existants */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <Label className="text-base font-medium">Créneaux disponibles</Label>
@@ -714,21 +737,33 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
                       <div className="grid grid-cols-2 gap-2">
                         {timeSlots.map((slot) => {
                           const isSelected = dayConfig.selectedSlots.includes(slot.key)
+                          const isExisting = isExistingSlot(slot.key)
+                          const isBooked = isBookedSlot(slot.key)
+
                           return (
                             <div
                               key={slot.key}
                               className={`
-                                flex items-center justify-between p-2 rounded border cursor-pointer transition-colors
+                                flex items-center justify-between p-2 rounded border cursor-pointer transition-colors relative
                                 ${
                                   isSelected
                                     ? "bg-blue-100 border-blue-300 text-blue-800"
                                     : "bg-gray-50 border-gray-200 hover:bg-gray-100"
                                 }
+                                ${isBooked ? "opacity-75" : ""}
                               `}
-                              onClick={() => toggleSlot(slot.key)}
+                              onClick={() => !isBooked && toggleSlot(slot.key)}
                             >
                               <span className="text-sm font-medium">{slot.label}</span>
-                              {isSelected && <CheckCircle className="h-4 w-4 text-blue-600" />}
+                              <div className="flex items-center gap-1">
+                                {isExisting && <Star className="h-3 w-3 text-yellow-600" title="Créneau existant" />}
+                                {isBooked && (
+                                  <Badge variant="destructive" className="text-xs px-1 py-0">
+                                    Réservé
+                                  </Badge>
+                                )}
+                                {isSelected && <CheckCircle className="h-4 w-4 text-blue-600" />}
+                              </div>
                             </div>
                           )
                         })}
@@ -741,7 +776,9 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
                           onClick={() =>
                             setDayConfig((prev) => ({
                               ...prev,
-                              selectedSlots: timeSlots.map((slot) => slot.key),
+                              selectedSlots: timeSlots
+                                .filter((slot) => !isBookedSlot(slot.key))
+                                .map((slot) => slot.key),
                             }))
                           }
                         >
@@ -754,6 +791,20 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
                         >
                           Tout désélectionner
                         </Button>
+                      </div>
+
+                      {/* Légende */}
+                      <div className="mt-3 pt-3 border-t text-xs text-muted-foreground space-y-1">
+                        <div className="flex items-center gap-2">
+                          <Star className="h-3 w-3 text-yellow-600" />
+                          <span>Créneau déjà configuré</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="destructive" className="text-xs px-1 py-0">
+                            Réservé
+                          </Badge>
+                          <span>Créneau réservé (non modifiable)</span>
+                        </div>
                       </div>
                     </div>
                   ) : (
