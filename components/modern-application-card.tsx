@@ -125,7 +125,7 @@ export function ModernApplicationCard({
 
       if (response.ok) {
         const data = await response.json()
-        setCalculatedScore(Math.min(100, Math.max(0, Math.round(data.score)))
+        setCalculatedScore(Math.min(100, Math.max(0, Math.round(data.score))))        
         setScoreBreakdown(data.breakdown)
         setScoreRecommendations(data.recommendations || [])
         setScoreWarnings(data.warnings || [])
