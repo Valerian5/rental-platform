@@ -390,7 +390,13 @@ export const applicationService = {
             notificationContent = `Votre candidature pour ${propertyTitle} n'a pas été retenue.`
           } else if (status === "visit_proposed") {
             notificationTitle = "Créneaux de visite proposés"
-            notificationContent = `Des créneaux de visite ont été proposés pour ${propertyTitle}`
+            notificationContent = `Des créneaux de visite ont été proposés pour ${propertyTitle}. Choisissez votre créneau préféré.`
+          } else if (status === "visit_scheduled") {
+            notificationTitle = "Visite programmée"
+            notificationContent = `Votre visite pour ${propertyTitle} a été programmée.`
+          } else if (status === "visit_completed") {
+            notificationTitle = "Visite effectuée"
+            notificationContent = `Votre visite pour ${propertyTitle} a été marquée comme effectuée.`
           }
 
           if (notificationTitle) {
