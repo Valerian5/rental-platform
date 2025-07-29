@@ -276,7 +276,7 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
     return days
   }
 
-  // Générer TOUS les créneaux possibles
+  // Générer TOUS les créneaux possibles pour une configuration donnée
   const generateTimeSlots = (config: DayConfiguration) => {
     const slots = []
     const duration = config.slotDuration === 0 ? customDuration : config.slotDuration
@@ -328,18 +328,16 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
     setCurrentDate(newDate)
   }
 
-  // Sélectionner un jour
+  // CORRECTION: Sélectionner un jour avec possibilité d'ajouter des créneaux
   const selectDate = (dateStr: string) => {
     console.log("📅 Date sélectionnée:", dateStr)
     setSelectedDate(dateStr)
 
-    // CORRECTION: Utiliser les créneaux des props (qui incluent les créneaux temporaires)
     const existingSlots = safeVisitSlots.filter((slot) => slot.date === dateStr)
     console.log("🔍 Créneaux existants pour", dateStr, ":", existingSlots.length)
-    console.log("🔍 Tous les créneaux disponibles:", safeVisitSlots.length)
 
     if (existingSlots.length > 0) {
-      // Il y a des créneaux existants
+      // Il y a des créneaux existants - on utilise leurs paramètres comme base
       const firstSlot = existingSlots[0]
 
       try {
@@ -353,7 +351,8 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
           setCustomDuration(duration)
         }
 
-        // CORRECTION: Utiliser les vraies heures de début et fin des créneaux existants
+        // CORRECTION: Utiliser une amplitude plus large pour permettre d'ajouter des créneaux
+        // On garde les paramètres du premier créneau mais on permet d'étendre l'amplitude
         const allStartTimes = existingSlots.map((slot) => slot.start_time).sort()
         const allEndTimes = existingSlots.map((slot) => slot.end_time).sort()
         const earliestStart = allStartTimes[0]
@@ -385,7 +384,7 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
         })
       }
     } else {
-      // Pas de créneaux existants
+      // Pas de créneaux existants - configuration par défaut
       console.log("🔄 Aucun créneau existant, configuration par défaut")
       setDayConfig({
         date: dateStr,
@@ -700,7 +699,7 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
                   </div>
                 )}
 
-                {/* Créneaux */}
+                {/* CORRECTION: Créneaux avec possibilité d'ajouter/modifier */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <Label className="text-base font-medium">Créneaux disponibles</Label>
@@ -799,37 +798,28 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
               <div>
-                <div className="text-2xl font-bold text-blue-600">
-                  {safeVisitSlots.filter(isFutureSlot).length}
-                </div>
+                <div className="text-2xl font-bold text-blue-600">{safeVisitSlots.filter(isFutureSlot).length}</div>
                 <div className="text-sm text-muted-foreground">Créneaux total</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-green-600">
-                  {safeVisitSlots.filter(
-                    (slot) => slot.is_available && 
-                    slot.current_bookings < slot.max_capacity && 
-                    isFutureSlot(slot)
-                  ).length}
+                  {
+                    safeVisitSlots.filter(
+                      (slot) => slot.is_available && slot.current_bookings < slot.max_capacity && isFutureSlot(slot),
+                    ).length
+                  }
                 </div>
                 <div className="text-sm text-muted-foreground">Disponibles</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-orange-600">
-                  {safeVisitSlots.filter(
-                    (slot) => slot.current_bookings > 0 && 
-                    isFutureSlot(slot)
-                  ).length}
+                  {safeVisitSlots.filter((slot) => slot.current_bookings > 0 && isFutureSlot(slot)).length}
                 </div>
                 <div className="text-sm text-muted-foreground">Réservés</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-purple-600">
-                  {new Set(
-                    safeVisitSlots
-                      .filter(isFutureSlot)
-                      .map((slot) => slot.date)
-                  ).size}
+                  {new Set(safeVisitSlots.filter(isFutureSlot).map((slot) => slot.date)).size}
                 </div>
                 <div className="text-sm text-muted-foreground">Jours configurés</div>
               </div>

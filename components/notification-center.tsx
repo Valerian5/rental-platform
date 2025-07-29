@@ -94,9 +94,26 @@ export function NotificationCenter() {
 
       if (data.success) {
         setNotifications(data.notifications || [])
-        setUnreadCount(data.unreadCount || 0)
+        // CORRECTION: Calculer le count des notifications non lues SEULEMENT pour les futures
+        const futureNotifications = (data.notifications || []).filter((notif: Notification) => {
+          // Si c'est une notification de visite, vérifier si elle est future
+          if (notif.type === "visit_scheduled") {
+            // Extraire la date de la notification si possible
+            const dateMatch = notif.content.match(/(\d{1,2}\/\d{1,2}\/\d{4})/)
+            if (dateMatch) {
+              const [day, month, year] = dateMatch[1].split("/")
+              const notifDate = new Date(Number.parseInt(year), Number.parseInt(month) - 1, Number.parseInt(day))
+              return notifDate >= new Date()
+            }
+          }
+          return true // Pour les autres types de notifications, les garder
+        })
+
+        const unreadFutureCount = futureNotifications.filter((notif: Notification) => !notif.read).length
+        setUnreadCount(unreadFutureCount)
+
         console.log(
-          `✅ NotificationCenter - ${data.notifications?.length || 0} notifications chargées, ${data.unreadCount || 0} non lues`,
+          `✅ NotificationCenter - ${data.notifications?.length || 0} notifications chargées, ${unreadFutureCount} non lues futures`,
         )
       } else {
         console.error("❌ NotificationCenter - Erreur API:", data.error)
