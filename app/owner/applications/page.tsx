@@ -564,7 +564,7 @@ export default function ApplicationsPage() {
                 <SelectContent>
                   <SelectItem value="all">Tous les biens</SelectItem>
                   {properties.map((property) => (
-                    <SelectItem key={property.id} value={property.id">
+                    <SelectItem key={property.id} value={property.id}>
                       {property.title}
                     </SelectItem>
                   ))}
