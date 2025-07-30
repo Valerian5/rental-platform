@@ -1,40 +1,42 @@
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { DownloadIcon, CheckIcon } from "lucide-react"
-import { Separator } from "@/components/ui/separator"
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { DownloadIcon, CheckIcon } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 
-type ApplicationDocument = {
-  document_id: string
-  label: string
-  file_url: string
-  category: string
-  verified: boolean
-  created_at: string
-  guarantor_id?: string
-  guarantor_name?: string
+interface ApplicationDocument {
+  document_id: string;
+  label: string;
+  file_url: string;
+  category: string;
+  verified: boolean;
+  created_at: string;
+  guarantor_id?: string;
+  guarantor_name?: string;
+}
+
+interface TenantAndGuarantorDocumentsSectionProps {
+  applicationId: string;
+  documents: ApplicationDocument[];
 }
 
 export function TenantAndGuarantorDocumentsSection({
   applicationId,
   documents,
-}: {
-  applicationId: string
-  documents: ApplicationDocument[]
-}) {
-  const tenantDocs = documents.filter((doc) => !doc.guarantor_id)
-  const guarantorDocs = documents.filter((doc) => doc.guarantor_id)
+}: TenantAndGuarantorDocumentsSectionProps) {
+  const tenantDocs = documents.filter((doc) => !doc.guarantor_id);
+  const guarantorDocs = documents.filter((doc) => doc.guarantor_id);
 
   const groupByGuarantor = () => {
-    const map = new Map<string, ApplicationDocument[]>()
+    const map = new Map<string, ApplicationDocument[]>();
     guarantorDocs.forEach((doc) => {
-      const key = doc.guarantor_id || "unknown"
+      const key = doc.guarantor_id || "unknown";
       if (!map.has(key)) {
-        map.set(key, [])
+        map.set(key, []);
       }
-      map.get(key)!.push(doc)
-    })
-    return map
-  }
+      map.get(key)!.push(doc);
+    });
+    return map;
+  };
 
   return (
     <div className="space-y-8">
@@ -70,11 +72,12 @@ export function TenantAndGuarantorDocumentsSection({
         </a>
       </div>
     </div>
-  )
+  );
 }
 
 function DocumentsGroup({ documents }: { documents: ApplicationDocument[] }) {
-  if (!documents?.length) return <p className="text-muted-foreground">Aucun document transmis.</p>
+  if (!documents?.length)
+    return <p className="text-muted-foreground">Aucun document transmis.</p>;
 
   return (
     <div className="space-y-4">
@@ -104,5 +107,5 @@ function DocumentsGroup({ documents }: { documents: ApplicationDocument[] }) {
         </div>
       ))}
     </div>
-  )
+  );
 }
