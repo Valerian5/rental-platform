@@ -11,6 +11,8 @@ import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { CircularScore } from "@/components/circular-score"
+import { VisitProposalManager } from "@/components/visit-proposal-manager";
+
 import {
   ArrowLeft,
   User,
@@ -109,7 +111,8 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const [rentalFile, setRentalFile] = useState<any>(null)
   const [user, setUser] = useState<any>(null)
   const [activeTab, setActiveTab] = useState("overview")
-  const [showVisitDialog, setShowVisitDialog] = useState(false)
+  const [showVisitDialog, setShowVisitDialog] = useState(false);
+  const [currentApplication, setCurrentApplication] = useState<Application | null>(null);
   const [showRefuseDialog, setShowRefuseDialog] = useState(false)
   const [scoringPreferences, setScoringPreferences] = useState<any>(null)
 
@@ -275,8 +278,9 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   }
 
   const handleProposeVisit = () => {
-    setShowVisitDialog(true)
-  }
+    setCurrentApplication(application);
+    setShowVisitDialog(true);
+  };
 
   const handleVisitProposed = async (slots: any[]) => {
     try {
@@ -1388,12 +1392,22 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       </div>
 
       {/* Dialogue de proposition de visite */}
-      <VisitProposalDialog
-        open={showVisitDialog}
-        onClose={() => setShowVisitDialog(false)}
-        onConfirm={handleVisitProposed}
-        propertyId={property?.id || ""}
-      />
+      {showVisitDialog && currentApplication && (
+        <VisitProposalManager
+          isOpen={showVisitDialog}
+          onClose={() => setShowVisitDialog(false)}
+          propertyId={currentApplication.property_id}
+          propertyTitle={currentApplication.property?.title || ""}
+          applicationId={currentApplication.id}
+          tenantName={`${currentApplication.tenant?.first_name || ""} ${currentApplication.tenant?.last_name || ""}`}
+          onSlotsProposed={async (slots) => {
+            // réutiliser ton handleStatusChange
+            await handleStatusChange(currentApplication.id, "visit_proposed");
+            setShowVisitDialog(false);
+            toast.success("Créneaux de visite proposés avec succès");
+          }}
+        />
+      )}
     </>
   )
 }
