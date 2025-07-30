@@ -12,6 +12,7 @@ import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { CircularScore } from "@/components/circular-score"
 import { VisitProposalManager } from "@/components/visit-proposal-manager";
+import { TenantAndGuarantorDocumentsSection } from "@/components/TenantAndGuarantorDocumentsSection";
 
 import {
   ArrowLeft,
@@ -1268,123 +1269,10 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {rentalFile ? (
-                  <div className="space-y-6">
-                    {/* Documents d'identité */}
-                    {hasDocuments(rentalFile.main_tenant?.identity_documents) && (
-                      <div>
-                        <h4 className="font-medium mb-3">Pièces d'identité du locataire</h4>
-                        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                          {rentalFile.main_tenant.identity_documents.map((doc: any, index: number) => (
-                            <DocumentPreview 
-                              key={index}
-                              doc={doc}
-                              type="identity"
-                              index={index}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Documents professionnels */}
-                    {hasDocuments(rentalFile.main_tenant?.professional_documents) && (
-                      <div>
-                        <h4 className="font-medium mb-3">Documents professionnels</h4>
-                        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                          {rentalFile.main_tenant.professional_documents.map((doc: any, index: number) => (
-                            <DocumentPreview
-                              key={index}
-                              doc={doc}
-                              type="professional"
-                              index={index}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Documents financiers */}
-                    {hasDocuments(rentalFile.main_tenant?.financial_documents) && (
-                      <div>
-                        <h4 className="font-medium mb-3">Documents financiers</h4>
-                        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                          {rentalFile.main_tenant.financial_documents.map((doc: any, index: number) => (
-                            <DocumentPreview
-                              key={index}
-                              doc={doc}
-                              type="financial"
-                              index={index}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Documents fiscaux */}
-                    {hasDocuments(rentalFile.main_tenant?.tax_documents) && (
-                      <div>
-                        <h4 className="font-medium mb-3">Documents fiscaux</h4>
-                        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                          {rentalFile.main_tenant.tax_documents.map((doc: any, index: number) => (
-                            <DocumentPreview
-                              key={index}
-                              doc={doc}
-                              type="tax"
-                              index={index}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Documents de logement */}
-                    {hasDocuments(rentalFile.main_tenant?.housing_documents) && (
-                      <div>
-                        <h4 className="font-medium mb-3">Justificatifs de domicile</h4>
-                        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                          {rentalFile.main_tenant.housing_documents.map((doc: any, index: number) => (
-                            <DocumentPreview
-                              key={index}
-                              doc={doc}
-                              type="housing"
-                              index={index}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Documents des garants */}
-                    {rentalFile.guarantors?.map((guarantor: any, gIndex: number) => (
-                      hasDocuments(guarantor.documents) && (
-                        <div key={gIndex}>
-                          <h4 className="font-medium mb-3">
-                            Documents du garant {gIndex + 1}: {guarantor.first_name} {guarantor.last_name}
-                          </h4>
-                          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                            {guarantor.documents.map((doc: any, index: number) => (
-                              <DocumentPreview
-                                key={index}
-                                doc={doc}
-                                type={`guarantor-${gIndex}`}
-                                index={index}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      )
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                    <h3 className="text-lg font-semibold mb-2">Aucun document disponible</h3>
-                    <p className="text-muted-foreground">
-                      Le candidat n'a pas encore fourni de documents ou le dossier n'est pas accessible.
-                    </p>
-                  </div>
-                )}
+              <TenantAndGuarantorDocumentsSection
+                applicationId={application.id}
+                documents={application.documents}
+              />
               </CardContent>
             </Card>
           </TabsContent>
