@@ -12,6 +12,7 @@ import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { CircularScore } from "@/components/circular-score"
 import { VisitProposalManager } from "@/components/visit-proposal-manager"
+import { TenantAndGuarantorDocumentsSection } from "@/components/TenantAndGuarantorDocumentsSection";
 import {
   ArrowLeft,
   User,
@@ -1260,33 +1261,22 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
 
           {/* Documents */}
           <TabsContent value="documents" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Documents fournis
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {documents.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {documents.map((doc, index) => (
-                      <DocumentPreview 
-                        key={doc.document_id} 
-                        doc={doc} 
-                        type={doc.category} 
-                        index={index} 
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground text-center py-8">
-                    Aucun document disponible pour cette candidature
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Documents fournis
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <TenantAndGuarantorDocumentsSection
+                applicationId={application.id}
+                mainTenant={rentalFile?.main_tenant}
+                guarantors={rentalFile?.guarantors || []}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
         </Tabs>
       </div>
 

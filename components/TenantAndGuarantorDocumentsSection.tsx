@@ -16,13 +16,167 @@ interface ApplicationDocument {
 
 interface TenantAndGuarantorDocumentsSectionProps {
   applicationId: string;
-  documents?: ApplicationDocument[];
+  mainTenant?: any;
+  guarantors?: any[];
 }
 
 export function TenantAndGuarantorDocumentsSection({
   applicationId,
-  documents = [],
+  mainTenant,
+  guarantors = [],
 }: TenantAndGuarantorDocumentsSectionProps) {
+  const flattenDocuments = () => {
+    const now = new Date().toISOString();
+    const docs: ApplicationDocument[] = [];
+
+    // Documents du locataire principal
+    if (mainTenant) {
+      // Pièces d'identité
+      if (mainTenant.identity_documents) {
+        mainTenant.identity_documents.forEach((url: string, index: number) => {
+          docs.push({
+            document_id: `identity-${index}`,
+            label: 'Pièce d\'identité',
+            file_url: url,
+            category: 'identity',
+            verified: false,
+            created_at: now
+          });
+        });
+      }
+
+      // Documents fiscaux
+      if (mainTenant.tax_situation?.documents) {
+        mainTenant.tax_situation.documents.forEach((url: string, index: number) => {
+          docs.push({
+            document_id: `tax-${index}`,
+            label: 'Avis d\'imposition',
+            file_url: url,
+            category: 'tax',
+            verified: false,
+            created_at: now
+          });
+        });
+      }
+
+      // Revenus
+      if (mainTenant.income_sources?.work_income?.documents) {
+        mainTenant.income_sources.work_income.documents.forEach((url: string, index: number) => {
+          docs.push({
+            document_id: `income-${index}`,
+            label: 'Justificatif de revenus',
+            file_url: url,
+            category: 'income',
+            verified: false,
+            created_at: now
+          });
+        });
+      }
+
+      // Activité professionnelle
+      if (mainTenant.activity_documents) {
+        mainTenant.activity_documents.forEach((url: string, index: number) => {
+          docs.push({
+            document_id: `activity-${index}`,
+            label: 'Justificatif d\'activité',
+            file_url: url,
+            category: 'activity',
+            verified: false,
+            created_at: now
+          });
+        });
+      }
+
+      // Justificatif de domicile
+      if (mainTenant.current_housing_documents?.quittances_loyer) {
+        mainTenant.current_housing_documents.quittances_loyer.forEach((url: string, index: number) => {
+          docs.push({
+            document_id: `housing-${index}`,
+            label: 'Quittance de loyer',
+            file_url: url,
+            category: 'housing',
+            verified: false,
+            created_at: now
+          });
+        });
+      }
+    }
+
+    // Documents des garants
+    guarantors.forEach((guarantor, guarantorIndex) => {
+      const guarantorInfo = guarantor.personal_info || {};
+      const guarantorName = `${guarantorInfo.first_name} ${guarantorInfo.last_name}`;
+
+      // Pièces d'identité
+      if (guarantorInfo.identity_documents) {
+        guarantorInfo.identity_documents.forEach((url: string, index: number) => {
+          docs.push({
+            document_id: `guarantor-${guarantorIndex}-identity-${index}`,
+            label: 'Pièce d\'identité',
+            file_url: url,
+            category: 'identity',
+            verified: false,
+            created_at: now,
+            guarantor_id: guarantorIndex.toString(),
+            guarantor_name: guarantorName
+          });
+        });
+      }
+
+      // Documents fiscaux
+      if (guarantorInfo.tax_situation?.documents) {
+        guarantorInfo.tax_situation.documents.forEach((url: string, index: number) => {
+          docs.push({
+            document_id: `guarantor-${guarantorIndex}-tax-${index}`,
+            label: 'Avis d\'imposition',
+            file_url: url,
+            category: 'tax',
+            verified: false,
+            created_at: now,
+            guarantor_id: guarantorIndex.toString(),
+            guarantor_name: guarantorName
+          });
+        });
+      }
+
+      // Revenus
+      if (guarantorInfo.income_sources?.work_income?.documents) {
+        guarantorInfo.income_sources.work_income.documents.forEach((url: string, index: number) => {
+          docs.push({
+            document_id: `guarantor-${guarantorIndex}-income-${index}`,
+            label: 'Justificatif de revenus',
+            file_url: url,
+            category: 'income',
+            verified: false,
+            created_at: now,
+            guarantor_id: guarantorIndex.toString(),
+            guarantor_name: guarantorName
+          });
+        });
+      }
+
+      // Activité professionnelle
+      if (guarantorInfo.activity_documents) {
+        guarantorInfo.activity_documents.forEach((url: string, index: number) => {
+          docs.push({
+            document_id: `guarantor-${guarantorIndex}-activity-${index}`,
+            label: 'Justificatif d\'activité',
+            file_url: url,
+            category: 'activity',
+            verified: false,
+            created_at: now,
+            guarantor_id: guarantorIndex.toString(),
+            guarantor_name: guarantorName
+          });
+        });
+      }
+    });
+
+    return docs;
+  };
+
+  const documents = flattenDocuments();
+
   if (!documents.length) {
     return <p className="text-muted-foreground">Aucun document transmis.</p>;
   }
