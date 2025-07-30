@@ -1259,28 +1259,29 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             </Card>
           </TabsContent>
 
-          {/* Documents */}
-          <TabsContent value="documents" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Documents fournis
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-            {currentUser && (<TenantAndGuarantorDocumentsSection
-            applicationId={application.id}
-            mainTenant={rentalFile?.main_tenant}
-            guarantors={rentalFile?.guarantors || []}
-            userId={currentUser?.id} // Assurez-vous que currentUser est défini dans votre page
-            userName={`${currentUser?.first_name} ${currentUser?.last_name}`}
-            rentalFile={rentalFile} // Passez l'objet complet si nécessaire
-          />
-            </CardContent>
-            )}
-          </Card>
-        </TabsContent>
+{/* Documents */}
+<TabsContent value="documents" className="space-y-6">
+<Card>
+  <CardHeader>
+    <CardTitle className="flex items-center gap-2">
+      <FileText className="h-5 w-5" />
+      Documents fournis
+    </CardTitle>
+  </CardHeader>
+  <CardContent>
+    {user && (
+      <TenantAndGuarantorDocumentsSection
+        applicationId={application.id}
+        mainTenant={rentalFile?.main_tenant}
+        guarantors={rentalFile?.guarantors || []}
+        userId={user.id}
+        userName={`${user.first_name} ${user.last_name}`}
+        rentalFile={rentalFile}
+      />
+    )}
+  </CardContent>
+</Card>
+</TabsContent>
         </Tabs>
       </div>
 
