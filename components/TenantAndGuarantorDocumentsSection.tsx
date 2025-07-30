@@ -21,12 +21,13 @@ interface ApplicationDocument {
 }
 
 interface TenantAndGuarantorDocumentsSectionProps {
-  applicationId: string
-  mainTenant?: any
-  guarantors?: any[]
-  userId?: string
-  userName?: string
-}
+    applicationId: string
+    mainTenant?: any
+    guarantors?: any[]
+    userId: string // Rendons cette prop obligatoire
+    userName: string // Rendons cette prop obligatoire
+    rentalFile?: any // Ajout d'une prop pour le fichier complet si nécessaire
+  }
 
 export function TenantAndGuarantorDocumentsSection({
   applicationId,
@@ -188,29 +189,24 @@ export function TenantAndGuarantorDocumentsSection({
   }
 
   const handleDownloadCompleteFile = async () => {
-    if (!userId) {
-      toast.error("Identifiant utilisateur manquant")
-      return
-    }
-
     try {
       setIsDownloading(true)
       toast.info("Génération du PDF en cours...")
 
       const pdfBlob = await generateRentalFilePDF({
-        rentalFile: {
+        rentalFile: rentalFile || { // Utilisez le rentalFile passé en prop ou créez un objet minimal
           main_tenant: mainTenant,
           guarantors,
           id: applicationId
         },
         userId,
-        userName: userName || `${mainTenant?.first_name} ${mainTenant?.last_name}` || "Locataire"
+        userName
       })
 
       const url = window.URL.createObjectURL(pdfBlob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `Dossier-Location-${mainTenant?.last_name || 'Locataire'}-${new Date().toISOString().split('T')[0]}.pdf`
+      a.download = `Dossier-Location-${userName.replace(' ', '-')}-${new Date().toISOString().split('T')[0]}.pdf`
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
@@ -223,7 +219,7 @@ export function TenantAndGuarantorDocumentsSection({
     } finally {
       setIsDownloading(false)
     }
-  }
+}
 
   const documents = flattenDocuments()
 

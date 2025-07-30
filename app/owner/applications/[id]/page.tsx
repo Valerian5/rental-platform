@@ -1269,14 +1269,16 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <TenantAndGuarantorDocumentsSection
-              applicationId={application.id}
-              mainTenant={rentalFile?.main_tenant}
-              guarantors={rentalFile?.guarantors || []}
-              userId={currentUser?.id}
-              userName={`${currentUser?.first_name} ${currentUser?.last_name}`}
-            />
+            {currentUser && (<TenantAndGuarantorDocumentsSection
+            applicationId={application.id}
+            mainTenant={rentalFile?.main_tenant}
+            guarantors={rentalFile?.guarantors || []}
+            userId={currentUser?.id} // Assurez-vous que currentUser est défini dans votre page
+            userName={`${currentUser?.first_name} ${currentUser?.last_name}`}
+            rentalFile={rentalFile} // Passez l'objet complet si nécessaire
+          />
             </CardContent>
+            )}
           </Card>
         </TabsContent>
         </Tabs>
