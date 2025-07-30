@@ -499,6 +499,93 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
     }
   }
 
+  function flattenDocuments(application: any): ApplicationDocument[] {
+  const now = new Date().toISOString();
+
+  const build = (
+    urls: string[],
+    category: string,
+    label: string,
+    extra?: Partial<ApplicationDocument>
+  ) =>
+    urls.map((url, index) => ({
+      document_id: `${category}-${index}`,
+      label,
+      file_url: url,
+      category,
+      verified: false,
+      created_at: now,
+      ...extra,
+    }));
+
+  const tenant = application.main_tenant || {};
+  const docs: ApplicationDocument[] = [];
+
+  docs.push(
+    ...build(tenant.identity_documents || [], 'identity', 'Pièce d’identité')
+  );
+  docs.push(
+    ...build(
+      tenant.tax_situation?.documents || [],
+      'tax',
+      'Avis d’imposition'
+    )
+  );
+  docs.push(
+    ...build(
+      tenant.income_sources?.work_income?.documents || [],
+      'income',
+      'Justificatif de revenus'
+    )
+  );
+  docs.push(
+    ...build(
+      tenant.activity_documents || [],
+      'activity',
+      'Justificatif d’activité'
+    )
+  );
+  docs.push(
+    ...build(
+      tenant.current_housing_documents?.quittances_loyer || [],
+      'housing',
+      'Quittances de loyer'
+    )
+  );
+
+  (application.guarantors || []).forEach((guarantor, index) => {
+    const info = guarantor.personal_info || {};
+    const name = `${info.first_name || ''} ${info.last_name || ''}`.trim();
+    const extra = {
+      guarantor_id: `${index}`,
+      guarantor_name: name,
+    };
+
+    docs.push(
+      ...build(info.identity_documents || [], 'identity', 'Pièce d’identité', extra)
+    );
+    docs.push(
+      ...build(info.tax_situation?.documents || [], 'tax', 'Avis d’imposition', extra)
+    );
+    docs.push(
+      ...build(
+        info.income_sources?.work_income?.documents || [],
+        'income',
+        'Justificatif de revenus',
+        extra
+      )
+    );
+    docs.push(
+      ...build(info.activity_documents || [], 'activity', 'Justificatif d’activité', extra)
+    );
+    docs.push(
+      ...build(info.current_housing_documents?.quittances_loyer || [], 'housing', 'Quittances de loyer', extra)
+    );
+  });
+
+  return docs;
+}
+
   const getActionButtons = () => {
     if (!application) return null
 
