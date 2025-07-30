@@ -11,9 +11,7 @@ import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { CircularScore } from "@/components/circular-score"
-import { VisitProposalManager } from "@/components/visit-proposal-manager";
-import { TenantAndGuarantorDocumentsSection } from "@/components/TenantAndGuarantorDocumentsSection";
-
+import { VisitProposalManager } from "@/components/visit-proposal-manager"
 import {
   ArrowLeft,
   User,
@@ -53,7 +51,7 @@ const DocumentPreview = ({ doc, type, index }: { doc: any; type: string; index: 
   const getDocTypeLabel = (type: string) => {
     switch (type) {
       case 'identity': return 'Pièce d\'identité';
-      case 'professional': return 'Document pro';
+      case 'professional': return 'Document professionnel';
       case 'financial': return 'Document financier';
       case 'tax': return 'Document fiscal';
       case 'housing': return 'Justificatif de domicile';
@@ -63,17 +61,20 @@ const DocumentPreview = ({ doc, type, index }: { doc: any; type: string; index: 
 
   const colorClass = getDocTypeColor(type);
   const docType = getDocTypeLabel(type);
+  const label = doc.guarantor_name 
+    ? `${docType} - ${doc.guarantor_name}` 
+    : `${docType} ${index + 1}`;
 
   return (
     <div className="border rounded-lg p-3">
       <div className={`flex items-center gap-2 mb-2 ${colorClass}`}>
         <FileText className={`h-4 w-4 ${colorClass}`} />
-        <span className="text-sm font-medium">{docType} {index + 1}</span>
+        <span className="text-sm font-medium">{label}</span>
       </div>
       {doc.file_type?.startsWith('image/') ? (
         <img
-          src={doc.url}
-          alt={`${docType} ${index + 1}`}
+          src={doc.file_url}
+          alt={label}
           className="w-full h-32 object-contain rounded border bg-gray-50"
           onError={(e) => {
             const target = e.target as HTMLImageElement;
@@ -90,14 +91,14 @@ const DocumentPreview = ({ doc, type, index }: { doc: any; type: string; index: 
       <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
         <div className="text-center">
           <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
-          <p className="text-xs text-gray-500">{doc.name || 'Document'}</p>
+          <p className="text-xs text-gray-500">{doc.label || 'Document'}</p>
         </div>
       </div>
       <Button
         variant="outline"
         size="sm"
         className="w-full mt-2"
-        onClick={() => window.open(doc.url, '_blank')}
+        onClick={() => window.open(doc.file_url, '_blank')}
       >
         Voir le document
       </Button>
@@ -113,9 +114,10 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const [user, setUser] = useState<any>(null)
   const [activeTab, setActiveTab] = useState("overview")
   const [showVisitDialog, setShowVisitDialog] = useState(false);
-  const [currentApplication, setCurrentApplication] = useState<Application | null>(null);
+  const [currentApplication, setCurrentApplication] = useState<any>(null);
   const [showRefuseDialog, setShowRefuseDialog] = useState(false)
   const [scoringPreferences, setScoringPreferences] = useState<any>(null)
+  const [documents, setDocuments] = useState<any[]>([])
 
   useEffect(() => {
     checkAuthAndLoadData()
@@ -167,6 +169,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       }
 
       setApplication(data.application)
+      setDocuments(flattenDocuments(data.application))
 
       if (data.application?.tenant_id) {
         try {
@@ -303,7 +306,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       toast.success(data.message || "Créneaux de visite proposés avec succès")
       setShowVisitDialog(false)
 
-      // Recharger l'application pour mettre à jour le statut
       loadApplicationDetails()
     } catch (error) {
       console.error("Erreur:", error)
@@ -499,8 +501,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
     }
   }
 
-const documents = flattenDocuments(application)
-
   const getActionButtons = () => {
     if (!application) return null
 
@@ -614,10 +614,6 @@ const documents = flattenDocuments(application)
     }
   }
 
-  const hasDocuments = (docs: any) => {
-    return docs && Array.isArray(docs) && docs.length > 0 && docs[0].url
-  }
-
   if (loading) {
     return (
       <div className="container mx-auto py-6 space-y-6">
@@ -700,7 +696,7 @@ const documents = flattenDocuments(application)
             <TabsTrigger value="documents">Documents</TabsTrigger>
           </TabsList>
 
-		{/* Vue d'ensemble */}
+          {/* Vue d'ensemble */}
           <TabsContent value="overview" className="space-y-6">
             <div className="grid gap-6 md:grid-cols-2">
               {/* Informations du candidat */}
@@ -884,7 +880,7 @@ const documents = flattenDocuments(application)
             )}
           </TabsContent>
 
-		{/* Analyse financière */}
+          {/* Analyse financière */}
           <TabsContent value="financial" className="space-y-6">
             <div className="grid gap-6 md:grid-cols-2">
               <Card>
@@ -1262,6 +1258,7 @@ const documents = flattenDocuments(application)
             </Card>
           </TabsContent>
 
+          {/* Documents */}
           <TabsContent value="documents" className="space-y-6">
             <Card>
               <CardHeader>
@@ -1271,10 +1268,22 @@ const documents = flattenDocuments(application)
                 </CardTitle>
               </CardHeader>
               <CardContent>
-              <TenantAndGuarantorDocumentsSection
-                applicationId={application.id}
-                documents={application.documents}
-              />
+                {documents.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {documents.map((doc, index) => (
+                      <DocumentPreview 
+                        key={doc.document_id} 
+                        doc={doc} 
+                        type={doc.category} 
+                        index={index} 
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-center py-8">
+                    Aucun document disponible pour cette candidature
+                  </p>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -1291,8 +1300,7 @@ const documents = flattenDocuments(application)
           applicationId={currentApplication.id}
           tenantName={`${currentApplication.tenant?.first_name || ""} ${currentApplication.tenant?.last_name || ""}`}
           onSlotsProposed={async (slots) => {
-            // réutiliser ton handleStatusChange
-            await handleStatusChange(currentApplication.id, "visit_proposed");
+            await updateApplicationStatus("visit_proposed");
             setShowVisitDialog(false);
             toast.success("Créneaux de visite proposés avec succès");
           }}
@@ -1302,89 +1310,47 @@ const documents = flattenDocuments(application)
   )
 }
 
-function flattenDocuments(application: any): ApplicationDocument[] {
+function flattenDocuments(application: any): any[] {
+  if (!application) return [];
+
   const now = new Date().toISOString();
+  const docs: any[] = [];
 
-  const build = (
-    urls: string[],
-    category: string,
-    label: string,
-    extra?: Partial<ApplicationDocument>
-  ) =>
-    urls.map((url, index) => ({
-      document_id: `${category}-${index}`,
-      label,
-      file_url: url,
-      category,
-      verified: false,
-      created_at: now,
-      ...extra,
-    }));
+  // Documents du locataire principal
+  if (application.documents) {
+    application.documents.forEach((doc: any) => {
+      docs.push({
+        document_id: doc.id || `doc-${docs.length}`,
+        label: doc.type || 'Document',
+        file_url: doc.url,
+        category: doc.category || 'other',
+        verified: doc.verified || false,
+        created_at: doc.created_at || now,
+        file_type: doc.file_type
+      });
+    });
+  }
 
-  const tenant = application.main_tenant || {};
-  const docs: ApplicationDocument[] = [];
-
-  docs.push(
-    ...build(tenant.identity_documents || [], 'identity', 'Pièce d’identité')
-  );
-  docs.push(
-    ...build(
-      tenant.tax_situation?.documents || [],
-      'tax',
-      'Avis d’imposition'
-    )
-  );
-  docs.push(
-    ...build(
-      tenant.income_sources?.work_income?.documents || [],
-      'income',
-      'Justificatif de revenus'
-    )
-  );
-  docs.push(
-    ...build(
-      tenant.activity_documents || [],
-      'activity',
-      'Justificatif d’activité'
-    )
-  );
-  docs.push(
-    ...build(
-      tenant.current_housing_documents?.quittances_loyer || [],
-      'housing',
-      'Quittances de loyer'
-    )
-  );
-
-  (application.guarantors || []).forEach((guarantor, index) => {
-    const info = guarantor.personal_info || {};
-    const name = `${info.first_name || ''} ${info.last_name || ''}`.trim();
-    const extra = {
-      guarantor_id: `${index}`,
-      guarantor_name: name,
-    };
-
-    docs.push(
-      ...build(info.identity_documents || [], 'identity', 'Pièce d’identité', extra)
-    );
-    docs.push(
-      ...build(info.tax_situation?.documents || [], 'tax', 'Avis d’imposition', extra)
-    );
-    docs.push(
-      ...build(
-        info.income_sources?.work_income?.documents || [],
-        'income',
-        'Justificatif de revenus',
-        extra
-      )
-    );
-    docs.push(
-      ...build(info.activity_documents || [], 'activity', 'Justificatif d’activité', extra)
-    );
-    docs.push(
-      ...build(info.current_housing_documents?.quittances_loyer || [], 'housing', 'Quittances de loyer', extra)
-    );
-  });
+  // Documents des garants
+  if (application.guarantors) {
+    application.guarantors.forEach((guarantor: any, index: number) => {
+      if (guarantor.documents) {
+        guarantor.documents.forEach((doc: any) => {
+          docs.push({
+            document_id: doc.id || `guarantor-${index}-doc-${docs.length}`,
+            label: `${doc.type || 'Document'} (Garant ${index + 1})`,
+            file_url: doc.url,
+            category: doc.category || 'other',
+            verified: doc.verified || false,
+            created_at: doc.created_at || now,
+            guarantor_id: guarantor.id || index.toString(),
+            guarantor_name: guarantor.name || `Garant ${index + 1}`,
+            file_type: doc.file_type
+          });
+        });
+      }
+    });
+  }
 
   return docs;
 }
