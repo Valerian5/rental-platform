@@ -1,33 +1,45 @@
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { DownloadIcon, CheckIcon } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
+"use client"
+
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { DownloadIcon, CheckIcon } from "lucide-react"
+import { Separator } from "@/components/ui/separator"
+import { generateRentalFilePDF } from "@/lib/pdf-generator-final"
+import { Loader2 } from "lucide-react"
+import { useState } from "react"
+import { toast } from "sonner"
 
 interface ApplicationDocument {
-  document_id: string;
-  label: string;
-  file_url: string;
-  category: string;
-  verified: boolean;
-  created_at: string;
-  guarantor_id?: string;
-  guarantor_name?: string;
+  document_id: string
+  label: string
+  file_url: string
+  category: string
+  verified: boolean
+  created_at: string
+  guarantor_id?: string
+  guarantor_name?: string
 }
 
 interface TenantAndGuarantorDocumentsSectionProps {
-  applicationId: string;
-  mainTenant?: any;
-  guarantors?: any[];
+  applicationId: string
+  mainTenant?: any
+  guarantors?: any[]
+  userId?: string
+  userName?: string
 }
 
 export function TenantAndGuarantorDocumentsSection({
   applicationId,
   mainTenant,
   guarantors = [],
+  userId,
+  userName
 }: TenantAndGuarantorDocumentsSectionProps) {
+  const [isDownloading, setIsDownloading] = useState(false)
+
   const flattenDocuments = () => {
-    const now = new Date().toISOString();
-    const docs: ApplicationDocument[] = [];
+    const now = new Date().toISOString()
+    const docs: ApplicationDocument[] = []
 
     // Documents du locataire principal
     if (mainTenant) {
@@ -41,8 +53,8 @@ export function TenantAndGuarantorDocumentsSection({
             category: 'identity',
             verified: false,
             created_at: now
-          });
-        });
+          })
+        })
       }
 
       // Documents fiscaux
@@ -55,8 +67,8 @@ export function TenantAndGuarantorDocumentsSection({
             category: 'tax',
             verified: false,
             created_at: now
-          });
-        });
+          })
+        })
       }
 
       // Revenus
@@ -69,8 +81,8 @@ export function TenantAndGuarantorDocumentsSection({
             category: 'income',
             verified: false,
             created_at: now
-          });
-        });
+          })
+        })
       }
 
       // Activité professionnelle
@@ -83,8 +95,8 @@ export function TenantAndGuarantorDocumentsSection({
             category: 'activity',
             verified: false,
             created_at: now
-          });
-        });
+          })
+        })
       }
 
       // Justificatif de domicile
@@ -97,15 +109,15 @@ export function TenantAndGuarantorDocumentsSection({
             category: 'housing',
             verified: false,
             created_at: now
-          });
-        });
+          })
+        })
       }
     }
 
     // Documents des garants
     guarantors.forEach((guarantor, guarantorIndex) => {
-      const guarantorInfo = guarantor.personal_info || {};
-      const guarantorName = `${guarantorInfo.first_name} ${guarantorInfo.last_name}`;
+      const guarantorInfo = guarantor.personal_info || {}
+      const guarantorName = `${guarantorInfo.first_name} ${guarantorInfo.last_name}`
 
       // Pièces d'identité
       if (guarantorInfo.identity_documents) {
@@ -119,8 +131,8 @@ export function TenantAndGuarantorDocumentsSection({
             created_at: now,
             guarantor_id: guarantorIndex.toString(),
             guarantor_name: guarantorName
-          });
-        });
+          })
+        })
       }
 
       // Documents fiscaux
@@ -135,8 +147,8 @@ export function TenantAndGuarantorDocumentsSection({
             created_at: now,
             guarantor_id: guarantorIndex.toString(),
             guarantor_name: guarantorName
-          });
-        });
+          })
+        })
       }
 
       // Revenus
@@ -151,8 +163,8 @@ export function TenantAndGuarantorDocumentsSection({
             created_at: now,
             guarantor_id: guarantorIndex.toString(),
             guarantor_name: guarantorName
-          });
-        });
+          })
+        })
       }
 
       // Activité professionnelle
@@ -167,34 +179,72 @@ export function TenantAndGuarantorDocumentsSection({
             created_at: now,
             guarantor_id: guarantorIndex.toString(),
             guarantor_name: guarantorName
-          });
-        });
+          })
+        })
       }
-    });
+    })
 
-    return docs;
-  };
-
-  const documents = flattenDocuments();
-
-  if (!documents.length) {
-    return <p className="text-muted-foreground">Aucun document transmis.</p>;
+    return docs
   }
 
-  const tenantDocs = documents.filter((doc) => !doc.guarantor_id);
-  const guarantorDocs = documents.filter((doc) => doc.guarantor_id);
+  const handleDownloadCompleteFile = async () => {
+    if (!userId) {
+      toast.error("Identifiant utilisateur manquant")
+      return
+    }
+
+    try {
+      setIsDownloading(true)
+      toast.info("Génération du PDF en cours...")
+
+      const pdfBlob = await generateRentalFilePDF({
+        rentalFile: {
+          main_tenant: mainTenant,
+          guarantors,
+          id: applicationId
+        },
+        userId,
+        userName: userName || `${mainTenant?.first_name} ${mainTenant?.last_name}` || "Locataire"
+      })
+
+      const url = window.URL.createObjectURL(pdfBlob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Dossier-Location-${mainTenant?.last_name || 'Locataire'}-${new Date().toISOString().split('T')[0]}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      a.remove()
+
+      toast.success("Téléchargement terminé !")
+    } catch (error) {
+      console.error("Erreur génération PDF:", error)
+      toast.error("Erreur lors de la génération du PDF")
+    } finally {
+      setIsDownloading(false)
+    }
+  }
+
+  const documents = flattenDocuments()
+
+  if (!documents.length) {
+    return <p className="text-muted-foreground">Aucun document transmis.</p>
+  }
+
+  const tenantDocs = documents.filter((doc) => !doc.guarantor_id)
+  const guarantorDocs = documents.filter((doc) => doc.guarantor_id)
 
   const groupByGuarantor = () => {
-    const map = new Map<string, ApplicationDocument[]>();
+    const map = new Map<string, ApplicationDocument[]>()
     guarantorDocs.forEach((doc) => {
-      const key = doc.guarantor_id || "unknown";
+      const key = doc.guarantor_id || "unknown"
       if (!map.has(key)) {
-        map.set(key, []);
+        map.set(key, [])
       }
-      map.get(key)!.push(doc);
-    });
-    return map;
-  };
+      map.get(key)!.push(doc)
+    })
+    return map
+  }
 
   return (
     <div className="space-y-8">
@@ -218,24 +268,27 @@ export function TenantAndGuarantorDocumentsSection({
 
       {/* Bouton téléchargement global */}
       <div className="pt-4">
-        <a
-          href={`/api/tenant/applications/${applicationId}/download`}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Button>
-            <DownloadIcon className="mr-2 h-4 w-4" />
-            Télécharger le dossier complet (PDF)
-          </Button>
-        </a>
+        <Button onClick={handleDownloadCompleteFile} disabled={isDownloading}>
+          {isDownloading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Génération en cours...
+            </>
+          ) : (
+            <>
+              <DownloadIcon className="mr-2 h-4 w-4" />
+              Télécharger le dossier complet (PDF)
+            </>
+          )}
+        </Button>
       </div>
     </div>
-  );
+  )
 }
 
 function DocumentsGroup({ documents }: { documents: ApplicationDocument[] }) {
   if (!documents?.length)
-    return <p className="text-muted-foreground">Aucun document transmis.</p>;
+    return <p className="text-muted-foreground">Aucun document transmis.</p>
 
   return (
     <div className="space-y-4">
@@ -265,5 +318,5 @@ function DocumentsGroup({ documents }: { documents: ApplicationDocument[] }) {
         </div>
       ))}
     </div>
-  );
+  )
 }

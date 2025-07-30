@@ -12,7 +12,7 @@ import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { CircularScore } from "@/components/circular-score"
 import { VisitProposalManager } from "@/components/visit-proposal-manager"
-import { TenantAndGuarantorDocumentsSection } from "@/components/TenantAndGuarantorDocumentsSection";
+import { TenantAndGuarantorDocumentsSection } from "@/components/TenantAndGuarantorDocumentsSection"
 import {
   ArrowLeft,
   User,
@@ -1270,10 +1270,12 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             </CardHeader>
             <CardContent>
               <TenantAndGuarantorDocumentsSection
-                applicationId={application.id}
-                mainTenant={rentalFile?.main_tenant}
-                guarantors={rentalFile?.guarantors || []}
-              />
+              applicationId={application.id}
+              mainTenant={rentalFile?.main_tenant}
+              guarantors={rentalFile?.guarantors || []}
+              userId={currentUser?.id}
+              userName={`${currentUser?.first_name} ${currentUser?.last_name}`}
+            />
             </CardContent>
           </Card>
         </TabsContent>
