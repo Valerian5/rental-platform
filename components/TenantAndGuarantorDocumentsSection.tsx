@@ -16,13 +16,17 @@ interface ApplicationDocument {
 
 interface TenantAndGuarantorDocumentsSectionProps {
   applicationId: string;
-  documents: ApplicationDocument[];
+  documents?: ApplicationDocument[];
 }
 
 export function TenantAndGuarantorDocumentsSection({
   applicationId,
-  documents,
+  documents = [],
 }: TenantAndGuarantorDocumentsSectionProps) {
+  if (!documents.length) {
+    return <p className="text-muted-foreground">Aucun document transmis.</p>;
+  }
+
   const tenantDocs = documents.filter((doc) => !doc.guarantor_id);
   const guarantorDocs = documents.filter((doc) => doc.guarantor_id);
 
