@@ -255,16 +255,13 @@ export function TenantAndGuarantorDocumentsSection({
       };
 
       // Génération du PDF
-      const pdfBlob = await generateRentalFilePDF(pdfData);
-
-      // Vérification que c'est bien un Blob
-      if (!(pdfBlob instanceof Blob)) {
-        throw new Error("Le générateur n'a pas retourné un fichier PDF valide");
-      }
+      await generateRentalFilePDF({
+        rentalFile,
+        userId,
+        userName
+      })
 
       // Téléchargement
-      const url = window.URL.createObjectURL(pdfBlob);
-      const a = document.createElement('a');
       a.style.display = 'none';
       a.href = url;
       a.download = `Dossier-Location-${userName.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`;
