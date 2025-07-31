@@ -247,7 +247,7 @@ export function RentalFileViewer({ rentalFile, onValidate }: RentalFileViewerPro
               ) : (
                 <>
                   <Download className="h-4 w-4 mr-2" />
-                  Télécharger le dossier PDF
+                  Télécharger le dossier de location PDF
                 </>
               )}
             </Button>
