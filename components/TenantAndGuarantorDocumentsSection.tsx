@@ -262,7 +262,6 @@ export function TenantAndGuarantorDocumentsSection({
       })
 
       toast.success("PDF généré avec succès !");
-    }
   };
 
   const documents = flattenDocuments();
