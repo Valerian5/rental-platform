@@ -1,182 +1,231 @@
-import { NextResponse, type NextRequest } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("🎯 Récupération des modèles système de scoring")
-
-    // Récupérer tous les modèles système
-    const { data, error } = await supabase
+    // Récupérer les modèles système prédéfinis
+    const { data: preferences, error } = await supabase
       .from("scoring_preferences")
       .select("*")
-      .eq("is_system", true)
-      .order("is_default", { ascending: false })
-      .order("name", { ascending: true })
+      .eq("owner_id", "00000000-0000-0000-0000-000000000000") // ID système
+      .order("model_type")
 
     if (error) {
       console.error("Erreur récupération modèles système:", error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    console.log("📊 Modèles système trouvés:", data?.length || 0)
-
-    // Si aucun modèle système n'existe, créer les modèles par défaut
-    if (!data || data.length === 0) {
-      console.log("🔧 Création des modèles système par défaut...")
+    // Si aucun modèle système n'existe, les créer
+    if (!preferences || preferences.length === 0) {
+      console.log("Aucun modèle système trouvé, création des modèles par défaut...")
 
       const defaultModels = [
         {
-          name: "Modèle équilibré",
-          description: "Critères équilibrés pour la plupart des situations",
-          is_system: true,
-          is_default: true,
-          owner_id: "system",
-          criteria: {
-            income_ratio: {
-              weight: 35,
-              thresholds: { excellent: 3.5, good: 3.0, acceptable: 2.5, minimum: 2.0 },
-              points: { excellent: 100, good: 75, acceptable: 50, insufficient: 0 },
-            },
-            professional_stability: {
-              weight: 30,
-              contract_types: { cdi: 100, cdd: 75, freelance: 50, student: 25, unemployed: 0, retired: 80 },
-              seniority_bonus: { enabled: true, min_months: 12, bonus_points: 10 },
-              trial_period_penalty: { enabled: true, penalty_points: 15 },
-            },
-            guarantor: {
-              weight: 25,
-              presence_points: 100,
-              income_ratio_bonus: { enabled: true, threshold: 3.0, bonus_points: 20 },
-              multiple_guarantors_bonus: { enabled: true, bonus_per_additional: 10 },
-            },
-            application_quality: {
-              weight: 10,
-              presentation_length: { excellent: 200, good: 100, basic: 50 },
-              completeness_bonus: { enabled: true, bonus_points: 15 },
-            },
-          },
-        },
-        {
-          name: "Modèle strict",
-          description: "Critères stricts pour des biens de standing",
-          is_system: true,
+          id: "strict-model-default",
+          owner_id: "00000000-0000-0000-0000-000000000000",
+          name: "Strict (GLI)",
+          model_type: "strict",
+          description:
+            "Critères stricts inspirés des assurances GLI. Revenus ≥ 3,5x, CDI privilégié, garant obligatoire, documents vérifiés requis.",
           is_default: false,
-          owner_id: "system",
           criteria: {
             income_ratio: {
-              weight: 45,
+              weight: 20,
               thresholds: { excellent: 4.0, good: 3.5, acceptable: 3.0, minimum: 2.5 },
-              points: { excellent: 100, good: 75, acceptable: 50, insufficient: 0 },
-            },
-            professional_stability: {
-              weight: 30,
-              contract_types: { cdi: 100, cdd: 60, freelance: 30, student: 10, unemployed: 0, retired: 85 },
-              seniority_bonus: { enabled: true, min_months: 18, bonus_points: 15 },
-              trial_period_penalty: { enabled: true, penalty_points: 25 },
+              per_person_check: true,
             },
             guarantor: {
               weight: 20,
-              presence_points: 100,
-              income_ratio_bonus: { enabled: true, threshold: 3.5, bonus_points: 25 },
-              multiple_guarantors_bonus: { enabled: true, bonus_per_additional: 15 },
+              required_if_income_below: 3.5,
+              types_accepted: { parent: true, visale: true, garantme: true, other_physical: true, company: true },
+              minimum_income_ratio: 3.0,
+              verification_required: true,
             },
-            application_quality: {
-              weight: 5,
-              presentation_length: { excellent: 300, good: 150, basic: 75 },
-              completeness_bonus: { enabled: true, bonus_points: 20 },
+            professional_stability: {
+              weight: 20,
+              contract_scoring: {
+                cdi_confirmed: 20,
+                cdi_trial: 10,
+                cdd_long: 15,
+                cdd_short: 8,
+                freelance: 5,
+                student: 3,
+                unemployed: 0,
+                retired: 18,
+                civil_servant: 20,
+              },
+              seniority_bonus: { enabled: true, min_months: 12, bonus_points: 3 },
+              trial_period_penalty: 5,
+            },
+            file_quality: {
+              weight: 20,
+              complete_documents_required: true,
+              verified_documents_required: true,
+              presentation_quality_weight: 5,
+              coherence_check_weight: 10,
+            },
+            property_coherence: {
+              weight: 10,
+              household_size_vs_property: true,
+              colocation_structure_check: true,
+              location_relevance_check: true,
+              family_situation_coherence: true,
+            },
+            income_distribution: {
+              weight: 10,
+              balance_check: true,
+              compensation_allowed: false,
             },
           },
+          exclusion_rules: {
+            incomplete_file: true,
+            no_guarantor_when_required: true,
+            income_ratio_below_2: true,
+            unverified_documents: true,
+            manifest_incoherence: true,
+          },
+          system_preference_id: "strict",
         },
         {
-          name: "Modèle flexible",
-          description: "Critères souples pour favoriser l'accessibilité",
-          is_system: true,
+          id: "standard-model-default",
+          owner_id: "00000000-0000-0000-0000-000000000000",
+          name: "Standard (Agence)",
+          model_type: "standard",
+          description:
+            "Pratiques standards d'agence. Revenus ≥ 3x, CDI/CDD acceptés, garant requis si revenus < 3x, approche équilibrée.",
           is_default: false,
-          owner_id: "system",
           criteria: {
             income_ratio: {
-              weight: 25,
-              thresholds: { excellent: 3.0, good: 2.5, acceptable: 2.0, minimum: 1.8 },
-              points: { excellent: 100, good: 80, acceptable: 60, insufficient: 20 },
-            },
-            professional_stability: {
-              weight: 25,
-              contract_types: { cdi: 100, cdd: 85, freelance: 70, student: 50, unemployed: 10, retired: 75 },
-              seniority_bonus: { enabled: true, min_months: 6, bonus_points: 10 },
-              trial_period_penalty: { enabled: false, penalty_points: 0 },
+              weight: 18,
+              thresholds: { excellent: 3.5, good: 3.0, acceptable: 2.5, minimum: 2.0 },
+              per_person_check: true,
             },
             guarantor: {
-              weight: 30,
-              presence_points: 100,
-              income_ratio_bonus: { enabled: true, threshold: 2.5, bonus_points: 15 },
-              multiple_guarantors_bonus: { enabled: true, bonus_per_additional: 10 },
+              weight: 17,
+              required_if_income_below: 3.0,
+              types_accepted: { parent: true, visale: true, garantme: true, other_physical: true, company: true },
+              minimum_income_ratio: 3.0,
+              verification_required: true,
             },
-            application_quality: {
-              weight: 20,
-              presentation_length: { excellent: 150, good: 75, basic: 25 },
-              completeness_bonus: { enabled: true, bonus_points: 25 },
+            professional_stability: {
+              weight: 17,
+              contract_scoring: {
+                cdi_confirmed: 17,
+                cdi_trial: 12,
+                cdd_long: 14,
+                cdd_short: 10,
+                freelance: 8,
+                student: 6,
+                unemployed: 0,
+                retired: 15,
+                civil_servant: 17,
+              },
+              seniority_bonus: { enabled: true, min_months: 6, bonus_points: 2 },
+              trial_period_penalty: 3,
+            },
+            file_quality: {
+              weight: 16,
+              complete_documents_required: true,
+              verified_documents_required: false,
+              presentation_quality_weight: 6,
+              coherence_check_weight: 8,
+            },
+            property_coherence: {
+              weight: 16,
+              household_size_vs_property: true,
+              colocation_structure_check: true,
+              location_relevance_check: false,
+              family_situation_coherence: true,
+            },
+            income_distribution: {
+              weight: 16,
+              balance_check: true,
+              compensation_allowed: true,
             },
           },
+          exclusion_rules: {
+            incomplete_file: false,
+            no_guarantor_when_required: true,
+            income_ratio_below_2: false,
+            unverified_documents: false,
+            manifest_incoherence: true,
+          },
+          system_preference_id: "standard",
+        },
+        {
+          id: "flexible-model-default",
+          owner_id: "00000000-0000-0000-0000-000000000000",
+          name: "Souple (Particulier)",
+          model_type: "flexible",
+          description:
+            "Approche humaine et flexible. Revenus ≥ 2,5x, étudiants/freelances acceptés, garant recommandé, priorité à l'équilibre global.",
+          is_default: false,
+          criteria: {
+            income_ratio: {
+              weight: 15,
+              thresholds: { excellent: 3.0, good: 2.5, acceptable: 2.0, minimum: 1.8 },
+              per_person_check: false,
+            },
+            guarantor: {
+              weight: 15,
+              required_if_income_below: 2.5,
+              types_accepted: { parent: true, visale: true, garantme: true, other_physical: true, company: false },
+              minimum_income_ratio: 2.5,
+              verification_required: false,
+            },
+            professional_stability: {
+              weight: 15,
+              contract_scoring: {
+                cdi_confirmed: 15,
+                cdi_trial: 13,
+                cdd_long: 12,
+                cdd_short: 10,
+                freelance: 12,
+                student: 10,
+                unemployed: 3,
+                retired: 13,
+                civil_servant: 15,
+              },
+              seniority_bonus: { enabled: false, min_months: 0, bonus_points: 0 },
+              trial_period_penalty: 1,
+            },
+            file_quality: {
+              weight: 15,
+              complete_documents_required: false,
+              verified_documents_required: false,
+              presentation_quality_weight: 8,
+              coherence_check_weight: 5,
+            },
+            property_coherence: {
+              weight: 20,
+              household_size_vs_property: false,
+              colocation_structure_check: false,
+              location_relevance_check: false,
+              family_situation_coherence: true,
+            },
+            income_distribution: {
+              weight: 20,
+              balance_check: false,
+              compensation_allowed: true,
+            },
+          },
+          exclusion_rules: {
+            incomplete_file: false,
+            no_guarantor_when_required: false,
+            income_ratio_below_2: false,
+            unverified_documents: false,
+            manifest_incoherence: false,
+          },
+          system_preference_id: "flexible",
         },
       ]
 
-      // Insérer les modèles par défaut
-      const { data: insertedData, error: insertError } = await supabase
-        .from("scoring_preferences")
-        .insert(defaultModels)
-        .select()
-
-      if (insertError) {
-        console.error("Erreur création modèles système:", insertError)
-        return NextResponse.json({ error: insertError.message }, { status: 500 })
-      }
-
-      console.log("✅ Modèles système créés:", insertedData?.length || 0)
-      return NextResponse.json({ preferences: insertedData })
+      return NextResponse.json({ preferences: defaultModels })
     }
 
-    return NextResponse.json({ preferences: data })
+    return NextResponse.json({ preferences: preferences || [] })
   } catch (error) {
-    console.error("Erreur serveur:", error)
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
-  }
-}
-
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json()
-    const { name, description, criteria } = body
-
-    console.log("💾 Création nouveau modèle système:", { name, description })
-
-    if (!name || !criteria) {
-      return NextResponse.json({ error: "Nom et critères requis" }, { status: 400 })
-    }
-
-    const { data, error } = await supabase
-      .from("scoring_preferences")
-      .insert({
-        name,
-        description: description || "",
-        is_system: true,
-        is_default: false,
-        owner_id: "system",
-        criteria,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .select()
-      .single()
-
-    if (error) {
-      console.error("Erreur création modèle système:", error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    console.log("✅ Modèle système créé:", data.id)
-    return NextResponse.json({ preference: data })
-  } catch (error) {
-    console.error("Erreur serveur:", error)
+    console.error("Erreur API admin/scoring-preferences GET:", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }
