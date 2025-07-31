@@ -255,13 +255,33 @@ export function TenantAndGuarantorDocumentsSection({
       };
 
       // Génération du PDF
-      await generateRentalFilePDF({
-        rentalFile,
+      const pdfBlob = await generateRentalFilePDF({
+        rentalFile: pdfData,
         userId,
         userName
-      })
+      });
+
+      // Créer et télécharger le PDF
+      const url = window.URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Dossier-Location-${userName.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Nettoyage
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }, 100);
 
       toast.success("PDF généré avec succès !");
+    } catch (error) {
+      console.error("Erreur génération PDF:", error);
+      toast.error(`Erreur lors de la génération du PDF: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const documents = flattenDocuments();
