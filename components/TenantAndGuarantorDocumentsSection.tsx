@@ -209,16 +209,16 @@ export function TenantAndGuarantorDocumentsSection({
 
   const handleDownloadCompleteFile = async () => {
     if (!rentalFile) {
-      toast.error("Aucun dossier de location disponible")
-      return
+      toast.error("Aucun dossier de location disponible");
+      return;
     }
 
     try {
-      setIsDownloading(true)
-      toast.info("Génération du PDF en cours...")
+      setIsDownloading(true);
+      toast.info("Génération du PDF en cours...");
 
-      // Préparer la structure complète des données
-      const completeData = {
+      // Préparer les données avec des valeurs par défaut
+      const pdfData = {
         ...rentalFile,
         id: applicationId,
         main_tenant: {
@@ -252,55 +252,60 @@ export function TenantAndGuarantorDocumentsSection({
             }
           }
         }))
+      };
+
+      // Génération du PDF
+      const pdfBlob = await generateRentalFilePDF(pdfData);
+
+      // Vérification que c'est bien un Blob
+      if (!(pdfBlob instanceof Blob)) {
+        throw new Error("Le générateur n'a pas retourné un fichier PDF valide");
       }
 
-      // Solution hybride qui évite createObjectURL mais conserve toutes les données
-      const newWindow = window.open('', '_blank')
-      if (newWindow) {
-        await generateRentalFilePDF({
-          rentalFile: completeData,
-          userId,
-          userName,
-          targetWindow: newWindow
-        })
-      } else {
-        // Fallback si window.open est bloqué
-        await generateRentalFilePDF({
-          rentalFile: completeData,
-          userId,
-          userName
-        })
-      }
+      // Téléchargement
+      const url = window.URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `Dossier-Location-${userName.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
 
-      toast.success("PDF généré avec succès !")
+      // Nettoyage
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }, 100);
+
+      toast.success("PDF généré avec succès !");
     } catch (error) {
-      console.error("Erreur génération PDF:", error)
-      toast.error(`Erreur lors de la génération du PDF: ${error instanceof Error ? error.message : 'Erreur inconnue'}`)
+      console.error("Erreur génération PDF:", error);
+      toast.error(`Erreur lors de la génération du PDF: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
     } finally {
-      setIsDownloading(false)
+      setIsDownloading(false);
     }
-  }
+  };
 
-  const documents = flattenDocuments()
+  const documents = flattenDocuments();
 
   if (!documents.length) {
-    return <p className="text-muted-foreground">Aucun document transmis.</p>
+    return <p className="text-muted-foreground">Aucun document transmis.</p>;
   }
 
-  const tenantDocs = documents.filter((doc) => !doc.guarantor_id)
-  const guarantorDocs = documents.filter((doc) => doc.guarantor_id)
+  const tenantDocs = documents.filter((doc) => !doc.guarantor_id);
+  const guarantorDocs = documents.filter((doc) => doc.guarantor_id);
 
   const groupByGuarantor = () => {
-    const map = new Map<string, ApplicationDocument[]>()
+    const map = new Map<string, ApplicationDocument[]>();
     guarantorDocs.forEach((doc) => {
-      const key = doc.guarantor_id || "unknown"
+      const key = doc.guarantor_id || "unknown";
       if (!map.has(key)) {
-        map.set(key, [])
+        map.set(key, []);
       }
-      map.get(key)!.push(doc)
-    })
-    return map
-  }
+      map.get(key)!.push(doc);
+    });
+    return map;
+  };
 
   return (
     <div className="space-y-8">
@@ -343,12 +348,12 @@ export function TenantAndGuarantorDocumentsSection({
         </Button>
       </div>
     </div>
-  )
+  );
 }
 
 function DocumentsGroup({ documents }: { documents: ApplicationDocument[] }) {
   if (!documents?.length) {
-    return <p className="text-muted-foreground">Aucun document transmis.</p>
+    return <p className="text-muted-foreground">Aucun document transmis.</p>;
   }
 
   return (
@@ -376,8 +381,8 @@ function DocumentsGroup({ documents }: { documents: ApplicationDocument[] }) {
             rel="noopener noreferrer"
             onClick={(e) => {
               if (!doc.file_url) {
-                e.preventDefault()
-                toast.error("Aucun document disponible")
+                e.preventDefault();
+                toast.error("Aucun document disponible");
               }
             }}
           >
@@ -389,5 +394,5 @@ function DocumentsGroup({ documents }: { documents: ApplicationDocument[] }) {
         </div>
       ))}
     </div>
-  )
+  );
 }
