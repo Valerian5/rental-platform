@@ -217,22 +217,65 @@ export function TenantAndGuarantorDocumentsSection({
       setIsDownloading(true)
       toast.info("Génération du PDF en cours...")
 
-      // Appel direct au générateur PDF (sans gestion de Blob)
-      await generateRentalFilePDF({
-        rentalFile: {
-          ...rentalFile,
-          id: applicationId,
-          main_tenant: mainTenant,
-          guarantors
+      // Préparer la structure complète des données
+      const completeData = {
+        ...rentalFile,
+        id: applicationId,
+        main_tenant: {
+          ...(rentalFile.main_tenant || {}),
+          first_name: rentalFile.main_tenant?.first_name || 'Non spécifié',
+          last_name: rentalFile.main_tenant?.last_name || 'Non spécifié',
+          identity_documents: rentalFile.main_tenant?.identity_documents || [],
+          activity_documents: rentalFile.main_tenant?.activity_documents || [],
+          income_sources: {
+            ...(rentalFile.main_tenant?.income_sources || {}),
+            work_income: {
+              ...(rentalFile.main_tenant?.income_sources?.work_income || {}),
+              documents: rentalFile.main_tenant?.income_sources?.work_income?.documents || []
+            }
+          }
         },
-        userId,
-        userName
-      })
+        guarantors: (rentalFile.guarantors || []).map((guarantor: any) => ({
+          ...guarantor,
+          type: guarantor.type || 'physical',
+          personal_info: {
+            ...(guarantor.personal_info || {}),
+            first_name: guarantor.personal_info?.first_name || 'Non spécifié',
+            last_name: guarantor.personal_info?.last_name || 'Non spécifié',
+            identity_documents: guarantor.personal_info?.identity_documents || [],
+            income_sources: {
+              ...(guarantor.personal_info?.income_sources || {}),
+              work_income: {
+                ...(guarantor.personal_info?.income_sources?.work_income || {}),
+                documents: guarantor.personal_info?.income_sources?.work_income?.documents || []
+              }
+            }
+          }
+        }))
+      }
+
+      // Solution hybride qui évite createObjectURL mais conserve toutes les données
+      const newWindow = window.open('', '_blank')
+      if (newWindow) {
+        await generateRentalFilePDF({
+          rentalFile: completeData,
+          userId,
+          userName,
+          targetWindow: newWindow
+        })
+      } else {
+        // Fallback si window.open est bloqué
+        await generateRentalFilePDF({
+          rentalFile: completeData,
+          userId,
+          userName
+        })
+      }
 
       toast.success("PDF généré avec succès !")
     } catch (error) {
       console.error("Erreur génération PDF:", error)
-      toast.error("Erreur lors de la génération du PDF")
+      toast.error(`Erreur lors de la génération du PDF: ${error instanceof Error ? error.message : 'Erreur inconnue'}`)
     } finally {
       setIsDownloading(false)
     }
