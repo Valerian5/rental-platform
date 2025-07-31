@@ -262,6 +262,7 @@ export function TenantAndGuarantorDocumentsSection({
       })
 
       // Téléchargement
+      const a = document.createElement('a')
       a.style.display = 'none';
       a.href = url;
       a.download = `Dossier-Location-${userName.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`;
