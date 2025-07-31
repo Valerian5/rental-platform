@@ -1,423 +1,429 @@
+// Interface pour les critères de scoring (nouvelle structure simplifiée)
+export interface ScoringCriteria {
+  income_ratio: {
+    weight: number
+    thresholds: {
+      excellent: number
+      good: number
+      acceptable: number
+      minimum: number
+    }
+    points: {
+      excellent: number
+      good: number
+      acceptable: number
+      insufficient: number
+    }
+  }
+  professional_stability: {
+    weight: number
+    contract_types: {
+      cdi: number
+      cdd: number
+      freelance: number
+      student: number
+      unemployed: number
+      retired: number
+    }
+    seniority_bonus: {
+      enabled: boolean
+      min_months: number
+      bonus_points: number
+    }
+    trial_period_penalty: {
+      enabled: boolean
+      penalty_points: number
+    }
+  }
+  guarantor: {
+    weight: number
+    presence_points: number
+    income_ratio_bonus: {
+      enabled: boolean
+      threshold: number
+      bonus_points: number
+    }
+    multiple_guarantors_bonus: {
+      enabled: boolean
+      bonus_per_additional: number
+    }
+  }
+  application_quality: {
+    weight: number
+    file_completeness: {
+      required: boolean
+      bonus_points: number
+    }
+    verified_documents: {
+      required: boolean
+      bonus_points: number
+    }
+  }
+}
+
 export interface ScoringPreferences {
   id?: string
   owner_id: string
   name: string
-  description?: string
-  model_type?: "strict" | "standard" | "flexible" | "custom"
   is_default: boolean
-  is_system?: boolean
+  criteria: ScoringCriteria
   system_preference_id?: string
-  criteria: {
-    income_ratio: {
-      weight: number
-      thresholds: {
-        excellent: number
-        good: number
-        acceptable: number
-        minimum: number
-      }
-      per_person_check: boolean
-    }
-    guarantor: {
-      weight: number
-      required_if_income_below: number
-      types_accepted: {
-        parent: boolean
-        visale: boolean
-        garantme: boolean
-        other_physical: boolean
-        company: boolean
-      }
-      minimum_income_ratio: number
-      verification_required: boolean
-    }
-    professional_stability: {
-      weight: number
-      contract_scoring: {
-        cdi_confirmed: number
-        cdi_trial: number
-        cdd_long: number
-        cdd_short: number
-        freelance: number
-        student: number
-        unemployed: number
-        retired: number
-        civil_servant: number
-      }
-      seniority_bonus: {
-        enabled: boolean
-        min_months: number
-        bonus_points: number
-      }
-      trial_period_penalty: number
-    }
-    file_quality: {
-      weight: number
-      complete_documents_required: boolean
-      verified_documents_required: boolean
-      presentation_quality_weight: number
-      coherence_check_weight: number
-    }
-    property_coherence: {
-      weight: number
-      household_size_vs_property: boolean
-      colocation_structure_check: boolean
-      location_relevance_check: boolean
-      family_situation_coherence: boolean
-    }
-    income_distribution: {
-      weight: number
-      balance_check: boolean
-      compensation_allowed: boolean
-    }
-  }
-  exclusion_rules: {
-    incomplete_file: boolean
-    no_guarantor_when_required: boolean
-    income_ratio_below_2: boolean
-    unverified_documents: boolean
-    manifest_incoherence: boolean
-  }
   created_at?: string
   updated_at?: string
 }
 
+// Interface pour le résultat du calcul de score
 export interface ScoringResult {
   totalScore: number
   compatible: boolean
   breakdown: {
-    income_ratio: { score: number; max: number; details: string }
-    guarantor: { score: number; max: number; details: string }
-    professional_stability: { score: number; max: number; details: string }
-    file_quality: { score: number; max: number; details: string }
-    property_coherence: { score: number; max: number; details: string }
-    income_distribution: { score: number; max: number; details: string }
+    income_ratio: {
+      score: number
+      details: string
+      max: number
+      compatible: boolean
+    }
+    professional_stability: {
+      score: number
+      details: string
+      max: number
+      compatible: boolean
+    }
+    guarantor: {
+      score: number
+      details: string
+      max: number
+      compatible: boolean
+    }
+    application_quality: {
+      score: number
+      details: string
+      max: number
+      compatible: boolean
+    }
   }
-  warnings: string[]
   recommendations: string[]
-  exclusions: string[]
+  warnings: string[]
 }
 
-export interface ApplicationProfile {
-  income: number
-  contract_type: string
-  profession: string
-  company: string
-  trial_period: boolean
-  seniority_months: number
-  has_guarantor: boolean
-  guarantor_income: number
-  guarantor_type: string
-  file_complete: boolean
-  has_verified_documents: boolean
-  presentation: string
-}
+export const scoringPreferencesService = {
+  // Obtenir les préférences par défaut pour un propriétaire
+  getDefaultPreferences(ownerId: string): ScoringPreferences {
+    return {
+      owner_id: ownerId,
+      name: "Préférences par défaut",
+      is_default: true,
+      criteria: {
+        income_ratio: {
+          weight: 40,
+          thresholds: {
+            excellent: 3.5,
+            good: 3.0,
+            acceptable: 2.5,
+            minimum: 2.0,
+          },
+          points: {
+            excellent: 100,
+            good: 75,
+            acceptable: 50,
+            insufficient: 0,
+          },
+        },
+        professional_stability: {
+          weight: 30,
+          contract_types: {
+            cdi: 100,
+            cdd: 75,
+            freelance: 50,
+            student: 25,
+            unemployed: 0,
+            retired: 80,
+          },
+          seniority_bonus: {
+            enabled: true,
+            min_months: 12,
+            bonus_points: 10,
+          },
+          trial_period_penalty: {
+            enabled: true,
+            penalty_points: 20,
+          },
+        },
+        guarantor: {
+          weight: 20,
+          presence_points: 100,
+          income_ratio_bonus: {
+            enabled: true,
+            threshold: 3.0,
+            bonus_points: 20,
+          },
+          multiple_guarantors_bonus: {
+            enabled: true,
+            bonus_per_additional: 10,
+          },
+        },
+        application_quality: {
+          weight: 10,
+          file_completeness: {
+            required: false,
+            bonus_points: 50,
+          },
+          verified_documents: {
+            required: false,
+            bonus_points: 50,
+          },
+        },
+      },
+    }
+  },
 
-export interface Property {
-  price: number
-  rooms?: number
-  type?: string
-}
+  // Calculer le score personnalisé
+  calculateCustomScore(application: any, property: any, preferences: ScoringPreferences): ScoringResult {
+    // Vérifier que les critères existent
+    if (!preferences || !preferences.criteria) {
+      console.error("Préférences ou critères manquants", preferences)
+      preferences = this.getDefaultPreferences(preferences?.owner_id || "default")
+    }
 
-class ScoringPreferencesService {
-  calculateScore(application: ApplicationProfile, property: Property, preferences: ScoringPreferences): ScoringResult {
+    const criteria = preferences.criteria
+
+    // Vérifier que tous les critères nécessaires existent
+    if (
+      !criteria.income_ratio ||
+      !criteria.professional_stability ||
+      !criteria.guarantor ||
+      !criteria.application_quality
+    ) {
+      console.error("Critères incomplets, utilisation des valeurs par défaut")
+      criteria.income_ratio = criteria.income_ratio || this.getDefaultPreferences("default").criteria.income_ratio
+      criteria.professional_stability =
+        criteria.professional_stability || this.getDefaultPreferences("default").criteria.professional_stability
+      criteria.guarantor = criteria.guarantor || this.getDefaultPreferences("default").criteria.guarantor
+      criteria.application_quality =
+        criteria.application_quality || this.getDefaultPreferences("default").criteria.application_quality
+    }
+
     const result: ScoringResult = {
       totalScore: 0,
-      compatible: true,
+      compatible: false,
       breakdown: {
-        income_ratio: { score: 0, max: 0, details: "" },
-        guarantor: { score: 0, max: 0, details: "" },
-        professional_stability: { score: 0, max: 0, details: "" },
-        file_quality: { score: 0, max: 0, details: "" },
-        property_coherence: { score: 0, max: 0, details: "" },
-        income_distribution: { score: 0, max: 0, details: "" },
+        income_ratio: { score: 0, max: criteria.income_ratio.weight, details: "", compatible: false },
+        professional_stability: {
+          score: 0,
+          max: criteria.professional_stability.weight,
+          details: "",
+          compatible: false,
+        },
+        guarantor: { score: 0, max: criteria.guarantor.weight, details: "", compatible: false },
+        application_quality: { score: 0, max: criteria.application_quality.weight, details: "", compatible: false },
       },
-      warnings: [],
       recommendations: [],
-      exclusions: [],
+      warnings: [],
     }
 
-    // 1. Calcul du score revenus
-    const incomeRatio = application.income / property.price
-    const incomeScore = this.calculateIncomeScore(incomeRatio, preferences.criteria.income_ratio)
-    result.breakdown.income_ratio = {
-      score: incomeScore,
-      max: preferences.criteria.income_ratio.weight,
-      details: `Ratio ${incomeRatio.toFixed(1)}x`,
-    }
+    // 1. Évaluation des revenus
+    const income = application.income || 0
+    const rent = property.price || 0
 
-    // 2. Calcul du score garant
-    const guarantorScore = this.calculateGuarantorScore(application, property, preferences.criteria.guarantor)
-    result.breakdown.guarantor = {
-      score: guarantorScore,
-      max: preferences.criteria.guarantor.weight,
-      details: application.has_guarantor ? "Garant présent" : "Pas de garant",
-    }
+    if (income > 0 && rent > 0) {
+      const ratio = income / rent
 
-    // 3. Calcul du score stabilité professionnelle
-    const professionalScore = this.calculateProfessionalScore(application, preferences.criteria.professional_stability)
-    result.breakdown.professional_stability = {
-      score: professionalScore,
-      max: preferences.criteria.professional_stability.weight,
-      details: application.contract_type.replace("_", " "),
-    }
-
-    // 4. Calcul du score qualité dossier
-    const fileScore = this.calculateFileScore(application, preferences.criteria.file_quality)
-    result.breakdown.file_quality = {
-      score: fileScore,
-      max: preferences.criteria.file_quality.weight,
-      details: application.file_complete ? "Dossier complet" : "Dossier incomplet",
-    }
-
-    // 5. Calcul du score cohérence propriété (score par défaut)
-    const coherenceScore = preferences.criteria.property_coherence.weight * 0.8
-    result.breakdown.property_coherence = {
-      score: Math.round(coherenceScore),
-      max: preferences.criteria.property_coherence.weight,
-      details: "Cohérence évaluée",
-    }
-
-    // 6. Calcul du score répartition revenus (score par défaut)
-    const distributionScore = preferences.criteria.income_distribution.weight * 0.8
-    result.breakdown.income_distribution = {
-      score: Math.round(distributionScore),
-      max: preferences.criteria.income_distribution.weight,
-      details: "Répartition évaluée",
-    }
-
-    // Calcul du score total
-    result.totalScore = Math.round(
-      incomeScore + guarantorScore + professionalScore + fileScore + coherenceScore + distributionScore,
-    )
-
-    // Vérification des règles d'exclusion
-    this.checkExclusionRules(application, property, preferences.exclusion_rules, result)
-
-    // Génération des warnings et recommandations
-    this.generateWarningsAndRecommendations(application, property, preferences, result)
-
-    return result
-  }
-
-  private calculateIncomeScore(ratio: number, criteria: ScoringPreferences["criteria"]["income_ratio"]): number {
-    const { weight, thresholds } = criteria
-
-    if (ratio >= thresholds.excellent) return weight
-    if (ratio >= thresholds.good) return Math.round(weight * 0.85)
-    if (ratio >= thresholds.acceptable) return Math.round(weight * 0.65)
-    if (ratio >= thresholds.minimum) return Math.round(weight * 0.4)
-    return Math.round(weight * 0.2)
-  }
-
-  private calculateGuarantorScore(
-    application: ApplicationProfile,
-    property: Property,
-    criteria: ScoringPreferences["criteria"]["guarantor"],
-  ): number {
-    const { weight, required_if_income_below, minimum_income_ratio } = criteria
-    const incomeRatio = application.income / property.price
-
-    if (application.has_guarantor) {
-      const guarantorRatio = application.guarantor_income / property.price
-      if (guarantorRatio >= minimum_income_ratio) {
-        return weight
+      if (ratio >= criteria.income_ratio.thresholds.excellent) {
+        result.breakdown.income_ratio.score = Math.round(
+          (criteria.income_ratio.points.excellent / 100) * criteria.income_ratio.weight,
+        )
+        result.breakdown.income_ratio.details = `Excellent ratio revenus/loyer (${ratio.toFixed(1)}x)`
+        result.breakdown.income_ratio.compatible = true
+      } else if (ratio >= criteria.income_ratio.thresholds.good) {
+        result.breakdown.income_ratio.score = Math.round(
+          (criteria.income_ratio.points.good / 100) * criteria.income_ratio.weight,
+        )
+        result.breakdown.income_ratio.details = `Bon ratio revenus/loyer (${ratio.toFixed(1)}x)`
+        result.breakdown.income_ratio.compatible = true
+      } else if (ratio >= criteria.income_ratio.thresholds.acceptable) {
+        result.breakdown.income_ratio.score = Math.round(
+          (criteria.income_ratio.points.acceptable / 100) * criteria.income_ratio.weight,
+        )
+        result.breakdown.income_ratio.details = `Ratio revenus/loyer acceptable (${ratio.toFixed(1)}x)`
+        result.breakdown.income_ratio.compatible = true
       } else {
-        return Math.round(weight * 0.6)
+        result.breakdown.income_ratio.score = Math.round(
+          (criteria.income_ratio.points.insufficient / 100) * criteria.income_ratio.weight,
+        )
+        result.breakdown.income_ratio.details = `Ratio revenus/loyer insuffisant (${ratio.toFixed(1)}x)`
+        result.breakdown.income_ratio.compatible = false
+        result.warnings.push(
+          `Revenus insuffisants : ${ratio.toFixed(1)}x le loyer (minimum : ${criteria.income_ratio.thresholds.minimum}x)`,
+        )
       }
     } else {
-      // Pas de garant
-      if (incomeRatio >= required_if_income_below) {
-        // Revenus suffisants, pas besoin de garant
-        return Math.round(weight * 0.3)
-      } else {
-        // Revenus insuffisants et pas de garant
-        return 0
-      }
+      result.breakdown.income_ratio.details = "Revenus ou loyer non spécifiés"
+      result.warnings.push("Revenus non spécifiés")
     }
-  }
 
-  private calculateProfessionalScore(
-    application: ApplicationProfile,
-    criteria: ScoringPreferences["criteria"]["professional_stability"],
-  ): number {
-    const { weight, contract_scoring, seniority_bonus, trial_period_penalty } = criteria
+    // 2. Évaluation de la stabilité professionnelle
+    const contractType = application.contract_type?.toLowerCase() || "unknown"
+    const contractScore =
+      criteria.professional_stability.contract_types[
+        contractType as keyof typeof criteria.professional_stability.contract_types
+      ] || 0
 
-    const baseScore = contract_scoring[application.contract_type as keyof typeof contract_scoring] || 0
-
-    // Normaliser le score sur le poids du critère
-    let score = (baseScore / 20) * weight
+    result.breakdown.professional_stability.score = Math.round(
+      (contractScore / 100) * criteria.professional_stability.weight,
+    )
+    result.breakdown.professional_stability.details = `Type de contrat: ${contractType.toUpperCase()} (${contractScore}%)`
+    result.breakdown.professional_stability.compatible = contractScore >= 50
 
     // Bonus ancienneté
-    if (seniority_bonus.enabled && application.seniority_months >= seniority_bonus.min_months) {
-      score += seniority_bonus.bonus_points
+    if (
+      criteria.professional_stability.seniority_bonus.enabled &&
+      application.seniority_months >= criteria.professional_stability.seniority_bonus.min_months
+    ) {
+      const bonus = Math.round(
+        (criteria.professional_stability.seniority_bonus.bonus_points / 100) * criteria.professional_stability.weight,
+      )
+      result.breakdown.professional_stability.score = Math.min(
+        criteria.professional_stability.weight,
+        result.breakdown.professional_stability.score + bonus,
+      )
+      result.breakdown.professional_stability.details += ` + bonus ancienneté`
     }
 
     // Pénalité période d'essai
-    if (application.trial_period) {
-      score -= trial_period_penalty
+    if (criteria.professional_stability.trial_period_penalty.enabled && application.trial_period) {
+      const penalty = Math.round(
+        (criteria.professional_stability.trial_period_penalty.penalty_points / 100) *
+          criteria.professional_stability.weight,
+      )
+      result.breakdown.professional_stability.score = Math.max(
+        0,
+        result.breakdown.professional_stability.score - penalty,
+      )
+      result.breakdown.professional_stability.details += ` - pénalité période d'essai`
     }
 
-    return Math.max(0, Math.round(score))
-  }
+    // 3. Évaluation des garants
+    if (application.has_guarantor) {
+      result.breakdown.guarantor.score = Math.round(
+        (criteria.guarantor.presence_points / 100) * criteria.guarantor.weight,
+      )
+      result.breakdown.guarantor.details = "Garant présent"
+      result.breakdown.guarantor.compatible = true
 
-  private calculateFileScore(
-    application: ApplicationProfile,
-    criteria: ScoringPreferences["criteria"]["file_quality"],
-  ): number {
-    const { weight, complete_documents_required, verified_documents_required, presentation_quality_weight } = criteria
-
-    let score = 0
-
-    // Score de base pour complétude
-    if (application.file_complete) {
-      score += weight * 0.4
-    } else if (complete_documents_required) {
-      return 0 // Exclusion si dossier incomplet requis
-    }
-
-    // Score pour documents vérifiés
-    if (application.has_verified_documents) {
-      score += weight * 0.3
-    } else if (verified_documents_required) {
-      score *= 0.5 // Pénalité si vérification requise
-    }
-
-    // Score pour présentation
-    const presentationScore = (presentation_quality_weight / 20) * weight
-    if (application.presentation.length > 50) {
-      score += presentationScore
+      // Bonus revenus garant
+      if (criteria.guarantor.income_ratio_bonus.enabled && application.guarantor_income && rent > 0) {
+        const guarantorRatio = application.guarantor_income / rent
+        if (guarantorRatio >= criteria.guarantor.income_ratio_bonus.threshold) {
+          const bonus = Math.round(
+            (criteria.guarantor.income_ratio_bonus.bonus_points / 100) * criteria.guarantor.weight,
+          )
+          result.breakdown.guarantor.score = Math.min(
+            criteria.guarantor.weight,
+            result.breakdown.guarantor.score + bonus,
+          )
+          result.breakdown.guarantor.details += ` + bonus revenus garant (${guarantorRatio.toFixed(1)}x)`
+        }
+      }
     } else {
-      score += presentationScore * 0.3
+      result.breakdown.guarantor.score = 0
+      result.breakdown.guarantor.details = "Pas de garant"
+      result.breakdown.guarantor.compatible = false
     }
 
-    return Math.round(score)
-  }
+    // 4. Évaluation de la qualité du dossier
+    let fileScore = 0
+    const fileDetails = []
 
-  private checkExclusionRules(
-    application: ApplicationProfile,
-    property: Property,
-    rules: ScoringPreferences["exclusion_rules"],
-    result: ScoringResult,
-  ): void {
-    const incomeRatio = application.income / property.price
-
-    if (rules.incomplete_file && !application.file_complete) {
-      result.compatible = false
-      result.exclusions.push("Dossier incomplet")
+    // Vérifier la complétude du dossier
+    const isComplete = application.file_complete || false
+    if (criteria.application_quality.file_completeness.required) {
+      if (isComplete) {
+        fileScore += criteria.application_quality.file_completeness.bonus_points
+        fileDetails.push("dossier complet")
+      } else {
+        result.warnings.push("Dossier incomplet requis")
+        fileDetails.push("dossier incomplet")
+      }
+    } else if (isComplete) {
+      fileScore += criteria.application_quality.file_completeness.bonus_points
+      fileDetails.push("dossier complet (bonus)")
     }
 
-    if (rules.no_guarantor_when_required && !application.has_guarantor && incomeRatio < 3.0) {
-      result.compatible = false
-      result.exclusions.push("Garant requis")
+    // Vérifier les documents vérifiés
+    const hasVerifiedDocs = application.has_verified_documents || false
+    if (criteria.application_quality.verified_documents.required) {
+      if (hasVerifiedDocs) {
+        fileScore += criteria.application_quality.verified_documents.bonus_points
+        fileDetails.push("documents vérifiés")
+      } else {
+        result.warnings.push("Documents vérifiés requis")
+        fileDetails.push("documents non vérifiés")
+      }
+    } else if (hasVerifiedDocs) {
+      fileScore += criteria.application_quality.verified_documents.bonus_points
+      fileDetails.push("documents vérifiés (bonus)")
     }
 
-    if (rules.income_ratio_below_2 && incomeRatio < 2.0) {
-      result.compatible = false
-      result.exclusions.push("Revenus insuffisants")
-    }
+    result.breakdown.application_quality.score = Math.round(
+      (Math.min(100, fileScore) / 100) * criteria.application_quality.weight,
+    )
+    result.breakdown.application_quality.details = fileDetails.length > 0 ? fileDetails.join(", ") : "Dossier standard"
+    result.breakdown.application_quality.compatible =
+      (!criteria.application_quality.file_completeness.required || isComplete) &&
+      (!criteria.application_quality.verified_documents.required || hasVerifiedDocs)
 
-    if (rules.unverified_documents && !application.has_verified_documents) {
-      result.compatible = false
-      result.exclusions.push("Documents non vérifiés")
-    }
-  }
+    // Calcul du score total
+    result.totalScore = Math.min(
+      100,
+      result.breakdown.income_ratio.score +
+        result.breakdown.professional_stability.score +
+        result.breakdown.guarantor.score +
+        result.breakdown.application_quality.score,
+    )
 
-  private generateWarningsAndRecommendations(
-    application: ApplicationProfile,
-    property: Property,
-    preferences: ScoringPreferences,
-    result: ScoringResult,
-  ): void {
-    const incomeRatio = application.income / property.price
+    // Déterminer la compatibilité globale
+    result.compatible =
+      result.totalScore >= 60 &&
+      result.breakdown.income_ratio.compatible &&
+      result.breakdown.professional_stability.compatible &&
+      result.breakdown.application_quality.compatible
 
-    // Warnings
-    if (incomeRatio < 3.0) {
-      result.warnings.push("Ratio revenus/loyer faible")
-    }
-
-    if (application.trial_period) {
-      result.warnings.push("Candidat en période d'essai")
-    }
-
-    if (!application.file_complete) {
-      result.warnings.push("Dossier incomplet")
-    }
-
-    // Recommandations
+    // Ajouter des recommandations
     if (result.totalScore < 60) {
-      result.recommendations.push("Score faible - Examiner attentivement")
-    } else if (result.totalScore >= 80) {
-      result.recommendations.push("Excellent profil - Candidature recommandée")
-    } else {
-      result.recommendations.push("Profil correct - Candidature acceptable")
+      result.recommendations.push("Améliorer le score global pour atteindre au moins 60/100")
     }
-  }
-
-  async getSystemPreferences(): Promise<ScoringPreferences[]> {
-    try {
-      const response = await fetch("/api/admin/scoring-preferences")
-      if (!response.ok) throw new Error("Erreur réseau")
-
-      const data = await response.json()
-      return data.preferences || []
-    } catch (error) {
-      console.error("Erreur chargement préférences système:", error)
-      return []
+    if (!result.breakdown.income_ratio.compatible) {
+      result.recommendations.push("Augmenter les revenus ou trouver un garant")
     }
-  }
-
-  async getUserPreferences(ownerId: string): Promise<ScoringPreferences[]> {
-    try {
-      const response = await fetch(`/api/scoring-preferences?owner_id=${ownerId}`)
-      if (!response.ok) throw new Error("Erreur réseau")
-
-      const data = await response.json()
-      return data.preferences || []
-    } catch (error) {
-      console.error("Erreur chargement préférences utilisateur:", error)
-      return []
+    if (!result.breakdown.guarantor.compatible && criteria.guarantor.weight > 15) {
+      result.recommendations.push("Ajouter un garant pour sécuriser le dossier")
     }
-  }
-
-  async savePreferences(preferences: Partial<ScoringPreferences>): Promise<ScoringPreferences> {
-    try {
-      const response = await fetch("/api/scoring-preferences", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(preferences),
-      })
-
-      if (!response.ok) throw new Error("Erreur sauvegarde")
-
-      const data = await response.json()
-      return data.preference || data.preferences
-    } catch (error) {
-      console.error("Erreur sauvegarde préférences:", error)
-      throw error
+    if (!result.breakdown.application_quality.compatible) {
+      result.recommendations.push("Compléter le dossier et faire vérifier les documents")
     }
-  }
 
-  async useSystemPreference(ownerId: string, systemPreferenceId: string): Promise<ScoringPreferences> {
-    try {
-      const response = await fetch("/api/scoring-preferences/use-system", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          owner_id: ownerId,
-          system_preference_id: systemPreferenceId,
-        }),
-      })
+    return result
+  },
 
-      if (!response.ok) throw new Error("Erreur application modèle")
+  // Valider les préférences
+  validatePreferences(preferences: ScoringPreferences): { valid: boolean; errors: string[] } {
+    const errors: string[] = []
 
-      const data = await response.json()
-      return data.preference
-    } catch (error) {
-      console.error("Erreur application modèle système:", error)
-      throw error
+    if (!preferences.criteria) {
+      errors.push("Critères manquants")
+      return { valid: false, errors }
     }
-  }
+
+    const totalWeight =
+      (preferences.criteria.income_ratio?.weight || 0) +
+      (preferences.criteria.professional_stability?.weight || 0) +
+      (preferences.criteria.guarantor?.weight || 0) +
+      (preferences.criteria.application_quality?.weight || 0)
+
+    if (totalWeight !== 100) {
+      errors.push(`Le total des poids doit être égal à 100% (actuellement: ${totalWeight}%)`)
+    }
+
+    return { valid: errors.length === 0, errors }
+  },
 }
-
-export const scoringPreferencesService = new ScoringPreferencesService()
