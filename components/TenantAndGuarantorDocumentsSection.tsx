@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { DownloadIcon, CheckIcon } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
-import { generateRentalFilePDF } from "@/lib/pdf-generator-final"
+import { generateRentalFilePDF } from "@/lib/pdf-generator-corrected"
 import { Loader2 } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
@@ -21,20 +21,21 @@ interface ApplicationDocument {
 }
 
 interface TenantAndGuarantorDocumentsSectionProps {
-    applicationId: string
-    mainTenant?: any
-    guarantors?: any[]
-    userId: string // Rendons cette prop obligatoire
-    userName: string // Rendons cette prop obligatoire
-    rentalFile?: any // Ajout d'une prop pour le fichier complet si nécessaire
-  }
+  applicationId: string
+  mainTenant?: any
+  guarantors?: any[]
+  userId: string
+  userName: string
+  rentalFile: any // Maintenant obligatoire
+}
 
 export function TenantAndGuarantorDocumentsSection({
   applicationId,
   mainTenant,
   guarantors = [],
   userId,
-  userName
+  userName,
+  rentalFile
 }: TenantAndGuarantorDocumentsSectionProps) {
   const [isDownloading, setIsDownloading] = useState(false)
 
@@ -193,33 +194,43 @@ export function TenantAndGuarantorDocumentsSection({
       setIsDownloading(true)
       toast.info("Génération du PDF en cours...")
 
-      const pdfBlob = await generateRentalFilePDF({
-        rentalFile: {
-          main_tenant: mainTenant,
-          guarantors,
-          id: applicationId
+      // Préparer les données pour le PDF
+      const pdfData = {
+        ...rentalFile,
+        main_tenant: {
+          ...rentalFile.main_tenant,
+          identity_documents: rentalFile.main_tenant?.identity_documents || [],
+          activity_documents: rentalFile.main_tenant?.activity_documents || [],
         },
-        userId,
-        userName
-      })
+        guarantors: rentalFile.guarantors?.map(guarantor => ({
+          ...guarantor,
+          personal_info: {
+            ...guarantor.personal_info,
+            identity_documents: guarantor.personal_info?.identity_documents || [],
+          }
+        })) || []
+      };
 
-      const url = window.URL.createObjectURL(pdfBlob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `Dossier-Location-${userName.replace(' ', '-')}-${new Date().toISOString().split('T')[0]}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      a.remove()
+      const pdfBlob = await generateRentalFilePDF(pdfData);
+      
+      // Créer et télécharger le PDF
+      const url = window.URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Dossier-Location-${userName.replace(' ', '-')}-${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
 
-      toast.success("Téléchargement terminé !")
+      toast.success("Téléchargement terminé !");
     } catch (error) {
-      console.error("Erreur génération PDF:", error)
-      toast.error("Erreur lors de la génération du PDF")
+      console.error("Erreur génération PDF:", error);
+      toast.error("Erreur lors de la génération du PDF");
     } finally {
-      setIsDownloading(false)
+      setIsDownloading(false);
     }
-}
+  }
 
   const documents = flattenDocuments()
 
