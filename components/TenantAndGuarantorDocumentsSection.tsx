@@ -194,7 +194,7 @@ export function TenantAndGuarantorDocumentsSection({
       toast.info("Génération du PDF en cours...")
 
       const pdfBlob = await generateRentalFilePDF({
-        rentalFile: rentalFile || { // Utilisez le rentalFile passé en prop ou créez un objet minimal
+        rentalFile: {
           main_tenant: mainTenant,
           guarantors,
           id: applicationId
