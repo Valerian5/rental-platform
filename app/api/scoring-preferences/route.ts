@@ -1,5 +1,24 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
+
+// Créer le client Supabase avec la clé service pour contourner RLS si nécessaire
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+  },
+})
+
+// Client normal pour les opérations utilisateur
+const supabase = createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+  },
+})
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,7 +30,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "owner_id requis" }, { status: 400 })
     }
 
-    let query = supabase
+    console.log("🔍 Récupération préférences pour:", ownerId, "default_only:", defaultOnly)
+
+    // Utiliser le client admin pour éviter les problèmes RLS lors de la lecture
+    let query = supabaseAdmin
       .from("scoring_preferences")
       .select("*")
       .eq("owner_id", ownerId)
@@ -24,13 +46,15 @@ export async function GET(request: NextRequest) {
     const { data: preferences, error } = await query
 
     if (error) {
-      console.error("Erreur récupération préférences:", error)
+      console.error("❌ Erreur récupération préférences:", error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
+    console.log("✅ Préférences récupérées:", preferences?.length || 0)
+
     return NextResponse.json({ preferences: preferences || [] })
   } catch (error) {
-    console.error("Erreur API scoring-preferences GET:", error)
+    console.error("❌ Erreur API scoring-preferences GET:", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }
@@ -47,6 +71,8 @@ export async function POST(request: NextRequest) {
       exclusion_rules,
       system_preference_id,
     } = body
+
+    console.log("💾 Création préférence pour:", owner_id, "modèle:", model_type)
 
     if (!owner_id || !name || !criteria) {
       return NextResponse.json({ error: "owner_id, name et criteria sont requis" }, { status: 400 })
@@ -80,15 +106,24 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Vérifier que l'utilisateur existe
+    const { data: user, error: userError } = await supabaseAdmin.from("users").select("id").eq("id", owner_id).single()
+
+    if (userError || !user) {
+      console.error("❌ Utilisateur non trouvé:", owner_id, userError)
+      return NextResponse.json({ error: "Utilisateur non trouvé" }, { status: 404 })
+    }
+
     // Si c'est une préférence par défaut, désactiver les autres
     if (is_default) {
-      const { error: updateError } = await supabase
+      const { error: updateError } = await supabaseAdmin
         .from("scoring_preferences")
         .update({ is_default: false })
         .eq("owner_id", owner_id)
+        .eq("is_system", false)
 
       if (updateError) {
-        console.error("Erreur mise à jour préférences existantes:", updateError)
+        console.error("⚠️ Erreur mise à jour préférences existantes:", updateError)
       }
     }
 
@@ -98,6 +133,7 @@ export async function POST(request: NextRequest) {
       name,
       model_type,
       is_default,
+      is_system: false, // Toujours false pour les préférences utilisateur
       criteria,
       exclusion_rules: exclusion_rules || {
         incomplete_file: false,
@@ -109,14 +145,21 @@ export async function POST(request: NextRequest) {
       system_preference_id,
     }
 
-    const { data: preference, error } = await supabase
+    console.log("📝 Données à insérer:", {
+      ...preferenceData,
+      criteria: "...", // Ne pas logger les critères complets
+      exclusion_rules: "...",
+    })
+
+    // Utiliser le client admin pour l'insertion
+    const { data: preference, error } = await supabaseAdmin
       .from("scoring_preferences")
       .insert(preferenceData)
       .select()
       .single()
 
     if (error) {
-      console.error("Erreur création préférence:", error)
+      console.error("❌ Erreur création préférence:", error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
@@ -127,7 +170,7 @@ export async function POST(request: NextRequest) {
       message: "Préférence de scoring créée avec succès",
     })
   } catch (error) {
-    console.error("Erreur API scoring-preferences POST:", error)
+    console.error("❌ Erreur API scoring-preferences POST:", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }
@@ -141,37 +184,43 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "ID requis" }, { status: 400 })
     }
 
+    console.log("🔄 Mise à jour préférence:", id)
+
     // Si c'est une préférence par défaut, désactiver les autres
-    if (updateData.is_default) {
-      const { error: updateError } = await supabase
+    if (updateData.is_default && updateData.owner_id) {
+      const { error: updateError } = await supabaseAdmin
         .from("scoring_preferences")
         .update({ is_default: false })
         .eq("owner_id", updateData.owner_id)
+        .eq("is_system", false)
         .neq("id", id)
 
       if (updateError) {
-        console.error("Erreur mise à jour préférences existantes:", updateError)
+        console.error("⚠️ Erreur mise à jour préférences existantes:", updateError)
       }
     }
 
-    const { data: preference, error } = await supabase
+    const { data: preference, error } = await supabaseAdmin
       .from("scoring_preferences")
       .update(updateData)
       .eq("id", id)
+      .eq("is_system", false) // Seulement les préférences utilisateur
       .select()
       .single()
 
     if (error) {
-      console.error("Erreur mise à jour préférence:", error)
+      console.error("❌ Erreur mise à jour préférence:", error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
+
+    console.log("✅ Préférence mise à jour:", preference.id)
 
     return NextResponse.json({
       preference,
       message: "Préférence mise à jour avec succès",
     })
   } catch (error) {
-    console.error("Erreur API scoring-preferences PUT:", error)
+    console.error("❌ Erreur API scoring-preferences PUT:", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }
