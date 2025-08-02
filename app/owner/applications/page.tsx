@@ -406,59 +406,59 @@ export default function ApplicationsPage() {
 
   // Fonction pour calculer le score de matching avec les préférences du propriétaire
   const calculateMatchScore = (application) => {
-    if (!application.property?.price || !application.income || !scoringPreferences) {
-      return 50 // Score par défaut
+    if (!application?.property?.price || !scoringPreferences || !scoringPreferences.weights) {
+      return 50 // Score par défaut si données manquantes
     }
-
-    const property = application.property
+  
+    const income = application.income || 0
+    const { income: incomeWeight = 0, stability = 0, guarantor = 0, file_quality = 0 } = scoringPreferences.weights
+    const minRatio = scoringPreferences.min_income_ratio || 2.5
+    const goodRatio = scoringPreferences.good_income_ratio || 3
+    const excellentRatio = scoringPreferences.excellent_income_ratio || 3.5
+  
     let score = 0
-
-    // 1. Score revenus (selon les préférences)
-    const rentRatio = application.income / property.price
-
-    if (rentRatio >= scoringPreferences.excellent_income_ratio) {
-      score += scoringPreferences.weights.income
-    } else if (rentRatio >= scoringPreferences.good_income_ratio) {
-      const points = Math.round(scoringPreferences.weights.income * 0.8)
-      score += points
-    } else if (rentRatio >= scoringPreferences.min_income_ratio) {
-      const points = Math.round(scoringPreferences.weights.income * 0.6)
-      score += points
+  
+    // 1. Score revenus
+    const rentRatio = income / application.property.price
+  
+    if (rentRatio >= excellentRatio) {
+      score += incomeWeight
+    } else if (rentRatio >= goodRatio) {
+      score += Math.round(incomeWeight * 0.8)
+    } else if (rentRatio >= minRatio) {
+      score += Math.round(incomeWeight * 0.6)
     } else {
-      const points = Math.round(scoringPreferences.weights.income * 0.3)
-      score += points
+      score += Math.round(incomeWeight * 0.3)
     }
-
-    // 2. Score stabilité professionnelle
+  
+    // 2. Score stabilité
     const contractType = (application.contract_type || "").toLowerCase()
-    if (contractType === "cdi" || contractType === "fonctionnaire") {
-      score += scoringPreferences.weights.stability
+    if (["cdi", "fonctionnaire"].includes(contractType)) {
+      score += stability
     } else if (contractType === "cdd") {
-      const points = Math.round(scoringPreferences.weights.stability * 0.7)
-      score += points
+      score += Math.round(stability * 0.7)
     } else {
-      const points = Math.round(scoringPreferences.weights.stability * 0.5)
-      score += points
+      score += Math.round(stability * 0.5)
     }
-
+  
     // 3. Score garant
     if (application.has_guarantor) {
-      score += scoringPreferences.weights.guarantor
+      score += guarantor
     }
-
+  
     // 4. Score qualité du dossier
     let fileQualityScore = 0
     if (application.profession && application.profession !== "Non spécifié") {
-      fileQualityScore += Math.round(scoringPreferences.weights.file_quality * 0.5)
+      fileQualityScore += Math.round(file_quality * 0.5)
     }
     if (application.company && application.company !== "Non spécifié") {
-      fileQualityScore += Math.round(scoringPreferences.weights.file_quality * 0.5)
+      fileQualityScore += Math.round(file_quality * 0.5)
     }
     score += fileQualityScore
-
-    const finalScore = Math.min(Math.round(score), 100)
-    return finalScore
+  
+    return Math.min(Math.round(score), 100)
   }
+  
 
   const getApplicationCounts = () => {
     return {
