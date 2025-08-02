@@ -29,42 +29,46 @@ import {
   CreditCard,
   BarChart3,
   AlertCircle,
-  Home,
-  Phone,
-  Mail,
-  MapPin,
-  Euro,
 } from "lucide-react"
-import { VisitProposalDialog } from "@/components/visit-proposal-dialog"
 
 const DocumentPreview = ({ doc, type, index }: { doc: any; type: string; index: number }) => {
   const getDocTypeColor = (type: string) => {
     switch (type) {
-      case 'identity': return 'text-blue-500';
-      case 'professional': return 'text-green-500';
-      case 'financial': return 'text-purple-500';
-      case 'tax': return 'text-orange-500';
-      case 'housing': return 'text-red-500';
-      default: return 'text-gray-500';
+      case "identity":
+        return "text-blue-500"
+      case "professional":
+        return "text-green-500"
+      case "financial":
+        return "text-purple-500"
+      case "tax":
+        return "text-orange-500"
+      case "housing":
+        return "text-red-500"
+      default:
+        return "text-gray-500"
     }
-  };
+  }
 
   const getDocTypeLabel = (type: string) => {
     switch (type) {
-      case 'identity': return 'Pièce d\'identité';
-      case 'professional': return 'Document professionnel';
-      case 'financial': return 'Document financier';
-      case 'tax': return 'Document fiscal';
-      case 'housing': return 'Justificatif de domicile';
-      default: return 'Document';
+      case "identity":
+        return "Pièce d'identité"
+      case "professional":
+        return "Document professionnel"
+      case "financial":
+        return "Document financier"
+      case "tax":
+        return "Document fiscal"
+      case "housing":
+        return "Justificatif de domicile"
+      default:
+        return "Document"
     }
-  };
+  }
 
-  const colorClass = getDocTypeColor(type);
-  const docType = getDocTypeLabel(type);
-  const label = doc.guarantor_name 
-    ? `${docType} - ${doc.guarantor_name}` 
-    : `${docType} ${index + 1}`;
+  const colorClass = getDocTypeColor(type)
+  const docType = getDocTypeLabel(type)
+  const label = doc.guarantor_name ? `${docType} - ${doc.guarantor_name}` : `${docType} ${index + 1}`
 
   return (
     <div className="border rounded-lg p-3">
@@ -72,16 +76,16 @@ const DocumentPreview = ({ doc, type, index }: { doc: any; type: string; index: 
         <FileText className={`h-4 w-4 ${colorClass}`} />
         <span className="text-sm font-medium">{label}</span>
       </div>
-      {doc.file_type?.startsWith('image/') ? (
+      {doc.file_type?.startsWith("image/") ? (
         <img
-          src={doc.file_url}
+          src={doc.file_url || "/placeholder.svg"}
           alt={label}
           className="w-full h-32 object-contain rounded border bg-gray-50"
           onError={(e) => {
-            const target = e.target as HTMLImageElement;
-            target.style.display = 'none';
-            const fallback = target.nextElementSibling as HTMLElement;
-            if (fallback) fallback.style.display = 'flex';
+            const target = e.target as HTMLImageElement
+            target.style.display = "none"
+            const fallback = target.nextElementSibling as HTMLElement
+            if (fallback) fallback.style.display = "flex"
           }}
         />
       ) : (
@@ -92,20 +96,20 @@ const DocumentPreview = ({ doc, type, index }: { doc: any; type: string; index: 
       <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
         <div className="text-center">
           <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
-          <p className="text-xs text-gray-500">{doc.label || 'Document'}</p>
+          <p className="text-xs text-gray-500">{doc.label || "Document"}</p>
         </div>
       </div>
       <Button
         variant="outline"
         size="sm"
-        className="w-full mt-2"
-        onClick={() => window.open(doc.file_url, '_blank')}
+        className="w-full mt-2 bg-transparent"
+        onClick={() => window.open(doc.file_url, "_blank")}
       >
         Voir le document
       </Button>
     </div>
-  );
-};
+  )
+}
 
 export default function ApplicationDetailsPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -114,8 +118,8 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const [rentalFile, setRentalFile] = useState<any>(null)
   const [user, setUser] = useState<any>(null)
   const [activeTab, setActiveTab] = useState("overview")
-  const [showVisitDialog, setShowVisitDialog] = useState(false);
-  const [currentApplication, setCurrentApplication] = useState<any>(null);
+  const [showVisitDialog, setShowVisitDialog] = useState(false)
+  const [currentApplication, setCurrentApplication] = useState<any>(null)
   const [showRefuseDialog, setShowRefuseDialog] = useState(false)
   const [scoringPreferences, setScoringPreferences] = useState<any>(null)
   const [documents, setDocuments] = useState<any[]>([])
@@ -172,6 +176,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       setApplication(data.application)
       setDocuments(flattenDocuments(data.application))
 
+      // Charger le dossier de location avec enrichissement des données
       if (data.application?.tenant_id) {
         try {
           const rentalFileResponse = await fetch(`/api/rental-files?tenant_id=${data.application.tenant_id}`)
@@ -186,7 +191,31 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                 income: rentalFile.main_tenant?.income_sources?.work_income?.amount,
                 guarantors_count: rentalFile.guarantors?.length || 0,
               })
+
               setRentalFile(rentalFile)
+
+              // Enrichir l'application avec les données du dossier de location
+              let income = 0
+              if (rentalFile.main_tenant?.income_sources?.work_income?.amount) {
+                income = rentalFile.main_tenant.income_sources.work_income.amount
+              } else if (rentalFile.main_tenant?.income_sources?.work_income?.monthly_amount) {
+                income = rentalFile.main_tenant.income_sources.work_income.monthly_amount
+              } else if (rentalFile.main_tenant?.monthly_income) {
+                income = rentalFile.main_tenant.monthly_income
+              } else if (data.application.income) {
+                income = data.application.income
+              }
+
+              // Mettre à jour l'application avec les données enrichies
+              setApplication((prev) => ({
+                ...prev,
+                income,
+                has_guarantor:
+                  (rentalFile.guarantors && rentalFile.guarantors.length > 0) || prev.has_guarantor || false,
+                profession: rentalFile.main_tenant?.profession || prev.profession || "Non spécifié",
+                company: rentalFile.main_tenant?.company || prev.company || "Non spécifié",
+                contract_type: rentalFile.main_tenant?.main_activity || prev.contract_type || "Non spécifié",
+              }))
             }
           }
         } catch (error) {
@@ -194,6 +223,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
         }
       }
 
+      // Charger les préférences de scoring du propriétaire
       if (data.application?.property?.owner_id) {
         try {
           const prefsResponse = await fetch(
@@ -208,34 +238,56 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
           if (prefsResponse.ok) {
             const prefsData = await prefsResponse.json()
             if (prefsData.preferences && prefsData.preferences.length > 0) {
-              console.log("Préférences de scoring récupérées:", prefsData.preferences[0].name)
-              setScoringPreferences(prefsData.preferences[0])
+              const prefs = prefsData.preferences[0]
+              console.log("Préférences de scoring récupérées:", prefs.name || "Modèle personnalisé")
+
+              // Adapter la structure des préférences pour le calcul de score
+              const adaptedPrefs = {
+                name: prefs.name,
+                criteria: prefs.criteria || {},
+                weights: prefs.criteria?.weights || {
+                  income: 40,
+                  stability: 25,
+                  guarantor: 20,
+                  file_quality: 15,
+                },
+                min_income_ratio: prefs.criteria?.min_income_ratio || 2.5,
+                good_income_ratio: prefs.criteria?.good_income_ratio || 3,
+                excellent_income_ratio: prefs.criteria?.excellent_income_ratio || 3.5,
+                exclusion_rules: prefs.exclusion_rules || {},
+              }
+
+              setScoringPreferences(adaptedPrefs)
             } else {
               setScoringPreferences({
-                min_income_ratio: 2.5,
-                good_income_ratio: 3,
-                excellent_income_ratio: 3.5,
+                name: "Modèle standard",
                 weights: {
                   income: 40,
                   stability: 25,
                   guarantor: 20,
                   file_quality: 15,
                 },
+                min_income_ratio: 2.5,
+                good_income_ratio: 3,
+                excellent_income_ratio: 3.5,
+                exclusion_rules: {},
               })
             }
           }
         } catch (error) {
           console.error("Erreur chargement préférences scoring:", error)
           setScoringPreferences({
-            min_income_ratio: 2.5,
-            good_income_ratio: 3,
-            excellent_income_ratio: 3.5,
+            name: "Modèle standard",
             weights: {
               income: 40,
               stability: 25,
               guarantor: 20,
               file_quality: 15,
             },
+            min_income_ratio: 2.5,
+            good_income_ratio: 3,
+            excellent_income_ratio: 3.5,
+            exclusion_rules: {},
           })
         }
       }
@@ -283,9 +335,9 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   }
 
   const handleProposeVisit = () => {
-    setCurrentApplication(application);
-    setShowVisitDialog(true);
-  };
+    setCurrentApplication(application)
+    setShowVisitDialog(true)
+  }
 
   const handleVisitProposed = async (slots: any[]) => {
     try {
@@ -409,53 +461,71 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
 
     const property = application.property
     const mainTenant = rentalFile?.main_tenant || {}
-    const income = mainTenant.income_sources?.work_income?.amount || application.income || 0
+
+    // Récupérer les revenus avec plusieurs sources possibles
+    let income = 0
+    if (mainTenant.income_sources?.work_income?.amount) {
+      income = mainTenant.income_sources.work_income.amount
+    } else if (mainTenant.income_sources?.work_income?.monthly_amount) {
+      income = mainTenant.income_sources.work_income.monthly_amount
+    } else if (mainTenant.monthly_income) {
+      income = mainTenant.monthly_income
+    } else if (application.income) {
+      income = application.income
+    }
+
     const hasGuarantor =
       (rentalFile?.guarantors && rentalFile.guarantors.length > 0) || application.has_guarantor || false
     const contractType = (mainTenant.main_activity || application.contract_type || "").toLowerCase()
 
+    const weights = scoringPreferences.weights || {
+      income: 40,
+      stability: 25,
+      guarantor: 20,
+      file_quality: 15,
+    }
+
     let score = 0
 
-    if (income && property.price) {
+    // 1. Score revenus
+    if (income > 0 && property.price > 0) {
       const rentRatio = income / property.price
 
       if (rentRatio >= scoringPreferences.excellent_income_ratio) {
-        score += scoringPreferences.weights.income
+        score += weights.income
       } else if (rentRatio >= scoringPreferences.good_income_ratio) {
-        const points = Math.round(scoringPreferences.weights.income * 0.8)
-        score += points
+        score += Math.round(weights.income * 0.8)
       } else if (rentRatio >= scoringPreferences.min_income_ratio) {
-        const points = Math.round(scoringPreferences.weights.income * 0.6)
-        score += points
+        score += Math.round(weights.income * 0.6)
       } else {
-        const points = Math.round(scoringPreferences.weights.income * 0.3)
-        score += points
+        score += Math.round(weights.income * 0.3)
       }
     }
 
+    // 2. Score stabilité
     if (contractType === "cdi" || contractType === "fonctionnaire") {
-      score += scoringPreferences.weights.stability
+      score += weights.stability
     } else if (contractType === "cdd") {
-      const points = Math.round(scoringPreferences.weights.stability * 0.7)
-      score += points
+      score += Math.round(weights.stability * 0.7)
     } else {
-      const points = Math.round(scoringPreferences.weights.stability * 0.5)
-      score += points
+      score += Math.round(weights.stability * 0.5)
     }
 
+    // 3. Score garant
     if (hasGuarantor) {
-      score += scoringPreferences.weights.guarantor
+      score += weights.guarantor
     }
 
+    // 4. Score qualité du dossier
     let fileQualityScore = 0
     const profession = mainTenant.profession || application.profession
     const company = mainTenant.company || application.company
 
     if (profession && profession !== "Non spécifié") {
-      fileQualityScore += Math.round(scoringPreferences.weights.file_quality * 0.5)
+      fileQualityScore += Math.round(weights.file_quality * 0.5)
     }
     if (company && company !== "Non spécifié") {
-      fileQualityScore += Math.round(scoringPreferences.weights.file_quality * 0.5)
+      fileQualityScore += Math.round(weights.file_quality * 0.5)
     }
     score += fileQualityScore
 
@@ -651,7 +721,18 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const property = application.property || {}
   const mainTenant = rentalFile?.main_tenant || {}
 
-  const income = mainTenant.income_sources?.work_income?.amount || application.income || 0
+  // Récupérer les revenus avec plusieurs sources possibles
+  let income = 0
+  if (mainTenant.income_sources?.work_income?.amount) {
+    income = mainTenant.income_sources.work_income.amount
+  } else if (mainTenant.income_sources?.work_income?.monthly_amount) {
+    income = mainTenant.income_sources.work_income.monthly_amount
+  } else if (mainTenant.monthly_income) {
+    income = mainTenant.monthly_income
+  } else if (application.income) {
+    income = application.income
+  }
+
   const hasGuarantor =
     (rentalFile?.guarantors && rentalFile.guarantors.length > 0) || application.has_guarantor || false
   const profession = mainTenant.profession || application.profession || "Non spécifié"
@@ -683,7 +764,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             <div>
               <h2 className="text-xl font-semibold">Score de compatibilité</h2>
               <p className="text-sm text-muted-foreground">
-                Basé sur les revenus, la stabilité professionnelle et les garants
+                Basé sur {scoringPreferences?.name || "le modèle standard"}
               </p>
             </div>
           </div>
@@ -1140,11 +1221,11 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               <CardContent>
                 <div className="space-y-4">
                   <div className="flex items-center gap-4">
-                    <CircularScore score={matchScore} size="md" />
+                    <CircularScore score={matchScore} size="md" customPreferences={scoringPreferences} />
                     <div>
                       <h3 className="font-medium">Score global: {matchScore}/100</h3>
                       <p className="text-sm text-muted-foreground">
-                        Évaluation basée sur les revenus, la stabilité professionnelle et les garanties
+                        Évaluation basée sur {scoringPreferences?.name || "le modèle standard"}
                       </p>
                     </div>
                   </div>
@@ -1259,29 +1340,29 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             </Card>
           </TabsContent>
 
-{/* Documents */}
-<TabsContent value="documents" className="space-y-6">
-<Card>
-  <CardHeader>
-    <CardTitle className="flex items-center gap-2">
-      <FileText className="h-5 w-5" />
-      Documents fournis
-    </CardTitle>
-  </CardHeader>
-  <CardContent>
-    {user && (
-      <TenantAndGuarantorDocumentsSection
-        applicationId={application.id}
-        mainTenant={rentalFile?.main_tenant}
-        guarantors={rentalFile?.guarantors || []}
-        userId={user.id}
-        userName={`${user.first_name} ${user.last_name}`}
-        rentalFile={rentalFile}
-      />
-    )}
-  </CardContent>
-</Card>
-</TabsContent>
+          {/* Documents */}
+          <TabsContent value="documents" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Documents fournis
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {user && (
+                  <TenantAndGuarantorDocumentsSection
+                    applicationId={application.id}
+                    mainTenant={rentalFile?.main_tenant}
+                    guarantors={rentalFile?.guarantors || []}
+                    userId={user.id}
+                    userName={`${user.first_name} ${user.last_name}`}
+                    rentalFile={rentalFile}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
       </div>
 
@@ -1295,9 +1376,9 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
           applicationId={currentApplication.id}
           tenantName={`${currentApplication.tenant?.first_name || ""} ${currentApplication.tenant?.last_name || ""}`}
           onSlotsProposed={async (slots) => {
-            await updateApplicationStatus("visit_proposed");
-            setShowVisitDialog(false);
-            toast.success("Créneaux de visite proposés avec succès");
+            await updateApplicationStatus("visit_proposed")
+            setShowVisitDialog(false)
+            toast.success("Créneaux de visite proposés avec succès")
           }}
         />
       )}
@@ -1306,24 +1387,24 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
 }
 
 function flattenDocuments(application: any): any[] {
-  if (!application) return [];
+  if (!application) return []
 
-  const now = new Date().toISOString();
-  const docs: any[] = [];
+  const now = new Date().toISOString()
+  const docs: any[] = []
 
   // Documents du locataire principal
   if (application.documents) {
     application.documents.forEach((doc: any) => {
       docs.push({
         document_id: doc.id || `doc-${docs.length}`,
-        label: doc.type || 'Document',
+        label: doc.type || "Document",
         file_url: doc.url,
-        category: doc.category || 'other',
+        category: doc.category || "other",
         verified: doc.verified || false,
         created_at: doc.created_at || now,
-        file_type: doc.file_type
-      });
-    });
+        file_type: doc.file_type,
+      })
+    })
   }
 
   // Documents des garants
@@ -1333,19 +1414,19 @@ function flattenDocuments(application: any): any[] {
         guarantor.documents.forEach((doc: any) => {
           docs.push({
             document_id: doc.id || `guarantor-${index}-doc-${docs.length}`,
-            label: `${doc.type || 'Document'} (Garant ${index + 1})`,
+            label: `${doc.type || "Document"} (Garant ${index + 1})`,
             file_url: doc.url,
-            category: doc.category || 'other',
+            category: doc.category || "other",
             verified: doc.verified || false,
             created_at: doc.created_at || now,
             guarantor_id: guarantor.id || index.toString(),
             guarantor_name: guarantor.name || `Garant ${index + 1}`,
-            file_type: doc.file_type
-          });
-        });
+            file_type: doc.file_type,
+          })
+        })
       }
-    });
+    })
   }
 
-  return docs;
+  return docs
 }
