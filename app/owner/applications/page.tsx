@@ -13,7 +13,7 @@ import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { ModernApplicationCard } from "@/components/modern-application-card"
 import { VisitProposalManager } from "@/components/visit-proposal-manager"
-import { Filter, Download, Users, Search, SortAsc, Settings, RefreshCw, MapPin, Star } from 'lucide-react'
+import { Filter, Download, Users, Search, SortAsc, Settings, RefreshCw, MapPin, Star } from "lucide-react"
 
 export default function ApplicationsPage() {
   const router = useRouter()
@@ -78,68 +78,86 @@ export default function ApplicationsPage() {
   const loadScoringPreferences = async (ownerId) => {
     try {
       console.log("🎯 Chargement préférences scoring pour:", ownerId)
-  
+
       // Récupérer les préférences par défaut du propriétaire
-      const response = await fetch(`/api/scoring-preferences?owner_id=${ownerId}&default_only=true`)
+      const response = await fetch(`/api/scoring-preferences?owner_id=${ownerId}&default_only=true`, {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache",
+        },
+      })
+
       if (response.ok) {
         const data = await response.json()
         console.log("📊 Préférences reçues:", data)
-  
+
         if (data.preferences && data.preferences.length > 0) {
-          setScoringPreferences(data.preferences[0])
-          console.log("✅ Préférences définies:", data.preferences[0])
+          const prefs = data.preferences[0]
+          console.log("✅ Préférences définies:", prefs.name || "Modèle personnalisé")
+
+          // Adapter la structure des préférences pour le calcul de score
+          const adaptedPrefs = {
+            name: prefs.name,
+            criteria: prefs.criteria || {},
+            weights: prefs.criteria?.weights || {
+              income: 40,
+              stability: 25,
+              guarantor: 20,
+              file_quality: 15,
+            },
+            min_income_ratio: prefs.criteria?.min_income_ratio || 2.5,
+            good_income_ratio: prefs.criteria?.good_income_ratio || 3,
+            excellent_income_ratio: prefs.criteria?.excellent_income_ratio || 3.5,
+            exclusion_rules: prefs.exclusion_rules || {},
+          }
+
+          setScoringPreferences(adaptedPrefs)
         } else {
           console.log("⚠️ Aucune préférence trouvée, utilisation des valeurs par défaut")
-          // Utiliser les préférences par défaut avec la nouvelle structure
           setScoringPreferences({
-            criteria: {
-              min_income_ratio: 2.5,
-              good_income_ratio: 3,
-              excellent_income_ratio: 3.5,
-              weights: {
-                income: 40,
-                stability: 25,
-                guarantor: 20,
-                file_quality: 15,
-              },
-            },
-            exclusion_rules: {}
-          })
-        }
-      } else {
-        console.error("❌ Erreur chargement préférences:", response.status)
-        // Utiliser les préférences par défaut avec la nouvelle structure
-        setScoringPreferences({
-          criteria: {
-            min_income_ratio: 2.5,
-            good_income_ratio: 3,
-            excellent_income_ratio: 3.5,
+            name: "Modèle standard",
             weights: {
               income: 40,
               stability: 25,
               guarantor: 20,
               file_quality: 15,
             },
-          },
-          exclusion_rules: {}
-        })
-      }
-    } catch (error) {
-      console.error("❌ Erreur chargement préférences scoring:", error)
-      // Utiliser les préférences par défaut avec la nouvelle structure
-      setScoringPreferences({
-        criteria: {
-          min_income_ratio: 2.5,
-          good_income_ratio: 3,
-          excellent_income_ratio: 3.5,
+            min_income_ratio: 2.5,
+            good_income_ratio: 3,
+            excellent_income_ratio: 3.5,
+            exclusion_rules: {},
+          })
+        }
+      } else {
+        console.error("❌ Erreur chargement préférences:", response.status)
+        setScoringPreferences({
+          name: "Modèle standard",
           weights: {
             income: 40,
             stability: 25,
             guarantor: 20,
             file_quality: 15,
           },
+          min_income_ratio: 2.5,
+          good_income_ratio: 3,
+          excellent_income_ratio: 3.5,
+          exclusion_rules: {},
+        })
+      }
+    } catch (error) {
+      console.error("❌ Erreur chargement préférences scoring:", error)
+      setScoringPreferences({
+        name: "Modèle standard",
+        weights: {
+          income: 40,
+          stability: 25,
+          guarantor: 20,
+          file_quality: 15,
         },
-        exclusion_rules: {}
+        min_income_ratio: 2.5,
+        good_income_ratio: 3,
+        excellent_income_ratio: 3.5,
+        exclusion_rules: {},
       })
     }
   }
@@ -170,8 +188,17 @@ export default function ApplicationsPage() {
                       guarantors_count: rentalFile.guarantors?.length || 0,
                     })
 
-                    // Récupérer les revenus depuis main_tenant
-                    const income = rentalFile.main_tenant.income_sources?.work_income?.amount || app.income || 0
+                    // Récupérer les revenus depuis main_tenant avec plusieurs sources possibles
+                    let income = 0
+                    if (rentalFile.main_tenant.income_sources?.work_income?.amount) {
+                      income = rentalFile.main_tenant.income_sources.work_income.amount
+                    } else if (rentalFile.main_tenant.income_sources?.work_income?.monthly_amount) {
+                      income = rentalFile.main_tenant.income_sources.work_income.monthly_amount
+                    } else if (rentalFile.main_tenant.monthly_income) {
+                      income = rentalFile.main_tenant.monthly_income
+                    } else if (app.income) {
+                      income = app.income
+                    }
 
                     // Vérifier la présence de garants
                     const hasGuarantor =
@@ -401,11 +428,11 @@ export default function ApplicationsPage() {
     try {
       // Mettre à jour le statut de la candidature
       await handleStatusChange(currentApplicationForVisit.id, "visit_proposed")
-      
+
       // Fermer le dialogue
       setShowVisitDialog(false)
       setCurrentApplicationForVisit(null)
-      
+
       toast.success("Créneaux de visite proposés avec succès")
     } catch (error) {
       console.error("Erreur lors de la proposition de visite:", error)
@@ -415,66 +442,75 @@ export default function ApplicationsPage() {
 
   // Fonction pour calculer le score de matching avec les préférences du propriétaire
   const calculateMatchScore = (application) => {
-    if (!application?.property?.price || !scoringPreferences || !scoringPreferences.weights) {
+    if (!application?.property?.price || !scoringPreferences) {
       return 50 // Score par défaut si données manquantes
     }
-  
+
     const income = application.income || 0
-    const { income: incomeWeight = 0, stability = 0, guarantor = 0, file_quality = 0 } = scoringPreferences.weights
+    const weights = scoringPreferences.weights || {
+      income: 40,
+      stability: 25,
+      guarantor: 20,
+      file_quality: 15,
+    }
+
     const minRatio = scoringPreferences.min_income_ratio || 2.5
     const goodRatio = scoringPreferences.good_income_ratio || 3
     const excellentRatio = scoringPreferences.excellent_income_ratio || 3.5
-  
+
     let score = 0
-  
+
     // 1. Score revenus
-    const rentRatio = income / application.property.price
-  
-    if (rentRatio >= excellentRatio) {
-      score += incomeWeight
-    } else if (rentRatio >= goodRatio) {
-      score += Math.round(incomeWeight * 0.8)
-    } else if (rentRatio >= minRatio) {
-      score += Math.round(incomeWeight * 0.6)
-    } else {
-      score += Math.round(incomeWeight * 0.3)
+    if (income > 0 && application.property.price > 0) {
+      const rentRatio = income / application.property.price
+
+      if (rentRatio >= excellentRatio) {
+        score += weights.income
+      } else if (rentRatio >= goodRatio) {
+        score += Math.round(weights.income * 0.8)
+      } else if (rentRatio >= minRatio) {
+        score += Math.round(weights.income * 0.6)
+      } else {
+        score += Math.round(weights.income * 0.3)
+      }
     }
-  
+
     // 2. Score stabilité
     const contractType = (application.contract_type || "").toLowerCase()
     if (["cdi", "fonctionnaire"].includes(contractType)) {
-      score += stability
+      score += weights.stability
     } else if (contractType === "cdd") {
-      score += Math.round(stability * 0.7)
+      score += Math.round(weights.stability * 0.7)
     } else {
-      score += Math.round(stability * 0.5)
+      score += Math.round(weights.stability * 0.5)
     }
-  
+
     // 3. Score garant
     if (application.has_guarantor) {
-      score += guarantor
+      score += weights.guarantor
     }
-  
+
     // 4. Score qualité du dossier
     let fileQualityScore = 0
     if (application.profession && application.profession !== "Non spécifié") {
-      fileQualityScore += Math.round(file_quality * 0.5)
+      fileQualityScore += Math.round(weights.file_quality * 0.5)
     }
     if (application.company && application.company !== "Non spécifié") {
-      fileQualityScore += Math.round(file_quality * 0.5)
+      fileQualityScore += Math.round(weights.file_quality * 0.5)
     }
     score += fileQualityScore
-  
+
     return Math.min(Math.round(score), 100)
   }
-  
 
   const getApplicationCounts = () => {
     return {
       all: applications.length,
       pending: applications.filter((app) => {
         const status = app.status || "pending"
-        return ["pending", "analyzing", "visit_proposed", "visit_scheduled", "waiting_tenant_confirmation"].includes(status)
+        return ["pending", "analyzing", "visit_proposed", "visit_scheduled", "waiting_tenant_confirmation"].includes(
+          status,
+        )
       }).length,
       accepted: applications.filter((app) => {
         const status = app.status || "pending"
@@ -683,7 +719,10 @@ export default function ApplicationsPage() {
           propertyId={currentApplicationForVisit.property_id}
           propertyTitle={currentApplicationForVisit.property?.title || "Propriété"}
           applicationId={currentApplicationForVisit.id}
-          tenantName={`${currentApplicationForVisit.tenant?.first_name || ""} ${currentApplicationForVisit.tenant?.last_name || ""}`.trim() || "Candidat"}
+          tenantName={
+            `${currentApplicationForVisit.tenant?.first_name || ""} ${currentApplicationForVisit.tenant?.last_name || ""}`.trim() ||
+            "Candidat"
+          }
           onSlotsProposed={handleVisitProposed}
         />
       )}
