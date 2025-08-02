@@ -78,20 +78,39 @@ export default function ApplicationsPage() {
   const loadScoringPreferences = async (ownerId) => {
     try {
       console.log("🎯 Chargement préférences scoring pour:", ownerId)
-
+  
       // Récupérer les préférences par défaut du propriétaire
       const response = await fetch(`/api/scoring-preferences?owner_id=${ownerId}&default_only=true`)
       if (response.ok) {
         const data = await response.json()
         console.log("📊 Préférences reçues:", data)
-
+  
         if (data.preferences && data.preferences.length > 0) {
           setScoringPreferences(data.preferences[0])
           console.log("✅ Préférences définies:", data.preferences[0])
         } else {
           console.log("⚠️ Aucune préférence trouvée, utilisation des valeurs par défaut")
-          // Utiliser les préférences par défaut
+          // Utiliser les préférences par défaut avec la nouvelle structure
           setScoringPreferences({
+            criteria: {
+              min_income_ratio: 2.5,
+              good_income_ratio: 3,
+              excellent_income_ratio: 3.5,
+              weights: {
+                income: 40,
+                stability: 25,
+                guarantor: 20,
+                file_quality: 15,
+              },
+            },
+            exclusion_rules: {}
+          })
+        }
+      } else {
+        console.error("❌ Erreur chargement préférences:", response.status)
+        // Utiliser les préférences par défaut avec la nouvelle structure
+        setScoringPreferences({
+          criteria: {
             min_income_ratio: 2.5,
             good_income_ratio: 3,
             excellent_income_ratio: 3.5,
@@ -101,12 +120,15 @@ export default function ApplicationsPage() {
               guarantor: 20,
               file_quality: 15,
             },
-          })
-        }
-      } else {
-        console.error("❌ Erreur chargement préférences:", response.status)
-        // Utiliser les préférences par défaut en cas d'erreur
-        setScoringPreferences({
+          },
+          exclusion_rules: {}
+        })
+      }
+    } catch (error) {
+      console.error("❌ Erreur chargement préférences scoring:", error)
+      // Utiliser les préférences par défaut avec la nouvelle structure
+      setScoringPreferences({
+        criteria: {
           min_income_ratio: 2.5,
           good_income_ratio: 3,
           excellent_income_ratio: 3.5,
@@ -116,21 +138,8 @@ export default function ApplicationsPage() {
             guarantor: 20,
             file_quality: 15,
           },
-        })
-      }
-    } catch (error) {
-      console.error("❌ Erreur chargement préférences scoring:", error)
-      // Utiliser les préférences par défaut en cas d'erreur
-      setScoringPreferences({
-        min_income_ratio: 2.5,
-        good_income_ratio: 3,
-        excellent_income_ratio: 3.5,
-        weights: {
-          income: 40,
-          stability: 25,
-          guarantor: 20,
-          file_quality: 15,
         },
+        exclusion_rules: {}
       })
     }
   }
