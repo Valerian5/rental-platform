@@ -13,7 +13,6 @@ import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import ModernApplicationCard from "@/components/modern-application-card"
 import { VisitProposalManager } from "@/components/visit-proposal-manager"
-import { useScoringPreferences, useRealtimeScores } from "@/hooks/use-scoring-preferences"
 import { Filter, Download, Users, Search, SortAsc, Settings, RefreshCw, MapPin, Star } from "lucide-react"
 
 export default function ApplicationsPage() {
@@ -35,36 +34,11 @@ export default function ApplicationsPage() {
   const [propertyFilter, setPropertyFilter] = useState("all")
   const [scoreFilter, setScoreFilter] = useState("all")
   const [properties, setProperties] = useState([])
+  const [scoringPreferences, setScoringPreferences] = useState(null)
 
   // États pour la gestion des visites
   const [showVisitDialog, setShowVisitDialog] = useState(false)
   const [currentApplicationForVisit, setCurrentApplicationForVisit] = useState(null)
-
-  // Hook pour les préférences de scoring en temps réel
-  const {
-    preferences: scoringPreferences,
-    loading: preferencesLoading,
-    error: preferencesError,
-    version: preferencesVersion,
-    refresh: refreshPreferences,
-  } = useScoringPreferences({
-    ownerId: user?.id || "",
-    autoRefresh: true,
-    refreshInterval: 30000,
-  })
-
-  // Hook pour les scores en temps réel
-  const {
-    scores: realtimeScores,
-    loading: scoresLoading,
-    recalculating,
-    lastCalculated,
-    recalculateAll,
-  } = useRealtimeScores({
-    applications: applications,
-    ownerId: user?.id || "",
-    enabled: !!user?.id && applications.length > 0,
-  })
 
   useEffect(() => {
     checkAuthAndLoadData()
@@ -72,7 +46,7 @@ export default function ApplicationsPage() {
 
   useEffect(() => {
     filterAndSortApplications()
-  }, [applications, searchTerm, statusFilter, sortBy, activeTab, propertyFilter, scoreFilter, realtimeScores])
+  }, [applications, searchTerm, statusFilter, sortBy, activeTab, propertyFilter, scoreFilter])
 
   const checkAuthAndLoadData = async () => {
     try {
@@ -92,12 +66,99 @@ export default function ApplicationsPage() {
       }
 
       setUser(currentUser)
-      await loadApplications(currentUser.id)
+      await Promise.all([loadApplications(currentUser.id), loadScoringPreferences(currentUser.id)])
     } catch (error) {
       console.error("Erreur auth:", error)
       toast.error("Erreur d'authentification")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadScoringPreferences = async (ownerId) => {
+    try {
+      console.log("🎯 Chargement préférences scoring pour:", ownerId)
+
+      // Récupérer les préférences par défaut du propriétaire
+      const response = await fetch(`/api/scoring-preferences?owner_id=${ownerId}&default_only=true`, {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache",
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log("📊 Préférences reçues:", data)
+
+        if (data.preferences && data.preferences.length > 0) {
+          const prefs = data.preferences[0]
+          console.log("✅ Préférences définies:", prefs.name || "Modèle personnalisé")
+
+          // Adapter la structure des préférences pour le calcul de score
+          const adaptedPrefs = {
+            name: prefs.name,
+            criteria: prefs.criteria || {},
+            weights: prefs.criteria?.weights || {
+              income: 40,
+              stability: 25,
+              guarantor: 20,
+              file_quality: 15,
+            },
+            min_income_ratio: prefs.criteria?.min_income_ratio || 2.5,
+            good_income_ratio: prefs.criteria?.good_income_ratio || 3,
+            excellent_income_ratio: prefs.criteria?.excellent_income_ratio || 3.5,
+            exclusion_rules: prefs.exclusion_rules || {},
+          }
+
+          setScoringPreferences(adaptedPrefs)
+        } else {
+          console.log("⚠️ Aucune préférence trouvée, utilisation des valeurs par défaut")
+          setScoringPreferences({
+            name: "Modèle standard",
+            weights: {
+              income: 40,
+              stability: 25,
+              guarantor: 20,
+              file_quality: 15,
+            },
+            min_income_ratio: 2.5,
+            good_income_ratio: 3,
+            excellent_income_ratio: 3.5,
+            exclusion_rules: {},
+          })
+        }
+      } else {
+        console.error("❌ Erreur chargement préférences:", response.status)
+        setScoringPreferences({
+          name: "Modèle standard",
+          weights: {
+            income: 40,
+            stability: 25,
+            guarantor: 20,
+            file_quality: 15,
+          },
+          min_income_ratio: 2.5,
+          good_income_ratio: 3,
+          excellent_income_ratio: 3.5,
+          exclusion_rules: {},
+        })
+      }
+    } catch (error) {
+      console.error("❌ Erreur chargement préférences scoring:", error)
+      setScoringPreferences({
+        name: "Modèle standard",
+        weights: {
+          income: 40,
+          stability: 25,
+          guarantor: 20,
+          file_quality: 15,
+        },
+        min_income_ratio: 2.5,
+        good_income_ratio: 3,
+        excellent_income_ratio: 3.5,
+        exclusion_rules: {},
+      })
     }
   }
 
@@ -252,9 +313,7 @@ export default function ApplicationsPage() {
         case "property_title":
           return (a.property?.title || "").localeCompare(b.property?.title || "")
         case "score":
-          const scoreA = realtimeScores.get(a.id)?.totalScore || 50
-          const scoreB = realtimeScores.get(b.id)?.totalScore || 50
-          return scoreB - scoreA
+          return calculateMatchScore(b) - calculateMatchScore(a)
         default:
           return 0
       }
@@ -263,7 +322,7 @@ export default function ApplicationsPage() {
     // Filtre par score
     if (scoreFilter !== "all") {
       filtered = filtered.filter((app) => {
-        const score = realtimeScores.get(app.id)?.totalScore || 50
+        const score = calculateMatchScore(app)
         switch (scoreFilter) {
           case "excellent":
             return score >= 80
@@ -381,6 +440,69 @@ export default function ApplicationsPage() {
     }
   }
 
+  // Fonction pour calculer le score de matching avec les préférences du propriétaire
+  const calculateMatchScore = (application) => {
+    if (!application?.property?.price || !scoringPreferences) {
+      return 50 // Score par défaut si données manquantes
+    }
+
+    const income = application.income || 0
+    const weights = scoringPreferences.weights || {
+      income: 40,
+      stability: 25,
+      guarantor: 20,
+      file_quality: 15,
+    }
+
+    const minRatio = scoringPreferences.min_income_ratio || 2.5
+    const goodRatio = scoringPreferences.good_income_ratio || 3
+    const excellentRatio = scoringPreferences.excellent_income_ratio || 3.5
+
+    let score = 0
+
+    // 1. Score revenus
+    if (income > 0 && application.property.price > 0) {
+      const rentRatio = income / application.property.price
+
+      if (rentRatio >= excellentRatio) {
+        score += weights.income
+      } else if (rentRatio >= goodRatio) {
+        score += Math.round(weights.income * 0.8)
+      } else if (rentRatio >= minRatio) {
+        score += Math.round(weights.income * 0.6)
+      } else {
+        score += Math.round(weights.income * 0.3)
+      }
+    }
+
+    // 2. Score stabilité
+    const contractType = (application.contract_type || "").toLowerCase()
+    if (["cdi", "fonctionnaire"].includes(contractType)) {
+      score += weights.stability
+    } else if (contractType === "cdd") {
+      score += Math.round(weights.stability * 0.7)
+    } else {
+      score += Math.round(weights.stability * 0.5)
+    }
+
+    // 3. Score garant
+    if (application.has_guarantor) {
+      score += weights.guarantor
+    }
+
+    // 4. Score qualité du dossier
+    let fileQualityScore = 0
+    if (application.profession && application.profession !== "Non spécifié") {
+      fileQualityScore += Math.round(weights.file_quality * 0.5)
+    }
+    if (application.company && application.company !== "Non spécifié") {
+      fileQualityScore += Math.round(weights.file_quality * 0.5)
+    }
+    score += fileQualityScore
+
+    return Math.min(Math.round(score), 100)
+  }
+
   const getApplicationCounts = () => {
     return {
       all: applications.length,
@@ -425,17 +547,8 @@ export default function ApplicationsPage() {
             <Settings className="h-4 w-4 mr-2" />
             Préférences de scoring
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              checkAuthAndLoadData()
-              refreshPreferences()
-              recalculateAll()
-            }}
-            disabled={loading || recalculating}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading || recalculating ? "animate-spin" : ""}`} />
+          <Button variant="outline" size="sm" onClick={() => checkAuthAndLoadData()} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
             Actualiser
           </Button>
           <Button variant="outline" size="sm">
@@ -446,30 +559,6 @@ export default function ApplicationsPage() {
       </PageHeader>
 
       <div className="p-6 space-y-6">
-        {/* Indicateur de statut des préférences */}
-        {scoringPreferences && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                <span className="text-sm font-medium text-blue-900">Modèle actuel: {scoringPreferences.name}</span>
-                <span className="text-xs text-blue-600">v{preferencesVersion}</span>
-              </div>
-              {recalculating && (
-                <div className="flex items-center gap-2 text-blue-600">
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                  <span className="text-xs">Recalcul en cours...</span>
-                </div>
-              )}
-              {lastCalculated && !recalculating && (
-                <span className="text-xs text-blue-600">
-                  Dernière mise à jour: {lastCalculated.toLocaleTimeString()}
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* Filtres et recherche */}
         <Card>
           <CardContent className="p-4">
@@ -575,8 +664,8 @@ export default function ApplicationsPage() {
                   const tenant = application.tenant || {}
                   const property = application.property || {}
 
-                  // Récupérer le score en temps réel
-                  const realtimeScore = realtimeScores.get(application.id)?.totalScore || 50
+                  // Calcul du score de matching avec les préférences du propriétaire
+                  const matchScore = calculateMatchScore(application)
 
                   // Préparation des données pour le composant ModernApplicationCard
                   const applicationData = {
@@ -591,14 +680,13 @@ export default function ApplicationsPage() {
                       title: property.title || "Propriété inconnue",
                       address: property.address || "Adresse inconnue",
                       price: property.price || 0,
-                      owner_id: property.owner_id || user?.id,
                     },
                     profession: application.profession || "Non spécifié",
                     income: application.income || 0,
                     has_guarantor: application.has_guarantor || false,
                     documents_complete: true,
                     status: application.status || "pending",
-                    match_score: realtimeScore,
+                    match_score: matchScore,
                     created_at: application.created_at || new Date().toISOString(),
                     tenant_id: application.tenant_id,
                   }

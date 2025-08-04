@@ -7,8 +7,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { CircularScore } from "@/components/circular-score"
 import { Mail, Phone, Euro, Calendar, FileText, MapPin, Eye, Check, X, MessageSquare, Clock } from "lucide-react"
 import Link from "next/link"
-import { useRealtimeScores } from "@/hooks/use-scoring-preferences"
-import { useEffect, useState } from "react"
 
 interface ModernApplicationCardProps {
   application: any
@@ -27,94 +25,6 @@ export default function ModernApplicationCard({
   showActions = true,
   scoringPreferences,
 }: ModernApplicationCardProps) {
-  const [realtimeScore, setRealtimeScore] = useState<number>(application.match_score || 50)
-  const [scoreLoading, setScoreLoading] = useState(false)
-
-  // Utiliser le hook pour les scores en temps réel si on a l'owner_id
-  const ownerId = application.property?.owner_id || application.owner_id
-  const { scores, recalculating } = useRealtimeScores({
-    applications: ownerId ? [application] : [],
-    ownerId: ownerId || "",
-    enabled: !!ownerId,
-  })
-
-  // Mettre à jour le score quand il change
-  useEffect(() => {
-    if (scores.has(application.id)) {
-      const newScore = scores.get(application.id)?.totalScore || 50
-      if (newScore !== realtimeScore) {
-        console.log(`📊 Score mis à jour pour ${application.id}:`, newScore)
-        setRealtimeScore(newScore)
-      }
-    }
-  }, [scores, application.id, realtimeScore])
-
-  // Fallback: calculer le score localement si pas de temps réel
-  useEffect(() => {
-    if (!ownerId && scoringPreferences && application.income && application.property?.price) {
-      setScoreLoading(true)
-
-      // Calcul simple basé sur les préférences
-      const income = application.income || 0
-      const rent = application.property.price || 0
-      const weights = scoringPreferences.weights || {
-        income: 40,
-        stability: 25,
-        guarantor: 20,
-        file_quality: 15,
-      }
-
-      let score = 0
-
-      // Score revenus
-      if (income > 0 && rent > 0) {
-        const rentRatio = income / rent
-        const minRatio = scoringPreferences.min_income_ratio || 2.5
-        const goodRatio = scoringPreferences.good_income_ratio || 3
-        const excellentRatio = scoringPreferences.excellent_income_ratio || 3.5
-
-        if (rentRatio >= excellentRatio) {
-          score += weights.income
-        } else if (rentRatio >= goodRatio) {
-          score += Math.round(weights.income * 0.8)
-        } else if (rentRatio >= minRatio) {
-          score += Math.round(weights.income * 0.6)
-        } else {
-          score += Math.round(weights.income * 0.3)
-        }
-      }
-
-      // Score stabilité
-      const contractType = (application.contract_type || "").toLowerCase()
-      if (["cdi", "fonctionnaire"].includes(contractType)) {
-        score += weights.stability
-      } else if (contractType === "cdd") {
-        score += Math.round(weights.stability * 0.7)
-      } else {
-        score += Math.round(weights.stability * 0.5)
-      }
-
-      // Score garant
-      if (application.has_guarantor) {
-        score += weights.guarantor
-      }
-
-      // Score qualité du dossier
-      let fileQualityScore = 0
-      if (application.profession && application.profession !== "Non spécifié") {
-        fileQualityScore += Math.round(weights.file_quality * 0.5)
-      }
-      if (application.company && application.company !== "Non spécifié") {
-        fileQualityScore += Math.round(weights.file_quality * 0.5)
-      }
-      score += fileQualityScore
-
-      const finalScore = Math.min(Math.round(score), 100)
-      setRealtimeScore(finalScore)
-      setScoreLoading(false)
-    }
-  }, [scoringPreferences, application, ownerId])
-
   const getStatusColor = (status: string) => {
     switch (status) {
       case "pending":
@@ -175,12 +85,7 @@ export default function ModernApplicationCard({
             </div>
 
             <div className="flex flex-col items-end gap-2 flex-shrink-0">
-              <CircularScore
-                score={realtimeScore}
-                size="sm"
-                loading={scoreLoading || recalculating}
-                customPreferences={scoringPreferences}
-              />
+              <CircularScore score={application.match_score || 50} size="sm" />
               <Badge className={`${getStatusColor(application.status)} text-xs px-2 py-1`}>
                 {getStatusText(application.status)}
               </Badge>
