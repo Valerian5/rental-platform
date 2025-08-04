@@ -11,7 +11,7 @@ import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { CircularScore } from "@/components/circular-score"
-import { VisitProposalManager } from "@/components/visit-proposal-manager"
+import VisitProposalManager from "@/components/visit-proposal-manager"
 import { TenantAndGuarantorDocumentsSection } from "@/components/TenantAndGuarantorDocumentsSection"
 import { useScoringPreferences } from "@/hooks/use-scoring-preferences"
 import {
