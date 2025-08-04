@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
 
 // Créer le client Supabase avec la clé service pour contourner RLS si nécessaire
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -127,7 +128,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Créer la nouvelle préférence
+    // Créer la nouvelle préférence avec versioning
     const preferenceData = {
       owner_id,
       name,
@@ -143,6 +144,7 @@ export async function POST(request: NextRequest) {
         manifest_incoherence: true,
       },
       system_preference_id,
+      version: 1, // Version initiale
     }
 
     console.log("📝 Données à insérer:", {
@@ -165,6 +167,9 @@ export async function POST(request: NextRequest) {
 
     console.log("✅ Préférence de scoring créée:", preference.id)
 
+    // Invalider le cache pour ce propriétaire
+    scoringPreferencesService.invalidatePreferencesCache(owner_id)
+
     return NextResponse.json({
       preference,
       message: "Préférence de scoring créée avec succès",
@@ -186,6 +191,22 @@ export async function PUT(request: NextRequest) {
 
     console.log("🔄 Mise à jour préférence:", id)
 
+    // Récupérer la préférence actuelle pour obtenir la version
+    const { data: currentPreference, error: fetchError } = await supabaseAdmin
+      .from("scoring_preferences")
+      .select("version, owner_id")
+      .eq("id", id)
+      .eq("is_system", false)
+      .single()
+
+    if (fetchError || !currentPreference) {
+      return NextResponse.json({ error: "Préférence non trouvée" }, { status: 404 })
+    }
+
+    // Incrémenter la version
+    const newVersion = (currentPreference.version || 1) + 1
+    const updatedData = { ...updateData, version: newVersion }
+
     // Si c'est une préférence par défaut, désactiver les autres
     if (updateData.is_default && updateData.owner_id) {
       const { error: updateError } = await supabaseAdmin
@@ -202,7 +223,7 @@ export async function PUT(request: NextRequest) {
 
     const { data: preference, error } = await supabaseAdmin
       .from("scoring_preferences")
-      .update(updateData)
+      .update(updatedData)
       .eq("id", id)
       .eq("is_system", false) // Seulement les préférences utilisateur
       .select()
@@ -213,7 +234,10 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    console.log("✅ Préférence mise à jour:", preference.id)
+    console.log("✅ Préférence mise à jour:", preference.id, "nouvelle version:", newVersion)
+
+    // Invalider le cache pour ce propriétaire
+    scoringPreferencesService.invalidatePreferencesCache(currentPreference.owner_id)
 
     return NextResponse.json({
       preference,

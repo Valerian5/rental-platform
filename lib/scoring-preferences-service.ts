@@ -97,6 +97,7 @@ export interface ScoringPreferences {
   is_system?: boolean
   created_at?: string
   updated_at?: string
+  version?: number // Nouveau : versioning des préférences
 }
 
 // Interface pour le résultat du calcul de score
@@ -104,6 +105,8 @@ export interface ScoringResult {
   totalScore: number
   compatible: boolean
   model_used: string
+  model_version?: number // Nouveau : version du modèle utilisé
+  calculated_at?: string // Nouveau : timestamp du calcul
   breakdown: {
     income_ratio: {
       score: number
@@ -162,7 +165,136 @@ export interface ScoringResult {
   household_type: "single" | "couple" | "colocation"
 }
 
+// Cache pour les préférences de scoring
+class ScoringPreferencesCache {
+  private cache = new Map<string, { preferences: ScoringPreferences; timestamp: number; version: number }>()
+  private readonly CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+  private listeners = new Map<string, Set<(preferences: ScoringPreferences) => void>>()
+
+  get(ownerId: string): ScoringPreferences | null {
+    const cached = this.cache.get(ownerId)
+    if (!cached) return null
+
+    const now = Date.now()
+    if (now - cached.timestamp > this.CACHE_TTL) {
+      this.cache.delete(ownerId)
+      return null
+    }
+
+    return cached.preferences
+  }
+
+  set(ownerId: string, preferences: ScoringPreferences): void {
+    const version = (preferences.version || 0) + 1
+    const versionedPreferences = { ...preferences, version }
+
+    this.cache.set(ownerId, {
+      preferences: versionedPreferences,
+      timestamp: Date.now(),
+      version,
+    })
+
+    // Notifier les listeners
+    this.notifyListeners(ownerId, versionedPreferences)
+  }
+
+  invalidate(ownerId: string): void {
+    this.cache.delete(ownerId)
+  }
+
+  subscribe(ownerId: string, callback: (preferences: ScoringPreferences) => void): () => void {
+    if (!this.listeners.has(ownerId)) {
+      this.listeners.set(ownerId, new Set())
+    }
+    this.listeners.get(ownerId)!.add(callback)
+
+    // Retourner une fonction de désabonnement
+    return () => {
+      const ownerListeners = this.listeners.get(ownerId)
+      if (ownerListeners) {
+        ownerListeners.delete(callback)
+        if (ownerListeners.size === 0) {
+          this.listeners.delete(ownerId)
+        }
+      }
+    }
+  }
+
+  private notifyListeners(ownerId: string, preferences: ScoringPreferences): void {
+    const ownerListeners = this.listeners.get(ownerId)
+    if (ownerListeners) {
+      ownerListeners.forEach((callback) => {
+        try {
+          callback(preferences)
+        } catch (error) {
+          console.error("Erreur lors de la notification du listener:", error)
+        }
+      })
+    }
+  }
+
+  getVersion(ownerId: string): number {
+    const cached = this.cache.get(ownerId)
+    return cached?.version || 0
+  }
+}
+
+// Cache pour les scores calculés
+class ScoreCache {
+  private cache = new Map<string, { result: ScoringResult; timestamp: number }>()
+  private readonly CACHE_TTL = 2 * 60 * 1000 // 2 minutes
+
+  private getKey(applicationId: string, preferencesVersion: number): string {
+    return `${applicationId}-${preferencesVersion}`
+  }
+
+  get(applicationId: string, preferencesVersion: number): ScoringResult | null {
+    const key = this.getKey(applicationId, preferencesVersion)
+    const cached = this.cache.get(key)
+    if (!cached) return null
+
+    const now = Date.now()
+    if (now - cached.timestamp > this.CACHE_TTL) {
+      this.cache.delete(key)
+      return null
+    }
+
+    return cached.result
+  }
+
+  set(applicationId: string, preferencesVersion: number, result: ScoringResult): void {
+    const key = this.getKey(applicationId, preferencesVersion)
+    this.cache.set(key, {
+      result: { ...result, calculated_at: new Date().toISOString() },
+      timestamp: Date.now(),
+    })
+  }
+
+  invalidateForOwner(ownerId: string): void {
+    // Invalider tous les scores pour un propriétaire (quand ses préférences changent)
+    const keysToDelete: string[] = []
+    for (const [key] of this.cache) {
+      // On ne peut pas facilement identifier l'owner depuis la clé, donc on invalide tout
+      // Dans une vraie implémentation, on pourrait stocker une map owner -> keys
+      keysToDelete.push(key)
+    }
+    keysToDelete.forEach((key) => this.cache.delete(key))
+  }
+
+  clear(): void {
+    this.cache.clear()
+  }
+}
+
+// Instances globales des caches
+const preferencesCache = new ScoringPreferencesCache()
+const scoreCache = new ScoreCache()
+
 export const scoringPreferencesService = {
+  // Cache instances (pour les tests et le debugging)
+  _preferencesCache: preferencesCache,
+  _scoreCache: scoreCache,
+
   // Modèles prédéfinis
   getStrictModel(): ScoringModel {
     return {
@@ -366,7 +498,88 @@ export const scoringPreferencesService = {
       model_type: "standard",
       criteria: standardModel.criteria,
       exclusion_rules: standardModel.exclusion_rules,
+      version: 1,
     }
+  },
+
+  // Obtenir les préférences avec cache
+  async getOwnerPreferences(ownerId: string, useCache = true): Promise<ScoringPreferences> {
+    if (useCache) {
+      const cached = preferencesCache.get(ownerId)
+      if (cached) {
+        console.log("🎯 Préférences récupérées depuis le cache:", cached.name)
+        return cached
+      }
+    }
+
+    try {
+      const response = await fetch(`/api/scoring-preferences?owner_id=${ownerId}&default_only=true`, {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache",
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.preferences && data.preferences.length > 0) {
+          const preferences = data.preferences[0]
+          preferencesCache.set(ownerId, preferences)
+          console.log("🎯 Préférences chargées et mises en cache:", preferences.name)
+          return preferences
+        }
+      }
+
+      // Fallback vers les préférences par défaut
+      const defaultPrefs = this.getDefaultPreferences(ownerId)
+      preferencesCache.set(ownerId, defaultPrefs)
+      return defaultPrefs
+    } catch (error) {
+      console.error("❌ Erreur chargement préférences:", error)
+      const defaultPrefs = this.getDefaultPreferences(ownerId)
+      preferencesCache.set(ownerId, defaultPrefs)
+      return defaultPrefs
+    }
+  },
+
+  // Souscrire aux changements de préférences
+  subscribeToPreferencesChanges(ownerId: string, callback: (preferences: ScoringPreferences) => void): () => void {
+    return preferencesCache.subscribe(ownerId, callback)
+  },
+
+  // Invalider le cache des préférences
+  invalidatePreferencesCache(ownerId: string): void {
+    preferencesCache.invalidate(ownerId)
+    scoreCache.invalidateForOwner(ownerId)
+  },
+
+  // Calculer le score avec cache
+  async calculateScoreWithCache(
+    application: any,
+    property: any,
+    ownerId: string,
+    useCache = true,
+  ): Promise<ScoringResult> {
+    const preferences = await this.getOwnerPreferences(ownerId, useCache)
+    const preferencesVersion = preferences.version || 1
+
+    if (useCache) {
+      const cachedScore = scoreCache.get(application.id, preferencesVersion)
+      if (cachedScore) {
+        console.log("📊 Score récupéré depuis le cache:", cachedScore.totalScore)
+        return cachedScore
+      }
+    }
+
+    const result = this.calculateScore(application, property, preferences)
+    result.model_version = preferencesVersion
+
+    if (useCache) {
+      scoreCache.set(application.id, preferencesVersion, result)
+    }
+
+    console.log("📊 Score calculé et mis en cache:", result.totalScore)
+    return result
   },
 
   // Calculer le score selon les préférences du propriétaire
@@ -389,6 +602,7 @@ export const scoringPreferencesService = {
       totalScore: 0,
       compatible: true,
       model_used: preferences.name,
+      model_version: preferences.version || 1,
       household_type: householdType,
       breakdown: {
         income_ratio: { score: 0, max: preferences.criteria.income_ratio.weight, details: "", compatible: true },
@@ -458,12 +672,54 @@ export const scoringPreferencesService = {
     return result
   },
 
+  // Recalculer les scores pour plusieurs candidatures (optimisé)
+  async recalculateScoresForApplications(
+    applications: any[],
+    ownerId: string,
+    forceRecalculation = false,
+  ): Promise<Map<string, ScoringResult>> {
+    const results = new Map<string, ScoringResult>()
+    const preferences = await this.getOwnerPreferences(ownerId, !forceRecalculation)
+
+    console.log(`🔄 Recalcul de ${applications.length} scores avec le modèle:`, preferences.name)
+
+    // Traitement par batch pour optimiser les performances
+    const batchSize = 50
+    const batches = []
+    for (let i = 0; i < applications.length; i += batchSize) {
+      batches.push(applications.slice(i, i + batchSize))
+    }
+
+    for (const batch of batches) {
+      const batchPromises = batch.map(async (application) => {
+        try {
+          const result = await this.calculateScoreWithCache(
+            application,
+            application.property,
+            ownerId,
+            !forceRecalculation,
+          )
+          results.set(application.id, result)
+        } catch (error) {
+          console.error(`❌ Erreur calcul score pour candidature ${application.id}:`, error)
+          results.set(application.id, this.getDefaultResult(preferences.name))
+        }
+      })
+
+      await Promise.all(batchPromises)
+    }
+
+    console.log(`✅ ${results.size} scores recalculés`)
+    return results
+  },
+
   // Résultat par défaut en cas d'erreur
   getDefaultResult(modelName: string): ScoringResult {
     return {
       totalScore: 0,
       compatible: false,
       model_used: modelName,
+      model_version: 1,
       household_type: "single",
       breakdown: {
         income_ratio: { score: 0, max: 20, details: "Données manquantes", compatible: false },
@@ -970,12 +1226,7 @@ export const scoringPreferencesService = {
   // Obtenir les préférences par défaut d'un propriétaire (pour compatibilité)
   async getOwnerDefaultPreference(ownerId: string): Promise<ScoringPreferences | null> {
     try {
-      const response = await fetch(`/api/scoring-preferences?owner_id=${ownerId}&default_only=true`)
-      if (response.ok) {
-        const data = await response.json()
-        return data.preferences?.[0] || null
-      }
-      return null
+      return await this.getOwnerPreferences(ownerId, true)
     } catch (error) {
       console.error("Erreur récupération préférences:", error)
       return null

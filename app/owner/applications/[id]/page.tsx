@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/page-header"
 import { CircularScore } from "@/components/circular-score"
 import { VisitProposalManager } from "@/components/visit-proposal-manager"
 import { TenantAndGuarantorDocumentsSection } from "@/components/TenantAndGuarantorDocumentsSection"
+import { useScoringPreferences } from "@/hooks/use-scoring-preferences"
 import {
   ArrowLeft,
   User,
@@ -121,12 +122,36 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const [showVisitDialog, setShowVisitDialog] = useState(false)
   const [currentApplication, setCurrentApplication] = useState<any>(null)
   const [showRefuseDialog, setShowRefuseDialog] = useState(false)
-  const [scoringPreferences, setScoringPreferences] = useState<any>(null)
   const [documents, setDocuments] = useState<any[]>([])
+  const [realtimeScore, setRealtimeScore] = useState<number>(50)
+
+  // Hook pour les préférences de scoring en temps réel
+  const {
+    preferences: scoringPreferences,
+    loading: preferencesLoading,
+    calculateScore,
+  } = useScoringPreferences({
+    ownerId: application?.property?.owner_id || "",
+    autoRefresh: true,
+  })
 
   useEffect(() => {
     checkAuthAndLoadData()
   }, [])
+
+  // Recalculer le score quand les préférences changent
+  useEffect(() => {
+    if (application && application.property && scoringPreferences) {
+      calculateScore(application, application.property)
+        .then((result) => {
+          console.log("📊 Score recalculé:", result.totalScore)
+          setRealtimeScore(result.totalScore)
+        })
+        .catch((error) => {
+          console.error("❌ Erreur recalcul score:", error)
+        })
+    }
+  }, [scoringPreferences, application, calculateScore])
 
   const checkAuthAndLoadData = async () => {
     try {
@@ -220,75 +245,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
           }
         } catch (error) {
           console.error("Erreur chargement dossier location:", error)
-        }
-      }
-
-      // Charger les préférences de scoring du propriétaire
-      if (data.application?.property?.owner_id) {
-        try {
-          const prefsResponse = await fetch(
-            `/api/scoring-preferences?owner_id=${data.application.property.owner_id}&default_only=true`,
-            {
-              cache: "no-store",
-              headers: {
-                "Cache-Control": "no-cache",
-              },
-            },
-          )
-          if (prefsResponse.ok) {
-            const prefsData = await prefsResponse.json()
-            if (prefsData.preferences && prefsData.preferences.length > 0) {
-              const prefs = prefsData.preferences[0]
-              console.log("Préférences de scoring récupérées:", prefs.name || "Modèle personnalisé")
-
-              // Adapter la structure des préférences pour le calcul de score
-              const adaptedPrefs = {
-                name: prefs.name,
-                criteria: prefs.criteria || {},
-                weights: prefs.criteria?.weights || {
-                  income: 40,
-                  stability: 25,
-                  guarantor: 20,
-                  file_quality: 15,
-                },
-                min_income_ratio: prefs.criteria?.min_income_ratio || 2.5,
-                good_income_ratio: prefs.criteria?.good_income_ratio || 3,
-                excellent_income_ratio: prefs.criteria?.excellent_income_ratio || 3.5,
-                exclusion_rules: prefs.exclusion_rules || {},
-              }
-
-              setScoringPreferences(adaptedPrefs)
-            } else {
-              setScoringPreferences({
-                name: "Modèle standard",
-                weights: {
-                  income: 40,
-                  stability: 25,
-                  guarantor: 20,
-                  file_quality: 15,
-                },
-                min_income_ratio: 2.5,
-                good_income_ratio: 3,
-                excellent_income_ratio: 3.5,
-                exclusion_rules: {},
-              })
-            }
-          }
-        } catch (error) {
-          console.error("Erreur chargement préférences scoring:", error)
-          setScoringPreferences({
-            name: "Modèle standard",
-            weights: {
-              income: 40,
-              stability: 25,
-              guarantor: 20,
-              file_quality: 15,
-            },
-            min_income_ratio: 2.5,
-            good_income_ratio: 3,
-            excellent_income_ratio: 3.5,
-            exclusion_rules: {},
-          })
         }
       }
     } catch (error) {
@@ -454,82 +410,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
     } catch (e) {
       return "Montant invalide"
     }
-  }
-
-  const calculateMatchScore = () => {
-    if (!application || !application.property || !scoringPreferences) return 50
-
-    const property = application.property
-    const mainTenant = rentalFile?.main_tenant || {}
-
-    // Récupérer les revenus avec plusieurs sources possibles
-    let income = 0
-    if (mainTenant.income_sources?.work_income?.amount) {
-      income = mainTenant.income_sources.work_income.amount
-    } else if (mainTenant.income_sources?.work_income?.monthly_amount) {
-      income = mainTenant.income_sources.work_income.monthly_amount
-    } else if (mainTenant.monthly_income) {
-      income = mainTenant.monthly_income
-    } else if (application.income) {
-      income = application.income
-    }
-
-    const hasGuarantor =
-      (rentalFile?.guarantors && rentalFile.guarantors.length > 0) || application.has_guarantor || false
-    const contractType = (mainTenant.main_activity || application.contract_type || "").toLowerCase()
-
-    const weights = scoringPreferences.weights || {
-      income: 40,
-      stability: 25,
-      guarantor: 20,
-      file_quality: 15,
-    }
-
-    let score = 0
-
-    // 1. Score revenus
-    if (income > 0 && property.price > 0) {
-      const rentRatio = income / property.price
-
-      if (rentRatio >= scoringPreferences.excellent_income_ratio) {
-        score += weights.income
-      } else if (rentRatio >= scoringPreferences.good_income_ratio) {
-        score += Math.round(weights.income * 0.8)
-      } else if (rentRatio >= scoringPreferences.min_income_ratio) {
-        score += Math.round(weights.income * 0.6)
-      } else {
-        score += Math.round(weights.income * 0.3)
-      }
-    }
-
-    // 2. Score stabilité
-    if (contractType === "cdi" || contractType === "fonctionnaire") {
-      score += weights.stability
-    } else if (contractType === "cdd") {
-      score += Math.round(weights.stability * 0.7)
-    } else {
-      score += Math.round(weights.stability * 0.5)
-    }
-
-    // 3. Score garant
-    if (hasGuarantor) {
-      score += weights.guarantor
-    }
-
-    // 4. Score qualité du dossier
-    let fileQualityScore = 0
-    const profession = mainTenant.profession || application.profession
-    const company = mainTenant.company || application.company
-
-    if (profession && profession !== "Non spécifié") {
-      fileQualityScore += Math.round(weights.file_quality * 0.5)
-    }
-    if (company && company !== "Non spécifié") {
-      fileQualityScore += Math.round(weights.file_quality * 0.5)
-    }
-    score += fileQualityScore
-
-    return Math.min(Math.round(score), 100)
   }
 
   const getStatusBadge = () => {
@@ -739,7 +619,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const company = mainTenant.company || application.company || "Non spécifié"
   const contractType = mainTenant.main_activity || application.contract_type || "Non spécifié"
 
-  const matchScore = calculateMatchScore()
   const rentRatio = income && property.price ? (income / property.price).toFixed(1) : "N/A"
 
   return (
@@ -760,7 +639,12 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       <div className="p-6 space-y-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex items-center gap-4">
-            <CircularScore score={matchScore} size="lg" customPreferences={scoringPreferences} />
+            <CircularScore
+              score={realtimeScore}
+              size="lg"
+              customPreferences={scoringPreferences}
+              loading={preferencesLoading}
+            />
             <div>
               <h2 className="text-xl font-semibold">Score de compatibilité</h2>
               <p className="text-sm text-muted-foreground">
@@ -1221,9 +1105,14 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               <CardContent>
                 <div className="space-y-4">
                   <div className="flex items-center gap-4">
-                    <CircularScore score={matchScore} size="md" customPreferences={scoringPreferences} />
+                    <CircularScore
+                      score={realtimeScore}
+                      size="md"
+                      customPreferences={scoringPreferences}
+                      loading={preferencesLoading}
+                    />
                     <div>
-                      <h3 className="font-medium">Score global: {matchScore}/100</h3>
+                      <h3 className="font-medium">Score global: {realtimeScore}/100</h3>
                       <p className="text-sm text-muted-foreground">
                         Évaluation basée sur {scoringPreferences?.name || "le modèle standard"}
                       </p>
@@ -1292,7 +1181,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
 
                   <div className="pt-4 border-t">
                     <h4 className="font-medium mb-2">Recommandation</h4>
-                    {matchScore >= 80 ? (
+                    {realtimeScore >= 80 ? (
                       <div className="flex items-start gap-2">
                         <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
                         <div>
@@ -1302,7 +1191,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                           </p>
                         </div>
                       </div>
-                    ) : matchScore >= 60 ? (
+                    ) : realtimeScore >= 60 ? (
                       <div className="flex items-start gap-2">
                         <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
                         <div>
@@ -1312,7 +1201,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                           </p>
                         </div>
                       </div>
-                    ) : matchScore >= 40 ? (
+                    ) : realtimeScore >= 40 ? (
                       <div className="flex items-start gap-2">
                         <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
                         <div>

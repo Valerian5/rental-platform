@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
+import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,20 +13,23 @@ export async function POST(request: NextRequest) {
 
     console.log("🔄 Application du modèle système:", system_preference_id, "pour:", owner_id)
 
-    // 1. Récupérer le modèle système
-    const { data: systemPreference, error: systemError } = await supabase
-      .from("scoring_preferences")
-      .select("*")
-      .eq("model_type", system_preference_id)
-      .eq("is_system", true)
-      .single()
-
-    if (systemError || !systemPreference) {
-      console.error("❌ Modèle système introuvable:", systemError)
-      return NextResponse.json({ error: "Modèle système introuvable" }, { status: 404 })
+    // 1. Récupérer le modèle système depuis le service
+    let systemModel
+    switch (system_preference_id) {
+      case "strict":
+        systemModel = scoringPreferencesService.getStrictModel()
+        break
+      case "standard":
+        systemModel = scoringPreferencesService.getStandardModel()
+        break
+      case "flexible":
+        systemModel = scoringPreferencesService.getFlexibleModel()
+        break
+      default:
+        return NextResponse.json({ error: "Modèle système non reconnu" }, { status: 400 })
     }
 
-    console.log("✅ Modèle système récupéré:", systemPreference.name)
+    console.log("✅ Modèle système récupéré:", systemModel.name)
 
     // 2. Désactiver les préférences par défaut existantes
     const { error: updateError } = await supabase
@@ -41,14 +45,15 @@ export async function POST(request: NextRequest) {
     // 3. Créer une nouvelle préférence utilisateur basée sur le modèle système
     const newPreference = {
       owner_id: owner_id,
-      name: `${systemPreference.name} (Appliqué)`,
-      description: systemPreference.description,
-      model_type: systemPreference.model_type,
+      name: `${systemModel.name} (Appliqué)`,
+      description: systemModel.description,
+      model_type: systemModel.id,
       is_default: true,
       is_system: false,
-      system_preference_id: systemPreference.id,
-      criteria: systemPreference.criteria,
-      exclusion_rules: systemPreference.exclusion_rules,
+      system_preference_id: systemModel.id,
+      criteria: systemModel.criteria,
+      exclusion_rules: systemModel.exclusion_rules,
+      version: 1, // Version initiale
     }
 
     const { data: preference, error: insertError } = await supabase
@@ -64,9 +69,12 @@ export async function POST(request: NextRequest) {
 
     console.log("✅ Préférence utilisateur créée:", preference.id)
 
+    // 4. Invalider le cache pour ce propriétaire
+    scoringPreferencesService.invalidatePreferencesCache(owner_id)
+
     return NextResponse.json({
       preference,
-      message: `Modèle "${systemPreference.name}" appliqué avec succès`,
+      message: `Modèle "${systemModel.name}" appliqué avec succès`,
     })
   } catch (error) {
     console.error("❌ Erreur API use-system:", error)

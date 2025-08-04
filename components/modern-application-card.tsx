@@ -1,456 +1,316 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { CircularScore } from "@/components/circular-score"
+import { Mail, Phone, Euro, Calendar, FileText, MapPin, Eye, Check, X, MessageSquare, Clock } from "lucide-react"
 import Link from "next/link"
-import {
-  User,
-  Building,
-  Calendar,
-  CheckCircle,
-  XCircle,
-  FileText,
-  MessageSquare,
-  ChevronDown,
-  ChevronUp,
-  Clock,
-  AlertCircle,
-  Eye,
-  BarChart3,
-} from "lucide-react"
-import { useRouter } from "next/navigation"
+import { useRealtimeScores } from "@/hooks/use-scoring-preferences"
+import { useEffect, useState } from "react"
 
-interface ApplicationCardProps {
-  application: {
-    id: string
-    tenant: {
-      first_name: string
-      last_name: string
-      email: string
-      phone: string
-    }
-    property: {
-      title: string
-      address: string
-      owner_id?: string
-      price?: number
-    }
-    profession: string
-    income: number
-    has_guarantor: boolean
-    documents_complete: boolean
-    status: string
-    match_score: number
-    created_at: string
-    tenant_id?: string
-  }
-  isSelected?: boolean
-  onSelect?: (selected: boolean) => void
-  onAction: (action: string) => void
-  rentalFile?: any
+interface ModernApplicationCardProps {
+  application: any
+  onAccept?: (id: string) => void
+  onReject?: (id: string) => void
+  onContact?: (id: string) => void
+  showActions?: boolean
   scoringPreferences?: any
 }
 
-export function ModernApplicationCard({
+export default function ModernApplicationCard({
   application,
-  isSelected,
-  onSelect,
-  onAction,
-  rentalFile,
+  onAccept,
+  onReject,
+  onContact,
+  showActions = true,
   scoringPreferences,
-}: ApplicationCardProps) {
-  const [expanded, setExpanded] = useState(false)
-  const [calculatedScore, setCalculatedScore] = useState<number>(application.match_score)
+}: ModernApplicationCardProps) {
+  const [realtimeScore, setRealtimeScore] = useState<number>(application.match_score || 50)
   const [scoreLoading, setScoreLoading] = useState(false)
-  const router = useRouter()
 
-  const [scoreBreakdown, setScoreBreakdown] = useState<any>(null)
-  const [scoreRecommendations, setScoreRecommendations] = useState<string[]>([])
-  const [scoreWarnings, setScoreWarnings] = useState<string[]>([])
-  const [scoreCompatible, setScoreCompatible] = useState<boolean | undefined>(undefined)
+  // Utiliser le hook pour les scores en temps réel si on a l'owner_id
+  const ownerId = application.property?.owner_id || application.owner_id
+  const { scores, recalculating } = useRealtimeScores({
+    applications: ownerId ? [application] : [],
+    ownerId: ownerId || "",
+    enabled: !!ownerId,
+  })
 
+  // Mettre à jour le score quand il change
   useEffect(() => {
-    if (application.property?.owner_id) {
-      calculateCustomScore()
-    }
-  }, [application, application.property?.owner_id])
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (application.property?.owner_id) {
-        calculateCustomScore()
+    if (scores.has(application.id)) {
+      const newScore = scores.get(application.id)?.totalScore || 50
+      if (newScore !== realtimeScore) {
+        console.log(`📊 Score mis à jour pour ${application.id}:`, newScore)
+        setRealtimeScore(newScore)
       }
-    }, 10000)
+    }
+  }, [scores, application.id, realtimeScore])
 
-    return () => clearInterval(interval)
-  }, [application.property?.owner_id])
-
-  const calculateCustomScore = async () => {
-    try {
+  // Fallback: calculer le score localement si pas de temps réel
+  useEffect(() => {
+    if (!ownerId && scoringPreferences && application.income && application.property?.price) {
       setScoreLoading(true)
 
-      const applicationData = {
-        income: application.income,
-        guarantor_income: rentalFile?.guarantor_income,
-        has_guarantor: application.has_guarantor || rentalFile?.has_guarantor,
-        guarantor_type: rentalFile?.guarantor_type || "individual",
-        profession: application.profession,
-        contract_type: rentalFile?.contract_type || "cdi",
-        professional_experience_months: rentalFile?.professional_experience_months || 0,
-        trial_period: rentalFile?.trial_period || false,
-        file_completion: rentalFile?.completion_percentage || 70,
-        has_verified_documents: rentalFile?.has_verified_documents || false,
-        documents_complete: application.documents_complete,
-        presentation: rentalFile?.presentation || "",
-        message: application.message || "",
+      // Calcul simple basé sur les préférences
+      const income = application.income || 0
+      const rent = application.property.price || 0
+      const weights = scoringPreferences.weights || {
+        income: 40,
+        stability: 25,
+        guarantor: 20,
+        file_quality: 15,
       }
 
-      const response = await fetch("/api/calculate-score", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-cache",
-        },
-        body: JSON.stringify({
-          application: applicationData,
-          property: {
-            price: application.property.price,
-          },
-          owner_id: application.property.owner_id,
-        }),
-      })
+      let score = 0
 
-      if (response.ok) {
-        const data = await response.json()
-        setCalculatedScore(Math.min(100, Math.max(0, Math.round(data.score))))        
-        setScoreBreakdown(data.breakdown)
-        setScoreRecommendations(data.recommendations || [])
-        setScoreWarnings(data.warnings || [])
-        setScoreCompatible(data.compatible)
+      // Score revenus
+      if (income > 0 && rent > 0) {
+        const rentRatio = income / rent
+        const minRatio = scoringPreferences.min_income_ratio || 2.5
+        const goodRatio = scoringPreferences.good_income_ratio || 3
+        const excellentRatio = scoringPreferences.excellent_income_ratio || 3.5
+
+        if (rentRatio >= excellentRatio) {
+          score += weights.income
+        } else if (rentRatio >= goodRatio) {
+          score += Math.round(weights.income * 0.8)
+        } else if (rentRatio >= minRatio) {
+          score += Math.round(weights.income * 0.6)
+        } else {
+          score += Math.round(weights.income * 0.3)
+        }
+      }
+
+      // Score stabilité
+      const contractType = (application.contract_type || "").toLowerCase()
+      if (["cdi", "fonctionnaire"].includes(contractType)) {
+        score += weights.stability
+      } else if (contractType === "cdd") {
+        score += Math.round(weights.stability * 0.7)
       } else {
-        setCalculatedScore(application.match_score)
+        score += Math.round(weights.stability * 0.5)
       }
-    } catch (error) {
-      setCalculatedScore(application.match_score)
-    } finally {
+
+      // Score garant
+      if (application.has_guarantor) {
+        score += weights.guarantor
+      }
+
+      // Score qualité du dossier
+      let fileQualityScore = 0
+      if (application.profession && application.profession !== "Non spécifié") {
+        fileQualityScore += Math.round(weights.file_quality * 0.5)
+      }
+      if (application.company && application.company !== "Non spécifié") {
+        fileQualityScore += Math.round(weights.file_quality * 0.5)
+      }
+      score += fileQualityScore
+
+      const finalScore = Math.min(Math.round(score), 100)
+      setRealtimeScore(finalScore)
       setScoreLoading(false)
     }
-  }
+  }, [scoringPreferences, application, ownerId])
 
-  const formatDate = (dateString: string) => {
-    try {
-      return new Date(dateString).toLocaleDateString("fr-FR", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      })
-    } catch (e) {
-      return "Date inconnue"
-    }
-  }
-
-  const formatAmount = (amount: number) => {
-    try {
-      return new Intl.NumberFormat("fr-FR", {
-        style: "currency",
-        currency: "EUR",
-        maximumFractionDigits: 0,
-      }).format(amount)
-    } catch (e) {
-      return "Montant inconnu"
-    }
-  }
-
-  const getStatusBadge = () => {
-    switch (application.status) {
+  const getStatusColor = (status: string) => {
+    switch (status) {
       case "pending":
-        return <Badge variant="outline">En attente</Badge>
-      case "analyzing":
-        return <Badge variant="secondary">En analyse</Badge>
-      case "visit_proposed":
-        return (
-          <Badge variant="secondary" className="bg-purple-100 text-purple-800 hover:bg-purple-200">
-            Visite proposée
-          </Badge>
-        )
-      case "visit_scheduled":
-        return (
-          <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200">
-            Visite planifiée
-          </Badge>
-        )
-      case "accepted":
+        return "bg-yellow-100 text-yellow-800 border-yellow-200"
       case "approved":
-        return (
-          <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-200">
-            Acceptée
-          </Badge>
-        )
+        return "bg-green-100 text-green-800 border-green-200"
       case "rejected":
-        return <Badge variant="destructive">Refusée</Badge>
-      case "waiting_tenant_confirmation":
-        return (
-          <Badge variant="outline" className="bg-amber-100 text-amber-800 hover:bg-amber-200">
-            En attente de confirmation
-          </Badge>
-        )
+        return "bg-red-100 text-red-800 border-red-200"
+      case "withdrawn":
+        return "bg-gray-100 text-gray-800 border-gray-200"
+      case "visite_proposée":
+        return "bg-purple-100 text-purple-800 border-purple-200"
       default:
-        return <Badge variant="outline">Statut inconnu</Badge>
+        return "bg-blue-100 text-blue-800 border-blue-200"
     }
   }
 
-  const getActionButtons = () => {
-    const viewAnalysisButton = (
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={() => router.push(`/owner/applications/${application.id}`)}
-      >
-        <BarChart3 className="h-4 w-4 mr-1" />
-        Voir analyse
-      </Button>
-    )
-
-    switch (application.status) {
+  const getStatusText = (status: string) => {
+    switch (status) {
       case "pending":
-        return (
-          <>
-            <Button size="sm" variant="default" onClick={() => onAction("analyze")}>
-              <Eye className="h-4 w-4 mr-1" />
-              Analyser
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-          </>
-        )
-      case "analyzing":
-        return (
-          <>
-            <Button size="sm" variant="default" onClick={() => onAction("propose_visit")}>
-              <Calendar className="h-4 w-4 mr-1" />
-              Proposer visite
-            </Button>
-            <Button size="sm" variant="destructive" onClick={() => onAction("refuse")}>
-              <XCircle className="h-4 w-4 mr-1" />
-              Refuser
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-          </>
-        )
-      case "visit_proposed":
-        return (
-          <>
-            <Button size="sm" variant="outline" disabled>
-              <Clock className="h-4 w-4 mr-1" />
-              En attente
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-            {viewAnalysisButton}
-          </>
-        )
-      case "visit_scheduled":
-        return (
-          <>
-            <Button size="sm" variant="default" onClick={() => onAction("accept")}>
-              <CheckCircle className="h-4 w-4 mr-1" />
-              Accepter
-            </Button>
-            <Button size="sm" variant="destructive" onClick={() => onAction("refuse")}>
-              <XCircle className="h-4 w-4 mr-1" />
-              Refuser
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-            {viewAnalysisButton}
-          </>
-        )
-      case "waiting_tenant_confirmation":
-        return (
-          <>
-            <Button size="sm" variant="outline" disabled>
-              <Clock className="h-4 w-4 mr-1" />
-              En attente
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-            {viewAnalysisButton}
-          </>
-        )
-      case "accepted":
+        return "En attente"
       case "approved":
-        return (
-          <>
-            <Button size="sm" variant="default" onClick={() => onAction("generate_lease")}>
-              <FileText className="h-4 w-4 mr-1" />
-              Générer bail
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-            {viewAnalysisButton}
-          </>
-        )
+        return "Approuvée"
       case "rejected":
-        return (
-          <>
-            <Button size="sm" variant="outline" onClick={() => router.push(`/owner/applications/${application.id}`)}>
-              <Eye className="h-4 w-4 mr-1" />
-              Voir détails
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-            {viewAnalysisButton}
-          </>
-        )
+        return "Refusée"
+      case "withdrawn":
+        return "Retirée"
+      case "visite_proposée":
+        return "Visite proposée"
       default:
-        return (
-          <>
-            <Button size="sm" variant="outline" onClick={() => router.push(`/owner/applications/${application.id}`)}>
-              <Eye className="h-4 w-4 mr-1" />
-              Voir détails
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-            {viewAnalysisButton}
-          </>
-        )
+        return status
     }
-  }
-
-  const hasDocuments = (docs: any) => {
-    return docs && Array.isArray(docs) && docs.length > 0 && docs[0].url
   }
 
   return (
-    <Card className={`overflow-hidden transition-all ${isSelected ? "border-blue-500 shadow-md" : ""}`}>
-      <CardContent className="p-0">
-        <div className="p-4 flex justify-between items-start">
-          <div className="flex items-center gap-3">
-            {onSelect && (
-              <input
-                type="checkbox"
-                checked={isSelected}
-                onChange={(e) => onSelect(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300"
+    <Card className="w-full max-w-full hover:shadow-lg transition-all duration-200 border-l-4 border-l-blue-500 overflow-hidden">
+      <CardHeader className="pb-3 px-3 sm:px-6 pt-3 sm:pt-6">
+        <div className="flex flex-col space-y-3">
+          {/* Première ligne : Avatar + Nom + Score + Status */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start space-x-3 min-w-0 flex-1">
+              <Avatar className="h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0">
+                <AvatarImage src="/placeholder.svg?height=48&width=48" />
+                <AvatarFallback className="bg-blue-100 text-blue-700 font-semibold text-sm">
+                  {application.tenant?.first_name
+                    ?.split(" ")
+                    .map((n: string) => n[0])
+                    .join("") || "T"}
+                </AvatarFallback>
+              </Avatar>
+
+              <div className="min-w-0 flex-1">
+                <CardTitle className="text-base sm:text-lg font-semibold text-gray-900 truncate">
+                  {`${application.tenant?.first_name || ""} ${application.tenant?.last_name || ""}`.trim() ||
+                    "Candidat anonyme"}
+                </CardTitle>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-end gap-2 flex-shrink-0">
+              <CircularScore
+                score={realtimeScore}
+                size="sm"
+                loading={scoreLoading || recalculating}
+                customPreferences={scoringPreferences}
               />
-            )}
-            <div>
-              <h3 className="font-medium">
-                <Link
-                  href={`/owner/applications/${application.id}`}
-                  className="hover:text-blue-600 transition-colors underline"
-                >
-                  {application.tenant.first_name} {application.tenant.last_name}
-                </Link>
-              </h3>
-              <p className="text-sm text-muted-foreground">{application.tenant.email}</p>
+              <Badge className={`${getStatusColor(application.status)} text-xs px-2 py-1`}>
+                {getStatusText(application.status)}
+              </Badge>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {getStatusBadge()}
-            <CircularScore
-              score={calculatedScore}
-              loading={scoreLoading}
-              showDetails={true}
-              breakdown={scoreBreakdown}
-              recommendations={scoreRecommendations}
-              warnings={scoreWarnings}
-              compatible={scoreCompatible}
-            />
-          </div>
-        </div>
 
-        <div className="px-4 pb-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-          <div className="flex items-center gap-1">
-            <Building className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="truncate">{application.property.title}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <User className="h-3.5 w-3.5 text-muted-foreground" />
-            <span>{application.profession}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-            <span>{formatDate(application.created_at)}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            {application.has_guarantor ? (
-              <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-            ) : (
-              <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+          {/* Deuxième ligne : Contact info */}
+          <div className="flex flex-col gap-1 pl-0 sm:pl-15">
+            <div className="flex items-center text-xs sm:text-sm text-gray-600 min-w-0">
+              <Mail className="h-3 w-3 sm:h-4 sm:w-4 mr-2 flex-shrink-0" />
+              <span className="truncate">{application.tenant?.email}</span>
+            </div>
+            {application.tenant?.phone && (
+              <div className="flex items-center text-xs sm:text-sm text-gray-600">
+                <Phone className="h-3 w-3 sm:h-4 sm:w-4 mr-2 flex-shrink-0" />
+                <span className="truncate">{application.tenant.phone}</span>
+              </div>
             )}
-            <span>{application.has_guarantor ? "Avec garant" : "Sans garant"}</span>
           </div>
         </div>
+      </CardHeader>
 
-        {expanded && (
-          <div className="px-4 py-2 bg-gray-50 border-t text-sm">
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-              <div>
-                <p className="text-muted-foreground">Revenus</p>
-                <p className="font-medium">{formatAmount(application.income)}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Téléphone</p>
-                <p>{application.tenant.phone || "Non renseigné"}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Adresse du bien</p>
-                <p className="truncate">{application.property.address}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Documents</p>
-                <p>
-                  {application.documents_complete ? (
-                    <span className="flex items-center">
-                      <CheckCircle className="h-3.5 w-3.5 text-green-500 mr-1" /> Complets
-                    </span>
-                  ) : (
-                    <span className="flex items-center">
-                      <AlertCircle className="h-3.5 w-3.5 text-amber-500 mr-1" /> Incomplets
-                    </span>
-                  )}
-                </p>
+      <CardContent className="space-y-3 px-3 sm:px-6 pb-3 sm:pb-6">
+        {/* Propriété */}
+        {application.property && (
+          <div className="bg-gray-50 rounded-lg p-2 sm:p-3">
+            <div className="flex items-start space-x-2">
+              <MapPin className="h-3 w-3 sm:h-4 sm:w-4 text-gray-500 mt-0.5 flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <h4 className="font-medium text-xs sm:text-sm text-gray-900 truncate">{application.property.title}</h4>
+                <p className="text-xs text-gray-600 truncate">{application.property.address}</p>
               </div>
             </div>
           </div>
         )}
 
-        <div className="px-4 py-3 border-t flex items-center justify-between">
-          <Button variant="ghost" size="sm" onClick={() => setExpanded(!expanded)} className="text-muted-foreground">
-            {expanded ? (
-              <>
-                <ChevronUp className="h-4 w-4 mr-1" /> Moins de détails
-              </>
-            ) : (
-              <>
-                <ChevronDown className="h-4 w-4 mr-1" /> Plus de détails
-              </>
-            )}
-          </Button>
+        {/* Informations financières et professionnelles */}
+        <div className="grid grid-cols-1 gap-2 sm:gap-3">
+          <div className="flex items-center space-x-2">
+            <Euro className="h-3 w-3 sm:h-4 sm:w-4 text-green-600 flex-shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-gray-500">Revenus mensuels</p>
+              <p className="font-semibold text-xs sm:text-sm truncate">{application.income?.toLocaleString()} €</p>
+            </div>
+          </div>
 
-          <div className="flex gap-2">{getActionButtons()}</div>
+          {application.profession && (
+            <div className="flex items-center space-x-2">
+              <FileText className="h-3 w-3 sm:h-4 sm:w-4 text-blue-600 flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-gray-500">Profession</p>
+                <p className="font-semibold text-xs sm:text-sm truncate">{application.profession}</p>
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* Badges et informations supplémentaires */}
+        <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+          {application.has_guarantor && (
+            <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 px-2 py-0.5">
+              Avec garant
+            </Badge>
+          )}
+          <div className="flex items-center text-xs text-gray-500">
+            <Calendar className="h-3 w-3 mr-1 flex-shrink-0" />
+            <span className="whitespace-nowrap">{new Date(application.created_at).toLocaleDateString("fr-FR")}</span>
+          </div>
+          {application.visit_requested && (
+            <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 px-2 py-0.5">
+              <Clock className="h-3 w-3 mr-1" />
+              Visite demandée
+            </Badge>
+          )}
+        </div>
+
+        {/* Message de candidature */}
+        {application.message && (
+          <div className="bg-blue-50 rounded-lg p-2 sm:p-3 border border-blue-100">
+            <p className="text-xs text-gray-600 mb-1">Message de candidature :</p>
+            <p className="text-xs sm:text-sm text-gray-800 line-clamp-3 break-words leading-relaxed">
+              {application.message}
+            </p>
+          </div>
+        )}
+
+        {/* Actions */}
+        {showActions && (
+          <div className="flex flex-col gap-2 pt-2 border-t">
+            {/* Première ligne : Bouton Examiner */}
+            <Button asChild variant="outline" size="sm" className="w-full bg-transparent">
+              <Link href={`/owner/applications/${application.id}`}>
+                <Eye className="h-4 w-4 mr-2" />
+                Examiner
+              </Link>
+            </Button>
+
+            {/* Deuxième ligne : Actions selon le statut */}
+            <div className="flex flex-col sm:flex-row gap-2">
+              {application.status === "pending" && (
+                <>
+                  {onAccept && (
+                    <Button
+                      onClick={() => onAccept(application.id)}
+                      size="sm"
+                      className="w-full bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      <Check className="h-4 w-4 mr-2" />
+                      Accepter
+                    </Button>
+                  )}
+
+                  {onReject && (
+                    <Button onClick={() => onReject(application.id)} variant="destructive" size="sm" className="w-full">
+                      <X className="h-4 w-4 mr-2" />
+                      Refuser
+                    </Button>
+                  )}
+                </>
+              )}
+
+              {onContact && (
+                <Button onClick={() => onContact(application.id)} variant="outline" size="sm" className="w-full">
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Contacter
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
