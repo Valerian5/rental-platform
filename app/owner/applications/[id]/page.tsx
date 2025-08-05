@@ -44,50 +44,50 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const [showRefuseDialog, setShowRefuseDialog] = useState(false)
   const [documents, setDocuments] = useState<any[]>([])
   const [realtimeScore, setRealtimeScore] = useState<number>(50)
-  const [scoringPreferences, setScoringPreferences] = useState<any>(null)
   const eventBus = useScoringEventBus()
 
   useEffect(() => {
     checkAuthAndLoadData()
   }, [])
 
-  // Écouter les événements de l'Event Bus
+  // Écouter les événements de l'Event Bus pour les mises à jour de score
   useEffect(() => {
     if (!application?.property?.owner_id) return
 
-    const unsubscribePreferences = eventBus.subscribe("preferences-updated", (event) => {
+    const unsubscribe = eventBus.subscribe("preferences-updated", (event) => {
       if (event.ownerId === application.property.owner_id) {
-        console.log("🔄 Préférences mises à jour, recalcul du score")
-        setScoringPreferences(event.data.preferences)
+        console.log("🔄 Préférences mises à jour, recalcul du score pour:", application.id)
         recalculateScore()
       }
     })
 
-    const unsubscribeScore = eventBus.subscribe("score-calculated", (event) => {
-      if (event.data.applicationId === application.id) {
-        setRealtimeScore(event.data.score)
-      }
-    })
-
-    return () => {
-      unsubscribePreferences()
-      unsubscribeScore()
-    }
-  }, [application?.id, application?.property?.owner_id])
+    return unsubscribe
+  }, [application?.property?.owner_id])
 
   const recalculateScore = async () => {
-    if (!application?.property?.owner_id || !application?.property?.price) return
+    if (!application || !application.property) return
 
     try {
+      const applicationData = {
+        income: application.income,
+        guarantor_income: rentalFile?.guarantor_income,
+        has_guarantor: application.has_guarantor || rentalFile?.has_guarantor,
+        contract_type: rentalFile?.contract_type || application.contract_type || "cdi",
+        documents_complete: application.documents_complete,
+        has_verified_documents: rentalFile?.has_verified_documents || false,
+        presentation: rentalFile?.presentation || application.message || "",
+      }
+
       const score = await eventBus.calculateScore(
         application.id,
-        application,
+        applicationData,
         application.property,
         application.property.owner_id,
       )
+
       setRealtimeScore(score)
     } catch (error) {
-      console.error("❌ Erreur recalcul score:", error)
+      console.error("Erreur recalcul score:", error)
     }
   }
 
@@ -109,36 +109,12 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       }
 
       setUser(currentUser)
-      await Promise.all([loadApplicationDetails(), loadScoringPreferences(currentUser.id)])
+      await loadApplicationDetails()
     } catch (error) {
       console.error("Erreur auth:", error)
       toast.error("Erreur d'authentification")
     } finally {
       setLoading(false)
-    }
-  }
-
-  const loadScoringPreferences = async (ownerId: string) => {
-    try {
-      // Vérifier d'abord le cache de l'Event Bus
-      const cachedPrefs = eventBus.getPreferences(ownerId)
-      if (cachedPrefs) {
-        setScoringPreferences(cachedPrefs)
-        return
-      }
-
-      const response = await fetch(`/api/scoring-preferences?owner_id=${ownerId}&default_only=true`)
-      if (response.ok) {
-        const data = await response.json()
-        if (data.preferences && data.preferences.length > 0) {
-          const prefs = data.preferences[0]
-          setScoringPreferences(prefs)
-          // Mettre à jour le cache de l'Event Bus
-          eventBus.updatePreferences(ownerId, prefs)
-        }
-      }
-    } catch (error) {
-      console.error("Erreur chargement préférences:", error)
     }
   }
 
@@ -194,31 +170,18 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               }
 
               // Mettre à jour l'application avec les données enrichies
-              const enrichedApplication = {
-                ...data.application,
+              setApplication((prev) => ({
+                ...prev,
                 income,
                 has_guarantor:
-                  (rentalFile.guarantors && rentalFile.guarantors.length > 0) ||
-                  data.application.has_guarantor ||
-                  false,
-                profession: rentalFile.main_tenant?.profession || data.application.profession || "Non spécifié",
-                company: rentalFile.main_tenant?.company || data.application.company || "Non spécifié",
-                contract_type:
-                  rentalFile.main_tenant?.main_activity || data.application.contract_type || "Non spécifié",
-              }
-
-              setApplication(enrichedApplication)
+                  (rentalFile.guarantors && rentalFile.guarantors.length > 0) || prev.has_guarantor || false,
+                profession: rentalFile.main_tenant?.profession || prev.profession || "Non spécifié",
+                company: rentalFile.main_tenant?.company || prev.company || "Non spécifié",
+                contract_type: rentalFile.main_tenant?.main_activity || prev.contract_type || "Non spécifié",
+              }))
 
               // Calculer le score initial
-              if (enrichedApplication.property?.owner_id && enrichedApplication.property?.price) {
-                const score = await eventBus.calculateScore(
-                  enrichedApplication.id,
-                  enrichedApplication,
-                  enrichedApplication.property,
-                  enrichedApplication.property.owner_id,
-                )
-                setRealtimeScore(score)
-              }
+              await recalculateScore()
             }
           }
         } catch (error) {
@@ -620,9 +583,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             <CircularScore score={realtimeScore} size="lg" />
             <div>
               <h2 className="text-xl font-semibold">Score de compatibilité</h2>
-              <p className="text-sm text-muted-foreground">
-                Basé sur {scoringPreferences?.name || "le modèle standard"}
-              </p>
+              <p className="text-sm text-muted-foreground">Basé sur vos préférences de scoring</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">{getActionButtons()}</div>
@@ -1081,9 +1042,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                     <CircularScore score={realtimeScore} size="md" />
                     <div>
                       <h3 className="font-medium">Score global: {realtimeScore}/100</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Évaluation basée sur {scoringPreferences?.name || "le modèle standard"}
-                      </p>
+                      <p className="text-sm text-muted-foreground">Évaluation basée sur vos préférences de scoring</p>
                     </div>
                   </div>
 
