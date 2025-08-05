@@ -11,9 +11,7 @@ import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { CircularScore } from "@/components/circular-score"
-import VisitProposalManager from "@/components/visit-proposal-manager"
-import { TenantAndGuarantorDocumentsSection } from "@/components/TenantAndGuarantorDocumentsSection"
-import { useScoringPreferences } from "@/hooks/use-scoring-preferences"
+import { VisitProposalManager } from "@/components/visit-proposal-manager"
 import {
   ArrowLeft,
   User,
@@ -32,86 +30,6 @@ import {
   AlertCircle,
 } from "lucide-react"
 
-const DocumentPreview = ({ doc, type, index }: { doc: any; type: string; index: number }) => {
-  const getDocTypeColor = (type: string) => {
-    switch (type) {
-      case "identity":
-        return "text-blue-500"
-      case "professional":
-        return "text-green-500"
-      case "financial":
-        return "text-purple-500"
-      case "tax":
-        return "text-orange-500"
-      case "housing":
-        return "text-red-500"
-      default:
-        return "text-gray-500"
-    }
-  }
-
-  const getDocTypeLabel = (type: string) => {
-    switch (type) {
-      case "identity":
-        return "Pièce d'identité"
-      case "professional":
-        return "Document professionnel"
-      case "financial":
-        return "Document financier"
-      case "tax":
-        return "Document fiscal"
-      case "housing":
-        return "Justificatif de domicile"
-      default:
-        return "Document"
-    }
-  }
-
-  const colorClass = getDocTypeColor(type)
-  const docType = getDocTypeLabel(type)
-  const label = doc.guarantor_name ? `${docType} - ${doc.guarantor_name}` : `${docType} ${index + 1}`
-
-  return (
-    <div className="border rounded-lg p-3">
-      <div className={`flex items-center gap-2 mb-2 ${colorClass}`}>
-        <FileText className={`h-4 w-4 ${colorClass}`} />
-        <span className="text-sm font-medium">{label}</span>
-      </div>
-      {doc.file_type?.startsWith("image/") ? (
-        <img
-          src={doc.file_url || "/placeholder.svg"}
-          alt={label}
-          className="w-full h-32 object-contain rounded border bg-gray-50"
-          onError={(e) => {
-            const target = e.target as HTMLImageElement
-            target.style.display = "none"
-            const fallback = target.nextElementSibling as HTMLElement
-            if (fallback) fallback.style.display = "flex"
-          }}
-        />
-      ) : (
-        <div className="w-full h-32 flex items-center justify-center bg-gray-100 rounded border">
-          <FileText className="h-8 w-8 text-gray-400" />
-        </div>
-      )}
-      <div className="hidden items-center justify-center h-32 bg-gray-100 rounded border">
-        <div className="text-center">
-          <FileText className="h-8 w-8 text-gray-400 mx-auto mb-1" />
-          <p className="text-xs text-gray-500">{doc.label || "Document"}</p>
-        </div>
-      </div>
-      <Button
-        variant="outline"
-        size="sm"
-        className="w-full mt-2 bg-transparent"
-        onClick={() => window.open(doc.file_url, "_blank")}
-      >
-        Voir le document
-      </Button>
-    </div>
-  )
-}
-
 export default function ApplicationDetailsPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -124,34 +42,28 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const [showRefuseDialog, setShowRefuseDialog] = useState(false)
   const [documents, setDocuments] = useState<any[]>([])
   const [realtimeScore, setRealtimeScore] = useState<number>(50)
-
-  // Hook pour les préférences de scoring en temps réel
-  const {
-    preferences: scoringPreferences,
-    loading: preferencesLoading,
-    calculateScore,
-  } = useScoringPreferences({
-    ownerId: application?.property?.owner_id || "",
-    autoRefresh: true,
-  })
+  const [scoringPreferences, setScoringPreferences] = useState<any>(null)
 
   useEffect(() => {
     checkAuthAndLoadData()
   }, [])
 
-  // Recalculer le score quand les préférences changent
+  // Écouter les changements de préférences de scoring
   useEffect(() => {
-    if (application && application.property && scoringPreferences) {
-      calculateScore(application, application.property)
-        .then((result) => {
-          console.log("📊 Score recalculé:", result.totalScore)
-          setRealtimeScore(result.totalScore)
-        })
-        .catch((error) => {
-          console.error("❌ Erreur recalcul score:", error)
-        })
+    const handlePreferencesUpdate = (event: CustomEvent) => {
+      console.log("🔄 Préférences mises à jour, recalcul du score")
+      if (application && application.property) {
+        const newScore = calculateScore(application, application.property, event.detail.preferences)
+        setRealtimeScore(newScore)
+        setScoringPreferences(event.detail.preferences)
+      }
     }
-  }, [scoringPreferences, application, calculateScore])
+
+    window.addEventListener("scoring-preferences-updated", handlePreferencesUpdate as EventListener)
+    return () => {
+      window.removeEventListener("scoring-preferences-updated", handlePreferencesUpdate as EventListener)
+    }
+  }, [application])
 
   const checkAuthAndLoadData = async () => {
     try {
@@ -171,13 +83,78 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       }
 
       setUser(currentUser)
-      await loadApplicationDetails()
+      await Promise.all([loadApplicationDetails(), loadScoringPreferences(currentUser.id)])
     } catch (error) {
       console.error("Erreur auth:", error)
       toast.error("Erreur d'authentification")
     } finally {
       setLoading(false)
     }
+  }
+
+  const loadScoringPreferences = async (ownerId: string) => {
+    try {
+      const response = await fetch(`/api/scoring-preferences?owner_id=${ownerId}&default_only=true`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.preferences && data.preferences.length > 0) {
+          setScoringPreferences(data.preferences[0])
+        }
+      }
+    } catch (error) {
+      console.error("Erreur chargement préférences:", error)
+    }
+  }
+
+  const calculateScore = (application: any, property: any, preferences?: any) => {
+    const prefs = preferences || scoringPreferences
+    if (!prefs || !application.income || !property.price) {
+      return 50
+    }
+
+    const income = application.income || 0
+    const rent = property.price || 0
+    const ratio = income / rent
+
+    let score = 0
+
+    // Score revenus (40 points max)
+    if (ratio >= 3.5) {
+      score += 40
+    } else if (ratio >= 3.0) {
+      score += 32
+    } else if (ratio >= 2.5) {
+      score += 24
+    } else if (ratio >= 2.0) {
+      score += 16
+    } else {
+      score += 8
+    }
+
+    // Score stabilité (25 points max)
+    const contractType = (application.contract_type || "").toLowerCase()
+    if (["cdi", "fonctionnaire"].includes(contractType)) {
+      score += 25
+    } else if (contractType === "cdd") {
+      score += 18
+    } else {
+      score += 12
+    }
+
+    // Score garant (20 points max)
+    if (application.has_guarantor) {
+      score += 20
+    }
+
+    // Score qualité dossier (15 points max)
+    if (application.profession && application.profession !== "Non spécifié") {
+      score += 8
+    }
+    if (application.company && application.company !== "Non spécifié") {
+      score += 7
+    }
+
+    return Math.min(Math.round(score), 100)
   }
 
   const loadApplicationDetails = async () => {
@@ -232,15 +209,26 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               }
 
               // Mettre à jour l'application avec les données enrichies
-              setApplication((prev) => ({
-                ...prev,
+              const enrichedApplication = {
+                ...data.application,
                 income,
                 has_guarantor:
-                  (rentalFile.guarantors && rentalFile.guarantors.length > 0) || prev.has_guarantor || false,
-                profession: rentalFile.main_tenant?.profession || prev.profession || "Non spécifié",
-                company: rentalFile.main_tenant?.company || prev.company || "Non spécifié",
-                contract_type: rentalFile.main_tenant?.main_activity || prev.contract_type || "Non spécifié",
-              }))
+                  (rentalFile.guarantors && rentalFile.guarantors.length > 0) ||
+                  data.application.has_guarantor ||
+                  false,
+                profession: rentalFile.main_tenant?.profession || data.application.profession || "Non spécifié",
+                company: rentalFile.main_tenant?.company || data.application.company || "Non spécifié",
+                contract_type:
+                  rentalFile.main_tenant?.main_activity || data.application.contract_type || "Non spécifié",
+              }
+
+              setApplication(enrichedApplication)
+
+              // Calculer le score avec les données enrichies
+              if (scoringPreferences) {
+                const score = calculateScore(enrichedApplication, enrichedApplication.property, scoringPreferences)
+                setRealtimeScore(score)
+              }
             }
           }
         } catch (error) {
@@ -639,12 +627,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       <div className="p-6 space-y-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex items-center gap-4">
-            <CircularScore
-              score={realtimeScore}
-              size="lg"
-              customPreferences={scoringPreferences}
-              loading={preferencesLoading}
-            />
+            <CircularScore score={realtimeScore} size="lg" />
             <div>
               <h2 className="text-xl font-semibold">Score de compatibilité</h2>
               <p className="text-sm text-muted-foreground">
@@ -1105,12 +1088,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               <CardContent>
                 <div className="space-y-4">
                   <div className="flex items-center gap-4">
-                    <CircularScore
-                      score={realtimeScore}
-                      size="md"
-                      customPreferences={scoringPreferences}
-                      loading={preferencesLoading}
-                    />
+                    <CircularScore score={realtimeScore} size="md" />
                     <div>
                       <h3 className="font-medium">Score global: {realtimeScore}/100</h3>
                       <p className="text-sm text-muted-foreground">
@@ -1239,16 +1217,10 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {user && (
-                  <TenantAndGuarantorDocumentsSection
-                    applicationId={application.id}
-                    mainTenant={rentalFile?.main_tenant}
-                    guarantors={rentalFile?.guarantors || []}
-                    userId={user.id}
-                    userName={`${user.first_name} ${user.last_name}`}
-                    rentalFile={rentalFile}
-                  />
-                )}
+                <p className="text-sm text-muted-foreground mb-4">
+                  Les documents du dossier de location seront affichés ici une fois le composant
+                  TenantAndGuarantorDocumentsSection intégré.
+                </p>
               </CardContent>
             </Card>
           </TabsContent>

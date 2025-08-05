@@ -48,6 +48,27 @@ export default function ApplicationsPage() {
     filterAndSortApplications()
   }, [applications, searchTerm, statusFilter, sortBy, activeTab, propertyFilter, scoreFilter])
 
+  // Écouter les changements de préférences de scoring
+  useEffect(() => {
+    const handlePreferencesUpdate = (event: CustomEvent) => {
+      console.log("🔄 Préférences mises à jour, recalcul des scores")
+      setScoringPreferences(event.detail.preferences)
+
+      // Recalculer les scores pour toutes les applications
+      setApplications((prevApplications) =>
+        prevApplications.map((app) => ({
+          ...app,
+          match_score: calculateMatchScore(app, event.detail.preferences),
+        })),
+      )
+    }
+
+    window.addEventListener("scoring-preferences-updated", handlePreferencesUpdate as EventListener)
+    return () => {
+      window.removeEventListener("scoring-preferences-updated", handlePreferencesUpdate as EventListener)
+    }
+  }, [])
+
   const checkAuthAndLoadData = async () => {
     try {
       setLoading(true)
@@ -211,7 +232,7 @@ export default function ApplicationsPage() {
                     // Type de contrat depuis main_activity
                     const contractType = rentalFile.main_tenant.main_activity || app.contract_type || "Non spécifié"
 
-                    return {
+                    const enrichedApp = {
                       ...app,
                       income,
                       has_guarantor: hasGuarantor,
@@ -223,12 +244,21 @@ export default function ApplicationsPage() {
                       rental_file_main_tenant: rentalFile.main_tenant,
                       rental_file_guarantors: rentalFile.guarantors,
                     }
+
+                    // Calculer le score avec les préférences actuelles
+                    enrichedApp.match_score = calculateMatchScore(enrichedApp, scoringPreferences)
+
+                    return enrichedApp
                   }
                 }
               }
+
+              // Calculer le score même sans dossier de location
+              app.match_score = calculateMatchScore(app, scoringPreferences)
               return app
             } catch (error) {
               console.error("Erreur enrichissement candidature:", error)
+              app.match_score = calculateMatchScore(app, scoringPreferences)
               return app
             }
           }),
@@ -313,7 +343,7 @@ export default function ApplicationsPage() {
         case "property_title":
           return (a.property?.title || "").localeCompare(b.property?.title || "")
         case "score":
-          return calculateMatchScore(b) - calculateMatchScore(a)
+          return (b.match_score || 50) - (a.match_score || 50)
         default:
           return 0
       }
@@ -322,7 +352,7 @@ export default function ApplicationsPage() {
     // Filtre par score
     if (scoreFilter !== "all") {
       filtered = filtered.filter((app) => {
-        const score = calculateMatchScore(app)
+        const score = app.match_score || 50
         switch (scoreFilter) {
           case "excellent":
             return score >= 80
@@ -441,22 +471,22 @@ export default function ApplicationsPage() {
   }
 
   // Fonction pour calculer le score de matching avec les préférences du propriétaire
-  const calculateMatchScore = (application) => {
-    if (!application?.property?.price || !scoringPreferences) {
+  const calculateMatchScore = (application, preferences = scoringPreferences) => {
+    if (!application?.property?.price || !preferences) {
       return 50 // Score par défaut si données manquantes
     }
 
     const income = application.income || 0
-    const weights = scoringPreferences.weights || {
+    const weights = preferences.weights || {
       income: 40,
       stability: 25,
       guarantor: 20,
       file_quality: 15,
     }
 
-    const minRatio = scoringPreferences.min_income_ratio || 2.5
-    const goodRatio = scoringPreferences.good_income_ratio || 3
-    const excellentRatio = scoringPreferences.excellent_income_ratio || 3.5
+    const minRatio = preferences.min_income_ratio || 2.5
+    const goodRatio = preferences.good_income_ratio || 3
+    const excellentRatio = preferences.excellent_income_ratio || 3.5
 
     let score = 0
 
@@ -559,6 +589,18 @@ export default function ApplicationsPage() {
       </PageHeader>
 
       <div className="p-6 space-y-6">
+        {/* Indicateur des préférences actuelles */}
+        {scoringPreferences && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                <span className="text-sm font-medium text-blue-900">Modèle actuel: {scoringPreferences.name}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Filtres et recherche */}
         <Card>
           <CardContent className="p-4">
@@ -664,9 +706,6 @@ export default function ApplicationsPage() {
                   const tenant = application.tenant || {}
                   const property = application.property || {}
 
-                  // Calcul du score de matching avec les préférences du propriétaire
-                  const matchScore = calculateMatchScore(application)
-
                   // Préparation des données pour le composant ModernApplicationCard
                   const applicationData = {
                     id: application.id,
@@ -686,9 +725,11 @@ export default function ApplicationsPage() {
                     has_guarantor: application.has_guarantor || false,
                     documents_complete: true,
                     status: application.status || "pending",
-                    match_score: matchScore,
+                    match_score: application.match_score || 50,
                     created_at: application.created_at || new Date().toISOString(),
                     tenant_id: application.tenant_id,
+                    message: application.message,
+                    visit_requested: application.visit_requested,
                   }
 
                   return (

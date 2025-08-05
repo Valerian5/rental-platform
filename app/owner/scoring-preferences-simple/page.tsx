@@ -99,7 +99,7 @@ export default function ScoringPreferencesSimplePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [user, setUser] = useState<any>(null)
-  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "assistant")
+  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "presets")
   const [selectedSystemPreference, setSelectedSystemPreference] = useState<string | null>(null)
   const [currentUserPreference, setCurrentUserPreference] = useState<any>(null)
 
@@ -346,6 +346,13 @@ export default function ScoringPreferencesSimplePage() {
         setSelectedSystemPreference(systemPreferenceId)
         setCurrentUserPreference(data.preference || data.preferences)
         await loadUserPreference(user.id)
+
+        // Notifier le changement pour recalculer les scores
+        window.dispatchEvent(
+          new CustomEvent("scoring-preferences-updated", {
+            detail: { ownerId: user.id, preferences: data.preference || data.preferences },
+          }),
+        )
       } else {
         const errorData = await response.json()
         console.error("Erreur API:", errorData)
@@ -454,6 +461,13 @@ export default function ScoringPreferencesSimplePage() {
         setCurrentUserPreference(data.preferences || data.preference)
         setSelectedSystemPreference(null) // Marquer comme personnalisé
         await loadUserPreference(user.id)
+
+        // Notifier le changement pour recalculer les scores
+        window.dispatchEvent(
+          new CustomEvent("scoring-preferences-updated", {
+            detail: { ownerId: user.id, preferences: data.preferences || data.preference },
+          }),
+        )
 
         // Conserver l'onglet actif après la sauvegarde
         router.push(`/owner/scoring-preferences-simple?tab=${activeTab}`)
@@ -570,9 +584,125 @@ export default function ScoringPreferencesSimplePage() {
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="assistant">Assistant de configuration</TabsTrigger>
           <TabsTrigger value="presets">Modèles prédéfinis</TabsTrigger>
+          <TabsTrigger value="assistant">Assistant de configuration</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="presets" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Modèles prédéfinis</CardTitle>
+              <CardDescription>
+                Choisissez un modèle prédéfini basé sur les pratiques du marché immobilier français
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Modèles en ligne */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {PREDEFINED_MODELS.map((model) => (
+                  <Card
+                    key={model.id}
+                    className={`cursor-pointer transition-all hover:shadow-lg ${
+                      selectedSystemPreference === model.id ? "ring-2 ring-blue-500" : ""
+                    } ${model.color}`}
+                    onClick={() => handleUseSystemPreference(model.id)}
+                  >
+                    <CardContent className="p-6">
+                      <div className="text-center mb-4">
+                        <div className="text-4xl mb-2">{model.icon}</div>
+                        <h3 className="font-bold text-xl mb-2">{model.name}</h3>
+                        <p className="text-sm text-muted-foreground">{model.description}</p>
+                      </div>
+
+                      {selectedSystemPreference === model.id && (
+                        <div className="mb-4 p-2 bg-blue-100 rounded-lg text-center">
+                          <div className="flex items-center justify-center gap-2 text-blue-800 font-medium text-sm">
+                            <CheckCircle className="h-4 w-4" />
+                            Modèle actuel
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Tableau des caractéristiques */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center py-1 border-b border-gray-200">
+                          <span className="text-sm font-medium">Revenus minimum</span>
+                          <span className="text-sm">{model.details.revenus}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-1 border-b border-gray-200">
+                          <span className="text-sm font-medium">Contrats</span>
+                          <span className="text-sm">{model.details.contrats}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-1 border-b border-gray-200">
+                          <span className="text-sm font-medium">Garants</span>
+                          <span className="text-sm">{model.details.garants}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-1 border-b border-gray-200">
+                          <span className="text-sm font-medium">Documents</span>
+                          <span className="text-sm">{model.details.documents}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-1">
+                          <span className="text-sm font-medium">Exclusions</span>
+                          <span className="text-sm">{model.details.exclusions}</span>
+                        </div>
+                      </div>
+
+                      <Button
+                        className="w-full mt-4"
+                        variant={selectedSystemPreference === model.id ? "default" : "outline"}
+                        disabled={saving}
+                      >
+                        {selectedSystemPreference === model.id ? "Modèle utilisé" : "Utiliser ce modèle"}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              {/* Texte explicatif */}
+              <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
+                <h4 className="font-semibold text-blue-900 mb-3">Comment choisir votre modèle ?</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <h5 className="font-medium text-blue-800 mb-2">🔒 Strict (GLI)</h5>
+                    <p className="text-blue-700">
+                      Idéal si vous souhaitez minimiser les risques. Critères alignés sur les assurances GLI. Convient
+                      aux biens haut de gamme ou aux propriétaires très prudents.
+                    </p>
+                  </div>
+                  <div>
+                    <h5 className="font-medium text-blue-800 mb-2">⚖️ Standard (Agence)</h5>
+                    <p className="text-blue-700">
+                      Équilibre entre sécurité et accessibilité. Pratiques courantes des agences immobilières. Convient
+                      à la majorité des situations locatives.
+                    </p>
+                  </div>
+                  <div>
+                    <h5 className="font-medium text-blue-800 mb-2">🤝 Souple (Particulier)</h5>
+                    <p className="text-blue-700">
+                      Approche humaine privilégiant l'équilibre global. Accepte plus de profils atypiques. Convient aux
+                      propriétaires ouverts et expérimentés.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {currentUserPreference &&
+                !currentUserPreference.system_preference_id &&
+                currentUserPreference.model_type === "custom" && (
+                  <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5 text-amber-600" />
+                      <p className="text-amber-800">
+                        Vous utilisez actuellement une configuration personnalisée :{" "}
+                        <strong>{currentUserPreference.name}</strong>
+                      </p>
+                    </div>
+                  </div>
+                )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="assistant" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1320,122 +1450,6 @@ export default function ScoringPreferencesSimplePage() {
               </Card>
             </div>
           </div>
-        </TabsContent>
-
-        <TabsContent value="presets" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Modèles prédéfinis</CardTitle>
-              <CardDescription>
-                Choisissez un modèle prédéfini basé sur les pratiques du marché immobilier français
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Modèles en ligne */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {PREDEFINED_MODELS.map((model) => (
-                  <Card
-                    key={model.id}
-                    className={`cursor-pointer transition-all hover:shadow-lg ${
-                      selectedSystemPreference === model.id ? "ring-2 ring-blue-500" : ""
-                    } ${model.color}`}
-                    onClick={() => handleUseSystemPreference(model.id)}
-                  >
-                    <CardContent className="p-6">
-                      <div className="text-center mb-4">
-                        <div className="text-4xl mb-2">{model.icon}</div>
-                        <h3 className="font-bold text-xl mb-2">{model.name}</h3>
-                        <p className="text-sm text-muted-foreground">{model.description}</p>
-                      </div>
-
-                      {selectedSystemPreference === model.id && (
-                        <div className="mb-4 p-2 bg-blue-100 rounded-lg text-center">
-                          <div className="flex items-center justify-center gap-2 text-blue-800 font-medium text-sm">
-                            <CheckCircle className="h-4 w-4" />
-                            Modèle actuel
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Tableau des caractéristiques */}
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center py-1 border-b border-gray-200">
-                          <span className="text-sm font-medium">Revenus minimum</span>
-                          <span className="text-sm">{model.details.revenus}</span>
-                        </div>
-                        <div className="flex justify-between items-center py-1 border-b border-gray-200">
-                          <span className="text-sm font-medium">Contrats</span>
-                          <span className="text-sm">{model.details.contrats}</span>
-                        </div>
-                        <div className="flex justify-between items-center py-1 border-b border-gray-200">
-                          <span className="text-sm font-medium">Garants</span>
-                          <span className="text-sm">{model.details.garants}</span>
-                        </div>
-                        <div className="flex justify-between items-center py-1 border-b border-gray-200">
-                          <span className="text-sm font-medium">Documents</span>
-                          <span className="text-sm">{model.details.documents}</span>
-                        </div>
-                        <div className="flex justify-between items-center py-1">
-                          <span className="text-sm font-medium">Exclusions</span>
-                          <span className="text-sm">{model.details.exclusions}</span>
-                        </div>
-                      </div>
-
-                      <Button
-                        className="w-full mt-4"
-                        variant={selectedSystemPreference === model.id ? "default" : "outline"}
-                        disabled={saving}
-                      >
-                        {selectedSystemPreference === model.id ? "Modèle utilisé" : "Utiliser ce modèle"}
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-
-              {/* Texte explicatif */}
-              <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
-                <h4 className="font-semibold text-blue-900 mb-3">Comment choisir votre modèle ?</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <h5 className="font-medium text-blue-800 mb-2">🔒 Strict (GLI)</h5>
-                    <p className="text-blue-700">
-                      Idéal si vous souhaitez minimiser les risques. Critères alignés sur les assurances GLI. Convient
-                      aux biens haut de gamme ou aux propriétaires très prudents.
-                    </p>
-                  </div>
-                  <div>
-                    <h5 className="font-medium text-blue-800 mb-2">⚖️ Standard (Agence)</h5>
-                    <p className="text-blue-700">
-                      Équilibre entre sécurité et accessibilité. Pratiques courantes des agences immobilières. Convient
-                      à la majorité des situations locatives.
-                    </p>
-                  </div>
-                  <div>
-                    <h5 className="font-medium text-blue-800 mb-2">🤝 Souple (Particulier)</h5>
-                    <p className="text-blue-700">
-                      Approche humaine privilégiant l'équilibre global. Accepte plus de profils atypiques. Convient aux
-                      propriétaires ouverts et expérimentés.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {currentUserPreference &&
-                !currentUserPreference.system_preference_id &&
-                currentUserPreference.model_type === "custom" && (
-                  <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
-                    <div className="flex items-center gap-2">
-                      <TrendingUp className="h-5 w-5 text-amber-600" />
-                      <p className="text-amber-800">
-                        Vous utilisez actuellement une configuration personnalisée :{" "}
-                        <strong>{currentUserPreference.name}</strong>
-                      </p>
-                    </div>
-                  </div>
-                )}
-            </CardContent>
-          </Card>
         </TabsContent>
       </Tabs>
     </div>
