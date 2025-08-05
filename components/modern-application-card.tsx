@@ -22,6 +22,7 @@ import {
   BarChart3,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { useScoringEventBus } from "@/lib/scoring-event-bus"
 
 interface ApplicationCardProps {
   application: {
@@ -66,6 +67,7 @@ export function ModernApplicationCard({
   const [calculatedScore, setCalculatedScore] = useState<number>(application.match_score)
   const [scoreLoading, setScoreLoading] = useState(false)
   const router = useRouter()
+  const eventBus = useScoringEventBus()
 
   const [scoreBreakdown, setScoreBreakdown] = useState<any>(null)
   const [scoreRecommendations, setScoreRecommendations] = useState<string[]>([])
@@ -78,17 +80,34 @@ export function ModernApplicationCard({
     }
   }, [application, application.property?.owner_id])
 
+  // Écouter les événements de l'Event Bus
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (application.property?.owner_id) {
+    if (!application.property?.owner_id) return
+
+    const unsubscribePreferences = eventBus.subscribe("preferences-updated", (event) => {
+      if (event.ownerId === application.property.owner_id) {
+        console.log("🔄 Préférences mises à jour, recalcul du score pour:", application.id)
         calculateCustomScore()
       }
-    }, 10000)
+    })
 
-    return () => clearInterval(interval)
-  }, [application.property?.owner_id])
+    const unsubscribeScore = eventBus.subscribe("score-calculated", (event) => {
+      if (event.data.applicationId === application.id) {
+        setCalculatedScore(event.data.score)
+      }
+    })
+
+    return () => {
+      unsubscribePreferences()
+      unsubscribeScore()
+    }
+  }, [application.id, application.property?.owner_id])
 
   const calculateCustomScore = async () => {
+    if (!application.property?.owner_id || !application.property?.price) {
+      return
+    }
+
     try {
       setScoreLoading(true)
 
@@ -108,32 +127,45 @@ export function ModernApplicationCard({
         message: application.message || "",
       }
 
-      const response = await fetch("/api/calculate-score", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-cache",
-        },
-        body: JSON.stringify({
-          application: applicationData,
-          property: {
-            price: application.property.price,
-          },
-          owner_id: application.property.owner_id,
-        }),
-      })
+      // Utiliser l'Event Bus pour le calcul
+      const score = await eventBus.calculateScore(
+        application.id,
+        applicationData,
+        application.property,
+        application.property.owner_id,
+      )
 
-      if (response.ok) {
-        const data = await response.json()
-        setCalculatedScore(Math.min(100, Math.max(0, Math.round(data.score))))        
-        setScoreBreakdown(data.breakdown)
-        setScoreRecommendations(data.recommendations || [])
-        setScoreWarnings(data.warnings || [])
-        setScoreCompatible(data.compatible)
-      } else {
-        setCalculatedScore(application.match_score)
+      setCalculatedScore(score)
+
+      // Optionnel : récupérer les détails via API pour l'affichage
+      try {
+        const response = await fetch("/api/calculate-score", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache",
+          },
+          body: JSON.stringify({
+            application: applicationData,
+            property: {
+              price: application.property.price,
+            },
+            owner_id: application.property.owner_id,
+          }),
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setScoreBreakdown(data.breakdown)
+          setScoreRecommendations(data.recommendations || [])
+          setScoreWarnings(data.warnings || [])
+          setScoreCompatible(data.compatible)
+        }
+      } catch (error) {
+        console.error("Erreur récupération détails score:", error)
       }
     } catch (error) {
+      console.error("Erreur calcul score:", error)
       setCalculatedScore(application.match_score)
     } finally {
       setScoreLoading(false)
@@ -204,11 +236,7 @@ export function ModernApplicationCard({
 
   const getActionButtons = () => {
     const viewAnalysisButton = (
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={() => router.push(`/owner/applications/${application.id}`)}
-      >
+      <Button size="sm" variant="outline" onClick={() => router.push(`/owner/applications/${application.id}`)}>
         <BarChart3 className="h-4 w-4 mr-1" />
         Voir analyse
       </Button>
@@ -335,10 +363,6 @@ export function ModernApplicationCard({
           </>
         )
     }
-  }
-
-  const hasDocuments = (docs: any) => {
-    return docs && Array.isArray(docs) && docs.length > 0 && docs[0].url
   }
 
   return (

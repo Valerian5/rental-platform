@@ -11,8 +11,9 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
-import ModernApplicationCard from "@/components/modern-application-card"
+import { ModernApplicationCard } from "@/components/modern-application-card"
 import { VisitProposalManager } from "@/components/visit-proposal-manager"
+import { useScoringEventBus } from "@/lib/scoring-event-bus"
 import { Filter, Download, Users, Search, SortAsc, Settings, RefreshCw, MapPin, Star } from "lucide-react"
 
 export default function ApplicationsPage() {
@@ -40,6 +41,8 @@ export default function ApplicationsPage() {
   const [showVisitDialog, setShowVisitDialog] = useState(false)
   const [currentApplicationForVisit, setCurrentApplicationForVisit] = useState(null)
 
+  const eventBus = useScoringEventBus()
+
   useEffect(() => {
     checkAuthAndLoadData()
   }, [])
@@ -48,26 +51,58 @@ export default function ApplicationsPage() {
     filterAndSortApplications()
   }, [applications, searchTerm, statusFilter, sortBy, activeTab, propertyFilter, scoreFilter])
 
-  // Écouter les changements de préférences de scoring
+  // Écouter les événements de l'Event Bus
   useEffect(() => {
-    const handlePreferencesUpdate = (event: CustomEvent) => {
-      console.log("🔄 Préférences mises à jour, recalcul des scores")
-      setScoringPreferences(event.detail.preferences)
+    if (!user?.id) return
 
-      // Recalculer les scores pour toutes les applications
-      setApplications((prevApplications) =>
-        prevApplications.map((app) => ({
-          ...app,
-          match_score: calculateMatchScore(app, event.detail.preferences),
-        })),
-      )
-    }
+    const unsubscribePreferences = eventBus.subscribe("preferences-updated", (event) => {
+      if (event.ownerId === user.id) {
+        console.log("🔄 Préférences mises à jour, recalcul des scores")
+        setScoringPreferences(event.data.preferences)
+        recalculateAllScores()
+      }
+    })
 
-    window.addEventListener("scoring-preferences-updated", handlePreferencesUpdate as EventListener)
+    const unsubscribeScore = eventBus.subscribe("score-calculated", (event) => {
+      if (event.ownerId === user.id) {
+        // Mettre à jour le score dans la liste des applications
+        setApplications((prevApps) =>
+          prevApps.map((app) =>
+            app.id === event.data.applicationId ? { ...app, match_score: event.data.score } : app,
+          ),
+        )
+      }
+    })
+
     return () => {
-      window.removeEventListener("scoring-preferences-updated", handlePreferencesUpdate as EventListener)
+      unsubscribePreferences()
+      unsubscribeScore()
     }
-  }, [])
+  }, [user?.id])
+
+  const recalculateAllScores = async () => {
+    if (!user?.id || !applications.length) return
+
+    console.log("🔄 Recalcul de tous les scores...")
+
+    // Recalculer les scores pour toutes les applications
+    const updatedApplications = await Promise.all(
+      applications.map(async (app) => {
+        try {
+          if (app.property?.price && app.income) {
+            const score = await eventBus.calculateScore(app.id, app, app.property, user.id)
+            return { ...app, match_score: score }
+          }
+          return app
+        } catch (error) {
+          console.error("Erreur recalcul score pour:", app.id, error)
+          return app
+        }
+      }),
+    )
+
+    setApplications(updatedApplications)
+  }
 
   const checkAuthAndLoadData = async () => {
     try {
@@ -98,9 +133,15 @@ export default function ApplicationsPage() {
 
   const loadScoringPreferences = async (ownerId) => {
     try {
+      // Vérifier d'abord le cache de l'Event Bus
+      const cachedPrefs = eventBus.getPreferences(ownerId)
+      if (cachedPrefs) {
+        setScoringPreferences(cachedPrefs)
+        return
+      }
+
       console.log("🎯 Chargement préférences scoring pour:", ownerId)
 
-      // Récupérer les préférences par défaut du propriétaire
       const response = await fetch(`/api/scoring-preferences?owner_id=${ownerId}&default_only=true`, {
         cache: "no-store",
         headers: {
@@ -115,77 +156,34 @@ export default function ApplicationsPage() {
         if (data.preferences && data.preferences.length > 0) {
           const prefs = data.preferences[0]
           console.log("✅ Préférences définies:", prefs.name || "Modèle personnalisé")
+          setScoringPreferences(prefs)
 
-          // Adapter la structure des préférences pour le calcul de score
-          const adaptedPrefs = {
-            name: prefs.name,
-            criteria: prefs.criteria || {},
-            weights: prefs.criteria?.weights || {
-              income: 40,
-              stability: 25,
-              guarantor: 20,
-              file_quality: 15,
-            },
-            min_income_ratio: prefs.criteria?.min_income_ratio || 2.5,
-            good_income_ratio: prefs.criteria?.good_income_ratio || 3,
-            excellent_income_ratio: prefs.criteria?.excellent_income_ratio || 3.5,
-            exclusion_rules: prefs.exclusion_rules || {},
-          }
-
-          setScoringPreferences(adaptedPrefs)
+          // Mettre à jour le cache de l'Event Bus
+          eventBus.updatePreferences(ownerId, prefs)
         } else {
           console.log("⚠️ Aucune préférence trouvée, utilisation des valeurs par défaut")
-          setScoringPreferences({
+          const defaultPrefs = {
             name: "Modèle standard",
-            weights: {
-              income: 40,
-              stability: 25,
-              guarantor: 20,
-              file_quality: 15,
+            criteria: {
+              income_ratio: { weight: 40 },
+              professional_stability: { weight: 25 },
+              guarantor: { weight: 20 },
+              file_quality: { weight: 15 },
             },
-            min_income_ratio: 2.5,
-            good_income_ratio: 3,
-            excellent_income_ratio: 3.5,
-            exclusion_rules: {},
-          })
+          }
+          setScoringPreferences(defaultPrefs)
+          eventBus.updatePreferences(ownerId, defaultPrefs)
         }
       } else {
         console.error("❌ Erreur chargement préférences:", response.status)
-        setScoringPreferences({
-          name: "Modèle standard",
-          weights: {
-            income: 40,
-            stability: 25,
-            guarantor: 20,
-            file_quality: 15,
-          },
-          min_income_ratio: 2.5,
-          good_income_ratio: 3,
-          excellent_income_ratio: 3.5,
-          exclusion_rules: {},
-        })
       }
     } catch (error) {
       console.error("❌ Erreur chargement préférences scoring:", error)
-      setScoringPreferences({
-        name: "Modèle standard",
-        weights: {
-          income: 40,
-          stability: 25,
-          guarantor: 20,
-          file_quality: 15,
-        },
-        min_income_ratio: 2.5,
-        good_income_ratio: 3,
-        excellent_income_ratio: 3.5,
-        exclusion_rules: {},
-      })
     }
   }
 
   const loadApplications = async (ownerId) => {
     try {
-      // Utiliser l'API existante avec owner_id
       const response = await fetch(`/api/applications?owner_id=${ownerId}`)
       if (response.ok) {
         const data = await response.json()
@@ -240,13 +238,27 @@ export default function ApplicationsPage() {
                       company,
                       contract_type: contractType,
                       rental_file_id: rentalFile.id,
-                      // Ajouter les données complètes pour debug
                       rental_file_main_tenant: rentalFile.main_tenant,
                       rental_file_guarantors: rentalFile.guarantors,
                     }
 
-                    // Calculer le score avec les préférences actuelles
-                    enrichedApp.match_score = calculateMatchScore(enrichedApp, scoringPreferences)
+                    // Calculer le score initial avec l'Event Bus
+                    if (enrichedApp.property?.price && enrichedApp.income && ownerId) {
+                      try {
+                        const score = await eventBus.calculateScore(
+                          enrichedApp.id,
+                          enrichedApp,
+                          enrichedApp.property,
+                          ownerId,
+                        )
+                        enrichedApp.match_score = score
+                      } catch (error) {
+                        console.error("Erreur calcul score initial:", error)
+                        enrichedApp.match_score = 50
+                      }
+                    } else {
+                      enrichedApp.match_score = 50
+                    }
 
                     return enrichedApp
                   }
@@ -254,11 +266,22 @@ export default function ApplicationsPage() {
               }
 
               // Calculer le score même sans dossier de location
-              app.match_score = calculateMatchScore(app, scoringPreferences)
+              if (app.property?.price && app.income && ownerId) {
+                try {
+                  const score = await eventBus.calculateScore(app.id, app, app.property, ownerId)
+                  app.match_score = score
+                } catch (error) {
+                  console.error("Erreur calcul score:", error)
+                  app.match_score = 50
+                }
+              } else {
+                app.match_score = 50
+              }
+
               return app
             } catch (error) {
               console.error("Erreur enrichissement candidature:", error)
-              app.match_score = calculateMatchScore(app, scoringPreferences)
+              app.match_score = 50
               return app
             }
           }),
@@ -382,11 +405,7 @@ export default function ApplicationsPage() {
 
     switch (action) {
       case "view_details":
-        // Rediriger vers la page de détails de la candidature
-        router.push(`/owner/applications/${applicationId}`)
-        break
       case "analyze":
-        // Rediriger vers la page de détails de la candidature
         router.push(`/owner/applications/${applicationId}`)
         break
       case "accept":
@@ -396,7 +415,6 @@ export default function ApplicationsPage() {
         await handleStatusChange(applicationId, "rejected")
         break
       case "contact":
-        // Rediriger vers la messagerie avec ce locataire
         if (application.tenant_id) {
           router.push(`/owner/messaging?tenant_id=${application.tenant_id}`)
         } else {
@@ -407,7 +425,6 @@ export default function ApplicationsPage() {
         router.push(`/owner/leases/new?application=${applicationId}`)
         break
       case "propose_visit":
-        // Ouvrir le popup de proposition de visite
         setCurrentApplicationForVisit(application)
         setShowVisitDialog(true)
         break
@@ -430,7 +447,6 @@ export default function ApplicationsPage() {
 
       if (response.ok) {
         toast.success(`Candidature ${newStatus === "accepted" ? "acceptée" : "refusée"}`)
-        // Mettre à jour l'état local
         setApplications(applications.map((app) => (app.id === applicationId ? { ...app, status: newStatus } : app)))
       } else {
         toast.error("Erreur lors de la mise à jour du statut")
@@ -451,86 +467,18 @@ export default function ApplicationsPage() {
     setSelectedApplications(newSelected)
   }
 
-  // Gestionnaire pour la proposition de visite
   const handleVisitProposed = async (slots) => {
     if (!currentApplicationForVisit) return
 
     try {
-      // Mettre à jour le statut de la candidature
       await handleStatusChange(currentApplicationForVisit.id, "visit_proposed")
-
-      // Fermer le dialogue
       setShowVisitDialog(false)
       setCurrentApplicationForVisit(null)
-
       toast.success("Créneaux de visite proposés avec succès")
     } catch (error) {
       console.error("Erreur lors de la proposition de visite:", error)
       toast.error("Erreur lors de la proposition de visite")
     }
-  }
-
-  // Fonction pour calculer le score de matching avec les préférences du propriétaire
-  const calculateMatchScore = (application, preferences = scoringPreferences) => {
-    if (!application?.property?.price || !preferences) {
-      return 50 // Score par défaut si données manquantes
-    }
-
-    const income = application.income || 0
-    const weights = preferences.weights || {
-      income: 40,
-      stability: 25,
-      guarantor: 20,
-      file_quality: 15,
-    }
-
-    const minRatio = preferences.min_income_ratio || 2.5
-    const goodRatio = preferences.good_income_ratio || 3
-    const excellentRatio = preferences.excellent_income_ratio || 3.5
-
-    let score = 0
-
-    // 1. Score revenus
-    if (income > 0 && application.property.price > 0) {
-      const rentRatio = income / application.property.price
-
-      if (rentRatio >= excellentRatio) {
-        score += weights.income
-      } else if (rentRatio >= goodRatio) {
-        score += Math.round(weights.income * 0.8)
-      } else if (rentRatio >= minRatio) {
-        score += Math.round(weights.income * 0.6)
-      } else {
-        score += Math.round(weights.income * 0.3)
-      }
-    }
-
-    // 2. Score stabilité
-    const contractType = (application.contract_type || "").toLowerCase()
-    if (["cdi", "fonctionnaire"].includes(contractType)) {
-      score += weights.stability
-    } else if (contractType === "cdd") {
-      score += Math.round(weights.stability * 0.7)
-    } else {
-      score += Math.round(weights.stability * 0.5)
-    }
-
-    // 3. Score garant
-    if (application.has_guarantor) {
-      score += weights.guarantor
-    }
-
-    // 4. Score qualité du dossier
-    let fileQualityScore = 0
-    if (application.profession && application.profession !== "Non spécifié") {
-      fileQualityScore += Math.round(weights.file_quality * 0.5)
-    }
-    if (application.company && application.company !== "Non spécifié") {
-      fileQualityScore += Math.round(weights.file_quality * 0.5)
-    }
-    score += fileQualityScore
-
-    return Math.min(Math.round(score), 100)
   }
 
   const getApplicationCounts = () => {
@@ -558,7 +506,7 @@ export default function ApplicationsPage() {
           <Skeleton className="h-10 w-32" />
         </div>
         <Skeleton className="h-12 w-full" />
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-1">
           {[...Array(4)].map((_, i) => (
             <Skeleton key={i} className="h-64 w-full" />
           ))}
@@ -702,11 +650,9 @@ export default function ApplicationsPage() {
             ) : (
               <div className="grid gap-4 md:grid-cols-1">
                 {filteredApplications.map((application) => {
-                  // Gestion sécurisée des données du tenant
                   const tenant = application.tenant || {}
                   const property = application.property || {}
 
-                  // Préparation des données pour le composant ModernApplicationCard
                   const applicationData = {
                     id: application.id,
                     tenant: {
@@ -719,6 +665,7 @@ export default function ApplicationsPage() {
                       title: property.title || "Propriété inconnue",
                       address: property.address || "Adresse inconnue",
                       price: property.price || 0,
+                      owner_id: property.owner_id,
                     },
                     profession: application.profession || "Non spécifié",
                     income: application.income || 0,
@@ -739,6 +686,14 @@ export default function ApplicationsPage() {
                       isSelected={selectedApplications.has(application.id)}
                       onSelect={(selected) => handleSelectApplication(application.id, selected)}
                       onAction={(action) => handleApplicationAction(action, application.id)}
+                      rentalFile={
+                        application.rental_file_main_tenant
+                          ? {
+                              main_tenant: application.rental_file_main_tenant,
+                              guarantors: application.rental_file_guarantors,
+                            }
+                          : null
+                      }
                       scoringPreferences={scoringPreferences}
                     />
                   )
