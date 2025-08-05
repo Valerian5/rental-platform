@@ -17,6 +17,7 @@ interface CircularScoreProps {
   compatible?: boolean
   modelUsed?: string
   size?: "sm" | "md" | "lg"
+  className?: string
 }
 
 export function CircularScore({
@@ -29,6 +30,7 @@ export function CircularScore({
   compatible = true,
   modelUsed = "",
   size = "md",
+  className = "",
 }: CircularScoreProps) {
   const [showPopover, setShowPopover] = useState(false)
 
@@ -61,7 +63,9 @@ export function CircularScore({
 
   if (loading) {
     return (
-      <div className={`${sizeClasses[size]} rounded-full bg-gray-200 animate-pulse flex items-center justify-center`}>
+      <div
+        className={`${sizeClasses[size]} rounded-full bg-gray-200 animate-pulse flex items-center justify-center ${className}`}
+      >
         <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
       </div>
     )
@@ -69,7 +73,7 @@ export function CircularScore({
 
   const ScoreCircle = () => (
     <div
-      className={`${sizeClasses[size]} rounded-full flex items-center justify-center font-bold ${getScoreBgColor(score)} ${getScoreColor(score)}`}
+      className={`${sizeClasses[size]} rounded-full flex items-center justify-center font-bold ${getScoreBgColor(score)} ${getScoreColor(score)} ${className}`}
     >
       {score}
     </div>

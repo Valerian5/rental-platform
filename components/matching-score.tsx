@@ -4,10 +4,9 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
+import { CircularScore } from "@/components/circular-score"
 import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
-import { BarChart3, TrendingUp, AlertTriangle, CheckCircle, XCircle, RefreshCw, Info } from "lucide-react"
+import { BarChart3, TrendingUp, AlertTriangle, CheckCircle } from "lucide-react"
 
 interface MatchingScoreProps {
   application: any
@@ -34,19 +33,24 @@ export function MatchingScore({
   compatible,
   modelUsed,
 }: MatchingScoreProps) {
-  const [calculatedScore, setCalculatedScore] = useState(score || 0)
-  const [scoreBreakdown, setScoreBreakdown] = useState(breakdown || {})
-  const [scoreRecommendations, setScoreRecommendations] = useState(recommendations || [])
-  const [scoreWarnings, setScoreWarnings] = useState(warnings || [])
-  const [isCompatible, setIsCompatible] = useState(compatible || false)
-  const [model, setModel] = useState(modelUsed || "")
-  const [loading, setLoading] = useState(!score)
+  const [loading, setLoading] = useState(false)
+  const [scoringResult, setScoringResult] = useState<any>(null)
 
   useEffect(() => {
-    if (!score && application && property && property.owner_id) {
+    if (score !== undefined && breakdown) {
+      // Utiliser les données passées en props
+      setScoringResult({
+        totalScore: score,
+        breakdown,
+        recommendations: recommendations || [],
+        warnings: warnings || [],
+        compatible: compatible !== undefined ? compatible : true,
+        model_used: modelUsed || "Modèle standard",
+      })
+    } else if (application && property && property.owner_id) {
       calculateScore()
     }
-  }, [application, property, score])
+  }, [application, property, score, breakdown])
 
   const calculateScore = async () => {
     if (!application || !property || !property.owner_id) return
@@ -54,51 +58,42 @@ export function MatchingScore({
     try {
       setLoading(true)
       const result = await scoringPreferencesService.calculateScore(application, property, property.owner_id, true)
-
-      setCalculatedScore(result.totalScore)
-      setScoreBreakdown(result.breakdown)
-      setScoreRecommendations(result.recommendations)
-      setScoreWarnings(result.warnings)
-      setIsCompatible(result.compatible)
-      setModel(result.model_used)
+      setScoringResult(result)
     } catch (error) {
       console.error("Erreur calcul score:", error)
+      setScoringResult({
+        totalScore: 50,
+        breakdown: {},
+        recommendations: ["Erreur lors du calcul"],
+        warnings: ["Impossible de calculer le score"],
+        compatible: false,
+        model_used: "Erreur",
+      })
     } finally {
       setLoading(false)
     }
   }
 
-  const getScoreColor = (score: number) => {
-    if (score >= 80) return "text-green-600"
-    if (score >= 60) return "text-blue-600"
-    if (score >= 40) return "text-orange-600"
-    return "text-red-600"
-  }
-
-  const getScoreBgColor = (score: number) => {
-    if (score >= 80) return "bg-green-100"
-    if (score >= 60) return "bg-blue-100"
-    if (score >= 40) return "bg-orange-100"
-    return "bg-red-100"
-  }
-
-  const getScoreLabel = (score: number) => {
-    if (score >= 80) return "Excellent"
-    if (score >= 60) return "Bon"
-    if (score >= 40) return "Moyen"
-    return "Faible"
-  }
-
   if (loading) {
     return (
-      <Card className={size === "sm" ? "p-2" : ""}>
-        <CardContent className={size === "sm" ? "p-2" : "p-4"}>
-          <div className="flex items-center gap-3">
-            <Skeleton className="h-12 w-12 rounded-full" />
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-3 w-16" />
-            </div>
+      <Card>
+        <CardContent className="flex items-center justify-center py-10">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-sm text-muted-foreground">Calcul du score en cours...</p>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (!scoringResult) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center py-10">
+          <div className="text-center">
+            <BarChart3 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <p className="text-sm text-muted-foreground">Impossible de calculer le score</p>
           </div>
         </CardContent>
       </Card>
@@ -106,20 +101,21 @@ export function MatchingScore({
   }
 
   if (size === "sm") {
+    return <CircularScore score={scoringResult.totalScore} size="sm" />
+  }
+
+  if (!detailed) {
     return (
-      <div className="flex items-center gap-2">
-        <div
-          className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${getScoreBgColor(calculatedScore)} ${getScoreColor(calculatedScore)}`}
-        >
-          {calculatedScore}
-        </div>
-        <div className="text-xs">
-          <div className="font-medium">{getScoreLabel(calculatedScore)}</div>
-          {isCompatible ? (
-            <CheckCircle className="h-3 w-3 text-green-500" />
-          ) : (
-            <XCircle className="h-3 w-3 text-red-500" />
-          )}
+      <div className="flex items-center gap-3">
+        <CircularScore score={scoringResult.totalScore} size={size} />
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="font-medium">Score: {scoringResult.totalScore}/100</span>
+            <Badge variant={scoringResult.compatible ? "default" : "destructive"}>
+              {scoringResult.compatible ? "Compatible" : "Non compatible"}
+            </Badge>
+          </div>
+          <p className="text-sm text-muted-foreground">{scoringResult.model_used}</p>
         </div>
       </div>
     )
@@ -127,75 +123,67 @@ export function MatchingScore({
 
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5" />
-            Score de compatibilité
-          </CardTitle>
-          <Button variant="ghost" size="sm" onClick={calculateScore} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          </Button>
-        </div>
-        {model && <p className="text-sm text-muted-foreground">Modèle: {model}</p>}
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <BarChart3 className="h-5 w-5" />
+          Analyse de compatibilité
+        </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Score principal */}
-        <div className="flex items-center gap-4">
-          <div
-            className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold ${getScoreBgColor(calculatedScore)} ${getScoreColor(calculatedScore)}`}
-          >
-            {calculatedScore}
-          </div>
-          <div>
-            <div className="text-lg font-semibold">{getScoreLabel(calculatedScore)}</div>
-            <div className="flex items-center gap-2">
-              {isCompatible ? (
-                <Badge className="bg-green-100 text-green-800 hover:bg-green-200">
-                  <CheckCircle className="h-3 w-3 mr-1" />
-                  Compatible
-                </Badge>
-              ) : (
-                <Badge variant="destructive">
-                  <XCircle className="h-3 w-3 mr-1" />
-                  Non compatible
-                </Badge>
-              )}
+      <CardContent className="space-y-6">
+        {/* Score global */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <CircularScore score={scoringResult.totalScore} size="lg" />
+            <div>
+              <h3 className="text-2xl font-bold">{scoringResult.totalScore}/100</h3>
+              <p className="text-muted-foreground">{scoringResult.model_used}</p>
             </div>
           </div>
+          <Badge variant={scoringResult.compatible ? "default" : "destructive"} className="text-sm">
+            {scoringResult.compatible ? (
+              <>
+                <CheckCircle className="h-4 w-4 mr-1" />
+                Compatible
+              </>
+            ) : (
+              <>
+                <AlertTriangle className="h-4 w-4 mr-1" />
+                Non compatible
+              </>
+            )}
+          </Badge>
         </div>
 
         {/* Détail par critère */}
-        {detailed && Object.keys(scoreBreakdown).length > 0 && (
-          <div className="space-y-3">
+        {Object.keys(scoringResult.breakdown).length > 0 && (
+          <div className="space-y-4">
             <h4 className="font-medium">Détail par critère</h4>
-            {Object.entries(scoreBreakdown).map(([key, item]: [string, any]) => (
-              <div key={key} className="space-y-1">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="capitalize">{key.replace("_", " ")}</span>
-                  <span className="font-medium">
-                    {item.score}/{item.max}
+            {Object.entries(scoringResult.breakdown).map(([key, item]: [string, any]) => (
+              <div key={key} className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium capitalize">{key.replace("_", " ")}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {item.score}/{item.max} points
                   </span>
                 </div>
                 <Progress value={(item.score / item.max) * 100} className="h-2" />
-                {item.details && <p className="text-xs text-muted-foreground">{item.details}</p>}
+                <p className="text-xs text-muted-foreground">{item.details}</p>
               </div>
             ))}
           </div>
         )}
 
         {/* Recommandations */}
-        {scoreRecommendations.length > 0 && (
+        {scoringResult.recommendations?.length > 0 && (
           <div className="space-y-2">
-            <h4 className="font-medium flex items-center gap-2">
+            <h4 className="font-medium flex items-center gap-1 text-blue-700">
               <TrendingUp className="h-4 w-4" />
               Recommandations
             </h4>
             <ul className="space-y-1">
-              {scoreRecommendations.map((rec, index) => (
-                <li key={index} className="text-sm text-blue-700 flex items-start gap-2">
-                  <Info className="h-3 w-3 mt-0.5 flex-shrink-0" />
-                  {rec}
+              {scoringResult.recommendations.map((rec: string, index: number) => (
+                <li key={index} className="text-sm text-blue-700">
+                  • {rec}
                 </li>
               ))}
             </ul>
@@ -203,17 +191,30 @@ export function MatchingScore({
         )}
 
         {/* Avertissements */}
-        {scoreWarnings.length > 0 && (
+        {scoringResult.warnings?.length > 0 && (
           <div className="space-y-2">
-            <h4 className="font-medium flex items-center gap-2 text-orange-700">
+            <h4 className="font-medium flex items-center gap-1 text-orange-700">
               <AlertTriangle className="h-4 w-4" />
-              Avertissements
+              Points d'attention
             </h4>
             <ul className="space-y-1">
-              {scoreWarnings.map((warning, index) => (
-                <li key={index} className="text-sm text-orange-700 flex items-start gap-2">
-                  <AlertTriangle className="h-3 w-3 mt-0.5 flex-shrink-0" />
-                  {warning}
+              {scoringResult.warnings.map((warning: string, index: number) => (
+                <li key={index} className="text-sm text-orange-700">
+                  • {warning}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Exclusions */}
+        {scoringResult.exclusions?.length > 0 && (
+          <div className="space-y-2 p-3 bg-red-50 rounded-lg border border-red-200">
+            <h4 className="font-medium text-red-700">Règles d'exclusion</h4>
+            <ul className="space-y-1">
+              {scoringResult.exclusions.map((exclusion: string, index: number) => (
+                <li key={index} className="text-sm text-red-700">
+                  • {exclusion}
                 </li>
               ))}
             </ul>

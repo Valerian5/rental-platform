@@ -10,7 +10,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
-import { CircularScore } from "@/components/circular-score"
 import { MatchingScore } from "@/components/matching-score"
 import { VisitProposalManager } from "@/components/visit-proposal-manager"
 import { TenantAndGuarantorDocumentsSection } from "@/components/TenantAndGuarantorDocumentsSection"
@@ -41,7 +40,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const [currentApplication, setCurrentApplication] = useState<any>(null)
   const [showRefuseDialog, setShowRefuseDialog] = useState(false)
   const [documents, setDocuments] = useState<any[]>([])
-  const [realtimeScore, setRealtimeScore] = useState<number>(50)
+  const [scoringResult, setScoringResult] = useState<any>(null)
 
   useEffect(() => {
     checkAuthAndLoadData()
@@ -136,13 +135,16 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                 contract_type: rentalFile.main_tenant?.main_activity || prev.contract_type || "Non spécifié",
               }))
 
-              // Calculer le score initial
-              await recalculateScore()
+              // Calculer le score avec le service unifié
+              await recalculateScore(data.application, rentalFile)
             }
           }
         } catch (error) {
           console.error("Erreur chargement dossier location:", error)
         }
+      } else {
+        // Calculer le score même sans dossier de location
+        await recalculateScore(data.application)
       }
     } catch (error) {
       console.error("Erreur:", error)
@@ -150,30 +152,40 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
     }
   }
 
-  const recalculateScore = async () => {
-    if (!application || !application.property) return
+  const recalculateScore = async (app: any, rentalFile?: any) => {
+    if (!app || !app.property || !app.property.owner_id) return
 
     try {
-      const applicationData = {
-        income: application.income,
-        guarantor_income: rentalFile?.guarantor_income,
-        has_guarantor: application.has_guarantor || rentalFile?.has_guarantor,
-        contract_type: rentalFile?.contract_type || application.contract_type || "cdi",
-        documents_complete: application.documents_complete,
+      // Préparer les données enrichies pour le calcul
+      const enrichedApp = {
+        ...app,
+        income: rentalFile?.main_tenant?.income_sources?.work_income?.amount || app.income,
+        has_guarantor: (rentalFile?.guarantors && rentalFile.guarantors.length > 0) || app.has_guarantor,
+        guarantor_income: rentalFile?.guarantors?.[0]?.personal_info?.income_sources?.work_income?.amount || 0,
+        contract_type: rentalFile?.main_tenant?.main_activity || app.contract_type,
+        documents_complete: app.documents_complete,
         has_verified_documents: rentalFile?.has_verified_documents || false,
-        presentation: rentalFile?.presentation || application.message || "",
       }
 
       const result = await scoringPreferencesService.calculateScore(
-        applicationData,
-        application.property,
-        application.property.owner_id,
+        enrichedApp,
+        app.property,
+        app.property.owner_id,
         true,
       )
-
-      setRealtimeScore(result.totalScore)
+      setScoringResult(result)
+      console.log("📊 Score calculé pour détail:", result.totalScore)
     } catch (error) {
       console.error("Erreur recalcul score:", error)
+      setScoringResult({
+        totalScore: 50,
+        breakdown: {},
+        compatible: false,
+        model_used: "Erreur",
+        recommendations: [],
+        warnings: [],
+        exclusions: [],
+      })
     }
   }
 
@@ -340,6 +352,9 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
     if (!application) return null
 
     switch (application.status) {
+      case "pending":
+        return <Badge variant="outline">En attente</Badge>
+      case "analyzing":
       case "pending":
         return <Badge variant="outline">En attente</Badge>
       case "analyzing":
@@ -563,10 +578,16 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       <div className="p-6 space-y-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex items-center gap-4">
-            <CircularScore score={realtimeScore} size="lg" />
+            {scoringResult && (
+              <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-lg">
+                {scoringResult.totalScore}
+              </div>
+            )}
             <div>
               <h2 className="text-xl font-semibold">Score de compatibilité</h2>
-              <p className="text-sm text-muted-foreground">Basé sur vos préférences de scoring</p>
+              <p className="text-sm text-muted-foreground">
+                {scoringResult ? scoringResult.model_used : "Calcul en cours..."}
+              </p>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">{getActionButtons()}</div>
@@ -765,7 +786,29 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
 
           {/* Analyse financière */}
           <TabsContent value="financial" className="space-y-6">
-            <MatchingScore application={application} property={property} size="lg" detailed={true} />
+            {scoringResult ? (
+              <MatchingScore
+                application={application}
+                property={property}
+                size="lg"
+                detailed={true}
+                score={scoringResult.totalScore}
+                breakdown={scoringResult.breakdown}
+                recommendations={scoringResult.recommendations}
+                warnings={scoringResult.warnings}
+                compatible={scoringResult.compatible}
+                modelUsed={scoringResult.model_used}
+              />
+            ) : (
+              <Card>
+                <CardContent className="flex items-center justify-center py-10">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-sm text-muted-foreground">Calcul du score en cours...</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {/* Documents */}

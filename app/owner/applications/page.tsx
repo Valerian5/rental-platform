@@ -35,7 +35,6 @@ export default function ApplicationsPage() {
   const [propertyFilter, setPropertyFilter] = useState("all")
   const [scoreFilter, setScoreFilter] = useState("all")
   const [properties, setProperties] = useState([])
-  const [scoringPreferences, setScoringPreferences] = useState(null)
 
   // États pour la gestion des visites
   const [showVisitDialog, setShowVisitDialog] = useState(false)
@@ -67,25 +66,12 @@ export default function ApplicationsPage() {
       }
 
       setUser(currentUser)
-      await Promise.all([loadApplications(currentUser.id), loadScoringPreferences(currentUser.id)])
+      await loadApplications(currentUser.id)
     } catch (error) {
       console.error("Erreur auth:", error)
       toast.error("Erreur d'authentification")
     } finally {
       setLoading(false)
-    }
-  }
-
-  const loadScoringPreferences = async (ownerId) => {
-    try {
-      console.log("🎯 Chargement préférences scoring pour:", ownerId)
-
-      const preferences = await scoringPreferencesService.getOwnerPreferences(ownerId, true)
-      setScoringPreferences(preferences)
-
-      console.log("✅ Préférences chargées:", preferences.name)
-    } catch (error) {
-      console.error("❌ Erreur chargement préférences scoring:", error)
     }
   }
 
@@ -98,7 +84,7 @@ export default function ApplicationsPage() {
         const data = await response.json()
         console.log("✅ Candidatures chargées:", data.applications?.length || 0)
 
-        // Enrichir chaque candidature avec les données du dossier de location
+        // Enrichir chaque candidature avec les données du dossier de location et calculer le score
         const enrichedApplications = await Promise.all(
           (data.applications || []).map(async (app) => {
             try {
@@ -109,13 +95,6 @@ export default function ApplicationsPage() {
                   const rentalFile = rentalFileData.rental_file
 
                   if (rentalFile && rentalFile.main_tenant) {
-                    console.log("📊 Enrichissement candidature:", {
-                      application_id: app.id,
-                      tenant_name: `${rentalFile.main_tenant.first_name} ${rentalFile.main_tenant.last_name}`,
-                      income: rentalFile.main_tenant.income_sources?.work_income?.amount,
-                      guarantors_count: rentalFile.guarantors?.length || 0,
-                    })
-
                     // Récupérer les revenus depuis main_tenant
                     let income = 0
                     if (rentalFile.main_tenant.income_sources?.work_income?.amount) {
@@ -138,59 +117,28 @@ export default function ApplicationsPage() {
                       guarantorIncome = rentalFile.guarantors[0].personal_info?.income_sources?.work_income?.amount || 0
                     }
 
-                    // Récupérer la profession et l'entreprise
-                    const profession = rentalFile.main_tenant.profession || app.profession || "Non spécifié"
-                    const company = rentalFile.main_tenant.company || app.company || "Non spécifié"
-
-                    // Type de contrat depuis main_activity
-                    const contractType = rentalFile.main_tenant.main_activity || app.contract_type || "Non spécifié"
-
-                    const enrichedApp = {
-                      ...app,
-                      income,
-                      has_guarantor: hasGuarantor,
-                      guarantor_income: guarantorIncome,
-                      profession,
-                      company,
-                      contract_type: contractType,
-                      rental_file_id: rentalFile.id,
-                      rental_file_main_tenant: rentalFile.main_tenant,
-                      rental_file_guarantors: rentalFile.guarantors,
-                    }
-
-                    // Calculer le score unifié
-                    if (enrichedApp.property?.price && enrichedApp.income && ownerId) {
-                      try {
-                        const result = await scoringPreferencesService.calculateScore(
-                          enrichedApp,
-                          enrichedApp.property,
-                          ownerId,
-                          true, // Utiliser le cache
-                        )
-                        enrichedApp.match_score = result.totalScore
-                        console.log("📊 Score calculé pour candidature:", {
-                          id: enrichedApp.id,
-                          score: result.totalScore,
-                          model: result.model_used,
-                        })
-                      } catch (error) {
-                        console.error("❌ Erreur calcul score initial:", error)
-                        enrichedApp.match_score = 50
-                      }
-                    } else {
-                      enrichedApp.match_score = 50
-                    }
-
-                    return enrichedApp
+                    // Enrichir l'application
+                    app.income = income
+                    app.has_guarantor = hasGuarantor
+                    app.guarantor_income = guarantorIncome
+                    app.profession = rentalFile.main_tenant.profession || app.profession || "Non spécifié"
+                    app.company = rentalFile.main_tenant.company || app.company || "Non spécifié"
+                    app.contract_type = rentalFile.main_tenant.main_activity || app.contract_type || "Non spécifié"
+                    app.rental_file_id = rentalFile.id
+                    app.rental_file_main_tenant = rentalFile.main_tenant
+                    app.rental_file_guarantors = rentalFile.guarantors
                   }
                 }
               }
 
-              // Calculer le score même sans dossier de location
+              // Calculer le score avec le service unifié
               if (app.property?.price && app.income && ownerId) {
                 try {
                   const result = await scoringPreferencesService.calculateScore(app, app.property, ownerId, true)
                   app.match_score = result.totalScore
+                  app.scoring_breakdown = result.breakdown
+                  app.scoring_compatible = result.compatible
+                  app.scoring_model = result.model_used
                 } catch (error) {
                   console.error("❌ Erreur calcul score:", error)
                   app.match_score = 50
@@ -444,7 +392,7 @@ export default function ApplicationsPage() {
     <>
       <PageHeader title="Candidatures" description="Gérez les candidatures pour vos biens">
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => router.push("/owner/scoring-preferences-simple")}>
+          <Button variant="outline" size="sm" onClick={() => router.push("/owner/scoring-preferences")}>
             <Settings className="h-4 w-4 mr-2" />
             Préférences de scoring
           </Button>
@@ -460,18 +408,6 @@ export default function ApplicationsPage() {
       </PageHeader>
 
       <div className="p-6 space-y-6">
-        {/* Indicateur des préférences actuelles */}
-        {scoringPreferences && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                <span className="text-sm font-medium text-blue-900">Modèle actuel: {scoringPreferences.name}</span>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Filtres et recherche */}
         <Card>
           <CardContent className="p-4">
@@ -621,7 +557,6 @@ export default function ApplicationsPage() {
                             }
                           : null
                       }
-                      scoringPreferences={scoringPreferences}
                     />
                   )
                 })}
