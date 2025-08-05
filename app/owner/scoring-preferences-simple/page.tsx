@@ -15,7 +15,7 @@ import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { CircularScore } from "@/components/circular-score"
-import { useScoringEventBus } from "@/lib/scoring-event-bus"
+import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
 import {
   Save,
   RefreshCw,
@@ -103,7 +103,6 @@ export default function ScoringPreferencesSimplePage() {
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "presets")
   const [selectedSystemPreference, setSelectedSystemPreference] = useState<string | null>(null)
   const [currentUserPreference, setCurrentUserPreference] = useState<any>(null)
-  const eventBus = useScoringEventBus()
 
   // Simulateur
   const [simulatorRent, setSimulatorRent] = useState(1000)
@@ -115,14 +114,13 @@ export default function ScoringPreferencesSimplePage() {
       weight: 18,
       thresholds: { excellent: 3.5, good: 3.0, acceptable: 2.5, minimum: 2.0 },
       per_person_check: true,
-      use_guarantor_income_for_students: false, // Nouvelle option
+      use_guarantor_income_for_students: false,
     },
     guarantor: {
       weight: 17,
       required_if_income_below: 3.0,
       minimum_income_ratio: 3.0,
       verification_required: true,
-      use_guarantor_income_for_students: false, // Nouvelle option
     },
     professional_stability: {
       weight: 17,
@@ -168,7 +166,7 @@ export default function ScoringPreferencesSimplePage() {
     manifest_incoherence: true,
   })
 
-  // Modèles prédéfinis avec scoring cohérent
+  // Modèles prédéfinis
   const PREDEFINED_MODELS = [
     {
       id: "strict",
@@ -184,16 +182,8 @@ export default function ScoringPreferencesSimplePage() {
         exclusions: "Strictes",
       },
       criteria: {
-        income_ratio: {
-          weight: 20,
-          thresholds: { excellent: 4.0, good: 3.5, acceptable: 3.0, minimum: 2.5 },
-          use_guarantor_income_for_students: false,
-        },
-        guarantor: {
-          weight: 20,
-          required_if_income_below: 3.5,
-          use_guarantor_income_for_students: false,
-        },
+        income_ratio: { weight: 20, thresholds: { excellent: 4.0, good: 3.5, acceptable: 3.0, minimum: 2.5 } },
+        guarantor: { weight: 20, required_if_income_below: 3.5 },
         professional_stability: { weight: 20 },
         file_quality: { weight: 20 },
         property_coherence: { weight: 10 },
@@ -221,16 +211,8 @@ export default function ScoringPreferencesSimplePage() {
         exclusions: "Modérées",
       },
       criteria: {
-        income_ratio: {
-          weight: 18,
-          thresholds: { excellent: 3.5, good: 3.0, acceptable: 2.5, minimum: 2.0 },
-          use_guarantor_income_for_students: false,
-        },
-        guarantor: {
-          weight: 17,
-          required_if_income_below: 3.0,
-          use_guarantor_income_for_students: false,
-        },
+        income_ratio: { weight: 18, thresholds: { excellent: 3.5, good: 3.0, acceptable: 2.5, minimum: 2.0 } },
+        guarantor: { weight: 17, required_if_income_below: 3.0 },
         professional_stability: { weight: 17 },
         file_quality: { weight: 16 },
         property_coherence: { weight: 16 },
@@ -258,16 +240,8 @@ export default function ScoringPreferencesSimplePage() {
         exclusions: "Minimales",
       },
       criteria: {
-        income_ratio: {
-          weight: 15,
-          thresholds: { excellent: 3.0, good: 2.5, acceptable: 2.0, minimum: 1.8 },
-          use_guarantor_income_for_students: true, // Plus flexible pour les étudiants
-        },
-        guarantor: {
-          weight: 15,
-          required_if_income_below: 2.5,
-          use_guarantor_income_for_students: true,
-        },
+        income_ratio: { weight: 15, thresholds: { excellent: 3.0, good: 2.5, acceptable: 2.0, minimum: 1.8 } },
+        guarantor: { weight: 15, required_if_income_below: 2.5 },
         professional_stability: { weight: 15 },
         file_quality: { weight: 15 },
         property_coherence: { weight: 20 },
@@ -307,33 +281,28 @@ export default function ScoringPreferencesSimplePage() {
 
   const loadUserPreference = async (ownerId: string) => {
     try {
-      const response = await fetch(`/api/scoring-preferences?owner_id=${ownerId}&default_only=true`)
-      if (response.ok) {
-        const data = await response.json()
-        if (data.preferences && data.preferences.length > 0) {
-          const pref = data.preferences[0]
-          setCurrentUserPreference(pref)
+      const preferences = await scoringPreferencesService.getOwnerPreferences(ownerId, true)
+      setCurrentUserPreference(preferences)
 
-          // Si l'utilisateur a une préférence basée sur un modèle système
-          if (pref.system_preference_id || pref.model_type) {
-            setSelectedSystemPreference(pref.system_preference_id || pref.model_type)
-          } else {
-            setSelectedSystemPreference(null)
-            // Charger les critères personnalisés dans l'assistant
-            if (pref.criteria) {
-              setCustomCriteria({
-                income_ratio: pref.criteria.income_ratio || customCriteria.income_ratio,
-                guarantor: pref.criteria.guarantor || customCriteria.guarantor,
-                professional_stability: pref.criteria.professional_stability || customCriteria.professional_stability,
-                file_quality: pref.criteria.file_quality || customCriteria.file_quality,
-                property_coherence: pref.criteria.property_coherence || customCriteria.property_coherence,
-                income_distribution: pref.criteria.income_distribution || customCriteria.income_distribution,
-              })
-            }
-            if (pref.exclusion_rules) {
-              setExclusionRules(pref.exclusion_rules)
-            }
-          }
+      // Si l'utilisateur a une préférence basée sur un modèle système
+      if (preferences.system_preference_id || preferences.model_type) {
+        setSelectedSystemPreference(preferences.system_preference_id || preferences.model_type)
+      } else {
+        setSelectedSystemPreference(null)
+        // Charger les critères personnalisés dans l'assistant
+        if (preferences.criteria) {
+          setCustomCriteria({
+            income_ratio: preferences.criteria.income_ratio || customCriteria.income_ratio,
+            guarantor: preferences.criteria.guarantor || customCriteria.guarantor,
+            professional_stability:
+              preferences.criteria.professional_stability || customCriteria.professional_stability,
+            file_quality: preferences.criteria.file_quality || customCriteria.file_quality,
+            property_coherence: preferences.criteria.property_coherence || customCriteria.property_coherence,
+            income_distribution: preferences.criteria.income_distribution || customCriteria.income_distribution,
+          })
+        }
+        if (preferences.exclusion_rules) {
+          setExclusionRules(preferences.exclusion_rules)
         }
       }
     } catch (error) {
@@ -375,8 +344,8 @@ export default function ScoringPreferencesSimplePage() {
         setCurrentUserPreference(data.preference || data.preferences)
         await loadUserPreference(user.id)
 
-        // Utiliser l'Event Bus pour la synchronisation
-        eventBus.updatePreferences(user.id, data.preference || data.preferences)
+        // Invalider le cache pour forcer le recalcul des scores
+        scoringPreferencesService.invalidateCache(user.id)
       } else {
         const errorData = await response.json()
         console.error("Erreur API:", errorData)
@@ -428,7 +397,6 @@ export default function ScoringPreferencesSimplePage() {
             },
             minimum_income_ratio: customCriteria.guarantor.minimum_income_ratio,
             verification_required: customCriteria.guarantor.verification_required,
-            use_guarantor_income_for_students: customCriteria.guarantor.use_guarantor_income_for_students,
           },
           professional_stability: {
             weight: customCriteria.professional_stability.weight,
@@ -488,8 +456,8 @@ export default function ScoringPreferencesSimplePage() {
         setSelectedSystemPreference(null) // Marquer comme personnalisé
         await loadUserPreference(user.id)
 
-        // Utiliser l'Event Bus pour la synchronisation
-        eventBus.updatePreferences(user.id, data.preferences || data.preference)
+        // Invalider le cache pour forcer le recalcul des scores
+        scoringPreferencesService.invalidateCache(user.id)
 
         // Conserver l'onglet actif après la sauvegarde
         router.push(`/owner/scoring-preferences-simple?tab=${activeTab}`)
@@ -525,40 +493,104 @@ export default function ScoringPreferencesSimplePage() {
     return Object.values(customCriteria).reduce((sum, criteria) => sum + criteria.weight, 0)
   }
 
-  // Calculer le score du persona sélectionné avec le nouveau système
-  const calculatePersonaScore = () => {
+  // Calculer le score du persona sélectionné avec le service unifié
+  const calculatePersonaScore = async () => {
     const persona = PERSONAS[selectedPersona]
+
     const applicationData = {
+      id: "persona-test",
       income: persona.income,
-      guarantor_income: persona.guarantor_income,
       has_guarantor: persona.guarantor,
-      contract_type: persona.contract,
+      guarantor_income: persona.guarantor_income,
+      contract_type: persona.contract.toLowerCase(),
+      profession: persona.profession,
       documents_complete: persona.complete_file,
       has_verified_documents: persona.verified_docs,
       presentation: persona.presentation,
     }
 
-    const property = { price: simulatorRent }
-
-    // Utiliser l'Event Bus pour calculer le score
-    return eventBus
-      .calculateScore("simulator", applicationData, property, user?.id || "demo")
-      .then((score) => score)
-      .catch(() => 50)
-  }
-
-  const [simulatorScore, setSimulatorScore] = useState(50)
-
-  // Recalculer le score du simulateur quand les critères changent
-  useEffect(() => {
-    if (user) {
-      calculatePersonaScore().then((score) => {
-        if (typeof score === "number") {
-          setSimulatorScore(score)
-        }
-      })
+    const propertyData = {
+      id: "test-property",
+      price: simulatorRent,
     }
-  }, [customCriteria, simulatorRent, selectedPersona, user])
+
+    try {
+      // Utiliser les critères personnalisés actuels
+      const tempPreferences = {
+        owner_id: user?.id || "test",
+        name: "Test",
+        model_type: "custom",
+        is_default: true,
+        criteria: {
+          income_ratio: {
+            weight: customCriteria.income_ratio.weight,
+            thresholds: customCriteria.income_ratio.thresholds,
+            per_person_check: customCriteria.income_ratio.per_person_check,
+            use_guarantor_income_for_students: customCriteria.income_ratio.use_guarantor_income_for_students,
+          },
+          guarantor: {
+            weight: customCriteria.guarantor.weight,
+            required_if_income_below: customCriteria.guarantor.required_if_income_below,
+            types_accepted: {
+              parent: true,
+              visale: true,
+              garantme: true,
+              other_physical: true,
+              company: true,
+            },
+            minimum_income_ratio: customCriteria.guarantor.minimum_income_ratio,
+            verification_required: customCriteria.guarantor.verification_required,
+          },
+          professional_stability: {
+            weight: customCriteria.professional_stability.weight,
+            contract_scoring: {
+              cdi_confirmed: 20,
+              cdi_trial: 15,
+              cdd_long: 14,
+              cdd_short: 10,
+              freelance: 8,
+              student: 6,
+              unemployed: 0,
+              retired: 15,
+              civil_servant: 20,
+            },
+            seniority_bonus: {
+              enabled: customCriteria.professional_stability.seniority_bonus,
+              min_months: 6,
+              bonus_points: 2,
+            },
+            trial_period_penalty: customCriteria.professional_stability.trial_period_penalty ? 3 : 0,
+          },
+          file_quality: {
+            weight: customCriteria.file_quality.weight,
+            complete_documents_required: customCriteria.file_quality.complete_documents_required,
+            verified_documents_required: customCriteria.file_quality.verified_documents_required,
+            presentation_quality_weight: customCriteria.file_quality.presentation_important ? 6 : 2,
+            coherence_check_weight: 8,
+          },
+          property_coherence: {
+            weight: customCriteria.property_coherence.weight,
+            household_size_vs_property: customCriteria.property_coherence.household_size_check,
+            colocation_structure_check: customCriteria.property_coherence.colocation_structure_check,
+            location_relevance_check: customCriteria.property_coherence.location_relevance,
+            family_situation_coherence: true,
+          },
+          income_distribution: {
+            weight: customCriteria.income_distribution.weight,
+            balance_check: customCriteria.income_distribution.balance_required,
+            compensation_allowed: customCriteria.income_distribution.compensation_allowed,
+          },
+        },
+        exclusion_rules: exclusionRules,
+      }
+
+      const result = scoringPreferencesService.calculateCustomScore(applicationData, propertyData, tempPreferences)
+      return result.totalScore
+    } catch (error) {
+      console.error("Erreur calcul score persona:", error)
+      return 50
+    }
+  }
 
   if (loading) {
     return (
@@ -831,14 +863,8 @@ export default function ScoringPreferencesSimplePage() {
                         />
                       </div>
 
-                      {/* Nouvelle option pour les étudiants */}
                       <div className="flex items-center justify-between">
-                        <div>
-                          <Label>Utiliser les revenus du garant pour les étudiants</Label>
-                          <p className="text-xs text-muted-foreground">
-                            Pour les étudiants, considérer les revenus du garant comme revenus principaux
-                          </p>
-                        </div>
+                        <Label>Utiliser les revenus du garant pour les étudiants</Label>
                         <Switch
                           checked={customCriteria.income_ratio.use_guarantor_income_for_students}
                           onCheckedChange={(checked) =>
@@ -1461,7 +1487,7 @@ export default function ScoringPreferencesSimplePage() {
 
                   {/* Score calculé */}
                   <div className="text-center">
-                    <CircularScore score={simulatorScore} size="lg" />
+                    <CircularScore score={calculatePersonaScore()} size="lg" />
                     <p className="text-sm text-muted-foreground mt-2">Score avec vos critères actuels</p>
                   </div>
 

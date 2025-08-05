@@ -1,481 +1,292 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { CircularScore } from "@/components/circular-score"
-import Link from "next/link"
-import {
-  User,
-  Building,
-  Calendar,
-  CheckCircle,
-  XCircle,
-  FileText,
-  MessageSquare,
-  ChevronDown,
-  ChevronUp,
-  Clock,
-  AlertCircle,
-  Eye,
-  BarChart3,
-} from "lucide-react"
-import { useRouter } from "next/navigation"
-import { useScoringEventBus } from "@/lib/scoring-event-bus"
+import { Progress } from "@/components/ui/progress"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Loader2, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle2 } from "lucide-react"
 
-interface ApplicationCardProps {
-  application: {
-    id: string
-    tenant: {
-      first_name: string
-      last_name: string
-      email: string
-      phone: string
-    }
-    property: {
-      title: string
-      address: string
-      owner_id?: string
-      price?: number
-    }
-    profession: string
-    income: number
-    has_guarantor: boolean
-    documents_complete: boolean
-    status: string
-    match_score: number
-    created_at: string
-    tenant_id?: string
-  }
-  isSelected?: boolean
-  onSelect?: (selected: boolean) => void
-  onAction: (action: string) => void
-  rentalFile?: any
-  scoringPreferences?: any
+interface CircularScoreProps {
+  score: number
+  size?: "sm" | "md" | "lg"
+  loading?: boolean
+  showDetails?: boolean
+  breakdown?: any
+  recommendations?: string[]
+  warnings?: string[]
+  compatible?: boolean
+  modelUsed?: string
+  className?: string
 }
 
-export function ModernApplicationCard({
-  application,
-  isSelected,
-  onSelect,
-  onAction,
-  rentalFile,
-  scoringPreferences,
-}: ApplicationCardProps) {
-  const [expanded, setExpanded] = useState(false)
-  const [calculatedScore, setCalculatedScore] = useState<number>(application.match_score)
-  const [scoreLoading, setScoreLoading] = useState(false)
-  const router = useRouter()
-  const eventBus = useScoringEventBus()
+export function CircularScore({
+  score,
+  size = "md",
+  loading = false,
+  showDetails = false,
+  breakdown,
+  recommendations = [],
+  warnings = [],
+  compatible,
+  modelUsed,
+  className = "",
+}: CircularScoreProps) {
+  const [showTooltip, setShowTooltip] = useState(false)
 
-  const [scoreBreakdown, setScoreBreakdown] = useState<any>(null)
-  const [scoreRecommendations, setScoreRecommendations] = useState<string[]>([])
-  const [scoreWarnings, setScoreWarnings] = useState<string[]>([])
-  const [scoreCompatible, setScoreCompatible] = useState<boolean | undefined>(undefined)
+  const getScoreColor = (score: number) => {
+    if (score >= 80) return "text-green-600"
+    if (score >= 60) return "text-yellow-600"
+    return "text-red-600"
+  }
 
-  useEffect(() => {
-    if (application.property?.owner_id) {
-      calculateCustomScore()
-    }
-  }, [application, application.property?.owner_id])
+  const getScoreBackground = (score: number) => {
+    if (score >= 80) return "bg-green-100"
+    if (score >= 60) return "bg-yellow-100"
+    return "bg-red-100"
+  }
 
-  // Écouter les événements de l'Event Bus
-  useEffect(() => {
-    if (!application.property?.owner_id) return
+  const getScoreBorder = (score: number) => {
+    if (score >= 80) return "border-green-200"
+    if (score >= 60) return "border-yellow-200"
+    return "border-red-200"
+  }
 
-    const unsubscribePreferences = eventBus.subscribe("preferences-updated", (event) => {
-      if (event.ownerId === application.property.owner_id) {
-        console.log("🔄 Préférences mises à jour, recalcul du score pour:", application.id)
-        calculateCustomScore()
-      }
-    })
+  const getScoreLabel = (score: number) => {
+    if (score >= 85) return "Excellent"
+    if (score >= 70) return "Très bon"
+    if (score >= 55) return "Bon"
+    if (score >= 40) return "Moyen"
+    return "Faible"
+  }
 
-    const unsubscribeScore = eventBus.subscribe("score-calculated", (event) => {
-      if (event.data.applicationId === application.id) {
-        setCalculatedScore(event.data.score)
-      }
-    })
+  const getScoreIcon = (score: number) => {
+    if (score >= 70) return <TrendingUp className="h-3 w-3" />
+    if (score >= 40) return <Minus className="h-3 w-3" />
+    return <TrendingDown className="h-3 w-3" />
+  }
 
-    return () => {
-      unsubscribePreferences()
-      unsubscribeScore()
-    }
-  }, [application.id, application.property?.owner_id])
-
-  const calculateCustomScore = async () => {
-    if (!application.property?.owner_id || !application.property?.price) {
-      return
-    }
-
-    try {
-      setScoreLoading(true)
-
-      const applicationData = {
-        income: application.income,
-        guarantor_income: rentalFile?.guarantor_income,
-        has_guarantor: application.has_guarantor || rentalFile?.has_guarantor,
-        guarantor_type: rentalFile?.guarantor_type || "individual",
-        profession: application.profession,
-        contract_type: rentalFile?.contract_type || "cdi",
-        professional_experience_months: rentalFile?.professional_experience_months || 0,
-        trial_period: rentalFile?.trial_period || false,
-        file_completion: rentalFile?.completion_percentage || 70,
-        has_verified_documents: rentalFile?.has_verified_documents || false,
-        documents_complete: application.documents_complete,
-        presentation: rentalFile?.presentation || "",
-        message: application.message || "",
-      }
-
-      // Utiliser l'Event Bus pour le calcul
-      const score = await eventBus.calculateScore(
-        application.id,
-        applicationData,
-        application.property,
-        application.property.owner_id,
-      )
-
-      setCalculatedScore(score)
-
-      // Optionnel : récupérer les détails via API pour l'affichage
-      try {
-        const response = await fetch("/api/calculate-score", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Cache-Control": "no-cache",
-          },
-          body: JSON.stringify({
-            application: applicationData,
-            property: {
-              price: application.property.price,
-            },
-            owner_id: application.property.owner_id,
-          }),
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          setScoreBreakdown(data.breakdown)
-          setScoreRecommendations(data.recommendations || [])
-          setScoreWarnings(data.warnings || [])
-          setScoreCompatible(data.compatible)
+  const getSizeClasses = () => {
+    switch (size) {
+      case "sm":
+        return {
+          container: "w-12 h-12",
+          text: "text-xs font-semibold",
+          circle: "w-10 h-10",
         }
-      } catch (error) {
-        console.error("Erreur récupération détails score:", error)
-      }
-    } catch (error) {
-      console.error("Erreur calcul score:", error)
-      setCalculatedScore(application.match_score)
-    } finally {
-      setScoreLoading(false)
+      case "lg":
+        return {
+          container: "w-24 h-24",
+          text: "text-xl font-bold",
+          circle: "w-20 h-20",
+        }
+      default: // md
+        return {
+          container: "w-16 h-16",
+          text: "text-sm font-semibold",
+          circle: "w-14 h-14",
+        }
     }
   }
 
-  const formatDate = (dateString: string) => {
-    try {
-      return new Date(dateString).toLocaleDateString("fr-FR", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      })
-    } catch (e) {
-      return "Date inconnue"
-    }
-  }
+  const sizeClasses = getSizeClasses()
+  const scoreColor = getScoreColor(score)
+  const scoreBg = getScoreBackground(score)
+  const scoreBorder = getScoreBorder(score)
 
-  const formatAmount = (amount: number) => {
-    try {
-      return new Intl.NumberFormat("fr-FR", {
-        style: "currency",
-        currency: "EUR",
-        maximumFractionDigits: 0,
-      }).format(amount)
-    } catch (e) {
-      return "Montant inconnu"
-    }
-  }
-
-  const getStatusBadge = () => {
-    switch (application.status) {
-      case "pending":
-        return <Badge variant="outline">En attente</Badge>
-      case "analyzing":
-        return <Badge variant="secondary">En analyse</Badge>
-      case "visit_proposed":
-        return (
-          <Badge variant="secondary" className="bg-purple-100 text-purple-800 hover:bg-purple-200">
-            Visite proposée
-          </Badge>
-        )
-      case "visit_scheduled":
-        return (
-          <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200">
-            Visite planifiée
-          </Badge>
-        )
-      case "accepted":
-      case "approved":
-        return (
-          <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-200">
-            Acceptée
-          </Badge>
-        )
-      case "rejected":
-        return <Badge variant="destructive">Refusée</Badge>
-      case "waiting_tenant_confirmation":
-        return (
-          <Badge variant="outline" className="bg-amber-100 text-amber-800 hover:bg-amber-200">
-            En attente de confirmation
-          </Badge>
-        )
-      default:
-        return <Badge variant="outline">Statut inconnu</Badge>
-    }
-  }
-
-  const getActionButtons = () => {
-    const viewAnalysisButton = (
-      <Button size="sm" variant="outline" onClick={() => router.push(`/owner/applications/${application.id}`)}>
-        <BarChart3 className="h-4 w-4 mr-1" />
-        Voir analyse
-      </Button>
+  if (loading) {
+    return (
+      <div className={`${sizeClasses.container} flex items-center justify-center ${className}`}>
+        <div
+          className={`${sizeClasses.circle} rounded-full border-2 border-gray-200 bg-gray-50 flex items-center justify-center`}
+        >
+          <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+        </div>
+      </div>
     )
-
-    switch (application.status) {
-      case "pending":
-        return (
-          <>
-            <Button size="sm" variant="default" onClick={() => onAction("analyze")}>
-              <Eye className="h-4 w-4 mr-1" />
-              Analyser
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-          </>
-        )
-      case "analyzing":
-        return (
-          <>
-            <Button size="sm" variant="default" onClick={() => onAction("propose_visit")}>
-              <Calendar className="h-4 w-4 mr-1" />
-              Proposer visite
-            </Button>
-            <Button size="sm" variant="destructive" onClick={() => onAction("refuse")}>
-              <XCircle className="h-4 w-4 mr-1" />
-              Refuser
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-          </>
-        )
-      case "visit_proposed":
-        return (
-          <>
-            <Button size="sm" variant="outline" disabled>
-              <Clock className="h-4 w-4 mr-1" />
-              En attente
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-            {viewAnalysisButton}
-          </>
-        )
-      case "visit_scheduled":
-        return (
-          <>
-            <Button size="sm" variant="default" onClick={() => onAction("accept")}>
-              <CheckCircle className="h-4 w-4 mr-1" />
-              Accepter
-            </Button>
-            <Button size="sm" variant="destructive" onClick={() => onAction("refuse")}>
-              <XCircle className="h-4 w-4 mr-1" />
-              Refuser
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-            {viewAnalysisButton}
-          </>
-        )
-      case "waiting_tenant_confirmation":
-        return (
-          <>
-            <Button size="sm" variant="outline" disabled>
-              <Clock className="h-4 w-4 mr-1" />
-              En attente
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-            {viewAnalysisButton}
-          </>
-        )
-      case "accepted":
-      case "approved":
-        return (
-          <>
-            <Button size="sm" variant="default" onClick={() => onAction("generate_lease")}>
-              <FileText className="h-4 w-4 mr-1" />
-              Générer bail
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-            {viewAnalysisButton}
-          </>
-        )
-      case "rejected":
-        return (
-          <>
-            <Button size="sm" variant="outline" onClick={() => router.push(`/owner/applications/${application.id}`)}>
-              <Eye className="h-4 w-4 mr-1" />
-              Voir détails
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-            {viewAnalysisButton}
-          </>
-        )
-      default:
-        return (
-          <>
-            <Button size="sm" variant="outline" onClick={() => router.push(`/owner/applications/${application.id}`)}>
-              <Eye className="h-4 w-4 mr-1" />
-              Voir détails
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-            {viewAnalysisButton}
-          </>
-        )
-    }
   }
 
-  return (
-    <Card className={`overflow-hidden transition-all ${isSelected ? "border-blue-500 shadow-md" : ""}`}>
-      <CardContent className="p-0">
-        <div className="p-4 flex justify-between items-start">
-          <div className="flex items-center gap-3">
-            {onSelect && (
-              <input
-                type="checkbox"
-                checked={isSelected}
-                onChange={(e) => onSelect(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300"
-              />
-            )}
-            <div>
-              <h3 className="font-medium">
-                <Link
-                  href={`/owner/applications/${application.id}`}
-                  className="hover:text-blue-600 transition-colors underline"
-                >
-                  {application.tenant.first_name} {application.tenant.last_name}
-                </Link>
-              </h3>
-              <p className="text-sm text-muted-foreground">{application.tenant.email}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {getStatusBadge()}
-            <CircularScore
-              score={calculatedScore}
-              loading={scoreLoading}
-              showDetails={true}
-              breakdown={scoreBreakdown}
-              recommendations={scoreRecommendations}
-              warnings={scoreWarnings}
-              compatible={scoreCompatible}
-            />
-          </div>
-        </div>
+  const circularScore = (
+    <div className={`${sizeClasses.container} flex items-center justify-center ${className}`}>
+      <div
+        className={`${sizeClasses.circle} rounded-full border-2 ${scoreBorder} ${scoreBg} flex items-center justify-center relative overflow-hidden`}
+      >
+        {/* Cercle de progression */}
+        <svg className="absolute inset-0 w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+          <path
+            className="text-gray-200"
+            stroke="currentColor"
+            strokeWidth="2"
+            fill="transparent"
+            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+          />
+          <path
+            className={scoreColor}
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeDasharray={`${score}, 100`}
+            strokeLinecap="round"
+            fill="transparent"
+            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+          />
+        </svg>
 
-        <div className="px-4 pb-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-          <div className="flex items-center gap-1">
-            <Building className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="truncate">{application.property.title}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <User className="h-3.5 w-3.5 text-muted-foreground" />
-            <span>{application.profession}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-            <span>{formatDate(application.created_at)}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            {application.has_guarantor ? (
-              <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-            ) : (
-              <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
-            )}
-            <span>{application.has_guarantor ? "Avec garant" : "Sans garant"}</span>
-          </div>
+        {/* Score au centre */}
+        <div className="flex flex-col items-center justify-center z-10">
+          <span className={`${sizeClasses.text} ${scoreColor}`}>{score}</span>
+          {size !== "sm" && <span className="text-xs text-muted-foreground">%</span>}
         </div>
+      </div>
+    </div>
+  )
 
-        {expanded && (
-          <div className="px-4 py-2 bg-gray-50 border-t text-sm">
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-              <div>
-                <p className="text-muted-foreground">Revenus</p>
-                <p className="font-medium">{formatAmount(application.income)}</p>
+  if (!showDetails && size === "sm") {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>{circularScore}</TooltipTrigger>
+          <TooltipContent side="top" className="w-64">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-medium">Score de compatibilité</span>
+                <Badge variant="outline" className={`${scoreBg} ${scoreColor} border-0`}>
+                  {getScoreLabel(score)}
+                </Badge>
               </div>
-              <div>
-                <p className="text-muted-foreground">Téléphone</p>
-                <p>{application.tenant.phone || "Non renseigné"}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Adresse du bien</p>
-                <p className="truncate">{application.property.address}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Documents</p>
-                <p>
-                  {application.documents_complete ? (
-                    <span className="flex items-center">
-                      <CheckCircle className="h-3.5 w-3.5 text-green-500 mr-1" /> Complets
-                    </span>
+              {modelUsed && <div className="text-xs text-muted-foreground">Modèle: {modelUsed}</div>}
+              {breakdown && (
+                <div className="space-y-1">
+                  {Object.entries(breakdown)
+                    .slice(0, 4)
+                    .map(([key, item]: [string, any]) => (
+                      <div key={key} className="flex items-center justify-between text-xs">
+                        <span className="capitalize">{key.replace("_", " ")}</span>
+                        <span>
+                          {item.score}/{item.max}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              )}
+              {compatible !== undefined && (
+                <div className="flex items-center gap-1 text-xs">
+                  {compatible ? (
+                    <CheckCircle2 className="h-3 w-3 text-green-500" />
                   ) : (
-                    <span className="flex items-center">
-                      <AlertCircle className="h-3.5 w-3.5 text-amber-500 mr-1" /> Incomplets
-                    </span>
+                    <AlertTriangle className="h-3 w-3 text-red-500" />
                   )}
-                </p>
-              </div>
+                  <span>{compatible ? "Compatible" : "Non compatible"}</span>
+                </div>
+              )}
             </div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    )
+  }
+
+  if (showDetails && size === "lg") {
+    return (
+      <Card className={className}>
+        <CardContent className="p-6">
+          <div className="flex items-center gap-6">
+            {circularScore}
+            <div className="flex-1 space-y-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="font-semibold text-lg">Score: {score}%</h3>
+                  <Badge variant="outline" className={`${scoreBg} ${scoreColor} border-0`}>
+                    {getScoreLabel(score)}
+                  </Badge>
+                  {getScoreIcon(score)}
+                </div>
+                {modelUsed && <p className="text-sm text-muted-foreground">Modèle: {modelUsed}</p>}
+                {compatible !== undefined && (
+                  <div className="flex items-center gap-1 mt-2">
+                    {compatible ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <AlertTriangle className="h-4 w-4 text-red-500" />
+                    )}
+                    <span className="text-sm font-medium">
+                      {compatible ? "Candidature compatible" : "Candidature non compatible"}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {breakdown && (
+                <div className="space-y-2">
+                  <h4 className="font-medium text-sm">Détail par critère</h4>
+                  {Object.entries(breakdown).map(([key, item]: [string, any]) => (
+                    <div key={key} className="space-y-1">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="capitalize font-medium">{key.replace("_", " ")}</span>
+                        <span className="text-muted-foreground">
+                          {item.score}/{item.max}
+                        </span>
+                      </div>
+                      <Progress value={(item.score / item.max) * 100} className="h-1.5" />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {recommendations.length > 0 && (
+                <div className="space-y-1">
+                  <h4 className="font-medium text-sm text-green-700">Recommandations</h4>
+                  <ul className="text-xs space-y-1">
+                    {recommendations.slice(0, 3).map((rec, index) => (
+                      <li key={index} className="flex items-start gap-1">
+                        <CheckCircle2 className="h-3 w-3 text-green-500 mt-0.5 flex-shrink-0" />
+                        <span>{rec}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {warnings.length > 0 && (
+                <div className="space-y-1">
+                  <h4 className="font-medium text-sm text-amber-700">Points d'attention</h4>
+                  <ul className="text-xs space-y-1">
+                    {warnings.slice(0, 3).map((warning, index) => (
+                      <li key={index} className="flex items-start gap-1">
+                        <AlertTriangle className="h-3 w-3 text-amber-500 mt-0.5 flex-shrink-0" />
+                        <span>{warning}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // Taille md par défaut
+  return (
+    <div className={`flex items-center gap-3 ${className}`}>
+      {circularScore}
+      <div>
+        <div className="flex items-center gap-2">
+          <span className={`font-semibold ${scoreColor}`}>{getScoreLabel(score)}</span>
+          {getScoreIcon(score)}
+        </div>
+        <div className="text-xs text-muted-foreground">{modelUsed || "Score de compatibilité"}</div>
+        {compatible !== undefined && (
+          <div className="flex items-center gap-1 mt-1">
+            {compatible ? (
+              <CheckCircle2 className="h-3 w-3 text-green-500" />
+            ) : (
+              <AlertTriangle className="h-3 w-3 text-red-500" />
+            )}
+            <span className="text-xs">{compatible ? "Compatible" : "Non compatible"}</span>
           </div>
         )}
-
-        <div className="px-4 py-3 border-t flex items-center justify-between">
-          <Button variant="ghost" size="sm" onClick={() => setExpanded(!expanded)} className="text-muted-foreground">
-            {expanded ? (
-              <>
-                <ChevronUp className="h-4 w-4 mr-1" /> Moins de détails
-              </>
-            ) : (
-              <>
-                <ChevronDown className="h-4 w-4 mr-1" /> Plus de détails
-              </>
-            )}
-          </Button>
-
-          <div className="flex gap-2">{getActionButtons()}</div>
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }

@@ -38,7 +38,7 @@ export function useScoringPreferences({
 
   const refresh = useCallback(() => {
     if (ownerId) {
-      scoringPreferencesService.invalidatePreferencesCache(ownerId)
+      scoringPreferencesService.invalidateCache(ownerId)
       loadPreferences()
     }
   }, [ownerId, loadPreferences])
@@ -83,11 +83,34 @@ export function useRealtimeScores({ applications, ownerId, enabled = true }: Use
 
     try {
       setRecalculating(true)
-      const newScores = await scoringPreferencesService.recalculateScoresForApplications(
-        applications,
-        ownerId,
-        true, // Force recalculation
-      )
+      const newScores = new Map()
+
+      // Calculer les scores en parallèle par batch
+      const batchSize = 10
+      for (let i = 0; i < applications.length; i += batchSize) {
+        const batch = applications.slice(i, i + batchSize)
+
+        const batchPromises = batch.map(async (app) => {
+          try {
+            const result = await scoringPreferencesService.calculateScore(
+              app,
+              app.property,
+              ownerId,
+              false, // Force recalculation
+            )
+            return { id: app.id, result }
+          } catch (error) {
+            console.error("Erreur calcul score pour:", app.id, error)
+            return { id: app.id, result: { totalScore: 50, compatible: false } }
+          }
+        })
+
+        const batchResults = await Promise.all(batchPromises)
+        batchResults.forEach(({ id, result }) => {
+          newScores.set(id, result)
+        })
+      }
+
       setScores(newScores)
       setLastCalculated(new Date())
     } catch (error) {
@@ -104,11 +127,34 @@ export function useRealtimeScores({ applications, ownerId, enabled = true }: Use
     const calculateInitialScores = async () => {
       try {
         setLoading(true)
-        const newScores = await scoringPreferencesService.recalculateScoresForApplications(
-          applications,
-          ownerId,
-          false, // Use cache
-        )
+        const newScores = new Map()
+
+        // Calculer les scores en parallèle par batch
+        const batchSize = 10
+        for (let i = 0; i < applications.length; i += batchSize) {
+          const batch = applications.slice(i, i + batchSize)
+
+          const batchPromises = batch.map(async (app) => {
+            try {
+              const result = await scoringPreferencesService.calculateScore(
+                app,
+                app.property,
+                ownerId,
+                true, // Utiliser le cache
+              )
+              return { id: app.id, result }
+            } catch (error) {
+              console.error("Erreur calcul score pour:", app.id, error)
+              return { id: app.id, result: { totalScore: 50, compatible: false } }
+            }
+          })
+
+          const batchResults = await Promise.all(batchPromises)
+          batchResults.forEach(({ id, result }) => {
+            newScores.set(id, result)
+          })
+        }
+
         setScores(newScores)
         setLastCalculated(new Date())
       } catch (error) {
@@ -121,11 +167,19 @@ export function useRealtimeScores({ applications, ownerId, enabled = true }: Use
     calculateInitialScores()
   }, [applications, ownerId, enabled])
 
+  const getScore = useCallback(
+    (applicationId: string) => {
+      return scores.get(applicationId) || { totalScore: 50, compatible: false }
+    },
+    [scores],
+  )
+
   return {
-    scores,
+    scores: Object.fromEntries(scores),
     loading,
     recalculating,
     lastCalculated,
+    getScore,
     recalculateAll,
   }
 }
