@@ -1,7 +1,3 @@
-import { createClient } from "@supabase/supabase-js"
-
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-
 // Cache pour les préférences
 const preferencesCache = new Map<string, any>()
 const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
