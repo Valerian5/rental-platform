@@ -4,55 +4,26 @@ import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { application, property, owner_id, force_recalculation = false } = body
+    const { application, property, owner_id } = body
 
     if (!application || !property || !owner_id) {
-      return NextResponse.json({ error: "Données manquantes" }, { status: 400 })
+      return NextResponse.json(
+        { error: "Données manquantes: application, property et owner_id requis" },
+        { status: 400 },
+      )
     }
 
-    console.log("🎯 API Calculate Score - Données reçues:", {
-      applicationId: application.id || "nouveau",
-      propertyId: property.id || "nouveau",
-      propertyPrice: property.price,
-      ownerId: owner_id,
-      forceRecalculation: force_recalculation,
-    })
-
-    // Utiliser le service unifié
-    const result = await scoringPreferencesService.calculateScore(application, property, owner_id, !force_recalculation)
-
-    console.log("📊 API Calculate Score - Résultat:", {
-      totalScore: result.totalScore,
-      compatible: result.compatible,
-      model_used: result.model_used,
-      breakdown: Object.entries(result.breakdown).map(([key, value]) => ({
-        critere: key,
-        score: value.score,
-        max: value.max,
-      })),
-    })
-
-    return NextResponse.json({
-      score: result.totalScore,
-      compatible: result.compatible,
-      breakdown: result.breakdown,
-      recommendations: result.recommendations,
-      warnings: result.warnings,
-      exclusions: result.exclusions,
-      model_used: result.model_used,
-      model_version: result.model_version,
-      calculated_at: result.calculated_at,
-      household_type: result.household_type,
-    })
-  } catch (error) {
-    console.error("❌ Erreur API Calculate Score:", error)
-    return NextResponse.json(
-      {
-        error: "Erreur serveur lors du calcul du score",
-        details: error instanceof Error ? error.message : "Erreur inconnue",
-      },
-      { status: 500 },
+    const result = await scoringPreferencesService.calculateScore(
+      application,
+      property,
+      owner_id,
+      true, // Utiliser le cache
     )
+
+    return NextResponse.json(result)
+  } catch (error) {
+    console.error("Erreur API calculate-score:", error)
+    return NextResponse.json({ error: "Erreur lors du calcul du score" }, { status: 500 })
   }
 }
 

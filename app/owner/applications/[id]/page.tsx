@@ -5,191 +5,179 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { CircularScore } from "@/components/circular-score"
 import { MatchingScore } from "@/components/matching-score"
+import { VisitProposalManager } from "@/components/visit-proposal-manager"
+import { TenantAndGuarantorDocumentsSection } from "@/components/TenantAndGuarantorDocumentsSection"
 import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
 import {
+  ArrowLeft,
   User,
-  Building,
-  Euro,
+  Briefcase,
   Shield,
   FileText,
-  Calendar,
-  Phone,
-  Mail,
-  MapPin,
+  MessageSquare,
   CheckCircle,
   XCircle,
-  AlertTriangle,
-  MessageSquare,
-  Download,
-  RefreshCw,
+  Calendar,
+  Clock,
+  Building,
   BarChart3,
-  Eye,
-  Settings,
 } from "lucide-react"
 
-interface ApplicationDetailPageProps {
-  params: {
-    id: string
-  }
-}
-
-export default function ApplicationDetailPage({ params }: ApplicationDetailPageProps) {
+export default function ApplicationDetailsPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [application, setApplication] = useState<any>(null)
+  const [rentalFile, setRentalFile] = useState<any>(null)
   const [user, setUser] = useState<any>(null)
   const [activeTab, setActiveTab] = useState("overview")
-
-  // États pour le scoring unifié
-  const [scoringResult, setScoringResult] = useState<any>(null)
-  const [scoringLoading, setScoreLoading] = useState(false)
-  const [scoringPreferences, setScoringPreferences] = useState<any>(null)
+  const [showVisitDialog, setShowVisitDialog] = useState(false)
+  const [currentApplication, setCurrentApplication] = useState<any>(null)
+  const [showRefuseDialog, setShowRefuseDialog] = useState(false)
+  const [documents, setDocuments] = useState<any[]>([])
+  const [realtimeScore, setRealtimeScore] = useState<number>(50)
 
   useEffect(() => {
     checkAuthAndLoadData()
-  }, [params.id])
+  }, [])
 
   const checkAuthAndLoadData = async () => {
     try {
+      setLoading(true)
       const currentUser = await authService.getCurrentUser()
-      if (!currentUser || currentUser.user_type !== "owner") {
+
+      if (!currentUser) {
+        toast.error("Vous devez être connecté pour accéder à cette page")
         router.push("/login")
         return
       }
 
+      if (currentUser.user_type !== "owner") {
+        toast.error("Accès réservé aux propriétaires")
+        router.push("/")
+        return
+      }
+
       setUser(currentUser)
-      await Promise.all([loadApplication(params.id), loadScoringPreferences(currentUser.id)])
+      await loadApplicationDetails()
     } catch (error) {
       console.error("Erreur auth:", error)
-      router.push("/login")
+      toast.error("Erreur d'authentification")
     } finally {
       setLoading(false)
     }
   }
 
-  const loadScoringPreferences = async (ownerId: string) => {
+  const loadApplicationDetails = async () => {
     try {
-      const preferences = await scoringPreferencesService.getOwnerPreferences(ownerId, true)
-      setScoringPreferences(preferences)
-    } catch (error) {
-      console.error("Erreur chargement préférences:", error)
-    }
-  }
+      console.log("🔍 Chargement détails candidature:", params.id)
 
-  const loadApplication = async (applicationId: string) => {
-    try {
-      const response = await fetch(`/api/applications/${applicationId}`)
-      if (response.ok) {
-        const data = await response.json()
-        const app = data.application
+      const response = await fetch(`/api/applications/${params.id}`)
+      if (!response.ok) {
+        toast.error("Erreur lors du chargement de la candidature")
+        return
+      }
 
-        // Enrichir avec les données du dossier de location
-        if (app.tenant_id) {
-          try {
-            const rentalFileResponse = await fetch(`/api/rental-files?tenant_id=${app.tenant_id}`)
-            if (rentalFileResponse.ok) {
-              const rentalFileData = await rentalFileResponse.json()
-              const rentalFile = rentalFileData.rental_file
+      const data = await response.json()
+      console.log("✅ Candidature chargée:", data.application)
 
-              if (rentalFile && rentalFile.main_tenant) {
-                // Enrichir les données de candidature
-                app.income = rentalFile.main_tenant.income_sources?.work_income?.amount || app.income
-                app.profession = rentalFile.main_tenant.profession || app.profession
-                app.company = rentalFile.main_tenant.company || app.company
-                app.contract_type = rentalFile.main_tenant.main_activity || app.contract_type
-                app.rental_file_main_tenant = rentalFile.main_tenant
-                app.rental_file_guarantors = rentalFile.guarantors || []
+      if (data.application.status === "pending") {
+        await updateApplicationStatus("analyzing")
+        data.application.status = "analyzing"
+      }
 
-                // Vérifier la présence de garants
-                app.has_guarantor = (rentalFile.guarantors && rentalFile.guarantors.length > 0) || app.has_guarantor
+      setApplication(data.application)
+      setDocuments(flattenDocuments(data.application))
 
-                // Récupérer les revenus du garant
-                if (rentalFile.guarantors && rentalFile.guarantors.length > 0) {
-                  app.guarantor_income =
-                    rentalFile.guarantors[0].personal_info?.income_sources?.work_income?.amount || 0
-                }
+      // Charger le dossier de location avec enrichissement des données
+      if (data.application?.tenant_id) {
+        try {
+          const rentalFileResponse = await fetch(`/api/rental-files?tenant_id=${data.application.tenant_id}`)
+          if (rentalFileResponse.ok) {
+            const rentalFileData = await rentalFileResponse.json()
+            const rentalFile = rentalFileData.rental_file
+
+            if (rentalFile) {
+              console.log("✅ Dossier de location chargé:", {
+                id: rentalFile.id,
+                main_tenant: rentalFile.main_tenant?.first_name + " " + rentalFile.main_tenant?.last_name,
+                income: rentalFile.main_tenant?.income_sources?.work_income?.amount,
+                guarantors_count: rentalFile.guarantors?.length || 0,
+              })
+
+              setRentalFile(rentalFile)
+
+              // Enrichir l'application avec les données du dossier de location
+              let income = 0
+              if (rentalFile.main_tenant?.income_sources?.work_income?.amount) {
+                income = rentalFile.main_tenant.income_sources.work_income.amount
+              } else if (rentalFile.main_tenant?.income_sources?.work_income?.monthly_amount) {
+                income = rentalFile.main_tenant.income_sources.work_income.monthly_amount
+              } else if (rentalFile.main_tenant?.monthly_income) {
+                income = rentalFile.main_tenant.monthly_income
+              } else if (data.application.income) {
+                income = data.application.income
               }
+
+              // Mettre à jour l'application avec les données enrichies
+              setApplication((prev) => ({
+                ...prev,
+                income,
+                has_guarantor:
+                  (rentalFile.guarantors && rentalFile.guarantors.length > 0) || prev.has_guarantor || false,
+                profession: rentalFile.main_tenant?.profession || prev.profession || "Non spécifié",
+                company: rentalFile.main_tenant?.company || prev.company || "Non spécifié",
+                contract_type: rentalFile.main_tenant?.main_activity || prev.contract_type || "Non spécifié",
+              }))
+
+              // Calculer le score initial
+              await recalculateScore()
             }
-          } catch (error) {
-            console.error("Erreur chargement dossier de location:", error)
           }
+        } catch (error) {
+          console.error("Erreur chargement dossier location:", error)
         }
-
-        setApplication(app)
-
-        // Calculer le score unifié
-        if (app.property?.owner_id && app.property?.price) {
-          await calculateUnifiedScore(app)
-        }
-      } else {
-        toast.error("Candidature introuvable")
-        router.push("/owner/applications")
       }
     } catch (error) {
       console.error("Erreur:", error)
-      toast.error("Erreur lors du chargement de la candidature")
+      toast.error("Erreur lors du chargement des détails")
     }
   }
 
-  const calculateUnifiedScore = async (app: any, forceRecalculation = false) => {
-    if (!app.property?.owner_id || !app.property?.price) {
-      console.warn("Données insuffisantes pour le calcul de score")
-      return
-    }
+  const recalculateScore = async () => {
+    if (!application || !application.property) return
 
     try {
-      setScoreLoading(true)
+      const applicationData = {
+        income: application.income,
+        guarantor_income: rentalFile?.guarantor_income,
+        has_guarantor: application.has_guarantor || rentalFile?.has_guarantor,
+        contract_type: rentalFile?.contract_type || application.contract_type || "cdi",
+        documents_complete: application.documents_complete,
+        has_verified_documents: rentalFile?.has_verified_documents || false,
+        presentation: rentalFile?.presentation || application.message || "",
+      }
 
-      console.log("🎯 ApplicationDetail - Calcul score unifié pour:", {
-        applicationId: app.id,
-        propertyPrice: app.property.price,
-        ownerId: app.property.owner_id,
-        forceRecalculation,
-      })
-
-      // Utiliser le service unifié
       const result = await scoringPreferencesService.calculateScore(
-        app,
-        app.property,
-        app.property.owner_id,
-        !forceRecalculation, // Utiliser le cache sauf si force
+        applicationData,
+        application.property,
+        application.property.owner_id,
+        true,
       )
 
-      console.log("📊 ApplicationDetail - Score calculé:", {
-        totalScore: result.totalScore,
-        compatible: result.compatible,
-        model: result.model_used,
-        breakdown: Object.entries(result.breakdown).map(([key, value]) => ({
-          critere: key,
-          score: value.score,
-          max: value.max,
-        })),
-      })
-
-      setScoringResult(result)
+      setRealtimeScore(result.totalScore)
     } catch (error) {
-      console.error("❌ Erreur calcul score ApplicationDetail:", error)
-      setScoringResult({
-        totalScore: 50,
-        compatible: false,
-        model_used: "Erreur",
-        breakdown: {},
-        recommendations: ["Erreur lors du calcul du score"],
-        warnings: ["Impossible de calculer le score"],
-        exclusions: [],
-      })
-    } finally {
-      setScoreLoading(false)
+      console.error("Erreur recalcul score:", error)
     }
   }
 
-  const handleStatusChange = async (newStatus: string) => {
+  const updateApplicationStatus = async (newStatus: string, notes?: string) => {
     try {
       const response = await fetch(`/api/applications/${params.id}`, {
         method: "PATCH",
@@ -198,36 +186,145 @@ export default function ApplicationDetailPage({ params }: ApplicationDetailPageP
         },
         body: JSON.stringify({
           status: newStatus,
+          notes: notes || undefined,
         }),
       })
 
       if (response.ok) {
-        toast.success(`Candidature ${newStatus === "accepted" ? "acceptée" : "refusée"}`)
+        const statusMessages: { [key: string]: string } = {
+          analyzing: "Candidature en cours d'analyse",
+          accepted: "Candidature acceptée",
+          rejected: "Candidature refusée",
+          visit_proposed: "Visite proposée au candidat",
+          visit_scheduled: "Visite planifiée",
+          waiting_tenant_confirmation: "En attente de confirmation du locataire",
+        }
+
+        toast.success(statusMessages[newStatus] || "Statut mis à jour")
         setApplication({ ...application, status: newStatus })
+        return true
       } else {
         toast.error("Erreur lors de la mise à jour du statut")
+        return false
       }
     } catch (error) {
       console.error("Erreur:", error)
       toast.error("Erreur lors de la mise à jour du statut")
+      return false
     }
   }
 
-  const formatDate = (dateString: string) => {
+  const handleProposeVisit = () => {
+    setCurrentApplication(application)
+    setShowVisitDialog(true)
+  }
+
+  const handleVisitProposed = async (slots: any[]) => {
+    try {
+      const response = await fetch(`/api/applications/${params.id}/propose-visit-slots`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ slots }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        toast.error(errorData.message || "Erreur lors de la proposition de visite")
+        return
+      }
+
+      const data = await response.json()
+      toast.success(data.message || "Créneaux de visite proposés avec succès")
+      setShowVisitDialog(false)
+
+      loadApplicationDetails()
+    } catch (error) {
+      console.error("Erreur:", error)
+      toast.error("Erreur lors de la proposition de visite")
+    }
+  }
+
+  const handleRefuse = () => {
+    setShowRefuseDialog(true)
+  }
+
+  const handleRefuseConfirm = async (reason: string, type: string) => {
+    let notes = ""
+
+    const refusalReasons: { [key: string]: string } = {
+      insufficient_income: "Revenus insuffisants",
+      incomplete_file: "Dossier incomplet",
+      missing_guarantor: "Absence de garant",
+      unstable_situation: "Situation professionnelle instable",
+      other: reason,
+    }
+
+    notes = refusalReasons[type] || reason
+
+    const success = await updateApplicationStatus("rejected", notes)
+    if (success) {
+      setShowRefuseDialog(false)
+    }
+  }
+
+  const handleAccept = async () => {
+    await updateApplicationStatus("accepted")
+  }
+
+  const handleContact = async () => {
+    if (!application?.tenant_id || !application?.property_id) {
+      toast.error("Impossible de contacter ce locataire")
+      return
+    }
+
+    try {
+      const response = await fetch("/api/conversations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          tenant_id: application.tenant_id,
+          owner_id: user.id,
+          property_id: application.property_id,
+          subject: `Candidature pour ${application.property?.title || "le bien"}`,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        router.push(`/owner/messaging?conversation_id=${data.conversation.id}`)
+      } else {
+        router.push(`/owner/messaging?tenant_id=${application.tenant_id}`)
+      }
+    } catch (error) {
+      console.error("Erreur création conversation:", error)
+      router.push(`/owner/messaging?tenant_id=${application.tenant_id}`)
+    }
+  }
+
+  const handleViewAnalysis = () => {
+    setActiveTab("financial")
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
+  const formatDate = (dateString: string | undefined) => {
+    if (!dateString) return "Non spécifié"
     try {
       return new Date(dateString).toLocaleDateString("fr-FR", {
         day: "numeric",
         month: "long",
         year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
       })
     } catch (e) {
-      return "Date inconnue"
+      return "Date invalide"
     }
   }
 
-  const formatAmount = (amount: number) => {
+  const formatAmount = (amount: number | undefined) => {
+    if (amount === null || amount === undefined) return "Non spécifié"
     try {
       return new Intl.NumberFormat("fr-FR", {
         style: "currency",
@@ -235,12 +332,14 @@ export default function ApplicationDetailPage({ params }: ApplicationDetailPageP
         maximumFractionDigits: 0,
       }).format(amount)
     } catch (e) {
-      return "Montant inconnu"
+      return "Montant invalide"
     }
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
+  const getStatusBadge = () => {
+    if (!application) return null
+
+    switch (application.status) {
       case "pending":
         return <Badge variant="outline">En attente</Badge>
       case "analyzing":
@@ -277,13 +376,128 @@ export default function ApplicationDetailPage({ params }: ApplicationDetailPageP
     }
   }
 
+  const getActionButtons = () => {
+    if (!application) return null
+
+    const viewAnalysisButton =
+      application.status !== "analyzing" ? (
+        <Button variant="outline" onClick={handleViewAnalysis}>
+          <BarChart3 className="h-4 w-4 mr-2" />
+          Voir analyse
+        </Button>
+      ) : null
+
+    switch (application.status) {
+      case "analyzing":
+        return (
+          <>
+            <Button onClick={handleProposeVisit}>
+              <Calendar className="h-4 w-4 mr-2" />
+              Proposer une visite
+            </Button>
+            <Button variant="destructive" onClick={handleRefuse}>
+              <XCircle className="h-4 w-4 mr-2" />
+              Refuser
+            </Button>
+            <Button variant="outline" onClick={handleContact}>
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Contacter
+            </Button>
+          </>
+        )
+      case "visit_proposed":
+        return (
+          <>
+            <Button variant="outline" disabled>
+              <Clock className="h-4 w-4 mr-2" />
+              En attente de réponse
+            </Button>
+            <Button variant="outline" onClick={handleContact}>
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Contacter
+            </Button>
+            {viewAnalysisButton}
+          </>
+        )
+      case "visit_scheduled":
+        return (
+          <>
+            <Button onClick={handleAccept}>
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Accepter le dossier
+            </Button>
+            <Button variant="destructive" onClick={handleRefuse}>
+              <XCircle className="h-4 w-4 mr-2" />
+              Refuser
+            </Button>
+            <Button variant="outline" onClick={handleContact}>
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Contacter
+            </Button>
+            {viewAnalysisButton}
+          </>
+        )
+      case "waiting_tenant_confirmation":
+        return (
+          <>
+            <Button variant="outline" disabled>
+              <Clock className="h-4 w-4 mr-2" />
+              En attente du locataire
+            </Button>
+            <Button variant="outline" onClick={handleContact}>
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Contacter
+            </Button>
+            {viewAnalysisButton}
+          </>
+        )
+      case "accepted":
+      case "approved":
+        return (
+          <>
+            <Button onClick={() => router.push(`/owner/leases/new?application=${application.id}`)}>
+              <FileText className="h-4 w-4 mr-2" />
+              Générer le bail
+            </Button>
+            <Button variant="outline" onClick={handleContact}>
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Contacter
+            </Button>
+            {viewAnalysisButton}
+          </>
+        )
+      case "rejected":
+        return (
+          <>
+            <Button variant="outline" onClick={handleContact}>
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Contacter
+            </Button>
+            {viewAnalysisButton}
+          </>
+        )
+      default:
+        return (
+          <>
+            <Button variant="outline" onClick={handleContact}>
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Contacter
+            </Button>
+            {viewAnalysisButton}
+          </>
+        )
+    }
+  }
+
   if (loading) {
     return (
-      <div className="container mx-auto py-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-gray-200 rounded w-1/3"></div>
-          <div className="h-64 bg-gray-200 rounded"></div>
+      <div className="container mx-auto py-6 space-y-6">
+        <Skeleton className="h-8 w-64" />
+        <div className="grid gap-6 md:grid-cols-2">
+          <Skeleton className="h-64" />
+          <Skeleton className="h-64" />
         </div>
+        <Skeleton className="h-96" />
       </div>
     )
   }
@@ -291,229 +505,114 @@ export default function ApplicationDetailPage({ params }: ApplicationDetailPageP
   if (!application) {
     return (
       <div className="container mx-auto py-6">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold">Candidature introuvable</h2>
-          <Button onClick={() => router.push("/owner/applications")} className="mt-4">
-            Retour aux candidatures
-          </Button>
-        </div>
+        <Button variant="ghost" onClick={() => router.back()}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Retour
+        </Button>
+        <Card className="mt-6">
+          <CardContent className="flex flex-col items-center justify-center py-10">
+            <h3 className="text-lg font-medium">Candidature introuvable</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              La candidature demandée n'existe pas ou vous n'avez pas les permissions nécessaires.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     )
   }
 
   const tenant = application.tenant || {}
   const property = application.property || {}
+  const mainTenant = rentalFile?.main_tenant || {}
+
+  // Récupérer les revenus avec plusieurs sources possibles
+  let income = 0
+  if (mainTenant.income_sources?.work_income?.amount) {
+    income = mainTenant.income_sources.work_income.amount
+  } else if (mainTenant.income_sources?.work_income?.monthly_amount) {
+    income = mainTenant.income_sources.work_income.monthly_amount
+  } else if (mainTenant.monthly_income) {
+    income = mainTenant.monthly_income
+  } else if (application.income) {
+    income = application.income
+  }
+
+  const hasGuarantor =
+    (rentalFile?.guarantors && rentalFile.guarantors.length > 0) || application.has_guarantor || false
+  const profession = mainTenant.profession || application.profession || "Non spécifié"
+  const company = mainTenant.company || application.company || "Non spécifié"
+  const contractType = mainTenant.main_activity || application.contract_type || "Non spécifié"
+
+  const rentRatio = income && property.price ? (income / property.price).toFixed(1) : "N/A"
 
   return (
-    <div className="space-y-6">
+    <>
       <PageHeader
-        title={`${tenant.first_name || "Prénom"} ${tenant.last_name || "Nom"}`}
-        description={`Candidature pour ${property.title || "Propriété inconnue"}`}
-        backButton={{
-          href: "/owner/applications",
-          label: "Retour aux candidatures",
-        }}
+        title={`Candidature de ${tenant.first_name} ${tenant.last_name}`}
+        description={`Pour ${property.title}`}
       >
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => calculateUnifiedScore(application, true)}
-            disabled={scoringLoading}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${scoringLoading ? "animate-spin" : ""}`} />
-            Recalculer score
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => router.push("/owner/scoring-preferences-simple")}>
-            <Settings className="h-4 w-4 mr-2" />
-            Préférences
-          </Button>
-          <Button variant="outline" size="sm">
-            <Download className="h-4 w-4 mr-2" />
-            Exporter
+        <div className="flex items-center gap-2">
+          {getStatusBadge()}
+          <Button variant="ghost" onClick={() => router.back()}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Retour
           </Button>
         </div>
       </PageHeader>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Colonne principale */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* En-tête avec statut et actions */}
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                    <User className="h-6 w-6 text-blue-600" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-semibold">
-                      {tenant.first_name} {tenant.last_name}
-                    </h2>
-                    <p className="text-muted-foreground">{application.profession || "Profession non spécifiée"}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  {getStatusBadge(application.status)}
-                  {scoringResult && (
-                    <CircularScore
-                      score={scoringResult.totalScore}
-                      loading={scoringLoading}
-                      showDetails={false}
-                      breakdown={scoringResult.breakdown}
-                      recommendations={scoringResult.recommendations}
-                      warnings={scoringResult.warnings}
-                      compatible={scoringResult.compatible}
-                      modelUsed={scoringResult.model_used}
-                      size="md"
-                    />
-                  )}
-                </div>
-              </div>
+      <div className="p-6 space-y-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="flex items-center gap-4">
+            <CircularScore score={realtimeScore} size="lg" />
+            <div>
+              <h2 className="text-xl font-semibold">Score de compatibilité</h2>
+              <p className="text-sm text-muted-foreground">Basé sur vos préférences de scoring</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">{getActionButtons()}</div>
+        </div>
 
-              {/* Actions rapides */}
-              <div className="flex gap-2">
-                {application.status === "pending" && (
-                  <>
-                    <Button onClick={() => handleStatusChange("analyzing")}>
-                      <Eye className="h-4 w-4 mr-2" />
-                      Analyser
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => router.push(`/owner/messaging?tenant_id=${application.tenant_id}`)}
-                    >
-                      <MessageSquare className="h-4 w-4 mr-2" />
-                      Contacter
-                    </Button>
-                  </>
-                )}
-                {application.status === "analyzing" && (
-                  <>
-                    <Button onClick={() => handleStatusChange("accepted")} className="bg-green-600 hover:bg-green-700">
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                      Accepter
-                    </Button>
-                    <Button variant="destructive" onClick={() => handleStatusChange("rejected")}>
-                      <XCircle className="h-4 w-4 mr-2" />
-                      Refuser
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => router.push(`/owner/messaging?tenant_id=${application.tenant_id}`)}
-                    >
-                      <MessageSquare className="h-4 w-4 mr-2" />
-                      Contacter
-                    </Button>
-                  </>
-                )}
-                {application.status === "accepted" && (
-                  <Button onClick={() => router.push(`/owner/leases/new?application=${application.id}`)}>
-                    <FileText className="h-4 w-4 mr-2" />
-                    Générer bail
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+        <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid grid-cols-3 mb-4">
+            <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
+            <TabsTrigger value="financial">Analyse financière</TabsTrigger>
+            <TabsTrigger value="documents">Documents</TabsTrigger>
+          </TabsList>
 
-          {/* Onglets de détail */}
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
-              <TabsTrigger value="scoring">Analyse scoring</TabsTrigger>
-              <TabsTrigger value="documents">Documents</TabsTrigger>
-              <TabsTrigger value="history">Historique</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="overview" className="space-y-6">
-              {/* Informations personnelles */}
+          {/* Vue d'ensemble */}
+          <TabsContent value="overview" className="space-y-6">
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Informations du candidat */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <User className="h-5 w-5" />
-                    Informations personnelles
+                    Informations du candidat
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex items-center gap-3">
-                      <Mail className="h-4 w-4 text-muted-foreground" />
-                      <div>
-                        <p className="text-sm text-muted-foreground">Email</p>
-                        <p className="font-medium">{tenant.email || "Non renseigné"}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Phone className="h-4 w-4 text-muted-foreground" />
-                      <div>
-                        <p className="text-sm text-muted-foreground">Téléphone</p>
-                        <p className="font-medium">{tenant.phone || "Non renseigné"}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <div>
-                        <p className="text-sm text-muted-foreground">Date de candidature</p>
-                        <p className="font-medium">{formatDate(application.created_at)}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Building className="h-4 w-4 text-muted-foreground" />
-                      <div>
-                        <p className="text-sm text-muted-foreground">Entreprise</p>
-                        <p className="font-medium">{application.company || "Non spécifiée"}</p>
-                      </div>
-                    </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Nom complet</label>
+                    <p className="text-lg">
+                      {tenant.first_name} {tenant.last_name}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Email</label>
+                    <p>{tenant.email}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Téléphone</label>
+                    <p>{tenant.phone || "Non renseigné"}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Date de candidature</label>
+                    <p>{formatDate(application.created_at)}</p>
                   </div>
                 </CardContent>
               </Card>
 
-              {/* Informations financières */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Euro className="h-5 w-5" />
-                    Informations financières
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="p-4 bg-green-50 rounded-lg">
-                      <p className="text-sm text-green-700 font-medium">Revenus mensuels</p>
-                      <p className="text-2xl font-bold text-green-800">{formatAmount(application.income || 0)}</p>
-                    </div>
-                    <div className="p-4 bg-blue-50 rounded-lg">
-                      <p className="text-sm text-blue-700 font-medium">Loyer du bien</p>
-                      <p className="text-2xl font-bold text-blue-800">{formatAmount(property.price || 0)}</p>
-                    </div>
-                    <div className="p-4 bg-purple-50 rounded-lg">
-                      <p className="text-sm text-purple-700 font-medium">Ratio revenus/loyer</p>
-                      <p className="text-2xl font-bold text-purple-800">
-                        {application.income && property.price
-                          ? `${(application.income / property.price).toFixed(1)}x`
-                          : "N/A"}
-                      </p>
-                    </div>
-                  </div>
-
-                  {application.has_guarantor && (
-                    <div className="mt-4 p-4 bg-amber-50 rounded-lg">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Shield className="h-4 w-4 text-amber-600" />
-                        <p className="font-medium text-amber-800">Garant présent</p>
-                      </div>
-                      {application.guarantor_income > 0 && (
-                        <p className="text-sm text-amber-700">
-                          Revenus du garant: {formatAmount(application.guarantor_income)}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Informations sur le bien */}
+              {/* Informations du bien */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -523,331 +622,239 @@ export default function ApplicationDetailPage({ params }: ApplicationDetailPageP
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
-                    <h3 className="font-semibold text-lg">{property.title}</h3>
-                    <div className="flex items-center gap-2 mt-1">
-                      <MapPin className="h-4 w-4 text-muted-foreground" />
-                      <p className="text-muted-foreground">{property.address}</p>
-                    </div>
+                    <label className="text-sm font-medium text-muted-foreground">Titre</label>
+                    <p className="text-lg">{property.title}</p>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">Loyer</p>
-                      <p className="font-medium">{formatAmount(property.price || 0)}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Surface</p>
-                      <p className="font-medium">{property.surface || "N/A"} m²</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Pièces</p>
-                      <p className="font-medium">{property.rooms || "N/A"}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Type</p>
-                      <p className="font-medium">{property.type || "N/A"}</p>
-                    </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Adresse</label>
+                    <p>{property.address}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Loyer</label>
+                    <p>{formatAmount(property.price)}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Type</label>
+                    <p>{property.type || "Non spécifié"}</p>
                   </div>
                 </CardContent>
               </Card>
+            </div>
 
-              {/* Message de candidature */}
-              {application.message && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <MessageSquare className="h-5 w-5" />
-                      Message de candidature
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <p className="text-sm leading-relaxed">{application.message}</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-
-            <TabsContent value="scoring" className="space-y-6">
-              {scoringResult ? (
-                <>
-                  {/* Score global */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <BarChart3 className="h-5 w-5" />
-                        Score de compatibilité
-                      </CardTitle>
-                      <div className="text-sm text-muted-foreground">
-                        Modèle utilisé: {scoringResult.model_used}
-                        {scoringPreferences && (
-                          <span className="ml-2">
-                            •{" "}
-                            <Button
-                              variant="link"
-                              size="sm"
-                              className="p-0 h-auto text-blue-600"
-                              onClick={() => router.push("/owner/scoring-preferences-simple")}
-                            >
-                              Modifier les préférences
-                            </Button>
-                          </span>
+            {/* Informations professionnelles et financières */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Briefcase className="h-5 w-5" />
+                  Situation professionnelle et financière
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-4 md:grid-cols-3">
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Profession</label>
+                  <p>{profession}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Entreprise</label>
+                  <p>{company}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Type de contrat</label>
+                  <p>{contractType}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Revenus mensuels</label>
+                  <p className="text-lg font-semibold text-green-600">{formatAmount(income)}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Ratio revenus/loyer</label>
+                  <p className="text-lg font-semibold">
+                    {rentRatio !== "N/A" ? (
+                      <>
+                        {rentRatio}x
+                        {Number(rentRatio) >= 3 ? (
+                          <Badge className="ml-2 bg-green-100 text-green-800 hover:bg-green-200">Excellent</Badge>
+                        ) : Number(rentRatio) >= 2.5 ? (
+                          <Badge className="ml-2 bg-green-100 text-green-800 hover:bg-green-200">Bon</Badge>
+                        ) : Number(rentRatio) >= 2 ? (
+                          <Badge className="ml-2 bg-amber-100 text-amber-800 hover:bg-amber-200">Acceptable</Badge>
+                        ) : (
+                          <Badge className="ml-2 bg-red-100 text-red-800 hover:bg-red-200">Insuffisant</Badge>
                         )}
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <MatchingScore
-                        application={application}
-                        property={property}
-                        size="lg"
-                        detailed={true}
-                        score={scoringResult.totalScore}
-                        breakdown={scoringResult.breakdown}
-                        recommendations={scoringResult.recommendations}
-                        warnings={scoringResult.warnings}
-                        compatible={scoringResult.compatible}
-                        modelUsed={scoringResult.model_used}
-                      />
-                    </CardContent>
-                  </Card>
-
-                  {/* Détail par critère */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Détail par critère</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-6">
-                      {Object.entries(scoringResult.breakdown).map(([key, item]: [string, any]) => (
-                        <div key={key} className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <h4 className="font-medium capitalize">{key.replace("_", " ")}</h4>
-                            <Badge variant={item.compatible ? "default" : "destructive"}>
-                              {item.score}/{item.max} points
-                            </Badge>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div
-                              className={`h-2 rounded-full ${item.compatible ? "bg-green-500" : "bg-red-500"}`}
-                              style={{ width: `${(item.score / item.max) * 100}%` }}
-                            />
-                          </div>
-                          <p className="text-sm text-muted-foreground">{item.details}</p>
-                        </div>
-                      ))}
-                    </CardContent>
-                  </Card>
-
-                  {/* Exclusions */}
-                  {scoringResult.exclusions && scoringResult.exclusions.length > 0 && (
-                    <Card className="border-red-200">
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-red-700">
-                          <XCircle className="h-5 w-5" />
-                          Règles d'exclusion
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <ul className="space-y-2">
-                          {scoringResult.exclusions.map((exclusion: string, index: number) => (
-                            <li key={index} className="flex items-start gap-2 text-red-700">
-                              <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                              <span className="text-sm">{exclusion}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </CardContent>
-                    </Card>
+                      </>
+                    ) : (
+                      "N/A"
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Garants</label>
+                  {hasGuarantor ? (
+                    <Badge className="bg-green-100 text-green-800 hover:bg-green-200">
+                      {rentalFile?.guarantors?.length || 1} garant(s)
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary">Sans garant</Badge>
                   )}
-                </>
-              ) : (
-                <Card>
-                  <CardContent className="flex items-center justify-center py-10">
-                    <div className="text-center">
-                      <BarChart3 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <h3 className="text-lg font-medium">Score en cours de calcul</h3>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Veuillez patienter pendant l'analyse de la candidature
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
+                </div>
+              </CardContent>
+            </Card>
 
-            <TabsContent value="documents" className="space-y-6">
+            {/* Message de candidature */}
+            {(application.message || application.presentation || rentalFile?.presentation_message) && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <FileText className="h-5 w-5" />
-                    Documents fournis
+                    Message de candidature
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-3 h-3 rounded-full ${application.documents_complete ? "bg-green-500" : "bg-red-500"}`}
-                        />
-                        <span>Dossier complet</span>
-                      </div>
-                      <Badge variant={application.documents_complete ? "default" : "destructive"}>
-                        {application.documents_complete ? "Oui" : "Non"}
-                      </Badge>
-                    </div>
-
-                    {application.rental_file_main_tenant && (
-                      <div className="bg-blue-50 p-4 rounded-lg">
-                        <h4 className="font-medium mb-2">Dossier de location disponible</h4>
-                        <p className="text-sm text-muted-foreground">
-                          Le candidat a complété son dossier de location sur la plateforme.
-                        </p>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="mt-2 bg-transparent"
-                          onClick={() => router.push(`/rental-files/${application.rental_file_id}/view`)}
-                        >
-                          <Eye className="h-4 w-4 mr-2" />
-                          Voir le dossier complet
-                        </Button>
-                      </div>
-                    )}
-                  </div>
+                  <p className="whitespace-pre-wrap">
+                    {rentalFile?.presentation_message || application.presentation || application.message}
+                  </p>
                 </CardContent>
               </Card>
-            </TabsContent>
+            )}
 
-            <TabsContent value="history" className="space-y-6">
+            {/* Informations sur les garants */}
+            {rentalFile?.guarantors && rentalFile.guarantors.length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Calendar className="h-5 w-5" />
-                    Historique de la candidature
+                    <Shield className="h-5 w-5" />
+                    Garants ({rentalFile.guarantors.length})
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    <div className="flex items-start gap-3">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full mt-2" />
-                      <div>
-                        <p className="font-medium">Candidature soumise</p>
-                        <p className="text-sm text-muted-foreground">{formatDate(application.created_at)}</p>
-                      </div>
-                    </div>
-
-                    {application.updated_at !== application.created_at && (
-                      <div className="flex items-start gap-3">
-                        <div className="w-2 h-2 bg-green-500 rounded-full mt-2" />
-                        <div>
-                          <p className="font-medium">Dernière mise à jour</p>
-                          <p className="text-sm text-muted-foreground">{formatDate(application.updated_at)}</p>
+                    {rentalFile.guarantors.map((guarantor: any, index: number) => (
+                      <div key={index} className="border rounded-lg p-4">
+                        <h4 className="font-medium mb-2">Garant {index + 1}</h4>
+                        <div className="grid gap-2 md:grid-cols-3">
+                          <div>
+                            <label className="text-sm font-medium text-muted-foreground">Type</label>
+                            <p>{guarantor.type === "physical" ? "Personne physique" : "Personne morale"}</p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-muted-foreground">Nom</label>
+                            <p>
+                              {guarantor.personal_info?.first_name} {guarantor.personal_info?.last_name}
+                            </p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-muted-foreground">Revenus</label>
+                            <p>{formatAmount(guarantor.personal_info?.income_sources?.work_income?.amount)}</p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-muted-foreground">Activité</label>
+                            <p>{guarantor.personal_info?.main_activity || "Non spécifié"}</p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-muted-foreground">Situation logement</label>
+                            <p>{guarantor.personal_info?.current_housing_situation || "Non spécifié"}</p>
+                          </div>
                         </div>
                       </div>
-                    )}
+                    ))}
                   </div>
                 </CardContent>
               </Card>
-            </TabsContent>
-          </Tabs>
-        </div>
+            )}
+          </TabsContent>
 
-        {/* Sidebar */}
-        <div className="space-y-6">
-          {/* Score rapide */}
-          {scoringResult && (
+          {/* Analyse financière */}
+          <TabsContent value="financial" className="space-y-6">
+            <MatchingScore application={application} property={property} size="lg" detailed={true} />
+          </TabsContent>
+
+          {/* Documents */}
+          <TabsContent value="documents" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Score de compatibilité</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Documents fournis
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <CircularScore
-                  score={scoringResult.totalScore}
-                  loading={scoringLoading}
-                  showDetails={true}
-                  breakdown={scoringResult.breakdown}
-                  recommendations={scoringResult.recommendations}
-                  warnings={scoringResult.warnings}
-                  compatible={scoringResult.compatible}
-                  modelUsed={scoringResult.model_used}
-                  size="lg"
-                />
+                {user && (
+                  <TenantAndGuarantorDocumentsSection
+                    applicationId={application.id}
+                    mainTenant={rentalFile?.main_tenant}
+                    guarantors={rentalFile?.guarantors || []}
+                    userId={user.id}
+                    userName={`${user.first_name} ${user.last_name}`}
+                    rentalFile={rentalFile}
+                  />
+                )}
               </CardContent>
             </Card>
-          )}
-
-          {/* Actions rapides */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Actions rapides</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Button
-                variant="outline"
-                className="w-full justify-start bg-transparent"
-                onClick={() => router.push(`/owner/messaging?tenant_id=${application.tenant_id}`)}
-              >
-                <MessageSquare className="h-4 w-4 mr-2" />
-                Contacter le candidat
-              </Button>
-
-              <Button
-                variant="outline"
-                className="w-full justify-start bg-transparent"
-                onClick={() => router.push(`/owner/properties/${property.id}`)}
-              >
-                <Building className="h-4 w-4 mr-2" />
-                Voir le bien
-              </Button>
-
-              {application.rental_file_id && (
-                <Button
-                  variant="outline"
-                  className="w-full justify-start bg-transparent"
-                  onClick={() => router.push(`/rental-files/${application.rental_file_id}/view`)}
-                >
-                  <FileText className="h-4 w-4 mr-2" />
-                  Dossier de location
-                </Button>
-              )}
-
-              <Button
-                variant="outline"
-                className="w-full justify-start bg-transparent"
-                onClick={() => calculateUnifiedScore(application, true)}
-                disabled={scoringLoading}
-              >
-                <RefreshCw className={`h-4 w-4 mr-2 ${scoringLoading ? "animate-spin" : ""}`} />
-                Recalculer le score
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Informations sur le modèle de scoring */}
-          {scoringPreferences && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Modèle de scoring</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <p className="font-medium">{scoringPreferences.name}</p>
-                  <p className="text-sm text-muted-foreground">{scoringPreferences.description}</p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full bg-transparent"
-                  onClick={() => router.push("/owner/scoring-preferences-simple")}
-                >
-                  <Settings className="h-4 w-4 mr-2" />
-                  Modifier les préférences
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+          </TabsContent>
+        </Tabs>
       </div>
-    </div>
+
+      {/* Dialogue de proposition de visite */}
+      {showVisitDialog && currentApplication && (
+        <VisitProposalManager
+          isOpen={showVisitDialog}
+          onClose={() => setShowVisitDialog(false)}
+          propertyId={currentApplication.property_id}
+          propertyTitle={currentApplication.property?.title || ""}
+          applicationId={currentApplication.id}
+          tenantName={`${currentApplication.tenant?.first_name || ""} ${currentApplication.tenant?.last_name || ""}`}
+          onSlotsProposed={async (slots) => {
+            await updateApplicationStatus("visit_proposed")
+            setShowVisitDialog(false)
+            toast.success("Créneaux de visite proposés avec succès")
+          }}
+        />
+      )}
+    </>
   )
+}
+
+function flattenDocuments(application: any): any[] {
+  if (!application) return []
+
+  const now = new Date().toISOString()
+  const docs: any[] = []
+
+  // Documents du locataire principal
+  if (application.documents) {
+    application.documents.forEach((doc: any) => {
+      docs.push({
+        document_id: doc.id || `doc-${docs.length}`,
+        label: doc.type || "Document",
+        file_url: doc.url,
+        category: doc.category || "other",
+        verified: doc.verified || false,
+        created_at: doc.created_at || now,
+        file_type: doc.file_type,
+      })
+    })
+  }
+
+  // Documents des garants
+  if (application.guarantors) {
+    application.guarantors.forEach((guarantor: any, index: number) => {
+      if (guarantor.documents) {
+        guarantor.documents.forEach((doc: any) => {
+          docs.push({
+            document_id: doc.id || `guarantor-${index}-doc-${docs.length}`,
+            label: `${doc.type || "Document"} (Garant ${index + 1})`,
+            file_url: doc.url,
+            category: doc.category || "other",
+            verified: doc.verified || false,
+            created_at: doc.created_at || now,
+            guarantor_id: guarantor.id || index.toString(),
+            guarantor_name: guarantor.name || `Garant ${index + 1}`,
+            file_type: doc.file_type,
+          })
+        })
+      }
+    })
+  }
+
+  return docs
 }
