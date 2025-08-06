@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Progress } from "@/components/ui/progress"
 import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
@@ -14,20 +15,8 @@ import { MatchingScore } from "@/components/matching-score"
 import { VisitProposalManager } from "@/components/visit-proposal-manager"
 import { TenantAndGuarantorDocumentsSection } from "@/components/TenantAndGuarantorDocumentsSection"
 import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
-import {
-  ArrowLeft,
-  User,
-  Briefcase,
-  Shield,
-  FileText,
-  MessageSquare,
-  CheckCircle,
-  XCircle,
-  Calendar,
-  Clock,
-  Building,
-  BarChart3,
-} from "lucide-react"
+import { ArrowLeft, User, Briefcase, Shield, FileText, MessageSquare, CheckCircle, XCircle, Calendar, Clock, Building, BarChart3, AlertTriangle, TrendingUp, DollarSign, Users, CreditCard, AlertCircle } from 'lucide-react'
+import { CircularScore } from "@/components/circular-score"
 
 export default function ApplicationDetailsPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -41,6 +30,8 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const [showRefuseDialog, setShowRefuseDialog] = useState(false)
   const [documents, setDocuments] = useState<any[]>([])
   const [scoringResult, setScoringResult] = useState<any>(null)
+  const [scoringPreferences, setScoringPreferences] = useState<any>(null)
+  const [matchScore, setMatchScore] = useState<number>(0)
 
   useEffect(() => {
     checkAuthAndLoadData()
@@ -108,21 +99,10 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                 main_tenant: rentalFile.main_tenant?.first_name + " " + rentalFile.main_tenant?.last_name,
                 income: rentalFile.main_tenant?.income_sources?.work_income?.amount,
                 guarantors_count: rentalFile.guarantors?.length || 0,
+                completion_percentage: rentalFile.completion_percentage,
               })
 
               setRentalFile(rentalFile)
-
-              // Enrichir l'application avec les données du dossier de location
-              let income = 0
-              if (rentalFile.main_tenant?.income_sources?.work_income?.amount) {
-                income = rentalFile.main_tenant.income_sources.work_income.amount
-              } else if (rentalFile.main_tenant?.income_sources?.work_income?.monthly_amount) {
-                income = rentalFile.main_tenant.income_sources.work_income.monthly_amount
-              } else if (rentalFile.main_tenant?.monthly_income) {
-                income = rentalFile.main_tenant.monthly_income
-              } else if (data.application.income) {
-                income = data.application.income
-              }
 
               // Mettre à jour l'application avec les données enrichies
               setApplication((prev) => ({
@@ -133,6 +113,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                 profession: rentalFile.main_tenant?.profession || prev.profession || "Non spécifié",
                 company: rentalFile.main_tenant?.company || prev.company || "Non spécifié",
                 contract_type: rentalFile.main_tenant?.main_activity || prev.contract_type || "Non spécifié",
+                documents_complete: rentalFile.completion_percentage >= 80, // Utiliser completion_percentage
               }))
 
               // Calculer le score avec le service unifié
@@ -163,7 +144,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
         has_guarantor: (rentalFile?.guarantors && rentalFile.guarantors.length > 0) || app.has_guarantor,
         guarantor_income: rentalFile?.guarantors?.[0]?.personal_info?.income_sources?.work_income?.amount || 0,
         contract_type: rentalFile?.main_tenant?.main_activity || app.contract_type,
-        documents_complete: app.documents_complete,
+        documents_complete: rentalFile?.completion_percentage >= 80 || app.documents_complete,
         has_verified_documents: rentalFile?.has_verified_documents || false,
       }
 
@@ -348,6 +329,29 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
     }
   }
 
+  // Calculer les revenus totaux (locataire + colocataires)
+  const calculateTotalIncome = () => {
+    let totalIncome = 0
+    
+    // Revenus du locataire principal
+    if (rentalFile?.main_tenant?.income_sources?.work_income?.amount) {
+      totalIncome += rentalFile.main_tenant.income_sources.work_income.amount
+    } else if (application?.income) {
+      totalIncome += application.income
+    }
+
+    // Revenus des colocataires
+    if (rentalFile?.cotenants && rentalFile.cotenants.length > 0) {
+      rentalFile.cotenants.forEach((cotenant: any) => {
+        if (cotenant.income_sources?.work_income?.amount) {
+          totalIncome += cotenant.income_sources.work_income.amount
+        }
+      })
+    }
+
+    return totalIncome
+  }
+
   const getStatusBadge = () => {
     if (!application) return null
 
@@ -504,6 +508,9 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
     }
   }
 
+  // Calculer les revenus totaux (locataire + colocataires)
+  
+
   if (loading) {
     return (
       <div className="container mx-auto py-6 space-y-6">
@@ -541,16 +548,8 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const mainTenant = rentalFile?.main_tenant || {}
 
   // Récupérer les revenus avec plusieurs sources possibles
-  let income = 0
-  if (mainTenant.income_sources?.work_income?.amount) {
-    income = mainTenant.income_sources.work_income.amount
-  } else if (mainTenant.income_sources?.work_income?.monthly_amount) {
-    income = mainTenant.income_sources.work_income.monthly_amount
-  } else if (mainTenant.monthly_income) {
-    income = mainTenant.monthly_income
-  } else if (application.income) {
-    income = application.income
-  }
+  const totalIncome = calculateTotalIncome()
+  const mainTenantIncome = rentalFile?.main_tenant?.income_sources?.work_income?.amount || application.income || 0
 
   const hasGuarantor =
     (rentalFile?.guarantors && rentalFile.guarantors.length > 0) || application.has_guarantor || false
@@ -558,7 +557,11 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const company = mainTenant.company || application.company || "Non spécifié"
   const contractType = mainTenant.main_activity || application.contract_type || "Non spécifié"
 
-  const rentRatio = income && property.price ? (income / property.price).toFixed(1) : "N/A"
+  const rentRatio = totalIncome && property.price ? (totalIncome / property.price).toFixed(1) : "N/A"
+
+  // Statut du dossier basé sur completion_percentage
+  const completionPercentage = rentalFile?.completion_percentage || 0
+  const isComplete = completionPercentage >= 80
 
   return (
     <>
@@ -630,6 +633,25 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                     <label className="text-sm font-medium text-muted-foreground">Date de candidature</label>
                     <p>{formatDate(application.created_at)}</p>
                   </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Statut du dossier</label>
+                    <div className="flex items-center gap-2">
+                      {isComplete ? (
+                        <Badge className="bg-green-100 text-green-800 hover:bg-green-200">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Complet ({completionPercentage}%)
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-200">
+                          <AlertTriangle className="h-3 w-3 mr-1" />
+                          Incomplet ({completionPercentage}%)
+                        </Badge>
+                      )}
+                    </div>
+                    {!isComplete && (
+                      <Progress value={completionPercentage} className="mt-2" />
+                    )}
+                  </div>
                 </CardContent>
               </Card>
 
@@ -685,27 +707,39 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Revenus mensuels</label>
-                  <p className="text-lg font-semibold text-green-600">{formatAmount(income)}</p>
+                  <p className="text-lg font-semibold text-green-600">{formatAmount(calculateTotalIncome())}</p>
+                  {rentalFile?.cotenants && rentalFile.cotenants.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Incluant {rentalFile.cotenants.length} colocataire(s)
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Ratio revenus/loyer</label>
                   <p className="text-lg font-semibold">
-                    {rentRatio !== "N/A" ? (
-                      <>
-                        {rentRatio}x
-                        {Number(rentRatio) >= 3 ? (
-                          <Badge className="ml-2 bg-green-100 text-green-800 hover:bg-green-200">Excellent</Badge>
-                        ) : Number(rentRatio) >= 2.5 ? (
-                          <Badge className="ml-2 bg-green-100 text-green-800 hover:bg-green-200">Bon</Badge>
-                        ) : Number(rentRatio) >= 2 ? (
-                          <Badge className="ml-2 bg-amber-100 text-amber-800 hover:bg-amber-200">Acceptable</Badge>
-                        ) : (
-                          <Badge className="ml-2 bg-red-100 text-red-800 hover:bg-red-200">Insuffisant</Badge>
-                        )}
-                      </>
-                    ) : (
-                      "N/A"
-                    )}
+                    {(() => {
+                      const totalIncome = calculateTotalIncome()
+                      const ratio = totalIncome && property.price ? (totalIncome / property.price).toFixed(1) : "N/A"
+                      
+                      if (ratio !== "N/A") {
+                        return (
+                          <>
+                            {ratio}x
+                            {Number(ratio) >= 3 ? (
+                              <Badge className="ml-2 bg-green-100 text-green-800 hover:bg-green-200">Excellent</Badge>
+                            ) : Number(ratio) >= 2.5 ? (
+                              <Badge className="ml-2 bg-green-100 text-green-800 hover:bg-green-200">Bon</Badge>
+                            ) : Number(ratio) >= 2 ? (
+                              <Badge className="ml-2 bg-amber-100 text-amber-800 hover:bg-amber-200">Acceptable</Badge>
+                            ) : (
+                              <Badge className="ml-2 bg-red-100 text-red-800 hover:bg-red-200">Insuffisant</Badge>
+                            )}
+                          </>
+                        )
+                      } else {
+                        return "N/A"
+                      }
+                    })()}
                   </p>
                 </div>
                 <div>
@@ -786,30 +820,438 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
 
           {/* Analyse financière */}
           <TabsContent value="financial" className="space-y-6">
-            {scoringResult ? (
-              <MatchingScore
-                application={application}
-                property={property}
-                size="lg"
-                detailed={true}
-                score={scoringResult.totalScore}
-                breakdown={scoringResult.breakdown}
-                recommendations={scoringResult.recommendations}
-                warnings={scoringResult.warnings}
-                compatible={scoringResult.compatible}
-                modelUsed={scoringResult.model_used}
-              />
-            ) : (
-              <Card>
-                <CardContent className="flex items-center justify-center py-10">
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-sm text-muted-foreground">Calcul du score en cours...</p>
+  <div className="grid gap-6 md:grid-cols-2">
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <CreditCard className="h-5 w-5" />
+          Revenus et charges
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <div className="flex justify-between">
+            <span className="text-sm text-muted-foreground">Revenus du locataire principal</span>
+            <span className="font-medium">{formatAmount(rentalFile?.main_tenant?.income_sources?.work_income?.amount || application.income)}</span>
+          </div>
+          
+          {rentalFile?.cotenants && rentalFile.cotenants.length > 0 && (
+            <>
+              {rentalFile.cotenants.map((cotenant: any, index: number) => (
+                <div key={index} className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Revenus {cotenant.first_name} {cotenant.last_name}
+                  </span>
+                  <span className="font-medium">{formatAmount(cotenant.income_sources?.work_income?.amount || 0)}</span>
+                </div>
+              ))}
+              <div className="flex justify-between pt-2 border-t">
+                <span className="text-sm font-medium text-muted-foreground">Total des revenus</span>
+                <span className="font-bold text-green-600">{formatAmount(calculateTotalIncome())}</span>
+              </div>
+            </>
+          )}
+          
+          <div className="flex justify-between">
+            <span className="text-sm text-muted-foreground">Loyer proposé</span>
+            <span className="font-medium">{formatAmount(property.price)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-sm text-muted-foreground">Charges estimées</span>
+            <span className="font-medium">{formatAmount(property.charges || 0)}</span>
+          </div>
+          <div className="flex justify-between pt-2 border-t">
+            <span className="font-medium">Ratio revenus/loyer</span>
+            <span className="font-bold">{(() => {
+              const totalIncome = calculateTotalIncome()
+              return totalIncome && property.price ? `${(totalIncome / property.price).toFixed(1)}x` : "N/A"
+            })()}</span>
+          </div>
+        </div>
+
+        <div className="pt-4">
+          <h4 className="font-medium mb-2">Analyse du ratio</h4>
+          {(() => {
+            const totalIncome = calculateTotalIncome()
+            const ratio = totalIncome && property.price ? totalIncome / property.price : 0
+            
+            if (ratio >= 3) {
+              return (
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-green-700">Excellent ratio (≥ 3)</p>
+                    <p className="text-sm text-muted-foreground">
+                      Le candidat dispose de revenus largement suffisants pour assumer le loyer.
+                    </p>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              )
+            } else if (ratio >= 2.5) {
+              return (
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-green-700">Bon ratio (≥ 2.5)</p>
+                    <p className="text-sm text-muted-foreground">
+                      Le candidat dispose de revenus confortables par rapport au loyer demandé.
+                    </p>
+                  </div>
+                </div>
+              )
+            } else if (ratio >= 2) {
+              return (
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-amber-700">Ratio acceptable (≥ 2)</p>
+                    <p className="text-sm text-muted-foreground">
+                      Le candidat dispose de revenus suffisants mais sa marge financière est limitée.
+                    </p>
+                  </div>
+                </div>
+              )
+            } else if (ratio > 0) {
+              return (
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-red-700">Ratio insuffisant ({"<"} 2)</p>
+                    <p className="text-sm text-muted-foreground">
+                      Le candidat risque d'avoir des difficultés à assumer le loyer sur la durée.
+                    </p>
+                  </div>
+                </div>
+              )
+            } else {
+              return (
+                <p className="text-sm text-muted-foreground">
+                  Impossible de calculer le ratio (revenus ou loyer non spécifiés).
+                </p>
+              )
+            }
+          })()}
+        </div>
+      </CardContent>
+    </Card>
+
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Shield className="h-5 w-5" />
+          Stabilité financière
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <div className="flex justify-between">
+            <span className="text-sm text-muted-foreground">Type de contrat</span>
+            <span className="font-medium">{contractType}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-sm text-muted-foreground">Ancienneté professionnelle</span>
+            <span className="font-medium">{mainTenant.professional_info?.seniority || "Non spécifié"}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-sm text-muted-foreground">Période d'essai</span>
+            <span className="font-medium">{mainTenant.professional_info?.trial_period ? "Oui" : "Non"}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-sm text-muted-foreground">Complétude du dossier</span>
+            <span className="font-medium">
+              {rentalFile?.completion_percentage ? `${rentalFile.completion_percentage}%` : "Non évalué"}
+              {rentalFile?.completion_percentage >= 80 ? (
+                <Badge className="ml-2 bg-green-100 text-green-800 hover:bg-green-200">Complet</Badge>
+              ) : (
+                <Badge variant="secondary" className="ml-2 bg-amber-100 text-amber-800 hover:bg-amber-200">Incomplet</Badge>
+              )}
+            </span>
+          </div>
+        </div>
+
+        <div className="pt-4">
+          <h4 className="font-medium mb-2">Analyse de la stabilité</h4>
+          <div className="space-y-2">
+            {contractType?.toLowerCase() === "cdi" ? (
+              <div className="flex items-start gap-2">
+                <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+                <div>
+                  <p className="font-medium text-green-700">Contrat stable (CDI)</p>
+                  <p className="text-sm text-muted-foreground">
+                    Le candidat bénéficie d'une stabilité professionnelle optimale.
+                  </p>
+                </div>
+              </div>
+            ) : contractType?.toLowerCase() === "cdd" ? (
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
+                <div>
+                  <p className="font-medium text-amber-700">Contrat à durée déterminée (CDD)</p>
+                  <p className="text-sm text-muted-foreground">
+                    Stabilité limitée dans le temps. Vérifier la durée restante du contrat.
+                  </p>
+                </div>
+              </div>
+            ) : contractType?.toLowerCase() === "freelance" ||
+              contractType?.toLowerCase() === "indépendant" ? (
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
+                <div>
+                  <p className="font-medium text-amber-700">Travailleur indépendant</p>
+                  <p className="text-sm text-muted-foreground">
+                    Revenus potentiellement variables. Vérifier l'historique des revenus.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
+                <div>
+                  <p className="font-medium text-red-700">Situation à clarifier</p>
+                  <p className="text-sm text-muted-foreground">
+                    Le type de contrat n'est pas clairement identifié ou présente des risques
+                  </p>
+                </div>
+              </div>
             )}
-          </TabsContent>
+
+            {mainTenant.professional_info?.trial_period && (
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
+                <div>
+                  <p className="font-medium text-red-700">Période d'essai en cours</p>
+                  <p className="text-sm text-muted-foreground">
+                    Le candidat est encore en période d'essai, ce qui représente un risque.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  </div>
+
+  <Card>
+    <CardHeader>
+      <CardTitle className="flex items-center gap-2">
+        <Shield className="h-5 w-5" />
+        Garanties
+      </CardTitle>
+    </CardHeader>
+    <CardContent>
+      {hasGuarantor ? (
+        <div className="space-y-4">
+          <div className="flex items-start gap-2">
+            <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+            <div>
+              <p className="font-medium text-green-700">
+                {rentalFile?.guarantors?.length || 1} garant(s) disponible(s)
+              </p>
+              <p className="text-sm text-muted-foreground">
+                La présence de garant(s) renforce considérablement la sécurité financière du dossier.
+              </p>
+            </div>
+          </div>
+
+          {rentalFile?.guarantors?.map((guarantor: any, index: number) => {
+            const guarantorIncome = guarantor.personal_info?.income_sources?.work_income?.amount || 0
+            const guarantorRatio =
+              guarantorIncome && property.price ? (guarantorIncome / property.price).toFixed(1) : "N/A"
+
+            return (
+              <div key={index} className="border rounded-lg p-4">
+                <h4 className="font-medium mb-2">Garant {index + 1}</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Revenus mensuels</span>
+                    <span className="font-medium">{formatAmount(guarantorIncome)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Ratio revenus/loyer</span>
+                    <span className="font-medium">
+                      {guarantorRatio !== "N/A" ? `${guarantorRatio}x` : "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Type de contrat</span>
+                    <span className="font-medium">
+                      {guarantor.personal_info?.main_activity || "Non spécifié"}
+                    </span>
+                  </div>
+                </div>
+
+                {guarantorRatio !== "N/A" && (
+                  <div className="mt-2 pt-2 border-t">
+                    {Number(guarantorRatio) >= 3 ? (
+                      <Badge className="bg-green-100 text-green-800">Excellent garant</Badge>
+                    ) : Number(guarantorRatio) >= 2 ? (
+                      <Badge className="bg-green-100 text-green-800">Bon garant</Badge>
+                    ) : (
+                      <Badge className="bg-amber-100 text-amber-800">Garant limité</Badge>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
+          <div>
+            <p className="font-medium text-red-700">Aucun garant</p>
+            <p className="text-sm text-muted-foreground">
+              L'absence de garant augmente le risque financier, surtout si le ratio revenus/loyer est faible.
+            </p>
+          </div>
+        </div>
+      )}
+    </CardContent>
+  </Card>
+
+  <Card>
+    <CardHeader>
+      <CardTitle className="flex items-center gap-2">
+        <BarChart3 className="h-5 w-5" />
+        Synthèse et recommandation
+      </CardTitle>
+    </CardHeader>
+    <CardContent>
+      <div className="space-y-4">
+        <div className="flex items-center gap-4">
+          <CircularScore score={matchScore} size="md" customPreferences={scoringPreferences} />
+          <div>
+            <h3 className="font-medium">Score global: {matchScore}/100</h3>
+            <p className="text-sm text-muted-foreground">
+              Évaluation basée sur {scoringPreferences?.name || "le modèle standard"}
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <h4 className="font-medium">Points forts</h4>
+          <ul className="space-y-1">
+            {(() => {
+              const totalIncome = calculateTotalIncome()
+              const ratio = totalIncome && property.price ? totalIncome / property.price : 0
+              return ratio >= 2.5 && (
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  <span>Ratio revenus/loyer favorable ({ratio.toFixed(1)}x)</span>
+                </li>
+              )
+            })()}
+            {contractType?.toLowerCase() === "cdi" && (
+              <li className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <span>Stabilité professionnelle (CDI)</span>
+              </li>
+            )}
+            {hasGuarantor && (
+              <li className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <span>Présence de {rentalFile?.guarantors?.length || 1} garant(s)</span>
+              </li>
+            )}
+            {rentalFile?.completion_percentage >= 80 && (
+              <li className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <span>Dossier complet ({rentalFile.completion_percentage}%)</span>
+              </li>
+            )}
+            {rentalFile?.cotenants && rentalFile.cotenants.length > 0 && (
+              <li className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <span>Revenus multiples ({rentalFile.cotenants.length + 1} personnes)</span>
+              </li>
+            )}
+          </ul>
+        </div>
+
+        <div className="space-y-2">
+          <h4 className="font-medium">Points d'attention</h4>
+          <ul className="space-y-1">
+            {(() => {
+              const totalIncome = calculateTotalIncome()
+              const ratio = totalIncome && property.price ? totalIncome / property.price : 0
+              return ratio < 2.5 && ratio > 0 && (
+                <li className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-amber-500" />
+                  <span>Ratio revenus/loyer limité ({ratio.toFixed(1)}x)</span>
+                </li>
+              )
+            })()}
+            {contractType?.toLowerCase() !== "cdi" && (
+              <li className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-amber-500" />
+                <span>Type de contrat: {contractType}</span>
+              </li>
+            )}
+            {!hasGuarantor && (
+              <li className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-amber-500" />
+                <span>Absence de garant</span>
+              </li>
+            )}
+            {rentalFile?.completion_percentage < 80 && (
+              <li className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-amber-500" />
+                <span>Dossier incomplet ({rentalFile?.completion_percentage || 0}%)</span>
+              </li>
+            )}
+          </ul>
+        </div>
+
+        <div className="pt-4 border-t">
+          <h4 className="font-medium mb-2">Recommandation</h4>
+          {matchScore >= 80 ? (
+            <div className="flex items-start gap-2">
+              <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+              <div>
+                <p className="font-medium text-green-700">Dossier solide</p>
+                <p className="text-sm text-muted-foreground">
+                  Ce dossier présente d'excellentes garanties financières. Candidature à privilégier.
+                </p>
+              </div>
+            </div>
+          ) : matchScore >= 60 ? (
+            <div className="flex items-start gap-2">
+              <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+              <div>
+                <p className="font-medium text-green-700">Dossier satisfaisant</p>
+                <p className="text-sm text-muted-foreground">
+                  Ce dossier présente des garanties financières satisfaisantes. Candidature recommandée.
+                </p>
+              </div>
+            </div>
+          ) : matchScore >= 40 ? (
+            <div className="flex items-start gap-2">
+              <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
+              <div>
+                <p className="font-medium text-amber-700">Dossier à surveiller</p>
+                <p className="text-sm text-muted-foreground">
+                  Ce dossier présente quelques fragilités. Une garantie complémentaire pourrait être demandée.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
+              <div>
+                <p className="font-medium text-red-700">Dossier fragile</p>
+                <p className="text-sm text-muted-foreground">
+                  Ce dossier présente des risques financiers importants. Candidature à considérer avec
+                  prudence.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </CardContent>
+  </Card>
+</TabsContent>
 
           {/* Documents */}
           <TabsContent value="documents" className="space-y-6">
