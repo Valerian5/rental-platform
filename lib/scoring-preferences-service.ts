@@ -1,4 +1,4 @@
-import { createServerClient } from "@/lib/supabase-server"
+import { createServerClient } from "@/lib/supabase"
 
 // Cache simple pour les préférences
 const preferencesCache = new Map<string, { data: any; timestamp: number }>()
