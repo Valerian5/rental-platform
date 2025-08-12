@@ -1,4 +1,4 @@
-import { createServerClient } from "@/lib/supabase"
+import { createServerClient } from "@/lib/supabase-server"
 
 // Cache simple pour les préférences
 const preferencesCache = new Map<string, { data: any; timestamp: number }>()
@@ -197,8 +197,14 @@ export const scoringPreferencesService = {
       const exclusions = this.checkExclusionRules(application, property, preferences)
       result.exclusions = exclusions
 
-      // Déterminer la compatibilité
-      result.compatible = exclusions.length === 0 && result.totalScore >= 60
+      // Si le profil professionnel est exclu, score total = 0
+      if (!professionalStability.compatible) {
+        result.totalScore = 0
+        result.compatible = false
+      } else {
+        // Déterminer la compatibilité
+        result.compatible = exclusions.length === 0 && result.totalScore >= 60
+      }
 
       // Générer recommandations et avertissements
       result.recommendations = this.generateRecommendations(result.breakdown, preferences)
@@ -266,8 +272,14 @@ export const scoringPreferencesService = {
       const exclusions = this.checkExclusionRules(application, property, preferences)
       result.exclusions = exclusions
 
-      // Déterminer la compatibilité
-      result.compatible = exclusions.length === 0 && result.totalScore >= 60
+      // Si le profil professionnel est exclu, score total = 0
+      if (!professionalStability.compatible) {
+        result.totalScore = 0
+        result.compatible = false
+      } else {
+        // Déterminer la compatibilité
+        result.compatible = exclusions.length === 0 && result.totalScore >= 60
+      }
 
       // Générer recommandations et avertissements
       result.recommendations = this.generateRecommendations(result.breakdown, preferences)
@@ -372,7 +384,7 @@ export const scoringPreferencesService = {
     }
 
     let score = 0
-    let compatible = true
+    const compatible = true
 
     // Déterminer le type de contrat
     let contractKey = "unemployed"
@@ -393,12 +405,18 @@ export const scoringPreferencesService = {
     }
 
     const baseScore = contractScoring[contractKey] || 0
-    score = Math.round((baseScore / 20) * maxScore)
 
+    // Si le score de base est 0, le profil est exclu
     if (baseScore === 0) {
-      compatible = false
-      score = 0 // Force le score à 0 pour les contrats exclus
+      return {
+        score: 0,
+        max: maxScore,
+        compatible: false,
+        details: `${contractType.toUpperCase()} - PROFIL EXCLU`,
+      }
     }
+
+    score = Math.round((baseScore / 20) * maxScore)
 
     // Bonus/malus selon l'ancienneté
     const seniority = application.seniority_months || 0

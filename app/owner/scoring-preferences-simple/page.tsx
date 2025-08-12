@@ -92,6 +92,20 @@ const PERSONAS = {
     presentation: "Présentation basique",
     color: "text-orange-600",
   },
+  unemployed: {
+    name: "Sans emploi",
+    icon: AlertCircle,
+    age: 30,
+    income: 1200,
+    contract: "Sans emploi",
+    profession: "En recherche",
+    guarantor: true,
+    guarantor_income: 4000,
+    complete_file: true,
+    verified_docs: false,
+    presentation: "Présentation avec garants",
+    color: "text-red-600",
+  },
 }
 
 export default function ScoringPreferencesSimplePage() {
@@ -319,6 +333,8 @@ export default function ScoringPreferencesSimplePage() {
       const preferences = await scoringPreferencesService.getOwnerPreferences(ownerId, false) // Ne pas utiliser le cache
       setCurrentUserPreference(preferences)
 
+      console.log("🔄 Préférences chargées:", preferences)
+
       // Charger les critères dans l'assistant
       if (preferences && preferences.criteria) {
         // Mapper les critères de la base vers l'interface
@@ -331,7 +347,7 @@ export default function ScoringPreferencesSimplePage() {
               acceptable: 2.5,
               minimum: 2.0,
             },
-            per_person_check: preferences.criteria.income_ratio?.per_person_check || true,
+            per_person_check: preferences.criteria.income_ratio?.per_person_check !== false,
             use_guarantor_income_for_students:
               preferences.criteria.income_ratio?.use_guarantor_income_for_students || false,
           },
@@ -339,7 +355,7 @@ export default function ScoringPreferencesSimplePage() {
             weight: preferences.criteria.guarantor?.weight || 17,
             required_if_income_below: preferences.criteria.guarantor?.required_if_income_below || 3.0,
             minimum_income_ratio: preferences.criteria.guarantor?.minimum_income_ratio || 3.0,
-            verification_required: preferences.criteria.guarantor?.verification_required || true,
+            verification_required: preferences.criteria.guarantor?.verification_required !== false,
             use_guarantor_income_for_students:
               preferences.criteria.guarantor?.use_guarantor_income_for_students || false,
           },
@@ -348,26 +364,32 @@ export default function ScoringPreferencesSimplePage() {
             contract_preferences: mapContractScoringToPreferences(
               preferences.criteria.professional_stability?.contract_scoring,
             ),
-            seniority_bonus: preferences.criteria.professional_stability?.seniority_bonus?.enabled || true,
+            seniority_bonus: preferences.criteria.professional_stability?.seniority_bonus?.enabled !== false,
             trial_period_penalty: (preferences.criteria.professional_stability?.trial_period_penalty || 0) > 0,
           },
           file_quality: {
             weight: preferences.criteria.file_quality?.weight || 16,
-            complete_documents_required: preferences.criteria.file_quality?.complete_documents_required || true,
+            complete_documents_required: preferences.criteria.file_quality?.complete_documents_required !== false,
             verified_documents_required: preferences.criteria.file_quality?.verified_documents_required || false,
             presentation_important: (preferences.criteria.file_quality?.presentation_quality_weight || 0) > 3,
           },
           property_coherence: {
             weight: preferences.criteria.property_coherence?.weight || 16,
-            household_size_check: preferences.criteria.property_coherence?.household_size_vs_property || true,
-            colocation_structure_check: preferences.criteria.property_coherence?.colocation_structure_check || true,
+            household_size_check: preferences.criteria.property_coherence?.household_size_vs_property !== false,
+            colocation_structure_check: preferences.criteria.property_coherence?.colocation_structure_check !== false,
             location_relevance: preferences.criteria.property_coherence?.location_relevance_check || false,
           },
           income_distribution: {
             weight: preferences.criteria.income_distribution?.weight || 16,
-            balance_required: preferences.criteria.income_distribution?.balance_check || true,
-            compensation_allowed: preferences.criteria.income_distribution?.compensation_allowed || true,
+            balance_required: preferences.criteria.income_distribution?.balance_check !== false,
+            compensation_allowed: preferences.criteria.income_distribution?.compensation_allowed !== false,
           },
+        })
+
+        console.log("🔄 Critères mappés:", {
+          contract_preferences: mapContractScoringToPreferences(
+            preferences.criteria.professional_stability?.contract_scoring,
+          ),
         })
       }
 
@@ -415,17 +437,20 @@ export default function ScoringPreferencesSimplePage() {
       return "with_guarantor"
     }
 
-    return {
+    const result = {
       cdi_confirmed: mapScoreToPreference(contractScoring.cdi_confirmed || 20),
       cdi_trial: mapScoreToPreference(contractScoring.cdi_trial || 15),
       cdd_long: mapScoreToPreference(contractScoring.cdd_long || 14),
       cdd_short: mapScoreToPreference(contractScoring.cdd_short || 10),
       freelance: mapScoreToPreference(contractScoring.freelance || 8),
       student: mapScoreToPreference(contractScoring.student || 6),
-      unemployed: "excluded",
+      unemployed: "excluded", // Toujours exclu
       retired: mapScoreToPreference(contractScoring.retired || 15),
       civil_servant: mapScoreToPreference(contractScoring.civil_servant || 20),
     }
+
+    console.log("🔄 Mapping contract scoring:", contractScoring, "->", result)
+    return result
   }
 
   // Mapper les préférences d'interface vers les scores de contrat
@@ -447,17 +472,20 @@ export default function ScoringPreferencesSimplePage() {
       }
     }
 
-    return {
+    const result = {
       cdi_confirmed: mapPreferenceToScore(preferences.cdi_confirmed),
       cdi_trial: mapPreferenceToScore(preferences.cdi_trial),
       cdd_long: mapPreferenceToScore(preferences.cdd_long),
       cdd_short: mapPreferenceToScore(preferences.cdd_short),
       freelance: mapPreferenceToScore(preferences.freelance),
       student: mapPreferenceToScore(preferences.student),
-      unemployed: 0,
+      unemployed: 0, // Toujours exclu
       retired: mapPreferenceToScore(preferences.retired),
       civil_servant: mapPreferenceToScore(preferences.civil_servant),
     }
+
+    console.log("🔄 Mapping preferences to scoring:", preferences, "->", result)
+    return result
   }
 
   const handleUseSystemPreference = async (systemPreferenceId: string) => {
@@ -760,6 +788,7 @@ export default function ScoringPreferencesSimplePage() {
       }
 
       const result = scoringPreferencesService.calculateCustomScore(applicationData, propertyData, preferencesToUse)
+      console.log("🎯 Score calculé pour", persona.name, ":", result.totalScore, result)
       return result.totalScore
     } catch (error) {
       console.error("Erreur calcul score persona:", error)
@@ -1670,6 +1699,7 @@ export default function ScoringPreferencesSimplePage() {
                   <div className="text-center">
                     <CircularScore score={simulatorScore} size="lg" />
                     <p className="text-sm text-muted-foreground mt-2">Score avec vos critères actuels</p>
+                    {simulatorScore === 0 && <p className="text-sm text-red-600 mt-1 font-medium">⚠️ Profil exclu</p>}
                   </div>
 
                   <div className="text-xs text-muted-foreground">
