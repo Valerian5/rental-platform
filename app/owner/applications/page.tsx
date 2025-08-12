@@ -130,14 +130,18 @@ export default function ApplicationsPage() {
                     enrichedApp,
                     app.property,
                     app.property.owner_id,
-                    true,
+                    true, // Utiliser le cache pour les performances
                   )
                   enrichedApp.match_score = result.totalScore
                   enrichedApp.scoring_compatible = result.compatible
+                  enrichedApp.scoring_breakdown = result.breakdown
+                  enrichedApp.scoring_model_used = result.model_used
                 } catch (error) {
                   console.error("Erreur calcul score pour candidature:", app.id, error)
                   enrichedApp.match_score = 50
                   enrichedApp.scoring_compatible = false
+                  enrichedApp.scoring_breakdown = {}
+                  enrichedApp.scoring_model_used = "Erreur"
                 }
               }
 

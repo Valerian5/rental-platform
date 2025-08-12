@@ -14,6 +14,7 @@ import { PageHeader } from "@/components/page-header"
 import { VisitProposalManager } from "@/components/visit-proposal-manager"
 import { TenantAndGuarantorDocumentsSection } from "@/components/TenantAndGuarantorDocumentsSection"
 import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
+import { CircularScore } from "@/components/circular-score"
 import {
   ArrowLeft,
   User,
@@ -30,6 +31,8 @@ import {
   AlertTriangle,
   CreditCard,
   AlertCircle,
+  Settings,
+  TrendingUp,
 } from "lucide-react"
 
 export default function ApplicationDetailsPage({ params }: { params: { id: string } }) {
@@ -68,7 +71,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       }
 
       setUser(currentUser)
-      await loadApplicationDetails()
+      await Promise.all([loadApplicationDetails(currentUser.id), loadScoringPreferences(currentUser.id)])
     } catch (error) {
       console.error("Erreur auth:", error)
       toast.error("Erreur d'authentification")
@@ -77,7 +80,16 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
     }
   }
 
-  const loadApplicationDetails = async () => {
+  const loadScoringPreferences = async (ownerId: string) => {
+    try {
+      const preferences = await scoringPreferencesService.getOwnerPreferences(ownerId, true)
+      setScoringPreferences(preferences)
+    } catch (error) {
+      console.error("Erreur chargement préférences scoring:", error)
+    }
+  }
+
+  const loadApplicationDetails = async (ownerId: string) => {
     try {
       console.log("🔍 Chargement détails candidature:", params.id)
 
@@ -148,10 +160,11 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                 company: rentalFile.main_tenant?.company || prev.company || "Non spécifié",
                 contract_type: rentalFile.main_tenant?.main_activity || prev.contract_type || "Non spécifié",
                 documents_complete: rentalFile.completion_percentage >= 80, // Utiliser completion_percentage
+                guarantor_income: rentalFile.guarantors?.[0]?.personal_info?.income_sources?.work_income?.amount || 0,
               }))
 
               // Calculer le score avec le service unifié
-              await recalculateScore(data.application, rentalFile, enrichedIncome)
+              await recalculateScore(data.application, rentalFile, enrichedIncome, ownerId)
             }
           }
         } catch (error) {
@@ -159,7 +172,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
         }
       } else {
         // Calculer le score même sans dossier de location
-        await recalculateScore(data.application, null, data.application.income || 0)
+        await recalculateScore(data.application, null, data.application.income || 0, ownerId)
       }
     } catch (error) {
       console.error("Erreur:", error)
@@ -167,7 +180,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
     }
   }
 
-  const recalculateScore = async (app: any, rentalFile?: any, totalIncome?: number) => {
+  const recalculateScore = async (app: any, rentalFile?: any, totalIncome?: number, ownerId?: string) => {
     if (!app || !app.property || !app.property.owner_id) return
 
     try {
@@ -179,17 +192,21 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
         ...app,
         income: finalIncome, // Utiliser les revenus totaux
         has_guarantor: (rentalFile?.guarantors && rentalFile.guarantors.length > 0) || app.has_guarantor,
-        guarantor_income: rentalFile?.guarantors?.[0]?.personal_info?.income_sources?.work_income?.amount || 0,
+        guarantor_income:
+          rentalFile?.guarantors?.[0]?.personal_info?.income_sources?.work_income?.amount || app.guarantor_income || 0,
         contract_type: rentalFile?.main_tenant?.main_activity || app.contract_type,
         documents_complete: rentalFile?.completion_percentage >= 80 || app.documents_complete,
         has_verified_documents: rentalFile?.has_verified_documents || false,
+        profession: rentalFile?.main_tenant?.profession || app.profession,
+        company: rentalFile?.main_tenant?.company || app.company,
+        completion_percentage: rentalFile?.completion_percentage || 0,
       }
 
       const result = await scoringPreferencesService.calculateScore(
         enrichedApp,
         app.property,
-        app.property.owner_id,
-        true,
+        ownerId || app.property.owner_id,
+        false, // Ne pas utiliser le cache pour avoir le score le plus récent
       )
       setScoringResult(result)
       console.log("📊 Score calculé pour détail:", result.totalScore)
@@ -269,7 +286,9 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       toast.success(data.message || "Créneaux de visite proposés avec succès")
       setShowVisitDialog(false)
 
-      loadApplicationDetails()
+      if (user) {
+        await loadApplicationDetails(user.id)
+      }
     } catch (error) {
       console.error("Erreur:", error)
       toast.error("Erreur lors de la proposition de visite")
@@ -610,26 +629,45 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       </PageHeader>
 
       <div className="p-6 space-y-6">
+        {/* Score et actions */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex items-center gap-4">
             {scoringResult && (
-              <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-lg">
-                {scoringResult.totalScore}
+              <div className="flex items-center gap-3">
+                <CircularScore score={scoringResult.totalScore} size="lg" />
+                <div>
+                  <h2 className="text-xl font-semibold">Score de compatibilité</h2>
+                  <p className="text-sm text-muted-foreground">Modèle: {scoringResult.model_used}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    {scoringResult.compatible ? (
+                      <Badge variant="outline" className="text-green-600 border-green-600">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Compatible
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-red-600 border-red-600">
+                        <XCircle className="h-3 w-3 mr-1" />
+                        Non compatible
+                      </Badge>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
-            <div>
-              <h2 className="text-xl font-semibold">Score de compatibilité</h2>
-              <p className="text-sm text-muted-foreground">
-                {scoringResult ? scoringResult.model_used : "Calcul en cours..."}
-              </p>
-            </div>
           </div>
-          <div className="flex flex-wrap gap-2">{getActionButtons()}</div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => router.push("/owner/scoring-preferences-simple")} size="sm">
+              <Settings className="h-4 w-4 mr-2" />
+              Modifier critères
+            </Button>
+            {getActionButtons()}
+          </div>
         </div>
 
         <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid grid-cols-3 mb-4">
+          <TabsList className="grid grid-cols-4 mb-4">
             <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
+            <TabsTrigger value="scoring">Analyse scoring</TabsTrigger>
             <TabsTrigger value="financial">Analyse financière</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
           </TabsList>
@@ -835,6 +873,131 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                       </div>
                     ))}
                   </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* Analyse scoring */}
+          <TabsContent value="scoring" className="space-y-6">
+            {scoringResult ? (
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5" />
+                      Détail du scoring
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="text-center">
+                      <CircularScore score={scoringResult.totalScore} size="xl" />
+                      <p className="text-sm text-muted-foreground mt-2">Modèle: {scoringResult.model_used}</p>
+                      <div className="flex items-center justify-center gap-2 mt-2">
+                        {scoringResult.compatible ? (
+                          <Badge variant="outline" className="text-green-600 border-green-600">
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            Compatible
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-red-600 border-red-600">
+                            <XCircle className="h-3 w-3 mr-1" />
+                            Non compatible
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Détail des scores */}
+                    <div className="space-y-4">
+                      <h4 className="font-medium">Détail par critère</h4>
+                      {Object.entries(scoringResult.breakdown).map(([key, data]: [string, any]) => (
+                        <div key={key} className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">
+                              {key === "income_ratio" && "Revenus/Loyer"}
+                              {key === "professional_stability" && "Stabilité professionnelle"}
+                              {key === "guarantor" && "Garants"}
+                              {key === "file_quality" && "Qualité du dossier"}
+                              {key === "property_coherence" && "Cohérence avec le bien"}
+                              {key === "income_distribution" && "Répartition des revenus"}
+                            </span>
+                            <span className="text-sm font-medium">
+                              {data.score}/{data.max}
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div
+                              className={`h-2 rounded-full ${data.compatible ? "bg-green-500" : "bg-red-500"}`}
+                              style={{ width: `${(data.score / data.max) * 100}%` }}
+                            ></div>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{data.details}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Avertissements */}
+                    {scoringResult.warnings.length > 0 && (
+                      <div className="space-y-2">
+                        <h4 className="font-medium text-orange-600 flex items-center gap-2">
+                          <AlertTriangle className="h-4 w-4" />
+                          Avertissements
+                        </h4>
+                        <ul className="space-y-1">
+                          {scoringResult.warnings.map((warning: string, index: number) => (
+                            <li key={index} className="text-sm text-orange-600">
+                              • {warning}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Exclusions */}
+                    {scoringResult.exclusions.length > 0 && (
+                      <div className="space-y-2">
+                        <h4 className="font-medium text-red-600 flex items-center gap-2">
+                          <XCircle className="h-4 w-4" />
+                          Règles d'exclusion
+                        </h4>
+                        <ul className="space-y-1">
+                          {scoringResult.exclusions.map((exclusion: string, index: number) => (
+                            <li key={index} className="text-sm text-red-600">
+                              • {exclusion}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Recommandations */}
+                    {scoringResult.recommendations.length > 0 && (
+                      <div className="space-y-2">
+                        <h4 className="font-medium text-blue-600 flex items-center gap-2">
+                          <TrendingUp className="h-4 w-4" />
+                          Recommandations
+                        </h4>
+                        <ul className="space-y-1">
+                          {scoringResult.recommendations.map((recommendation: string, index: number) => (
+                            <li key={index} className="text-sm text-blue-600">
+                              • {recommendation}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </>
+            ) : (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-10">
+                  <Clock className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-medium">Calcul du score en cours...</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Veuillez patienter pendant l'analyse de la candidature.
+                  </p>
                 </CardContent>
               </Card>
             )}
@@ -1125,144 +1288,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                 )}
               </CardContent>
             </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
-                  Synthèse et recommandation
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center gap-4">
-                    {scoringResult && (
-                      <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-lg">
-                        {scoringResult.totalScore}
-                      </div>
-                    )}
-                    <div>
-                      <h3 className="font-medium">Score global: {scoringResult?.totalScore || 0}/100</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Évaluation basée sur {scoringResult?.model_used || "le modèle standard"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <h4 className="font-medium">Points forts</h4>
-                    <ul className="space-y-1">
-                      {Number(rentRatio) >= 2.5 && (
-                        <li className="flex items-center gap-2">
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                          <span>Ratio revenus/loyer favorable ({rentRatio}x)</span>
-                        </li>
-                      )}
-                      {contractType?.toLowerCase() === "cdi" && (
-                        <li className="flex items-center gap-2">
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                          <span>Stabilité professionnelle (CDI)</span>
-                        </li>
-                      )}
-                      {hasGuarantor && (
-                        <li className="flex items-center gap-2">
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                          <span>Présence de {rentalFile?.guarantors?.length || 1} garant(s)</span>
-                        </li>
-                      )}
-                      {isComplete && (
-                        <li className="flex items-center gap-2">
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                          <span>Dossier complet ({completionPercentage}%)</span>
-                        </li>
-                      )}
-                      {rentalFile?.cotenants && rentalFile.cotenants.length > 0 && (
-                        <li className="flex items-center gap-2">
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                          <span>Revenus multiples ({rentalFile.cotenants.length + 1} personnes)</span>
-                        </li>
-                      )}
-                    </ul>
-                  </div>
-
-                  <div className="space-y-2">
-                    <h4 className="font-medium">Points d'attention</h4>
-                    <ul className="space-y-1">
-                      {Number(rentRatio) < 2.5 && Number(rentRatio) > 0 && (
-                        <li className="flex items-center gap-2">
-                          <AlertCircle className="h-4 w-4 text-amber-500" />
-                          <span>Ratio revenus/loyer limité ({rentRatio}x)</span>
-                        </li>
-                      )}
-                      {contractType?.toLowerCase() !== "cdi" && (
-                        <li className="flex items-center gap-2">
-                          <AlertCircle className="h-4 w-4 text-amber-500" />
-                          <span>Type de contrat: {contractType}</span>
-                        </li>
-                      )}
-                      {!hasGuarantor && (
-                        <li className="flex items-center gap-2">
-                          <AlertCircle className="h-4 w-4 text-amber-500" />
-                          <span>Absence de garant</span>
-                        </li>
-                      )}
-                      {!isComplete && (
-                        <li className="flex items-center gap-2">
-                          <AlertCircle className="h-4 w-4 text-amber-500" />
-                          <span>Dossier incomplet ({completionPercentage}%)</span>
-                        </li>
-                      )}
-                    </ul>
-                  </div>
-
-                  <div className="pt-4 border-t">
-                    <h4 className="font-medium mb-2">Recommandation</h4>
-                    {(scoringResult?.totalScore || 0) >= 80 ? (
-                      <div className="flex items-start gap-2">
-                        <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
-                        <div>
-                          <p className="font-medium text-green-700">Dossier solide</p>
-                          <p className="text-sm text-muted-foreground">
-                            Ce dossier présente d'excellentes garanties financières. Candidature à privilégier.
-                          </p>
-                        </div>
-                      </div>
-                    ) : (scoringResult?.totalScore || 0) >= 60 ? (
-                      <div className="flex items-start gap-2">
-                        <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
-                        <div>
-                          <p className="font-medium text-green-700">Dossier satisfaisant</p>
-                          <p className="text-sm text-muted-foreground">
-                            Ce dossier présente des garanties financières satisfaisantes. Candidature recommandée.
-                          </p>
-                        </div>
-                      </div>
-                    ) : (scoringResult?.totalScore || 0) >= 40 ? (
-                      <div className="flex items-start gap-2">
-                        <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
-                        <div>
-                          <p className="font-medium text-amber-700">Dossier à surveiller</p>
-                          <p className="text-sm text-muted-foreground">
-                            Ce dossier présente quelques fragilités. Une garantie complémentaire pourrait être demandée.
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-start gap-2">
-                        <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
-                        <div>
-                          <p className="font-medium text-red-700">Dossier fragile</p>
-                          <p className="text-sm text-muted-foreground">
-                            Ce dossier présente des risques financiers importants. Candidature à considérer avec
-                            prudence.
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </TabsContent>
 
           {/* Documents */}
@@ -1300,11 +1325,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
           propertyTitle={currentApplication.property?.title || ""}
           applicationId={currentApplication.id}
           tenantName={`${currentApplication.tenant?.first_name || ""} ${currentApplication.tenant?.last_name || ""}`}
-          onSlotsProposed={async (slots) => {
-            await updateApplicationStatus("visit_proposed")
-            setShowVisitDialog(false)
-            toast.success("Créneaux de visite proposés avec succès")
-          }}
+          onSlotsProposed={handleVisitProposed}
         />
       )}
     </>
