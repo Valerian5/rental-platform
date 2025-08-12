@@ -289,10 +289,37 @@ export default function ScoringPreferencesSimplePage() {
     }
   }
 
+// Sauvegarde dans localStorage
+const saveCustomCriteria = (criteria: any) => {
+  localStorage.setItem('customCriteria', JSON.stringify(criteria));
+};
+
+const saveExclusionRules = (rules: any) => {
+  localStorage.setItem('exclusionRules', JSON.stringify(rules));
+};
+
+// Chargement depuis localStorage
+const loadCustomCriteria = () => {
+  const saved = localStorage.getItem('customCriteria');
+  return saved ? JSON.parse(saved) : null;
+};
+
+const loadExclusionRules = () => {
+  const saved = localStorage.getItem('exclusionRules');
+  return saved ? JSON.parse(saved) : null;
+};  
+
   const loadUserPreference = async (ownerId: string) => {
     try {
       const preferences = await scoringPreferencesService.getOwnerPreferences(ownerId, true)
       setCurrentUserPreference(preferences)
+
+      // Charger depuis localStorage si disponible
+      const savedCriteria = loadCustomCriteria();
+      const savedRules = loadExclusionRules();
+      
+      if (savedCriteria) setCustomCriteria(savedCriteria);
+      if (savedRules) setExclusionRules(savedRules);
 
       // Si l'utilisateur a une préférence basée sur un modèle système
       if (preferences.system_preference_id || preferences.model_type) {
@@ -381,6 +408,10 @@ export default function ScoringPreferencesSimplePage() {
         toast.error(`Le total des poids ne peut pas dépasser 100 (actuellement: ${totalWeight})`)
         return
       }
+
+      // Sauvegarder dans localStorage
+      saveCustomCriteria(customCriteria);
+      saveExclusionRules(exclusionRules);
 
       // Construire les critères selon la nouvelle structure
       const newPreferences = {
@@ -616,7 +647,13 @@ export default function ScoringPreferencesSimplePage() {
         setSimulatorScore(score)
       })
     }
-  }, [customCriteria, simulatorRent, selectedPersona, user, currentUserPreference])
+  }, [  customCriteria, 
+    simulatorRent, 
+    selectedPersona, 
+    user, 
+    currentUserPreference,
+    exclusionRules // Ajout de cette dépendance
+  ])
 
   if (loading) {
     return (

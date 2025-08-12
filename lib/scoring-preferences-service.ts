@@ -368,29 +368,34 @@ export const scoringPreferencesService = {
     let compatible = true
 
     // Déterminer le type de contrat
-    let contractKey = "unemployed"
-    if (contractType.includes("cdi") && !contractType.includes("essai")) {
-      contractKey = "cdi_confirmed"
-    } else if (contractType.includes("cdi") && contractType.includes("essai")) {
-      contractKey = "cdi_trial"
-    } else if (contractType.includes("cdd")) {
-      contractKey = contractType.includes("long") ? "cdd_long" : "cdd_short"
-    } else if (contractType.includes("freelance") || contractType.includes("indépendant")) {
-      contractKey = "freelance"
-    } else if (contractType.includes("étudiant") || contractType.includes("student")) {
-      contractKey = "student"
-    } else if (contractType.includes("retraité") || contractType.includes("retired")) {
-      contractKey = "retired"
-    } else if (contractType.includes("fonctionnaire") || contractType.includes("civil")) {
-      contractKey = "civil_servant"
-    }
+  let contractKey = "unemployed";
+  if (contractType.includes("cdi") && !contractType.includes("essai")) {
+    contractKey = "cdi_confirmed";
+  } else if (contractType.includes("cdi") && contractType.includes("essai")) {
+    contractKey = "cdi_trial";
+  } else if (contractType.includes("cdd")) {
+    contractKey = contractType.includes("long") ? "cdd_long" : "cdd_short";
+  } else if (contractType.includes("freelance") || contractType.includes("indépendant")) {
+    contractKey = "freelance";
+  } else if (contractType.includes("étudiant") || contractType.includes("student")) {
+    contractKey = "student";
+  } else if (contractType.includes("retraité") || contractType.includes("retired")) {
+    contractKey = "retired";
+  } else if (contractType.includes("fonctionnaire") || contractType.includes("civil")) {
+    contractKey = "civil_servant";
+  }
 
-    const baseScore = contractScoring[contractKey] || 0
-    score = Math.round((baseScore / 20) * maxScore)
-
-    if (baseScore === 0) {
-      compatible = false
-    }
+  const baseScore = contractScoring[contractKey] || 0;
+  
+  // Gestion de l'exclusion
+  if (baseScore === 0) {
+    return {
+      score: 0,
+      max: maxScore,
+      compatible: false,
+      details: `Contrat exclu: ${contractType.toUpperCase()}`
+    };
+  }
 
     // Bonus/malus selon l'ancienneté
     const seniority = application.seniority_months || 0
