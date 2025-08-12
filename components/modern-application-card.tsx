@@ -51,6 +51,9 @@ interface ApplicationCardProps {
     guarantor_income?: number
     rental_file_main_tenant?: any
     rental_file_guarantors?: any[]
+    completion_percentage?: number
+    message?: string
+    company?: string
   }
   isSelected?: boolean
   onSelect?: (selected: boolean) => void
@@ -100,7 +103,7 @@ export function ModernApplicationCard({
         contract_type: application.contract_type || rentalFile?.contract_type || "cdi",
         profession: application.profession,
         company: application.company || "Non spécifié",
-        documents_complete: application.documents_complete,
+        documents_complete: application.documents_complete || (application.completion_percentage || 0) >= 80,
         has_verified_documents: rentalFile?.has_verified_documents || false,
         presentation: rentalFile?.presentation || application.message || "",
         trial_period: rentalFile?.trial_period || false,
@@ -110,7 +113,7 @@ export function ModernApplicationCard({
         rental_file_guarantors: application.rental_file_guarantors,
       }
 
-      // Utiliser le service unifié
+      // Utiliser le service unifié de scoring
       const result = await scoringPreferencesService.calculateScore(
         enrichedApplication,
         application.property,
