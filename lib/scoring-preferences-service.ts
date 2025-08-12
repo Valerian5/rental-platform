@@ -1,4 +1,4 @@
-import { createServerClient } from "@/lib/supabase"
+import { createServerClient } from "@/lib/supabase-server"
 
 // Cache simple pour les préférences
 const preferencesCache = new Map<string, { data: any; timestamp: number }>()
@@ -12,6 +12,7 @@ export const scoringPreferencesService = {
     if (useCache && preferencesCache.has(cacheKey)) {
       const cached = preferencesCache.get(cacheKey)!
       if (Date.now() - cached.timestamp < CACHE_DURATION) {
+        console.log(`📋 Préférences récupérées du cache pour ${ownerId}`)
         return cached.data
       }
     }
@@ -26,6 +27,7 @@ export const scoringPreferencesService = {
         .single()
 
       if (error || !data) {
+        console.log(`📋 Aucune préférence trouvée pour ${ownerId}, utilisation des préférences par défaut`)
         // Retourner les préférences par défaut
         const defaultPrefs = this.getDefaultPreferences(ownerId)
         if (useCache) {
@@ -36,6 +38,12 @@ export const scoringPreferencesService = {
         }
         return defaultPrefs
       }
+
+      console.log(`📋 Préférences chargées depuis la DB pour ${ownerId}:`, {
+        name: data.name,
+        model_type: data.model_type,
+        system_preference_id: data.system_preference_id,
+      })
 
       if (useCache) {
         preferencesCache.set(cacheKey, {
@@ -135,7 +143,7 @@ export const scoringPreferencesService = {
     }
   },
 
-  // Calculer le score d'une candidature - FONCTION UNIQUE UTILISÉE PARTOUT
+  // FONCTION UNIQUE DE CALCUL DE SCORE - UTILISÉE PARTOUT
   async calculateScore(
     application: any,
     property: any,
@@ -146,11 +154,24 @@ export const scoringPreferencesService = {
     breakdown: any
     compatible: boolean
     model_used: string
+    model_version: string
+    calculated_at: string
     recommendations: string[]
     warnings: string[]
     exclusions: string[]
   }> {
     try {
+      console.log(`🎯 Calcul score pour candidature ${application.id} - Propriétaire: ${ownerId}`)
+      console.log(`📊 Données d'entrée:`, {
+        income: application.income,
+        has_guarantor: application.has_guarantor,
+        guarantor_income: application.guarantor_income,
+        contract_type: application.contract_type,
+        documents_complete: application.documents_complete,
+        completion_percentage: application.completion_percentage,
+        property_price: property.price,
+      })
+
       const preferences = await this.getOwnerPreferences(ownerId, useCache)
 
       const result = {
@@ -158,6 +179,8 @@ export const scoringPreferencesService = {
         breakdown: {},
         compatible: true,
         model_used: preferences.name || "Modèle standard",
+        model_version: preferences.system_preference_id || preferences.model_type || "custom",
+        calculated_at: new Date().toISOString(),
         recommendations: [],
         warnings: [],
         exclusions: [],
@@ -201,6 +224,7 @@ export const scoringPreferencesService = {
       if (!professionalStability.compatible) {
         result.totalScore = 0
         result.compatible = false
+        result.warnings.push("Profil professionnel exclu")
       } else {
         // Déterminer la compatibilité
         result.compatible = exclusions.length === 0 && result.totalScore >= 60
@@ -208,16 +232,21 @@ export const scoringPreferencesService = {
 
       // Générer recommandations et avertissements
       result.recommendations = this.generateRecommendations(result.breakdown, preferences)
-      result.warnings = this.generateWarnings(result.breakdown, exclusions)
+      result.warnings = [...result.warnings, ...this.generateWarnings(result.breakdown, exclusions)]
+
+      console.log(`✅ Score calculé: ${result.totalScore}/100 - Compatible: ${result.compatible}`)
+      console.log(`📋 Modèle utilisé: ${result.model_used} (${result.model_version})`)
 
       return result
     } catch (error) {
-      console.error("Erreur calcul score:", error)
+      console.error("❌ Erreur calcul score:", error)
       return {
         totalScore: 50,
         breakdown: {},
         compatible: false,
         model_used: "Erreur",
+        model_version: "error",
+        calculated_at: new Date().toISOString(),
         recommendations: ["Erreur lors du calcul"],
         warnings: ["Impossible de calculer le score"],
         exclusions: [],
@@ -228,11 +257,15 @@ export const scoringPreferencesService = {
   // Calcul personnalisé avec préférences fournies directement
   calculateCustomScore(application: any, property: any, preferences: any) {
     try {
+      console.log(`🎯 Calcul score personnalisé pour candidature ${application.id}`)
+
       const result = {
         totalScore: 0,
         breakdown: {},
         compatible: true,
         model_used: preferences.name || "Configuration personnalisée",
+        model_version: "custom",
+        calculated_at: new Date().toISOString(),
         recommendations: [],
         warnings: [],
         exclusions: [],
@@ -276,6 +309,7 @@ export const scoringPreferencesService = {
       if (!professionalStability.compatible) {
         result.totalScore = 0
         result.compatible = false
+        result.warnings.push("Profil professionnel exclu")
       } else {
         // Déterminer la compatibilité
         result.compatible = exclusions.length === 0 && result.totalScore >= 60
@@ -283,16 +317,20 @@ export const scoringPreferencesService = {
 
       // Générer recommandations et avertissements
       result.recommendations = this.generateRecommendations(result.breakdown, preferences)
-      result.warnings = this.generateWarnings(result.breakdown, exclusions)
+      result.warnings = [...result.warnings, ...this.generateWarnings(result.breakdown, exclusions)]
+
+      console.log(`✅ Score personnalisé calculé: ${result.totalScore}/100`)
 
       return result
     } catch (error) {
-      console.error("Erreur calcul score personnalisé:", error)
+      console.error("❌ Erreur calcul score personnalisé:", error)
       return {
         totalScore: 50,
         breakdown: {},
         compatible: false,
         model_used: "Erreur",
+        model_version: "error",
+        calculated_at: new Date().toISOString(),
         recommendations: ["Erreur lors du calcul"],
         warnings: ["Impossible de calculer le score"],
         exclusions: [],
@@ -306,6 +344,8 @@ export const scoringPreferencesService = {
     const maxScore = criteria.weight || 18
     const applicationIncome = application.income || 0
     const rent = property.price || 0
+
+    console.log(`💰 Calcul ratio revenus/loyer: ${applicationIncome}€ / ${rent}€`)
 
     if (!applicationIncome || !rent) {
       return {
@@ -325,6 +365,7 @@ export const scoringPreferencesService = {
 
     if (isStudent && criteria.use_guarantor_income_for_students && application.guarantor_income) {
       effectiveIncome = application.guarantor_income
+      console.log(`🎓 Étudiant: utilisation revenus garant ${effectiveIncome}€`)
     }
 
     const ratio = effectiveIncome / rent
@@ -357,6 +398,8 @@ export const scoringPreferencesService = {
       compatible = false
     }
 
+    console.log(`💰 Ratio: ${ratio.toFixed(1)}x - Score: ${score}/${maxScore} - Compatible: ${compatible}`)
+
     return {
       score: Math.min(score, maxScore),
       max: maxScore,
@@ -383,6 +426,8 @@ export const scoringPreferencesService = {
       civil_servant: 20,
     }
 
+    console.log(`💼 Calcul stabilité professionnelle: ${contractType}`)
+
     let score = 0
     const compatible = true
 
@@ -406,6 +451,8 @@ export const scoringPreferencesService = {
 
     const baseScore = contractScoring[contractKey] || 0
 
+    console.log(`💼 Type de contrat détecté: ${contractKey} - Score de base: ${baseScore}/20`)
+
     // Si le score de base est 0, le profil est exclu
     if (baseScore === 0) {
       return {
@@ -424,15 +471,20 @@ export const scoringPreferencesService = {
 
     if (seniorityBonus.enabled && seniority >= (seniorityBonus.min_months || 6)) {
       score += seniorityBonus.bonus_points || 2
+      console.log(`💼 Bonus ancienneté: +${seniorityBonus.bonus_points || 2} points`)
     }
 
     // Pénalité période d'essai
     if (contractType.includes("essai") && criteria.trial_period_penalty) {
       score -= criteria.trial_period_penalty
+      console.log(`💼 Pénalité période d'essai: -${criteria.trial_period_penalty} points`)
     }
 
+    const finalScore = Math.max(0, Math.min(score, maxScore))
+    console.log(`💼 Score final stabilité: ${finalScore}/${maxScore}`)
+
     return {
-      score: Math.max(0, Math.min(score, maxScore)),
+      score: finalScore,
       max: maxScore,
       compatible,
       details: `${contractType.toUpperCase()} (score base: ${baseScore}/20)`,
@@ -449,15 +501,20 @@ export const scoringPreferencesService = {
     const requiredIfIncomeBelow = criteria.required_if_income_below || 3.0
     const minGuarantorRatio = criteria.minimum_income_ratio || 3.0
 
+    console.log(`🛡️ Calcul score garants: hasGuarantor=${hasGuarantor}, guarantorIncome=${guarantorIncome}€`)
+
     // Vérifier si un garant est requis
     const applicationIncome = application.income || 0
     const incomeRatio = applicationIncome && rent ? applicationIncome / rent : 0
     const guarantorRequired = incomeRatio < requiredIfIncomeBelow
 
+    console.log(`🛡️ Ratio revenus: ${incomeRatio.toFixed(1)}x - Garant requis: ${guarantorRequired}`)
+
     let score = 0
     const compatible = true
 
     if (guarantorRequired && !hasGuarantor) {
+      console.log(`🛡️ Garant requis mais absent - Score: 0`)
       return {
         score: 0,
         max: maxScore,
@@ -474,12 +531,15 @@ export const scoringPreferencesService = {
         } else {
           score = Math.round((guarantorRatio / minGuarantorRatio) * maxScore)
         }
+        console.log(`🛡️ Ratio garant: ${guarantorRatio.toFixed(1)}x - Score: ${score}/${maxScore}`)
       } else {
         score = Math.round(maxScore * 0.7) // Garant présent mais revenus non vérifiés
+        console.log(`🛡️ Garant présent mais revenus non vérifiés - Score: ${score}/${maxScore}`)
       }
     } else if (!guarantorRequired) {
       // Pas de garant mais pas requis non plus
       score = Math.round(maxScore * 0.8)
+      console.log(`🛡️ Pas de garant mais non requis - Score: ${score}/${maxScore}`)
     }
 
     return {
@@ -498,8 +558,15 @@ export const scoringPreferencesService = {
   calculateFileQuality(application: any, preferences: any) {
     const criteria = preferences.criteria?.file_quality || {}
     const maxScore = criteria.weight || 16
-    const documentsComplete = application.documents_complete || false
+
+    // Utiliser completion_percentage si disponible, sinon documents_complete
+    const completionPercentage = application.completion_percentage || 0
+    const documentsComplete = completionPercentage >= 80 || application.documents_complete || false
     const hasVerifiedDocuments = application.has_verified_documents || false
+
+    console.log(
+      `📄 Calcul qualité dossier: completion=${completionPercentage}%, complete=${documentsComplete}, verified=${hasVerifiedDocuments}`,
+    )
 
     let score = 0
     let compatible = true
@@ -510,7 +577,13 @@ export const scoringPreferencesService = {
     } else if (documentsComplete) {
       score = Math.round(maxScore * 0.8)
     } else {
-      score = Math.round(maxScore * 0.4)
+      // Utiliser le pourcentage de completion pour un score plus nuancé
+      if (completionPercentage > 0) {
+        score = Math.round((completionPercentage / 100) * maxScore * 0.6)
+      } else {
+        score = Math.round(maxScore * 0.4)
+      }
+
       if (criteria.complete_documents_required) {
         compatible = false
       }
@@ -528,6 +601,8 @@ export const scoringPreferencesService = {
       score += Math.round(presentationWeight * 0.5)
     }
 
+    console.log(`📄 Score qualité dossier: ${score}/${maxScore} - Compatible: ${compatible}`)
+
     return {
       score: Math.min(score, maxScore),
       max: maxScore,
@@ -536,7 +611,7 @@ export const scoringPreferencesService = {
         ? hasVerifiedDocuments
           ? "Dossier complet et vérifié"
           : "Dossier complet"
-        : "Dossier incomplet",
+        : `Dossier ${completionPercentage}% complet`,
     }
   },
 
@@ -547,6 +622,8 @@ export const scoringPreferencesService = {
 
     const score = maxScore // Score de base
     const compatible = true
+
+    console.log(`🏠 Score cohérence propriété: ${Math.round(score * 0.8)}/${maxScore}`)
 
     // Pour l'instant, score de base car pas assez d'infos sur la taille du foyer, etc.
     return {
@@ -566,6 +643,8 @@ export const scoringPreferencesService = {
     const score = Math.round(maxScore * 0.8)
     const compatible = true
 
+    console.log(`👥 Score répartition revenus: ${score}/${maxScore}`)
+
     return {
       score,
       max: maxScore,
@@ -578,6 +657,8 @@ export const scoringPreferencesService = {
   checkExclusionRules(application: any, property: any, preferences: any): string[] {
     const exclusions = []
     const rules = preferences.exclusion_rules || {}
+
+    console.log(`🚫 Vérification règles d'exclusion:`, rules)
 
     // Ratio minimum absolu
     if (rules.income_ratio_below_2) {
@@ -606,14 +687,20 @@ export const scoringPreferencesService = {
     }
 
     // Dossier incomplet
-    if (rules.incomplete_file && !application.documents_complete) {
-      exclusions.push("Dossier incomplet")
+    if (rules.incomplete_file) {
+      const completionPercentage = application.completion_percentage || 0
+      const documentsComplete = completionPercentage >= 80 || application.documents_complete || false
+      if (!documentsComplete) {
+        exclusions.push("Dossier incomplet")
+      }
     }
 
     // Documents non vérifiés
     if (rules.unverified_documents && !application.has_verified_documents) {
       exclusions.push("Documents non vérifiés")
     }
+
+    console.log(`🚫 Exclusions trouvées:`, exclusions)
 
     return exclusions
   },
@@ -664,8 +751,10 @@ export const scoringPreferencesService = {
   invalidateCache(ownerId?: string) {
     if (ownerId) {
       preferencesCache.delete(`prefs_${ownerId}`)
+      console.log(`🗑️ Cache invalidé pour ${ownerId}`)
     } else {
       preferencesCache.clear()
+      console.log(`🗑️ Cache complet invalidé`)
     }
   },
 }

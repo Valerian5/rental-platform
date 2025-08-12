@@ -13,16 +13,20 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    console.log(`🎯 API Calculate Score - Candidature ${application.id} pour propriétaire ${owner_id}`)
+
     const result = await scoringPreferencesService.calculateScore(
       application,
       property,
       owner_id,
-      true, // Utiliser le cache
+      false, // Ne pas utiliser le cache pour avoir le score le plus récent
     )
+
+    console.log(`✅ API Calculate Score - Score calculé: ${result.totalScore}`)
 
     return NextResponse.json(result)
   } catch (error) {
-    console.error("Erreur API calculate-score:", error)
+    console.error("❌ Erreur API calculate-score:", error)
     return NextResponse.json({ error: "Erreur lors du calcul du score" }, { status: 500 })
   }
 }

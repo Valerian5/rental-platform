@@ -14,6 +14,7 @@ import { PageHeader } from "@/components/page-header"
 import { VisitProposalManager } from "@/components/visit-proposal-manager"
 import { TenantAndGuarantorDocumentsSection } from "@/components/TenantAndGuarantorDocumentsSection"
 import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
+import { applicationEnrichmentService } from "@/lib/application-enrichment-service"
 import { CircularScore } from "@/components/circular-score"
 import {
   ArrowLeft,
@@ -82,8 +83,9 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
 
   const loadScoringPreferences = async (ownerId: string) => {
     try {
-      const preferences = await scoringPreferencesService.getOwnerPreferences(ownerId, true)
+      const preferences = await scoringPreferencesService.getOwnerPreferences(ownerId, false)
       setScoringPreferences(preferences)
+      console.log("📋 Préférences de scoring chargées:", preferences.name)
     } catch (error) {
       console.error("Erreur chargement préférences scoring:", error)
     }
@@ -110,13 +112,14 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       setApplication(data.application)
       setDocuments(flattenDocuments(data.application))
 
-      // Charger le dossier de location avec enrichissement des données
+      // Charger le dossier de location
+      let rentalFile = null
       if (data.application?.tenant_id) {
         try {
           const rentalFileResponse = await fetch(`/api/rental-files?tenant_id=${data.application.tenant_id}`)
           if (rentalFileResponse.ok) {
             const rentalFileData = await rentalFileResponse.json()
-            const rentalFile = rentalFileData.rental_file
+            rentalFile = rentalFileData.rental_file
 
             if (rentalFile) {
               console.log("✅ Dossier de location chargé:", {
@@ -128,108 +131,49 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               })
 
               setRentalFile(rentalFile)
-
-              // Calculer les revenus enrichis
-              let enrichedIncome = 0
-              if (rentalFile.main_tenant?.income_sources?.work_income?.amount) {
-                enrichedIncome = rentalFile.main_tenant.income_sources.work_income.amount
-              } else if (rentalFile.main_tenant?.income_sources?.work_income?.monthly_amount) {
-                enrichedIncome = rentalFile.main_tenant.income_sources.work_income.monthly_amount
-              } else if (rentalFile.main_tenant?.monthly_income) {
-                enrichedIncome = rentalFile.main_tenant.monthly_income
-              } else if (data.application.income) {
-                enrichedIncome = data.application.income
-              }
-
-              // Ajouter les revenus des colocataires
-              if (rentalFile.cotenants && rentalFile.cotenants.length > 0) {
-                rentalFile.cotenants.forEach((cotenant: any) => {
-                  if (cotenant.income_sources?.work_income?.amount) {
-                    enrichedIncome += cotenant.income_sources.work_income.amount
-                  }
-                })
-              }
-
-              // Mettre à jour l'application avec les données enrichies
-              setApplication((prev: any) => ({
-                ...prev,
-                income: enrichedIncome,
-                has_guarantor:
-                  (rentalFile.guarantors && rentalFile.guarantors.length > 0) || prev.has_guarantor || false,
-                profession: rentalFile.main_tenant?.profession || prev.profession || "Non spécifié",
-                company: rentalFile.main_tenant?.company || prev.company || "Non spécifié",
-                contract_type: rentalFile.main_tenant?.main_activity || prev.contract_type || "Non spécifié",
-                documents_complete: rentalFile.completion_percentage >= 80, // Utiliser completion_percentage
-                guarantor_income: rentalFile.guarantors?.[0]?.personal_info?.income_sources?.work_income?.amount || 0,
-              }))
-
-              // Calculer le score avec le service unifié
-              await recalculateScore(data.application, rentalFile, enrichedIncome, ownerId)
             }
           }
         } catch (error) {
           console.error("Erreur chargement dossier location:", error)
         }
-      } else {
-        // Calculer le score même sans dossier de location
-        await recalculateScore(data.application, null, data.application.income || 0, ownerId)
       }
+
+      // Enrichir l'application avec les données du dossier de location
+      const enrichedApplication = await applicationEnrichmentService.enrichApplication(data.application, rentalFile)
+      setApplication(enrichedApplication)
+
+      // Calculer le score avec le service unifié
+      await recalculateScore(enrichedApplication, ownerId)
     } catch (error) {
       console.error("Erreur:", error)
       toast.error("Erreur lors du chargement des détails")
     }
   }
 
-  const recalculateScore = async (app: any, rentalFile?: any, totalIncome?: number, ownerId?: string) => {
+  const recalculateScore = async (app: any, ownerId?: string) => {
     if (!app || !app.property || !app.property.owner_id) return
 
     try {
-      // Utiliser les revenus totaux calculés
-      const finalIncome = totalIncome || app.income || 0
-
-      // Préparer les données enrichies EXACTEMENT comme dans la page de liste
-      const enrichedApp = {
-        id: app.id,
-        income: finalIncome, // Utiliser les revenus totaux
-        has_guarantor: (rentalFile?.guarantors && rentalFile.guarantors.length > 0) || app.has_guarantor || false,
-        guarantor_income:
-          rentalFile?.guarantors?.[0]?.personal_info?.income_sources?.work_income?.amount || app.guarantor_income || 0,
-        contract_type: rentalFile?.main_tenant?.main_activity || app.contract_type || "Non spécifié",
-        documents_complete: (rentalFile?.completion_percentage || 0) >= 80 || app.documents_complete || false,
-        has_verified_documents: rentalFile?.has_verified_documents || false,
-        presentation: rentalFile?.presentation_message || app.message || "",
-        profession: rentalFile?.main_tenant?.profession || app.profession || "Non spécifié",
-        company: rentalFile?.main_tenant?.company || app.company || "Non spécifié",
-        completion_percentage: rentalFile?.completion_percentage || 0,
-        seniority_months: rentalFile?.main_tenant?.professional_info?.seniority_months || 0,
-        trial_period: rentalFile?.main_tenant?.professional_info?.trial_period || false,
-      }
-
-      console.log(`🔍 Données pour scoring détail candidature ${app.id}:`, {
-        income: enrichedApp.income,
-        has_guarantor: enrichedApp.has_guarantor,
-        guarantor_income: enrichedApp.guarantor_income,
-        contract_type: enrichedApp.contract_type,
-        documents_complete: enrichedApp.documents_complete,
-        completion_percentage: enrichedApp.completion_percentage,
-      })
+      console.log(`🎯 Recalcul score pour candidature ${app.id}`)
 
       const result = await scoringPreferencesService.calculateScore(
-        enrichedApp,
+        app,
         app.property,
         ownerId || app.property.owner_id,
         false, // Ne pas utiliser le cache pour avoir le score le plus récent
       )
 
       setScoringResult(result)
-      console.log(`📊 Score calculé pour détail candidature ${app.id}: ${result.totalScore}`)
+      console.log(`📊 Score recalculé: ${result.totalScore}/100 - Compatible: ${result.compatible}`)
     } catch (error) {
-      console.error("Erreur recalcul score:", error)
+      console.error("❌ Erreur recalcul score:", error)
       setScoringResult({
         totalScore: 50,
         breakdown: {},
         compatible: false,
         model_used: "Erreur",
+        model_version: "error",
+        calculated_at: new Date().toISOString(),
         recommendations: [],
         warnings: [],
         exclusions: [],
@@ -396,29 +340,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
     } catch (e) {
       return "Montant invalide"
     }
-  }
-
-  // Calculer les revenus totaux (locataire + colocataires)
-  const calculateTotalIncome = () => {
-    let totalIncome = 0
-
-    // Revenus du locataire principal
-    if (rentalFile?.main_tenant?.income_sources?.work_income?.amount) {
-      totalIncome += rentalFile.main_tenant.income_sources.work_income.amount
-    } else if (application?.income) {
-      totalIncome += application.income
-    }
-
-    // Revenus des colocataires
-    if (rentalFile?.cotenants && rentalFile.cotenants.length > 0) {
-      rentalFile.cotenants.forEach((cotenant: any) => {
-        if (cotenant.income_sources?.work_income?.amount) {
-          totalIncome += cotenant.income_sources.work_income.amount
-        }
-      })
-    }
-
-    return totalIncome
   }
 
   const getStatusBadge = () => {
@@ -610,21 +531,18 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const property = application.property || {}
   const mainTenant = rentalFile?.main_tenant || {}
 
-  // Récupérer les revenus avec plusieurs sources possibles
-  const totalIncome = calculateTotalIncome()
-  const mainTenantIncome = rentalFile?.main_tenant?.income_sources?.work_income?.amount || application.income || 0
-
-  const hasGuarantor =
-    (rentalFile?.guarantors && rentalFile.guarantors.length > 0) || application.has_guarantor || false
-  const profession = mainTenant.profession || application.profession || "Non spécifié"
-  const company = mainTenant.company || application.company || "Non spécifié"
-  const contractType = mainTenant.main_activity || application.contract_type || "Non spécifié"
+  // Utiliser les données enrichies
+  const totalIncome = application.income || 0
+  const hasGuarantor = application.has_guarantor || false
+  const profession = application.profession || "Non spécifié"
+  const company = application.company || "Non spécifié"
+  const contractType = application.contract_type || "Non spécifié"
 
   const rentRatio = totalIncome && property.price ? (totalIncome / property.price).toFixed(1) : "N/A"
 
   // Statut du dossier basé sur completion_percentage
-  const completionPercentage = rentalFile?.completion_percentage || 0
-  const isComplete = completionPercentage >= 80
+  const completionPercentage = application.completion_percentage || 0
+  const isComplete = application.documents_complete || false
 
   return (
     <>
@@ -829,7 +747,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             </Card>
 
             {/* Message de candidature */}
-            {(application.message || application.presentation || rentalFile?.presentation_message) && (
+            {application.presentation && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -838,9 +756,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="whitespace-pre-wrap">
-                    {rentalFile?.presentation_message || application.presentation || application.message}
-                  </p>
+                  <p className="whitespace-pre-wrap">{application.presentation}</p>
                 </CardContent>
               </Card>
             )}
@@ -1140,11 +1056,13 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-muted-foreground">Ancienneté professionnelle</span>
-                      <span className="font-medium">{mainTenant.professional_info?.seniority || "Non spécifié"}</span>
+                      <span className="font-medium">
+                        {application.seniority_months ? `${application.seniority_months} mois` : "Non spécifié"}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-muted-foreground">Période d'essai</span>
-                      <span className="font-medium">{mainTenant.professional_info?.trial_period ? "Oui" : "Non"}</span>
+                      <span className="font-medium">{application.trial_period ? "Oui" : "Non"}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-muted-foreground">Complétude du dossier</span>
@@ -1164,7 +1082,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                   <div className="pt-4">
                     <h4 className="font-medium mb-2">Analyse de la stabilité</h4>
                     <div className="space-y-2">
-                      {contractType?.toLowerCase() === "cdi" ? (
+                      {contractType?.toLowerCase().includes("cdi") ? (
                         <div className="flex items-start gap-2">
                           <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
                           <div>
@@ -1174,7 +1092,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                             </p>
                           </div>
                         </div>
-                      ) : contractType?.toLowerCase() === "cdd" ? (
+                      ) : contractType?.toLowerCase().includes("cdd") ? (
                         <div className="flex items-start gap-2">
                           <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
                           <div>
@@ -1184,8 +1102,8 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                             </p>
                           </div>
                         </div>
-                      ) : contractType?.toLowerCase() === "freelance" ||
-                        contractType?.toLowerCase() === "indépendant" ? (
+                      ) : contractType?.toLowerCase().includes("freelance") ||
+                        contractType?.toLowerCase().includes("indépendant") ? (
                         <div className="flex items-start gap-2">
                           <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
                           <div>
@@ -1207,7 +1125,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                         </div>
                       )}
 
-                      {mainTenant.professional_info?.trial_period && (
+                      {application.trial_period && (
                         <div className="flex items-start gap-2">
                           <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
                           <div>

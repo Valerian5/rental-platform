@@ -5,7 +5,6 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { CircularScore } from "@/components/circular-score"
-import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
 import Link from "next/link"
 import {
   User,
@@ -23,7 +22,6 @@ import {
   BarChart3,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
-import type { completion_percentage } from "@/types/completion_percentage" // Declare the variable here
 
 interface ApplicationCardProps {
   application: {
@@ -50,16 +48,18 @@ interface ApplicationCardProps {
     tenant_id?: string
     contract_type?: string
     guarantor_income?: number
-    rental_file_main_tenant?: any
-    rental_file_guarantors?: any[]
-    completion_percentage?: completion_percentage
+    completion_percentage?: number
     message?: string
     company?: string
+    scoring_breakdown?: any
+    scoring_recommendations?: string[]
+    scoring_warnings?: string[]
+    scoring_compatible?: boolean
+    scoring_model_used?: string
   }
   isSelected?: boolean
   onSelect?: (selected: boolean) => void
   onAction: (action: string) => void
-  rentalFile?: any
   scoringPreferences?: any
 }
 
@@ -68,82 +68,39 @@ export function ModernApplicationCard({
   isSelected,
   onSelect,
   onAction,
-  rentalFile,
   scoringPreferences,
 }: ApplicationCardProps) {
   const [expanded, setExpanded] = useState(false)
   const [calculatedScore, setCalculatedScore] = useState<number>(application.match_score)
   const [scoreLoading, setScoreLoading] = useState(false)
-  const [scoreBreakdown, setScoreBreakdown] = useState<any>(null)
-  const [scoreRecommendations, setScoreRecommendations] = useState<string[]>([])
-  const [scoreWarnings, setScoreWarnings] = useState<string[]>([])
-  const [scoreCompatible, setScoreCompatible] = useState<boolean | undefined>(undefined)
-  const [modelUsed, setModelUsed] = useState<string>("")
+  const [scoreBreakdown, setScoreBreakdown] = useState<any>(application.scoring_breakdown || null)
+  const [scoreRecommendations, setScoreRecommendations] = useState<string[]>(application.scoring_recommendations || [])
+  const [scoreWarnings, setScoreWarnings] = useState<string[]>(application.scoring_warnings || [])
+  const [scoreCompatible, setScoreCompatible] = useState<boolean | undefined>(application.scoring_compatible)
+  const [modelUsed, setModelUsed] = useState<string>(application.scoring_model_used || "")
   const router = useRouter()
 
+  // Utiliser les scores déjà calculés depuis la page parent
   useEffect(() => {
-    if (application.property?.owner_id && application.property?.price) {
-      calculateUnifiedScore()
+    if (application.match_score !== undefined) {
+      setCalculatedScore(application.match_score)
     }
-  }, [application, application.property?.owner_id, scoringPreferences])
-
-  const calculateUnifiedScore = async () => {
-    if (!application.property?.owner_id || !application.property?.price) {
-      return
+    if (application.scoring_breakdown) {
+      setScoreBreakdown(application.scoring_breakdown)
     }
-
-    try {
-      setScoreLoading(true)
-
-      // Préparer les données d'application enrichies EXACTEMENT comme dans les autres pages
-      const enrichedApplication = {
-        id: application.id,
-        income: application.income,
-        has_guarantor: application.has_guarantor,
-        guarantor_income: application.guarantor_income || 0,
-        contract_type: application.contract_type || "Non spécifié",
-        profession: application.profession,
-        company: application.company || "Non spécifié",
-        documents_complete: (application.completion_percentage || 0) >= 80 || application.documents_complete || false,
-        has_verified_documents: rentalFile?.has_verified_documents || false,
-        presentation: rentalFile?.presentation || application.message || "",
-        completion_percentage: application.completion_percentage || 0,
-        seniority_months: rentalFile?.seniority_months || 0,
-        trial_period: rentalFile?.trial_period || false,
-      }
-
-      console.log(`🔍 Données pour scoring carte candidature ${application.id}:`, {
-        income: enrichedApplication.income,
-        has_guarantor: enrichedApplication.has_guarantor,
-        guarantor_income: enrichedApplication.guarantor_income,
-        contract_type: enrichedApplication.contract_type,
-        documents_complete: enrichedApplication.documents_complete,
-        completion_percentage: enrichedApplication.completion_percentage,
-      })
-
-      // Utiliser le service unifié de scoring
-      const result = await scoringPreferencesService.calculateScore(
-        enrichedApplication,
-        application.property,
-        application.property.owner_id,
-        false, // Ne pas utiliser le cache pour cohérence
-      )
-
-      setCalculatedScore(result.totalScore)
-      setScoreBreakdown(result.breakdown)
-      setScoreRecommendations(result.recommendations || [])
-      setScoreWarnings(result.warnings || [])
-      setScoreCompatible(result.compatible)
-      setModelUsed(result.model_used)
-
-      console.log(`📊 Score calculé pour carte candidature ${application.id}: ${result.totalScore}`)
-    } catch (error) {
-      console.error("❌ Erreur calcul score ModernApplicationCard:", error)
-      setCalculatedScore(application.match_score || 50)
-    } finally {
-      setScoreLoading(false)
+    if (application.scoring_recommendations) {
+      setScoreRecommendations(application.scoring_recommendations)
     }
-  }
+    if (application.scoring_warnings) {
+      setScoreWarnings(application.scoring_warnings)
+    }
+    if (application.scoring_compatible !== undefined) {
+      setScoreCompatible(application.scoring_compatible)
+    }
+    if (application.scoring_model_used) {
+      setModelUsed(application.scoring_model_used)
+    }
+  }, [application])
 
   const formatDate = (dateString: string) => {
     try {
