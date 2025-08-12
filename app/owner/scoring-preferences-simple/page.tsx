@@ -69,7 +69,7 @@ const PERSONAS = {
     icon: Zap,
     age: 32,
     income: 2800,
-    contract: "Indépendant",
+    contract: "Freelance",
     profession: "Consultant digital",
     guarantor: false,
     guarantor_income: 0,
@@ -338,6 +338,13 @@ export default function ScoringPreferencesSimplePage() {
       // Charger les critères dans l'assistant
       if (preferences && preferences.criteria) {
         // Mapper les critères de la base vers l'interface
+        const mappedContractPreferences = mapContractScoringToPreferences(
+          preferences.criteria.professional_stability?.contract_scoring,
+        )
+
+        console.log("🔄 Contract scoring from DB:", preferences.criteria.professional_stability?.contract_scoring)
+        console.log("🔄 Mapped to preferences:", mappedContractPreferences)
+
         setCustomCriteria({
           income_ratio: {
             weight: preferences.criteria.income_ratio?.weight || 18,
@@ -361,9 +368,7 @@ export default function ScoringPreferencesSimplePage() {
           },
           professional_stability: {
             weight: preferences.criteria.professional_stability?.weight || 17,
-            contract_preferences: mapContractScoringToPreferences(
-              preferences.criteria.professional_stability?.contract_scoring,
-            ),
+            contract_preferences: mappedContractPreferences,
             seniority_bonus: preferences.criteria.professional_stability?.seniority_bonus?.enabled !== false,
             trial_period_penalty: (preferences.criteria.professional_stability?.trial_period_penalty || 0) > 0,
           },
@@ -384,12 +389,6 @@ export default function ScoringPreferencesSimplePage() {
             balance_required: preferences.criteria.income_distribution?.balance_check !== false,
             compensation_allowed: preferences.criteria.income_distribution?.compensation_allowed !== false,
           },
-        })
-
-        console.log("🔄 Critères mappés:", {
-          contract_preferences: mapContractScoringToPreferences(
-            preferences.criteria.professional_stability?.contract_scoring,
-          ),
         })
       }
 
@@ -413,10 +412,12 @@ export default function ScoringPreferencesSimplePage() {
     }
   }
 
-  // Mapper les scores de contrat vers les préférences d'interface
+  // Mapper les scores de contrat vers les préférences d'interface - CORRIGÉ
   const mapContractScoringToPreferences = (contractScoring: any) => {
+    console.log("🔄 Mapping contract scoring to preferences:", contractScoring)
+
     if (!contractScoring) {
-      return {
+      const defaultPrefs = {
         cdi_confirmed: "excellent",
         cdi_trial: "good",
         cdd_long: "good",
@@ -427,6 +428,8 @@ export default function ScoringPreferencesSimplePage() {
         retired: "good",
         civil_servant: "excellent",
       }
+      console.log("🔄 Using default preferences:", defaultPrefs)
+      return defaultPrefs
     }
 
     const mapScoreToPreference = (score: number) => {
@@ -438,23 +441,25 @@ export default function ScoringPreferencesSimplePage() {
     }
 
     const result = {
-      cdi_confirmed: mapScoreToPreference(contractScoring.cdi_confirmed || 20),
-      cdi_trial: mapScoreToPreference(contractScoring.cdi_trial || 15),
-      cdd_long: mapScoreToPreference(contractScoring.cdd_long || 14),
-      cdd_short: mapScoreToPreference(contractScoring.cdd_short || 10),
-      freelance: mapScoreToPreference(contractScoring.freelance || 8),
-      student: mapScoreToPreference(contractScoring.student || 6),
+      cdi_confirmed: mapScoreToPreference(contractScoring.cdi_confirmed ?? 20),
+      cdi_trial: mapScoreToPreference(contractScoring.cdi_trial ?? 15),
+      cdd_long: mapScoreToPreference(contractScoring.cdd_long ?? 14),
+      cdd_short: mapScoreToPreference(contractScoring.cdd_short ?? 10),
+      freelance: mapScoreToPreference(contractScoring.freelance ?? 8),
+      student: mapScoreToPreference(contractScoring.student ?? 6),
       unemployed: "excluded", // Toujours exclu
-      retired: mapScoreToPreference(contractScoring.retired || 15),
-      civil_servant: mapScoreToPreference(contractScoring.civil_servant || 20),
+      retired: mapScoreToPreference(contractScoring.retired ?? 15),
+      civil_servant: mapScoreToPreference(contractScoring.civil_servant ?? 20),
     }
 
-    console.log("🔄 Mapping contract scoring:", contractScoring, "->", result)
+    console.log("🔄 Mapped result:", result)
     return result
   }
 
-  // Mapper les préférences d'interface vers les scores de contrat
+  // Mapper les préférences d'interface vers les scores de contrat - CORRIGÉ
   const mapPreferencesToContractScoring = (preferences: any) => {
+    console.log("🔄 Mapping preferences to contract scoring:", preferences)
+
     const mapPreferenceToScore = (preference: string) => {
       switch (preference) {
         case "excluded":
@@ -484,7 +489,7 @@ export default function ScoringPreferencesSimplePage() {
       civil_servant: mapPreferenceToScore(preferences.civil_servant),
     }
 
-    console.log("🔄 Mapping preferences to scoring:", preferences, "->", result)
+    console.log("🔄 Contract scoring result:", result)
     return result
   }
 
@@ -591,6 +596,10 @@ export default function ScoringPreferencesSimplePage() {
       }
 
       // Construire les critères selon la nouvelle structure
+      const contractScoring = mapPreferencesToContractScoring(
+        customCriteria.professional_stability.contract_preferences,
+      )
+
       const newPreferences = {
         owner_id: user.id,
         name: "Préférences personnalisées",
@@ -619,9 +628,7 @@ export default function ScoringPreferencesSimplePage() {
           },
           professional_stability: {
             weight: customCriteria.professional_stability.weight,
-            contract_scoring: mapPreferencesToContractScoring(
-              customCriteria.professional_stability.contract_preferences,
-            ),
+            contract_scoring: contractScoring,
             seniority_bonus: {
               enabled: customCriteria.professional_stability.seniority_bonus,
               min_months: 6,
@@ -653,6 +660,7 @@ export default function ScoringPreferencesSimplePage() {
       }
 
       console.log("💾 Sauvegarde des préférences:", newPreferences)
+      console.log("💾 Contract scoring à sauvegarder:", contractScoring)
 
       const response = await fetch("/api/scoring-preferences", {
         method: "POST",
@@ -1226,7 +1234,10 @@ export default function ScoringPreferencesSimplePage() {
                               <span className="text-sm">{label}</span>
                               <select
                                 value={customCriteria.professional_stability.contract_preferences[key]}
-                                onChange={(e) =>
+                                onChange={(e) => {
+                                  console.log(
+                                    `🔄 Changing ${key} from ${customCriteria.professional_stability.contract_preferences[key]} to ${e.target.value}`,
+                                  )
                                   setCustomCriteria((prev) => ({
                                     ...prev,
                                     professional_stability: {
@@ -1237,7 +1248,7 @@ export default function ScoringPreferencesSimplePage() {
                                       },
                                     },
                                   }))
-                                }
+                                }}
                                 className="text-sm border rounded px-2 py-1"
                               >
                                 <option value="excellent">Excellent</option>
