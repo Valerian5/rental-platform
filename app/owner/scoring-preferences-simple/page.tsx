@@ -16,7 +16,23 @@ import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { CircularScore } from "@/components/circular-score"
 import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
-import { Save, RefreshCw, CheckCircle, FileCheck, Shield, Euro, Briefcase, AlertCircle, Home, Users, TrendingUp, User, GraduationCap, Building, Zap } from 'lucide-react'
+import {
+  Save,
+  RefreshCw,
+  CheckCircle,
+  FileCheck,
+  Shield,
+  Euro,
+  Briefcase,
+  AlertCircle,
+  Home,
+  Users,
+  TrendingUp,
+  User,
+  GraduationCap,
+  Building,
+  Zap,
+} from "lucide-react"
 
 // Personas prédéfinis avec salaires médians
 const PERSONAS = {
@@ -271,6 +287,15 @@ export default function ScoringPreferencesSimplePage() {
     checkAuthAndLoadData()
   }, [])
 
+  // Recalculer le score du simulateur quand les critères changent
+  useEffect(() => {
+    if (user) {
+      calculatePersonaScore().then((score) => {
+        setSimulatorScore(score)
+      })
+    }
+  }, [customCriteria, exclusionRules, simulatorRent, selectedPersona, user, currentUserPreference])
+
   const checkAuthAndLoadData = async () => {
     try {
       const currentUser = await authService.getCurrentUser()
@@ -289,41 +314,47 @@ export default function ScoringPreferencesSimplePage() {
     }
   }
 
-// Sauvegarde dans localStorage
-const saveCustomCriteria = (criteria: any) => {
-  localStorage.setItem('customCriteria', JSON.stringify(criteria));
-};
-
-const saveExclusionRules = (rules: any) => {
-  localStorage.setItem('exclusionRules', JSON.stringify(rules));
-};
-
-// Chargement depuis localStorage
-const loadCustomCriteria = () => {
-  const saved = localStorage.getItem('customCriteria');
-  return saved ? JSON.parse(saved) : null;
-};
-
-const loadExclusionRules = () => {
-  const saved = localStorage.getItem('exclusionRules');
-  return saved ? JSON.parse(saved) : null;
-};  
-
   const loadUserPreference = async (ownerId: string) => {
     try {
-      const preferences = await scoringPreferencesService.getOwnerPreferences(ownerId, true)
+      const preferences = await scoringPreferencesService.getOwnerPreferences(ownerId, false) // Ne pas utiliser le cache pour le chargement initial
       setCurrentUserPreference(preferences)
-
-      // Charger depuis localStorage si disponible
-      const savedCriteria = loadCustomCriteria();
-      const savedRules = loadExclusionRules();
-      
-      if (savedCriteria) setCustomCriteria(savedCriteria);
-      if (savedRules) setExclusionRules(savedRules);
 
       // Si l'utilisateur a une préférence basée sur un modèle système
       if (preferences.system_preference_id || preferences.model_type) {
-        setSelectedSystemPreference(preferences.system_preference_id || preferences.model_type)
+        const modelId = preferences.system_preference_id || preferences.model_type
+        setSelectedSystemPreference(modelId)
+
+        // Charger les critères du modèle dans l'assistant pour permettre la modification
+        const selectedModel = PREDEFINED_MODELS.find((p) => p.id === modelId)
+        if (selectedModel) {
+          setCustomCriteria({
+            income_ratio: {
+              ...customCriteria.income_ratio,
+              ...selectedModel.criteria.income_ratio,
+            },
+            guarantor: {
+              ...customCriteria.guarantor,
+              ...selectedModel.criteria.guarantor,
+            },
+            professional_stability: {
+              ...customCriteria.professional_stability,
+              weight: selectedModel.criteria.professional_stability.weight,
+            },
+            file_quality: {
+              ...customCriteria.file_quality,
+              weight: selectedModel.criteria.file_quality.weight,
+            },
+            property_coherence: {
+              ...customCriteria.property_coherence,
+              weight: selectedModel.criteria.property_coherence.weight,
+            },
+            income_distribution: {
+              ...customCriteria.income_distribution,
+              weight: selectedModel.criteria.income_distribution.weight,
+            },
+          })
+          setExclusionRules(selectedModel.exclusion_rules)
+        }
       } else {
         setSelectedSystemPreference(null)
         // Charger les critères personnalisés dans l'assistant
@@ -379,7 +410,35 @@ const loadExclusionRules = () => {
         toast.success("Modèle appliqué avec succès")
         setSelectedSystemPreference(systemPreferenceId)
         setCurrentUserPreference(data.preference || data.preferences)
-        await loadUserPreference(user.id)
+
+        // Mettre à jour les critères dans l'assistant
+        setCustomCriteria({
+          income_ratio: {
+            ...customCriteria.income_ratio,
+            ...selectedModel.criteria.income_ratio,
+          },
+          guarantor: {
+            ...customCriteria.guarantor,
+            ...selectedModel.criteria.guarantor,
+          },
+          professional_stability: {
+            ...customCriteria.professional_stability,
+            weight: selectedModel.criteria.professional_stability.weight,
+          },
+          file_quality: {
+            ...customCriteria.file_quality,
+            weight: selectedModel.criteria.file_quality.weight,
+          },
+          property_coherence: {
+            ...customCriteria.property_coherence,
+            weight: selectedModel.criteria.property_coherence.weight,
+          },
+          income_distribution: {
+            ...customCriteria.income_distribution,
+            weight: selectedModel.criteria.income_distribution.weight,
+          },
+        })
+        setExclusionRules(selectedModel.exclusion_rules)
 
         // Invalider le cache pour forcer le recalcul des scores
         scoringPreferencesService.invalidateCache(user.id)
@@ -408,10 +467,6 @@ const loadExclusionRules = () => {
         toast.error(`Le total des poids ne peut pas dépasser 100 (actuellement: ${totalWeight})`)
         return
       }
-
-      // Sauvegarder dans localStorage
-      saveCustomCriteria(customCriteria);
-      saveExclusionRules(exclusionRules);
 
       // Construire les critères selon la nouvelle structure
       const newPreferences = {
@@ -443,15 +498,89 @@ const loadExclusionRules = () => {
           professional_stability: {
             weight: customCriteria.professional_stability.weight,
             contract_scoring: {
-              cdi_confirmed: 20,
-              cdi_trial: 15,
-              cdd_long: 14,
-              cdd_short: 10,
-              freelance: customCriteria.professional_stability.contract_preferences.freelance === "excluded" ? 0 : 8,
-              student: customCriteria.professional_stability.contract_preferences.student === "excluded" ? 0 : 6,
-              unemployed: 0,
-              retired: 15,
-              civil_servant: 20,
+              cdi_confirmed:
+                customCriteria.professional_stability.contract_preferences.cdi_confirmed === "excluded"
+                  ? 0
+                  : customCriteria.professional_stability.contract_preferences.cdi_confirmed === "excellent"
+                    ? 20
+                    : customCriteria.professional_stability.contract_preferences.cdi_confirmed === "good"
+                      ? 15
+                      : customCriteria.professional_stability.contract_preferences.cdi_confirmed === "acceptable"
+                        ? 10
+                        : 5,
+              cdi_trial:
+                customCriteria.professional_stability.contract_preferences.cdi_trial === "excluded"
+                  ? 0
+                  : customCriteria.professional_stability.contract_preferences.cdi_trial === "excellent"
+                    ? 20
+                    : customCriteria.professional_stability.contract_preferences.cdi_trial === "good"
+                      ? 15
+                      : customCriteria.professional_stability.contract_preferences.cdi_trial === "acceptable"
+                        ? 10
+                        : 5,
+              cdd_long:
+                customCriteria.professional_stability.contract_preferences.cdd_long === "excluded"
+                  ? 0
+                  : customCriteria.professional_stability.contract_preferences.cdd_long === "excellent"
+                    ? 20
+                    : customCriteria.professional_stability.contract_preferences.cdd_long === "good"
+                      ? 15
+                      : customCriteria.professional_stability.contract_preferences.cdd_long === "acceptable"
+                        ? 10
+                        : 5,
+              cdd_short:
+                customCriteria.professional_stability.contract_preferences.cdd_short === "excluded"
+                  ? 0
+                  : customCriteria.professional_stability.contract_preferences.cdd_short === "excellent"
+                    ? 20
+                    : customCriteria.professional_stability.contract_preferences.cdd_short === "good"
+                      ? 15
+                      : customCriteria.professional_stability.contract_preferences.cdd_short === "acceptable"
+                        ? 10
+                        : 5,
+              freelance:
+                customCriteria.professional_stability.contract_preferences.freelance === "excluded"
+                  ? 0
+                  : customCriteria.professional_stability.contract_preferences.freelance === "excellent"
+                    ? 20
+                    : customCriteria.professional_stability.contract_preferences.freelance === "good"
+                      ? 15
+                      : customCriteria.professional_stability.contract_preferences.freelance === "acceptable"
+                        ? 10
+                        : 5,
+              student:
+                customCriteria.professional_stability.contract_preferences.student === "excluded"
+                  ? 0
+                  : customCriteria.professional_stability.contract_preferences.student === "excellent"
+                    ? 20
+                    : customCriteria.professional_stability.contract_preferences.student === "good"
+                      ? 15
+                      : customCriteria.professional_stability.contract_preferences.student === "acceptable"
+                        ? 10
+                        : customCriteria.professional_stability.contract_preferences.student === "with_guarantor"
+                          ? 6
+                          : 5,
+              unemployed: 0, // Toujours exclu
+              retired:
+                customCriteria.professional_stability.contract_preferences.retired === "excluded"
+                  ? 0
+                  : customCriteria.professional_stability.contract_preferences.retired === "excellent"
+                    ? 20
+                    : customCriteria.professional_stability.contract_preferences.retired === "good"
+                      ? 15
+                      : customCriteria.professional_stability.contract_preferences.retired === "acceptable"
+                        ? 10
+                        : 5,
+              civil_servant:
+                customCriteria.professional_stability.contract_preferences.civil_servant === "excluded"
+                  ? 0
+                  : customCriteria.professional_stability.contract_preferences.civil_servant === "excellent"
+                    ? 20
+                    : customCriteria.professional_stability.contract_preferences.civil_servant === "good"
+                      ? 15
+                      : customCriteria.professional_stability.contract_preferences.civil_servant === "acceptable"
+                        ? 10
+                        : 5,
             },
             seniority_bonus: {
               enabled: customCriteria.professional_stability.seniority_bonus,
@@ -496,7 +625,6 @@ const loadExclusionRules = () => {
         toast.success("Préférences sauvegardées avec succès")
         setCurrentUserPreference(data.preferences || data.preference)
         setSelectedSystemPreference(null) // Marquer comme personnalisé
-        await loadUserPreference(user.id)
 
         // Invalider le cache pour forcer le recalcul des scores
         scoringPreferencesService.invalidateCache(user.id)
@@ -557,79 +685,148 @@ const loadExclusionRules = () => {
     }
 
     try {
-      // Utiliser les critères personnalisés actuels ou les préférences sauvegardées
-      let preferencesToUse = currentUserPreference
-
-      if (!preferencesToUse || selectedSystemPreference === null) {
-        // Utiliser les critères personnalisés actuels
-        preferencesToUse = {
-          owner_id: user?.id || "test",
-          name: "Test",
-          model_type: "custom",
-          is_default: true,
-          criteria: {
-            income_ratio: {
-              weight: customCriteria.income_ratio.weight,
-              thresholds: customCriteria.income_ratio.thresholds,
-              per_person_check: customCriteria.income_ratio.per_person_check,
-              use_guarantor_income_for_students: customCriteria.income_ratio.use_guarantor_income_for_students,
-            },
-            guarantor: {
-              weight: customCriteria.guarantor.weight,
-              required_if_income_below: customCriteria.guarantor.required_if_income_below,
-              types_accepted: {
-                parent: true,
-                visale: true,
-                garantme: true,
-                other_physical: true,
-                company: true,
-              },
-              minimum_income_ratio: customCriteria.guarantor.minimum_income_ratio,
-              verification_required: customCriteria.guarantor.verification_required,
-              use_guarantor_income_for_students: customCriteria.guarantor.use_guarantor_income_for_students,
-            },
-            professional_stability: {
-              weight: customCriteria.professional_stability.weight,
-              contract_scoring: {
-                cdi_confirmed: 20,
-                cdi_trial: 15,
-                cdd_long: 14,
-                cdd_short: 10,
-                freelance: 8,
-                student: 6,
-                unemployed: 0,
-                retired: 15,
-                civil_servant: 20,
-              },
-              seniority_bonus: {
-                enabled: customCriteria.professional_stability.seniority_bonus,
-                min_months: 6,
-                bonus_points: 2,
-              },
-              trial_period_penalty: customCriteria.professional_stability.trial_period_penalty ? 3 : 0,
-            },
-            file_quality: {
-              weight: customCriteria.file_quality.weight,
-              complete_documents_required: customCriteria.file_quality.complete_documents_required,
-              verified_documents_required: customCriteria.file_quality.verified_documents_required,
-              presentation_quality_weight: customCriteria.file_quality.presentation_important ? 6 : 2,
-              coherence_check_weight: 8,
-            },
-            property_coherence: {
-              weight: customCriteria.property_coherence.weight,
-              household_size_vs_property: customCriteria.property_coherence.household_size_check,
-              colocation_structure_check: customCriteria.property_coherence.colocation_structure_check,
-              location_relevance_check: customCriteria.property_coherence.location_relevance,
-              family_situation_coherence: true,
-            },
-            income_distribution: {
-              weight: customCriteria.income_distribution.weight,
-              balance_check: customCriteria.income_distribution.balance_required,
-              compensation_allowed: customCriteria.income_distribution.compensation_allowed,
-            },
+      // Utiliser les critères personnalisés actuels
+      const preferencesToUse = {
+        owner_id: user?.id || "test",
+        name: "Test",
+        model_type: "custom",
+        is_default: true,
+        criteria: {
+          income_ratio: {
+            weight: customCriteria.income_ratio.weight,
+            thresholds: customCriteria.income_ratio.thresholds,
+            per_person_check: customCriteria.income_ratio.per_person_check,
+            use_guarantor_income_for_students: customCriteria.income_ratio.use_guarantor_income_for_students,
           },
-          exclusion_rules: exclusionRules,
-        }
+          guarantor: {
+            weight: customCriteria.guarantor.weight,
+            required_if_income_below: customCriteria.guarantor.required_if_income_below,
+            types_accepted: {
+              parent: true,
+              visale: true,
+              garantme: true,
+              other_physical: true,
+              company: true,
+            },
+            minimum_income_ratio: customCriteria.guarantor.minimum_income_ratio,
+            verification_required: customCriteria.guarantor.verification_required,
+            use_guarantor_income_for_students: customCriteria.guarantor.use_guarantor_income_for_students,
+          },
+          professional_stability: {
+            weight: customCriteria.professional_stability.weight,
+            contract_scoring: {
+              cdi_confirmed:
+                customCriteria.professional_stability.contract_preferences.cdi_confirmed === "excluded"
+                  ? 0
+                  : customCriteria.professional_stability.contract_preferences.cdi_confirmed === "excellent"
+                    ? 20
+                    : customCriteria.professional_stability.contract_preferences.cdi_confirmed === "good"
+                      ? 15
+                      : customCriteria.professional_stability.contract_preferences.cdi_confirmed === "acceptable"
+                        ? 10
+                        : 5,
+              cdi_trial:
+                customCriteria.professional_stability.contract_preferences.cdi_trial === "excluded"
+                  ? 0
+                  : customCriteria.professional_stability.contract_preferences.cdi_trial === "excellent"
+                    ? 20
+                    : customCriteria.professional_stability.contract_preferences.cdi_trial === "good"
+                      ? 15
+                      : customCriteria.professional_stability.contract_preferences.cdi_trial === "acceptable"
+                        ? 10
+                        : 5,
+              cdd_long:
+                customCriteria.professional_stability.contract_preferences.cdd_long === "excluded"
+                  ? 0
+                  : customCriteria.professional_stability.contract_preferences.cdd_long === "excellent"
+                    ? 20
+                    : customCriteria.professional_stability.contract_preferences.cdd_long === "good"
+                      ? 15
+                      : customCriteria.professional_stability.contract_preferences.cdd_long === "acceptable"
+                        ? 10
+                        : 5,
+              cdd_short:
+                customCriteria.professional_stability.contract_preferences.cdd_short === "excluded"
+                  ? 0
+                  : customCriteria.professional_stability.contract_preferences.cdd_short === "excellent"
+                    ? 20
+                    : customCriteria.professional_stability.contract_preferences.cdd_short === "good"
+                      ? 15
+                      : customCriteria.professional_stability.contract_preferences.cdd_short === "acceptable"
+                        ? 10
+                        : 5,
+              freelance:
+                customCriteria.professional_stability.contract_preferences.freelance === "excluded"
+                  ? 0
+                  : customCriteria.professional_stability.contract_preferences.freelance === "excellent"
+                    ? 20
+                    : customCriteria.professional_stability.contract_preferences.freelance === "good"
+                      ? 15
+                      : customCriteria.professional_stability.contract_preferences.freelance === "acceptable"
+                        ? 10
+                        : 5,
+              student:
+                customCriteria.professional_stability.contract_preferences.student === "excluded"
+                  ? 0
+                  : customCriteria.professional_stability.contract_preferences.student === "excellent"
+                    ? 20
+                    : customCriteria.professional_stability.contract_preferences.student === "good"
+                      ? 15
+                      : customCriteria.professional_stability.contract_preferences.student === "acceptable"
+                        ? 10
+                        : customCriteria.professional_stability.contract_preferences.student === "with_guarantor"
+                          ? 6
+                          : 5,
+              unemployed: 0,
+              retired:
+                customCriteria.professional_stability.contract_preferences.retired === "excluded"
+                  ? 0
+                  : customCriteria.professional_stability.contract_preferences.retired === "excellent"
+                    ? 20
+                    : customCriteria.professional_stability.contract_preferences.retired === "good"
+                      ? 15
+                      : customCriteria.professional_stability.contract_preferences.retired === "acceptable"
+                        ? 10
+                        : 5,
+              civil_servant:
+                customCriteria.professional_stability.contract_preferences.civil_servant === "excluded"
+                  ? 0
+                  : customCriteria.professional_stability.contract_preferences.civil_servant === "excellent"
+                    ? 20
+                    : customCriteria.professional_stability.contract_preferences.civil_servant === "good"
+                      ? 15
+                      : customCriteria.professional_stability.contract_preferences.civil_servant === "acceptable"
+                        ? 10
+                        : 5,
+            },
+            seniority_bonus: {
+              enabled: customCriteria.professional_stability.seniority_bonus,
+              min_months: 6,
+              bonus_points: 2,
+            },
+            trial_period_penalty: customCriteria.professional_stability.trial_period_penalty ? 3 : 0,
+          },
+          file_quality: {
+            weight: customCriteria.file_quality.weight,
+            complete_documents_required: customCriteria.file_quality.complete_documents_required,
+            verified_documents_required: customCriteria.file_quality.verified_documents_required,
+            presentation_quality_weight: customCriteria.file_quality.presentation_important ? 6 : 2,
+            coherence_check_weight: 8,
+          },
+          property_coherence: {
+            weight: customCriteria.property_coherence.weight,
+            household_size_vs_property: customCriteria.property_coherence.household_size_check,
+            colocation_structure_check: customCriteria.property_coherence.colocation_structure_check,
+            location_relevance_check: customCriteria.property_coherence.location_relevance,
+            family_situation_coherence: true,
+          },
+          income_distribution: {
+            weight: customCriteria.income_distribution.weight,
+            balance_check: customCriteria.income_distribution.balance_required,
+            compensation_allowed: customCriteria.income_distribution.compensation_allowed,
+          },
+        },
+        exclusion_rules: exclusionRules,
       }
 
       const result = scoringPreferencesService.calculateCustomScore(applicationData, propertyData, preferencesToUse)
@@ -639,21 +836,6 @@ const loadExclusionRules = () => {
       return 50
     }
   }
-
-  // Recalculer le score du simulateur quand les critères changent
-  useEffect(() => {
-    if (user) {
-      calculatePersonaScore().then((score) => {
-        setSimulatorScore(score)
-      })
-    }
-  }, [  customCriteria, 
-    simulatorRent, 
-    selectedPersona, 
-    user, 
-    currentUserPreference,
-    exclusionRules // Ajout de cette dépendance
-  ])
 
   if (loading) {
     return (
