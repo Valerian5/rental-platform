@@ -126,10 +126,9 @@ export default function ApplicationsPage() {
               // Calculer le score avec le service unifié
               if (app.property?.owner_id && app.property?.price) {
                 try {
-                  // Préparer les données enrichies exactement comme dans la page de détail
+                  // Préparer les données enrichies EXACTEMENT comme dans la page de détail
                   const enrichedAppForScoring = {
-                    ...enrichedApp,
-                    // S'assurer que les données sont cohérentes
+                    id: enrichedApp.id,
                     income: totalIncome, // Utiliser les revenus totaux calculés
                     has_guarantor:
                       (rentalFile?.guarantors && rentalFile.guarantors.length > 0) || app.has_guarantor || false,
@@ -145,7 +144,18 @@ export default function ApplicationsPage() {
                     profession: rentalFile?.main_tenant?.profession || app.profession || "Non spécifié",
                     company: rentalFile?.main_tenant?.company || app.company || "Non spécifié",
                     completion_percentage: rentalFile?.completion_percentage || 0,
+                    seniority_months: rentalFile?.main_tenant?.professional_info?.seniority_months || 0,
+                    trial_period: rentalFile?.main_tenant?.professional_info?.trial_period || false,
                   }
+
+                  console.log(`🔍 Données pour scoring candidature ${app.id}:`, {
+                    income: enrichedAppForScoring.income,
+                    has_guarantor: enrichedAppForScoring.has_guarantor,
+                    guarantor_income: enrichedAppForScoring.guarantor_income,
+                    contract_type: enrichedAppForScoring.contract_type,
+                    documents_complete: enrichedAppForScoring.documents_complete,
+                    completion_percentage: enrichedAppForScoring.completion_percentage,
+                  })
 
                   const result = await scoringPreferencesService.calculateScore(
                     enrichedAppForScoring,

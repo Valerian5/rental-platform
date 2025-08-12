@@ -189,7 +189,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
 
       // Préparer les données enrichies EXACTEMENT comme dans la page de liste
       const enrichedApp = {
-        ...app,
+        id: app.id,
         income: finalIncome, // Utiliser les revenus totaux
         has_guarantor: (rentalFile?.guarantors && rentalFile.guarantors.length > 0) || app.has_guarantor || false,
         guarantor_income:
@@ -201,7 +201,18 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
         profession: rentalFile?.main_tenant?.profession || app.profession || "Non spécifié",
         company: rentalFile?.main_tenant?.company || app.company || "Non spécifié",
         completion_percentage: rentalFile?.completion_percentage || 0,
+        seniority_months: rentalFile?.main_tenant?.professional_info?.seniority_months || 0,
+        trial_period: rentalFile?.main_tenant?.professional_info?.trial_period || false,
       }
+
+      console.log(`🔍 Données pour scoring détail candidature ${app.id}:`, {
+        income: enrichedApp.income,
+        has_guarantor: enrichedApp.has_guarantor,
+        guarantor_income: enrichedApp.guarantor_income,
+        contract_type: enrichedApp.contract_type,
+        documents_complete: enrichedApp.documents_complete,
+        completion_percentage: enrichedApp.completion_percentage,
+      })
 
       const result = await scoringPreferencesService.calculateScore(
         enrichedApp,

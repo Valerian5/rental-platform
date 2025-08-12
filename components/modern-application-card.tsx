@@ -23,6 +23,7 @@ import {
   BarChart3,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
+import type { completion_percentage } from "@/types/completion_percentage" // Declare the variable here
 
 interface ApplicationCardProps {
   application: {
@@ -51,7 +52,7 @@ interface ApplicationCardProps {
     guarantor_income?: number
     rental_file_main_tenant?: any
     rental_file_guarantors?: any[]
-    completion_percentage?: number
+    completion_percentage?: completion_percentage
     message?: string
     company?: string
   }
@@ -99,20 +100,26 @@ export function ModernApplicationCard({
         id: application.id,
         income: application.income,
         has_guarantor: application.has_guarantor,
-        guarantor_income: application.guarantor_income || rentalFile?.guarantor_income || 0,
-        contract_type: application.contract_type || rentalFile?.contract_type || "Non spécifié",
+        guarantor_income: application.guarantor_income || 0,
+        contract_type: application.contract_type || "Non spécifié",
         profession: application.profession,
         company: application.company || "Non spécifié",
-        documents_complete: application.documents_complete || (application.completion_percentage || 0) >= 80,
+        documents_complete: (application.completion_percentage || 0) >= 80 || application.documents_complete || false,
         has_verified_documents: rentalFile?.has_verified_documents || false,
         presentation: rentalFile?.presentation || application.message || "",
-        trial_period: rentalFile?.trial_period || false,
-        seniority_months: rentalFile?.seniority_months || 0,
         completion_percentage: application.completion_percentage || 0,
-        // Enrichir avec les données du rental_file si disponibles
-        rental_file_main_tenant: application.rental_file_main_tenant,
-        rental_file_guarantors: application.rental_file_guarantors,
+        seniority_months: rentalFile?.seniority_months || 0,
+        trial_period: rentalFile?.trial_period || false,
       }
+
+      console.log(`🔍 Données pour scoring carte candidature ${application.id}:`, {
+        income: enrichedApplication.income,
+        has_guarantor: enrichedApplication.has_guarantor,
+        guarantor_income: enrichedApplication.guarantor_income,
+        contract_type: enrichedApplication.contract_type,
+        documents_complete: enrichedApplication.documents_complete,
+        completion_percentage: enrichedApplication.completion_percentage,
+      })
 
       // Utiliser le service unifié de scoring
       const result = await scoringPreferencesService.calculateScore(
