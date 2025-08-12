@@ -187,18 +187,19 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       // Utiliser les revenus totaux calculés
       const finalIncome = totalIncome || app.income || 0
 
-      // Préparer les données enrichies pour le calcul
+      // Préparer les données enrichies EXACTEMENT comme dans la page de liste
       const enrichedApp = {
         ...app,
         income: finalIncome, // Utiliser les revenus totaux
-        has_guarantor: (rentalFile?.guarantors && rentalFile.guarantors.length > 0) || app.has_guarantor,
+        has_guarantor: (rentalFile?.guarantors && rentalFile.guarantors.length > 0) || app.has_guarantor || false,
         guarantor_income:
           rentalFile?.guarantors?.[0]?.personal_info?.income_sources?.work_income?.amount || app.guarantor_income || 0,
-        contract_type: rentalFile?.main_tenant?.main_activity || app.contract_type,
-        documents_complete: rentalFile?.completion_percentage >= 80 || app.documents_complete,
+        contract_type: rentalFile?.main_tenant?.main_activity || app.contract_type || "Non spécifié",
+        documents_complete: (rentalFile?.completion_percentage || 0) >= 80 || app.documents_complete || false,
         has_verified_documents: rentalFile?.has_verified_documents || false,
-        profession: rentalFile?.main_tenant?.profession || app.profession,
-        company: rentalFile?.main_tenant?.company || app.company,
+        presentation: rentalFile?.presentation_message || app.message || "",
+        profession: rentalFile?.main_tenant?.profession || app.profession || "Non spécifié",
+        company: rentalFile?.main_tenant?.company || app.company || "Non spécifié",
         completion_percentage: rentalFile?.completion_percentage || 0,
       }
 
@@ -208,8 +209,9 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
         ownerId || app.property.owner_id,
         false, // Ne pas utiliser le cache pour avoir le score le plus récent
       )
+
       setScoringResult(result)
-      console.log("📊 Score calculé pour détail:", result.totalScore)
+      console.log(`📊 Score calculé pour détail candidature ${app.id}: ${result.totalScore}`)
     } catch (error) {
       console.error("Erreur recalcul score:", error)
       setScoringResult({

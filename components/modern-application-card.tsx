@@ -94,13 +94,13 @@ export function ModernApplicationCard({
     try {
       setScoreLoading(true)
 
-      // Préparer les données d'application enrichies
+      // Préparer les données d'application enrichies EXACTEMENT comme dans les autres pages
       const enrichedApplication = {
         id: application.id,
         income: application.income,
         has_guarantor: application.has_guarantor,
         guarantor_income: application.guarantor_income || rentalFile?.guarantor_income || 0,
-        contract_type: application.contract_type || rentalFile?.contract_type || "cdi",
+        contract_type: application.contract_type || rentalFile?.contract_type || "Non spécifié",
         profession: application.profession,
         company: application.company || "Non spécifié",
         documents_complete: application.documents_complete || (application.completion_percentage || 0) >= 80,
@@ -108,6 +108,7 @@ export function ModernApplicationCard({
         presentation: rentalFile?.presentation || application.message || "",
         trial_period: rentalFile?.trial_period || false,
         seniority_months: rentalFile?.seniority_months || 0,
+        completion_percentage: application.completion_percentage || 0,
         // Enrichir avec les données du rental_file si disponibles
         rental_file_main_tenant: application.rental_file_main_tenant,
         rental_file_guarantors: application.rental_file_guarantors,
@@ -118,7 +119,7 @@ export function ModernApplicationCard({
         enrichedApplication,
         application.property,
         application.property.owner_id,
-        true, // Utiliser le cache
+        false, // Ne pas utiliser le cache pour cohérence
       )
 
       setCalculatedScore(result.totalScore)
@@ -127,6 +128,8 @@ export function ModernApplicationCard({
       setScoreWarnings(result.warnings || [])
       setScoreCompatible(result.compatible)
       setModelUsed(result.model_used)
+
+      console.log(`📊 Score calculé pour carte candidature ${application.id}: ${result.totalScore}`)
     } catch (error) {
       console.error("❌ Erreur calcul score ModernApplicationCard:", error)
       setCalculatedScore(application.match_score || 50)

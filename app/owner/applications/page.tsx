@@ -126,16 +126,40 @@ export default function ApplicationsPage() {
               // Calculer le score avec le service unifié
               if (app.property?.owner_id && app.property?.price) {
                 try {
+                  // Préparer les données enrichies exactement comme dans la page de détail
+                  const enrichedAppForScoring = {
+                    ...enrichedApp,
+                    // S'assurer que les données sont cohérentes
+                    income: totalIncome, // Utiliser les revenus totaux calculés
+                    has_guarantor:
+                      (rentalFile?.guarantors && rentalFile.guarantors.length > 0) || app.has_guarantor || false,
+                    guarantor_income:
+                      rentalFile?.guarantors?.[0]?.personal_info?.income_sources?.work_income?.amount ||
+                      app.guarantor_income ||
+                      0,
+                    contract_type: rentalFile?.main_tenant?.main_activity || app.contract_type || "Non spécifié",
+                    documents_complete:
+                      (rentalFile?.completion_percentage || 0) >= 80 || app.documents_complete || false,
+                    has_verified_documents: rentalFile?.has_verified_documents || false,
+                    presentation: rentalFile?.presentation_message || app.message || "",
+                    profession: rentalFile?.main_tenant?.profession || app.profession || "Non spécifié",
+                    company: rentalFile?.main_tenant?.company || app.company || "Non spécifié",
+                    completion_percentage: rentalFile?.completion_percentage || 0,
+                  }
+
                   const result = await scoringPreferencesService.calculateScore(
-                    enrichedApp,
+                    enrichedAppForScoring,
                     app.property,
                     app.property.owner_id,
-                    true, // Utiliser le cache pour les performances
+                    false, // Ne pas utiliser le cache pour avoir le score le plus récent
                   )
+
                   enrichedApp.match_score = result.totalScore
                   enrichedApp.scoring_compatible = result.compatible
                   enrichedApp.scoring_breakdown = result.breakdown
                   enrichedApp.scoring_model_used = result.model_used
+
+                  console.log(`📊 Score calculé pour candidature ${app.id}: ${result.totalScore}`)
                 } catch (error) {
                   console.error("Erreur calcul score pour candidature:", app.id, error)
                   enrichedApp.match_score = 50
