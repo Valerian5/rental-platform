@@ -20,7 +20,6 @@ import {
   User,
   Home,
   Heart,
-  Upload,
 } from "lucide-react"
 import { rentalFileService, RENTAL_SITUATIONS, GUARANTOR_TYPES } from "@/lib/rental-file-service"
 import { authService } from "@/lib/auth-service"
@@ -259,23 +258,6 @@ export default function RentalFilePage() {
             </div>
           </div>
         </div>
-
-        {/* Nouveau bouton pour l'upload de documents */}
-        <Card className="border-2 border-dashed border-blue-300 bg-blue-50">
-          <CardContent className="p-6 text-center">
-            <Upload className="h-12 w-12 mx-auto mb-4 text-blue-500" />
-            <h3 className="text-lg font-semibold text-blue-800 mb-2">Nouveau système d'upload</h3>
-            <p className="text-blue-700 mb-4">
-              Utilisez notre nouveau système d'upload avec validation automatique et preview des documents
-            </p>
-            <Button asChild className="bg-blue-600 hover:bg-blue-700">
-              <Link href="/tenant/documents/upload-new">
-                <Upload className="h-4 w-4 mr-2" />
-                Uploader mes documents
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
 
         {/* Progression principale avec icônes */}
         <Card>
