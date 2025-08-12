@@ -1,11 +1,10 @@
 "use client"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { DocumentPreview } from "./DocumentPreview"
-import { CheckCircle, AlertTriangle, FileText, Calendar, User, Euro, Building } from "lucide-react"
-import { documentAttemptTracker } from "@/lib/documentAttemptTracker"
+import { CheckCircle, AlertTriangle, FileText, Calendar, User, Euro, Home } from "lucide-react"
 
 interface DocumentPreUploadPopupProps {
   isOpen: boolean
@@ -14,73 +13,9 @@ interface DocumentPreUploadPopupProps {
   file: File | null
   preUploadUrl: string | null
   documentType: string
-  documentName: string
+  documentName?: string
   expectedMonth?: string
   isUploading?: boolean
-}
-
-const DOCUMENT_ICONS = {
-  identity: <User className="h-5 w-5" />,
-  payslip: <Euro className="h-5 w-5" />,
-  rent_receipt: <Building className="h-5 w-5" />,
-  tax_notice: <FileText className="h-5 w-5" />,
-  bank_statement: <Building className="h-5 w-5" />,
-}
-
-const DOCUMENT_DESCRIPTIONS = {
-  identity_recto: {
-    title: "Recto de votre pièce d'identité",
-    checks: [
-      "C'est bien VOTRE pièce d'identité",
-      "La photo est visible et nette",
-      "Toutes les informations sont lisibles",
-      "Le document n'est pas expiré",
-    ],
-  },
-  identity_verso: {
-    title: "Verso de votre pièce d'identité",
-    checks: [
-      "C'est bien le VERSO de la même pièce d'identité",
-      "Les informations sont lisibles",
-      "La signature est visible (si applicable)",
-    ],
-  },
-  payslip: {
-    title: "Fiche de paie",
-    checks: [
-      "C'est bien VOTRE fiche de paie",
-      "Le mois correspond à celui demandé",
-      "L'employeur est visible",
-      "Le salaire net et brut sont lisibles",
-    ],
-  },
-  rent_receipt: {
-    title: "Quittance de loyer",
-    checks: [
-      "C'est bien VOTRE quittance de loyer",
-      "Le mois correspond à celui demandé",
-      "Le montant du loyer est visible",
-      "Le propriétaire/agence est mentionné",
-    ],
-  },
-  tax_notice: {
-    title: "Avis d'imposition",
-    checks: [
-      "C'est bien VOTRE avis d'imposition",
-      "L'année correspond (N-1)",
-      "Le Revenu Fiscal de Référence est visible",
-      "Le QR Code 2DDoc est présent et lisible",
-    ],
-  },
-  bank_statement: {
-    title: "Relevé bancaire",
-    checks: [
-      "C'est bien VOTRE relevé bancaire",
-      "Le mois correspond à celui demandé",
-      "Votre nom apparaît sur le relevé",
-      "Les transactions sont visibles",
-    ],
-  },
 }
 
 export function DocumentPreUploadPopup({
@@ -94,150 +29,156 @@ export function DocumentPreUploadPopup({
   expectedMonth,
   isUploading = false,
 }: DocumentPreUploadPopupProps) {
-  const attempts = documentAttemptTracker.getAttempts(documentType)
-  const remainingAttempts = documentAttemptTracker.getRemainingAttempts(documentType)
-  const progressiveMessage = documentAttemptTracker.getProgressiveMessage(documentType)
-  const lastErrors = documentAttemptTracker.getLastErrors(documentType)
+  if (!file || !preUploadUrl) return null
 
-  const documentInfo = DOCUMENT_DESCRIPTIONS[documentType as keyof typeof DOCUMENT_DESCRIPTIONS] || {
-    title: documentName,
-    checks: ["Vérifiez que le document est correct et lisible"],
+  const getDocumentIcon = () => {
+    if (documentType.includes("identity")) return <User className="h-5 w-5" />
+    if (documentType === "payslip") return <Euro className="h-5 w-5" />
+    if (documentType === "rent_receipt") return <Home className="h-5 w-5" />
+    if (documentType === "tax_notice") return <FileText className="h-5 w-5" />
+    return <FileText className="h-5 w-5" />
   }
+
+  const getValidationChecklist = () => {
+    const checks = []
+
+    if (documentType.includes("identity")) {
+      if (documentType.includes("recto")) {
+        checks.push(
+          { text: "La photo est visible et nette", icon: <CheckCircle className="h-4 w-4" /> },
+          { text: "Le nom et prénom sont lisibles", icon: <CheckCircle className="h-4 w-4" /> },
+          { text: "La date de naissance est visible", icon: <CheckCircle className="h-4 w-4" /> },
+          { text: "Le document n'est pas expiré", icon: <AlertTriangle className="h-4 w-4 text-orange-500" /> },
+        )
+      } else {
+        checks.push(
+          { text: "L'adresse est lisible", icon: <CheckCircle className="h-4 w-4" /> },
+          { text: "La signature est présente", icon: <CheckCircle className="h-4 w-4" /> },
+          { text: "Le numéro de document est visible", icon: <CheckCircle className="h-4 w-4" /> },
+        )
+      }
+    } else if (documentType === "payslip") {
+      checks.push(
+        { text: `Le mois correspond bien à ${expectedMonth}`, icon: <Calendar className="h-4 w-4 text-blue-500" /> },
+        { text: "Le nom de l'employé est visible", icon: <CheckCircle className="h-4 w-4" /> },
+        { text: "Le salaire net est clairement indiqué", icon: <Euro className="h-4 w-4 text-green-500" /> },
+        { text: "Le nom de l'employeur est présent", icon: <CheckCircle className="h-4 w-4" /> },
+        { text: "Toutes les informations sont lisibles", icon: <CheckCircle className="h-4 w-4" /> },
+      )
+    } else if (documentType === "rent_receipt") {
+      checks.push(
+        { text: `Le mois correspond bien à ${expectedMonth}`, icon: <Calendar className="h-4 w-4 text-blue-500" /> },
+        { text: "Le nom du locataire est visible", icon: <CheckCircle className="h-4 w-4" /> },
+        { text: "Le montant du loyer est indiqué", icon: <Euro className="h-4 w-4 text-green-500" /> },
+        { text: "Le nom du propriétaire/agence est présent", icon: <CheckCircle className="h-4 w-4" /> },
+        { text: "La quittance est signée ou tamponnée", icon: <CheckCircle className="h-4 w-4" /> },
+      )
+    } else if (documentType === "tax_notice") {
+      checks.push(
+        { text: "L'avis est de l'année fiscale 2023", icon: <Calendar className="h-4 w-4 text-blue-500" /> },
+        { text: "Le QR Code 2DDoc est visible", icon: <AlertTriangle className="h-4 w-4 text-orange-500" /> },
+        { text: "Le Revenu Fiscal de Référence est lisible", icon: <Euro className="h-4 w-4 text-green-500" /> },
+        { text: "Le nom du contribuable correspond", icon: <CheckCircle className="h-4 w-4" /> },
+        { text: "Toutes les pages sont présentes", icon: <CheckCircle className="h-4 w-4" /> },
+      )
+    }
+
+    return checks
+  }
+
+  const validationChecks = getValidationChecklist()
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl h-[80vh] p-0">
-        <DialogHeader className="p-6 pb-0">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden">
+        <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {DOCUMENT_ICONS[documentType as keyof typeof DOCUMENT_ICONS] || <FileText className="h-5 w-5" />}
-            Vérifiez votre document
-            {attempts > 0 && (
-              <Badge variant="outline" className="ml-2">
-                Tentative {attempts + 1}/5
-              </Badge>
-            )}
+            {getDocumentIcon()}
+            Vérification avant upload - {documentName || documentType}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex h-full p-6 pt-0 gap-6">
-          {/* Preview à gauche */}
-          <div className="flex-1">
-            <h3 className="font-medium mb-3">Aperçu du document</h3>
-            {preUploadUrl && file ? (
-              <DocumentPreview fileUrl={preUploadUrl} fileName={file.name} fileType={file.type} className="h-full" />
-            ) : (
-              <Card className="h-full">
-                <CardContent className="flex items-center justify-center h-full">
-                  <div className="text-center">
-                    <FileText className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                    <p className="text-gray-600">Chargement de l'aperçu...</p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 py-4">
+          {/* Colonne gauche : Aperçu du document */}
+          <div className="space-y-4">
+            <h3 className="font-medium text-gray-900">Aperçu du document</h3>
+            <DocumentPreview fileUrl={preUploadUrl} fileName={file.name} className="h-96" />
+
+            <div className="bg-blue-50 p-3 rounded-lg">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-blue-600 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-medium text-blue-800">Vérifiez la qualité</p>
+                  <p className="text-blue-700">
+                    Assurez-vous que le document est net, lisible et complet avant de continuer.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* Instructions à droite */}
-          <div className="w-80 space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                  Document demandé
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <h4 className="font-medium">{documentInfo.title}</h4>
-                  {expectedMonth && (
-                    <div className="flex items-center gap-2 mt-2">
-                      <Calendar className="h-4 w-4 text-blue-600" />
-                      <span className="text-sm font-medium text-blue-600">{expectedMonth}</span>
-                    </div>
-                  )}
+          {/* Colonne droite : Liste de vérification */}
+          <div className="space-y-4">
+            <h3 className="font-medium text-gray-900">Points à vérifier</h3>
+
+            <div className="space-y-3">
+              {validationChecks.map((check, index) => (
+                <div key={index} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                  {check.icon}
+                  <span className="text-sm text-gray-700">{check.text}</span>
                 </div>
-
-                <div>
-                  <h5 className="font-medium text-sm mb-2">✅ Vérifiez que :</h5>
-                  <ul className="space-y-1">
-                    {documentInfo.checks.map((check, index) => (
-                      <li key={index} className="text-sm text-gray-600 flex items-start gap-2">
-                        <span className="text-green-600 mt-0.5">•</span>
-                        {check}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {expectedMonth && (
-                  <div className="bg-blue-50 p-3 rounded-lg">
-                    <div className="flex items-center gap-2 mb-1">
-                      <AlertTriangle className="h-4 w-4 text-blue-600" />
-                      <span className="font-medium text-blue-800 text-sm">Important</span>
-                    </div>
-                    <p className="text-sm text-blue-700">
-                      Assurez-vous que le document correspond bien au mois de <strong>{expectedMonth}</strong>
-                    </p>
-                  </div>
-                )}
-
-                {attempts > 0 && (
-                  <div className="bg-orange-50 p-3 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <AlertTriangle className="h-4 w-4 text-orange-600" />
-                      <span className="font-medium text-orange-800 text-sm">
-                        Tentatives restantes: {remainingAttempts}
-                      </span>
-                    </div>
-                    {progressiveMessage && <p className="text-sm text-orange-700 mb-2">{progressiveMessage}</p>}
-                    {lastErrors.length > 0 && (
-                      <div>
-                        <p className="text-sm font-medium text-orange-800 mb-1">Erreurs précédentes:</p>
-                        <ul className="text-sm text-orange-700">
-                          {lastErrors.slice(-2).map((error, index) => (
-                            <li key={index} className="flex items-start gap-1">
-                              <span>•</span>
-                              <span>{error}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={onClose} disabled={isUploading} className="flex-1 bg-transparent">
-                Annuler
-              </Button>
-              <Button onClick={onConfirm} disabled={isUploading || remainingAttempts === 0} className="flex-1">
-                {isUploading ? (
-                  <>
-                    <CheckCircle className="h-4 w-4 mr-2 animate-spin" />
-                    Upload en cours...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    Uploader définitivement
-                  </>
-                )}
-              </Button>
+              ))}
             </div>
 
-            {remainingAttempts === 0 && (
-              <div className="bg-red-50 p-3 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-red-600" />
-                  <span className="font-medium text-red-800 text-sm">Document bloqué</span>
-                </div>
-                <p className="text-sm text-red-700 mt-1">Nombre maximum de tentatives atteint. Contactez le support.</p>
-              </div>
+            {expectedMonth && (
+              <Alert>
+                <Calendar className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Mois attendu :</strong> {expectedMonth}
+                  <br />
+                  Vérifiez bien que le document correspond à cette période.
+                </AlertDescription>
+              </Alert>
             )}
+
+            <div className="bg-yellow-50 p-4 rounded-lg">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-medium text-yellow-800 mb-1">Important</p>
+                  <p className="text-yellow-700">
+                    Une fois uploadé, le document sera analysé automatiquement. Si les informations ne correspondent
+                    pas, vous devrez recommencer.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
+
+        <DialogFooter className="flex justify-between">
+          <Button variant="outline" onClick={onClose} disabled={isUploading}>
+            Annuler
+          </Button>
+          <div className="space-x-2">
+            <Button variant="outline" onClick={onClose} disabled={isUploading}>
+              Choisir un autre fichier
+            </Button>
+            <Button onClick={onConfirm} disabled={isUploading}>
+              {isUploading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Upload en cours...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Confirmer l'upload
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
