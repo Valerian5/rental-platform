@@ -294,7 +294,7 @@ export default function ScoringPreferencesSimplePage() {
         setSimulatorScore(score)
       })
     }
-  }, [customCriteria, exclusionRules, simulatorRent, selectedPersona, user, currentUserPreference])
+  }, [customCriteria, exclusionRules, simulatorRent, selectedPersona, user])
 
   const checkAuthAndLoadData = async () => {
     try {
@@ -316,65 +316,147 @@ export default function ScoringPreferencesSimplePage() {
 
   const loadUserPreference = async (ownerId: string) => {
     try {
-      const preferences = await scoringPreferencesService.getOwnerPreferences(ownerId, false) // Ne pas utiliser le cache pour le chargement initial
+      const preferences = await scoringPreferencesService.getOwnerPreferences(ownerId, false) // Ne pas utiliser le cache
       setCurrentUserPreference(preferences)
 
-      // Si l'utilisateur a une préférence basée sur un modèle système
+      // Charger les critères dans l'assistant
+      if (preferences && preferences.criteria) {
+        // Mapper les critères de la base vers l'interface
+        setCustomCriteria({
+          income_ratio: {
+            weight: preferences.criteria.income_ratio?.weight || 18,
+            thresholds: preferences.criteria.income_ratio?.thresholds || {
+              excellent: 3.5,
+              good: 3.0,
+              acceptable: 2.5,
+              minimum: 2.0,
+            },
+            per_person_check: preferences.criteria.income_ratio?.per_person_check || true,
+            use_guarantor_income_for_students:
+              preferences.criteria.income_ratio?.use_guarantor_income_for_students || false,
+          },
+          guarantor: {
+            weight: preferences.criteria.guarantor?.weight || 17,
+            required_if_income_below: preferences.criteria.guarantor?.required_if_income_below || 3.0,
+            minimum_income_ratio: preferences.criteria.guarantor?.minimum_income_ratio || 3.0,
+            verification_required: preferences.criteria.guarantor?.verification_required || true,
+            use_guarantor_income_for_students:
+              preferences.criteria.guarantor?.use_guarantor_income_for_students || false,
+          },
+          professional_stability: {
+            weight: preferences.criteria.professional_stability?.weight || 17,
+            contract_preferences: mapContractScoringToPreferences(
+              preferences.criteria.professional_stability?.contract_scoring,
+            ),
+            seniority_bonus: preferences.criteria.professional_stability?.seniority_bonus?.enabled || true,
+            trial_period_penalty: (preferences.criteria.professional_stability?.trial_period_penalty || 0) > 0,
+          },
+          file_quality: {
+            weight: preferences.criteria.file_quality?.weight || 16,
+            complete_documents_required: preferences.criteria.file_quality?.complete_documents_required || true,
+            verified_documents_required: preferences.criteria.file_quality?.verified_documents_required || false,
+            presentation_important: (preferences.criteria.file_quality?.presentation_quality_weight || 0) > 3,
+          },
+          property_coherence: {
+            weight: preferences.criteria.property_coherence?.weight || 16,
+            household_size_check: preferences.criteria.property_coherence?.household_size_vs_property || true,
+            colocation_structure_check: preferences.criteria.property_coherence?.colocation_structure_check || true,
+            location_relevance: preferences.criteria.property_coherence?.location_relevance_check || false,
+          },
+          income_distribution: {
+            weight: preferences.criteria.income_distribution?.weight || 16,
+            balance_required: preferences.criteria.income_distribution?.balance_check || true,
+            compensation_allowed: preferences.criteria.income_distribution?.compensation_allowed || true,
+          },
+        })
+      }
+
+      if (preferences && preferences.exclusion_rules) {
+        setExclusionRules(preferences.exclusion_rules)
+      }
+
+      // Déterminer le modèle sélectionné
       if (preferences.system_preference_id || preferences.model_type) {
         const modelId = preferences.system_preference_id || preferences.model_type
-        setSelectedSystemPreference(modelId)
-
-        // Charger les critères du modèle dans l'assistant pour permettre la modification
-        const selectedModel = PREDEFINED_MODELS.find((p) => p.id === modelId)
-        if (selectedModel) {
-          setCustomCriteria({
-            income_ratio: {
-              ...customCriteria.income_ratio,
-              ...selectedModel.criteria.income_ratio,
-            },
-            guarantor: {
-              ...customCriteria.guarantor,
-              ...selectedModel.criteria.guarantor,
-            },
-            professional_stability: {
-              ...customCriteria.professional_stability,
-              weight: selectedModel.criteria.professional_stability.weight,
-            },
-            file_quality: {
-              ...customCriteria.file_quality,
-              weight: selectedModel.criteria.file_quality.weight,
-            },
-            property_coherence: {
-              ...customCriteria.property_coherence,
-              weight: selectedModel.criteria.property_coherence.weight,
-            },
-            income_distribution: {
-              ...customCriteria.income_distribution,
-              weight: selectedModel.criteria.income_distribution.weight,
-            },
-          })
-          setExclusionRules(selectedModel.exclusion_rules)
+        if (PREDEFINED_MODELS.find((m) => m.id === modelId)) {
+          setSelectedSystemPreference(modelId)
+        } else {
+          setSelectedSystemPreference(null)
         }
       } else {
         setSelectedSystemPreference(null)
-        // Charger les critères personnalisés dans l'assistant
-        if (preferences.criteria) {
-          setCustomCriteria({
-            income_ratio: preferences.criteria.income_ratio || customCriteria.income_ratio,
-            guarantor: preferences.criteria.guarantor || customCriteria.guarantor,
-            professional_stability:
-              preferences.criteria.professional_stability || customCriteria.professional_stability,
-            file_quality: preferences.criteria.file_quality || customCriteria.file_quality,
-            property_coherence: preferences.criteria.property_coherence || customCriteria.property_coherence,
-            income_distribution: preferences.criteria.income_distribution || customCriteria.income_distribution,
-          })
-        }
-        if (preferences.exclusion_rules) {
-          setExclusionRules(preferences.exclusion_rules)
-        }
       }
     } catch (error) {
       console.error("Erreur chargement préférence utilisateur:", error)
+    }
+  }
+
+  // Mapper les scores de contrat vers les préférences d'interface
+  const mapContractScoringToPreferences = (contractScoring: any) => {
+    if (!contractScoring) {
+      return {
+        cdi_confirmed: "excellent",
+        cdi_trial: "good",
+        cdd_long: "good",
+        cdd_short: "acceptable",
+        freelance: "acceptable",
+        student: "with_guarantor",
+        unemployed: "excluded",
+        retired: "good",
+        civil_servant: "excellent",
+      }
+    }
+
+    const mapScoreToPreference = (score: number) => {
+      if (score === 0) return "excluded"
+      if (score >= 18) return "excellent"
+      if (score >= 14) return "good"
+      if (score >= 8) return "acceptable"
+      return "with_guarantor"
+    }
+
+    return {
+      cdi_confirmed: mapScoreToPreference(contractScoring.cdi_confirmed || 20),
+      cdi_trial: mapScoreToPreference(contractScoring.cdi_trial || 15),
+      cdd_long: mapScoreToPreference(contractScoring.cdd_long || 14),
+      cdd_short: mapScoreToPreference(contractScoring.cdd_short || 10),
+      freelance: mapScoreToPreference(contractScoring.freelance || 8),
+      student: mapScoreToPreference(contractScoring.student || 6),
+      unemployed: "excluded",
+      retired: mapScoreToPreference(contractScoring.retired || 15),
+      civil_servant: mapScoreToPreference(contractScoring.civil_servant || 20),
+    }
+  }
+
+  // Mapper les préférences d'interface vers les scores de contrat
+  const mapPreferencesToContractScoring = (preferences: any) => {
+    const mapPreferenceToScore = (preference: string) => {
+      switch (preference) {
+        case "excluded":
+          return 0
+        case "with_guarantor":
+          return 6
+        case "acceptable":
+          return 10
+        case "good":
+          return 15
+        case "excellent":
+          return 20
+        default:
+          return 10
+      }
+    }
+
+    return {
+      cdi_confirmed: mapPreferenceToScore(preferences.cdi_confirmed),
+      cdi_trial: mapPreferenceToScore(preferences.cdi_trial),
+      cdd_long: mapPreferenceToScore(preferences.cdd_long),
+      cdd_short: mapPreferenceToScore(preferences.cdd_short),
+      freelance: mapPreferenceToScore(preferences.freelance),
+      student: mapPreferenceToScore(preferences.student),
+      unemployed: 0,
+      retired: mapPreferenceToScore(preferences.retired),
+      civil_servant: mapPreferenceToScore(preferences.civil_servant),
     }
   }
 
@@ -399,7 +481,45 @@ export default function ScoringPreferencesSimplePage() {
           name: selectedModel.name,
           model_type: selectedModel.id,
           is_default: true,
-          criteria: selectedModel.criteria,
+          criteria: {
+            income_ratio: selectedModel.criteria.income_ratio,
+            guarantor: selectedModel.criteria.guarantor,
+            professional_stability: {
+              weight: selectedModel.criteria.professional_stability.weight,
+              contract_scoring: {
+                cdi_confirmed: 20,
+                cdi_trial: 15,
+                cdd_long: 14,
+                cdd_short: 10,
+                freelance: selectedModel.id === "flexible" ? 15 : selectedModel.id === "strict" ? 6 : 8,
+                student: selectedModel.id === "flexible" ? 14 : selectedModel.id === "strict" ? 4 : 6,
+                unemployed: 0,
+                retired: 15,
+                civil_servant: 20,
+              },
+              seniority_bonus: { enabled: true, min_months: 6, bonus_points: 2 },
+              trial_period_penalty: selectedModel.id === "strict" ? 5 : 3,
+            },
+            file_quality: {
+              weight: selectedModel.criteria.file_quality.weight,
+              complete_documents_required: selectedModel.id !== "flexible",
+              verified_documents_required: selectedModel.id === "strict",
+              presentation_quality_weight: 6,
+              coherence_check_weight: 8,
+            },
+            property_coherence: {
+              weight: selectedModel.criteria.property_coherence.weight,
+              household_size_vs_property: true,
+              colocation_structure_check: true,
+              location_relevance_check: false,
+              family_situation_coherence: true,
+            },
+            income_distribution: {
+              weight: selectedModel.criteria.income_distribution.weight,
+              balance_check: true,
+              compensation_allowed: true,
+            },
+          },
           exclusion_rules: selectedModel.exclusion_rules,
           system_preference_id: systemPreferenceId,
         }),
@@ -411,34 +531,8 @@ export default function ScoringPreferencesSimplePage() {
         setSelectedSystemPreference(systemPreferenceId)
         setCurrentUserPreference(data.preference || data.preferences)
 
-        // Mettre à jour les critères dans l'assistant
-        setCustomCriteria({
-          income_ratio: {
-            ...customCriteria.income_ratio,
-            ...selectedModel.criteria.income_ratio,
-          },
-          guarantor: {
-            ...customCriteria.guarantor,
-            ...selectedModel.criteria.guarantor,
-          },
-          professional_stability: {
-            ...customCriteria.professional_stability,
-            weight: selectedModel.criteria.professional_stability.weight,
-          },
-          file_quality: {
-            ...customCriteria.file_quality,
-            weight: selectedModel.criteria.file_quality.weight,
-          },
-          property_coherence: {
-            ...customCriteria.property_coherence,
-            weight: selectedModel.criteria.property_coherence.weight,
-          },
-          income_distribution: {
-            ...customCriteria.income_distribution,
-            weight: selectedModel.criteria.income_distribution.weight,
-          },
-        })
-        setExclusionRules(selectedModel.exclusion_rules)
+        // Recharger les préférences pour mettre à jour l'interface
+        await loadUserPreference(user.id)
 
         // Invalider le cache pour forcer le recalcul des scores
         scoringPreferencesService.invalidateCache(user.id)
@@ -497,91 +591,9 @@ export default function ScoringPreferencesSimplePage() {
           },
           professional_stability: {
             weight: customCriteria.professional_stability.weight,
-            contract_scoring: {
-              cdi_confirmed:
-                customCriteria.professional_stability.contract_preferences.cdi_confirmed === "excluded"
-                  ? 0
-                  : customCriteria.professional_stability.contract_preferences.cdi_confirmed === "excellent"
-                    ? 20
-                    : customCriteria.professional_stability.contract_preferences.cdi_confirmed === "good"
-                      ? 15
-                      : customCriteria.professional_stability.contract_preferences.cdi_confirmed === "acceptable"
-                        ? 10
-                        : 5,
-              cdi_trial:
-                customCriteria.professional_stability.contract_preferences.cdi_trial === "excluded"
-                  ? 0
-                  : customCriteria.professional_stability.contract_preferences.cdi_trial === "excellent"
-                    ? 20
-                    : customCriteria.professional_stability.contract_preferences.cdi_trial === "good"
-                      ? 15
-                      : customCriteria.professional_stability.contract_preferences.cdi_trial === "acceptable"
-                        ? 10
-                        : 5,
-              cdd_long:
-                customCriteria.professional_stability.contract_preferences.cdd_long === "excluded"
-                  ? 0
-                  : customCriteria.professional_stability.contract_preferences.cdd_long === "excellent"
-                    ? 20
-                    : customCriteria.professional_stability.contract_preferences.cdd_long === "good"
-                      ? 15
-                      : customCriteria.professional_stability.contract_preferences.cdd_long === "acceptable"
-                        ? 10
-                        : 5,
-              cdd_short:
-                customCriteria.professional_stability.contract_preferences.cdd_short === "excluded"
-                  ? 0
-                  : customCriteria.professional_stability.contract_preferences.cdd_short === "excellent"
-                    ? 20
-                    : customCriteria.professional_stability.contract_preferences.cdd_short === "good"
-                      ? 15
-                      : customCriteria.professional_stability.contract_preferences.cdd_short === "acceptable"
-                        ? 10
-                        : 5,
-              freelance:
-                customCriteria.professional_stability.contract_preferences.freelance === "excluded"
-                  ? 0
-                  : customCriteria.professional_stability.contract_preferences.freelance === "excellent"
-                    ? 20
-                    : customCriteria.professional_stability.contract_preferences.freelance === "good"
-                      ? 15
-                      : customCriteria.professional_stability.contract_preferences.freelance === "acceptable"
-                        ? 10
-                        : 5,
-              student:
-                customCriteria.professional_stability.contract_preferences.student === "excluded"
-                  ? 0
-                  : customCriteria.professional_stability.contract_preferences.student === "excellent"
-                    ? 20
-                    : customCriteria.professional_stability.contract_preferences.student === "good"
-                      ? 15
-                      : customCriteria.professional_stability.contract_preferences.student === "acceptable"
-                        ? 10
-                        : customCriteria.professional_stability.contract_preferences.student === "with_guarantor"
-                          ? 6
-                          : 5,
-              unemployed: 0, // Toujours exclu
-              retired:
-                customCriteria.professional_stability.contract_preferences.retired === "excluded"
-                  ? 0
-                  : customCriteria.professional_stability.contract_preferences.retired === "excellent"
-                    ? 20
-                    : customCriteria.professional_stability.contract_preferences.retired === "good"
-                      ? 15
-                      : customCriteria.professional_stability.contract_preferences.retired === "acceptable"
-                        ? 10
-                        : 5,
-              civil_servant:
-                customCriteria.professional_stability.contract_preferences.civil_servant === "excluded"
-                  ? 0
-                  : customCriteria.professional_stability.contract_preferences.civil_servant === "excellent"
-                    ? 20
-                    : customCriteria.professional_stability.contract_preferences.civil_servant === "good"
-                      ? 15
-                      : customCriteria.professional_stability.contract_preferences.civil_servant === "acceptable"
-                        ? 10
-                        : 5,
-            },
+            contract_scoring: mapPreferencesToContractScoring(
+              customCriteria.professional_stability.contract_preferences,
+            ),
             seniority_bonus: {
               enabled: customCriteria.professional_stability.seniority_bonus,
               min_months: 6,
@@ -714,91 +726,9 @@ export default function ScoringPreferencesSimplePage() {
           },
           professional_stability: {
             weight: customCriteria.professional_stability.weight,
-            contract_scoring: {
-              cdi_confirmed:
-                customCriteria.professional_stability.contract_preferences.cdi_confirmed === "excluded"
-                  ? 0
-                  : customCriteria.professional_stability.contract_preferences.cdi_confirmed === "excellent"
-                    ? 20
-                    : customCriteria.professional_stability.contract_preferences.cdi_confirmed === "good"
-                      ? 15
-                      : customCriteria.professional_stability.contract_preferences.cdi_confirmed === "acceptable"
-                        ? 10
-                        : 5,
-              cdi_trial:
-                customCriteria.professional_stability.contract_preferences.cdi_trial === "excluded"
-                  ? 0
-                  : customCriteria.professional_stability.contract_preferences.cdi_trial === "excellent"
-                    ? 20
-                    : customCriteria.professional_stability.contract_preferences.cdi_trial === "good"
-                      ? 15
-                      : customCriteria.professional_stability.contract_preferences.cdi_trial === "acceptable"
-                        ? 10
-                        : 5,
-              cdd_long:
-                customCriteria.professional_stability.contract_preferences.cdd_long === "excluded"
-                  ? 0
-                  : customCriteria.professional_stability.contract_preferences.cdd_long === "excellent"
-                    ? 20
-                    : customCriteria.professional_stability.contract_preferences.cdd_long === "good"
-                      ? 15
-                      : customCriteria.professional_stability.contract_preferences.cdd_long === "acceptable"
-                        ? 10
-                        : 5,
-              cdd_short:
-                customCriteria.professional_stability.contract_preferences.cdd_short === "excluded"
-                  ? 0
-                  : customCriteria.professional_stability.contract_preferences.cdd_short === "excellent"
-                    ? 20
-                    : customCriteria.professional_stability.contract_preferences.cdd_short === "good"
-                      ? 15
-                      : customCriteria.professional_stability.contract_preferences.cdd_short === "acceptable"
-                        ? 10
-                        : 5,
-              freelance:
-                customCriteria.professional_stability.contract_preferences.freelance === "excluded"
-                  ? 0
-                  : customCriteria.professional_stability.contract_preferences.freelance === "excellent"
-                    ? 20
-                    : customCriteria.professional_stability.contract_preferences.freelance === "good"
-                      ? 15
-                      : customCriteria.professional_stability.contract_preferences.freelance === "acceptable"
-                        ? 10
-                        : 5,
-              student:
-                customCriteria.professional_stability.contract_preferences.student === "excluded"
-                  ? 0
-                  : customCriteria.professional_stability.contract_preferences.student === "excellent"
-                    ? 20
-                    : customCriteria.professional_stability.contract_preferences.student === "good"
-                      ? 15
-                      : customCriteria.professional_stability.contract_preferences.student === "acceptable"
-                        ? 10
-                        : customCriteria.professional_stability.contract_preferences.student === "with_guarantor"
-                          ? 6
-                          : 5,
-              unemployed: 0,
-              retired:
-                customCriteria.professional_stability.contract_preferences.retired === "excluded"
-                  ? 0
-                  : customCriteria.professional_stability.contract_preferences.retired === "excellent"
-                    ? 20
-                    : customCriteria.professional_stability.contract_preferences.retired === "good"
-                      ? 15
-                      : customCriteria.professional_stability.contract_preferences.retired === "acceptable"
-                        ? 10
-                        : 5,
-              civil_servant:
-                customCriteria.professional_stability.contract_preferences.civil_servant === "excluded"
-                  ? 0
-                  : customCriteria.professional_stability.contract_preferences.civil_servant === "excellent"
-                    ? 20
-                    : customCriteria.professional_stability.contract_preferences.civil_servant === "good"
-                      ? 15
-                      : customCriteria.professional_stability.contract_preferences.civil_servant === "acceptable"
-                        ? 10
-                        : 5,
-            },
+            contract_scoring: mapPreferencesToContractScoring(
+              customCriteria.professional_stability.contract_preferences,
+            ),
             seniority_bonus: {
               enabled: customCriteria.professional_stability.seniority_bonus,
               min_months: 6,

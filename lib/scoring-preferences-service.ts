@@ -1,4 +1,4 @@
-import { createServerClient } from "@/lib/supabase"
+import { createServerClient } from "@/lib/supabase-server"
 
 // Cache simple pour les préférences
 const preferencesCache = new Map<string, { data: any; timestamp: number }>()
@@ -65,7 +65,7 @@ export const scoringPreferencesService = {
             excellent: 3.5,
             good: 3.0,
             acceptable: 2.5,
-            minimum: 2.0
+            minimum: 2.0,
           },
           per_person_check: true,
           use_guarantor_income_for_students: false,
@@ -292,10 +292,10 @@ export const scoringPreferencesService = {
   calculateIncomeRatio(application: any, property: any, preferences: any) {
     const criteria = preferences.criteria?.income_ratio || {}
     const maxScore = criteria.weight || 18
-    const income = application.income || 0
+    const applicationIncome = application.income || 0
     const rent = property.price || 0
 
-    if (!income || !rent) {
+    if (!applicationIncome || !rent) {
       return {
         score: 0,
         max: maxScore,
@@ -306,10 +306,11 @@ export const scoringPreferencesService = {
     }
 
     // Gestion spéciale pour les étudiants
-    let effectiveIncome = income
-    const isStudent = application.contract_type?.toLowerCase().includes('étudiant') || 
-                     application.contract_type?.toLowerCase().includes('student')
-    
+    let effectiveIncome = applicationIncome
+    const isStudent =
+      application.contract_type?.toLowerCase().includes("étudiant") ||
+      application.contract_type?.toLowerCase().includes("student")
+
     if (isStudent && criteria.use_guarantor_income_for_students && application.guarantor_income) {
       effectiveIncome = application.guarantor_income
     }
@@ -319,7 +320,7 @@ export const scoringPreferencesService = {
       excellent: 3.5,
       good: 3.0,
       acceptable: 2.5,
-      minimum: 2.0
+      minimum: 2.0,
     }
 
     let score = 0
@@ -328,11 +329,17 @@ export const scoringPreferencesService = {
     if (ratio >= thresholds.excellent) {
       score = maxScore
     } else if (ratio >= thresholds.good) {
-      score = Math.round(((ratio - thresholds.good) / (thresholds.excellent - thresholds.good)) * maxScore * 0.2 + maxScore * 0.8)
+      score = Math.round(
+        ((ratio - thresholds.good) / (thresholds.excellent - thresholds.good)) * maxScore * 0.2 + maxScore * 0.8,
+      )
     } else if (ratio >= thresholds.acceptable) {
-      score = Math.round(((ratio - thresholds.acceptable) / (thresholds.good - thresholds.acceptable)) * maxScore * 0.2 + maxScore * 0.6)
+      score = Math.round(
+        ((ratio - thresholds.acceptable) / (thresholds.good - thresholds.acceptable)) * maxScore * 0.2 + maxScore * 0.6,
+      )
     } else if (ratio >= thresholds.minimum) {
-      score = Math.round(((ratio - thresholds.minimum) / (thresholds.acceptable - thresholds.minimum)) * maxScore * 0.4 + maxScore * 0.2)
+      score = Math.round(
+        ((ratio - thresholds.minimum) / (thresholds.acceptable - thresholds.minimum)) * maxScore * 0.4 + maxScore * 0.2,
+      )
     } else {
       score = Math.round((ratio / thresholds.minimum) * maxScore * 0.2)
       compatible = false
@@ -343,7 +350,7 @@ export const scoringPreferencesService = {
       max: maxScore,
       ratio: Math.round(ratio * 10) / 10,
       compatible,
-      details: `Ratio ${ratio.toFixed(1)}x (min: ${thresholds.minimum}x, excellent: ${thresholds.excellent}x)${isStudent && criteria.use_guarantor_income_for_students ? ' - Revenus garant utilisés' : ''}`,
+      details: `Ratio ${ratio.toFixed(1)}x (min: ${thresholds.minimum}x, excellent: ${thresholds.excellent}x)${isStudent && criteria.use_guarantor_income_for_students ? " - Revenus garant utilisés" : ""}`,
     }
   },
 
@@ -368,39 +375,35 @@ export const scoringPreferencesService = {
     let compatible = true
 
     // Déterminer le type de contrat
-  let contractKey = "unemployed";
-  if (contractType.includes("cdi") && !contractType.includes("essai")) {
-    contractKey = "cdi_confirmed";
-  } else if (contractType.includes("cdi") && contractType.includes("essai")) {
-    contractKey = "cdi_trial";
-  } else if (contractType.includes("cdd")) {
-    contractKey = contractType.includes("long") ? "cdd_long" : "cdd_short";
-  } else if (contractType.includes("freelance") || contractType.includes("indépendant")) {
-    contractKey = "freelance";
-  } else if (contractType.includes("étudiant") || contractType.includes("student")) {
-    contractKey = "student";
-  } else if (contractType.includes("retraité") || contractType.includes("retired")) {
-    contractKey = "retired";
-  } else if (contractType.includes("fonctionnaire") || contractType.includes("civil")) {
-    contractKey = "civil_servant";
-  }
+    let contractKey = "unemployed"
+    if (contractType.includes("cdi") && !contractType.includes("essai")) {
+      contractKey = "cdi_confirmed"
+    } else if (contractType.includes("cdi") && contractType.includes("essai")) {
+      contractKey = "cdi_trial"
+    } else if (contractType.includes("cdd")) {
+      contractKey = contractType.includes("long") ? "cdd_long" : "cdd_short"
+    } else if (contractType.includes("freelance") || contractType.includes("indépendant")) {
+      contractKey = "freelance"
+    } else if (contractType.includes("étudiant") || contractType.includes("student")) {
+      contractKey = "student"
+    } else if (contractType.includes("retraité") || contractType.includes("retired")) {
+      contractKey = "retired"
+    } else if (contractType.includes("fonctionnaire") || contractType.includes("civil")) {
+      contractKey = "civil_servant"
+    }
 
-  const baseScore = contractScoring[contractKey] || 0;
-  
-  // Gestion de l'exclusion
-  if (baseScore === 0) {
-    return {
-      score: 0,
-      max: maxScore,
-      compatible: false,
-      details: `Contrat exclu: ${contractType.toUpperCase()}`
-    };
-  }
+    const baseScore = contractScoring[contractKey] || 0
+    score = Math.round((baseScore / 20) * maxScore)
+
+    if (baseScore === 0) {
+      compatible = false
+      score = 0 // Force le score à 0 pour les contrats exclus
+    }
 
     // Bonus/malus selon l'ancienneté
     const seniority = application.seniority_months || 0
     const seniorityBonus = criteria.seniority_bonus || {}
-    
+
     if (seniorityBonus.enabled && seniority >= (seniorityBonus.min_months || 6)) {
       score += seniorityBonus.bonus_points || 2
     }
@@ -429,12 +432,12 @@ export const scoringPreferencesService = {
     const minGuarantorRatio = criteria.minimum_income_ratio || 3.0
 
     // Vérifier si un garant est requis
-    const income = application.income || 0
-    const incomeRatio = income && rent ? income / rent : 0
+    const applicationIncome = application.income || 0
+    const incomeRatio = applicationIncome && rent ? applicationIncome / rent : 0
     const guarantorRequired = incomeRatio < requiredIfIncomeBelow
 
     let score = 0
-    let compatible = true
+    const compatible = true
 
     if (guarantorRequired && !hasGuarantor) {
       return {
@@ -467,7 +470,9 @@ export const scoringPreferencesService = {
       compatible,
       details: hasGuarantor
         ? `Garant avec revenus ${guarantorIncome ? `de ${guarantorIncome}€` : "non spécifiés"}`
-        : guarantorRequired ? "Garant requis" : "Aucun garant (non requis)",
+        : guarantorRequired
+          ? "Garant requis"
+          : "Aucun garant (non requis)",
     }
   },
 
@@ -522,8 +527,8 @@ export const scoringPreferencesService = {
     const criteria = preferences.criteria?.property_coherence || {}
     const maxScore = criteria.weight || 16
 
-    let score = maxScore // Score de base
-    let compatible = true
+    const score = maxScore // Score de base
+    const compatible = true
 
     // Pour l'instant, score de base car pas assez d'infos sur la taille du foyer, etc.
     return {
@@ -540,8 +545,8 @@ export const scoringPreferencesService = {
     const maxScore = criteria.weight || 16
 
     // Pour l'instant, score de base car pas d'info sur la colocation
-    let score = Math.round(maxScore * 0.8)
-    let compatible = true
+    const score = Math.round(maxScore * 0.8)
+    const compatible = true
 
     return {
       score,
@@ -558,10 +563,10 @@ export const scoringPreferencesService = {
 
     // Ratio minimum absolu
     if (rules.income_ratio_below_2) {
-      const income = application.income || 0
+      const applicationIncome = application.income || 0
       const rent = property.price || 0
-      if (income && rent) {
-        const ratio = income / rent
+      if (applicationIncome && rent) {
+        const ratio = applicationIncome / rent
         if (ratio < 2.0) {
           exclusions.push(`Ratio revenus/loyer insuffisant: ${ratio.toFixed(1)}x < 2.0x`)
         }
@@ -570,12 +575,12 @@ export const scoringPreferencesService = {
 
     // Garant requis si ratio faible
     if (rules.no_guarantor_when_required) {
-      const income = application.income || 0
+      const applicationIncome = application.income || 0
       const rent = property.price || 0
       const requiredThreshold = preferences.criteria?.guarantor?.required_if_income_below || 3.0
-      
-      if (income && rent) {
-        const ratio = income / rent
+
+      if (applicationIncome && rent) {
+        const ratio = applicationIncome / rent
         if (ratio < requiredThreshold && !application.has_guarantor) {
           exclusions.push(`Garant requis pour un ratio de ${ratio.toFixed(1)}x`)
         }
