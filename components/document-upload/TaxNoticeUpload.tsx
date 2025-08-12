@@ -3,60 +3,30 @@
 import type React from "react"
 import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Upload, FileText, CheckCircle, AlertTriangle, X, Loader2, Calendar } from "lucide-react"
+import { Upload, FileText, CheckCircle, AlertTriangle, X, Eye, Loader2 } from "lucide-react"
 import { DocumentPreview } from "./DocumentPreview"
 import { toast } from "sonner"
 
-interface MonthlyDocumentUploadProps {
-  documentType: "payslip" | "rent_receipt"
-  documentName: string
-  onDocumentValidated: (monthKey: string, documentData: any) => void
-  completedMonths?: Record<string, any>
+interface TaxNoticeUploadProps {
+  onDocumentValidated: (documentData: any) => void
+  completedDocument?: any
 }
 
-export function MonthlyDocumentUpload({
-  documentType,
-  documentName,
-  onDocumentValidated,
-  completedMonths = {},
-}: MonthlyDocumentUploadProps) {
+export function TaxNoticeUpload({ onDocumentValidated, completedDocument }: TaxNoticeUploadProps) {
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
-  const [currentMonth, setCurrentMonth] = useState<string | null>(null)
   const [previewDocument, setPreviewDocument] = useState<any>(null)
   const [showPreview, setShowPreview] = useState(false)
   const [validationErrors, setValidationErrors] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Générer les 3 derniers mois
-  const getLastThreeMonths = () => {
-    const months = []
-    const now = new Date()
-
-    for (let i = 0; i < 3; i++) {
-      const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
-      const monthName = date.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
-
-      months.push({
-        key: monthKey,
-        name: monthName,
-        shortName: date.toLocaleDateString("fr-FR", { month: "short", year: "numeric" }),
-      })
-    }
-
-    return months
-  }
-
-  const months = getLastThreeMonths()
-
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
-    if (!file || !currentMonth) return
+    if (!file) return
 
     // Vérifications de base
     const maxSize = 10 * 1024 * 1024 // 10MB
@@ -92,7 +62,7 @@ export function MonthlyDocumentUpload({
       const formData = new FormData()
       formData.append("file", file)
       formData.append("bucket", "documents")
-      formData.append("folder", `${documentType}s/${currentMonth}`)
+      formData.append("folder", "tax-notices")
 
       const uploadResponse = await fetch("/api/upload-supabase", {
         method: "POST",
@@ -108,14 +78,13 @@ export function MonthlyDocumentUpload({
 
       // Créer l'objet document pour preview
       const documentData = {
-        id: `${documentType}_${currentMonth}_${Date.now()}`,
+        id: `tax_notice_${Date.now()}`,
         fileName: file.name,
         fileUrl: uploadResult.url,
         filePath: uploadResult.path,
         fileType: file.type,
         fileSize: file.size,
-        documentType,
-        month: currentMonth,
+        documentType: "tax_notice",
         uploadedAt: new Date().toISOString(),
         validationStatus: "pending",
         extractedData: {},
@@ -133,7 +102,7 @@ export function MonthlyDocumentUpload({
   }
 
   const handleValidateDocument = async () => {
-    if (!previewDocument || !currentMonth) return
+    if (!previewDocument) return
 
     setIsUploading(true)
 
@@ -144,26 +113,18 @@ export function MonthlyDocumentUpload({
       const validatedDocument = {
         ...previewDocument,
         validationStatus: "validated",
-        validationScore: 88,
-        extractedData:
-          documentType === "payslip"
-            ? {
-                salary: "3500",
-                employer: "Entreprise ABC",
-                period: currentMonth,
-              }
-            : {
-                amount: "1200",
-                landlord: "Propriétaire XYZ",
-                period: currentMonth,
-              },
+        validationScore: 85,
+        extractedData: {
+          year: "2023",
+          income: "45000",
+          taxAmount: "3200",
+        },
       }
 
-      onDocumentValidated(currentMonth, validatedDocument)
+      onDocumentValidated(validatedDocument)
       setShowPreview(false)
       setPreviewDocument(null)
-      setCurrentMonth(null)
-      toast.success(`${documentName} validé avec succès !`)
+      toast.success("Avis d'imposition validé avec succès !")
     } catch (error) {
       console.error("Erreur validation:", error)
       toast.error("Erreur lors de la validation")
@@ -172,33 +133,67 @@ export function MonthlyDocumentUpload({
     }
   }
 
-  const handleRemoveDocument = (monthKey: string) => {
-    onDocumentValidated(monthKey, null)
-    toast.success(`${documentName} supprimé`)
+  const handleRemoveDocument = () => {
+    onDocumentValidated(null)
+    toast.success("Avis d'imposition supprimé")
   }
 
   const handleCancelPreview = () => {
     setShowPreview(false)
     setPreviewDocument(null)
-    setCurrentMonth(null)
     setValidationErrors([])
   }
 
-  const startUpload = (monthKey: string) => {
-    setCurrentMonth(monthKey)
-    fileInputRef.current?.click()
+  // Si un document est déjà validé
+  if (completedDocument && !showPreview) {
+    return (
+      <Card className="border-green-200 bg-green-50">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-green-100 rounded-full">
+                <CheckCircle className="h-5 w-5 text-green-600" />
+              </div>
+              <div>
+                <p className="font-medium text-green-800">Avis d'imposition validé</p>
+                <p className="text-sm text-green-600">{completedDocument.fileName}</p>
+                {completedDocument.extractedData?.year && (
+                  <p className="text-xs text-green-600">Année fiscale : {completedDocument.extractedData.year}</p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Badge variant="default" className="bg-green-600">
+                Score: {completedDocument.validationScore || 85}%
+              </Badge>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setPreviewDocument(completedDocument)
+                  setShowPreview(true)
+                }}
+              >
+                <Eye className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handleRemoveDocument}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
 
   // Mode preview
   if (showPreview && previewDocument) {
-    const monthData = months.find((m) => m.key === currentMonth)
-
     return (
       <div className="space-y-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-medium">Aperçu - {monthData?.name}</h3>
+              <h3 className="font-medium">Aperçu du document</h3>
               <div className="flex items-center space-x-2">
                 <Badge variant="outline">{previewDocument.fileName}</Badge>
                 <Button variant="ghost" size="sm" onClick={handleCancelPreview}>
@@ -243,7 +238,7 @@ export function MonthlyDocumentUpload({
                 </div>
                 <div className="flex items-center space-x-2">
                   <CheckCircle className="h-4 w-4 text-green-500" />
-                  <span>Période correspondante détectée</span>
+                  <span>Taille du fichier correcte</span>
                 </div>
               </div>
             </div>
@@ -272,6 +267,7 @@ export function MonthlyDocumentUpload({
     )
   }
 
+  // Mode upload initial
   return (
     <div className="space-y-4">
       <input
@@ -282,93 +278,48 @@ export function MonthlyDocumentUpload({
         className="hidden"
       />
 
-      {months.map((month) => (
-        <Card key={month.key}>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              {month.name}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {completedMonths[month.key] ? (
-              <Card className="border-green-200 bg-green-50">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className="p-2 bg-green-100 rounded-full">
-                        <CheckCircle className="h-5 w-5 text-green-600" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-green-800">{documentName} validé</p>
-                        <p className="text-sm text-green-600">{completedMonths[month.key].fileName}</p>
-                        {completedMonths[month.key].extractedData?.salary && (
-                          <p className="text-xs text-green-600">
-                            Salaire: {completedMonths[month.key].extractedData.salary}€
-                          </p>
-                        )}
-                        {completedMonths[month.key].extractedData?.amount && (
-                          <p className="text-xs text-green-600">
-                            Montant: {completedMonths[month.key].extractedData.amount}€
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Badge variant="default" className="bg-green-600">
-                        Score: {completedMonths[month.key].validationScore || 88}%
-                      </Badge>
-                      <Button variant="ghost" size="sm" onClick={() => handleRemoveDocument(month.key)}>
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+      <Card className="border-2 border-dashed border-gray-300 hover:border-blue-400 transition-colors">
+        <CardContent className="p-8">
+          <div className="text-center space-y-4">
+            <div className="p-4 bg-blue-50 rounded-full w-fit mx-auto">
+              <FileText className="h-8 w-8 text-blue-600" />
+            </div>
+
+            <div>
+              <h3 className="font-medium text-gray-900 mb-2">Avis d'imposition sur le revenu</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Téléchargez votre dernier avis d'imposition complet (année fiscale 2023)
+              </p>
+            </div>
+
+            {isUploading ? (
+              <div className="space-y-3">
+                <Progress value={uploadProgress} className="w-full" />
+                <p className="text-sm text-gray-600">Upload en cours... {uploadProgress}%</p>
+              </div>
             ) : (
-              <Card className="border-2 border-dashed border-gray-300 hover:border-blue-400 transition-colors">
-                <CardContent className="p-6">
-                  <div className="text-center space-y-4">
-                    <div className="p-3 bg-blue-50 rounded-full w-fit mx-auto">
-                      <FileText className="h-6 w-6 text-blue-600" />
-                    </div>
-                    <div>
-                      <h4 className="font-medium text-gray-900 mb-2">
-                        {documentName} - {month.shortName}
-                      </h4>
-                      <p className="text-sm text-gray-600">
-                        {documentType === "payslip"
-                          ? "Téléchargez votre fiche de paie complète"
-                          : "Téléchargez votre quittance de loyer"}
-                      </p>
-                    </div>
-                    {isUploading && currentMonth === month.key ? (
-                      <div className="space-y-3">
-                        <Progress value={uploadProgress} className="w-full" />
-                        <p className="text-sm text-gray-600">Upload en cours... {uploadProgress}%</p>
-                      </div>
-                    ) : (
-                      <Button onClick={() => startUpload(month.key)} className="bg-blue-600 hover:bg-blue-700">
-                        <Upload className="h-4 w-4 mr-2" />
-                        Télécharger
-                      </Button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+              <Button onClick={() => fileInputRef.current?.click()} className="bg-blue-600 hover:bg-blue-700">
+                <Upload className="h-4 w-4 mr-2" />
+                Choisir le fichier
+              </Button>
             )}
-          </CardContent>
-        </Card>
-      ))}
+
+            <div className="text-xs text-gray-500 space-y-1">
+              <p>Formats acceptés : PDF, JPG, PNG</p>
+              <p>Taille maximum : 10 MB</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="bg-yellow-50 p-4 rounded-lg">
         <div className="flex items-start space-x-2">
           <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
           <div className="text-sm">
-            <p className="font-medium text-yellow-800 mb-1">Documents requis</p>
+            <p className="font-medium text-yellow-800 mb-1">Document requis</p>
             <p className="text-yellow-700">
-              Les 3 derniers {documentType === "payslip" ? "bulletins de salaire" : "quittances de loyer"} sont
-              obligatoires pour constituer votre dossier.
+              L'avis d'imposition est obligatoire pour constituer votre dossier. Assurez-vous qu'il soit complet et
+              lisible.
             </p>
           </div>
         </div>
