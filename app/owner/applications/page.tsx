@@ -1,44 +1,34 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { ModernApplicationCard } from "@/components/modern-application-card"
 import { VisitProposalManager } from "@/components/visit-proposal-manager"
+import { RefusalDialog } from "@/components/refusal-dialog"
 import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
-import { Filter, Download, Users, Search, SortAsc, Settings, RefreshCw, MapPin, Star } from "lucide-react"
+import { Search, Filter, SortAsc, Settings, Users, CheckCircle, XCircle, AlertTriangle } from "lucide-react"
 
 export default function ApplicationsPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const propertyIdFilter = searchParams.get("propertyId")
-
   const [loading, setLoading] = useState(true)
-  const [applications, setApplications] = useState([])
-  const [filteredApplications, setFilteredApplications] = useState([])
-  const [activeTab, setActiveTab] = useState("all")
-  const [user, setUser] = useState(null)
-  const [selectedApplications, setSelectedApplications] = useState(new Set())
-
-  // États pour les filtres
+  const [applications, setApplications] = useState<any[]>([])
+  const [filteredApplications, setFilteredApplications] = useState<any[]>([])
+  const [user, setUser] = useState<any>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-  const [sortBy, setSortBy] = useState("created_at")
-  const [propertyFilter, setPropertyFilter] = useState("all")
-  const [scoreFilter, setScoreFilter] = useState("all")
-  const [properties, setProperties] = useState([])
-
-  // États pour la gestion des visites
+  const [sortBy, setSortBy] = useState("date_desc")
+  const [selectedApplications, setSelectedApplications] = useState<string[]>([])
   const [showVisitDialog, setShowVisitDialog] = useState(false)
-  const [currentApplicationForVisit, setCurrentApplicationForVisit] = useState(null)
+  const [showRefuseDialog, setShowRefuseDialog] = useState(false)
+  const [currentApplication, setCurrentApplication] = useState<any>(null)
+  const [scoringPreferences, setScoringPreferences] = useState<any>(null)
 
   useEffect(() => {
     checkAuthAndLoadData()
@@ -46,7 +36,7 @@ export default function ApplicationsPage() {
 
   useEffect(() => {
     filterAndSortApplications()
-  }, [applications, searchTerm, statusFilter, sortBy, activeTab, propertyFilter, scoreFilter])
+  }, [applications, searchTerm, statusFilter, sortBy])
 
   const checkAuthAndLoadData = async () => {
     try {
@@ -66,7 +56,7 @@ export default function ApplicationsPage() {
       }
 
       setUser(currentUser)
-      await loadApplications(currentUser.id)
+      await Promise.all([loadApplications(currentUser.id), loadScoringPreferences(currentUser.id)])
     } catch (error) {
       console.error("Erreur auth:", error)
       toast.error("Erreur d'authentification")
@@ -75,188 +65,155 @@ export default function ApplicationsPage() {
     }
   }
 
-  const loadApplications = async (ownerId) => {
+  const loadApplications = async (ownerId: string) => {
     try {
-      console.log("🔍 Chargement candidatures pour propriétaire:", ownerId)
+      console.log("🔍 Chargement des candidatures pour le propriétaire:", ownerId)
 
       const response = await fetch(`/api/applications?owner_id=${ownerId}`)
-      if (response.ok) {
-        const data = await response.json()
-        console.log("✅ Candidatures chargées:", data.applications?.length || 0)
+      if (!response.ok) {
+        toast.error("Erreur lors du chargement des candidatures")
+        return
+      }
 
-        // Enrichir chaque candidature avec les données du dossier de location et calculer le score
+      const data = await response.json()
+      console.log("✅ Candidatures chargées:", data.applications?.length || 0)
+
+      if (data.applications && data.applications.length > 0) {
+        // Enrichir les candidatures avec les données des dossiers de location
         const enrichedApplications = await Promise.all(
-          (data.applications || []).map(async (app) => {
+          data.applications.map(async (app: any) => {
             try {
+              // Charger le dossier de location si disponible
+              let rentalFile = null
               if (app.tenant_id) {
                 const rentalFileResponse = await fetch(`/api/rental-files?tenant_id=${app.tenant_id}`)
                 if (rentalFileResponse.ok) {
                   const rentalFileData = await rentalFileResponse.json()
-                  const rentalFile = rentalFileData.rental_file
-
-                  if (rentalFile && rentalFile.main_tenant) {
-                    // Récupérer les revenus depuis main_tenant
-                    let income = 0
-                    if (rentalFile.main_tenant.income_sources?.work_income?.amount) {
-                      income = rentalFile.main_tenant.income_sources.work_income.amount
-                    } else if (rentalFile.main_tenant.income_sources?.work_income?.monthly_amount) {
-                      income = rentalFile.main_tenant.income_sources.work_income.monthly_amount
-                    } else if (rentalFile.main_tenant.monthly_income) {
-                      income = rentalFile.main_tenant.monthly_income
-                    } else if (app.income) {
-                      income = app.income
-                    }
-
-                    // Vérifier la présence de garants
-                    const hasGuarantor =
-                      (rentalFile.guarantors && rentalFile.guarantors.length > 0) || app.has_guarantor || false
-
-                    // Récupérer les revenus du garant
-                    let guarantorIncome = 0
-                    if (rentalFile.guarantors && rentalFile.guarantors.length > 0) {
-                      guarantorIncome = rentalFile.guarantors[0].personal_info?.income_sources?.work_income?.amount || 0
-                    }
-
-                    // Enrichir l'application
-                    app.income = income
-                    app.has_guarantor = hasGuarantor
-                    app.guarantor_income = guarantorIncome
-                    app.profession = rentalFile.main_tenant.profession || app.profession || "Non spécifié"
-                    app.company = rentalFile.main_tenant.company || app.company || "Non spécifié"
-                    app.contract_type = rentalFile.main_tenant.main_activity || app.contract_type || "Non spécifié"
-                    app.rental_file_id = rentalFile.id
-                    app.rental_file_main_tenant = rentalFile.main_tenant
-                    app.rental_file_guarantors = rentalFile.guarantors
-                  }
+                  rentalFile = rentalFileData.rental_file
                 }
+              }
+
+              // Calculer les revenus totaux (locataire principal + colocataires)
+              let totalIncome = app.income || 0
+              if (rentalFile?.main_tenant?.income_sources?.work_income?.amount) {
+                totalIncome = rentalFile.main_tenant.income_sources.work_income.amount
+              }
+
+              // Ajouter les revenus des colocataires
+              if (rentalFile?.cotenants && rentalFile.cotenants.length > 0) {
+                rentalFile.cotenants.forEach((cotenant: any) => {
+                  if (cotenant.income_sources?.work_income?.amount) {
+                    totalIncome += cotenant.income_sources.work_income.amount
+                  }
+                })
+              }
+
+              // Enrichir l'application avec les données du dossier de location
+              const enrichedApp = {
+                ...app,
+                income: totalIncome, // Revenus totaux
+                has_guarantor:
+                  (rentalFile?.guarantors && rentalFile.guarantors.length > 0) || app.has_guarantor || false,
+                profession: rentalFile?.main_tenant?.profession || app.profession || "Non spécifié",
+                company: rentalFile?.main_tenant?.company || app.company || "Non spécifié",
+                contract_type: rentalFile?.main_tenant?.main_activity || app.contract_type || "Non spécifié",
+                completion_percentage: rentalFile?.completion_percentage || 0,
+                documents_complete: rentalFile?.completion_percentage >= 80 || app.documents_complete || false,
+                rental_file_main_tenant: rentalFile?.main_tenant,
+                rental_file_guarantors: rentalFile?.guarantors || [],
               }
 
               // Calculer le score avec le service unifié
-              if (app.property?.price && app.income && ownerId) {
+              if (app.property?.owner_id && app.property?.price) {
                 try {
-                  const result = await scoringPreferencesService.calculateScore(app, app.property, ownerId, true)
-                  app.match_score = result.totalScore
-                  app.scoring_breakdown = result.breakdown
-                  app.scoring_compatible = result.compatible
-                  app.scoring_model = result.model_used
+                  const result = await scoringPreferencesService.calculateScore(
+                    enrichedApp,
+                    app.property,
+                    app.property.owner_id,
+                    true,
+                  )
+                  enrichedApp.match_score = result.totalScore
+                  enrichedApp.scoring_compatible = result.compatible
                 } catch (error) {
-                  console.error("❌ Erreur calcul score:", error)
-                  app.match_score = 50
+                  console.error("Erreur calcul score pour candidature:", app.id, error)
+                  enrichedApp.match_score = 50
+                  enrichedApp.scoring_compatible = false
                 }
-              } else {
-                app.match_score = 50
               }
 
-              return app
+              return enrichedApp
             } catch (error) {
-              console.error("❌ Erreur enrichissement candidature:", error)
-              app.match_score = 50
-              return app
+              console.error("Erreur enrichissement candidature:", app.id, error)
+              return {
+                ...app,
+                completion_percentage: 0,
+                documents_complete: app.documents_complete || false,
+                match_score: app.match_score || 50,
+                scoring_compatible: false,
+              }
             }
           }),
         )
 
         setApplications(enrichedApplications)
-
-        // Extraire les propriétés uniques pour le filtre
-        const uniqueProperties = enrichedApplications.reduce((acc, app) => {
-          if (app.property && !acc.find((p) => p.id === app.property.id)) {
-            acc.push({
-              id: app.property.id,
-              title: app.property.title,
-            })
-          }
-          return acc
-        }, [])
-        setProperties(uniqueProperties)
-
-        console.log("✅ Candidatures enrichies et scores calculés:", enrichedApplications.length)
       } else {
-        console.error("❌ Erreur chargement candidatures:", await response.text())
-        toast.error("Erreur lors du chargement des candidatures")
+        setApplications([])
       }
     } catch (error) {
-      console.error("❌ Erreur:", error)
+      console.error("Erreur:", error)
       toast.error("Erreur lors du chargement des candidatures")
+      setApplications([])
+    }
+  }
+
+  const loadScoringPreferences = async (ownerId: string) => {
+    try {
+      const preferences = await scoringPreferencesService.getOwnerPreferences(ownerId, true)
+      setScoringPreferences(preferences)
+    } catch (error) {
+      console.error("Erreur chargement préférences scoring:", error)
     }
   }
 
   const filterAndSortApplications = () => {
     let filtered = [...applications]
 
-    // Filtre par onglet
-    if (activeTab !== "all") {
-      const statusMap = {
-        pending: ["pending", "analyzing", "visit_proposed", "visit_scheduled", "waiting_tenant_confirmation"],
-        accepted: ["accepted", "approved"],
-        rejected: ["rejected"],
-      }
-      filtered = filtered.filter((app) => {
-        const status = app.status || "pending"
-        return statusMap[activeTab]?.includes(status)
-      })
-    }
-
-    // Filtre par recherche
+    // Filtrage par terme de recherche
     if (searchTerm) {
-      const term = searchTerm.toLowerCase()
       filtered = filtered.filter(
         (app) =>
-          (app.tenant?.first_name || "").toLowerCase().includes(term) ||
-          (app.tenant?.last_name || "").toLowerCase().includes(term) ||
-          (app.tenant?.email || "").toLowerCase().includes(term) ||
-          (app.property?.title || "").toLowerCase().includes(term) ||
-          (app.property?.address || "").toLowerCase().includes(term),
+          app.tenant?.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          app.tenant?.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          app.tenant?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          app.property?.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          app.profession?.toLowerCase().includes(searchTerm.toLowerCase()),
       )
     }
 
-    // Filtre par statut
+    // Filtrage par statut
     if (statusFilter !== "all") {
       filtered = filtered.filter((app) => app.status === statusFilter)
-    }
-
-    // Filtre par propriété
-    if (propertyFilter !== "all") {
-      filtered = filtered.filter((app) => app.property_id === propertyFilter)
-    }
-
-    // Filtrer par propriété si spécifié dans l'URL
-    if (propertyIdFilter) {
-      filtered = filtered.filter((app) => app.property_id === propertyIdFilter)
-    }
-
-    // Filtre par score
-    if (scoreFilter !== "all") {
-      filtered = filtered.filter((app) => {
-        const score = app.match_score || 50
-        switch (scoreFilter) {
-          case "excellent":
-            return score >= 80
-          case "good":
-            return score >= 60 && score < 80
-          case "average":
-            return score >= 40 && score < 60
-          case "poor":
-            return score < 40
-          default:
-            return true
-        }
-      })
     }
 
     // Tri
     filtered.sort((a, b) => {
       switch (sortBy) {
-        case "created_at":
+        case "date_desc":
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        case "tenant_name":
-          const nameA = `${a.tenant?.first_name || ""} ${a.tenant?.last_name || ""}`
-          const nameB = `${b.tenant?.first_name || ""} ${b.tenant?.last_name || ""}`
-          return nameA.localeCompare(nameB)
-        case "property_title":
-          return (a.property?.title || "").localeCompare(b.property?.title || "")
-        case "score":
-          return (b.match_score || 50) - (a.match_score || 50)
+        case "date_asc":
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        case "score_desc":
+          return (b.match_score || 0) - (a.match_score || 0)
+        case "score_asc":
+          return (a.match_score || 0) - (b.match_score || 0)
+        case "name_asc":
+          return `${a.tenant?.first_name} ${a.tenant?.last_name}`.localeCompare(
+            `${b.tenant?.first_name} ${b.tenant?.last_name}`,
+          )
+        case "name_desc":
+          return `${b.tenant?.first_name} ${b.tenant?.last_name}`.localeCompare(
+            `${a.tenant?.first_name} ${a.tenant?.last_name}`,
+          )
         default:
           return 0
       }
@@ -265,46 +222,37 @@ export default function ApplicationsPage() {
     setFilteredApplications(filtered)
   }
 
-  const handleApplicationAction = async (action, applicationId) => {
-    console.log("🎯 Action:", action, "pour candidature:", applicationId)
-
+  const handleApplicationAction = async (applicationId: string, action: string) => {
     const application = applications.find((app) => app.id === applicationId)
-    if (!application) {
-      toast.error("Candidature introuvable")
-      return
-    }
+    if (!application) return
 
     switch (action) {
-      case "view_details":
       case "analyze":
         router.push(`/owner/applications/${applicationId}`)
         break
+      case "propose_visit":
+        setCurrentApplication(application)
+        setShowVisitDialog(true)
+        break
       case "accept":
-        await handleStatusChange(applicationId, "accepted")
+        await updateApplicationStatus(applicationId, "accepted")
         break
       case "refuse":
-        await handleStatusChange(applicationId, "rejected")
+        setCurrentApplication(application)
+        setShowRefuseDialog(true)
         break
       case "contact":
-        if (application.tenant_id) {
-          router.push(`/owner/messaging?tenant_id=${application.tenant_id}`)
-        } else {
-          toast.error("Impossible de contacter ce locataire")
-        }
+        await handleContact(application)
         break
       case "generate_lease":
         router.push(`/owner/leases/new?application=${applicationId}`)
         break
-      case "propose_visit":
-        setCurrentApplicationForVisit(application)
-        setShowVisitDialog(true)
-        break
       default:
-        console.log("Action non reconnue:", action)
+        console.log("Action non gérée:", action)
     }
   }
 
-  const handleStatusChange = async (applicationId, newStatus) => {
+  const updateApplicationStatus = async (applicationId: string, newStatus: string, notes?: string) => {
     try {
       const response = await fetch(`/api/applications/${applicationId}`, {
         method: "PATCH",
@@ -313,12 +261,26 @@ export default function ApplicationsPage() {
         },
         body: JSON.stringify({
           status: newStatus,
+          notes: notes || undefined,
         }),
       })
 
       if (response.ok) {
-        toast.success(`Candidature ${newStatus === "accepted" ? "acceptée" : "refusée"}`)
-        setApplications(applications.map((app) => (app.id === applicationId ? { ...app, status: newStatus } : app)))
+        const statusMessages: { [key: string]: string } = {
+          analyzing: "Candidature en cours d'analyse",
+          accepted: "Candidature acceptée",
+          rejected: "Candidature refusée",
+          visit_proposed: "Visite proposée au candidat",
+          visit_scheduled: "Visite planifiée",
+          waiting_tenant_confirmation: "En attente de confirmation du locataire",
+        }
+
+        toast.success(statusMessages[newStatus] || "Statut mis à jour")
+
+        // Recharger les candidatures
+        if (user) {
+          await loadApplications(user.id)
+        }
       } else {
         toast.error("Erreur lors de la mise à jour du statut")
       }
@@ -328,260 +290,345 @@ export default function ApplicationsPage() {
     }
   }
 
-  const handleSelectApplication = (applicationId, selected) => {
-    const newSelected = new Set(selectedApplications)
-    if (selected) {
-      newSelected.add(applicationId)
-    } else {
-      newSelected.delete(applicationId)
+  const handleContact = async (application: any) => {
+    if (!application?.tenant_id || !application?.property_id) {
+      toast.error("Impossible de contacter ce locataire")
+      return
     }
-    setSelectedApplications(newSelected)
-  }
-
-  const handleVisitProposed = async (slots) => {
-    if (!currentApplicationForVisit) return
 
     try {
-      await handleStatusChange(currentApplicationForVisit.id, "visit_proposed")
-      setShowVisitDialog(false)
-      setCurrentApplicationForVisit(null)
-      toast.success("Créneaux de visite proposés avec succès")
+      const response = await fetch("/api/conversations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          tenant_id: application.tenant_id,
+          owner_id: user.id,
+          property_id: application.property_id,
+          subject: `Candidature pour ${application.property?.title || "le bien"}`,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        router.push(`/owner/messaging?conversation_id=${data.conversation.id}`)
+      } else {
+        router.push(`/owner/messaging?tenant_id=${application.tenant_id}`)
+      }
     } catch (error) {
-      console.error("Erreur lors de la proposition de visite:", error)
+      console.error("Erreur création conversation:", error)
+      router.push(`/owner/messaging?tenant_id=${application.tenant_id}`)
+    }
+  }
+
+  const handleVisitProposed = async (slots: any[]) => {
+    if (!currentApplication) return
+
+    try {
+      const response = await fetch(`/api/applications/${currentApplication.id}/propose-visit-slots`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ slots }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        toast.error(errorData.message || "Erreur lors de la proposition de visite")
+        return
+      }
+
+      const data = await response.json()
+      toast.success(data.message || "Créneaux de visite proposés avec succès")
+      setShowVisitDialog(false)
+      setCurrentApplication(null)
+
+      // Recharger les candidatures
+      if (user) {
+        await loadApplications(user.id)
+      }
+    } catch (error) {
+      console.error("Erreur:", error)
       toast.error("Erreur lors de la proposition de visite")
     }
   }
 
-  const getApplicationCounts = () => {
-    return {
-      all: applications.length,
-      pending: applications.filter((app) => {
-        const status = app.status || "pending"
-        return ["pending", "analyzing", "visit_proposed", "visit_scheduled", "waiting_tenant_confirmation"].includes(
-          status,
-        )
-      }).length,
-      accepted: applications.filter((app) => {
-        const status = app.status || "pending"
-        return ["accepted", "approved"].includes(status)
-      }).length,
+  const handleRefuseConfirm = async (reason: string, type: string) => {
+    if (!currentApplication) return
+
+    let notes = ""
+    const refusalReasons: { [key: string]: string } = {
+      insufficient_income: "Revenus insuffisants",
+      incomplete_file: "Dossier incomplet",
+      missing_guarantor: "Absence de garant",
+      unstable_situation: "Situation professionnelle instable",
+      other: reason,
+    }
+
+    notes = refusalReasons[type] || reason
+
+    await updateApplicationStatus(currentApplication.id, "rejected", notes)
+    setShowRefuseDialog(false)
+    setCurrentApplication(null)
+  }
+
+  const handleBulkAction = async (action: string) => {
+    if (selectedApplications.length === 0) {
+      toast.error("Aucune candidature sélectionnée")
+      return
+    }
+
+    try {
+      const promises = selectedApplications.map((id) =>
+        updateApplicationStatus(id, action === "accept" ? "accepted" : "rejected"),
+      )
+      await Promise.all(promises)
+      setSelectedApplications([])
+      toast.success(
+        `${selectedApplications.length} candidature(s) ${action === "accept" ? "acceptée(s)" : "refusée(s)"}`,
+      )
+    } catch (error) {
+      console.error("Erreur action groupée:", error)
+      toast.error("Erreur lors de l'action groupée")
+    }
+  }
+
+  const getStatusStats = () => {
+    const stats = {
+      total: applications.length,
+      pending: applications.filter((app) => app.status === "pending").length,
+      analyzing: applications.filter((app) => app.status === "analyzing").length,
+      visit_proposed: applications.filter((app) => app.status === "visit_proposed").length,
+      visit_scheduled: applications.filter((app) => app.status === "visit_scheduled").length,
+      accepted: applications.filter((app) => app.status === "accepted").length,
       rejected: applications.filter((app) => app.status === "rejected").length,
     }
+    return stats
   }
 
   if (loading) {
     return (
-      <div className="space-y-6 p-6">
-        <div className="flex justify-between items-center">
-          <Skeleton className="h-8 w-64" />
-          <Skeleton className="h-10 w-32" />
-        </div>
-        <Skeleton className="h-12 w-full" />
-        <div className="grid gap-4 md:grid-cols-1">
-          {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-64 w-full" />
-          ))}
+      <div className="container mx-auto py-6">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-gray-200 rounded w-1/3"></div>
+          <div className="h-64 bg-gray-200 rounded"></div>
         </div>
       </div>
     )
   }
 
-  const counts = getApplicationCounts()
+  const stats = getStatusStats()
 
   return (
     <>
-      <PageHeader title="Candidatures" description="Gérez les candidatures pour vos biens">
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => router.push("/owner/scoring-preferences")}>
+      <PageHeader title="Candidatures" description="Gérez les candidatures pour vos biens immobiliers">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => router.push("/owner/scoring-preferences-simple")}>
             <Settings className="h-4 w-4 mr-2" />
-            Préférences de scoring
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => checkAuthAndLoadData()} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-            Actualiser
-          </Button>
-          <Button variant="outline" size="sm">
-            <Download className="h-4 w-4 mr-2" />
-            Exporter
+            Configurer le scoring
           </Button>
         </div>
       </PageHeader>
 
       <div className="p-6 space-y-6">
+        {/* Statistiques */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+          <Card>
+            <CardContent className="p-4 text-center">
+              <div className="text-2xl font-bold text-blue-600">{stats.total}</div>
+              <div className="text-sm text-muted-foreground">Total</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <div className="text-2xl font-bold text-gray-600">{stats.pending}</div>
+              <div className="text-sm text-muted-foreground">En attente</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <div className="text-2xl font-bold text-orange-600">{stats.analyzing}</div>
+              <div className="text-sm text-muted-foreground">En analyse</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <div className="text-2xl font-bold text-purple-600">{stats.visit_proposed}</div>
+              <div className="text-sm text-muted-foreground">Visite proposée</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <div className="text-2xl font-bold text-blue-600">{stats.visit_scheduled}</div>
+              <div className="text-sm text-muted-foreground">Visite planifiée</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <div className="text-2xl font-bold text-green-600">{stats.accepted}</div>
+              <div className="text-sm text-muted-foreground">Acceptées</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <div className="text-2xl font-bold text-red-600">{stats.rejected}</div>
+              <div className="text-sm text-muted-foreground">Refusées</div>
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Filtres et recherche */}
         <Card>
           <CardContent className="p-4">
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                   <Input
-                    placeholder="Rechercher par nom, email, propriété..."
+                    placeholder="Rechercher par nom, email, bien ou profession..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10"
                   />
                 </div>
               </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-48">
-                  <Filter className="h-4 w-4 mr-2" />
-                  <SelectValue placeholder="Filtrer par statut" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous les statuts</SelectItem>
-                  <SelectItem value="pending">En attente</SelectItem>
-                  <SelectItem value="analyzing">En analyse</SelectItem>
-                  <SelectItem value="visit_proposed">Visite proposée</SelectItem>
-                  <SelectItem value="visit_scheduled">Visite planifiée</SelectItem>
-                  <SelectItem value="accepted">Acceptée</SelectItem>
-                  <SelectItem value="rejected">Refusée</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-48">
-                  <SortAsc className="h-4 w-4 mr-2" />
-                  <SelectValue placeholder="Trier par" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="created_at">Date de candidature</SelectItem>
-                  <SelectItem value="tenant_name">Nom du locataire</SelectItem>
-                  <SelectItem value="property_title">Propriété</SelectItem>
-                  <SelectItem value="score">Score de compatibilité</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={propertyFilter} onValueChange={setPropertyFilter}>
-                <SelectTrigger className="w-48">
-                  <MapPin className="h-4 w-4 mr-2" />
-                  <SelectValue placeholder="Filtrer par bien" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous les biens</SelectItem>
-                  {properties.map((property) => (
-                    <SelectItem key={property.id} value={property.id}>
-                      {property.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={scoreFilter} onValueChange={setScoreFilter}>
-                <SelectTrigger className="w-48">
-                  <Star className="h-4 w-4 mr-2" />
-                  <SelectValue placeholder="Filtrer par score" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous les scores</SelectItem>
-                  <SelectItem value="excellent">Excellent (80-100)</SelectItem>
-                  <SelectItem value="good">Bon (60-79)</SelectItem>
-                  <SelectItem value="average">Moyen (40-59)</SelectItem>
-                  <SelectItem value="poor">Faible (&lt;40)</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex gap-2">
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-[180px]">
+                    <Filter className="h-4 w-4 mr-2" />
+                    <SelectValue placeholder="Filtrer par statut" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous les statuts</SelectItem>
+                    <SelectItem value="pending">En attente</SelectItem>
+                    <SelectItem value="analyzing">En analyse</SelectItem>
+                    <SelectItem value="visit_proposed">Visite proposée</SelectItem>
+                    <SelectItem value="visit_scheduled">Visite planifiée</SelectItem>
+                    <SelectItem value="accepted">Acceptées</SelectItem>
+                    <SelectItem value="rejected">Refusées</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger className="w-[180px]">
+                    <SortAsc className="h-4 w-4 mr-2" />
+                    <SelectValue placeholder="Trier par" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="date_desc">Plus récentes</SelectItem>
+                    <SelectItem value="date_asc">Plus anciennes</SelectItem>
+                    <SelectItem value="score_desc">Score décroissant</SelectItem>
+                    <SelectItem value="score_asc">Score croissant</SelectItem>
+                    <SelectItem value="name_asc">Nom A-Z</SelectItem>
+                    <SelectItem value="name_desc">Nom Z-A</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid grid-cols-4 mb-4">
-            <TabsTrigger value="all">Toutes ({counts.all})</TabsTrigger>
-            <TabsTrigger value="pending">En attente ({counts.pending})</TabsTrigger>
-            <TabsTrigger value="accepted">Acceptées ({counts.accepted})</TabsTrigger>
-            <TabsTrigger value="rejected">Refusées ({counts.rejected})</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value={activeTab} className="mt-0">
-            {filteredApplications.length === 0 ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-10">
-                  <Users className="h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-medium">Aucune candidature</h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {searchTerm || statusFilter !== "all" || propertyFilter !== "all" || scoreFilter !== "all"
-                      ? "Aucune candidature ne correspond à vos filtres"
-                      : activeTab === "all"
-                        ? "Vous n'avez pas encore reçu de candidatures"
-                        : `Vous n'avez pas de candidatures ${
-                            activeTab === "pending" ? "en attente" : activeTab === "accepted" ? "acceptées" : "refusées"
-                          }`}
-                  </p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-1">
-                {filteredApplications.map((application) => {
-                  const tenant = application.tenant || {}
-                  const property = application.property || {}
-
-                  const applicationData = {
-                    id: application.id,
-                    tenant: {
-                      first_name: tenant.first_name || "Prénom",
-                      last_name: tenant.last_name || "Nom",
-                      email: tenant.email || "email@example.com",
-                      phone: tenant.phone || "Non renseigné",
-                    },
-                    property: {
-                      title: property.title || "Propriété inconnue",
-                      address: property.address || "Adresse inconnue",
-                      price: property.price || 0,
-                      owner_id: property.owner_id,
-                    },
-                    profession: application.profession || "Non spécifié",
-                    income: application.income || 0,
-                    has_guarantor: application.has_guarantor || false,
-                    guarantor_income: application.guarantor_income || 0,
-                    documents_complete: application.documents_complete || false,
-                    status: application.status || "pending",
-                    match_score: application.match_score || 50,
-                    created_at: application.created_at || new Date().toISOString(),
-                    tenant_id: application.tenant_id,
-                    contract_type: application.contract_type,
-                    message: application.message,
-                    visit_requested: application.visit_requested,
-                    rental_file_main_tenant: application.rental_file_main_tenant,
-                    rental_file_guarantors: application.rental_file_guarantors,
-                  }
-
-                  return (
-                    <ModernApplicationCard
-                      key={application.id}
-                      application={applicationData}
-                      isSelected={selectedApplications.has(application.id)}
-                      onSelect={(selected) => handleSelectApplication(application.id, selected)}
-                      onAction={(action) => handleApplicationAction(action, application.id)}
-                      rentalFile={
-                        application.rental_file_main_tenant
-                          ? {
-                              main_tenant: application.rental_file_main_tenant,
-                              guarantors: application.rental_file_guarantors,
-                            }
-                          : null
-                      }
-                    />
-                  )
-                })}
+        {/* Actions groupées */}
+        {selectedApplications.length > 0 && (
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  <span>{selectedApplications.length} candidature(s) sélectionnée(s)</span>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => handleBulkAction("accept")}>
+                    <CheckCircle className="h-4 w-4 mr-1" />
+                    Accepter
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={() => handleBulkAction("reject")}>
+                    <XCircle className="h-4 w-4 mr-1" />
+                    Refuser
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setSelectedApplications([])}>
+                    Annuler
+                  </Button>
+                </div>
               </div>
-            )}
-          </TabsContent>
-        </Tabs>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Liste des candidatures */}
+        <div className="space-y-4">
+          {filteredApplications.length > 0 ? (
+            filteredApplications.map((application) => (
+              <ModernApplicationCard
+                key={application.id}
+                application={application}
+                isSelected={selectedApplications.includes(application.id)}
+                onSelect={(selected) => {
+                  if (selected) {
+                    setSelectedApplications([...selectedApplications, application.id])
+                  } else {
+                    setSelectedApplications(selectedApplications.filter((id) => id !== application.id))
+                  }
+                }}
+                onAction={(action) => handleApplicationAction(application.id, action)}
+                scoringPreferences={scoringPreferences}
+              />
+            ))
+          ) : (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-10">
+                <AlertTriangle className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-medium">Aucune candidature trouvée</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {searchTerm || statusFilter !== "all"
+                    ? "Aucune candidature ne correspond à vos critères de recherche."
+                    : "Vous n'avez pas encore reçu de candidatures."}
+                </p>
+                {(searchTerm || statusFilter !== "all") && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSearchTerm("")
+                      setStatusFilter("all")
+                    }}
+                    className="mt-4"
+                  >
+                    Effacer les filtres
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
 
       {/* Dialogue de proposition de visite */}
-      {showVisitDialog && currentApplicationForVisit && (
+      {showVisitDialog && currentApplication && (
         <VisitProposalManager
           isOpen={showVisitDialog}
           onClose={() => {
             setShowVisitDialog(false)
-            setCurrentApplicationForVisit(null)
+            setCurrentApplication(null)
           }}
-          propertyId={currentApplicationForVisit.property_id}
-          propertyTitle={currentApplicationForVisit.property?.title || "Propriété"}
-          applicationId={currentApplicationForVisit.id}
-          tenantName={
-            `${currentApplicationForVisit.tenant?.first_name || ""} ${currentApplicationForVisit.tenant?.last_name || ""}`.trim() ||
-            "Candidat"
-          }
+          propertyId={currentApplication.property_id}
+          propertyTitle={currentApplication.property?.title || ""}
+          applicationId={currentApplication.id}
+          tenantName={`${currentApplication.tenant?.first_name || ""} ${currentApplication.tenant?.last_name || ""}`}
           onSlotsProposed={handleVisitProposed}
+        />
+      )}
+
+      {/* Dialogue de refus */}
+      {showRefuseDialog && currentApplication && (
+        <RefusalDialog
+          isOpen={showRefuseDialog}
+          onClose={() => {
+            setShowRefuseDialog(false)
+            setCurrentApplication(null)
+          }}
+          onConfirm={handleRefuseConfirm}
+          tenantName={`${currentApplication.tenant?.first_name || ""} ${currentApplication.tenant?.last_name || ""}`}
         />
       )}
     </>
