@@ -3,193 +3,323 @@
 import type React from "react"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { ArrowLeft, Upload, FileText, Calendar, Shield } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { DocumentUploadWithValidation } from "@/components/document-upload-with-validation"
+import { FileText, User, Euro, Building, CheckCircle, AlertTriangle, Calendar } from "lucide-react"
 
-export default function UploadDocumentPage() {
-  const router = useRouter()
-  const [isUploading, setIsUploading] = useState(false)
-  const [formData, setFormData] = useState({
-    documentType: "",
-    documentName: "",
-    expiryDate: "",
-    file: null as File | null,
-  })
+interface DocumentCategory {
+  id: string
+  name: string
+  icon: React.ReactNode
+  documents: DocumentType[]
+  required: boolean
+}
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsUploading(true)
+interface DocumentType {
+  id: string
+  name: string
+  description: string
+  required: boolean
+  completed: boolean
+  documentCount: number
+}
 
-    try {
-      // Simuler l'upload
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+const DOCUMENT_CATEGORIES: DocumentCategory[] = [
+  {
+    id: "identity",
+    name: "Identité",
+    icon: <User className="h-5 w-5" />,
+    required: true,
+    documents: [
+      {
+        id: "identity",
+        name: "Pièce d'identité",
+        description: "Carte d'identité, passeport ou titre de séjour (recto + verso)",
+        required: true,
+        completed: false,
+        documentCount: 2,
+      },
+    ],
+  },
+  {
+    id: "income",
+    name: "Revenus",
+    icon: <Euro className="h-5 w-5" />,
+    required: true,
+    documents: [
+      {
+        id: "payslip",
+        name: "Fiches de paie",
+        description: "3 dernières fiches de paie consécutives",
+        required: true,
+        completed: false,
+        documentCount: 3,
+      },
+      {
+        id: "tax_notice",
+        name: "Avis d'imposition",
+        description: "Dernier avis d'imposition sur le revenu",
+        required: true,
+        completed: false,
+        documentCount: 1,
+      },
+      {
+        id: "employment_contract",
+        name: "Contrat de travail",
+        description: "Contrat de travail en cours",
+        required: false,
+        completed: false,
+        documentCount: 1,
+      },
+    ],
+  },
+  {
+    id: "banking",
+    name: "Banque",
+    icon: <Building className="h-5 w-5" />,
+    required: true,
+    documents: [
+      {
+        id: "bank_statement",
+        name: "Relevés bancaires",
+        description: "3 derniers relevés bancaires",
+        required: true,
+        completed: false,
+        documentCount: 3,
+      },
+    ],
+  },
+]
 
-      // Rediriger vers la page de gestion locative
-      router.push("/tenant/rental-management?tab=documents&success=document-uploaded")
-    } catch (error) {
-      console.error("Erreur lors de l'upload:", error)
-    } finally {
-      setIsUploading(false)
+export default function DocumentUploadPage() {
+  const [completedDocuments, setCompletedDocuments] = useState<Record<string, any>>({})
+  const [activeCategory, setActiveCategory] = useState("identity")
+
+  const handleDocumentValidated = (documentId: string, documentData: any) => {
+    console.log("✅ Document validé:", documentId, documentData)
+
+    setCompletedDocuments((prev) => ({
+      ...prev,
+      [documentId]: {
+        ...documentData,
+        completedAt: new Date().toISOString(),
+      },
+    }))
+
+    // Passer automatiquement à la catégorie suivante si tous les documents requis sont complétés
+    const currentCategory = DOCUMENT_CATEGORIES.find((cat) => cat.documents.some((doc) => doc.id === documentId))
+
+    if (currentCategory) {
+      const allRequiredCompleted = currentCategory.documents
+        .filter((doc) => doc.required)
+        .every((doc) => completedDocuments[doc.id] || doc.id === documentId)
+
+      if (allRequiredCompleted) {
+        const currentIndex = DOCUMENT_CATEGORIES.findIndex((cat) => cat.id === currentCategory.id)
+        const nextCategory = DOCUMENT_CATEGORIES[currentIndex + 1]
+        if (nextCategory) {
+          setTimeout(() => setActiveCategory(nextCategory.id), 1500)
+        }
+      }
     }
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFormData((prev) => ({ ...prev, file: e.target.files![0] }))
+  const getDocumentStatus = (documentId: string) => {
+    return completedDocuments[documentId] ? "completed" : "pending"
+  }
+
+  const getCategoryProgress = (category: DocumentCategory) => {
+    const requiredDocs = category.documents.filter((doc) => doc.required)
+    const completedRequiredDocs = requiredDocs.filter((doc) => completedDocuments[doc.id])
+    return {
+      completed: completedRequiredDocs.length,
+      total: requiredDocs.length,
+      percentage: (completedRequiredDocs.length / requiredDocs.length) * 100,
     }
   }
 
-  const getDocumentTypeLabel = (type: string) => {
-    switch (type) {
-      case "insurance":
-        return "Attestation d'assurance habitation"
-      case "boiler_maintenance":
-        return "Certificat d'entretien chaudière"
-      case "energy_certificate":
-        return "Certificat énergétique"
-      case "other":
-        return "Autre document"
-      default:
-        return ""
+  const getTotalProgress = () => {
+    const allRequiredDocs = DOCUMENT_CATEGORIES.flatMap((cat) => cat.documents.filter((doc) => doc.required))
+    const completedRequiredDocs = allRequiredDocs.filter((doc) => completedDocuments[doc.id])
+    return {
+      completed: completedRequiredDocs.length,
+      total: allRequiredDocs.length,
+      percentage: (completedRequiredDocs.length / allRequiredDocs.length) * 100,
     }
   }
+
+  const totalProgress = getTotalProgress()
 
   return (
-    <div className="container mx-auto py-8 max-w-2xl">
-      <div className="mb-8">
-        <Link href="/tenant/rental-management" className="text-blue-600 hover:underline flex items-center mb-4">
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          Retour à mon espace locataire
-        </Link>
-        <h1 className="text-3xl font-bold mb-2">Ajouter un document</h1>
-        <p className="text-muted-foreground">Téléchargez vos documents obligatoires</p>
+    <div className="container mx-auto py-8 space-y-8">
+      {/* En-tête */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Téléchargement de documents</h1>
+          <p className="text-gray-600 mt-2">Complétez votre dossier de location en téléchargeant vos documents</p>
+        </div>
+        <div className="text-right">
+          <div className="text-2xl font-bold text-blue-600">
+            {totalProgress.completed}/{totalProgress.total}
+          </div>
+          <div className="text-sm text-gray-600">Documents requis</div>
+        </div>
       </div>
 
-      <Alert className="mb-6">
-        <Shield className="h-4 w-4" />
-        <AlertDescription>
-          <strong>Sécurité :</strong> Vos documents sont stockés de manière sécurisée et ne sont accessibles qu'à vous
-          et votre propriétaire.
-        </AlertDescription>
-      </Alert>
-
+      {/* Progression globale */}
       <Card>
-        <CardHeader>
-          <CardTitle>Informations du document</CardTitle>
-          <CardDescription>Renseignez les détails de votre document</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="documentType">Type de document *</Label>
-              <Select
-                value={formData.documentType}
-                onValueChange={(value) => setFormData((prev) => ({ ...prev, documentType: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionnez le type de document" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="insurance">Attestation d'assurance habitation</SelectItem>
-                  <SelectItem value="boiler_maintenance">Certificat d'entretien chaudière</SelectItem>
-                  <SelectItem value="energy_certificate">Certificat énergétique</SelectItem>
-                  <SelectItem value="other">Autre document</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="documentName">Nom du document *</Label>
-              <Input
-                id="documentName"
-                placeholder="Ex: Attestation assurance habitation 2024"
-                value={formData.documentName}
-                onChange={(e) => setFormData((prev) => ({ ...prev, documentName: e.target.value }))}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="expiryDate">Date d'expiration *</Label>
-              <Input
-                id="expiryDate"
-                type="date"
-                value={formData.expiryDate}
-                onChange={(e) => setFormData((prev) => ({ ...prev, expiryDate: e.target.value }))}
-                required
-              />
-              <p className="text-sm text-muted-foreground">Nous vous enverrons un rappel avant l'expiration</p>
-            </div>
-
-            <div className="space-y-3">
-              <Label>Fichier du document *</Label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                <FileText className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                <p className="text-sm text-muted-foreground mb-3">Sélectionnez le fichier à télécharger</p>
-                <input
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  onChange={handleFileChange}
-                  className="hidden"
-                  id="file-upload"
-                  required
-                />
-                <Button type="button" variant="outline" size="sm" asChild>
-                  <label htmlFor="file-upload" className="cursor-pointer">
-                    <Upload className="h-4 w-4 mr-2" />
-                    Choisir un fichier
-                  </label>
-                </Button>
-                <p className="text-xs text-muted-foreground mt-2">Formats acceptés : PDF, JPG, PNG (max 10 MB)</p>
-              </div>
-
-              {formData.file && (
-                <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
-                  <FileText className="h-5 w-5 text-green-600" />
-                  <div className="flex-1">
-                    <p className="font-medium text-green-800">{formData.file.name}</p>
-                    <p className="text-sm text-green-600">{(formData.file.size / 1024 / 1024).toFixed(2)} MB</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {formData.documentType && (
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <h4 className="font-semibold mb-2 flex items-center">
-                  <Calendar className="h-4 w-4 mr-2" />À propos de ce document
-                </h4>
-                <p className="text-sm">
-                  {formData.documentType === "insurance" &&
-                    "L'attestation d'assurance habitation est obligatoire et doit être renouvelée chaque année. Elle couvre votre responsabilité locative."}
-                  {formData.documentType === "boiler_maintenance" &&
-                    "L'entretien annuel de la chaudière est obligatoire pour les logements équipés d'une chaudière gaz ou fioul."}
-                  {formData.documentType === "energy_certificate" &&
-                    "Le certificat énergétique indique la performance énergétique de votre logement."}
-                  {formData.documentType === "other" &&
-                    "Autres documents liés à votre location (état des lieux, inventaire, etc.)."}
-                </p>
-              </div>
-            )}
-
-            <div className="flex gap-4">
-              <Button type="button" variant="outline" className="flex-1" asChild>
-                <Link href="/tenant/rental-management">Annuler</Link>
-              </Button>
-              <Button type="submit" className="flex-1" disabled={isUploading || !formData.file}>
-                {isUploading ? "Téléchargement..." : "Ajouter le document"}
-              </Button>
-            </div>
-          </form>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-medium">Progression du dossier</h3>
+            <Badge variant={totalProgress.percentage === 100 ? "default" : "secondary"}>
+              {Math.round(totalProgress.percentage)}% complété
+            </Badge>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-3">
+            <div
+              className="bg-blue-600 h-3 rounded-full transition-all duration-500"
+              style={{ width: `${totalProgress.percentage}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-sm text-gray-600 mt-2">
+            <span>Début</span>
+            <span>Dossier complet</span>
+          </div>
         </CardContent>
       </Card>
+
+      {/* Navigation par catégories */}
+      <Tabs value={activeCategory} onValueChange={setActiveCategory}>
+        <TabsList className="grid w-full grid-cols-3">
+          {DOCUMENT_CATEGORIES.map((category) => {
+            const progress = getCategoryProgress(category)
+            return (
+              <TabsTrigger key={category.id} value={category.id} className="flex items-center gap-2">
+                {category.icon}
+                <span>{category.name}</span>
+                {progress.percentage === 100 && <CheckCircle className="h-4 w-4 text-green-600" />}
+                {progress.percentage > 0 && progress.percentage < 100 && (
+                  <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                )}
+              </TabsTrigger>
+            )
+          })}
+        </TabsList>
+
+        {DOCUMENT_CATEGORIES.map((category) => (
+          <TabsContent key={category.id} value={category.id} className="space-y-6">
+            {/* En-tête de catégorie */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  {category.icon}
+                  {category.name}
+                  {category.required && <Badge variant="destructive">Obligatoire</Badge>}
+                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <p className="text-gray-600">Téléchargez vos documents d'{category.name.toLowerCase()}</p>
+                  <div className="text-sm text-gray-600">
+                    {getCategoryProgress(category).completed} / {getCategoryProgress(category).total} requis
+                  </div>
+                </div>
+              </CardHeader>
+            </Card>
+
+            {/* Documents de la catégorie */}
+            <div className="space-y-6">
+              {category.documents.map((document) => (
+                <Card
+                  key={document.id}
+                  className={`${
+                    getDocumentStatus(document.id) === "completed"
+                      ? "border-green-500 bg-green-50"
+                      : document.required
+                        ? "border-orange-500"
+                        : "border-gray-200"
+                  }`}
+                >
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="flex items-center gap-2">
+                        <FileText className="h-5 w-5" />
+                        {document.name}
+                        {document.required && <Badge variant="destructive">Requis</Badge>}
+                        {getDocumentStatus(document.id) === "completed" && (
+                          <Badge variant="default">
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            Complété
+                          </Badge>
+                        )}
+                      </CardTitle>
+                      <div className="text-sm text-gray-600">
+                        {document.documentCount} fichier{document.documentCount > 1 ? "s" : ""}
+                      </div>
+                    </div>
+                    <p className="text-gray-600">{document.description}</p>
+                  </CardHeader>
+
+                  <CardContent>
+                    {getDocumentStatus(document.id) === "completed" ? (
+                      <div className="bg-green-100 p-4 rounded-lg">
+                        <div className="flex items-center gap-2 mb-2">
+                          <CheckCircle className="h-5 w-5 text-green-600" />
+                          <span className="font-medium text-green-800">Document validé</span>
+                        </div>
+                        <div className="text-sm text-green-700">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4" />
+                            Complété le{" "}
+                            {new Date(completedDocuments[document.id].completedAt).toLocaleDateString("fr-FR")}
+                          </div>
+                          {completedDocuments[document.id].autoValidated && (
+                            <div className="mt-1">✅ Validation automatique réussie</div>
+                          )}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-3 bg-transparent"
+                          onClick={() => {
+                            setCompletedDocuments((prev) => {
+                              const updated = { ...prev }
+                              delete updated[document.id]
+                              return updated
+                            })
+                          }}
+                        >
+                          Modifier ce document
+                        </Button>
+                      </div>
+                    ) : (
+                      <DocumentUploadWithValidation
+                        documentType={document.id}
+                        documentName={document.name}
+                        onDocumentValidated={(data) => handleDocumentValidated(document.id, data)}
+                        maxFiles={document.documentCount}
+                      />
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+        ))}
+      </Tabs>
+
+      {/* Résumé final */}
+      {totalProgress.percentage === 100 && (
+        <Card className="border-green-500 bg-green-50">
+          <CardContent className="p-6 text-center">
+            <CheckCircle className="h-12 w-12 text-green-600 mx-auto mb-4" />
+            <h3 className="text-xl font-bold text-green-800 mb-2">🎉 Dossier complet !</h3>
+            <p className="text-green-700 mb-4">Tous vos documents requis ont été téléchargés et validés avec succès.</p>
+            <Button className="bg-green-600 hover:bg-green-700">Soumettre mon dossier de location</Button>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
