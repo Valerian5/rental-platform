@@ -150,7 +150,7 @@ export function ImprovedPersonProfile({
   // Remplacer la fonction handleDocumentUpload par ces handlers spécifiques :
 
   const handleIdentityDocumentValidated = (side: "recto" | "verso", documentData: any) => {
-    const identityDocs = { ...localProfile.identity_documents_detailed }
+    const identityDocs = { ...profile.identity_documents_detailed }
     identityDocs[side] = documentData
 
     // Maintenir aussi l'ancien format pour compatibilité
@@ -158,32 +158,16 @@ export function ImprovedPersonProfile({
     if (identityDocs.recto?.fileUrl) identityUrls.push(identityDocs.recto.fileUrl)
     if (identityDocs.verso?.fileUrl) identityUrls.push(identityDocs.verso.fileUrl)
 
-    updateField("identity_documents_detailed", identityDocs)
-    updateField("identity_documents", identityUrls)
-  }
-
-  const handlePayslipValidated = (monthKey: string, documentData: any) => {
-    const workIncome = { ...localProfile.income_sources?.work_income }
-    if (!workIncome.documents_detailed) workIncome.documents_detailed = {}
-
-    if (documentData === null) {
-      delete workIncome.documents_detailed[monthKey]
-    } else {
-      workIncome.documents_detailed[monthKey] = documentData
+    const updatedProfile = {
+      ...profile,
+      identity_documents_detailed: identityDocs,
+      identity_documents: identityUrls,
     }
-
-    // Maintenir aussi l'ancien format pour compatibilité
-    const payslipUrls = Object.values(workIncome.documents_detailed || {})
-      .filter((doc) => doc?.fileUrl)
-      .map((doc) => doc.fileUrl)
-
-    workIncome.documents = payslipUrls
-    updateIncomeSource("work_income", "documents_detailed", workIncome.documents_detailed)
-    updateIncomeSource("work_income", "documents", payslipUrls)
+    onUpdate(updatedProfile)
   }
 
   const handleRentReceiptValidated = (monthKey: string, documentData: any) => {
-    const housingDocs = { ...localProfile.current_housing_documents }
+    const housingDocs = { ...profile.current_housing_documents }
     if (!housingDocs.quittances_loyer_detailed) housingDocs.quittances_loyer_detailed = {}
 
     if (documentData === null) {
@@ -198,15 +182,27 @@ export function ImprovedPersonProfile({
       .map((doc) => doc.fileUrl)
 
     housingDocs.quittances_loyer = receiptUrls
-    updateField("current_housing_documents", housingDocs)
+
+    const updatedProfile = {
+      ...profile,
+      current_housing_documents: housingDocs,
+    }
+    onUpdate(updatedProfile)
   }
 
   const handleTaxNoticeValidated = (documentData: any) => {
-    updateNestedField("tax_situation", "documents_detailed", documentData)
-
     // Maintenir aussi l'ancien format pour compatibilité
     const taxUrls = documentData?.fileUrl ? [documentData.fileUrl] : []
-    updateNestedField("tax_situation", "documents", taxUrls)
+
+    const updatedProfile = {
+      ...profile,
+      tax_situation: {
+        ...profile.tax_situation,
+        documents_detailed: documentData,
+        documents: taxUrls,
+      },
+    }
+    onUpdate(updatedProfile)
   }
 
   const handleDocumentUpload = (category: string, urls: string[], subcategory?: string, index?: number) => {
@@ -233,6 +229,19 @@ export function ImprovedPersonProfile({
         updateIncomeSource("rent_income", "documents", urls, index)
       }
     }
+  }
+
+  const handlePayslipValidated = (monthKey: string, documentData: any) => {
+    const incomeSources = { ...localProfile.income_sources }
+    if (!incomeSources.work_income.documents_detailed) incomeSources.work_income.documents_detailed = {}
+
+    incomeSources.work_income.documents_detailed[monthKey] = documentData
+
+    const updatedProfile = {
+      ...profile,
+      income_sources: incomeSources,
+    }
+    onUpdate(updatedProfile)
   }
 
   const getCompletionPercentage = () => {
@@ -389,8 +398,8 @@ export function ImprovedPersonProfile({
               <IdentityDocumentUpload
                 onDocumentValidated={handleIdentityDocumentValidated}
                 completedSides={{
-                  recto: localProfile.identity_documents_detailed?.recto,
-                  verso: localProfile.identity_documents_detailed?.verso,
+                  recto: profile.identity_documents_detailed?.recto,
+                  verso: profile.identity_documents_detailed?.verso,
                 }}
               />
             </div>
@@ -422,16 +431,20 @@ export function ImprovedPersonProfile({
               <div>
                 <Label className="text-base font-medium">Documents justificatifs *</Label>
                 {localProfile.current_housing_situation === "locataire" && (
-                  <div className="space-y-4 mt-3">
-                    <div>
-                      <Label>3 dernières quittances de loyer</Label>
-                      <MonthlyDocumentUpload
-                        documentType="rent_receipt"
-                        documentName="Quittance de loyer"
-                        onDocumentValidated={handleRentReceiptValidated}
-                        completedMonths={localProfile.current_housing_documents?.quittances_loyer_detailed || {}}
-                      />
+                  <div className="space-y-4">
+                    <div className="bg-blue-50 p-4 rounded-lg">
+                      <h4 className="font-medium text-blue-800 mb-2">Documents requis pour locataire :</h4>
+                      <ul className="text-sm text-blue-700 space-y-1">
+                        <li>• 3 dernières quittances de loyer</li>
+                        <li>• Attestation de bon paiement des loyers</li>
+                      </ul>
                     </div>
+                    <MonthlyDocumentUpload
+                      documentType="rent_receipt"
+                      documentName="Quittance de loyer"
+                      onDocumentValidated={handleRentReceiptValidated}
+                      completedMonths={profile.current_housing_documents?.quittances_loyer_detailed || {}}
+                    />
                   </div>
                 )}
 
@@ -444,6 +457,7 @@ export function ImprovedPersonProfile({
                       bucket="documents"
                       folder="rental-files"
                       category="housing"
+                      documentType="tax_notice"
                       existingFiles={localProfile.current_housing_documents?.attestation_hebergement || []}
                     />
                   </div>
@@ -919,7 +933,7 @@ export function ImprovedPersonProfile({
               <p className="text-sm text-gray-600 mb-3">Téléchargez votre dernier avis d'imposition complet</p>
               <TaxNoticeUpload
                 onDocumentValidated={handleTaxNoticeValidated}
-                completedDocument={localProfile.tax_situation?.documents_detailed}
+                completedDocument={profile.tax_situation?.documents_detailed}
               />
             </div>
           </TabsContent>
