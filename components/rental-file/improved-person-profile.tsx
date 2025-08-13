@@ -14,6 +14,9 @@ import { MAIN_ACTIVITIES, TAX_SITUATIONS, CURRENT_HOUSING_SITUATIONS } from "@/l
 import { toast } from "sonner"
 import { ImprovedIncomeSection } from "./improved-income-section"
 import { SupabaseFileUpload } from "@/components/supabase-file-upload"
+import { IdentityDocumentUpload } from "@/components/document-upload/IdentityDocumentUpload"
+import { MonthlyDocumentUpload } from "@/components/document-upload/MonthlyDocumentUpload"
+import { TaxNoticeUpload } from "@/components/document-upload/TaxNoticeUpload"
 
 interface ImprovedPersonProfileProps {
   profile: any
@@ -128,6 +131,62 @@ export function ImprovedPersonProfile({
     console.log("📁 Profil mis à jour:", updatedProfile)
     onUpdate(updatedProfile)
     toast.success(`${urls.length} document(s) ajouté(s) avec succès`)
+  }
+
+  // Handlers pour les nouveaux composants d'upload
+  const handleIdentityDocumentValidated = (side: "recto" | "verso", documentData: any) => {
+    const updatedProfile = { ...profile }
+
+    if (!updatedProfile.identity_documents_detailed) updatedProfile.identity_documents_detailed = {}
+    updatedProfile.identity_documents_detailed[side] = documentData
+
+    // Maintenir aussi l'ancien format pour compatibilité
+    const identityUrls = []
+    if (updatedProfile.identity_documents_detailed.recto?.fileUrl)
+      identityUrls.push(updatedProfile.identity_documents_detailed.recto.fileUrl)
+    if (updatedProfile.identity_documents_detailed.verso?.fileUrl)
+      identityUrls.push(updatedProfile.identity_documents_detailed.verso.fileUrl)
+    updatedProfile.identity_documents = identityUrls
+
+    onUpdate(updatedProfile)
+    toast.success("Document d'identité validé avec succès")
+  }
+
+  const handleRentReceiptValidated = (monthKey: string, documentData: any) => {
+    const updatedProfile = { ...profile }
+
+    if (!updatedProfile.current_housing_documents) updatedProfile.current_housing_documents = {}
+    if (!updatedProfile.current_housing_documents.quittances_loyer_detailed)
+      updatedProfile.current_housing_documents.quittances_loyer_detailed = {}
+
+    if (documentData === null) {
+      delete updatedProfile.current_housing_documents.quittances_loyer_detailed[monthKey]
+    } else {
+      updatedProfile.current_housing_documents.quittances_loyer_detailed[monthKey] = documentData
+    }
+
+    // Maintenir aussi l'ancien format pour compatibilité
+    const receiptUrls = Object.values(updatedProfile.current_housing_documents.quittances_loyer_detailed || {})
+      .filter((doc) => doc?.fileUrl)
+      .map((doc) => doc.fileUrl)
+    updatedProfile.current_housing_documents.quittances_loyer = receiptUrls
+
+    onUpdate(updatedProfile)
+    toast.success("Quittance de loyer validée avec succès")
+  }
+
+  const handleTaxNoticeValidated = (documentData: any) => {
+    const updatedProfile = { ...profile }
+
+    if (!updatedProfile.tax_situation) updatedProfile.tax_situation = { type: "own_notice" }
+    updatedProfile.tax_situation.documents_detailed = documentData
+
+    // Maintenir aussi l'ancien format pour compatibilité
+    const taxUrls = documentData?.fileUrl ? [documentData.fileUrl] : []
+    updatedProfile.tax_situation.documents = taxUrls
+
+    onUpdate(updatedProfile)
+    toast.success("Avis d'imposition validé avec succès")
   }
 
   // Fonction pour obtenir l'icône de chaque sous-étape
@@ -304,13 +363,12 @@ export function ImprovedPersonProfile({
               />
             </div>
 
-            <SupabaseFileUpload
-              onFilesUploaded={(urls) => handleFileUpload("identity", urls)}
-              maxFiles={3}
-              bucket="documents"
-              folder="identity"
-              existingFiles={profile.identity_documents || []}
-              acceptedTypes={["image/*", "application/pdf"]}
+            <IdentityDocumentUpload
+              onDocumentValidated={handleIdentityDocumentValidated}
+              completedSides={{
+                recto: profile.identity_documents_detailed?.recto,
+                verso: profile.identity_documents_detailed?.verso,
+              }}
             />
           </div>
         )}
@@ -354,12 +412,11 @@ export function ImprovedPersonProfile({
                     <li>• Attestation de bon paiement des loyers</li>
                   </ul>
                 </div>
-                <SupabaseFileUpload
-                  onFilesUploaded={(urls) => handleFileUpload("housing_quittances_loyer", urls)}
-                  maxFiles={3}
-                  bucket="documents"
-                  folder="housing"
-                  existingFiles={profile.current_housing_documents?.quittances_loyer || []}
+                <MonthlyDocumentUpload
+                  documentType="rent_receipt"
+                  documentName="Quittance de loyer"
+                  onDocumentValidated={handleRentReceiptValidated}
+                  completedMonths={profile.current_housing_documents?.quittances_loyer_detailed || {}}
                 />
               </div>
             )}
@@ -507,12 +564,9 @@ export function ImprovedPersonProfile({
               </div>
             )}
 
-            <SupabaseFileUpload
-              onFilesUploaded={(urls) => handleFileUpload("tax", urls)}
-              maxFiles={3}
-              bucket="documents"
-              folder="tax"
-              existingFiles={profile.tax_situation?.documents || []}
+            <TaxNoticeUpload
+              onDocumentValidated={handleTaxNoticeValidated}
+              completedDocument={profile.tax_situation?.documents_detailed}
             />
 
             {completion >= 80 && (
