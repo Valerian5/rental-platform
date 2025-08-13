@@ -24,16 +24,8 @@ import {
   Heart,
   FileText,
   Euro,
-  Briefcase,
 } from "lucide-react"
-import {
-  rentalFileService,
-  RENTAL_SITUATIONS,
-  GUARANTOR_TYPES,
-  MAIN_ACTIVITIES,
-  TAX_SITUATIONS,
-  CURRENT_HOUSING_SITUATIONS,
-} from "@/lib/rental-file-service"
+import { rentalFileService, RENTAL_SITUATIONS, GUARANTOR_TYPES } from "@/lib/rental-file-service"
 import { authService } from "@/lib/auth-service"
 import { ImprovedPersonProfile } from "@/components/rental-file/improved-person-profile"
 import { RentalFileViewer } from "@/components/rental-file/rental-file-viewer"
@@ -59,7 +51,7 @@ export default function RentalFilePage() {
     taxNotice: null,
   })
 
-  const totalSteps = 3 // Garder 3 étapes comme avant
+  const totalSteps = 6 // 6 étapes comme avant
 
   useEffect(() => {
     const fetchData = async () => {
@@ -215,47 +207,42 @@ export default function RentalFilePage() {
     }
   }
 
-  // Fonction pour obtenir l'icône de chaque étape principale
+  // Fonction pour obtenir l'icône de chaque étape
   const getStepIcon = (step: number) => {
     switch (step) {
       case 1:
         return <User className="h-4 w-4" />
       case 2:
-        return <Users className="h-4 w-4" />
+        return <FileText className="h-4 w-4" />
       case 3:
+        return <Euro className="h-4 w-4" />
+      case 4:
+        return <Home className="h-4 w-4" />
+      case 5:
+        return <Users className="h-4 w-4" />
+      case 6:
         return <Shield className="h-4 w-4" />
       default:
         return <CheckCircle className="h-4 w-4" />
     }
   }
 
-  // Fonction pour obtenir l'icône de situation de location
-  const getSituationIcon = (situation: string) => {
-    switch (situation) {
-      case "alone":
-        return <User className="h-6 w-6" />
-      case "couple":
-        return <Heart className="h-6 w-6" />
-      case "colocation":
-        return <Users className="h-6 w-6" />
+  const getStepTitle = (step: number) => {
+    switch (step) {
+      case 1:
+        return "Identité"
+      case 2:
+        return "Pièce d'identité"
+      case 3:
+        return "Revenus"
+      case 4:
+        return "Logement"
+      case 5:
+        return "Colocataires"
+      case 6:
+        return "Garants"
       default:
-        return <Home className="h-6 w-6" />
-    }
-  }
-
-  // Fonction pour obtenir l'icône de type de garant
-  const getGuarantorIcon = (type: string) => {
-    switch (type) {
-      case "physical":
-        return <User className="h-6 w-6" />
-      case "organism":
-        return <Shield className="h-6 w-6" />
-      case "moral_person":
-        return <Users className="h-6 w-6" />
-      case "none":
-        return <X className="h-6 w-6" />
-      default:
-        return <Shield className="h-6 w-6" />
+        return "Étape"
     }
   }
 
@@ -331,59 +318,43 @@ export default function RentalFilePage() {
           </div>
         </div>
 
-        {/* Progression principale avec icônes */}
+        {/* Progression principale */}
         <Card>
           <CardContent className="p-6">
             <div className="mb-4">
               <Progress value={(currentStep / totalSteps) * 100} className="h-3" />
             </div>
             <div className="flex justify-between">
-              <div className="flex flex-col items-center space-y-2">
-                <div
-                  className={`p-2 rounded-full ${currentStep >= 1 ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-400"}`}
-                >
-                  {getStepIcon(1)}
+              {[1, 2, 3, 4, 5, 6].map((step) => (
+                <div key={step} className="flex flex-col items-center space-y-2">
+                  <div
+                    className={`p-2 rounded-full ${
+                      currentStep >= step ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-400"
+                    }`}
+                  >
+                    {getStepIcon(step)}
+                  </div>
+                  <span className={`text-xs font-medium ${currentStep >= step ? "text-blue-600" : "text-gray-500"}`}>
+                    {getStepTitle(step)}
+                  </span>
                 </div>
-                <span className={`text-sm font-medium ${currentStep >= 1 ? "text-blue-600" : "text-gray-500"}`}>
-                  Locataire principal
-                </span>
-              </div>
-              <div className="flex flex-col items-center space-y-2">
-                <div
-                  className={`p-2 rounded-full ${currentStep >= 2 ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-400"}`}
-                >
-                  {getStepIcon(2)}
-                </div>
-                <span className={`text-sm font-medium ${currentStep >= 2 ? "text-blue-600" : "text-gray-500"}`}>
-                  Colocataires
-                </span>
-              </div>
-              <div className="flex flex-col items-center space-y-2">
-                <div
-                  className={`p-2 rounded-full ${currentStep >= 3 ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-400"}`}
-                >
-                  {getStepIcon(3)}
-                </div>
-                <span className={`text-sm font-medium ${currentStep >= 3 ? "text-blue-600" : "text-gray-500"}`}>
-                  Garants
-                </span>
-              </div>
+              ))}
             </div>
           </CardContent>
         </Card>
 
         <CompletionDiagnostic rentalFile={rentalFile} />
 
-        {/* Étape 1: Locataire principal */}
+        {/* Étape 1: Informations personnelles */}
         {currentStep === 1 && (
           <div className="space-y-6">
-            {/* Informations personnelles */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
                   <User className="h-5 w-5 mr-2" />
-                  Informations personnelles
+                  Vos informations personnelles
                 </CardTitle>
+                <CardDescription>Renseignez vos informations de base</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -463,7 +434,18 @@ export default function RentalFilePage() {
               </CardContent>
             </Card>
 
-            {/* Pièce d'identité avec nouveau composant */}
+            <div className="flex justify-end">
+              <Button onClick={nextStep}>
+                Suivant
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Étape 2: Pièce d'identité */}
+        {currentStep === 2 && (
+          <div className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -482,201 +464,11 @@ export default function RentalFilePage() {
               </CardContent>
             </Card>
 
-            {/* Logement actuel */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Home className="h-5 w-5 mr-2" />
-                  Logement actuel
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div>
-                  <Label className="text-base font-medium">Situation d'hébergement actuelle *</Label>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
-                    {CURRENT_HOUSING_SITUATIONS.map((situation) => (
-                      <div
-                        key={situation.value}
-                        onClick={() =>
-                          handleUpdateData({
-                            main_tenant: { ...rentalFile?.main_tenant, current_housing_situation: situation.value },
-                          })
-                        }
-                        className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                          rentalFile?.main_tenant?.current_housing_situation === situation.value
-                            ? "border-blue-500 bg-blue-50"
-                            : "border-gray-200 hover:border-gray-300"
-                        }`}
-                      >
-                        <h4 className="font-medium">{situation.label}</h4>
-                        <p className="text-sm text-gray-600 mt-1">{situation.description}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Quittances de loyer avec nouveau composant */}
-                {rentalFile?.main_tenant?.current_housing_situation === "locataire" && (
-                  <div>
-                    <Label className="text-base font-medium mb-4 block">Quittances de loyer</Label>
-                    <MonthlyDocumentUpload
-                      documentType="rent_receipt"
-                      documentName="Quittance de loyer"
-                      onDocumentValidated={handleRentReceiptValidated}
-                      completedMonths={documents.rentReceipts}
-                    />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Activité professionnelle */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Briefcase className="h-5 w-5 mr-2" />
-                  Activité professionnelle
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div>
-                  <Label className="text-base font-medium">Activité principale *</Label>
-                  <Select
-                    value={rentalFile?.main_tenant?.main_activity || ""}
-                    onValueChange={(value) =>
-                      handleUpdateData({
-                        main_tenant: { ...rentalFile?.main_tenant, main_activity: value },
-                      })
-                    }
-                  >
-                    <SelectTrigger className="mt-2">
-                      <SelectValue placeholder="Sélectionnez votre activité principale" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {MAIN_ACTIVITIES.map((activity) => (
-                        <SelectItem key={activity.value} value={activity.value}>
-                          <div>
-                            <div className="font-medium">{activity.label}</div>
-                            <div className="text-sm text-gray-500">{activity.description}</div>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="profession">Profession</Label>
-                    <Input
-                      id="profession"
-                      value={rentalFile?.main_tenant?.profession || ""}
-                      onChange={(e) =>
-                        handleUpdateData({
-                          main_tenant: { ...rentalFile?.main_tenant, profession: e.target.value },
-                        })
-                      }
-                      placeholder="Ex: Développeur, Comptable..."
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="company">Entreprise</Label>
-                    <Input
-                      id="company"
-                      value={rentalFile?.main_tenant?.company || ""}
-                      onChange={(e) =>
-                        handleUpdateData({
-                          main_tenant: { ...rentalFile?.main_tenant, company: e.target.value },
-                        })
-                      }
-                      placeholder="Nom de votre entreprise"
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Revenus */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Euro className="h-5 w-5" />
-                  Revenus
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Fiches de paie avec nouveau composant */}
-                <div>
-                  <Label className="text-base font-medium mb-4 block">Fiches de paie</Label>
-                  <MonthlyDocumentUpload
-                    documentType="payslip"
-                    documentName="Fiche de paie"
-                    onDocumentValidated={handlePayslipValidated}
-                    completedMonths={documents.payslips}
-                  />
-                </div>
-
-                {/* Avis d'imposition avec nouveau composant */}
-                <div>
-                  <Label className="text-base font-medium mb-4 block">Avis d'imposition</Label>
-                  <TaxNoticeUpload
-                    onDocumentValidated={handleTaxNoticeValidated}
-                    completedDocument={documents.taxNotice}
-                  />
-                </div>
-
-                {/* Situation fiscale */}
-                <div>
-                  <Label className="text-base font-medium">Situation fiscale *</Label>
-                  <Select
-                    value={rentalFile?.main_tenant?.tax_situation?.type || ""}
-                    onValueChange={(value) =>
-                      handleUpdateData({
-                        main_tenant: {
-                          ...rentalFile?.main_tenant,
-                          tax_situation: { ...rentalFile?.main_tenant?.tax_situation, type: value },
-                        },
-                      })
-                    }
-                  >
-                    <SelectTrigger className="mt-2">
-                      <SelectValue placeholder="Sélectionnez votre situation fiscale" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TAX_SITUATIONS.map((situation) => (
-                        <SelectItem key={situation.value} value={situation.value}>
-                          {situation.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {rentalFile?.main_tenant?.tax_situation?.type === "other" && (
-                  <div>
-                    <Label htmlFor="tax_explanation">Précisez votre situation</Label>
-                    <Textarea
-                      id="tax_explanation"
-                      value={rentalFile?.main_tenant?.tax_situation?.explanation || ""}
-                      onChange={(e) =>
-                        handleUpdateData({
-                          main_tenant: {
-                            ...rentalFile?.main_tenant,
-                            tax_situation: {
-                              ...rentalFile?.main_tenant?.tax_situation,
-                              explanation: e.target.value,
-                            },
-                          },
-                        })
-                      }
-                      placeholder="Décrivez votre situation fiscale particulière"
-                    />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <div className="flex justify-end">
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={prevStep}>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Précédent
+              </Button>
               <Button onClick={nextStep}>
                 Suivant
                 <ArrowRight className="h-4 w-4 ml-2" />
@@ -685,14 +477,102 @@ export default function RentalFilePage() {
           </div>
         )}
 
-        {/* Étape 2: Colocataires */}
-        {currentStep === 2 && (
+        {/* Étape 3: Revenus */}
+        {currentStep === 3 && (
+          <div className="space-y-6">
+            {/* Fiches de paie */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Euro className="h-5 w-5" />
+                  Fiches de paie
+                </CardTitle>
+                <CardDescription>Téléchargez vos 3 dernières fiches de paie (mois les plus récents)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <MonthlyDocumentUpload
+                  documentType="payslip"
+                  documentName="Fiche de paie"
+                  onDocumentValidated={handlePayslipValidated}
+                  completedMonths={documents.payslips}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Avis d'imposition */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Avis d'imposition
+                </CardTitle>
+                <CardDescription>
+                  Téléchargez votre dernier avis d'imposition complet (année fiscale 2023)
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <TaxNoticeUpload
+                  onDocumentValidated={handleTaxNoticeValidated}
+                  completedDocument={documents.taxNotice}
+                />
+              </CardContent>
+            </Card>
+
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={prevStep}>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Précédent
+              </Button>
+              <Button onClick={nextStep}>
+                Suivant
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Étape 4: Logement actuel */}
+        {currentStep === 4 && (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Home className="h-5 w-5" />
+                  Quittances de loyer
+                </CardTitle>
+                <CardDescription>Téléchargez vos 3 dernières quittances de loyer (obligatoires)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <MonthlyDocumentUpload
+                  documentType="rent_receipt"
+                  documentName="Quittance de loyer"
+                  onDocumentValidated={handleRentReceiptValidated}
+                  completedMonths={documents.rentReceipts}
+                />
+              </CardContent>
+            </Card>
+
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={prevStep}>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Précédent
+              </Button>
+              <Button onClick={nextStep}>
+                Suivant
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Étape 5: Colocataires */}
+        {currentStep === 5 && (
           <div className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
                   <Users className="h-5 w-5 mr-2" />
-                  Constituez-vous un dossier de location afin d'habiter
+                  Situation de location
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -715,7 +595,9 @@ export default function RentalFilePage() {
                               : "bg-gray-100 text-gray-500"
                           }`}
                         >
-                          {getSituationIcon(option.value)}
+                          {option.value === "alone" && <User className="h-6 w-6" />}
+                          {option.value === "couple" && <Heart className="h-6 w-6" />}
+                          {option.value === "colocation" && <Users className="h-6 w-6" />}
                         </div>
                         <div>
                           <h3 className="font-medium text-gray-900 mb-1">{option.label}</h3>
@@ -752,29 +634,9 @@ export default function RentalFilePage() {
                     onChange={(e) => handleUpdateData({ presentation_message: e.target.value })}
                     className="resize-none"
                   />
-                  <div className="flex justify-between items-center">
-                    <p className="text-sm text-gray-500">
-                      Ce message sera visible par les propriétaires. Soyez authentique et rassurant.
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      {(rentalFile?.presentation_message || "").length}/500 caractères
-                    </p>
-                  </div>
-                </div>
-
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h4 className="font-medium text-blue-800 mb-2">Conseils pour un bon message :</h4>
-                  <ul className="text-sm text-blue-700 space-y-1">
-                    <li>• Présentez votre situation professionnelle et personnelle</li>
-                    <li>• Expliquez pourquoi vous cherchez ce logement</li>
-                    <li>• Mettez en avant vos qualités de locataire</li>
-                    <li>• Restez authentique et professionnel</li>
-                  </ul>
                 </div>
               </CardContent>
             </Card>
-
-            <CompletionDiagnostic rentalFile={rentalFile} />
 
             {(rentalFile?.rental_situation === "colocation" || rentalFile?.rental_situation === "couple") && (
               <div className="space-y-6">
@@ -827,15 +689,15 @@ export default function RentalFilePage() {
           </div>
         )}
 
-        {/* Étape 3: Garants */}
-        {currentStep === 3 && (
+        {/* Étape 6: Garants */}
+        {currentStep === 6 && (
           <div className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
                   <span className="flex items-center">
                     <Shield className="h-5 w-5 mr-2" />
-                    Garant
+                    Garants
                   </span>
                   <Button onClick={addGuarantor} size="sm">
                     <Plus className="h-4 w-4 mr-2" />
@@ -866,8 +728,6 @@ export default function RentalFilePage() {
                 )}
               </CardContent>
             </Card>
-
-            <CompletionDiagnostic rentalFile={rentalFile} />
 
             {rentalFile?.guarantors?.map((guarantor: any, index: number) => (
               <Card key={index}>
@@ -907,7 +767,10 @@ export default function RentalFilePage() {
                                   : "bg-gray-100 text-gray-500"
                               }`}
                             >
-                              {getGuarantorIcon(type.value)}
+                              {type.value === "physical" && <User className="h-6 w-6" />}
+                              {type.value === "organism" && <Shield className="h-6 w-6" />}
+                              {type.value === "moral_person" && <Users className="h-6 w-6" />}
+                              {type.value === "none" && <X className="h-6 w-6" />}
                             </div>
                             <div>
                               <h4 className="font-medium text-gray-900 mb-1">{type.label}</h4>
@@ -933,107 +796,6 @@ export default function RentalFilePage() {
                       }}
                       title="Informations du garant"
                     />
-                  )}
-
-                  {guarantor.type === "organism" && (
-                    <div className="space-y-4">
-                      <div>
-                        <h4 className="font-medium text-gray-900 mb-3">Type d'organisme</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div
-                            onClick={() => {
-                              const updatedGuarantor = { ...guarantor, organism_type: "visale" }
-                              updateGuarantor(index, updatedGuarantor)
-                            }}
-                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                              guarantor.organism_type === "visale"
-                                ? "border-green-500 bg-green-50"
-                                : "border-gray-200 hover:border-gray-300"
-                            }`}
-                          >
-                            <div className="flex items-center space-x-3">
-                              <Shield className="h-5 w-5 text-green-600" />
-                              <div>
-                                <h5 className="font-medium">Garantie Visale</h5>
-                                <p className="text-sm text-gray-600">Gratuite et sécurisée</p>
-                              </div>
-                            </div>
-                          </div>
-                          <div
-                            onClick={() => {
-                              const updatedGuarantor = { ...guarantor, organism_type: "autre" }
-                              updateGuarantor(index, updatedGuarantor)
-                            }}
-                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                              guarantor.organism_type === "autre"
-                                ? "border-blue-500 bg-blue-50"
-                                : "border-gray-200 hover:border-gray-300"
-                            }`}
-                          >
-                            <div className="flex items-center space-x-3">
-                              <Users className="h-5 w-5 text-blue-600" />
-                              <div>
-                                <h5 className="font-medium">Autre organisme</h5>
-                                <p className="text-sm text-gray-600">Organisme privé</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {guarantor.organism_type === "visale" && (
-                        <div className="bg-green-50 p-4 rounded-lg">
-                          <h4 className="font-medium text-green-800 mb-2">Garantie Visale</h4>
-                          <p className="text-sm text-green-700 mb-3">
-                            La garantie Visale est gratuite et couvre les loyers impayés. Vous devez faire votre demande
-                            sur le site d'Action Logement.
-                          </p>
-                          <Button variant="outline" size="sm" asChild>
-                            <a href="https://www.visale.fr" target="_blank" rel="noopener noreferrer">
-                              Faire ma demande Visale
-                            </a>
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {guarantor.type === "moral_person" && (
-                    <div className="space-y-4">
-                      <div>
-                        <label
-                          htmlFor={`company_name_${index}`}
-                          className="block text-sm font-medium text-gray-700 mb-2"
-                        >
-                          Nom de la personne morale
-                        </label>
-                        <Input
-                          id={`company_name_${index}`}
-                          placeholder="Nom de l'entreprise"
-                          value={guarantor.company_name || ""}
-                          onChange={(e) => {
-                            const updatedGuarantor = { ...guarantor, company_name: e.target.value }
-                            updateGuarantor(index, updatedGuarantor)
-                          }}
-                        />
-                      </div>
-
-                      <div className="bg-yellow-50 p-4 rounded-lg">
-                        <p className="text-sm text-yellow-800">
-                          J'ajoute un extrait K bis de la société, ou toute autre pièce justifiant de l'existence légale
-                          de la personne.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {guarantor.type === "none" && (
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <p className="text-sm text-gray-700">
-                        Vous avez choisi de ne pas ajouter de garant. Cela peut réduire vos chances d'obtenir un
-                        logement.
-                      </p>
-                    </div>
                   )}
                 </CardContent>
               </Card>
