@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,12 +21,12 @@ interface ImprovedPersonProfileProps {
   onRemove?: () => void
 }
 
-export function ImprovedPersonProfile({
+const ImprovedPersonProfile: React.FC<ImprovedPersonProfileProps> = ({
   profile,
   onUpdate,
   isMainTenant = false,
   onRemove,
-}: ImprovedPersonProfileProps) {
+}) => {
   const [activeSection, setActiveSection] = useState<string>("personal")
 
   const handleInputChange = (field: string, value: any) => {
@@ -55,8 +57,8 @@ export function ImprovedPersonProfile({
     }
     // Gestion des documents d'activité (contrat de travail, etc.)
     else if (category === "activity_documents") {
-      if (!updatedProfile.activity_documents) updatedProfile.activity_documents = {}
-      updatedProfile.activity_documents.documents = [...(updatedProfile.activity_documents.documents || []), ...urls]
+      if (!updatedProfile.activity_documents) updatedProfile.activity_documents = []
+      updatedProfile.activity_documents = [...updatedProfile.activity_documents, ...urls]
     }
     // Gestion des documents de logement
     else if (category === "housing_documents") {
@@ -89,7 +91,7 @@ export function ImprovedPersonProfile({
     const sections = {
       personal: !!(profile.first_name && profile.last_name && profile.email && profile.phone),
       identity: !!(profile.identity_documents?.documents?.length > 0),
-      activity: !!(profile.activity_documents?.documents?.length > 0),
+      activity: !!(profile.activity_documents?.length > 0),
       housing: !!(
         profile.housing_documents?.situation &&
         (profile.housing_documents.situation === "locataire"
@@ -435,11 +437,12 @@ export function ImprovedPersonProfile({
               <p className="text-xs text-gray-600 mb-2">Contrat de travail, attestation employeur, carte étudiant...</p>
               <SupabaseFileUpload
                 onFilesUploaded={(urls) => handleFileUpload("activity_documents", urls)}
-                maxFiles={3}
+                maxFiles={10}
                 bucket="documents"
                 folder="activity"
-                existingFiles={profile.activity_documents?.documents || []}
+                existingFiles={profile.activity_documents || []}
                 acceptedTypes={["image/*", "application/pdf"]}
+                showPreview={true}
               />
             </div>
           </CardContent>
@@ -526,3 +529,5 @@ export function ImprovedPersonProfile({
     </div>
   )
 }
+
+export default ImprovedPersonProfile
