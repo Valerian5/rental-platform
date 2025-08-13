@@ -14,6 +14,7 @@ import { RentalFileViewer } from "@/components/rental-file/rental-file-viewer"
 import { toast } from "sonner"
 import Link from "next/link"
 import { CompletionDiagnostic } from "@/components/rental-file/completion-diagnostic"
+import { DossierFacileIntegration } from "@/components/rental-file/dossierfacile-integration"
 
 export default function RentalFilePage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
@@ -259,6 +260,9 @@ export default function RentalFilePage() {
             </div>
           </div>
         </div>
+
+        {/* Choix de la méthode de création */}
+        <DossierFacileIntegration profile={rentalFile || {}} onUpdate={handleUpdateData} />
 
         {/* Progression principale avec icônes */}
         <Card>

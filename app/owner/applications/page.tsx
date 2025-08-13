@@ -9,12 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
-import { ModernApplicationCard } from "@/components/modern-application-card"
 import { VisitProposalManager } from "@/components/visit-proposal-manager"
 import { RefusalDialog } from "@/components/refusal-dialog"
 import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
 import { applicationEnrichmentService } from "@/lib/application-enrichment-service"
 import { Search, Filter, SortAsc, Settings, Users, CheckCircle, XCircle, AlertTriangle } from "lucide-react"
+import { ApplicationCardWithDossierFacileBadge } from "@/components/application-card-with-dossierfacile-badge"
 
 export default function ApplicationsPage() {
   const router = useRouter()
@@ -213,6 +213,13 @@ export default function ApplicationsPage() {
     switch (action) {
       case "analyze":
         router.push(`/owner/applications/${applicationId}`)
+        break
+      case "view_dossierfacile":
+        if (application.dossierfacile_pdf_url) {
+          window.open(application.dossierfacile_pdf_url, "_blank")
+        } else {
+          toast.error("PDF DossierFacile non disponible")
+        }
         break
       case "propose_visit":
         setCurrentApplication(application)
@@ -544,19 +551,10 @@ export default function ApplicationsPage() {
         <div className="space-y-4">
           {filteredApplications.length > 0 ? (
             filteredApplications.map((application) => (
-              <ModernApplicationCard
+              <ApplicationCardWithDossierFacileBadge
                 key={application.id}
                 application={application}
-                isSelected={selectedApplications.includes(application.id)}
-                onSelect={(selected) => {
-                  if (selected) {
-                    setSelectedApplications([...selectedApplications, application.id])
-                  } else {
-                    setSelectedApplications(selectedApplications.filter((id) => id !== application.id))
-                  }
-                }}
                 onAction={(action) => handleApplicationAction(application.id, action)}
-                scoringPreferences={scoringPreferences}
               />
             ))
           ) : (

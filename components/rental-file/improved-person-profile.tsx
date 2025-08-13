@@ -511,13 +511,35 @@ export function ImprovedPersonProfile({
                   </ul>
                 </div>
 
-                <SupabaseFileUpload
-                  onFilesUploaded={(urls) => handleFileUpload("activity", urls)}
-                  maxFiles={5}
-                  bucket="documents"
-                  folder="activity"
-                  existingFiles={profile.activity_documents || []}
-                />
+                <div>
+                  <Label className="text-sm font-medium">Documents d'activité *</Label>
+                  <SupabaseFileUpload
+                    onFilesUploaded={(urls) => handleFileUpload("activity", urls)}
+                    maxFiles={5}
+                    bucket="documents"
+                    folder="activity"
+                    existingFiles={profile.activity_documents || []}
+                    acceptedTypes={["image/*", "application/pdf"]}
+                    showPreview={true}
+                  />
+                </div>
+
+                {/* Upload spécifique pour contrat de travail */}
+                {(profile.main_activity === "cdi" || profile.main_activity === "cdd") && (
+                  <div>
+                    <Label className="text-sm font-medium">Contrat de travail *</Label>
+                    <p className="text-xs text-gray-600 mb-2">Contrat complet et signé (toutes les pages)</p>
+                    <SupabaseFileUpload
+                      onFilesUploaded={(urls) => handleFileUpload("employment_contract", urls)}
+                      maxFiles={1}
+                      bucket="documents"
+                      folder="contracts"
+                      existingFiles={profile.employment_contract_documents || []}
+                      acceptedTypes={["application/pdf"]}
+                      showPreview={true}
+                    />
+                  </div>
+                )}
               </div>
             )}
           </div>
