@@ -2,617 +2,527 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Progress } from "@/components/ui/progress"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { X, User, Briefcase, ChevronRight, Home, CheckCircle, AlertTriangle, Euro, CreditCard } from "lucide-react"
-import { MAIN_ACTIVITIES, TAX_SITUATIONS, CURRENT_HOUSING_SITUATIONS } from "@/lib/rental-file-service"
+import { User, FileText, CheckCircle, Home, X, Briefcase, Euro } from "lucide-react"
 import { toast } from "sonner"
-import { ImprovedIncomeSection } from "./improved-income-section"
 import { SupabaseFileUpload } from "@/components/supabase-file-upload"
-import { IdentityDocumentUpload } from "@/components/document-upload/IdentityDocumentUpload"
-import { MonthlyDocumentUpload } from "@/components/document-upload/MonthlyDocumentUpload"
-import { TaxNoticeUpload } from "@/components/document-upload/TaxNoticeUpload"
+import { ImprovedIncomeSection } from "./improved-income-section"
 
 interface ImprovedPersonProfileProps {
   profile: any
   onUpdate: (profile: any) => void
+  isMainTenant?: boolean
   onRemove?: () => void
-  title: string
-  canRemove?: boolean
 }
 
 export function ImprovedPersonProfile({
   profile,
   onUpdate,
+  isMainTenant = false,
   onRemove,
-  title,
-  canRemove = false,
 }: ImprovedPersonProfileProps) {
-  const [currentSubStep, setCurrentSubStep] = useState(1)
-  const [validationErrors, setValidationErrors] = useState<string[]>([])
+  const [activeSection, setActiveSection] = useState<string>("personal")
 
-  const totalSubSteps = 5
-
-  const validateCurrentStep = (): boolean => {
-    const errors: string[] = []
-
-    switch (currentSubStep) {
-      case 1: // Identité
-        if (!profile.first_name?.trim()) errors.push("Le prénom est requis")
-        if (!profile.last_name?.trim()) errors.push("Le nom est requis")
-        if (!profile.identity_documents?.length) errors.push("La pièce d'identité est requise")
-        break
-      case 2: // Logement actuel
-        if (!profile.current_housing_situation) errors.push("La situation d'hébergement est requise")
-        break
-      case 3: // Activité
-        if (!profile.main_activity) errors.push("L'activité principale est requise")
-        if (!profile.activity_documents?.length) errors.push("Les documents d'activité sont requis")
-        break
-      case 4: // Revenus
-        if (!profile.income_sources || Object.keys(profile.income_sources).length === 0) {
-          errors.push("Au moins une source de revenus est requise")
-        }
-        break
-      case 5: // Fiscalité
-        if (!profile.tax_situation?.type) errors.push("La situation fiscale est requise")
-        if (!profile.tax_situation?.documents?.length) errors.push("L'avis d'imposition est requis")
-        break
-    }
-
-    setValidationErrors(errors)
-    return errors.length === 0
+  const handleInputChange = (field: string, value: any) => {
+    const updatedProfile = { ...profile, [field]: value }
+    onUpdate(updatedProfile)
   }
 
-  const nextSubStep = () => {
-    if (validateCurrentStep() && currentSubStep < totalSubSteps) {
-      setCurrentSubStep(currentSubStep + 1)
-      setValidationErrors([])
+  const handleNestedInputChange = (section: string, field: string, value: any) => {
+    const updatedProfile = {
+      ...profile,
+      [section]: {
+        ...profile[section],
+        [field]: value,
+      },
     }
-  }
-
-  const prevSubStep = () => {
-    if (currentSubStep > 1) {
-      setCurrentSubStep(currentSubStep - 1)
-      setValidationErrors([])
-    }
-  }
-
-  const calculateStepCompletion = (): number => {
-    let completed = 0
-    const total = 5
-
-    // Identité
-    if (profile.first_name && profile.last_name && profile.identity_documents?.length) completed++
-    // Logement
-    if (profile.current_housing_situation) completed++
-    // Activité
-    if (profile.main_activity && profile.activity_documents?.length) completed++
-    // Revenus
-    if (profile.income_sources && Object.keys(profile.income_sources).length > 0) completed++
-    // Fiscalité
-    if (profile.tax_situation?.type && profile.tax_situation?.documents?.length) completed++
-
-    return Math.round((completed / total) * 100)
+    onUpdate(updatedProfile)
   }
 
   const handleFileUpload = async (category: string, urls: string[]) => {
-    console.log("📁 Upload reçu:", { category, urls, count: urls.length })
-
-    if (!urls || urls.length === 0) {
-      toast.error("Aucun fichier reçu")
-      return
-    }
+    console.log("📁 Upload documents - Catégorie:", category, "URLs:", urls)
 
     const updatedProfile = { ...profile }
 
-    // Gestion des différents types de documents
-    if (category === "identity") {
-      updatedProfile.identity_documents = [...(updatedProfile.identity_documents || []), ...urls]
-    } else if (category === "activity") {
-      updatedProfile.activity_documents = [...(updatedProfile.activity_documents || []), ...urls]
-    } else if (category === "tax") {
-      if (!updatedProfile.tax_situation) updatedProfile.tax_situation = { type: "own_notice", documents: [] }
-      updatedProfile.tax_situation.documents = [...(updatedProfile.tax_situation.documents || []), ...urls]
-    } else if (category.startsWith("housing_")) {
-      const docType = category.replace("housing_", "")
-      if (!updatedProfile.current_housing_documents) updatedProfile.current_housing_documents = {}
-      updatedProfile.current_housing_documents[docType] = [
-        ...(updatedProfile.current_housing_documents[docType] || []),
+    // Gestion des documents d'identité
+    if (category === "identity_documents") {
+      if (!updatedProfile.identity_documents) updatedProfile.identity_documents = {}
+      updatedProfile.identity_documents.documents = [...(updatedProfile.identity_documents.documents || []), ...urls]
+    }
+    // Gestion des documents d'activité (contrat de travail, etc.)
+    else if (category === "activity_documents") {
+      if (!updatedProfile.activity_documents) updatedProfile.activity_documents = {}
+      updatedProfile.activity_documents.documents = [...(updatedProfile.activity_documents.documents || []), ...urls]
+    }
+    // Gestion des documents de logement
+    else if (category === "housing_documents") {
+      if (!updatedProfile.housing_documents) updatedProfile.housing_documents = {}
+      updatedProfile.housing_documents.documents = [...(updatedProfile.housing_documents.documents || []), ...urls]
+    }
+    // Gestion des documents de logement pour "hébergé"
+    else if (category === "housing_documents_heberge") {
+      if (!updatedProfile.housing_documents) updatedProfile.housing_documents = {}
+      updatedProfile.housing_documents.heberge_documents = [
+        ...(updatedProfile.housing_documents.heberge_documents || []),
+        ...urls,
+      ]
+    }
+    // Gestion des documents de logement pour "propriétaire"
+    else if (category === "housing_documents_proprietaire") {
+      if (!updatedProfile.housing_documents) updatedProfile.housing_documents = {}
+      updatedProfile.housing_documents.proprietaire_documents = [
+        ...(updatedProfile.housing_documents.proprietaire_documents || []),
         ...urls,
       ]
     }
 
-    console.log("📁 Profil mis à jour:", updatedProfile)
+    console.log("📁 Profil mis à jour avec URLs Supabase:", updatedProfile)
     onUpdate(updatedProfile)
     toast.success(`${urls.length} document(s) ajouté(s) avec succès`)
   }
 
-  // Handlers pour les nouveaux composants d'upload
-  const handleIdentityDocumentValidated = (side: "recto" | "verso", documentData: any) => {
-    const updatedProfile = { ...profile }
-
-    if (!updatedProfile.identity_documents_detailed) updatedProfile.identity_documents_detailed = {}
-    updatedProfile.identity_documents_detailed[side] = documentData
-
-    // Maintenir aussi l'ancien format pour compatibilité
-    const identityUrls = []
-    if (updatedProfile.identity_documents_detailed.recto?.fileUrl)
-      identityUrls.push(updatedProfile.identity_documents_detailed.recto.fileUrl)
-    if (updatedProfile.identity_documents_detailed.verso?.fileUrl)
-      identityUrls.push(updatedProfile.identity_documents_detailed.verso.fileUrl)
-    updatedProfile.identity_documents = identityUrls
-
-    onUpdate(updatedProfile)
-    toast.success("Document d'identité validé avec succès")
-  }
-
-  const handleRentReceiptValidated = (monthKey: string, documentData: any) => {
-    const updatedProfile = { ...profile }
-
-    if (!updatedProfile.current_housing_documents) updatedProfile.current_housing_documents = {}
-    if (!updatedProfile.current_housing_documents.quittances_loyer_detailed)
-      updatedProfile.current_housing_documents.quittances_loyer_detailed = {}
-
-    if (documentData === null) {
-      delete updatedProfile.current_housing_documents.quittances_loyer_detailed[monthKey]
-    } else {
-      updatedProfile.current_housing_documents.quittances_loyer_detailed[monthKey] = documentData
+  const getCompletionStatus = () => {
+    const sections = {
+      personal: !!(profile.first_name && profile.last_name && profile.email && profile.phone),
+      identity: !!(profile.identity_documents?.documents?.length > 0),
+      activity: !!(profile.activity_documents?.documents?.length > 0),
+      housing: !!(
+        profile.housing_documents?.situation &&
+        (profile.housing_documents.situation === "locataire"
+          ? profile.housing_documents.documents?.length > 0
+          : profile.housing_documents.situation === "heberge"
+            ? profile.housing_documents.heberge_documents?.length > 0
+            : profile.housing_documents.proprietaire_documents?.length > 0)
+      ),
+      income: !!(profile.income_sources && Object.keys(profile.income_sources).length > 0),
     }
 
-    // Maintenir aussi l'ancien format pour compatibilité
-    const receiptUrls = Object.values(updatedProfile.current_housing_documents.quittances_loyer_detailed || {})
-      .filter((doc) => doc?.fileUrl)
-      .map((doc) => doc.fileUrl)
-    updatedProfile.current_housing_documents.quittances_loyer = receiptUrls
+    const completed = Object.values(sections).filter(Boolean).length
+    const total = Object.keys(sections).length
 
-    onUpdate(updatedProfile)
-    toast.success("Quittance de loyer validée avec succès")
+    return { completed, total, sections }
   }
 
-  const handleTaxNoticeValidated = (documentData: any) => {
-    const updatedProfile = { ...profile }
+  const { completed, total, sections } = getCompletionStatus()
 
-    if (!updatedProfile.tax_situation) updatedProfile.tax_situation = { type: "own_notice" }
-    updatedProfile.tax_situation.documents_detailed = documentData
-
-    // Maintenir aussi l'ancien format pour compatibilité
-    const taxUrls = documentData?.fileUrl ? [documentData.fileUrl] : []
-    updatedProfile.tax_situation.documents = taxUrls
-
-    onUpdate(updatedProfile)
-    toast.success("Avis d'imposition validé avec succès")
-  }
-
-  // Fonction pour obtenir l'icône de chaque sous-étape
-  const getSubStepIcon = (step: number) => {
-    switch (step) {
-      case 1:
-        return <User className="h-4 w-4" />
-      case 2:
-        return <Home className="h-4 w-4" />
-      case 3:
-        return <Briefcase className="h-4 w-4" />
-      case 4:
-        return <Euro className="h-4 w-4" />
-      case 5:
-        return <CreditCard className="h-4 w-4" />
-      default:
-        return <CheckCircle className="h-4 w-4" />
-    }
-  }
-
-  const completion = calculateStepCompletion()
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
+  const SectionCard = ({
+    id,
+    title,
+    description,
+    icon: Icon,
+    isCompleted,
+    isActive,
+    onClick,
+  }: {
+    id: string
+    title: string
+    description: string
+    icon: any
+    isCompleted: boolean
+    isActive: boolean
+    onClick: () => void
+  }) => (
+    <Card
+      className={`cursor-pointer transition-all duration-200 ${
+        isActive
+          ? "border-blue-500 bg-blue-50 shadow-md"
+          : isCompleted
+            ? "border-green-500 bg-green-50 hover:shadow-sm"
+            : "border-gray-200 hover:border-gray-300 hover:shadow-sm"
+      }`}
+      onClick={onClick}
+    >
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <User className="h-5 w-5" />
-            <span>{title}</span>
-            <Badge variant={completion >= 80 ? "default" : "secondary"}>{completion}% complété</Badge>
+            <div
+              className={`p-2 rounded-lg ${isActive ? "bg-blue-100" : isCompleted ? "bg-green-100" : "bg-gray-100"}`}
+            >
+              <Icon
+                className={`h-5 w-5 ${isActive ? "text-blue-600" : isCompleted ? "text-green-600" : "text-gray-600"}`}
+              />
+            </div>
+            <div>
+              <h4 className="font-medium text-gray-900">{title}</h4>
+              <p className="text-sm text-gray-600">{description}</p>
+            </div>
           </div>
-          {canRemove && (
-            <Button onClick={onRemove} size="sm" variant="outline">
-              <X className="h-4 w-4" />
-            </Button>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Progression des sous-étapes avec icônes */}
-        <div className="space-y-4">
-          <Progress value={(currentSubStep / totalSubSteps) * 100} className="h-2" />
-          <div className="flex justify-between">
-            <div className="flex flex-col items-center space-y-1">
-              <div
-                className={`p-1 rounded-full ${currentSubStep >= 1 ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-400"}`}
-              >
-                {getSubStepIcon(1)}
-              </div>
-              <span className={`text-xs ${currentSubStep >= 1 ? "text-blue-600 font-medium" : "text-gray-500"}`}>
-                Identité
-              </span>
-            </div>
-            <div className="flex flex-col items-center space-y-1">
-              <div
-                className={`p-1 rounded-full ${currentSubStep >= 2 ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-400"}`}
-              >
-                {getSubStepIcon(2)}
-              </div>
-              <span className={`text-xs ${currentSubStep >= 2 ? "text-blue-600 font-medium" : "text-gray-500"}`}>
-                Logement
-              </span>
-            </div>
-            <div className="flex flex-col items-center space-y-1">
-              <div
-                className={`p-1 rounded-full ${currentSubStep >= 3 ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-400"}`}
-              >
-                {getSubStepIcon(3)}
-              </div>
-              <span className={`text-xs ${currentSubStep >= 3 ? "text-blue-600 font-medium" : "text-gray-500"}`}>
-                Activité
-              </span>
-            </div>
-            <div className="flex flex-col items-center space-y-1">
-              <div
-                className={`p-1 rounded-full ${currentSubStep >= 4 ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-400"}`}
-              >
-                {getSubStepIcon(4)}
-              </div>
-              <span className={`text-xs ${currentSubStep >= 4 ? "text-blue-600 font-medium" : "text-gray-500"}`}>
-                Revenus
-              </span>
-            </div>
-            <div className="flex flex-col items-center space-y-1">
-              <div
-                className={`p-1 rounded-full ${currentSubStep >= 5 ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-400"}`}
-              >
-                {getSubStepIcon(5)}
-              </div>
-              <span className={`text-xs ${currentSubStep >= 5 ? "text-blue-600 font-medium" : "text-gray-500"}`}>
-                Fiscalité
-              </span>
+          <div className="flex items-center space-x-2">
+            {isCompleted && (
+              <Badge variant="outline" className="bg-green-50">
+                <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
+                Complété
+              </Badge>
+            )}
+            <div
+              className={`w-4 h-4 rounded-full border-2 ${
+                isCompleted
+                  ? "bg-green-500 border-green-500"
+                  : isActive
+                    ? "bg-blue-500 border-blue-500"
+                    : "border-gray-300"
+              }`}
+            >
+              {isCompleted && <CheckCircle className="h-3 w-3 text-white" />}
             </div>
           </div>
         </div>
+      </CardContent>
+    </Card>
+  )
 
-        {/* Erreurs de validation */}
-        {validationErrors.length > 0 && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex items-start">
-              <AlertTriangle className="h-5 w-5 text-red-600 mr-2 mt-0.5" />
+  return (
+    <div className="space-y-6">
+      {/* En-tête avec progression */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <User className="h-6 w-6 text-blue-600" />
+              </div>
               <div>
-                <h4 className="font-medium text-red-800 mb-2">Informations manquantes :</h4>
-                <ul className="text-sm text-red-700 space-y-1">
-                  {validationErrors.map((error, index) => (
-                    <li key={index} className="flex items-start">
-                      <span className="mr-2">•</span>
-                      <span>{error}</span>
-                    </li>
-                  ))}
-                </ul>
+                <CardTitle className="text-xl">
+                  {isMainTenant ? "Locataire principal" : "Co-locataire / Conjoint"}
+                </CardTitle>
+                <p className="text-sm text-gray-600">
+                  {profile.first_name && profile.last_name
+                    ? `${profile.first_name} ${profile.last_name}`
+                    : "Profil non complété"}
+                </p>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* Étape 1: Identité */}
-        {currentSubStep === 1 && (
-          <div className="space-y-6">
-            <div className="flex items-center space-x-2 mb-4">
-              <User className="h-5 w-5 text-blue-600" />
-              <h3 className="text-lg font-medium">Identité</h3>
+            <div className="flex items-center space-x-4">
+              <div className="text-right">
+                <p className="text-sm font-medium text-gray-900">
+                  Progression: {completed}/{total}
+                </p>
+                <div className="w-24 bg-gray-200 rounded-full h-2 mt-1">
+                  <div
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${(completed / total) * 100}%` }}
+                  />
+                </div>
+              </div>
+              {!isMainTenant && onRemove && (
+                <Button onClick={onRemove} variant="outline" size="sm">
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
             </div>
+          </div>
+        </CardHeader>
+      </Card>
 
+      {/* Navigation par sections */}
+      <div className="grid gap-4">
+        <SectionCard
+          id="personal"
+          title="Informations personnelles"
+          description="Nom, prénom, contact..."
+          icon={User}
+          isCompleted={sections.personal}
+          isActive={activeSection === "personal"}
+          onClick={() => setActiveSection("personal")}
+        />
+
+        <SectionCard
+          id="identity"
+          title="Pièce d'identité"
+          description="CNI, passeport, titre de séjour..."
+          icon={FileText}
+          isCompleted={sections.identity}
+          isActive={activeSection === "identity"}
+          onClick={() => setActiveSection("identity")}
+        />
+
+        <SectionCard
+          id="activity"
+          title="Justificatifs d'activité"
+          description="Contrat de travail, attestation..."
+          icon={Briefcase}
+          isCompleted={sections.activity}
+          isActive={activeSection === "activity"}
+          onClick={() => setActiveSection("activity")}
+        />
+
+        <SectionCard
+          id="housing"
+          title="Situation de logement"
+          description="Locataire, propriétaire, hébergé..."
+          icon={Home}
+          isCompleted={sections.housing}
+          isActive={activeSection === "housing"}
+          onClick={() => setActiveSection("housing")}
+        />
+
+        <SectionCard
+          id="income"
+          title="Justificatifs de ressources"
+          description="Revenus, aides, bourses..."
+          icon={Euro}
+          isCompleted={sections.income}
+          isActive={activeSection === "income"}
+          onClick={() => setActiveSection("income")}
+        />
+      </div>
+
+      {/* Contenu des sections */}
+      {activeSection === "personal" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <User className="h-5 w-5 text-blue-600" />
+              <span>Informations personnelles</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="first_name">Prénom *</Label>
                 <Input
                   id="first_name"
+                  placeholder="Jean"
                   value={profile.first_name || ""}
-                  onChange={(e) => onUpdate({ ...profile, first_name: e.target.value })}
-                  placeholder="Votre prénom"
+                  onChange={(e) => handleInputChange("first_name", e.target.value)}
                 />
               </div>
               <div>
                 <Label htmlFor="last_name">Nom *</Label>
                 <Input
                   id="last_name"
+                  placeholder="Dupont"
                   value={profile.last_name || ""}
-                  onChange={(e) => onUpdate({ ...profile, last_name: e.target.value })}
-                  placeholder="Votre nom"
+                  onChange={(e) => handleInputChange("last_name", e.target.value)}
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="birth_date">Date de naissance</Label>
+                <Label htmlFor="email">Email *</Label>
                 <Input
-                  id="birth_date"
-                  type="date"
-                  value={profile.birth_date || ""}
-                  onChange={(e) => onUpdate({ ...profile, birth_date: e.target.value })}
+                  id="email"
+                  type="email"
+                  placeholder="jean.dupont@email.com"
+                  value={profile.email || ""}
+                  onChange={(e) => handleInputChange("email", e.target.value)}
                 />
               </div>
               <div>
-                <Label htmlFor="birth_place">Lieu de naissance</Label>
+                <Label htmlFor="phone">Téléphone *</Label>
                 <Input
-                  id="birth_place"
-                  value={profile.birth_place || ""}
-                  onChange={(e) => onUpdate({ ...profile, birth_place: e.target.value })}
-                  placeholder="Ville de naissance"
+                  id="phone"
+                  placeholder="06 12 34 56 78"
+                  value={profile.phone || ""}
+                  onChange={(e) => handleInputChange("phone", e.target.value)}
                 />
               </div>
+            </div>
+
+            <div>
+              <Label htmlFor="birth_date">Date de naissance</Label>
+              <Input
+                id="birth_date"
+                type="date"
+                value={profile.birth_date || ""}
+                onChange={(e) => handleInputChange("birth_date", e.target.value)}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="birth_place">Lieu de naissance</Label>
+              <Input
+                id="birth_place"
+                placeholder="Paris, France"
+                value={profile.birth_place || ""}
+                onChange={(e) => handleInputChange("birth_place", e.target.value)}
+              />
             </div>
 
             <div>
               <Label htmlFor="nationality">Nationalité</Label>
               <Input
                 id="nationality"
-                value={profile.nationality || "française"}
-                onChange={(e) => onUpdate({ ...profile, nationality: e.target.value })}
-                placeholder="Nationalité"
+                placeholder="Française"
+                value={profile.nationality || ""}
+                onChange={(e) => handleInputChange("nationality", e.target.value)}
               />
             </div>
+          </CardContent>
+        </Card>
+      )}
 
-            <IdentityDocumentUpload
-              onDocumentValidated={handleIdentityDocumentValidated}
-              completedSides={{
-                recto: profile.identity_documents_detailed?.recto,
-                verso: profile.identity_documents_detailed?.verso,
-              }}
-            />
-          </div>
-        )}
-
-        {/* Étape 2: Logement actuel */}
-        {currentSubStep === 2 && (
-          <div className="space-y-6">
-            <div className="flex items-center space-x-2 mb-4">
-              <Home className="h-5 w-5 text-blue-600" />
-              <h3 className="text-lg font-medium">Situation d'hébergement actuelle</h3>
-            </div>
-
+      {activeSection === "identity" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <FileText className="h-5 w-5 text-blue-600" />
+              <span>Pièce d'identité</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div>
-              <Label>Votre situation actuelle *</Label>
+              <Label>Type de document</Label>
               <Select
-                value={profile.current_housing_situation || ""}
-                onValueChange={(value) => onUpdate({ ...profile, current_housing_situation: value })}
+                value={profile.identity_documents?.type || "cni"}
+                onValueChange={(value) => handleNestedInputChange("identity_documents", "type", value)}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Sélectionnez votre situation" />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {CURRENT_HOUSING_SITUATIONS.map((situation) => (
-                    <SelectItem key={situation.value} value={situation.value}>
-                      <div>
-                        <div className="font-medium">{situation.label}</div>
-                        <div className="text-sm text-gray-600">{situation.description}</div>
-                      </div>
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="cni">Carte nationale d'identité</SelectItem>
+                  <SelectItem value="passport">Passeport</SelectItem>
+                  <SelectItem value="titre_sejour">Titre de séjour</SelectItem>
+                  <SelectItem value="permis_conduire">Permis de conduire</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {profile.current_housing_situation === "locataire" && (
-              <div className="space-y-4">
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h4 className="font-medium text-blue-800 mb-2">Documents requis pour locataire :</h4>
-                  <ul className="text-sm text-blue-700 space-y-1">
-                    <li>• 3 dernières quittances de loyer</li>
-                    <li>• Attestation de bon paiement des loyers</li>
-                  </ul>
-                </div>
-                <MonthlyDocumentUpload
-                  documentType="rent_receipt"
-                  documentName="Quittance de loyer"
-                  onDocumentValidated={handleRentReceiptValidated}
-                  completedMonths={profile.current_housing_documents?.quittances_loyer_detailed || {}}
-                />
-              </div>
-            )}
+            <div>
+              <Label className="text-sm font-medium">Documents d'identité *</Label>
+              <p className="text-xs text-gray-600 mb-2">Recto et verso de votre pièce d'identité</p>
+              <SupabaseFileUpload
+                onFilesUploaded={(urls) => handleFileUpload("identity_documents", urls)}
+                maxFiles={2}
+                bucket="documents"
+                folder="identity"
+                existingFiles={profile.identity_documents?.documents || []}
+                acceptedTypes={["image/*", "application/pdf"]}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-            {profile.current_housing_situation === "heberge" && (
-              <div className="space-y-4">
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h4 className="font-medium text-blue-800 mb-2">Documents requis pour hébergé :</h4>
-                  <ul className="text-sm text-blue-700 space-y-1">
-                    <li>• Attestation d'hébergement de moins de 3 mois</li>
-                  </ul>
-                </div>
-                <SupabaseFileUpload
-                  onFilesUploaded={(urls) => handleFileUpload("housing_attestation_hebergement", urls)}
-                  maxFiles={2}
-                  bucket="documents"
-                  folder="housing"
-                  existingFiles={profile.current_housing_documents?.attestation_hebergement || []}
-                />
-              </div>
-            )}
-
-            {profile.current_housing_situation === "proprietaire" && (
-              <div className="space-y-4">
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h4 className="font-medium text-blue-800 mb-2">Documents requis pour propriétaire :</h4>
-                  <ul className="text-sm text-blue-700 space-y-1">
-                    <li>• Avis de taxe foncière 2024</li>
-                  </ul>
-                </div>
-                <SupabaseFileUpload
-                  onFilesUploaded={(urls) => handleFileUpload("housing_avis_taxe_fonciere", urls)}
-                  maxFiles={1}
-                  bucket="documents"
-                  folder="housing"
-                  existingFiles={profile.current_housing_documents?.avis_taxe_fonciere || []}
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Étape 3: Activité professionnelle */}
-        {currentSubStep === 3 && (
-          <div className="space-y-6">
-            <div className="flex items-center space-x-2 mb-4">
+      {activeSection === "activity" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
               <Briefcase className="h-5 w-5 text-blue-600" />
-              <h3 className="text-lg font-medium">Situation professionnelle</h3>
-            </div>
-
+              <span>Justificatifs d'activité</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div>
-              <Label>Activité principale *</Label>
-              <p className="text-sm text-gray-600 mb-2">
-                Vous avez plusieurs activités ? Choisissez votre activité principale. Vous pourrez ajouter d'autres
-                revenus à l'étape suivante.
-              </p>
+              <Label>Situation professionnelle</Label>
               <Select
-                value={profile.main_activity || ""}
-                onValueChange={(value) => onUpdate({ ...profile, main_activity: value })}
+                value={profile.activity_documents?.situation || "salarie"}
+                onValueChange={(value) => handleNestedInputChange("activity_documents", "situation", value)}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Sélectionnez votre activité principale" />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {MAIN_ACTIVITIES.map((activity) => (
-                    <SelectItem key={activity.value} value={activity.value}>
-                      <div>
-                        <div className="font-medium">{activity.label}</div>
-                        <div className="text-sm text-gray-600">{activity.description}</div>
-                      </div>
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="salarie">Salarié</SelectItem>
+                  <SelectItem value="fonctionnaire">Fonctionnaire</SelectItem>
+                  <SelectItem value="independant">Indépendant</SelectItem>
+                  <SelectItem value="etudiant">Étudiant</SelectItem>
+                  <SelectItem value="retraite">Retraité</SelectItem>
+                  <SelectItem value="chomage">Demandeur d'emploi</SelectItem>
+                  <SelectItem value="autre">Autre</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {profile.main_activity && (
-              <div className="space-y-4">
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h4 className="font-medium text-blue-800 mb-2">
-                    Documents requis pour {MAIN_ACTIVITIES.find((a) => a.value === profile.main_activity)?.label} :
-                  </h4>
-                  <ul className="text-sm text-blue-700 space-y-1">
-                    {MAIN_ACTIVITIES.find((a) => a.value === profile.main_activity)?.required_documents.map(
-                      (doc, index) => (
-                        <li key={index} className="flex items-start">
-                          <span className="mr-2">•</span>
-                          <span>{doc}</span>
-                        </li>
-                      ),
-                    )}
-                  </ul>
-                </div>
-
-                <div>
-                  <Label className="text-sm font-medium">Justificatifs d'activité *</Label>
-                  <p className="text-xs text-gray-600 mb-2">
-                    Tous les documents requis pour votre activité (contrat, bulletins de salaire, etc.)
-                  </p>
-                  <SupabaseFileUpload
-                    onFilesUploaded={(urls) => handleFileUpload("activity", urls)}
-                    maxFiles={10}
-                    bucket="documents"
-                    folder="activity"
-                    existingFiles={profile.activity_documents || []}
-                    acceptedTypes={["image/*", "application/pdf"]}
-                    showPreview={true}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Étape 4: Revenus */}
-        {currentSubStep === 4 && <ImprovedIncomeSection profile={profile} onUpdate={onUpdate} />}
-
-        {/* Étape 5: Fiscalité */}
-        {currentSubStep === 5 && (
-          <div className="space-y-6">
-            <div className="flex items-center space-x-2 mb-4">
-              <CreditCard className="h-5 w-5 text-blue-600" />
-              <h3 className="text-lg font-medium">Avis d'imposition</h3>
-            </div>
-
             <div>
-              <Label>Votre situation fiscale *</Label>
+              <Label className="text-sm font-medium">Justificatifs d'activité *</Label>
+              <p className="text-xs text-gray-600 mb-2">Contrat de travail, attestation employeur, carte étudiant...</p>
+              <SupabaseFileUpload
+                onFilesUploaded={(urls) => handleFileUpload("activity_documents", urls)}
+                maxFiles={3}
+                bucket="documents"
+                folder="activity"
+                existingFiles={profile.activity_documents?.documents || []}
+                acceptedTypes={["image/*", "application/pdf"]}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {activeSection === "housing" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Home className="h-5 w-5 text-blue-600" />
+              <span>Situation de logement</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label>Situation actuelle</Label>
               <Select
-                value={profile.tax_situation?.type || ""}
-                onValueChange={(value) =>
-                  onUpdate({
-                    ...profile,
-                    tax_situation: { ...profile.tax_situation, type: value },
-                  })
-                }
+                value={profile.housing_documents?.situation || "locataire"}
+                onValueChange={(value) => handleNestedInputChange("housing_documents", "situation", value)}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Sélectionnez votre situation fiscale" />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {TAX_SITUATIONS.map((situation) => (
-                    <SelectItem key={situation.value} value={situation.value}>
-                      {situation.label}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="locataire">Locataire</SelectItem>
+                  <SelectItem value="proprietaire">Propriétaire</SelectItem>
+                  <SelectItem value="heberge">Hébergé</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {profile.tax_situation?.type === "other" && (
+            {profile.housing_documents?.situation === "locataire" && (
               <div>
-                <Label htmlFor="tax_explanation">
-                  Merci d'expliquer pourquoi vous ne pouvez pas fournir d'avis d'imposition
-                </Label>
-                <Textarea
-                  id="tax_explanation"
-                  placeholder="Expliquez votre situation..."
-                  value={profile.tax_situation?.explanation || ""}
-                  onChange={(e) =>
-                    onUpdate({
-                      ...profile,
-                      tax_situation: { ...profile.tax_situation, explanation: e.target.value },
-                    })
-                  }
-                  rows={3}
+                <Label className="text-sm font-medium">Justificatifs de logement *</Label>
+                <p className="text-xs text-gray-600 mb-2">Bail, quittances de loyer, attestation de logement...</p>
+                <SupabaseFileUpload
+                  onFilesUploaded={(urls) => handleFileUpload("housing_documents", urls)}
+                  maxFiles={3}
+                  bucket="documents"
+                  folder="housing/locataire"
+                  existingFiles={profile.housing_documents?.documents || []}
+                  acceptedTypes={["image/*", "application/pdf"]}
                 />
               </div>
             )}
 
-            <TaxNoticeUpload
-              onDocumentValidated={handleTaxNoticeValidated}
-              completedDocument={profile.tax_situation?.documents_detailed}
-            />
-
-            {completion >= 80 && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex items-center">
-                  <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
-                  <span className="font-medium text-green-800">Profil complété à {completion}% !</span>
-                </div>
+            {profile.housing_documents?.situation === "heberge" && (
+              <div>
+                <Label className="text-sm font-medium">Justificatifs d'hébergement *</Label>
+                <p className="text-xs text-gray-600 mb-2">
+                  Attestation d'hébergement, pièce d'identité de l'hébergeant...
+                </p>
+                <SupabaseFileUpload
+                  onFilesUploaded={(urls) => handleFileUpload("housing_documents_heberge", urls)}
+                  maxFiles={3}
+                  bucket="documents"
+                  folder="housing/heberge"
+                  existingFiles={profile.housing_documents?.heberge_documents || []}
+                  acceptedTypes={["image/*", "application/pdf"]}
+                />
               </div>
             )}
-          </div>
-        )}
 
-        {/* Navigation */}
-        <div className="flex justify-between pt-4 border-t">
-          <Button variant="outline" onClick={prevSubStep} disabled={currentSubStep === 1}>
-            Précédent
-          </Button>
-          <Button onClick={nextSubStep} disabled={currentSubStep === totalSubSteps}>
-            {currentSubStep === totalSubSteps ? "Terminé" : "Suivant"}
-            <ChevronRight className="h-4 w-4 ml-2" />
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+            {profile.housing_documents?.situation === "proprietaire" && (
+              <div>
+                <Label className="text-sm font-medium">Justificatifs de propriété *</Label>
+                <p className="text-xs text-gray-600 mb-2">Titre de propriété, taxe foncière...</p>
+                <SupabaseFileUpload
+                  onFilesUploaded={(urls) => handleFileUpload("housing_documents_proprietaire", urls)}
+                  maxFiles={3}
+                  bucket="documents"
+                  folder="housing/proprietaire"
+                  existingFiles={profile.housing_documents?.proprietaire_documents || []}
+                  acceptedTypes={["image/*", "application/pdf"]}
+                />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {activeSection === "income" && <ImprovedIncomeSection profile={profile} onUpdate={onUpdate} />}
+    </div>
   )
 }
