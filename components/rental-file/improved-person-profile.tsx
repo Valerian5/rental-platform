@@ -17,6 +17,7 @@ import { SupabaseFileUpload } from "@/components/supabase-file-upload"
 import { IdentityDocumentUpload } from "@/components/document-upload/IdentityDocumentUpload"
 import { MonthlyDocumentUpload } from "@/components/document-upload/MonthlyDocumentUpload"
 import { TaxNoticeUpload } from "@/components/document-upload/TaxNoticeUpload"
+import { ActivityDocumentUpload } from "@/components/document-upload/ActivityDocumentUpload"
 
 interface ImprovedPersonProfileProps {
   profile: any
@@ -189,7 +190,7 @@ export function ImprovedPersonProfile({
     toast.success("Avis d'imposition validé avec succès")
   }
 
-  // Handler pour les documents d'activité avec validation utilisateur (comme TaxNoticeUpload)
+  // Handler pour les documents d'activité avec validation utilisateur
   const handleActivityDocumentValidated = (documentData: any) => {
     const updatedProfile = { ...profile }
 
@@ -526,10 +527,9 @@ export function ImprovedPersonProfile({
                   </ul>
                 </div>
 
-                <TaxNoticeUpload
+                <ActivityDocumentUpload
                   onDocumentValidated={handleActivityDocumentValidated}
                   completedDocument={profile.activity_documents_detailed}
-                  documentType="activity"
                   title="Justificatifs d'activité"
                   description="Tous les documents requis pour votre activité (contrat, bulletins de salaire, etc.)"
                 />
