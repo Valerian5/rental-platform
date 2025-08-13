@@ -13,8 +13,9 @@ import { ImprovedPersonProfile } from "@/components/rental-file/improved-person-
 import { RentalFileViewer } from "@/components/rental-file/rental-file-viewer"
 import { toast } from "sonner"
 import Link from "next/link"
-import { CompletionDiagnostic } from "@/components/rental-file/completion-diagnostic"
 import { DossierFacileIntegration } from "@/components/rental-file/dossierfacile-integration"
+import { CompletionDiagnosticTooltip } from "@/components/rental-file/completion-diagnostic-tooltip"
+import { GuarantorUploadSection } from "@/components/rental-file/guarantor-upload-section"
 
 export default function RentalFilePage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
@@ -250,9 +251,7 @@ export default function RentalFilePage() {
           </div>
           <div className="text-right space-y-2">
             <div className="flex items-center space-x-2">
-              <Badge variant={completionPercentage >= 80 ? "default" : "secondary"} className="text-lg px-4 py-2">
-                {completionPercentage}% complété
-              </Badge>
+              <CompletionDiagnosticTooltip rentalFile={rentalFile} />
               <Button onClick={() => setShowViewer(true)} variant="outline" size="sm">
                 <Eye className="h-4 w-4 mr-2" />
                 Aperçu
@@ -289,7 +288,7 @@ export default function RentalFilePage() {
           </CardContent>
         </Card>
 
-        <CompletionDiagnostic rentalFile={rentalFile} />
+        {/* <CompletionDiagnostic rentalFile={rentalFile} /> */}
 
         {/* Étape 1: Locataire principal avec structure complète */}
         {currentStep === 1 && (
@@ -543,6 +542,11 @@ export default function RentalFilePage() {
                     </div>
                   </div>
 
+                  <GuarantorUploadSection
+                    guarantor={guarantor}
+                    onUpdate={(updatedGuarantor) => updateGuarantor(index, updatedGuarantor)}
+                  />
+
                   {guarantor.type === "physical" && guarantor.personal_info && (
                     <ImprovedPersonProfile
                       profile={guarantor.personal_info}
@@ -552,99 +556,6 @@ export default function RentalFilePage() {
                       }}
                       title="Informations du garant"
                     />
-                  )}
-
-                  {guarantor.type === "organism" && (
-                    <div className="space-y-4">
-                      <div>
-                        <h4 className="font-medium text-gray-900 mb-3">Type d'organisme</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div
-                            onClick={() => {
-                              const updatedGuarantor = { ...guarantor, organism_type: "visale" }
-                              updateGuarantor(index, updatedGuarantor)
-                            }}
-                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                              guarantor.organism_type === "visale"
-                                ? "border-green-500 bg-green-50"
-                                : "border-gray-200 hover:border-gray-300"
-                            }`}
-                          >
-                            <div className="flex items-center space-x-3">
-                              <Shield className="h-5 w-5 text-green-600" />
-                              <div>
-                                <h5 className="font-medium">Garantie Visale</h5>
-                                <p className="text-sm text-gray-600">Gratuite et sécurisée</p>
-                              </div>
-                            </div>
-                          </div>
-                          <div
-                            onClick={() => {
-                              const updatedGuarantor = { ...guarantor, organism_type: "autre" }
-                              updateGuarantor(index, updatedGuarantor)
-                            }}
-                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                              guarantor.organism_type === "autre"
-                                ? "border-blue-500 bg-blue-50"
-                                : "border-gray-200 hover:border-gray-300"
-                            }`}
-                          >
-                            <div className="flex items-center space-x-3">
-                              <Users className="h-5 w-5 text-blue-600" />
-                              <div>
-                                <h5 className="font-medium">Autre organisme</h5>
-                                <p className="text-sm text-gray-600">Organisme privé</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {guarantor.organism_type === "visale" && (
-                        <div className="bg-green-50 p-4 rounded-lg">
-                          <h4 className="font-medium text-green-800 mb-2">Garantie Visale</h4>
-                          <p className="text-sm text-green-700 mb-3">
-                            La garantie Visale est gratuite et couvre les loyers impayés. Vous devez faire votre demande
-                            sur le site d'Action Logement.
-                          </p>
-                          <Button variant="outline" size="sm" asChild>
-                            <a href="https://www.visale.fr" target="_blank" rel="noopener noreferrer">
-                              Faire ma demande Visale
-                            </a>
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {guarantor.type === "moral_person" && (
-                    <div className="space-y-4">
-                      <div>
-                        <label
-                          htmlFor={`company_name_${index}`}
-                          className="block text-sm font-medium text-gray-700 mb-2"
-                        >
-                          Nom de la personne morale
-                        </label>
-                        <input
-                          id={`company_name_${index}`}
-                          placeholder="Nom de l'entreprise"
-                          value={guarantor.company_name || ""}
-                          onChange={(e) => {
-                            const updatedGuarantor = { ...guarantor, company_name: e.target.value }
-                            updateGuarantor(index, updatedGuarantor)
-                          }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-
-                      <div className="bg-yellow-50 p-4 rounded-lg">
-                        <p className="text-sm text-yellow-800">
-                          J'ajoute un extrait K bis de la société, ou toute autre pièce justifiant de l'existence légale
-                          de la personne.
-                        </p>
-                      </div>
-                    </div>
                   )}
 
                   {guarantor.type === "none" && (
