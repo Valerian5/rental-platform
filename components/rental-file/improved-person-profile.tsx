@@ -189,32 +189,6 @@ export function ImprovedPersonProfile({
     toast.success("Avis d'imposition validé avec succès")
   }
 
-  // Handler pour les documents d'activité avec validation utilisateur
-  const handleActivityDocumentValidated = (documentData: any) => {
-    const updatedProfile = { ...profile }
-
-    if (!updatedProfile.activity_documents_detailed) updatedProfile.activity_documents_detailed = []
-
-    if (documentData === null) {
-      // Suppression d'un document
-      updatedProfile.activity_documents_detailed = updatedProfile.activity_documents_detailed.filter(
-        (doc: any) => doc.id !== documentData?.id,
-      )
-    } else {
-      // Ajout d'un nouveau document validé
-      updatedProfile.activity_documents_detailed.push(documentData)
-    }
-
-    // Maintenir aussi l'ancien format pour compatibilité
-    const activityUrls = updatedProfile.activity_documents_detailed
-      .filter((doc: any) => doc?.fileUrl)
-      .map((doc: any) => doc.fileUrl)
-    updatedProfile.activity_documents = activityUrls
-
-    onUpdate(updatedProfile)
-    toast.success("Document d'activité validé avec succès")
-  }
-
   // Fonction pour obtenir l'icône de chaque sous-étape
   const getSubStepIcon = (step: number) => {
     switch (step) {
@@ -537,16 +511,21 @@ export function ImprovedPersonProfile({
                   </ul>
                 </div>
 
-                <MonthlyDocumentUpload
-                  documentType="activity_document"
-                  documentName="Justificatif d'activité"
-                  onDocumentValidated={handleActivityDocumentValidated}
-                  completedMonths={profile.activity_documents_detailed || {}}
-                  monthsRequired={1}
-                  showMonthSelector={false}
-                  customTitle="Justificatifs d'activité"
-                  customDescription="Tous les documents requis pour votre activité (contrat, bulletins de salaire, etc.)"
-                />
+                <div>
+                  <Label className="text-sm font-medium">Justificatifs d'activité *</Label>
+                  <p className="text-xs text-gray-600 mb-2">
+                    Tous les documents requis pour votre activité (contrat, bulletins de salaire, etc.)
+                  </p>
+                  <SupabaseFileUpload
+                    onFilesUploaded={(urls) => handleFileUpload("activity", urls)}
+                    maxFiles={10}
+                    bucket="documents"
+                    folder="activity"
+                    existingFiles={profile.activity_documents || []}
+                    acceptedTypes={["image/*", "application/pdf"]}
+                    showPreview={true}
+                  />
+                </div>
               </div>
             )}
           </div>
