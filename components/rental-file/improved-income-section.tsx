@@ -27,8 +27,8 @@ import {
   RENT_INCOME_TYPES,
 } from "@/lib/rental-file-service"
 import { toast } from "sonner"
-import { MonthlyDocumentUpload } from "@/components/monthly-document-upload"
-import { DocumentUploadWithPreview } from "@/components/document-upload-with-preview"
+import { MonthlyDocumentUpload } from "@/components/document-upload/MonthlyDocumentUpload"
+import { SupabaseFileUpload } from "@/components/supabase-file-upload"
 
 interface ImprovedIncomeSourceProps {
   profile: any
@@ -283,6 +283,7 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
     updatedProfile.income_sources.work_income.documents = payslipUrls
 
     onUpdate(updatedProfile)
+    toast.success("Fiche de paie validée avec succès")
   }
 
   return (
@@ -410,7 +411,7 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
 
               <div>
                 <Label className="text-sm font-medium">Justificatifs de bourse</Label>
-                <DocumentUploadWithPreview
+                <SupabaseFileUpload
                   onFilesUploaded={(urls) => handleFileUpload("income_scholarship", urls)}
                   maxFiles={3}
                   bucket="documents"
@@ -446,7 +447,7 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
 
               <div>
                 <Label className="text-sm font-medium">Justificatifs (optionnel)</Label>
-                <DocumentUploadWithPreview
+                <SupabaseFileUpload
                   onFilesUploaded={(urls) => handleFileUpload("income_no_income", urls)}
                   maxFiles={3}
                   bucket="documents"
@@ -555,7 +556,7 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
 
                   <div>
                     <Label className="text-sm font-medium">Justificatifs</Label>
-                    <DocumentUploadWithPreview
+                    <SupabaseFileUpload
                       onFilesUploaded={(urls) => handleFileUpload(`income_social_aid_${index}`, urls)}
                       maxFiles={3}
                       bucket="documents"
@@ -643,7 +644,7 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
 
                   <div>
                     <Label className="text-sm font-medium">Justificatifs</Label>
-                    <DocumentUploadWithPreview
+                    <SupabaseFileUpload
                       onFilesUploaded={(urls) => handleFileUpload(`income_retirement_pension_${index}`, urls)}
                       maxFiles={3}
                       bucket="documents"
@@ -727,7 +728,7 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
 
                   <div>
                     <Label className="text-sm font-medium">Justificatifs</Label>
-                    <DocumentUploadWithPreview
+                    <SupabaseFileUpload
                       onFilesUploaded={(urls) => handleFileUpload(`income_rent_income_${index}`, urls)}
                       maxFiles={3}
                       bucket="documents"
