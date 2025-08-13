@@ -429,6 +429,13 @@ export function ImprovedPersonProfile({
                     <li>• Attestation d'hébergement de moins de 3 mois</li>
                   </ul>
                 </div>
+                <SupabaseFileUpload
+                  onFilesUploaded={(urls) => handleFileUpload("housing_attestation_hebergement", urls)}
+                  maxFiles={2}
+                  bucket="documents"
+                  folder="housing"
+                  existingFiles={profile.current_housing_documents?.attestation_hebergement || []}
+                />
               </div>
             )}
 
@@ -440,6 +447,13 @@ export function ImprovedPersonProfile({
                     <li>• Avis de taxe foncière 2024</li>
                   </ul>
                 </div>
+                <SupabaseFileUpload
+                  onFilesUploaded={(urls) => handleFileUpload("housing_avis_taxe_fonciere", urls)}
+                  maxFiles={1}
+                  bucket="documents"
+                  folder="housing"
+                  existingFiles={profile.current_housing_documents?.avis_taxe_fonciere || []}
+                />
               </div>
             )}
           </div>
