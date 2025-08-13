@@ -189,6 +189,21 @@ export function ImprovedPersonProfile({
     toast.success("Avis d'imposition validé avec succès")
   }
 
+  // Handler pour les documents d'activité avec validation utilisateur (comme TaxNoticeUpload)
+  const handleActivityDocumentValidated = (documentData: any) => {
+    const updatedProfile = { ...profile }
+
+    if (!updatedProfile.activity_documents_detailed) updatedProfile.activity_documents_detailed = {}
+    updatedProfile.activity_documents_detailed = documentData
+
+    // Maintenir aussi l'ancien format pour compatibilité
+    const activityUrls = documentData?.fileUrl ? [documentData.fileUrl] : []
+    updatedProfile.activity_documents = activityUrls
+
+    onUpdate(updatedProfile)
+    toast.success("Document d'activité validé avec succès")
+  }
+
   // Fonction pour obtenir l'icône de chaque sous-étape
   const getSubStepIcon = (step: number) => {
     switch (step) {
@@ -511,21 +526,13 @@ export function ImprovedPersonProfile({
                   </ul>
                 </div>
 
-                <div>
-                  <Label className="text-sm font-medium">Justificatifs d'activité *</Label>
-                  <p className="text-xs text-gray-600 mb-2">
-                    Tous les documents requis pour votre activité (contrat, bulletins de salaire, etc.)
-                  </p>
-                  <SupabaseFileUpload
-                    onFilesUploaded={(urls) => handleFileUpload("activity", urls)}
-                    maxFiles={10}
-                    bucket="documents"
-                    folder="activity"
-                    existingFiles={profile.activity_documents || []}
-                    acceptedTypes={["image/*", "application/pdf"]}
-                    showPreview={true}
-                  />
-                </div>
+                <TaxNoticeUpload
+                  onDocumentValidated={handleActivityDocumentValidated}
+                  completedDocument={profile.activity_documents_detailed}
+                  documentType="activity"
+                  title="Justificatifs d'activité"
+                  description="Tous les documents requis pour votre activité (contrat, bulletins de salaire, etc.)"
+                />
               </div>
             )}
           </div>
