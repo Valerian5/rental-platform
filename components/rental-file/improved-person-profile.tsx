@@ -147,7 +147,8 @@ export function ImprovedPersonProfile({
     updateField("income_sources", incomeSources)
   }
 
-  // Gestion des uploads avec les nouveaux composants
+  // Remplacer la fonction handleDocumentUpload par ces handlers spécifiques :
+
   const handleIdentityDocumentValidated = (side: "recto" | "verso", documentData: any) => {
     const identityDocs = { ...localProfile.identity_documents_detailed }
     identityDocs[side] = documentData
