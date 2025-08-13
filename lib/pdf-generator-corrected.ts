@@ -1,814 +1,753 @@
-import { type RentalFileData, MAIN_ACTIVITIES } from "./rental-file-service"
+"use client"
 
-// Fonction pour récupérer les logos depuis la base de données
-const getLogos = async (): Promise<any> => {
-  try {
-    const response = await fetch("/api/admin/settings?key=logos")
-    const result = await response.json()
-    return result.success ? result.data : {}
-  } catch (error) {
-    console.error("Erreur récupération logos:", error)
-    return {}
-  }
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import {
+  Plus,
+  X,
+  Euro,
+  CheckCircle,
+  Briefcase,
+  Heart,
+  PiggyBank,
+  GraduationCap,
+  AlertCircle,
+  Building2,
+} from "lucide-react"
+import {
+  WORK_INCOME_TYPES,
+  SOCIAL_AID_TYPES,
+  DURATION_OPTIONS,
+  RETIREMENT_PENSION_TYPES,
+  RENT_INCOME_TYPES,
+} from "@/lib/rental-file-service"
+import { toast } from "sonner"
+import { MonthlyDocumentUpload } from "@/components/document-upload/MonthlyDocumentUpload"
+import { SupabaseFileUpload } from "@/components/supabase-file-upload"
+
+interface ImprovedIncomeSourceProps {
+  profile: any
+  onUpdate: (profile: any) => void
 }
 
-// Fonction pour récupérer les informations du site
-const getSiteInfo = async (): Promise<any> => {
-  try {
-    const response = await fetch("/api/admin/settings?key=site_info")
-    const result = await response.json()
-    return result.success
-      ? result.data
-      : { title: "Louer Ici", description: "Plateforme de gestion locative intelligente" }
-  } catch (error) {
-    console.error("Erreur récupération site info:", error)
-    return { title: "Louer Ici", description: "Plateforme de gestion locative intelligente" }
+export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourceProps) {
+  const handleFileUpload = async (category: string, urls: string[]) => {
+    console.log("📁 Upload revenus - Catégorie:", category, "URLs:", urls)
+
+    const updatedProfile = { ...profile }
+    if (!updatedProfile.income_sources) updatedProfile.income_sources = {}
+
+    // Gestion spécifique pour les revenus du travail
+    if (category === "income_work_income") {
+      if (!updatedProfile.income_sources.work_income) {
+        updatedProfile.income_sources.work_income = { documents: [] }
+      }
+      updatedProfile.income_sources.work_income.documents = [
+        ...(updatedProfile.income_sources.work_income.documents || []),
+        ...urls,
+      ]
+    }
+    // Gestion pour les aides sociales
+    else if (category.startsWith("income_social_aid_")) {
+      const index = Number.parseInt(category.split("_")[3])
+      if (!updatedProfile.income_sources.social_aid) updatedProfile.income_sources.social_aid = []
+      if (!updatedProfile.income_sources.social_aid[index]) {
+        updatedProfile.income_sources.social_aid[index] = { documents: [] }
+      }
+      updatedProfile.income_sources.social_aid[index].documents = [
+        ...(updatedProfile.income_sources.social_aid[index].documents || []),
+        ...urls,
+      ]
+    }
+    // Gestion pour les retraites/pensions
+    else if (category.startsWith("income_retirement_pension_")) {
+      const index = Number.parseInt(category.split("_")[3])
+      if (!updatedProfile.income_sources.retirement_pension) updatedProfile.income_sources.retirement_pension = []
+      if (!updatedProfile.income_sources.retirement_pension[index]) {
+        updatedProfile.income_sources.retirement_pension[index] = { documents: [] }
+      }
+      updatedProfile.income_sources.retirement_pension[index].documents = [
+        ...(updatedProfile.income_sources.retirement_pension[index].documents || []),
+        ...urls,
+      ]
+    }
+    // Gestion pour les rentes
+    else if (category.startsWith("income_rent_income_")) {
+      const index = Number.parseInt(category.split("_")[3])
+      if (!updatedProfile.income_sources.rent_income) updatedProfile.income_sources.rent_income = []
+      if (!updatedProfile.income_sources.rent_income[index]) {
+        updatedProfile.income_sources.rent_income[index] = { documents: [] }
+      }
+      updatedProfile.income_sources.rent_income[index].documents = [
+        ...(updatedProfile.income_sources.rent_income[index].documents || []),
+        ...urls,
+      ]
+    }
+    // Gestion pour les bourses
+    else if (category === "income_scholarship") {
+      if (!updatedProfile.income_sources.scholarship) {
+        updatedProfile.income_sources.scholarship = { documents: [] }
+      }
+      updatedProfile.income_sources.scholarship.documents = [
+        ...(updatedProfile.income_sources.scholarship.documents || []),
+        ...urls,
+      ]
+    }
+    // Gestion pour pas de revenus
+    else if (category === "income_no_income") {
+      if (!updatedProfile.income_sources.no_income) {
+        updatedProfile.income_sources.no_income = { documents: [] }
+      }
+      updatedProfile.income_sources.no_income.documents = [
+        ...(updatedProfile.income_sources.no_income.documents || []),
+        ...urls,
+      ]
+    }
+
+    console.log("📁 Profil mis à jour avec URLs Supabase:", updatedProfile.income_sources)
+    onUpdate(updatedProfile)
+    toast.success(`${urls.length} document(s) ajouté(s) avec succès`)
   }
-}
 
-export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise<void> => {
-  try {
-    // Charger les paramètres du site
-    const [logos, siteInfo] = await Promise.all([getLogos(), getSiteInfo()])
-
-    console.log("🎨 Logos chargés:", logos)
-    console.log("ℹ️ Info site:", siteInfo)
-
-    // Import dynamique de jsPDF et pdf-lib
-    const { jsPDF } = await import("jspdf")
-    const { PDFDocument } = await import("pdf-lib")
-
-    const doc = new jsPDF()
-    let yPosition = 20
-    const pageWidth = doc.internal.pageSize.width
-    const pageHeight = doc.internal.pageSize.height
-    const margin = 20
-
-    // Couleurs de la charte graphique
-    const primaryColor = [59, 130, 246] // Bleu principal RGB
-    const secondaryColor = [30, 64, 175] // Bleu foncé RGB
-    const accentColor = [16, 185, 129] // Vert pour les montants RGB
-    const grayColor = [107, 114, 128] // Gris pour les labels
-
-    // Stocker les PDF à merger à la fin
-    const pdfsToMerge = []
-    const imagesToAdd = []
-
-    // Fonction helper pour formater les montants
-    const formatAmount = (amount: number): string => {
-      if (!amount || amount === 0) return "Non renseigné"
-      return new Intl.NumberFormat("fr-FR", {
-        style: "currency",
-        currency: "EUR",
-        maximumFractionDigits: 0,
-      }).format(amount)
-    }
-
-    // Fonction pour vérifier si une URL est valide
-    const isValidDocumentUrl = (url: string): boolean => {
-      if (!url || url === "DOCUMENT_MIGRE_PLACEHOLDER") return false
-      if (url.includes("blob:")) return false
-      if (url.startsWith("https://") && url.includes("supabase")) return true
-      if (url.startsWith("http")) return true
-      return false
-    }
-
-    // Fonction pour déterminer le type de fichier
-    const getFileType = (url: string): string => {
-      const extension = url.split(".").pop()?.toLowerCase() || ""
-      if (["jpg", "jpeg", "png", "gif", "webp"].includes(extension)) {
-        return "image"
-      } else if (extension === "pdf") {
-        return "pdf"
-      }
-      return "document"
-    }
-
-    // Fonction pour ajouter le logo
-    const addLogo = async (x: number, y: number, size = 25, logoUrl?: string) => {
-      if (logoUrl && logoUrl !== "DOCUMENT_MIGRE_PLACEHOLDER") {
-        try {
-          // Charger l'image du logo
-          const response = await fetch(logoUrl)
-          if (response.ok) {
-            const blob = await response.blob()
-            const base64Data = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader()
-              reader.onload = () => resolve(reader.result as string)
-              reader.onerror = reject
-              reader.readAsDataURL(blob)
-            })
-
-            // Ajouter l'image au PDF
-            const imgFormat = logoUrl.toLowerCase().includes(".png") ? "PNG" : "JPEG"
-            doc.addImage(base64Data, imgFormat, x, y, size, size * 0.6) // Ratio 5:3 pour les logos
-            return
-          }
-        } catch (error) {
-          console.error("Erreur chargement logo:", error)
-        }
-      }
-
-      // Fallback : logo simple
-      doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])
-      doc.circle(x + size / 2, y + size / 2, size / 2, "F")
-
-      doc.setTextColor(255, 255, 255)
-      doc.setFontSize(12)
-      doc.setFont("helvetica", "bold")
-      doc.text("L", x + size / 2 - 3, y + size / 2 + 4)
-    }
-
-    // Fonction pour ajouter un en-tête de page
-    const addPageHeader = async (title: string): Promise<number> => {
-      // Fond bleu
-      doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])
-      doc.rect(0, 0, pageWidth, 35, "F")
-
-      // Logo (utiliser le logo PDF s'il existe)
-      await addLogo(pageWidth - margin - 30, 5, 25, logos.pdf || logos.main)
-
-      // Titre
-      doc.setTextColor(255, 255, 255)
-      doc.setFontSize(16)
-      doc.setFont("helvetica", "bold")
-      doc.text(title, margin, 22)
-
-      // Sous-titre avec le nom du site
-      doc.setFontSize(10)
-      doc.text(siteInfo.title || "Louer Ici", margin, 30)
-
-      // Ligne de séparation
-      doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2])
-      doc.setLineWidth(2)
-      doc.line(0, 35, pageWidth, 35)
-
-      return 45 // Position Y après l'en-tête
-    }
-
-    // Fonction pour ajouter une section avec icône simple
-    const addSectionWithIcon = (title: string, y: number): number => {
-      // Icône simple (carré coloré)
-      doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])
-      doc.rect(margin, y - 3, 6, 6, "F")
-
-      // Titre de section
-      doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2])
-      doc.setFontSize(14)
-      doc.setFont("helvetica", "bold")
-      doc.text(title, margin + 12, y + 2)
-
-      // Ligne de séparation
-      doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2])
-      doc.setLineWidth(0.5)
-      doc.line(margin, y + 8, pageWidth - margin, y + 8)
-
-      return y + 18
-    }
-
-    // Fonction pour ajouter une propriété
-    const addProperty = async (
-      label: string,
-      value: string,
-      x: number,
-      y: number,
-      options: any = {},
-    ): Promise<number> => {
-      // Vérifier si on dépasse la page
-      if (y > pageHeight - 40) {
-        doc.addPage()
-        y = await addPageHeader("DOSSIER DE LOCATION (SUITE)")
-      }
-
-      // Label
-      doc.setTextColor(grayColor[0], grayColor[1], grayColor[2])
-      doc.setFontSize(9)
-      doc.setFont("helvetica", "normal")
-      doc.text(label, x, y)
-
-      // Valeur
-      doc.setTextColor(0, 0, 0)
-      doc.setFontSize(11)
-      doc.setFont("helvetica", options.bold ? "bold" : "normal")
-
-      const displayValue = value || "Non renseigné"
-      doc.text(displayValue, x, y + 8)
-
-      return y + 18
-    }
-
-    // Fonction pour ajouter un montant
-    const addAmount = async (label: string, amount: number, x: number, y: number): Promise<number> => {
-      // Vérifier si on dépasse la page
-      if (y > pageHeight - 40) {
-        doc.addPage()
-        y = await addPageHeader("DOSSIER DE LOCATION (SUITE)")
-      }
-
-      // Label
-      doc.setTextColor(grayColor[0], grayColor[1], grayColor[2])
-      doc.setFontSize(9)
-      doc.setFont("helvetica", "normal")
-      doc.text(label, x, y)
-
-      // Montant
-      doc.setTextColor(accentColor[0], accentColor[1], accentColor[2])
-      doc.setFontSize(12)
-      doc.setFont("helvetica", "bold")
-      doc.text(formatAmount(amount), x, y + 8)
-
-      return y + 18
-    }
-
-    // Fonction pour traiter les documents
-    const processDocument = async (documentUrl: string, documentName: string, category: string) => {
-      try {
-        console.log("📄 Traitement du document:", documentName)
-
-        if (!isValidDocumentUrl(documentUrl)) {
-          console.log("⚠️ URL non valide, ignoré:", documentUrl)
-          return
-        }
-
-        const fileType = getFileType(documentUrl)
-
-        if (fileType === "pdf") {
-          // Traiter le PDF
-          const response = await fetch("/api/pdf/merge-pages", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ pdfUrl: documentUrl }),
-          })
-
-          if (response.ok) {
-            const result = await response.json()
-            if (result.success) {
-              pdfsToMerge.push({
-                name: documentName,
-                data: new Uint8Array(result.pdfData),
-                pageCount: result.pageCount,
-                category: category,
-              })
-              console.log(`✅ PDF préparé: ${documentName} (${result.pageCount} pages)`)
-            }
-          }
-        } else if (fileType === "image") {
-          // Traiter l'image
-          const response = await fetch(documentUrl)
-          if (response.ok) {
-            const blob = await response.blob()
-            const base64Data = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader()
-              reader.onload = () => resolve(reader.result as string)
-              reader.onerror = reject
-              reader.readAsDataURL(blob)
-            })
-
-            imagesToAdd.push({
-              name: documentName,
-              data: base64Data,
-              category: category,
-            })
-            console.log(`✅ Image préparée: ${documentName}`)
-          }
-        }
-      } catch (error) {
-        console.error(`❌ Erreur traitement ${documentName}:`, error)
-      }
-    }
-
-    // DÉBUT DE LA GÉNÉRATION DU PDF
-
-    const mainTenant = rentalFile.main_tenant || {}
-    const tenantName = `${mainTenant.first_name || ""} ${mainTenant.last_name || ""}`.trim() || "Locataire"
-
-    // PAGE DE COUVERTURE SIMPLIFIÉE
-    yPosition = await addPageHeader("DOSSIER DE LOCATION NUMÉRIQUE")
-
-    // Logo principal centré (si disponible)
-    if (logos.main) {
-      try {
-        const response = await fetch(logos.main)
-        if (response.ok) {
-          const blob = await response.blob()
-          const base64Data = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader()
-            reader.onload = () => resolve(reader.result as string)
-            reader.onerror = reject
-            reader.readAsDataURL(blob)
-          })
-
-          const imgFormat = logos.main.toLowerCase().includes(".png") ? "PNG" : "JPEG"
-          doc.addImage(base64Data, imgFormat, (pageWidth - 60) / 2, yPosition, 60, 36) // Logo centré
-          yPosition += 50
-        }
-      } catch (error) {
-        console.error("Erreur chargement logo principal:", error)
-        yPosition += 20
-      }
-    } else {
-      yPosition += 20
-    }
-
-    // Nom du site
-    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2])
-    doc.setFontSize(18)
-    doc.setFont("helvetica", "bold")
-    const siteTitleWidth = doc.getTextWidth(siteInfo.title || "Louer Ici")
-    doc.text(siteInfo.title || "Louer Ici", (pageWidth - siteTitleWidth) / 2, yPosition)
-
-    yPosition += 15
-
-    // Description du site
-    doc.setTextColor(grayColor[0], grayColor[1], grayColor[2])
-    doc.setFontSize(12)
-    doc.setFont("helvetica", "normal")
-    const descWidth = doc.getTextWidth(siteInfo.description || "Plateforme de gestion locative intelligente")
-    doc.text(
-      siteInfo.description || "Plateforme de gestion locative intelligente",
-      (pageWidth - descWidth) / 2,
-      yPosition,
-    )
-
-    yPosition += 30
-
-    // Nom du locataire (centré et grand)
-    doc.setTextColor(0, 0, 0)
-    doc.setFontSize(24)
-    doc.setFont("helvetica", "bold")
-    const nameWidth = doc.getTextWidth(tenantName)
-    doc.text(tenantName, (pageWidth - nameWidth) / 2, yPosition)
-
-    yPosition += 30
-
-    // Synthèse du dossier
-    doc.setTextColor(grayColor[0], grayColor[1], grayColor[2])
-    doc.setFontSize(14)
-    doc.setFont("helvetica", "bold")
-    doc.text("SYNTHÈSE DU DOSSIER", pageWidth / 2, yPosition, { align: "center" })
-
-    yPosition += 20
-
-    // Informations de synthèse
-    const synthese = []
-
-    // Type de location
-    if (rentalFile.rental_situation === "alone") {
-      synthese.push("• Location individuelle")
-    } else if (rentalFile.rental_situation === "couple") {
-      synthese.push("• Location en couple")
-    } else {
-      synthese.push("• Colocation")
-    }
-
-    // Colocataires/conjoint
-    if (rentalFile.cotenants && rentalFile.cotenants.length > 0) {
-      if (rentalFile.rental_situation === "couple") {
-        synthese.push(`• Avec conjoint(e)`)
-      } else {
-        synthese.push(`• ${rentalFile.cotenants.length} colocataire(s)`)
-      }
-    }
-
-    // Garants
-    const guarantorsCount = rentalFile.guarantors?.length || 0
-    if (guarantorsCount > 0) {
-      synthese.push(`• ${guarantorsCount} garant(s)`)
-    } else {
-      synthese.push("• Aucun garant")
-    }
-
-    // Revenus
-    const income = mainTenant.income_sources?.work_income?.amount || 0
-    if (income > 0) {
-      synthese.push(`• Revenus: ${formatAmount(income)}`)
-    }
-
-    // Afficher la synthèse
-    doc.setTextColor(0, 0, 0)
-    doc.setFontSize(12)
-    doc.setFont("helvetica", "normal")
-
-    synthese.forEach((item) => {
-      doc.text(item, pageWidth / 2, yPosition, { align: "center" })
-      yPosition += 12
-    })
-
-    yPosition += 20
-
-    // Date de génération
-    doc.setTextColor(grayColor[0], grayColor[1], grayColor[2])
-    doc.setFontSize(10)
-    doc.text(`Document généré le ${new Date().toLocaleDateString("fr-FR")}`, pageWidth / 2, yPosition, {
-      align: "center",
-    })
-
-    // PAGE LOCATAIRE PRINCIPAL
-    doc.addPage()
-    yPosition = await addPageHeader("LOCATAIRE PRINCIPAL")
-
-    if (mainTenant) {
-      // Informations personnelles
-      yPosition = addSectionWithIcon("INFORMATIONS PERSONNELLES", yPosition)
-
-      const colWidth = (pageWidth - 2 * margin - 20) / 2
-      const col2X = margin + colWidth + 20
-
-      let col1Y = yPosition
-      let col2Y = yPosition
-
-      col1Y = await addProperty("Nom", mainTenant.last_name || "", margin, col1Y)
-      col2Y = await addProperty("Prénom", mainTenant.first_name || "", col2X, col2Y)
-
-      col1Y = await addProperty("Date de naissance", mainTenant.birth_date || "", margin, col1Y)
-      col2Y = await addProperty("Lieu de naissance", mainTenant.birth_place || "", col2X, col2Y)
-
-      col1Y = await addProperty("Nationalité", mainTenant.nationality || "", margin, col1Y)
-      col2Y = await addProperty("Situation logement", mainTenant.current_housing_situation || "", col2X, col2Y)
-
-      yPosition = Math.max(col1Y, col2Y) + 10
-
-      // Situation professionnelle
-      yPosition = addSectionWithIcon("SITUATION PROFESSIONNELLE", yPosition)
-
-      const activity = MAIN_ACTIVITIES.find((a) => a.value === mainTenant.main_activity)
-      yPosition = await addProperty(
-        "Activité principale",
-        activity?.label || mainTenant.main_activity || "",
-        margin,
-        yPosition,
-      )
-
-      if (mainTenant.income_sources?.work_income?.type) {
-        yPosition = await addProperty("Type de revenus", mainTenant.income_sources.work_income.type, margin, yPosition)
-      }
-
-      yPosition += 10
-
-      // Revenus (section séparée pour éviter les chevauchements)
-      yPosition = addSectionWithIcon("REVENUS", yPosition)
-
-      if (mainTenant.income_sources?.work_income?.amount) {
-        yPosition = await addAmount(
-          "Revenus du travail (mensuel)",
-          mainTenant.income_sources.work_income.amount,
-          margin,
-          yPosition,
-        )
-      }
-
-      // Autres revenus si présents
-      if (mainTenant.income_sources?.social_aid && mainTenant.income_sources.social_aid.length > 0) {
-        for (let index = 0; index < mainTenant.income_sources.social_aid.length; index++) {
-          const aid = mainTenant.income_sources.social_aid[index]
-          if (aid.amount) {
-            yPosition = await addAmount(`Aide sociale ${index + 1}`, aid.amount, margin, yPosition)
-          }
-        }
-      }
-    }
-
-    // PAGES GARANTS (même mise en forme que locataire principal)
-    if (rentalFile.guarantors && rentalFile.guarantors.length > 0) {
-      for (let index = 0; index < rentalFile.guarantors.length; index++) {
-        const guarantor = rentalFile.guarantors[index]
-        doc.addPage()
-        yPosition = await addPageHeader(`GARANT ${index + 1}`)
-
-        yPosition = addSectionWithIcon("TYPE DE GARANT", yPosition)
-        yPosition = await addProperty(
-          "Type",
-          guarantor.type === "physical" ? "Personne physique" : "Personne morale",
-          margin,
-          yPosition,
-          { bold: true },
-        )
-
-        if (guarantor.personal_info) {
-          const guarantorInfo = guarantor.personal_info
-
-          yPosition += 10
-          yPosition = addSectionWithIcon("INFORMATIONS PERSONNELLES", yPosition)
-
-          const colWidth = (pageWidth - 2 * margin - 20) / 2
-          const col2X = margin + colWidth + 20
-
-          let col1Y = yPosition
-          let col2Y = yPosition
-
-          col1Y = await addProperty("Nom", guarantorInfo.last_name || "", margin, col1Y)
-          col2Y = await addProperty("Prénom", guarantorInfo.first_name || "", col2X, col2Y)
-
-          if (guarantorInfo.birth_date) {
-            col1Y = await addProperty("Date de naissance", guarantorInfo.birth_date, margin, col1Y)
-          }
-
-          if (guarantorInfo.nationality) {
-            col2Y = await addProperty("Nationalité", guarantorInfo.nationality, col2X, col2Y)
-          }
-
-          if (guarantorInfo.current_housing_situation) {
-            col1Y = await addProperty("Situation logement", guarantorInfo.current_housing_situation, margin, col1Y)
-          }
-
-          yPosition = Math.max(col1Y, col2Y) + 10
-
-          // Situation professionnelle du garant
-          if (guarantorInfo.main_activity) {
-            yPosition = addSectionWithIcon("SITUATION PROFESSIONNELLE", yPosition)
-            const guarantorActivity = MAIN_ACTIVITIES.find((a) => a.value === guarantorInfo.main_activity)
-            yPosition = await addProperty(
-              "Activité principale",
-              guarantorActivity?.label || guarantorInfo.main_activity,
-              margin,
-              yPosition,
-            )
-          }
-
-          // Revenus du garant
-          if (guarantorInfo.income_sources?.work_income?.amount) {
-            yPosition += 10
-            yPosition = addSectionWithIcon("REVENUS", yPosition)
-            yPosition = await addAmount(
-              "Revenus du travail (mensuel)",
-              guarantorInfo.income_sources.work_income.amount,
-              margin,
-              yPosition,
-            )
-          }
-        }
-      }
-    }
-
-    // COLLECTE DES DOCUMENTS
-    const documentsToProcess = []
-
-    // Documents du locataire principal
-    if (mainTenant) {
-      // Documents d'identité
-      if (mainTenant.identity_documents && Array.isArray(mainTenant.identity_documents)) {
-        mainTenant.identity_documents.forEach((doc, index) => {
-          documentsToProcess.push({
-            url: doc,
-            name: `Pièce d'identité locataire ${index + 1}`,
-            category: "identity",
-          })
+  const addIncomeSource = (sourceType: string) => {
+    const updatedProfile = { ...profile }
+    if (!updatedProfile.income_sources) updatedProfile.income_sources = {}
+
+    switch (sourceType) {
+      case "social_aid":
+        if (!updatedProfile.income_sources.social_aid) updatedProfile.income_sources.social_aid = []
+        updatedProfile.income_sources.social_aid.push({
+          type: "caf_msa",
+          duration: "plus_3_mois",
+          amount: 0,
+          documents: [],
         })
-      }
-
-      // Documents d'activité
-      if (mainTenant.activity_documents && Array.isArray(mainTenant.activity_documents)) {
-        mainTenant.activity_documents.forEach((doc, index) => {
-          documentsToProcess.push({
-            url: doc,
-            name: `Justificatif d'activité ${index + 1}`,
-            category: "activity",
-          })
+        break
+      case "retirement_pension":
+        if (!updatedProfile.income_sources.retirement_pension) updatedProfile.income_sources.retirement_pension = []
+        updatedProfile.income_sources.retirement_pension.push({
+          type: "retraite",
+          amount: 0,
+          documents: [],
         })
-      }
-
-      // Documents de revenus
-      if (
-        mainTenant.income_sources?.work_income?.documents &&
-        Array.isArray(mainTenant.income_sources.work_income.documents)
-      ) {
-        mainTenant.income_sources.work_income.documents.forEach((doc, index) => {
-          documentsToProcess.push({
-            url: doc,
-            name: `Justificatif de revenu ${index + 1}`,
-            category: "income",
-          })
+        break
+      case "rent_income":
+        if (!updatedProfile.income_sources.rent_income) updatedProfile.income_sources.rent_income = []
+        updatedProfile.income_sources.rent_income.push({
+          type: "revenus_locatifs",
+          amount: 0,
+          documents: [],
         })
-      }
-
-      // Documents fiscaux
-      if (mainTenant.tax_situation?.documents && Array.isArray(mainTenant.tax_situation.documents)) {
-        mainTenant.tax_situation.documents.forEach((doc, index) => {
-          documentsToProcess.push({
-            url: doc,
-            name: `Document fiscal ${index + 1}`,
-            category: "tax",
-          })
-        })
-      }
-
-      // Quittances de loyer
-      if (
-        mainTenant.current_housing_documents?.quittances_loyer &&
-        Array.isArray(mainTenant.current_housing_documents.quittances_loyer)
-      ) {
-        mainTenant.current_housing_documents.quittances_loyer.forEach((doc, index) => {
-          documentsToProcess.push({
-            url: doc,
-            name: `Quittance de loyer ${index + 1}`,
-            category: "housing",
-          })
-        })
-      }
+        break
     }
 
-    // Documents des garants
-    if (rentalFile.guarantors && Array.isArray(rentalFile.guarantors)) {
-      rentalFile.guarantors.forEach((guarantor, gIndex) => {
-        if (guarantor.type === "physical" && guarantor.personal_info) {
-          // Documents d'identité des garants
-          if (guarantor.personal_info.identity_documents && Array.isArray(guarantor.personal_info.identity_documents)) {
-            guarantor.personal_info.identity_documents.forEach((doc, index) => {
-              documentsToProcess.push({
-                url: doc,
-                name: `Garant ${gIndex + 1} - Pièce d'identité ${index + 1}`,
-                category: "guarantor_identity",
-              })
-            })
-          }
-
-          // Documents de revenus des garants
-          if (
-            guarantor.personal_info.income_sources?.work_income?.documents &&
-            Array.isArray(guarantor.personal_info.income_sources.work_income.documents)
-          ) {
-            guarantor.personal_info.income_sources.work_income.documents.forEach((doc, index) => {
-              documentsToProcess.push({
-                url: doc,
-                name: `Garant ${gIndex + 1} - Justificatif de revenu ${index + 1}`,
-                category: "guarantor_income",
-              })
-            })
-          }
-
-          // Documents fiscaux des garants
-          if (
-            guarantor.personal_info.tax_situation?.documents &&
-            Array.isArray(guarantor.personal_info.tax_situation.documents)
-          ) {
-            guarantor.personal_info.tax_situation.documents.forEach((doc, index) => {
-              documentsToProcess.push({
-                url: doc,
-                name: `Garant ${gIndex + 1} - Document fiscal ${index + 1}`,
-                category: "guarantor_tax",
-              })
-            })
-          }
-        }
-      })
-    }
-
-    console.log(`📋 ${documentsToProcess.length} documents à traiter`)
-
-    // Traiter tous les documents
-    for (const document of documentsToProcess) {
-      await processDocument(document.url, document.name, document.category)
-    }
-
-    // PAGE ANNEXES SIMPLIFIÉE
-    if (pdfsToMerge.length > 0 || imagesToAdd.length > 0) {
-      doc.addPage()
-      yPosition = await addPageHeader("ANNEXES - PIÈCES JUSTIFICATIVES")
-
-      doc.setTextColor(0, 0, 0)
-      doc.setFontSize(12)
-      doc.setFont("helvetica", "normal")
-      doc.text("Les pièces justificatives suivantes sont intégrées dans ce document :", margin, yPosition)
-
-      yPosition += 20
-
-      // Liste simplifiée des documents
-      let docCount = 1
-
-      pdfsToMerge.forEach((pdf) => {
-        doc.setFontSize(10)
-        doc.text(`${docCount}. ${pdf.name} (${pdf.pageCount} page(s))`, margin + 10, yPosition)
-        yPosition += 8
-        docCount++
-      })
-
-      imagesToAdd.forEach((img) => {
-        doc.setFontSize(10)
-        doc.text(`${docCount}. ${img.name} (image)`, margin + 10, yPosition)
-        yPosition += 8
-        docCount++
-      })
-
-      if (docCount === 1) {
-        doc.setTextColor(grayColor[0], grayColor[1], grayColor[2])
-        doc.text("Aucune pièce justificative fournie.", margin, yPosition)
-      }
-    }
-
-    // MERGE FINAL
-    console.log(`🔄 Préparation du PDF final avec ${pdfsToMerge.length} PDF(s) et ${imagesToAdd.length} image(s)...`)
-
-    try {
-      // Convertir le PDF jsPDF en ArrayBuffer
-      const jsPdfOutput = doc.output("arraybuffer")
-      const mainPdfDoc = await PDFDocument.load(jsPdfOutput)
-
-      // Ajouter les images
-      for (const imageItem of imagesToAdd) {
-        try {
-          console.log(`🖼️ Ajout de l'image: ${imageItem.name}`)
-
-          const imagePage = mainPdfDoc.addPage()
-          const { width, height } = imagePage.getSize()
-
-          // En-tête de page pour l'image
-          imagePage.drawRectangle({
-            x: 0,
-            y: height - 40,
-            width: width,
-            height: 40,
-            color: { r: 0.23, g: 0.51, b: 0.97 },
-          })
-
-          imagePage.drawText(imageItem.name, {
-            x: 20,
-            y: height - 25,
-            size: 12,
-            color: { r: 1, g: 1, b: 1 },
-          })
-
-          // Traiter l'image
-          const base64Data = imageItem.data.split(",")[1]
-          const imageBytes = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0))
-
-          let pdfImage
-          if (imageItem.data.includes("image/jpeg") || imageItem.data.includes("image/jpg")) {
-            pdfImage = await mainPdfDoc.embedJpg(imageBytes)
-          } else {
-            pdfImage = await mainPdfDoc.embedPng(imageBytes)
-          }
-
-          // Calculer les dimensions
-          const imgWidth = pdfImage.width
-          const imgHeight = pdfImage.height
-          const availableWidth = width - 40
-          const availableHeight = height - 80
-
-          let finalWidth = availableWidth
-          let finalHeight = (imgHeight * availableWidth) / imgWidth
-
-          if (finalHeight > availableHeight) {
-            finalHeight = availableHeight
-            finalWidth = (imgWidth * availableHeight) / imgHeight
-          }
-
-          const xPos = (width - finalWidth) / 2
-          const yPos = (height - finalHeight - 40) / 2
-
-          imagePage.drawImage(pdfImage, {
-            x: xPos,
-            y: yPos,
-            width: finalWidth,
-            height: finalHeight,
-          })
-
-          console.log(`✅ Image ajoutée: ${imageItem.name}`)
-        } catch (imageError) {
-          console.error(`❌ Erreur ajout image ${imageItem.name}:`, imageError)
-        }
-      }
-
-      // Merger les PDF
-      for (const pdfToMerge of pdfsToMerge) {
-        try {
-          console.log(`📄 Merge de ${pdfToMerge.name}...`)
-
-          const sourcePdfDoc = await PDFDocument.load(pdfToMerge.data)
-          const pageIndices = Array.from({ length: pdfToMerge.pageCount }, (_, i) => i)
-          const copiedPages = await mainPdfDoc.copyPages(sourcePdfDoc, pageIndices)
-
-          copiedPages.forEach((page) => {
-            mainPdfDoc.addPage(page)
-          })
-
-          console.log(`✅ ${pdfToMerge.name} mergé`)
-        } catch (mergeError) {
-          console.error(`❌ Erreur merge ${pdfToMerge.name}:`, mergeError)
-        }
-      }
-
-      // Sauvegarder le PDF final
-      const finalPdfBytes = await mainPdfDoc.save()
-      const fileName = `dossier-location-${tenantName.replace(/\s+/g, "-").toLowerCase()}.pdf`
-
-      const blob = new Blob([finalPdfBytes], { type: "application/pdf" })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = fileName
-      a.click()
-      URL.revokeObjectURL(url)
-
-      console.log(`🎉 PDF final généré avec succès !`)
-    } catch (mergeError) {
-      console.error("❌ Erreur lors du merge final:", mergeError)
-
-      // Fallback : télécharger le PDF sans les annexes
-      const fileName = `dossier-location-${tenantName.replace(/\s+/g, "-").toLowerCase()}.pdf`
-      doc.save(fileName)
-    }
-  } catch (error) {
-    console.error("❌ Erreur génération PDF:", error)
-    throw error
+    onUpdate(updatedProfile)
   }
+
+  const removeIncomeSource = (sourceType: string, index: number) => {
+    const updatedProfile = { ...profile }
+    if (updatedProfile.income_sources?.[sourceType]) {
+      updatedProfile.income_sources[sourceType].splice(index, 1)
+      onUpdate(updatedProfile)
+    }
+  }
+
+  const updateIncomeSource = (sourceType: string, index: number | null, field: string, value: any) => {
+    const updatedProfile = { ...profile }
+    if (!updatedProfile.income_sources) updatedProfile.income_sources = {}
+
+    if (index !== null) {
+      if (!updatedProfile.income_sources[sourceType]) updatedProfile.income_sources[sourceType] = []
+      if (!updatedProfile.income_sources[sourceType][index]) {
+        updatedProfile.income_sources[sourceType][index] = { documents: [] }
+      }
+      updatedProfile.income_sources[sourceType][index][field] = value
+    } else {
+      if (!updatedProfile.income_sources[sourceType]) {
+        updatedProfile.income_sources[sourceType] = { documents: [] }
+      }
+      updatedProfile.income_sources[sourceType][field] = value
+    }
+
+    onUpdate(updatedProfile)
+  }
+
+  const toggleIncomeType = (incomeType: string) => {
+    const updatedProfile = { ...profile }
+    if (!updatedProfile.income_sources) updatedProfile.income_sources = {}
+
+    if (updatedProfile.income_sources[incomeType]) {
+      delete updatedProfile.income_sources[incomeType]
+    } else {
+      switch (incomeType) {
+        case "work_income":
+          updatedProfile.income_sources.work_income = {
+            type: "salarie",
+            amount: 0,
+            documents: [],
+          }
+          break
+        case "scholarship":
+          updatedProfile.income_sources.scholarship = {
+            amount: 0,
+            documents: [],
+          }
+          break
+        case "no_income":
+          updatedProfile.income_sources.no_income = {
+            explanation: "",
+            documents: [],
+          }
+          break
+      }
+    }
+
+    onUpdate(updatedProfile)
+  }
+
+  const IncomeTypeCard = ({
+    icon: Icon,
+    title,
+    description,
+    isActive,
+    onToggle,
+    documentCount = 0,
+  }: {
+    icon: any
+    title: string
+    description: string
+    isActive: boolean
+    onToggle: () => void
+    documentCount?: number
+  }) => (
+    <Card
+      className={`cursor-pointer transition-all duration-200 ${
+        isActive ? "border-blue-500 bg-blue-50 shadow-md" : "border-gray-200 hover:border-gray-300 hover:shadow-sm"
+      }`}
+      onClick={onToggle}
+    >
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className={`p-2 rounded-lg ${isActive ? "bg-blue-100" : "bg-gray-100"}`}>
+              <Icon className={`h-5 w-5 ${isActive ? "text-blue-600" : "text-gray-600"}`} />
+            </div>
+            <div>
+              <h4 className="font-medium text-gray-900">{title}</h4>
+              <p className="text-sm text-gray-600">{description}</p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            {documentCount > 0 && (
+              <Badge variant="outline" className="bg-green-50">
+                <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
+                {documentCount}
+              </Badge>
+            )}
+            <div
+              className={`w-4 h-4 rounded-full border-2 ${
+                isActive ? "bg-blue-500 border-blue-500" : "border-gray-300"
+              }`}
+            >
+              {isActive && <CheckCircle className="h-3 w-3 text-white" />}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+
+  const hasAnyIncome = profile.income_sources && Object.keys(profile.income_sources).length > 0
+
+  const handlePayslipValidated = (monthKey: string, documentData: any) => {
+    const updatedProfile = { ...profile }
+    if (!updatedProfile.income_sources.work_income.documents_detailed) {
+      updatedProfile.income_sources.work_income.documents_detailed = {}
+    }
+
+    if (documentData === null) {
+      delete updatedProfile.income_sources.work_income.documents_detailed[monthKey]
+    } else {
+      updatedProfile.income_sources.work_income.documents_detailed[monthKey] = documentData
+    }
+
+    // Maintenir aussi l'ancien format pour compatibilité
+    const payslipUrls = Object.values(updatedProfile.income_sources.work_income.documents_detailed || {})
+      .filter((doc) => doc?.fileUrl)
+      .map((doc) => doc.fileUrl)
+    updatedProfile.income_sources.work_income.documents = payslipUrls
+
+    onUpdate(updatedProfile)
+    toast.success("Fiche de paie validée avec succès")
+  }
+
+  return (
+    <Card className="mb-6">
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Euro className="h-5 w-5 text-blue-600" />
+            <span>Justificatifs de ressources</span>
+            {hasAnyIncome && <Badge variant="outline">Configuré</Badge>}
+          </div>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Types de revenus principaux */}
+        <div className="space-y-4">
+          <h3 className="font-medium text-gray-900">Sélectionnez vos sources de revenus</h3>
+
+          <div className="grid gap-4">
+            {/* Revenus du travail */}
+            <IncomeTypeCard
+              icon={Briefcase}
+              title="Revenus du travail"
+              description="Salaire, freelance, auto-entrepreneur..."
+              isActive={!!profile.income_sources?.work_income}
+              onToggle={() => toggleIncomeType("work_income")}
+              documentCount={profile.income_sources?.work_income?.documents?.length || 0}
+            />
+
+            {/* Bourse */}
+            <IncomeTypeCard
+              icon={GraduationCap}
+              title="Bourse d'études"
+              description="Bourse CROUS, aide aux étudiants..."
+              isActive={!!profile.income_sources?.scholarship}
+              onToggle={() => toggleIncomeType("scholarship")}
+              documentCount={profile.income_sources?.scholarship?.documents?.length || 0}
+            />
+
+            {/* Pas de revenus */}
+            <IncomeTypeCard
+              icon={AlertCircle}
+              title="Aucun revenu"
+              description="Situation temporaire, recherche d'emploi..."
+              isActive={!!profile.income_sources?.no_income}
+              onToggle={() => toggleIncomeType("no_income")}
+              documentCount={profile.income_sources?.no_income?.documents?.length || 0}
+            />
+          </div>
+        </div>
+
+        {/* Détails des revenus du travail */}
+        {profile.income_sources?.work_income && (
+          <Card className="border-blue-200 bg-blue-50/50">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg flex items-center space-x-2">
+                <Briefcase className="h-5 w-5 text-blue-600" />
+                <span>Revenus du travail</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label>Type de travail</Label>
+                <Select
+                  value={profile.income_sources.work_income.type || "salarie"}
+                  onValueChange={(value) => updateIncomeSource("work_income", null, "type", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {WORK_INCOME_TYPES.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="work_amount">Montant mensuel net (€) *</Label>
+                <Input
+                  id="work_amount"
+                  type="number"
+                  placeholder="2500"
+                  value={profile.income_sources.work_income.amount || ""}
+                  onChange={(e) => updateIncomeSource("work_income", null, "amount", Number.parseFloat(e.target.value))}
+                />
+              </div>
+
+              <div>
+                <Label className="text-sm font-medium">Justificatifs de revenus (3 dernières fiches de paie) *</Label>
+                <MonthlyDocumentUpload
+                  documentType="payslip"
+                  documentName="Fiche de paie"
+                  onDocumentValidated={handlePayslipValidated}
+                  completedMonths={profile.income_sources.work_income.documents_detailed || {}}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Détails de la bourse */}
+        {profile.income_sources?.scholarship && (
+          <Card className="border-green-200 bg-green-50/50">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg flex items-center space-x-2">
+                <GraduationCap className="h-5 w-5 text-green-600" />
+                <span>Bourse d'études</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="scholarship_amount">Montant mensuel (€)</Label>
+                <Input
+                  id="scholarship_amount"
+                  type="number"
+                  placeholder="300"
+                  value={profile.income_sources.scholarship.amount || ""}
+                  onChange={(e) => updateIncomeSource("scholarship", null, "amount", Number.parseFloat(e.target.value))}
+                />
+              </div>
+
+              <div>
+                <Label className="text-sm font-medium">Justificatifs de bourse</Label>
+                <SupabaseFileUpload
+                  onFilesUploaded={(urls) => handleFileUpload("income_scholarship", urls)}
+                  maxFiles={3}
+                  bucket="documents"
+                  folder="income/scholarship"
+                  existingFiles={profile.income_sources.scholarship.documents || []}
+                  acceptedTypes={["image/*", "application/pdf"]}
+                  showPreview={true}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Détails pas de revenus */}
+        {profile.income_sources?.no_income && (
+          <Card className="border-amber-200 bg-amber-50/50">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg flex items-center space-x-2">
+                <AlertCircle className="h-5 w-5 text-amber-600" />
+                <span>Aucun revenu</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="no_income_explanation">Explication de votre situation</Label>
+                <Textarea
+                  id="no_income_explanation"
+                  placeholder="Expliquez votre situation..."
+                  value={profile.income_sources.no_income.explanation || ""}
+                  onChange={(e) => updateIncomeSource("no_income", null, "explanation", e.target.value)}
+                  rows={3}
+                />
+              </div>
+
+              <div>
+                <Label className="text-sm font-medium">Justificatifs (optionnel)</Label>
+                <SupabaseFileUpload
+                  onFilesUploaded={(urls) => handleFileUpload("income_no_income", urls)}
+                  maxFiles={3}
+                  bucket="documents"
+                  folder="income/none"
+                  existingFiles={profile.income_sources.no_income.documents || []}
+                  acceptedTypes={["image/*", "application/pdf"]}
+                  showPreview={true}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Sources de revenus supplémentaires */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-medium text-gray-900">Sources de revenus supplémentaires</h3>
+            <p className="text-sm text-gray-600">Optionnel</p>
+          </div>
+
+          {/* Aide sociale */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Heart className="h-4 w-4 text-pink-600" />
+                <Label className="font-medium">Aide sociale</Label>
+              </div>
+              <Button onClick={() => addIncomeSource("social_aid")} size="sm" variant="outline">
+                <Plus className="h-4 w-4 mr-2" />
+                Ajouter
+              </Button>
+            </div>
+
+            {profile.income_sources?.social_aid?.map((aid: any, index: number) => (
+              <Card key={index} className="border-pink-200 bg-pink-50/50">
+                <CardContent className="p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium flex items-center space-x-2">
+                      <Heart className="h-4 w-4 text-pink-600" />
+                      <span>Aide sociale {index + 1}</span>
+                    </h4>
+                    <div className="flex items-center space-x-2">
+                      {aid.documents?.length > 0 && (
+                        <Badge variant="outline" className="bg-green-50">
+                          <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
+                          {aid.documents.length}
+                        </Badge>
+                      )}
+                      <Button onClick={() => removeIncomeSource("social_aid", index)} size="sm" variant="outline">
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label>Type d'aide</Label>
+                      <Select
+                        value={aid.type || "caf_msa"}
+                        onValueChange={(value) => updateIncomeSource("social_aid", index, "type", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SOCIAL_AID_TYPES.map((type) => (
+                            <SelectItem key={type.value} value={type.value}>
+                              {type.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label>Depuis quand ?</Label>
+                      <Select
+                        value={aid.duration || "plus_3_mois"}
+                        onValueChange={(value) => updateIncomeSource("social_aid", index, "duration", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {DURATION_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor={`aid_amount_${index}`}>Montant mensuel (€)</Label>
+                    <Input
+                      id={`aid_amount_${index}`}
+                      type="number"
+                      placeholder="500"
+                      value={aid.amount || ""}
+                      onChange={(e) =>
+                        updateIncomeSource("social_aid", index, "amount", Number.parseFloat(e.target.value))
+                      }
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-medium">Justificatifs</Label>
+                    <SupabaseFileUpload
+                      onFilesUploaded={(urls) => handleFileUpload(`income_social_aid_${index}`, urls)}
+                      maxFiles={3}
+                      bucket="documents"
+                      folder={`income/social_aid/${index}`}
+                      existingFiles={aid.documents || []}
+                      acceptedTypes={["image/*", "application/pdf"]}
+                      showPreview={true}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Retraite et pensions */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <PiggyBank className="h-4 w-4 text-purple-600" />
+                <Label className="font-medium">Retraite ou pension</Label>
+              </div>
+              <Button onClick={() => addIncomeSource("retirement_pension")} size="sm" variant="outline">
+                <Plus className="h-4 w-4 mr-2" />
+                Ajouter
+              </Button>
+            </div>
+
+            {profile.income_sources?.retirement_pension?.map((pension: any, index: number) => (
+              <Card key={index} className="border-purple-200 bg-purple-50/50">
+                <CardContent className="p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium flex items-center space-x-2">
+                      <PiggyBank className="h-4 w-4 text-purple-600" />
+                      <span>Retraite/Pension {index + 1}</span>
+                    </h4>
+                    <div className="flex items-center space-x-2">
+                      {pension.documents?.length > 0 && (
+                        <Badge variant="outline" className="bg-green-50">
+                          <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
+                          {pension.documents.length}
+                        </Badge>
+                      )}
+                      <Button
+                        onClick={() => removeIncomeSource("retirement_pension", index)}
+                        size="sm"
+                        variant="outline"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label>Type de pension</Label>
+                      <Select
+                        value={pension.type || "retraite"}
+                        onValueChange={(value) => updateIncomeSource("retirement_pension", index, "type", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {RETIREMENT_PENSION_TYPES.map((type) => (
+                            <SelectItem key={type.value} value={type.value}>
+                              {type.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor={`pension_amount_${index}`}>Montant mensuel (€)</Label>
+                      <Input
+                        id={`pension_amount_${index}`}
+                        type="number"
+                        placeholder="1200"
+                        value={pension.amount || ""}
+                        onChange={(e) =>
+                          updateIncomeSource("retirement_pension", index, "amount", Number.parseFloat(e.target.value))
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-medium">Justificatifs</Label>
+                    <SupabaseFileUpload
+                      onFilesUploaded={(urls) => handleFileUpload(`income_retirement_pension_${index}`, urls)}
+                      maxFiles={3}
+                      bucket="documents"
+                      folder={`income/retirement/${index}`}
+                      existingFiles={pension.documents || []}
+                      acceptedTypes={["image/*", "application/pdf"]}
+                      showPreview={true}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Rentes */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Building2 className="h-4 w-4 text-indigo-600" />
+                <Label className="font-medium">Rentes et revenus locatifs</Label>
+              </div>
+              <Button onClick={() => addIncomeSource("rent_income")} size="sm" variant="outline">
+                <Plus className="h-4 w-4 mr-2" />
+                Ajouter
+              </Button>
+            </div>
+
+            {profile.income_sources?.rent_income?.map((rent: any, index: number) => (
+              <Card key={index} className="border-indigo-200 bg-indigo-50/50">
+                <CardContent className="p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium flex items-center space-x-2">
+                      <Building2 className="h-4 w-4 text-indigo-600" />
+                      <span>Rente {index + 1}</span>
+                    </h4>
+                    <div className="flex items-center space-x-2">
+                      {rent.documents?.length > 0 && (
+                        <Badge variant="outline" className="bg-green-50">
+                          <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
+                          {rent.documents.length}
+                        </Badge>
+                      )}
+                      <Button onClick={() => removeIncomeSource("rent_income", index)} size="sm" variant="outline">
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label>Type de rente</Label>
+                      <Select
+                        value={rent.type || "revenus_locatifs"}
+                        onValueChange={(value) => updateIncomeSource("rent_income", index, "type", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {RENT_INCOME_TYPES.map((type) => (
+                            <SelectItem key={type.value} value={type.value}>
+                              {type.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor={`rent_amount_${index}`}>Montant mensuel (€)</Label>
+                      <Input
+                        id={`rent_amount_${index}`}
+                        type="number"
+                        placeholder="800"
+                        value={rent.amount || ""}
+                        onChange={(e) =>
+                          updateIncomeSource("rent_income", index, "amount", Number.parseFloat(e.target.value))
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-medium">Justificatifs</Label>
+                    <SupabaseFileUpload
+                      onFilesUploaded={(urls) => handleFileUpload(`income_rent_income_${index}`, urls)}
+                      maxFiles={3}
+                      bucket="documents"
+                      folder={`income/rent/${index}`}
+                      existingFiles={rent.documents || []}
+                      acceptedTypes={["image/*", "application/pdf"]}
+                      showPreview={true}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
 }

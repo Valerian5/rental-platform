@@ -418,6 +418,7 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
                   folder="income/scholarship"
                   existingFiles={profile.income_sources.scholarship.documents || []}
                   acceptedTypes={["image/*", "application/pdf"]}
+                  showPreview={true}
                 />
               </div>
             </CardContent>
@@ -454,6 +455,7 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
                   folder="income/none"
                   existingFiles={profile.income_sources.no_income.documents || []}
                   acceptedTypes={["image/*", "application/pdf"]}
+                  showPreview={true}
                 />
               </div>
             </CardContent>
@@ -563,6 +565,7 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
                       folder={`income/social_aid/${index}`}
                       existingFiles={aid.documents || []}
                       acceptedTypes={["image/*", "application/pdf"]}
+                      showPreview={true}
                     />
                   </div>
                 </CardContent>
@@ -651,6 +654,7 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
                       folder={`income/retirement/${index}`}
                       existingFiles={pension.documents || []}
                       acceptedTypes={["image/*", "application/pdf"]}
+                      showPreview={true}
                     />
                   </div>
                 </CardContent>
@@ -735,6 +739,7 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
                       folder={`income/rent/${index}`}
                       existingFiles={rent.documents || []}
                       acceptedTypes={["image/*", "application/pdf"]}
+                      showPreview={true}
                     />
                   </div>
                 </CardContent>
