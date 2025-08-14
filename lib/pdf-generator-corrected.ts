@@ -26,19 +26,6 @@ const getSiteInfo = async (): Promise<any> => {
   }
 }
 
-// Fonction helper pour formater les montants CORRECTEMENT (AVEC ESPACES)
-const formatAmount = (amount: number): string => {
-  if (!amount || amount === 0) return "Non renseigné"
-  return new Intl.NumberFormat("fr-FR", {
-    style: "currency",
-    currency: "EUR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  })
-    .format(amount)
-    .replace(/\s/g, " ") // Forcer les espaces normaux
-}
-
 export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise<void> => {
   try {
     // Charger les paramètres du site
@@ -47,7 +34,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     console.log("🎨 Logos chargés:", logos)
     console.log("ℹ️ Info site:", siteInfo)
 
-    // Import dynamique de jsPDF et pdf-lib - MÉTHODE CORRECTE
+    // Import dynamique de jsPDF et pdf-lib
     const { jsPDF } = await import("jspdf")
     const { PDFDocument } = await import("pdf-lib")
 
@@ -57,28 +44,34 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     const pageHeight = doc.internal.pageSize.height
     const margin = 20
 
-    // Couleurs douces et modernes (palette pastel professionnelle)
-    const primaryColor = [99, 102, 241] // Indigo doux
-    const secondaryColor = [148, 163, 184] // Gris ardoise doux
+    // Couleurs douces et professionnelles
+    const primaryColor = [79, 70, 229] // Indigo doux
+    const secondaryColor = [100, 116, 139] // Gris ardoise doux
     const accentColor = [34, 197, 94] // Vert émeraude doux
-    const grayColor = [156, 163, 175] // Gris doux pour les labels
-    const lightGrayColor = [249, 250, 251] // Gris très clair et doux
-    const softBlueColor = [239, 246, 255] // Bleu très doux pour les fonds
+    const grayColor = [107, 114, 128] // Gris pour les labels
+    const lightGrayColor = [248, 250, 252] // Gris très clair pour les fonds
 
     // Stocker les PDF à merger à la fin
     const pdfsToMerge: any[] = []
     const imagesToAdd: any[] = []
 
-    // Fonction helper pour formater les montants CORRECTEMENT (SANS "/")
-    // const formatAmount = (amount: number): string => {
-    //   if (!amount || amount === 0) return "Non renseigné"
-    //   return new Intl.NumberFormat("fr-FR", {
-    //     style: "currency",
-    //     currency: "EUR",
-    //     minimumFractionDigits: 0,
-    //     maximumFractionDigits: 0,
-    //   }).format(amount)
-    // }
+    // Fonction helper pour formater les montants CORRECTEMENT
+    const formatAmount = (amount: number): string => {
+      if (!amount || amount === 0) return "Non renseigné"
+      return new Intl.NumberFormat("fr-FR", {
+        style: "currency",
+        currency: "EUR",
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      })
+        .format(amount)
+        .replace(/\s/g, " ") // Force les espaces normaux
+    }
+
+    // Fonction pour dessiner un rectangle arrondi
+    const roundedRect = (x: number, y: number, width: number, height: number, radius: number, style = "S") => {
+      doc.roundedRect(x, y, width, height, radius, radius, style)
+    }
 
     // Fonction pour calculer les revenus totaux d'une personne
     const calculateTotalIncomeForPerson = (incomeSources: any): number => {
@@ -144,11 +137,10 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       return "document"
     }
 
-    // Fonction pour ajouter le logo avec design doux
+    // Fonction pour ajouter le logo
     const addLogo = async (x: number, y: number, size = 25, logoUrl?: string) => {
       if (logoUrl && logoUrl !== "DOCUMENT_MIGRE_PLACEHOLDER") {
         try {
-          // Charger l'image du logo
           const response = await fetch(logoUrl)
           if (response.ok) {
             const blob = await response.blob()
@@ -159,9 +151,8 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
               reader.readAsDataURL(blob)
             })
 
-            // Ajouter l'image au PDF avec coins arrondis simulés
             const imgFormat = logoUrl.toLowerCase().includes(".png") ? "PNG" : "JPEG"
-            doc.addImage(base64Data, imgFormat, x, y, size, size * 0.6) // Ratio 5:3 pour les logos
+            doc.addImage(base64Data, imgFormat, x, y, size, size * 0.6)
             return
           }
         } catch (error) {
@@ -169,55 +160,54 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
         }
       }
 
-      // Fallback : logo simple et doux
+      // Fallback : logo simple moderne
       doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])
-      doc.roundedRect(x, y, size, size * 0.6, 8, 8, "F") // Coins très arrondis
+      doc.circle(x + size / 2, y + size / 2, size / 2, "F")
 
       doc.setTextColor(255, 255, 255)
       doc.setFontSize(12)
       doc.setFont("helvetica", "bold")
-      doc.text("L", x + size / 2 - 3, y + (size * 0.6) / 2 + 4)
+      doc.text("L", x + size / 2 - 3, y + size / 2 + 4)
     }
 
-    // Fonction pour ajouter un en-tête de page moderne et uni (SANS DÉGRADÉ)
+    // Fonction pour ajouter un en-tête de page moderne (UNI)
     const addPageHeader = async (title: string): Promise<number> => {
       // Fond uni moderne (pas de dégradé)
       doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])
       doc.rect(0, 0, pageWidth, 35, "F")
 
-      // Logo (utiliser le logo PDF s'il existe)
+      // Logo
       await addLogo(pageWidth - margin - 30, 5, 25, logos.pdf || logos.main)
 
-      // Titre avec style doux
+      // Titre
       doc.setTextColor(255, 255, 255)
       doc.setFontSize(16)
       doc.setFont("helvetica", "bold")
       doc.text(title, margin, 22)
 
-      // Sous-titre avec le nom du site
+      // Sous-titre
       doc.setFontSize(10)
-      doc.setFont("helvetica", "normal")
       doc.text(siteInfo.title || "Louer Ici", margin, 30)
 
-      return 45 // Position Y après l'en-tête
+      return 45
     }
 
-    // Fonction pour ajouter une section avec design doux et COMPACT
+    // Fonction pour ajouter une section avec design doux
     const addSectionWithIcon = (title: string, y: number, icon = "•"): number => {
-      // Fond très doux pour la section
-      doc.setFillColor(softBlueColor[0], softBlueColor[1], softBlueColor[2])
-      doc.roundedRect(margin - 8, y - 6, pageWidth - 2 * margin + 16, 16, 12, 12, "F") // Hauteur réduite
+      // Fond doux pour la section
+      doc.setFillColor(lightGrayColor[0], lightGrayColor[1], lightGrayColor[2])
+      roundedRect(margin - 5, y - 5, pageWidth - 2 * margin + 10, 16, 8, "F")
 
-      // Titre de section moderne et doux
+      // Titre de section moderne
       doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2])
       doc.setFontSize(12)
       doc.setFont("helvetica", "bold")
-      doc.text(`${icon} ${title}`, margin, y + 4)
+      doc.text(`${icon} ${title}`, margin, y + 5)
 
-      return y + 20 // Espacement réduit
+      return y + 20
     }
 
-    // Fonction pour ajouter une propriété avec design très doux et COMPACT
+    // Fonction pour ajouter une propriété avec design compact
     const addProperty = async (
       label: string,
       value: string,
@@ -231,30 +221,30 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
         y = await addPageHeader("DOSSIER DE LOCATION (SUITE)")
       }
 
-      // Fond alterné très doux pour améliorer la lisibilité
+      // Fond alterné doux
       if (options.background) {
-        doc.setFillColor(lightGrayColor[0], lightGrayColor[1], lightGrayColor[2])
-        doc.roundedRect(x - 5, y - 5, 90, 16, 8, 8, "F") // Hauteur réduite
+        doc.setFillColor(248, 250, 252)
+        roundedRect(x - 3, y - 3, 85, 14, 4, "F")
       }
 
-      // Label avec style doux
+      // Label
       doc.setTextColor(grayColor[0], grayColor[1], grayColor[2])
       doc.setFontSize(8)
       doc.setFont("helvetica", "normal")
       doc.text(label, x, y)
 
-      // Valeur avec style doux
-      doc.setTextColor(55, 65, 81) // Gris foncé doux au lieu du noir pur
+      // Valeur
+      doc.setTextColor(55, 65, 81) // Gris foncé doux
       doc.setFontSize(10)
       doc.setFont("helvetica", options.bold ? "bold" : "normal")
 
       const displayValue = value || "Non renseigné"
       doc.text(displayValue, x, y + 8)
 
-      return y + 18 // Espacement réduit
+      return y + 16 // Réduit de 18 à 16
     }
 
-    // Fonction pour ajouter un montant avec design très doux et COMPACT
+    // Fonction pour ajouter un montant avec design doux
     const addAmount = async (label: string, amount: number, x: number, y: number): Promise<number> => {
       // Vérifier si on dépasse la page
       if (y > pageHeight - 40) {
@@ -262,23 +252,23 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
         y = await addPageHeader("DOSSIER DE LOCATION (SUITE)")
       }
 
-      // Fond très doux pour les montants
-      doc.setFillColor(240, 253, 244) // Vert très pâle
-      doc.roundedRect(x - 5, y - 5, 90, 16, 10, 10, "F") // Hauteur réduite
+      // Fond doux pour les montants
+      doc.setFillColor(240, 253, 244)
+      roundedRect(x - 3, y - 3, 85, 14, 4, "F")
 
-      // Label doux
+      // Label
       doc.setTextColor(grayColor[0], grayColor[1], grayColor[2])
       doc.setFontSize(8)
       doc.setFont("helvetica", "normal")
       doc.text(label, x, y)
 
-      // Montant avec formatage correct et couleur douce
+      // Montant avec formatage correct
       doc.setTextColor(accentColor[0], accentColor[1], accentColor[2])
       doc.setFontSize(11)
       doc.setFont("helvetica", "bold")
       doc.text(formatAmount(amount), x, y + 8)
 
-      return y + 18 // Espacement réduit
+      return y + 16 // Réduit de 18 à 16
     }
 
     // Fonction pour traiter les documents
@@ -294,7 +284,6 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
         const fileType = getFileType(documentUrl)
 
         if (fileType === "pdf") {
-          // Traiter le PDF
           const response = await fetch("/api/pdf/merge-pages", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -314,7 +303,6 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
             }
           }
         } else if (fileType === "image") {
-          // Traiter l'image
           const response = await fetch(documentUrl)
           if (response.ok) {
             const blob = await response.blob()
@@ -344,10 +332,10 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     const tenantName = `${mainTenant.first_name || ""} ${mainTenant.last_name || ""}`.trim() || "Locataire"
     const totalHouseholdIncome = calculateTotalHouseholdIncome()
 
-    // PAGE DE COUVERTURE MODERNE ET DOUCE
+    // PAGE DE COUVERTURE MODERNE
     yPosition = await addPageHeader("DOSSIER DE LOCATION NUMÉRIQUE")
 
-    // Logo principal centré (si disponible) avec style doux
+    // Logo principal centré (si disponible)
     if (logos.main) {
       try {
         const response = await fetch(logos.main)
@@ -361,7 +349,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
           })
 
           const imgFormat = logos.main.toLowerCase().includes(".png") ? "PNG" : "JPEG"
-          doc.addImage(base64Data, imgFormat, (pageWidth - 60) / 2, yPosition, 60, 36) // Logo centré
+          doc.addImage(base64Data, imgFormat, (pageWidth - 60) / 2, yPosition, 60, 36)
           yPosition += 50
         }
       } catch (error) {
@@ -372,7 +360,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       yPosition += 20
     }
 
-    // Nom du site avec couleur douce
+    // Nom du site
     doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2])
     doc.setFontSize(18)
     doc.setFont("helvetica", "bold")
@@ -381,7 +369,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
 
     yPosition += 15
 
-    // Description du site avec couleur douce
+    // Description du site
     doc.setTextColor(grayColor[0], grayColor[1], grayColor[2])
     doc.setFontSize(12)
     doc.setFont("helvetica", "normal")
@@ -394,8 +382,8 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
 
     yPosition += 30
 
-    // Nom du locataire (centré et grand) avec couleur douce
-    doc.setTextColor(55, 65, 81) // Gris foncé doux au lieu du noir pur
+    // Nom du locataire (centré et grand)
+    doc.setTextColor(55, 65, 81)
     doc.setFontSize(24)
     doc.setFont("helvetica", "bold")
     const nameWidth = doc.getTextWidth(tenantName)
@@ -403,9 +391,9 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
 
     yPosition += 40
 
-    // Encadré de synthèse très doux
-    doc.setFillColor(softBlueColor[0], softBlueColor[1], softBlueColor[2])
-    doc.roundedRect(margin, yPosition, pageWidth - 2 * margin, 90, 20, 20, "F")
+    // Encadré de synthèse moderne
+    doc.setFillColor(lightGrayColor[0], lightGrayColor[1], lightGrayColor[2])
+    roundedRect(margin, yPosition, pageWidth - 2 * margin, 90, 12, "F")
 
     yPosition += 15
 
@@ -445,8 +433,8 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       synthese.push("• Aucun garant")
     }
 
-    // Afficher la synthèse avec couleur douce
-    doc.setTextColor(55, 65, 81) // Gris foncé doux
+    // Afficher la synthèse
+    doc.setTextColor(55, 65, 81)
     doc.setFontSize(12)
     doc.setFont("helvetica", "normal")
 
@@ -457,7 +445,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
 
     yPosition += 20
 
-    // Date de génération avec couleur douce
+    // Date de génération
     doc.setTextColor(grayColor[0], grayColor[1], grayColor[2])
     doc.setFontSize(10)
     doc.text(
@@ -469,7 +457,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       },
     )
 
-    // PAGE LOCATAIRE PRINCIPAL
+    // PAGE LOCATAIRE PRINCIPAL (COMPACTE)
     doc.addPage()
     yPosition = await addPageHeader("• LOCATAIRE PRINCIPAL")
 
@@ -492,7 +480,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       col1Y = await addProperty("Nationalité", mainTenant.nationality || "", margin, col1Y, { background: true })
       col2Y = await addProperty("Situation logement", mainTenant.current_housing_situation || "", col2X, col2Y)
 
-      yPosition = Math.max(col1Y, col2Y) + 10
+      yPosition = Math.max(col1Y, col2Y) + 8
 
       // Situation professionnelle
       yPosition = addSectionWithIcon("SITUATION PROFESSIONNELLE", yPosition, "•")
@@ -510,7 +498,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
         yPosition = await addProperty("Type de revenus", mainTenant.income_sources.work_income.type, margin, yPosition)
       }
 
-      yPosition += 10
+      yPosition += 8
 
       // Revenus (section séparée avec fond moderne)
       yPosition = addSectionWithIcon("REVENUS", yPosition, "•")
@@ -524,7 +512,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
         )
       }
 
-      // Aides sociales - INCLUSES MAINTENANT
+      // Aides sociales
       if (mainTenant.income_sources?.social_aid && mainTenant.income_sources.social_aid.length > 0) {
         for (let index = 0; index < mainTenant.income_sources.social_aid.length; index++) {
           const aid = mainTenant.income_sources.social_aid[index]
@@ -545,7 +533,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
         }
       }
 
-      // Pensions/retraites - INCLUSES MAINTENANT
+      // Pensions/retraites
       if (mainTenant.income_sources?.retirement_pension && mainTenant.income_sources.retirement_pension.length > 0) {
         for (let index = 0; index < mainTenant.income_sources.retirement_pension.length; index++) {
           const pension = mainTenant.income_sources.retirement_pension[index]
@@ -565,7 +553,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
         }
       }
 
-      // Revenus locatifs/rentes - INCLUS MAINTENANT
+      // Revenus locatifs/rentes
       if (mainTenant.income_sources?.rent_income && mainTenant.income_sources.rent_income.length > 0) {
         for (let index = 0; index < mainTenant.income_sources.rent_income.length; index++) {
           const rent = mainTenant.income_sources.rent_income[index]
@@ -597,7 +585,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       }
     }
 
-    // PAGES COLOCATAIRES/CONJOINT (même structure douce)
+    // PAGES COLOCATAIRES/CONJOINT (même structure compacte)
     if (rentalFile.cotenants && rentalFile.cotenants.length > 0) {
       for (let index = 0; index < rentalFile.cotenants.length; index++) {
         const cotenant = rentalFile.cotenants[index]
@@ -625,7 +613,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
           col2Y = await addProperty("Nationalité", cotenant.nationality, col2X, col2Y, { background: true })
         }
 
-        yPosition = Math.max(col1Y, col2Y) + 10
+        yPosition = Math.max(col1Y, col2Y) + 8
 
         // Situation professionnelle du colocataire
         if (cotenant.main_activity) {
@@ -640,9 +628,9 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
           )
         }
 
-        // Revenus du colocataire - TOUS INCLUS
+        // Revenus du colocataire
         if (cotenant.income_sources) {
-          yPosition += 10
+          yPosition += 8
           yPosition = addSectionWithIcon("REVENUS", yPosition, "•")
 
           if (cotenant.income_sources.work_income?.amount) {
@@ -708,7 +696,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       }
     }
 
-    // PAGES GARANTS - TOUS LES DOCUMENTS INCLUS avec design doux
+    // PAGES GARANTS (compactes)
     if (rentalFile.guarantors && rentalFile.guarantors.length > 0) {
       for (let index = 0; index < rentalFile.guarantors.length; index++) {
         const guarantor = rentalFile.guarantors[index]
@@ -725,7 +713,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
         if (guarantor.personal_info) {
           const guarantorInfo = guarantor.personal_info
 
-          yPosition += 10
+          yPosition += 8
           yPosition = addSectionWithIcon("INFORMATIONS PERSONNELLES", yPosition, "•")
 
           const colWidth = (pageWidth - 2 * margin - 20) / 2
@@ -751,7 +739,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
             })
           }
 
-          yPosition = Math.max(col1Y, col2Y) + 10
+          yPosition = Math.max(col1Y, col2Y) + 8
 
           // Situation professionnelle du garant
           if (guarantorInfo.main_activity) {
@@ -768,9 +756,9 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
             )
           }
 
-          // Revenus du garant - TOUS INCLUS
+          // Revenus du garant
           if (guarantorInfo.income_sources) {
-            yPosition += 10
+            yPosition += 8
             yPosition = addSectionWithIcon("REVENUS", yPosition, "•")
 
             if (guarantorInfo.income_sources.work_income?.amount) {
@@ -818,7 +806,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
           }
         } else if (guarantor.type === "organism") {
           // Informations organisme (Visale, etc.)
-          yPosition += 10
+          yPosition += 8
           yPosition = addSectionWithIcon("INFORMATIONS ORGANISME", yPosition, "•")
 
           if (guarantor.organism_name) {
@@ -833,7 +821,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
           }
         } else if (guarantor.type === "moral_person") {
           // Informations personne morale
-          yPosition += 10
+          yPosition += 8
           yPosition = addSectionWithIcon("INFORMATIONS SOCIÉTÉ", yPosition, "•")
 
           if (guarantor.company_name) {
@@ -856,7 +844,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       }
     }
 
-    // COLLECTE COMPLÈTE DES DOCUMENTS - TOUS TYPES INCLUS
+    // COLLECTE COMPLÈTE DES DOCUMENTS
     const documentsToProcess: any[] = []
 
     // Documents du locataire principal
@@ -883,7 +871,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
         })
       }
 
-      // Documents de revenus - TOUS TYPES
+      // Documents de revenus
       if (
         mainTenant.income_sources?.work_income?.documents &&
         Array.isArray(mainTenant.income_sources.work_income.documents)
@@ -897,7 +885,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
         })
       }
 
-      // Documents d'aides sociales - INCLUS MAINTENANT
+      // Documents d'aides sociales
       if (mainTenant.income_sources?.social_aid && Array.isArray(mainTenant.income_sources.social_aid)) {
         mainTenant.income_sources.social_aid.forEach((aid: any, aidIndex: number) => {
           if (aid.documents && Array.isArray(aid.documents)) {
@@ -912,7 +900,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
         })
       }
 
-      // Documents de pensions - INCLUS MAINTENANT
+      // Documents de pensions
       if (
         mainTenant.income_sources?.retirement_pension &&
         Array.isArray(mainTenant.income_sources.retirement_pension)
@@ -941,7 +929,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
         })
       }
 
-      // Documents de logement - TOUS TYPES
+      // Documents de logement
       if (
         mainTenant.current_housing_documents?.quittances_loyer &&
         Array.isArray(mainTenant.current_housing_documents.quittances_loyer)
@@ -982,12 +970,11 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       }
     }
 
-    // Documents des colocataires/conjoint - TOUS INCLUS
+    // Documents des colocataires/conjoint
     if (rentalFile.cotenants && Array.isArray(rentalFile.cotenants)) {
       rentalFile.cotenants.forEach((cotenant: any, cIndex: number) => {
         const cotenantLabel = rentalFile.rental_situation === "couple" ? "Conjoint(e)" : `Colocataire ${cIndex + 1}`
 
-        // Tous les types de documents pour les colocataires
         if (cotenant.identity_documents && Array.isArray(cotenant.identity_documents)) {
           cotenant.identity_documents.forEach((doc: string, index: number) => {
             documentsToProcess.push({
@@ -1008,7 +995,6 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
           })
         }
 
-        // Documents de revenus des colocataires
         if (
           cotenant.income_sources?.work_income?.documents &&
           Array.isArray(cotenant.income_sources.work_income.documents)
@@ -1022,7 +1008,6 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
           })
         }
 
-        // Aides sociales des colocataires
         if (cotenant.income_sources?.social_aid && Array.isArray(cotenant.income_sources.social_aid)) {
           cotenant.income_sources.social_aid.forEach((aid: any, aidIndex: number) => {
             if (aid.documents && Array.isArray(aid.documents)) {
@@ -1039,11 +1024,10 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       })
     }
 
-    // Documents des garants - TOUS TYPES INCLUS
+    // Documents des garants
     if (rentalFile.guarantors && Array.isArray(rentalFile.guarantors)) {
       rentalFile.guarantors.forEach((guarantor: any, gIndex: number) => {
         if (guarantor.type === "physical" && guarantor.personal_info) {
-          // Tous les documents des garants physiques
           if (guarantor.personal_info.identity_documents && Array.isArray(guarantor.personal_info.identity_documents)) {
             guarantor.personal_info.identity_documents.forEach((doc: string, index: number) => {
               documentsToProcess.push({
@@ -1064,7 +1048,6 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
             })
           }
 
-          // Documents de revenus des garants
           if (
             guarantor.personal_info.income_sources?.work_income?.documents &&
             Array.isArray(guarantor.personal_info.income_sources.work_income.documents)
@@ -1078,7 +1061,6 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
             })
           }
 
-          // Quittances des garants - INCLUSES MAINTENANT
           if (
             guarantor.personal_info.current_housing_documents?.quittances_loyer &&
             Array.isArray(guarantor.personal_info.current_housing_documents.quittances_loyer)
@@ -1092,7 +1074,6 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
             })
           }
 
-          // Documents fiscaux des garants
           if (
             guarantor.personal_info.tax_situation?.documents &&
             Array.isArray(guarantor.personal_info.tax_situation.documents)
@@ -1106,7 +1087,6 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
             })
           }
         } else if (guarantor.type === "organism") {
-          // Documents Visale ou autres organismes
           if (guarantor.organism_documents && Array.isArray(guarantor.organism_documents)) {
             guarantor.organism_documents.forEach((doc: string, index: number) => {
               documentsToProcess.push({
@@ -1117,7 +1097,6 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
             })
           }
         } else if (guarantor.type === "moral_person") {
-          // Documents Kbis et autres - INCLUS MAINTENANT
           if (guarantor.kbis_documents && Array.isArray(guarantor.kbis_documents)) {
             guarantor.kbis_documents.forEach((doc: string, index: number) => {
               documentsToProcess.push({
@@ -1138,16 +1117,14 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       await processDocument(document.url, document.name, document.category)
     }
 
-    // Dans la section PAGE ANNEXES MODERNE ET DOUCE, améliorer la gestion des pages :
-
-    // PAGE ANNEXES MODERNE ET DOUCE
+    // PAGE ANNEXES MODERNE AVEC GESTION DES PAGES
     if (pdfsToMerge.length > 0 || imagesToAdd.length > 0) {
       doc.addPage()
       yPosition = await addPageHeader("• ANNEXES - PIÈCES JUSTIFICATIVES")
 
       yPosition = addSectionWithIcon("LISTE DES DOCUMENTS INCLUS", yPosition, "•")
 
-      doc.setTextColor(55, 65, 81) // Gris foncé doux
+      doc.setTextColor(55, 65, 81)
       doc.setFontSize(11)
       doc.setFont("helvetica", "normal")
       doc.text("Les pièces justificatives suivantes sont intégrées dans ce document :", margin, yPosition)
@@ -1167,7 +1144,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
         documentsByCategory[img.category].push({ name: img.name, type: "Image", pages: 1 })
       })
 
-      // Afficher par catégorie avec design doux
+      // Afficher par catégorie avec gestion des pages
       const categoryLabels: any = {
         identity: "• PIÈCES D'IDENTITÉ",
         activity: "• JUSTIFICATIFS D'ACTIVITÉ",
@@ -1190,25 +1167,25 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       }
 
       let docCount = 1
-      Object.keys(documentsByCategory).forEach(async (category) => {
-        const categoryName = categoryLabels[category] || category.replace(/_/g, " ").toUpperCase()
-
-        // Vérifier si on a besoin d'une nouvelle page AVANT d'ajouter la catégorie
+      for (const category of Object.keys(documentsByCategory)) {
+        // Vérifier si on dépasse la page avant chaque catégorie
         if (yPosition > pageHeight - 60) {
           doc.addPage()
           yPosition = await addPageHeader("• ANNEXES - PIÈCES JUSTIFICATIVES (SUITE)")
         }
 
-        // Titre de catégorie doux
+        const categoryName = categoryLabels[category] || category.replace(/_/g, " ").toUpperCase()
+
+        // Titre de catégorie moderne
         doc.setFontSize(10)
         doc.setFont("helvetica", "bold")
         doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2])
         doc.text(categoryName, margin, yPosition)
         yPosition += 10
 
-        // Documents de cette catégorie avec style doux
-        documentsByCategory[category].forEach((docItem: any) => {
-          // Vérifier si on a besoin d'une nouvelle page AVANT chaque document
+        // Documents de cette catégorie
+        for (const docItem of documentsByCategory[category]) {
+          // Vérifier si on dépasse la page avant chaque document
           if (yPosition > pageHeight - 30) {
             doc.addPage()
             yPosition = await addPageHeader("• ANNEXES - PIÈCES JUSTIFICATIVES (SUITE)")
@@ -1216,7 +1193,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
 
           doc.setFontSize(9)
           doc.setFont("helvetica", "normal")
-          doc.setTextColor(55, 65, 81) // Gris foncé doux
+          doc.setTextColor(55, 65, 81)
           doc.text(
             `   ${docCount}. ${docItem.name} (${docItem.type} - ${docItem.pages} page${docItem.pages > 1 ? "s" : ""})`,
             margin,
@@ -1224,10 +1201,10 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
           )
           yPosition += 8
           docCount++
-        })
+        }
 
         yPosition += 5
-      })
+      }
 
       if (docCount === 1) {
         doc.setTextColor(grayColor[0], grayColor[1], grayColor[2])
@@ -1239,11 +1216,10 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     console.log(`🔄 Préparation du PDF final avec ${pdfsToMerge.length} PDF(s) et ${imagesToAdd.length} image(s)...`)
 
     try {
-      // Convertir le PDF jsPDF en ArrayBuffer
       const jsPdfOutput = doc.output("arraybuffer")
       const mainPdfDoc = await PDFDocument.load(jsPdfOutput)
 
-      // Ajouter les images avec en-têtes doux
+      // Ajouter les images avec en-têtes modernes
       for (const imageItem of imagesToAdd) {
         try {
           console.log(`🖼️ Ajout de l'image: ${imageItem.name}`)
@@ -1251,7 +1227,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
           const imagePage = mainPdfDoc.addPage()
           const { width, height } = imagePage.getSize()
 
-          // En-tête doux pour l'image
+          // En-tête moderne pour l'image
           imagePage.drawRectangle({
             x: 0,
             y: height - 40,
@@ -1278,7 +1254,6 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
             pdfImage = await mainPdfDoc.embedPng(imageBytes)
           }
 
-          // Calculer les dimensions avec marges douces
           const imgWidth = pdfImage.width
           const imgHeight = pdfImage.height
           const availableWidth = width - 40
@@ -1294,16 +1269,6 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
 
           const xPos = (width - finalWidth) / 2
           const yPos = (height - finalHeight - 40) / 2
-
-          // Bordure très douce autour de l'image
-          imagePage.drawRectangle({
-            x: xPos - 2,
-            y: yPos - 2,
-            width: finalWidth + 4,
-            height: finalHeight + 4,
-            borderColor: { r: 0.9, g: 0.9, b: 0.9 },
-            borderWidth: 1,
-          })
 
           imagePage.drawImage(pdfImage, {
             x: xPos,
@@ -1337,7 +1302,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
         }
       }
 
-      // Sauvegarder le PDF final - MÉTHODE CORRECTE
+      // Sauvegarder le PDF final
       const finalPdfBytes = await mainPdfDoc.save()
       const fileName = `dossier-location-${tenantName.replace(/\s+/g, "-").toLowerCase()}.pdf`
 
