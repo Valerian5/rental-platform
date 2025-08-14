@@ -1,467 +1,447 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { PageHeader } from "@/components/page-header"
-import { authService } from "@/lib/auth-service"
-import { toast } from "sonner"
+import { Button } from "@/components/ui/button"
 import {
-  FileText,
-  Clock,
-  CheckCircle,
-  XCircle,
-  MapPin,
-  Calendar,
-  Eye,
-  MessageSquare,
-  Search,
-  Filter,
-} from "lucide-react"
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { Calendar, MapPin, Euro, Clock, AlertTriangle, CheckCircle, XCircle, Eye, Trash2 } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import { supabase } from "@/lib/supabase"
 
 interface Application {
   id: string
-  status: string
-  created_at: string
+  property_id: string
+  status: "pending" | "accepted" | "rejected" | "visit_proposed" | "visit_scheduled" | "withdrawn"
   message?: string
-  property: {
+  created_at: string
+  updated_at: string
+  visit_slots?: Array<{
+    id: string
+    date: string
+    time: string
+    available: boolean
+  }>
+  properties: {
     id: string
     title: string
-    address: string
-    city: string
-    rent?: number
-    property_images?: Array<{ url: string; is_primary: boolean }>
-  }
-  owner?: {
-    id: string
-    first_name: string
-    last_name: string
+    location: string
+    price: number
+    images: string[]
+    bedrooms: number
+    bathrooms: number
+    surface_area: number
   }
 }
 
 export default function TenantApplicationsPage() {
-  const router = useRouter()
-  const [currentUser, setCurrentUser] = useState<any>(null)
   const [applications, setApplications] = useState<Application[]>([])
-  const [filteredApplications, setFilteredApplications] = useState<Application[]>([])
   const [loading, setLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
-
-  const statusConfig = {
-    pending: { label: "En attente", variant: "secondary" as const, icon: Clock, color: "text-yellow-600" },
-    accepted: { label: "Acceptée", variant: "default" as const, icon: CheckCircle, color: "text-green-600" },
-    rejected: { label: "Refusée", variant: "destructive" as const, icon: XCircle, color: "text-red-600" },
-    visit_scheduled: {
-      label: "Visite programmée",
-      variant: "outline" as const,
-      icon: Calendar,
-      color: "text-blue-600",
-    },
-    visit_proposed: {
-      label: "Visite proposée",
-      variant: "outline" as const,
-      icon: Calendar,
-      color: "text-blue-600",
-    },
-  }
+  const [withdrawing, setWithdrawing] = useState<string | null>(null)
+  const { toast } = useToast()
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const user = await authService.getCurrentUser()
-        if (!user || user.user_type !== "tenant") {
-          router.push("/login")
-          return
-        }
+    fetchApplications()
+  }, [])
 
-        setCurrentUser(user)
-        await loadApplications(user.id)
-      } catch (error) {
-        console.error("Erreur auth:", error)
-        router.push("/login")
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [router])
-
-  const loadApplications = async (tenantId: string) => {
+  const fetchApplications = async () => {
     try {
-      const response = await fetch(`/api/applications/tenant?tenant_id=${tenantId}`)
-      if (response.ok) {
-        const data = await response.json()
-        setApplications(data.applications || [])
-        setFilteredApplications(data.applications || [])
-      } else {
-        toast.error("Erreur lors du chargement des candidatures")
+      setLoading(true)
+
+      // Récupérer l'utilisateur connecté
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) {
+        toast({
+          title: "Erreur",
+          description: "Vous devez être connecté pour voir vos candidatures",
+          variant: "destructive",
+        })
+        return
       }
+
+      // Récupérer les candidatures avec les informations des propriétés
+      const { data, error } = await supabase
+        .from("applications")
+        .select(`
+          id,
+          property_id,
+          status,
+          message,
+          created_at,
+          updated_at,
+          visit_slots,
+          properties (
+            id,
+            title,
+            location,
+            price,
+            images,
+            bedrooms,
+            bathrooms,
+            surface_area
+          )
+        `)
+        .eq("tenant_id", user.id)
+        .order("created_at", { ascending: false })
+
+      if (error) {
+        console.error("Erreur récupération candidatures:", error)
+        toast({
+          title: "Erreur",
+          description: "Impossible de récupérer vos candidatures",
+          variant: "destructive",
+        })
+        return
+      }
+
+      setApplications(data || [])
     } catch (error) {
-      console.error("Erreur chargement candidatures:", error)
-      toast.error("Erreur lors du chargement des candidatures")
+      console.error("Erreur:", error)
+      toast({
+        title: "Erreur",
+        description: "Une erreur inattendue s'est produite",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
     }
-  }
-
-  // Filtrage des candidatures
-  useEffect(() => {
-    let filtered = applications
-
-    // Filtre par recherche
-    if (searchQuery) {
-      filtered = filtered.filter(
-        (app) =>
-          app.property.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          app.property.address.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          app.property.city.toLowerCase().includes(searchQuery.toLowerCase()),
-      )
-    }
-
-    // Filtre par statut
-    if (statusFilter !== "all") {
-      filtered = filtered.filter((app) => app.status === statusFilter)
-    }
-
-    setFilteredApplications(filtered)
-  }, [applications, searchQuery, statusFilter])
-
-  const getPropertyImage = (property: Application["property"]) => {
-    if (!property.property_images?.length) {
-      return "/placeholder.svg?height=120&width=120&text=Apt"
-    }
-    const primaryImage = property.property_images.find((img) => img.is_primary)
-    return primaryImage?.url || property.property_images[0]?.url || "/placeholder.svg?height=120&width=120&text=Apt"
   }
 
   const getStatusBadge = (status: string) => {
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending
-    const Icon = config.icon
-    return (
-      <Badge variant={config.variant} className="flex items-center gap-1">
-        <Icon className="h-3 w-3 flex-shrink-0" />
-        <span className="truncate">{config.label}</span>
-      </Badge>
-    )
+    switch (status) {
+      case "pending":
+        return (
+          <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
+            En analyse
+          </Badge>
+        )
+      case "accepted":
+        return (
+          <Badge variant="default" className="bg-green-100 text-green-800">
+            Acceptée
+          </Badge>
+        )
+      case "rejected":
+        return <Badge variant="destructive">Refusée</Badge>
+      case "visit_proposed":
+        return (
+          <Badge variant="outline" className="bg-blue-100 text-blue-800">
+            Visite proposée
+          </Badge>
+        )
+      case "visit_scheduled":
+        return (
+          <Badge variant="outline" className="bg-purple-100 text-purple-800">
+            Visite programmée
+          </Badge>
+        )
+      case "withdrawn":
+        return (
+          <Badge variant="secondary" className="bg-gray-100 text-gray-800">
+            Retirée
+          </Badge>
+        )
+      default:
+        return <Badge variant="secondary">Statut inconnu</Badge>
+    }
   }
 
-  const getApplicationsByStatus = (status: string) => {
-    return applications.filter((app) => app.status === status)
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "pending":
+        return <Clock className="h-4 w-4 text-yellow-600" />
+      case "accepted":
+        return <CheckCircle className="h-4 w-4 text-green-600" />
+      case "rejected":
+        return <XCircle className="h-4 w-4 text-red-600" />
+      case "visit_proposed":
+        return <Calendar className="h-4 w-4 text-blue-600" />
+      case "visit_scheduled":
+        return <Calendar className="h-4 w-4 text-purple-600" />
+      case "withdrawn":
+        return <XCircle className="h-4 w-4 text-gray-600" />
+      default:
+        return <AlertTriangle className="h-4 w-4 text-gray-600" />
+    }
   }
 
-  const stats = {
-    total: applications.length,
-    pending: getApplicationsByStatus("pending").length,
-    accepted: getApplicationsByStatus("accepted").length,
-    rejected: getApplicationsByStatus("rejected").length,
-    visit_scheduled: getApplicationsByStatus("visit_scheduled").length,
-    visit_proposed: getApplicationsByStatus("visit_proposed").length,
+  const handleWithdrawApplication = async (applicationId: string) => {
+    try {
+      setWithdrawing(applicationId)
+
+      const { error } = await supabase
+        .from("applications")
+        .update({
+          status: "withdrawn",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", applicationId)
+
+      if (error) {
+        console.error("Erreur retrait candidature:", error)
+        toast({
+          title: "Erreur",
+          description: "Impossible de retirer votre candidature",
+          variant: "destructive",
+        })
+        return
+      }
+
+      toast({
+        title: "Candidature retirée",
+        description: "Votre candidature a été retirée avec succès",
+      })
+
+      // Rafraîchir la liste
+      fetchApplications()
+    } catch (error) {
+      console.error("Erreur:", error)
+      toast({
+        title: "Erreur",
+        description: "Une erreur inattendue s'est produite",
+        variant: "destructive",
+      })
+    } finally {
+      setWithdrawing(null)
+    }
+  }
+
+  const handleChooseVisitSlot = async (applicationId: string, slotId: string) => {
+    try {
+      const response = await fetch(`/api/applications/${applicationId}/choose-visit-slot`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ slot_id: slotId }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Erreur lors de la sélection du créneau")
+      }
+
+      toast({
+        title: "Créneau sélectionné",
+        description: "Votre créneau de visite a été confirmé",
+      })
+
+      // Rafraîchir la liste
+      fetchApplications()
+    } catch (error) {
+      console.error("Erreur sélection créneau:", error)
+      toast({
+        title: "Erreur",
+        description: "Impossible de sélectionner ce créneau",
+        variant: "destructive",
+      })
+    }
   }
 
   if (loading) {
     return (
-      <div className="space-y-6 max-w-full overflow-x-hidden">
-        <PageHeader title="Mes candidatures" description="Chargement..." />
-        <div className="flex items-center justify-center h-96">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Chargement de vos candidatures...</p>
+          </div>
         </div>
       </div>
     )
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "pending":
-        return "bg-yellow-100 text-yellow-800"
-      case "accepted":
-        return "bg-green-100 text-green-800"
-      case "rejected":
-        return "bg-red-100 text-red-800"
-      case "visit_proposed":
-      case "visit_scheduled":
-        return "bg-blue-100 text-blue-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
-  }
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "pending":
-        return "En analyse"
-      case "accepted":
-        return "Acceptée"
-      case "rejected":
-        return "Refusée"
-      case "visit_proposed":
-      case "visit_scheduled":
-        return "Visite"
-      default:
-        return "Inconnu"
-    }
-  }
-
   return (
-    <div className="space-y-6 p-4 max-w-full overflow-x-hidden">
-      <PageHeader title="Mes candidatures" description="Suivez l'état de vos candidatures">
-        <Button asChild className="w-full sm:w-auto">
-          <Link href="/tenant/search">
-            <Search className="h-4 w-4 mr-2 flex-shrink-0" />
-            <span className="hidden sm:inline">Rechercher un logement</span>
-            <span className="sm:hidden">Rechercher</span>
-          </Link>
-        </Button>
-      </PageHeader>
-
-      {/* Statistiques */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4 sm:p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Total</p>
-                <p className="text-2xl font-bold">{stats.total}</p>
-              </div>
-              <FileText className="h-8 w-8 text-muted-foreground flex-shrink-0" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4 sm:p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">En attente</p>
-                <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
-              </div>
-              <Clock className="h-8 w-8 text-yellow-600 flex-shrink-0" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4 sm:p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Acceptées</p>
-                <p className="text-2xl font-bold text-green-600">{stats.accepted}</p>
-              </div>
-              <CheckCircle className="h-8 w-8 text-green-600 flex-shrink-0" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4 sm:p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Visites</p>
-                <p className="text-2xl font-bold text-blue-600">{stats.visit_scheduled}</p>
-              </div>
-              <Calendar className="h-8 w-8 text-blue-600 flex-shrink-0" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4 sm:p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Refusées</p>
-                <p className="text-2xl font-bold text-red-600">{stats.rejected}</p>
-              </div>
-              <XCircle className="h-8 w-8 text-red-600 flex-shrink-0" />
-            </div>
-          </CardContent>
-        </Card>
+    <div className="container mx-auto px-4 py-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Mes candidatures</h1>
+        <p className="text-gray-600">Suivez l'état de vos candidatures et gérez vos visites</p>
       </div>
 
-      {/* Filtres */}
-      <Card>
-        <CardContent className="p-4 sm:p-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground flex-shrink-0" />
-              <Input
-                placeholder="Rechercher un logement..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-8"
-              />
+      {applications.length === 0 ? (
+        <Card>
+          <CardContent className="text-center py-12">
+            <div className="mb-4">
+              <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
+                <Eye className="h-8 w-8 text-gray-400" />
+              </div>
             </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Aucune candidature</h3>
+            <p className="text-gray-600 mb-4">Vous n'avez pas encore postulé à des logements.</p>
+            <Button onClick={() => (window.location.href = "/tenant/search")}>Rechercher des logements</Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-6">
+          {applications.map((application) => (
+            <Card key={application.id} className="overflow-hidden">
+              <CardHeader className="pb-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <CardTitle className="text-xl mb-2">{application.properties.title}</CardTitle>
+                    <div className="flex items-center text-gray-600 mb-2">
+                      <MapPin className="h-4 w-4 mr-1" />
+                      <span className="text-sm">{application.properties.location}</span>
+                    </div>
+                    <div className="flex items-center text-gray-600">
+                      <Euro className="h-4 w-4 mr-1" />
+                      <span className="font-semibold">{application.properties.price}€/mois</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end space-y-2">
+                    <div className="flex items-center space-x-2">
+                      {getStatusIcon(application.status)}
+                      {getStatusBadge(application.status)}
+                    </div>
+                    <span className="text-sm text-gray-500">
+                      Candidature du {new Date(application.created_at).toLocaleDateString("fr-FR")}
+                    </span>
+                  </div>
+                </div>
+              </CardHeader>
 
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger>
-                <Filter className="h-4 w-4 mr-2 flex-shrink-0" />
-                <SelectValue placeholder="Statut" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les statuts</SelectItem>
-                <SelectItem value="pending">En attente</SelectItem>
-                <SelectItem value="accepted">Acceptées</SelectItem>
-                <SelectItem value="visit_scheduled">Visites programmées</SelectItem>
-                <SelectItem value="rejected">Refusées</SelectItem>
-              </SelectContent>
-            </Select>
+              <CardContent className="pt-0">
+                <div className="grid grid-cols-3 gap-4 mb-4 text-sm text-gray-600">
+                  <div>
+                    <span className="font-medium">{application.properties.bedrooms}</span> chambre
+                    {application.properties.bedrooms > 1 ? "s" : ""}
+                  </div>
+                  <div>
+                    <span className="font-medium">{application.properties.bathrooms}</span> salle
+                    {application.properties.bathrooms > 1 ? "s" : ""} de bain
+                  </div>
+                  <div>
+                    <span className="font-medium">{application.properties.surface_area}</span> m²
+                  </div>
+                </div>
 
-            <Button
-              variant="outline"
-              onClick={() => {
-                setSearchQuery("")
-                setStatusFilter("all")
-              }}
-              className="w-full sm:w-auto"
-            >
-              Réinitialiser
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Onglets par statut */}
-      <Tabs value={statusFilter} onValueChange={setStatusFilter}>
-        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5">
-          <TabsTrigger value="all">Toutes</TabsTrigger>
-          <TabsTrigger value="pending">En analyse</TabsTrigger>
-          <TabsTrigger value="visit_proposed">Visite</TabsTrigger>
-          <TabsTrigger value="accepted">Acceptées</TabsTrigger>
-          <TabsTrigger value="rejected">Refusées</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value={statusFilter} className="space-y-4">
-          {filteredApplications.length === 0 ? (
-            <Card>
-              <CardContent className="p-8 text-center">
-                <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="text-lg font-semibold mb-2">Aucune candidature</h3>
-                <p className="text-muted-foreground mb-4">
-                  {applications.length === 0
-                    ? "Vous n'avez pas encore postulé à des logements"
-                    : "Aucune candidature ne correspond aux filtres sélectionnés"}
-                </p>
-                {applications.length === 0 && (
-                  <Button asChild>
-                    <Link href="/tenant/search">
-                      <Search className="h-4 w-4 mr-2" />
-                      Rechercher un logement
-                    </Link>
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {filteredApplications.map((application) => (
-                <Card key={application.id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-4 sm:p-6">
-                    <div className="flex flex-col lg:flex-row">
-                      {/* Image */}
-                      <div className="w-full lg:w-1/3 h-48 lg:h-auto">
-                        <img
-                          src={
-                            application.property?.property_images?.find((img: any) => img.is_primary)?.url ||
-                            application.property?.property_images?.[0]?.url ||
-                            "/placeholder.svg?height=200&width=300" ||
-                            "/placeholder.svg"
-                          }
-                          alt={application.property?.title || "Propriété"}
-                          className="w-full h-full object-cover"
-                        />
+                {/* Encart visite proposée */}
+                {application.status === "visit_proposed" &&
+                  application.visit_slots &&
+                  application.visit_slots.length > 0 && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                      <div className="flex items-center mb-3">
+                        <Calendar className="h-5 w-5 text-blue-600 mr-2" />
+                        <h4 className="font-semibold text-blue-900">Créneaux de visite proposés</h4>
                       </div>
-
-                      {/* Contenu */}
-                      <div className="flex-1 p-4 sm:p-6">
-                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
-                          <div className="min-w-0 flex-1">
-                            <h2 className="text-xl font-semibold truncate">
-                              {application.property?.title || "Propriété"}
-                            </h2>
-                            <div className="flex items-center text-muted-foreground mt-1 min-w-0">
-                              <MapPin className="h-4 w-4 mr-1 flex-shrink-0" />
-                              <span className="truncate">
-                                {application.property?.address || "Adresse non disponible"}
-                              </span>
-                            </div>
-                          </div>
-                          <Badge className={`${getStatusColor(application.status)} whitespace-nowrap flex-shrink-0`}>
-                            {getStatusText(application.status)}
-                          </Badge>
-                        </div>
-
-                        {/* Informations candidature */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div>
-                            <p className="text-sm text-muted-foreground">Date de candidature</p>
-                            <p className="text-sm font-medium">
-                              {new Date(application.created_at).toLocaleDateString("fr-FR", {
-                                year: "numeric",
-                                month: "long",
-                                day: "numeric",
-                              })}
-                            </p>
-                          </div>
-                          {application.owner && (
-                            <div>
-                              <p className="text-sm text-muted-foreground">Propriétaire</p>
-                              <p className="text-sm font-medium truncate">
-                                {application.owner.first_name} {application.owner.last_name}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Message de candidature */}
-                        {application.message && (
-                          <div>
-                            <p className="text-sm text-muted-foreground mb-1">Message</p>
-                            <p className="text-sm bg-gray-50 p-3 rounded-lg break-words">{application.message}</p>
-                          </div>
-                        )}
-
-                        {/* Actions */}
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          <Button variant="outline" size="sm" asChild className="w-full sm:w-auto bg-transparent">
-                            <Link href={`/properties/${application.property_id}`}>
-                              <Eye className="h-4 w-4 mr-1 flex-shrink-0" />
-                              Voir l'annonce
-                            </Link>
-                          </Button>
-
-                          {application.owner && (
-                            <Button variant="outline" size="sm" asChild className="w-full sm:w-auto bg-transparent">
-                              <Link
-                                href={`/tenant/messaging?owner_id=${application.owner.id}&property_id=${application.property.id}`}
+                      <p className="text-blue-800 text-sm mb-3">
+                        Le propriétaire vous propose plusieurs créneaux de visite. Choisissez celui qui vous convient le
+                        mieux.
+                      </p>
+                      <div className="space-y-2">
+                        {application.visit_slots
+                          .filter((slot) => slot.available)
+                          .map((slot) => (
+                            <div
+                              key={slot.id}
+                              className="flex items-center justify-between bg-white rounded-lg p-3 border"
+                            >
+                              <div className="flex items-center">
+                                <Calendar className="h-4 w-4 text-gray-500 mr-2" />
+                                <span className="font-medium">
+                                  {new Date(slot.date).toLocaleDateString("fr-FR", {
+                                    weekday: "long",
+                                    year: "numeric",
+                                    month: "long",
+                                    day: "numeric",
+                                  })}
+                                </span>
+                                <span className="ml-2 text-gray-600">à {slot.time}</span>
+                              </div>
+                              <Button
+                                size="sm"
+                                onClick={() => handleChooseVisitSlot(application.id, slot.id)}
+                                className="bg-blue-600 hover:bg-blue-700"
                               >
-                                <MessageSquare className="h-4 w-4 mr-2 flex-shrink-0" />
-                                Contacter
-                              </Link>
-                            </Button>
-                          )}
-
-                          {application.status === "visit_scheduled" && (
-                            <Button size="sm" asChild className="w-full sm:w-auto">
-                              <Link href="/tenant/visits">
-                                <Calendar className="h-4 w-4 mr-2 flex-shrink-0" />
-                                Voir visite
-                              </Link>
-                            </Button>
-                          )}
-                        </div>
+                                Choisir ce créneau
+                              </Button>
+                            </div>
+                          ))}
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+                  )}
+
+                {/* Message de candidature */}
+                {application.message && (
+                  <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                    <h4 className="font-semibold text-gray-900 mb-2">Votre message</h4>
+                    <p className="text-gray-700 text-sm">{application.message}</p>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex items-center justify-between pt-4 border-t">
+                  <div className="flex space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => (window.location.href = `/properties/${application.property_id}`)}
+                    >
+                      <Eye className="h-4 w-4 mr-1" />
+                      Voir le logement
+                    </Button>
+                  </div>
+
+                  {/* Bouton retirer candidature avec confirmation */}
+                  {application.status !== "withdrawn" && application.status !== "rejected" && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 border-red-200 hover:bg-red-50 bg-transparent"
+                          disabled={withdrawing === application.id}
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          {withdrawing === application.id ? "Retrait..." : "Retirer"}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle className="flex items-center">
+                            <AlertTriangle className="h-5 w-5 text-red-600 mr-2" />
+                            Retirer votre candidature
+                          </AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Êtes-vous sûr de vouloir retirer votre candidature pour ce logement ?
+                            <br />
+                            <strong>Cette action est irréversible.</strong>
+                            <br />
+                            <br />
+                            <span className="text-sm text-gray-600">
+                              Logement : {application.properties.title} - {application.properties.location}
+                            </span>
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Annuler</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleWithdrawApplication(application.id)}
+                            className="bg-red-600 hover:bg-red-700"
+                          >
+                            Confirmer le retrait
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

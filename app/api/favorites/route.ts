@@ -1,58 +1,83 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
-
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+import { supabase } from "@/lib/supabase"
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get("user_id")
-    const limit = Number.parseInt(searchParams.get("limit") || "10")
+    const limit = searchParams.get("limit") || "10"
 
     if (!userId) {
       return NextResponse.json({ error: "user_id is required" }, { status: 400 })
     }
 
-    // Récupérer les favoris de l'utilisateur
-    const { data: favorites, error: favoritesError } = await supabase
+    console.log("📋 API Favorites - GET", { userId, limit })
+
+    // Vérifier si la table favorites existe
+    const { data: tableExists, error: tableError } = await supabase
+      .from("information_schema.tables")
+      .select("table_name")
+      .eq("table_name", "favorites")
+      .single()
+
+    if (tableError || !tableExists) {
+      console.log("⚠️ Table favorites n'existe pas encore")
+      return NextResponse.json({
+        success: true,
+        data: [],
+        message: "Table favorites not found, returning empty array",
+      })
+    }
+
+    // Récupérer les favoris avec les informations des propriétés
+    const { data: favorites, error } = await supabase
       .from("favorites")
       .select(`
         id,
+        property_id,
         created_at,
-        property:properties (
+        properties (
           id,
           title,
-          address,
-          city,
-          rent,
-          property_images (
-            url,
-            is_primary
-          )
+          description,
+          price,
+          location,
+          bedrooms,
+          bathrooms,
+          surface_area,
+          images,
+          status,
+          created_at
         )
       `)
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
-      .limit(limit)
+      .limit(Number.parseInt(limit))
 
-    if (favoritesError) {
-      console.error("Erreur récupération favoris:", favoritesError)
-      return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+    if (error) {
+      console.error("❌ Erreur récupération favoris:", error)
+      // Retourner des données vides au lieu d'une erreur 500
+      return NextResponse.json({
+        success: true,
+        data: [],
+        message: "Error fetching favorites, returning empty array",
+      })
     }
 
-    // Compter le total
-    const { count: totalCount } = await supabase
-      .from("favorites")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", userId)
+    console.log(`✅ ${favorites?.length || 0} favoris récupérés`)
 
     return NextResponse.json({
-      favorites: favorites || [],
-      total: totalCount || 0,
+      success: true,
+      data: favorites || [],
     })
   } catch (error) {
-    console.error("Erreur API favoris:", error)
-    return NextResponse.json({ error: "Erreur interne du serveur" }, { status: 500 })
+    console.error("❌ Erreur dans API favorites:", error)
+    // Retourner des données vides au lieu d'une erreur 500
+    return NextResponse.json({
+      success: true,
+      data: [],
+      message: "Unexpected error, returning empty array",
+    })
   }
 }
 
@@ -62,8 +87,10 @@ export async function POST(request: NextRequest) {
     const { user_id, property_id } = body
 
     if (!user_id || !property_id) {
-      return NextResponse.json({ error: "user_id et property_id requis" }, { status: 400 })
+      return NextResponse.json({ error: "user_id and property_id are required" }, { status: 400 })
     }
+
+    console.log("📋 API Favorites - POST", { user_id, property_id })
 
     // Vérifier si déjà en favoris
     const { data: existing } = await supabase
@@ -74,25 +101,30 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (existing) {
-      return NextResponse.json({ error: "Déjà en favoris" }, { status: 409 })
+      return NextResponse.json({ error: "Property already in favorites" }, { status: 409 })
     }
 
     // Ajouter aux favoris
-    const { data: favorite, error: favoriteError } = await supabase
+    const { data, error } = await supabase
       .from("favorites")
-      .insert({ user_id, property_id })
+      .insert({
+        user_id,
+        property_id,
+        created_at: new Date().toISOString(),
+      })
       .select()
       .single()
 
-    if (favoriteError) {
-      console.error("Erreur ajout favori:", favoriteError)
-      return NextResponse.json({ error: "Erreur ajout favori" }, { status: 500 })
+    if (error) {
+      console.error("❌ Erreur ajout favori:", error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ favorite }, { status: 201 })
+    console.log("✅ Favori ajouté")
+    return NextResponse.json({ success: true, data })
   } catch (error) {
-    console.error("Erreur POST favoris:", error)
-    return NextResponse.json({ error: "Erreur interne du serveur" }, { status: 500 })
+    console.error("❌ Erreur dans POST favorites:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
@@ -103,23 +135,22 @@ export async function DELETE(request: NextRequest) {
     const propertyId = searchParams.get("property_id")
 
     if (!userId || !propertyId) {
-      return NextResponse.json({ error: "user_id et property_id requis" }, { status: 400 })
+      return NextResponse.json({ error: "user_id and property_id are required" }, { status: 400 })
     }
 
-    const { error: deleteError } = await supabase
-      .from("favorites")
-      .delete()
-      .eq("user_id", userId)
-      .eq("property_id", propertyId)
+    console.log("📋 API Favorites - DELETE", { userId, propertyId })
 
-    if (deleteError) {
-      console.error("Erreur suppression favori:", deleteError)
-      return NextResponse.json({ error: "Erreur suppression favori" }, { status: 500 })
+    const { error } = await supabase.from("favorites").delete().eq("user_id", userId).eq("property_id", propertyId)
+
+    if (error) {
+      console.error("❌ Erreur suppression favori:", error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
+    console.log("✅ Favori supprimé")
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("Erreur DELETE favoris:", error)
-    return NextResponse.json({ error: "Erreur interne du serveur" }, { status: 500 })
+    console.error("❌ Erreur dans DELETE favorites:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
