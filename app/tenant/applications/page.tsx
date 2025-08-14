@@ -45,13 +45,26 @@ interface Application {
     id: string
     title: string
     address: string
-    price: number
+    city: string
+    postal_code: string
+    rent: number
     bedrooms?: number
     bathrooms?: number
-    surface?: number
-    images?: Array<{ url: string; alt?: string }>
+    surface_area?: number
+    property_images?: Array<{
+      id: string
+      url: string
+      is_main: boolean
+    }>
   }
   visit_slots?: Array<{
+    id: string
+    start_time: string
+    end_time: string
+    date: string
+    is_available: boolean
+  }>
+  proposed_visit_slots?: Array<{
     id: string
     start_time: string
     end_time: string
@@ -173,7 +186,8 @@ export default function TenantApplicationsPage() {
         throw new Error(errorData.error || "Erreur lors du retrait de la candidature")
       }
 
-      toast.success("Candidature retirée avec succès")
+      const data = await response.json()
+      toast.success(data.message || "Candidature retirée avec succès")
       setWithdrawDialog({ isOpen: false, applicationId: null, propertyTitle: "" })
 
       // Recharger les candidatures
@@ -270,6 +284,13 @@ export default function TenantApplicationsPage() {
             Refusée
           </Badge>
         )
+      case "withdrawn":
+        return (
+          <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
+            <Trash2 className="h-3 w-3 mr-1" />
+            Retirée
+          </Badge>
+        )
       default:
         return <Badge variant="outline">Statut inconnu</Badge>
     }
@@ -290,6 +311,8 @@ export default function TenantApplicationsPage() {
         return "Félicitations ! Votre candidature a été acceptée. Le propriétaire va vous contacter pour finaliser le bail."
       case "rejected":
         return "Malheureusement, votre candidature n'a pas été retenue pour ce logement."
+      case "withdrawn":
+        return "Vous avez retiré cette candidature."
       default:
         return "Statut de candidature inconnu."
     }
@@ -297,6 +320,15 @@ export default function TenantApplicationsPage() {
 
   const canWithdraw = (status: string) => {
     return ["pending", "analyzing", "visit_proposed", "visit_scheduled"].includes(status)
+  }
+
+  const getMainImage = (property: Application["property"]) => {
+    if (!property.property_images || property.property_images.length === 0) {
+      return "/placeholder.svg?height=200&width=300&text=Pas+d'image"
+    }
+
+    const mainImage = property.property_images.find((img) => img.is_main)
+    return mainImage ? mainImage.url : property.property_images[0].url
   }
 
   if (loading) {
@@ -350,17 +382,11 @@ export default function TenantApplicationsPage() {
                     {/* Image du bien */}
                     <div className="relative">
                       <div className="aspect-video md:aspect-square relative overflow-hidden">
-                        {application.property.images && application.property.images.length > 0 ? (
-                          <img
-                            src={application.property.images[0].url || "/placeholder.svg"}
-                            alt={application.property.images[0].alt || application.property.title}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                            <Building className="h-12 w-12 text-gray-400" />
-                          </div>
-                        )}
+                        <img
+                          src={getMainImage(application.property) || "/placeholder.svg"}
+                          alt={application.property.title}
+                          className="w-full h-full object-cover"
+                        />
                         <div className="absolute top-3 left-3">{getStatusBadge(application.status)}</div>
                       </div>
                     </div>
@@ -375,7 +401,10 @@ export default function TenantApplicationsPage() {
                               <h3 className="text-xl font-semibold mb-2">{application.property.title}</h3>
                               <div className="flex items-center text-muted-foreground mb-2">
                                 <MapPin className="h-4 w-4 mr-1" />
-                                <span className="text-sm">{application.property.address}</span>
+                                <span className="text-sm">
+                                  {application.property.address}, {application.property.city}{" "}
+                                  {application.property.postal_code}
+                                </span>
                               </div>
                               <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
                                 {application.property.bedrooms && (
@@ -390,15 +419,15 @@ export default function TenantApplicationsPage() {
                                     <span>{application.property.bathrooms} sdb</span>
                                   </div>
                                 )}
-                                {application.property.surface && (
+                                {application.property.surface_area && (
                                   <div className="flex items-center gap-1">
                                     <Square className="h-4 w-4" />
-                                    <span>{application.property.surface} m²</span>
+                                    <span>{application.property.surface_area} m²</span>
                                   </div>
                                 )}
                               </div>
                               <p className="text-2xl font-bold text-green-600">
-                                {formatAmount(application.property.price)}
+                                {formatAmount(application.property.rent)}
                                 <span className="text-sm font-normal text-muted-foreground">/mois</span>
                               </p>
                             </div>
@@ -410,44 +439,46 @@ export default function TenantApplicationsPage() {
                           </Alert>
 
                           {/* Créneaux de visite */}
-                          {application.status === "visit_proposed" && application.visit_slots && (
-                            <div className="mb-4">
-                              <h4 className="font-medium mb-3">Créneaux de visite proposés :</h4>
-                              <div className="space-y-2">
-                                {application.visit_slots
-                                  .filter((slot) => slot.is_available)
-                                  .map((slot) => {
-                                    const { date, time } = formatDateTime(slot.date, slot.start_time)
-                                    const endTime = slot.end_time.split(":").slice(0, 2).join(":")
-                                    return (
-                                      <div
-                                        key={slot.id}
-                                        className="flex items-center justify-between p-3 border rounded-lg"
-                                      >
-                                        <div>
-                                          <p className="font-medium capitalize">{date}</p>
-                                          <p className="text-sm text-muted-foreground">
-                                            {time} - {endTime}
-                                          </p>
-                                        </div>
-                                        <Button
-                                          onClick={() => handleChooseVisitSlot(application.id, slot.id)}
-                                          disabled={loadingActions[slot.id]}
-                                          size="sm"
+                          {application.status === "visit_proposed" &&
+                            application.proposed_visit_slots &&
+                            application.proposed_visit_slots.length > 0 && (
+                              <div className="mb-4">
+                                <h4 className="font-medium mb-3">Créneaux de visite proposés :</h4>
+                                <div className="space-y-2">
+                                  {application.proposed_visit_slots
+                                    .filter((slot) => slot.is_available)
+                                    .map((slot) => {
+                                      const { date, time } = formatDateTime(slot.date, slot.start_time)
+                                      const endTime = slot.end_time.split(":").slice(0, 2).join(":")
+                                      return (
+                                        <div
+                                          key={slot.id}
+                                          className="flex items-center justify-between p-3 border rounded-lg"
                                         >
-                                          {loadingActions[slot.id] ? (
-                                            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                                          ) : (
-                                            <Calendar className="h-4 w-4 mr-2" />
-                                          )}
-                                          Choisir ce créneau
-                                        </Button>
-                                      </div>
-                                    )
-                                  })}
+                                          <div>
+                                            <p className="font-medium capitalize">{date}</p>
+                                            <p className="text-sm text-muted-foreground">
+                                              {time} - {endTime}
+                                            </p>
+                                          </div>
+                                          <Button
+                                            onClick={() => handleChooseVisitSlot(application.id, slot.id)}
+                                            disabled={loadingActions[slot.id]}
+                                            size="sm"
+                                          >
+                                            {loadingActions[slot.id] ? (
+                                              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                            ) : (
+                                              <Calendar className="h-4 w-4 mr-2" />
+                                            )}
+                                            Choisir ce créneau
+                                          </Button>
+                                        </div>
+                                      )
+                                    })}
+                                </div>
                               </div>
-                            </div>
-                          )}
+                            )}
 
                           {/* Informations de candidature */}
                           <div className="text-sm text-muted-foreground mb-4">
