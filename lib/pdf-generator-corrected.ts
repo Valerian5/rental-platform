@@ -26,6 +26,19 @@ const getSiteInfo = async (): Promise<any> => {
   }
 }
 
+// Fonction helper pour formater les montants CORRECTEMENT (AVEC ESPACES)
+const formatAmount = (amount: number): string => {
+  if (!amount || amount === 0) return "Non renseigné"
+  return new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })
+    .format(amount)
+    .replace(/\s/g, " ") // Forcer les espaces normaux
+}
+
 export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise<void> => {
   try {
     // Charger les paramètres du site
@@ -57,15 +70,15 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
     const imagesToAdd: any[] = []
 
     // Fonction helper pour formater les montants CORRECTEMENT (SANS "/")
-    const formatAmount = (amount: number): string => {
-      if (!amount || amount === 0) return "Non renseigné"
-      return new Intl.NumberFormat("fr-FR", {
-        style: "currency",
-        currency: "EUR",
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-      }).format(amount)
-    }
+    // const formatAmount = (amount: number): string => {
+    //   if (!amount || amount === 0) return "Non renseigné"
+    //   return new Intl.NumberFormat("fr-FR", {
+    //     style: "currency",
+    //     currency: "EUR",
+    //     minimumFractionDigits: 0,
+    //     maximumFractionDigits: 0,
+    //   }).format(amount)
+    // }
 
     // Fonction pour calculer les revenus totaux d'une personne
     const calculateTotalIncomeForPerson = (incomeSources: any): number => {
@@ -166,18 +179,11 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       doc.text("L", x + size / 2 - 3, y + (size * 0.6) / 2 + 4)
     }
 
-    // Fonction pour ajouter un en-tête de page moderne et doux
+    // Fonction pour ajouter un en-tête de page moderne et uni (SANS DÉGRADÉ)
     const addPageHeader = async (title: string): Promise<number> => {
-      // Fond doux avec dégradé simulé très subtil
-      for (let i = 0; i < 35; i++) {
-        const opacity = 0.9 - i * 0.01
-        doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])
-        doc.setGState(doc.GState({ opacity: opacity }))
-        doc.rect(0, i, pageWidth, 1, "F")
-      }
-
-      // Reset opacity
-      doc.setGState(doc.GState({ opacity: 1 }))
+      // Fond uni moderne (pas de dégradé)
+      doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])
+      doc.rect(0, 0, pageWidth, 35, "F")
 
       // Logo (utiliser le logo PDF s'il existe)
       await addLogo(pageWidth - margin - 30, 5, 25, logos.pdf || logos.main)
@@ -196,22 +202,22 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       return 45 // Position Y après l'en-tête
     }
 
-    // Fonction pour ajouter une section avec design doux
+    // Fonction pour ajouter une section avec design doux et COMPACT
     const addSectionWithIcon = (title: string, y: number, icon = "•"): number => {
       // Fond très doux pour la section
       doc.setFillColor(softBlueColor[0], softBlueColor[1], softBlueColor[2])
-      doc.roundedRect(margin - 8, y - 8, pageWidth - 2 * margin + 16, 20, 12, 12, "F")
+      doc.roundedRect(margin - 8, y - 6, pageWidth - 2 * margin + 16, 16, 12, 12, "F") // Hauteur réduite
 
       // Titre de section moderne et doux
       doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2])
       doc.setFontSize(12)
       doc.setFont("helvetica", "bold")
-      doc.text(`${icon} ${title}`, margin, y + 5)
+      doc.text(`${icon} ${title}`, margin, y + 4)
 
-      return y + 28
+      return y + 20 // Espacement réduit
     }
 
-    // Fonction pour ajouter une propriété avec design très doux
+    // Fonction pour ajouter une propriété avec design très doux et COMPACT
     const addProperty = async (
       label: string,
       value: string,
@@ -228,7 +234,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       // Fond alterné très doux pour améliorer la lisibilité
       if (options.background) {
         doc.setFillColor(lightGrayColor[0], lightGrayColor[1], lightGrayColor[2])
-        doc.roundedRect(x - 5, y - 5, 90, 20, 8, 8, "F")
+        doc.roundedRect(x - 5, y - 5, 90, 16, 8, 8, "F") // Hauteur réduite
       }
 
       // Label avec style doux
@@ -245,10 +251,10 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       const displayValue = value || "Non renseigné"
       doc.text(displayValue, x, y + 8)
 
-      return y + 22
+      return y + 18 // Espacement réduit
     }
 
-    // Fonction pour ajouter un montant avec design très doux
+    // Fonction pour ajouter un montant avec design très doux et COMPACT
     const addAmount = async (label: string, amount: number, x: number, y: number): Promise<number> => {
       // Vérifier si on dépasse la page
       if (y > pageHeight - 40) {
@@ -258,7 +264,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
 
       // Fond très doux pour les montants
       doc.setFillColor(240, 253, 244) // Vert très pâle
-      doc.roundedRect(x - 5, y - 5, 90, 20, 10, 10, "F")
+      doc.roundedRect(x - 5, y - 5, 90, 16, 10, 10, "F") // Hauteur réduite
 
       // Label doux
       doc.setTextColor(grayColor[0], grayColor[1], grayColor[2])
@@ -272,7 +278,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       doc.setFont("helvetica", "bold")
       doc.text(formatAmount(amount), x, y + 8)
 
-      return y + 22
+      return y + 18 // Espacement réduit
     }
 
     // Fonction pour traiter les documents
@@ -1132,6 +1138,8 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       await processDocument(document.url, document.name, document.category)
     }
 
+    // Dans la section PAGE ANNEXES MODERNE ET DOUCE, améliorer la gestion des pages :
+
     // PAGE ANNEXES MODERNE ET DOUCE
     if (pdfsToMerge.length > 0 || imagesToAdd.length > 0) {
       doc.addPage()
@@ -1182,8 +1190,14 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       }
 
       let docCount = 1
-      Object.keys(documentsByCategory).forEach((category) => {
+      Object.keys(documentsByCategory).forEach(async (category) => {
         const categoryName = categoryLabels[category] || category.replace(/_/g, " ").toUpperCase()
+
+        // Vérifier si on a besoin d'une nouvelle page AVANT d'ajouter la catégorie
+        if (yPosition > pageHeight - 60) {
+          doc.addPage()
+          yPosition = await addPageHeader("• ANNEXES - PIÈCES JUSTIFICATIVES (SUITE)")
+        }
 
         // Titre de catégorie doux
         doc.setFontSize(10)
@@ -1194,6 +1208,12 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
 
         // Documents de cette catégorie avec style doux
         documentsByCategory[category].forEach((docItem: any) => {
+          // Vérifier si on a besoin d'une nouvelle page AVANT chaque document
+          if (yPosition > pageHeight - 30) {
+            doc.addPage()
+            yPosition = await addPageHeader("• ANNEXES - PIÈCES JUSTIFICATIVES (SUITE)")
+          }
+
           doc.setFontSize(9)
           doc.setFont("helvetica", "normal")
           doc.setTextColor(55, 65, 81) // Gris foncé doux
