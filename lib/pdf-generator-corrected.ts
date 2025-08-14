@@ -1613,7 +1613,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
       }
 
       let docCount = 1
-      Object.keys(documentsByCategory).forEach(async (category) => {
+      for (const category of Object.keys(documentsByCategory)) {
         const categoryName = categoryLabels[category] || category.replace(/_/g, " ").toUpperCase()
 
         // Vérifier si on a besoin d'une nouvelle page
@@ -1639,7 +1639,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
         yPosition += 20
 
         // Documents de cette catégorie
-        documentsByCategory[category].forEach((docItem: any) => {
+        documentsByCategory[category].forEach(async (docItem: any) => {
           // Vérifier si on a besoin d'une nouvelle page
           if (yPosition > pageHeight - 30) {
             doc.addPage()
@@ -1676,7 +1676,7 @@ export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise
         })
 
         yPosition += 8
-      })
+      }
 
       if (docCount === 1) {
         doc.setTextColor(...colors.gray)
