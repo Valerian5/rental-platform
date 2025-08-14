@@ -1,718 +1,1347 @@
-import jsPDF from "jspdf"
+import type { RentalFileData } from "./rental-file-service"
 
-interface PersonProfile {
-  first_name?: string
-  last_name?: string
-  email?: string
-  phone?: string
-  birth_date?: string
-  birth_place?: string
-  nationality?: string
-  identity_documents?: string[]
-  identity_documents_detailed?: any
-  activity_documents?: string[]
-  activity_documents_detailed?: any
-  current_housing_situation?: string
-  current_housing_documents?: any
-  income_sources?: any
-  tax_situation?: any
-  main_activity?: string
-  profession?: string
-  company?: string
-}
-
-interface GuarantorInfo {
-  type: "physical" | "organism" | "moral_person" | "none"
-  personal_info?: PersonProfile
-  organism_type?: string
-  organism_name?: string
-  company_name?: string
-  kbis_documents?: string[]
-}
-
-interface RentalFileData {
-  id: string
-  tenant_id: string
-  main_tenant: PersonProfile
-  cotenants?: PersonProfile[]
-  guarantors?: GuarantorInfo[]
-  rental_situation?: "alone" | "couple" | "colocation"
-  presentation_message?: string
-  created_at: string
-  updated_at: string
-}
-
-export async function generateRentalFilePDF(rentalFileData: RentalFileData): Promise<Blob> {
-  const doc = new jsPDF()
-  let yPosition = 20
-
-  // Configuration des couleurs (design moderne et professionnel)
-  const colors = {
-    primary: [30, 58, 138], // Bleu foncé professionnel
-    secondary: [71, 85, 105], // Gris ardoise
-    accent: [16, 185, 129], // Vert émeraude
-    text: [15, 23, 42], // Gris très foncé
-    lightGray: [248, 250, 252], // Gris très clair
-    border: [226, 232, 240], // Gris bordure
+// Fonction pour récupérer les logos depuis la base de données
+const getLogos = async (): Promise<any> => {
+  try {
+    const response = await fetch("/api/admin/settings?key=logos")
+    const result = await response.json()
+    return result.success ? result.data : {}
+  } catch (error) {
+    console.error("Erreur récupération logos:", error)
+    return {}
   }
+}
 
-  // Fonction utilitaire pour formater les montants
-  const formatAmount = (amount: number | string): string => {
-    const num = typeof amount === "string" ? Number.parseFloat(amount) : amount
-    if (isNaN(num)) return "0 €"
-    return new Intl.NumberFormat("fr-FR", {
-      style: "currency",
-      currency: "EUR",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(num)
+// Fonction pour récupérer les informations du site
+const getSiteInfo = async (): Promise<any> => {
+  try {
+    const response = await fetch("/api/admin/settings?key=site_info")
+    const result = await response.json()
+    return result.success
+      ? result.data
+      : { title: "Louer Ici", description: "Plateforme de gestion locative intelligente" }
+  } catch (error) {
+    console.error("Erreur récupération site info:", error)
+    return { title: "Louer Ici", description: "Plateforme de gestion locative intelligente" }
   }
+}
 
-  // Fonction pour ajouter du texte avec gestion des retours à la ligne
-  const addText = (text: string, x: number, y: number, options: any = {}) => {
-    const fontSize = options.fontSize || 10
-    const maxWidth = options.maxWidth || 170
-    const lineHeight = options.lineHeight || 5
+export const generateRentalFilePDF = async (rentalFile: RentalFileData): Promise<void> => {
+  try {
+    // Charger les paramètres du site
+    const [logos, siteInfo] = await Promise.all([getLogos(), getSiteInfo()])
 
-    doc.setFontSize(fontSize)
-    doc.setFont("helvetica", options.bold ? "bold" : "normal")
+    console.log("🎨 Logos chargés:", logos)
+    console.log("ℹ️ Info site:", siteInfo)
 
-    if (options.color) {
-      doc.setTextColor(...options.color)
+    // Import dynamique de jsPDF et pdf-lib - MÉTHODE CORRECTE
+    const { jsPDF } = await import("jspdf")
+    const { PDFDocument } = await import("pdf-lib")
+
+    const doc = new jsPDF()
+    let yPosition = 20
+    const pageWidth = doc.internal.pageSize.width
+    const pageHeight = doc.internal.pageSize.height
+    const margin = 20
+
+    // Couleurs modernes et professionnelles (sans dégradés)
+    const primaryColor = [30, 58, 138] // Bleu foncé professionnel
+    const secondaryColor = [71, 85, 105] // Gris ardoise
+    const accentColor = [16, 185, 129] // Vert émeraude pour les montants
+    const grayColor = [107, 114, 128] // Gris pour les labels
+    const lightGrayColor = [248, 250, 252] // Gris très clair pour les fonds
+
+    // Stocker les PDF à merger à la fin
+    const pdfsToMerge: any[] = []
+    const imagesToAdd: any[] = []
+
+    // Fonction helper pour formater les montants CORRECTEMENT
+    const formatAmount = (amount: number): string => {
+      if (!amount || amount === 0) return "Non renseigné"
+      return new Intl.NumberFormat("fr-FR", {
+        style: "currency",
+        currency: "EUR",
+        maximumFractionDigits: 0,
+      }).format(amount)
+    }
+
+    // Fonction pour calculer les revenus totaux d'une personne
+    const calculateTotalIncomeForPerson = (incomeSources: any): number => {
+      let total = 0
+      if (incomeSources?.work_income?.amount) total += incomeSources.work_income.amount
+      if (incomeSources?.social_aid) {
+        incomeSources.social_aid.forEach((aid: any) => {
+          total += aid.amount || 0
+        })
+      }
+      if (incomeSources?.retirement_pension) {
+        incomeSources.retirement_pension.forEach((pension: any) => {
+          total += pension.amount || 0
+        })
+      }
+      if (incomeSources?.rent_income) {
+        incomeSources.rent_income.forEach((rent: any) => {
+          total += rent.amount || 0
+        })
+      }
+      if (incomeSources?.scholarship?.amount) total += incomeSources.scholarship.amount
+      return total
+    }
+
+    // Calculer les revenus totaux du dossier
+    const calculateTotalHouseholdIncome = (): number => {
+      let total = 0
+
+      // Revenus du locataire principal
+      if (rentalFile.main_tenant?.income_sources) {
+        total += calculateTotalIncomeForPerson(rentalFile.main_tenant.income_sources)
+      }
+
+      // Revenus des colocataires/conjoint
+      if (rentalFile.cotenants && Array.isArray(rentalFile.cotenants)) {
+        rentalFile.cotenants.forEach((cotenant) => {
+          if (cotenant.income_sources) {
+            total += calculateTotalIncomeForPerson(cotenant.income_sources)
+          }
+        })
+      }
+
+      return total
+    }
+
+    // Fonction pour vérifier si une URL est valide
+    const isValidDocumentUrl = (url: string): boolean => {
+      if (!url || url === "DOCUMENT_MIGRE_PLACEHOLDER") return false
+      if (url.includes("blob:")) return false
+      if (url.startsWith("https://") && url.includes("supabase")) return true
+      if (url.startsWith("http")) return true
+      return false
+    }
+
+    // Fonction pour déterminer le type de fichier
+    const getFileType = (url: string): string => {
+      const extension = url.split(".").pop()?.toLowerCase() || ""
+      if (["jpg", "jpeg", "png", "gif", "webp"].includes(extension)) {
+        return "image"
+      } else if (extension === "pdf") {
+        return "pdf"
+      }
+      return "document"
+    }
+
+    // Fonction pour ajouter le logo
+    const addLogo = async (x: number, y: number, size = 25, logoUrl?: string) => {
+      if (logoUrl && logoUrl !== "DOCUMENT_MIGRE_PLACEHOLDER") {
+        try {
+          // Charger l'image du logo
+          const response = await fetch(logoUrl)
+          if (response.ok) {
+            const blob = await response.blob()
+            const base64Data = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader()
+              reader.onload = () => resolve(reader.result as string)
+              reader.onerror = reject
+              reader.readAsDataURL(blob)
+            })
+
+            // Ajouter l'image au PDF
+            const imgFormat = logoUrl.toLowerCase().includes(".png") ? "PNG" : "JPEG"
+            doc.addImage(base64Data, imgFormat, x, y, size, size * 0.6) // Ratio 5:3 pour les logos
+            return
+          }
+        } catch (error) {
+          console.error("Erreur chargement logo:", error)
+        }
+      }
+
+      // Fallback : logo simple moderne
+      doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])
+      doc.circle(x + size / 2, y + size / 2, size / 2, "F")
+
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(12)
+      doc.setFont("helvetica", "bold")
+      doc.text("L", x + size / 2 - 3, y + size / 2 + 4)
+    }
+
+    // Fonction pour ajouter un en-tête de page moderne
+    const addPageHeader = async (title: string): Promise<number> => {
+      // Fond uni moderne (pas de dégradé)
+      doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])
+      doc.rect(0, 0, pageWidth, 35, "F")
+
+      // Logo (utiliser le logo PDF s'il existe)
+      await addLogo(pageWidth - margin - 30, 5, 25, logos.pdf || logos.main)
+
+      // Titre
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(16)
+      doc.setFont("helvetica", "bold")
+      doc.text(title, margin, 22)
+
+      // Sous-titre avec le nom du site
+      doc.setFontSize(10)
+      doc.text(siteInfo.title || "Louer Ici", margin, 30)
+
+      // Ligne de séparation moderne
+      doc.setDrawColor(secondaryColor[0], secondaryColor[1], secondaryColor[2])
+      doc.setLineWidth(2)
+      doc.line(0, 35, pageWidth, 35)
+
+      return 45 // Position Y après l'en-tête
+    }
+
+    // Fonction pour ajouter une section avec design moderne
+    const addSectionWithIcon = (title: string, y: number, icon = "•"): number => {
+      // Fond moderne pour la section
+      doc.setFillColor(lightGrayColor[0], lightGrayColor[1], lightGrayColor[2])
+      doc.rect(margin - 5, y - 5, pageWidth - 2 * margin + 10, 15, "F")
+
+      // Bordure moderne
+      doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2])
+      doc.setLineWidth(1)
+      doc.rect(margin - 5, y - 5, pageWidth - 2 * margin + 10, 15, "S")
+
+      // Titre de section moderne
+      doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2])
+      doc.setFontSize(12)
+      doc.setFont("helvetica", "bold")
+      doc.text(`${icon} ${title}`, margin, y + 5)
+
+      return y + 25
+    }
+
+    // Fonction pour ajouter une propriété avec design moderne
+    const addProperty = async (
+      label: string,
+      value: string,
+      x: number,
+      y: number,
+      options: any = {},
+    ): Promise<number> => {
+      // Vérifier si on dépasse la page
+      if (y > pageHeight - 40) {
+        doc.addPage()
+        y = await addPageHeader("DOSSIER DE LOCATION (SUITE)")
+      }
+
+      // Fond alterné moderne pour améliorer la lisibilité
+      if (options.background) {
+        doc.setFillColor(248, 250, 252)
+        doc.rect(x - 3, y - 3, 85, 16, "F")
+      }
+
+      // Label
+      doc.setTextColor(grayColor[0], grayColor[1], grayColor[2])
+      doc.setFontSize(8)
+      doc.setFont("helvetica", "normal")
+      doc.text(label, x, y)
+
+      // Valeur
+      doc.setTextColor(0, 0, 0)
+      doc.setFontSize(10)
+      doc.setFont("helvetica", options.bold ? "bold" : "normal")
+
+      const displayValue = value || "Non renseigné"
+      doc.text(displayValue, x, y + 8)
+
+      return y + 18
+    }
+
+    // Fonction pour ajouter un montant avec design moderne
+    const addAmount = async (label: string, amount: number, x: number, y: number): Promise<number> => {
+      // Vérifier si on dépasse la page
+      if (y > pageHeight - 40) {
+        doc.addPage()
+        y = await addPageHeader("DOSSIER DE LOCATION (SUITE)")
+      }
+
+      // Fond moderne pour les montants
+      doc.setFillColor(240, 253, 244)
+      doc.rect(x - 3, y - 3, 85, 16, "F")
+
+      // Label
+      doc.setTextColor(grayColor[0], grayColor[1], grayColor[2])
+      doc.setFontSize(8)
+      doc.setFont("helvetica", "normal")
+      doc.text(label, x, y)
+
+      // Montant avec formatage correct
+      doc.setTextColor(accentColor[0], accentColor[1], accentColor[2])
+      doc.setFontSize(11)
+      doc.setFont("helvetica", "bold")
+      doc.text(formatAmount(amount), x, y + 8)
+
+      return y + 18
+    }
+
+    // Fonction pour traiter les documents
+    const processDocument = async (documentUrl: string, documentName: string, category: string) => {
+      try {
+        console.log("📄 Traitement du document:", documentName)
+
+        if (!isValidDocumentUrl(documentUrl)) {
+          console.log("⚠️ URL non valide, ignoré:", documentUrl)
+          return
+        }
+
+        const fileType = getFileType(documentUrl)
+
+        if (fileType === "pdf") {
+          // Traiter le PDF
+          const response = await fetch("/api/pdf/merge-pages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pdfUrl: documentUrl }),
+          })
+
+          if (response.ok) {
+            const result = await response.json()
+            if (result.success) {
+              pdfsToMerge.push({
+                name: documentName,
+                data: new Uint8Array(result.pdfData),
+                pageCount: result.pageCount,
+                category: category,
+              })
+              console.log(`✅ PDF préparé: ${documentName} (${result.pageCount} pages)`)
+            }
+          }
+        } else if (fileType === "image") {
+          // Traiter l'image
+          const response = await fetch(documentUrl)
+          if (response.ok) {
+            const blob = await response.blob()
+            const base64Data = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader()
+              reader.onload = () => resolve(reader.result as string)
+              reader.onerror = reject
+              reader.readAsDataURL(blob)
+            })
+
+            imagesToAdd.push({
+              name: documentName,
+              data: base64Data,
+              category: category,
+            })
+            console.log(`✅ Image préparée: ${documentName}`)
+          }
+        }
+      } catch (error) {
+        console.error(`❌ Erreur traitement ${documentName}:`, error)
+      }
+    }
+
+    // DÉBUT DE LA GÉNÉRATION DU PDF
+
+    const mainTenant = rentalFile.main_tenant || {}
+    const tenantName = `${mainTenant.first_name || ""} ${mainTenant.last_name || ""}`.trim() || "Locataire"
+    const totalHouseholdIncome = calculateTotalHouseholdIncome()
+
+    // PAGE DE COUVERTURE MODERNE
+    yPosition = await addPageHeader("DOSSIER DE LOCATION NUMÉRIQUE")
+
+    // Logo principal centré (si disponible)
+    if (logos.main) {
+      try {
+        const response = await fetch(logos.main)
+        if (response.ok) {
+          const blob = await response.blob()
+          const base64Data = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(reader.result as string)
+            reader.onerror = reject
+            reader.readAsDataURL(blob)
+          })
+
+          const imgFormat = logos.main.toLowerCase().includes(".png") ? "PNG" : "JPEG"
+          doc.addImage(base64Data, imgFormat, (pageWidth - 60) / 2, yPosition, 60, 36) // Logo centré
+          yPosition += 50
+        }
+      } catch (error) {
+        console.error("Erreur chargement logo principal:", error)
+        yPosition += 20
+      }
     } else {
-      doc.setTextColor(...colors.text)
+      yPosition += 20
     }
 
-    const lines = doc.splitTextToSize(text, maxWidth)
-    lines.forEach((line: string, index: number) => {
-      doc.text(line, x, y + index * lineHeight)
-    })
+    // Nom du site
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2])
+    doc.setFontSize(18)
+    doc.setFont("helvetica", "bold")
+    const siteTitleWidth = doc.getTextWidth(siteInfo.title || "Louer Ici")
+    doc.text(siteInfo.title || "Louer Ici", (pageWidth - siteTitleWidth) / 2, yPosition)
 
-    return y + lines.length * lineHeight
-  }
-
-  // Fonction pour vérifier si une nouvelle page est nécessaire
-  const checkPageBreak = (requiredSpace = 20) => {
-    if (yPosition + requiredSpace > 280) {
-      doc.addPage()
-      yPosition = 20
-    }
-  }
-
-  // En-tête moderne
-  doc.setFillColor(...colors.primary)
-  doc.rect(0, 0, 210, 35, "F")
-
-  doc.setTextColor(255, 255, 255)
-  doc.setFontSize(24)
-  doc.setFont("helvetica", "bold")
-  doc.text("DOSSIER DE LOCATION", 105, 22, { align: "center" })
-
-  yPosition = 50
-
-  // Informations générales avec design moderne
-  doc.setFillColor(...colors.lightGray)
-  doc.rect(15, yPosition - 5, 180, 25, "F")
-
-  yPosition = addText("INFORMATIONS GÉNÉRALES", 20, yPosition + 3, {
-    fontSize: 14,
-    bold: true,
-    color: colors.primary,
-  })
-  yPosition += 5
-
-  yPosition = addText(
-    `Dossier créé le : ${new Date(rentalFileData.created_at).toLocaleDateString("fr-FR")}`,
-    20,
-    yPosition,
-  )
-  yPosition = addText(`Identifiant : ${rentalFileData.id}`, 20, yPosition)
-  yPosition = addText(
-    `Situation de location : ${rentalFileData.rental_situation === "alone" ? "Seul(e)" : rentalFileData.rental_situation === "couple" ? "En couple" : "En colocation"}`,
-    20,
-    yPosition,
-  )
-  yPosition += 15
-
-  // Message de présentation
-  if (rentalFileData.presentation_message) {
-    checkPageBreak(30)
-    doc.setFillColor(...colors.lightGray)
-    doc.rect(15, yPosition - 5, 180, 8, "F")
-
-    yPosition = addText("MESSAGE DE PRÉSENTATION", 20, yPosition + 1, {
-      fontSize: 12,
-      bold: true,
-      color: colors.primary,
-    })
-    yPosition += 8
-
-    yPosition = addText(rentalFileData.presentation_message, 20, yPosition, {
-      maxWidth: 170,
-      lineHeight: 4,
-    })
     yPosition += 15
-  }
 
-  // Fonction pour calculer le total des revenus
-  const calculateTotalIncome = (profile: PersonProfile): number => {
-    let total = 0
-    if (profile.income_sources) {
-      // Revenus du travail
-      if (profile.income_sources.work_income?.amount) {
-        total += Number.parseFloat(profile.income_sources.work_income.amount.toString()) || 0
-      }
+    // Description du site
+    doc.setTextColor(grayColor[0], grayColor[1], grayColor[2])
+    doc.setFontSize(12)
+    doc.setFont("helvetica", "normal")
+    const descWidth = doc.getTextWidth(siteInfo.description || "Plateforme de gestion locative intelligente")
+    doc.text(
+      siteInfo.description || "Plateforme de gestion locative intelligente",
+      (pageWidth - descWidth) / 2,
+      yPosition,
+    )
 
-      // Aides sociales
-      if (profile.income_sources.social_aid) {
-        profile.income_sources.social_aid.forEach((aid: any) => {
-          total += Number.parseFloat(aid.amount?.toString() || "0") || 0
-        })
-      }
+    yPosition += 30
 
-      // Pensions/retraites
-      if (profile.income_sources.retirement_pension) {
-        profile.income_sources.retirement_pension.forEach((pension: any) => {
-          total += Number.parseFloat(pension.amount?.toString() || "0") || 0
-        })
-      }
+    // Nom du locataire (centré et grand)
+    doc.setTextColor(0, 0, 0)
+    doc.setFontSize(24)
+    doc.setFont("helvetica", "bold")
+    const nameWidth = doc.getTextWidth(tenantName)
+    doc.text(tenantName, (pageWidth - nameWidth) / 2, yPosition)
 
-      // Revenus locatifs/rentes
-      if (profile.income_sources.rent_income) {
-        profile.income_sources.rent_income.forEach((rent: any) => {
-          total += Number.parseFloat(rent.amount?.toString() || "0") || 0
-        })
-      }
+    yPosition += 40
 
-      // Bourses
-      if (profile.income_sources.scholarship?.amount) {
-        total += Number.parseFloat(profile.income_sources.scholarship.amount.toString()) || 0
-      }
-    }
-    return total
-  }
+    // Encadré de synthèse moderne
+    doc.setFillColor(lightGrayColor[0], lightGrayColor[1], lightGrayColor[2])
+    doc.rect(margin, yPosition, pageWidth - 2 * margin, 90, "F")
+    doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2])
+    doc.setLineWidth(2)
+    doc.rect(margin, yPosition, pageWidth - 2 * margin, 90, "S")
 
-  // Fonction pour traiter un profil de personne
-  const processPersonProfile = async (profile: PersonProfile, title: string, isGuarantor = false) => {
-    checkPageBreak(50)
+    yPosition += 15
 
-    // Titre de section avec design moderne
-    doc.setFillColor(...colors.secondary)
-    doc.rect(15, yPosition - 5, 180, 12, "F")
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2])
+    doc.setFontSize(16)
+    doc.setFont("helvetica", "bold")
+    doc.text("• SYNTHÈSE DU DOSSIER", pageWidth / 2, yPosition, { align: "center" })
 
-    yPosition = addText(title.toUpperCase(), 20, yPosition + 3, {
-      fontSize: 14,
-      bold: true,
-      color: [255, 255, 255],
-    })
     yPosition += 20
 
-    // Identité
-    if (profile.first_name || profile.last_name) {
-      yPosition = addText("IDENTITÉ", 20, yPosition, {
-        fontSize: 12,
-        bold: true,
-        color: colors.primary,
-      })
-      yPosition += 5
+    // Synthèse moderne avec revenus totaux
+    const synthese = []
 
-      if (profile.first_name && profile.last_name) {
-        yPosition = addText(`Nom complet : ${profile.first_name} ${profile.last_name}`, 25, yPosition)
-      }
-      if (profile.birth_date) {
-        yPosition = addText(
-          `Date de naissance : ${new Date(profile.birth_date).toLocaleDateString("fr-FR")}`,
-          25,
-          yPosition,
-        )
-      }
-      if (profile.birth_place) {
-        yPosition = addText(`Lieu de naissance : ${profile.birth_place}`, 25, yPosition)
-      }
-      if (profile.nationality) {
-        yPosition = addText(`Nationalité : ${profile.nationality}`, 25, yPosition)
-      }
-      if (profile.email) {
-        yPosition = addText(`Email : ${profile.email}`, 25, yPosition)
-      }
-      if (profile.phone) {
-        yPosition = addText(`Téléphone : ${profile.phone}`, 25, yPosition)
-      }
-      yPosition += 10
+    // Type de location
+    if (rentalFile.rental_situation === "alone") {
+      synthese.push("• Location individuelle")
+    } else if (rentalFile.rental_situation === "couple") {
+      synthese.push("• Location en couple")
+    } else {
+      synthese.push("• Colocation")
     }
 
-    // Situation de logement actuelle
-    if (profile.current_housing_situation) {
-      checkPageBreak(25)
-      yPosition = addText("SITUATION DE LOGEMENT ACTUELLE", 20, yPosition, {
-        fontSize: 12,
-        bold: true,
-        color: colors.primary,
-      })
-      yPosition += 5
+    // Nombre de personnes
+    const totalPersons = 1 + (rentalFile.cotenants?.length || 0)
+    synthese.push(`• ${totalPersons} personne${totalPersons > 1 ? "s" : ""} dans le dossier`)
 
-      const housingLabels: { [key: string]: string } = {
-        locataire: "Locataire",
-        proprietaire: "Propriétaire",
-        heberge: "Hébergé(e)",
-      }
-
-      yPosition = addText(
-        `Situation : ${housingLabels[profile.current_housing_situation] || profile.current_housing_situation}`,
-        25,
-        yPosition,
-      )
-      yPosition += 10
+    // Revenus totaux du foyer
+    if (totalHouseholdIncome > 0) {
+      synthese.push(`• Revenus totaux du foyer: ${formatAmount(totalHouseholdIncome)}`)
     }
 
-    // Activité professionnelle
-    if (profile.main_activity || profile.profession) {
-      checkPageBreak(30)
-      yPosition = addText("ACTIVITÉ PROFESSIONNELLE", 20, yPosition, {
-        fontSize: 12,
-        bold: true,
-        color: colors.primary,
-      })
-      yPosition += 5
-
-      if (profile.main_activity) {
-        const activityLabels: { [key: string]: string } = {
-          cdi: "CDI",
-          cdd: "CDD",
-          fonction_publique: "Fonction publique",
-          independant: "Indépendant",
-          retraite: "Retraité",
-          chomage: "Demandeur d'emploi",
-          etudes: "Étudiant",
-          alternance: "Alternance",
-        }
-        yPosition = addText(
-          `Activité : ${activityLabels[profile.main_activity] || profile.main_activity}`,
-          25,
-          yPosition,
-        )
-      }
-      if (profile.profession) {
-        yPosition = addText(`Profession : ${profile.profession}`, 25, yPosition)
-      }
-      if (profile.company) {
-        yPosition = addText(`Entreprise : ${profile.company}`, 25, yPosition)
-      }
-      yPosition += 10
+    // Garants
+    const guarantorsCount = rentalFile.guarantors?.length || 0
+    if (guarantorsCount > 0) {
+      synthese.push(`• ${guarantorsCount} garant${guarantorsCount > 1 ? "s" : ""}`)
+    } else {
+      synthese.push("• Aucun garant")
     }
 
-    // Revenus détaillés
-    if (profile.income_sources && Object.keys(profile.income_sources).length > 0) {
-      checkPageBreak(40)
-      yPosition = addText("REVENUS MENSUELS", 20, yPosition, {
-        fontSize: 12,
-        bold: true,
-        color: colors.primary,
-      })
-      yPosition += 5
+    // Afficher la synthèse
+    doc.setTextColor(0, 0, 0)
+    doc.setFontSize(12)
+    doc.setFont("helvetica", "normal")
 
-      let totalIncome = 0
-
-      // Revenus du travail
-      if (profile.income_sources.work_income?.amount) {
-        const amount = Number.parseFloat(profile.income_sources.work_income.amount.toString()) || 0
-        totalIncome += amount
-        yPosition = addText(`Revenus du travail : ${formatAmount(amount)}`, 25, yPosition)
-      }
-
-      // Aides sociales
-      if (profile.income_sources.social_aid && profile.income_sources.social_aid.length > 0) {
-        profile.income_sources.social_aid.forEach((aid: any, index: number) => {
-          const amount = Number.parseFloat(aid.amount?.toString() || "0") || 0
-          totalIncome += amount
-          const aidLabels: { [key: string]: string } = {
-            caf_msa: "Aide CAF/MSA",
-            france_travail: "Aide France Travail",
-            apl_aah: "APL/AAH",
-            autre: "Autre aide",
-          }
-          yPosition = addText(`${aidLabels[aid.type] || aid.type} : ${formatAmount(amount)}`, 25, yPosition)
-        })
-      }
-
-      // Pensions/retraites
-      if (profile.income_sources.retirement_pension && profile.income_sources.retirement_pension.length > 0) {
-        profile.income_sources.retirement_pension.forEach((pension: any, index: number) => {
-          const amount = Number.parseFloat(pension.amount?.toString() || "0") || 0
-          totalIncome += amount
-          const pensionLabels: { [key: string]: string } = {
-            retraite: "Retraite",
-            pension_invalidite: "Pension d'invalidité",
-            pension_alimentaire: "Pension alimentaire",
-          }
-          yPosition = addText(`${pensionLabels[pension.type] || pension.type} : ${formatAmount(amount)}`, 25, yPosition)
-        })
-      }
-
-      // Revenus locatifs/rentes
-      if (profile.income_sources.rent_income && profile.income_sources.rent_income.length > 0) {
-        profile.income_sources.rent_income.forEach((rent: any, index: number) => {
-          const amount = Number.parseFloat(rent.amount?.toString() || "0") || 0
-          totalIncome += amount
-          const rentLabels: { [key: string]: string } = {
-            revenus_locatifs: "Revenus locatifs",
-            rente_viagere: "Rente viagère",
-            autre_rente: "Autre rente",
-          }
-          yPosition = addText(`${rentLabels[rent.type] || rent.type} : ${formatAmount(amount)}`, 25, yPosition)
-        })
-      }
-
-      // Bourses
-      if (profile.income_sources.scholarship?.amount) {
-        const amount = Number.parseFloat(profile.income_sources.scholarship.amount.toString()) || 0
-        totalIncome += amount
-        yPosition = addText(`Bourse : ${formatAmount(amount)}`, 25, yPosition)
-      }
-
-      // Total avec mise en évidence
-      yPosition += 3
-      doc.setFillColor(...colors.accent)
-      doc.rect(20, yPosition - 2, 170, 8, "F")
-      yPosition = addText(`TOTAL MENSUEL : ${formatAmount(totalIncome)}`, 25, yPosition + 2, {
-        bold: true,
-        color: [255, 255, 255],
-      })
-      yPosition += 10
-    }
-
-    // Situation fiscale
-    if (profile.tax_situation?.type) {
-      checkPageBreak(25)
-      yPosition = addText("SITUATION FISCALE", 20, yPosition, {
-        fontSize: 12,
-        bold: true,
-        color: colors.primary,
-      })
-      yPosition += 5
-
-      const taxLabels: { [key: string]: string } = {
-        own_notice: "Avis d'imposition personnel",
-        attached_to_parents: "Rattaché au foyer fiscal des parents",
-        less_than_year: "Moins d'un an en France",
-        other: "Autre situation",
-      }
-
-      yPosition = addText(
-        `Situation : ${taxLabels[profile.tax_situation.type] || profile.tax_situation.type}`,
-        25,
-        yPosition,
-      )
-
-      if (profile.tax_situation.explanation) {
-        yPosition = addText(`Explication : ${profile.tax_situation.explanation}`, 25, yPosition, {
-          maxWidth: 160,
-          lineHeight: 4,
-        })
-      }
-      yPosition += 10
-    }
-
-    // Documents fournis avec comptage détaillé
-    checkPageBreak(30)
-    yPosition = addText("DOCUMENTS FOURNIS", 20, yPosition, {
-      fontSize: 12,
-      bold: true,
-      color: colors.primary,
+    synthese.forEach((item) => {
+      doc.text(item, pageWidth / 2, yPosition, { align: "center" })
+      yPosition += 12
     })
-    yPosition += 5
 
-    let totalDocuments = 0
+    yPosition += 20
 
-    // Documents d'identité
-    if (profile.identity_documents?.length || profile.identity_documents_detailed) {
-      const count =
-        profile.identity_documents?.length ||
-        (profile.identity_documents_detailed ? Object.keys(profile.identity_documents_detailed).length : 0)
-      if (count > 0) {
-        totalDocuments += count
-        yPosition = addText(`✓ Pièces d'identité (${count} document${count > 1 ? "s" : ""})`, 25, yPosition, {
-          color: colors.accent,
-        })
-      }
-    }
-
-    // Documents d'activité
-    if (profile.activity_documents?.length || profile.activity_documents_detailed) {
-      const count = profile.activity_documents?.length || (profile.activity_documents_detailed ? 1 : 0)
-      if (count > 0) {
-        totalDocuments += count
-        yPosition = addText(`✓ Justificatifs d'activité (${count} document${count > 1 ? "s" : ""})`, 25, yPosition, {
-          color: colors.accent,
-        })
-      }
-    }
-
-    // Documents de logement
-    if (profile.current_housing_documents) {
-      let housingDocsCount = 0
-      Object.entries(profile.current_housing_documents).forEach(([key, docs]: [string, any]) => {
-        if (Array.isArray(docs)) {
-          housingDocsCount += docs.length
-        } else if (typeof docs === "object" && docs !== null) {
-          housingDocsCount += Object.keys(docs).length
-        }
-      })
-      if (housingDocsCount > 0) {
-        totalDocuments += housingDocsCount
-        yPosition = addText(
-          `✓ Justificatifs de logement (${housingDocsCount} document${housingDocsCount > 1 ? "s" : ""})`,
-          25,
-          yPosition,
-          {
-            color: colors.accent,
-          },
-        )
-      }
-    }
-
-    // Documents fiscaux
-    if (profile.tax_situation?.documents?.length || profile.tax_situation?.documents_detailed) {
-      const count = profile.tax_situation?.documents?.length || (profile.tax_situation?.documents_detailed ? 1 : 0)
-      if (count > 0) {
-        totalDocuments += count
-        yPosition = addText(`✓ Avis d'imposition (${count} document${count > 1 ? "s" : ""})`, 25, yPosition, {
-          color: colors.accent,
-        })
-      }
-    }
-
-    // Documents de revenus (justificatifs d'aides, bulletins de salaire, etc.)
-    if (profile.income_sources) {
-      let incomeDocsCount = 0
-
-      // Compter tous les documents de revenus
-      if (profile.income_sources.work_income?.documents) {
-        incomeDocsCount += profile.income_sources.work_income.documents.length
-      }
-
-      if (profile.income_sources.social_aid) {
-        profile.income_sources.social_aid.forEach((aid: any) => {
-          if (aid.documents) incomeDocsCount += aid.documents.length
-        })
-      }
-
-      if (profile.income_sources.retirement_pension) {
-        profile.income_sources.retirement_pension.forEach((pension: any) => {
-          if (pension.documents) incomeDocsCount += pension.documents.length
-        })
-      }
-
-      if (profile.income_sources.rent_income) {
-        profile.income_sources.rent_income.forEach((rent: any) => {
-          if (rent.documents) incomeDocsCount += rent.documents.length
-        })
-      }
-
-      if (profile.income_sources.scholarship?.documents) {
-        incomeDocsCount += profile.income_sources.scholarship.documents.length
-      }
-
-      if (incomeDocsCount > 0) {
-        totalDocuments += incomeDocsCount
-        yPosition = addText(
-          `✓ Justificatifs de revenus (${incomeDocsCount} document${incomeDocsCount > 1 ? "s" : ""})`,
-          25,
-          yPosition,
-          {
-            color: colors.accent,
-          },
-        )
-      }
-    }
-
-    if (totalDocuments === 0) {
-      yPosition = addText("Aucun document fourni", 25, yPosition, {
-        color: [239, 68, 68], // Rouge
-      })
-    }
-
-    yPosition += 15
-    return yPosition
-  }
-
-  // Traitement du locataire principal
-  if (rentalFileData.main_tenant) {
-    yPosition = await processPersonProfile(rentalFileData.main_tenant, "LOCATAIRE PRINCIPAL")
-  }
-
-  // Traitement des colocataires/conjoints
-  if (rentalFileData.cotenants && rentalFileData.cotenants.length > 0) {
-    for (let i = 0; i < rentalFileData.cotenants.length; i++) {
-      const cotenant = rentalFileData.cotenants[i]
-      const title = rentalFileData.rental_situation === "couple" ? `CONJOINT(E) ${i + 1}` : `CO-LOCATAIRE ${i + 1}`
-      yPosition = await processPersonProfile(cotenant, title)
-    }
-  }
-
-  // Traitement des garants
-  if (rentalFileData.guarantors && rentalFileData.guarantors.length > 0) {
-    for (let i = 0; i < rentalFileData.guarantors.length; i++) {
-      const guarantor = rentalFileData.guarantors[i]
-
-      if (guarantor.type === "physical" && guarantor.personal_info) {
-        yPosition = await processPersonProfile(guarantor.personal_info, `GARANT ${i + 1}`, true)
-      } else if (guarantor.type === "organism") {
-        checkPageBreak(30)
-        doc.setFillColor(...colors.secondary)
-        doc.rect(15, yPosition - 5, 180, 12, "F")
-
-        yPosition = addText(`GARANT ${i + 1} - ORGANISME`, 20, yPosition + 3, {
-          fontSize: 14,
-          bold: true,
-          color: [255, 255, 255],
-        })
-        yPosition += 15
-
-        yPosition = addText(`Type d'organisme : ${guarantor.organism_type || "Non spécifié"}`, 25, yPosition)
-        if (guarantor.organism_name) {
-          yPosition = addText(`Nom : ${guarantor.organism_name}`, 25, yPosition)
-        }
-        yPosition += 15
-      } else if (guarantor.type === "moral_person") {
-        checkPageBreak(30)
-        doc.setFillColor(...colors.secondary)
-        doc.rect(15, yPosition - 5, 180, 12, "F")
-
-        yPosition = addText(`GARANT ${i + 1} - PERSONNE MORALE`, 20, yPosition + 3, {
-          fontSize: 14,
-          bold: true,
-          color: [255, 255, 255],
-        })
-        yPosition += 15
-
-        if (guarantor.company_name) {
-          yPosition = addText(`Entreprise : ${guarantor.company_name}`, 25, yPosition)
-        }
-        if (guarantor.kbis_documents?.length) {
-          yPosition = addText(
-            `✓ Documents Kbis (${guarantor.kbis_documents.length} document${guarantor.kbis_documents.length > 1 ? "s" : ""})`,
-            25,
-            yPosition,
-            {
-              color: colors.accent,
-            },
-          )
-        }
-        yPosition += 15
-      }
-    }
-  }
-
-  // Synthèse finale moderne
-  checkPageBreak(80)
-  doc.setFillColor(...colors.primary)
-  doc.rect(15, yPosition - 5, 180, 12, "F")
-
-  yPosition = addText("SYNTHÈSE DU DOSSIER", 20, yPosition + 3, {
-    fontSize: 16,
-    bold: true,
-    color: [255, 255, 255],
-  })
-  yPosition += 20
-
-  // Calcul des totaux
-  const allProfiles = [rentalFileData.main_tenant, ...(rentalFileData.cotenants || [])]
-  let totalHouseholdIncome = 0
-  let totalPersons = 0
-  let totalDocuments = 0
-
-  allProfiles.forEach((profile) => {
-    if (profile) {
-      totalPersons++
-      totalHouseholdIncome += calculateTotalIncome(profile)
-
-      // Compter tous les documents
-      if (profile.identity_documents?.length) totalDocuments += profile.identity_documents.length
-      if (profile.activity_documents?.length) totalDocuments += profile.activity_documents.length
-      if (profile.tax_situation?.documents?.length) totalDocuments += profile.tax_situation.documents.length
-      if (profile.current_housing_documents) {
-        Object.values(profile.current_housing_documents).forEach((docs: any) => {
-          if (Array.isArray(docs)) totalDocuments += docs.length
-          else if (typeof docs === "object" && docs !== null) totalDocuments += Object.keys(docs).length
-        })
-      }
-    }
-  })
-
-  // Ajouter les documents des garants
-  if (rentalFileData.guarantors) {
-    rentalFileData.guarantors.forEach((guarantor) => {
-      if (guarantor.type === "physical" && guarantor.personal_info) {
-        totalDocuments += calculateTotalIncome(guarantor.personal_info) // Réutiliser la fonction pour compter
-      }
-      if (guarantor.kbis_documents?.length) {
-        totalDocuments += guarantor.kbis_documents.length
-      }
-    })
-  }
-
-  // Affichage de la synthèse avec design moderne
-  doc.setFillColor(...colors.lightGray)
-  doc.rect(15, yPosition - 5, 180, 35, "F")
-
-  yPosition = addText(`Nombre de personnes : ${totalPersons}`, 20, yPosition + 5, {
-    fontSize: 11,
-    bold: true,
-  })
-  yPosition = addText(`Revenus totaux du foyer : ${formatAmount(totalHouseholdIncome)}`, 20, yPosition, {
-    fontSize: 11,
-    bold: true,
-    color: colors.accent,
-  })
-  yPosition = addText(`Nombre total de documents : ${totalDocuments}`, 20, yPosition, {
-    fontSize: 11,
-    bold: true,
-  })
-  yPosition = addText(`Nombre de garants : ${rentalFileData.guarantors?.length || 0}`, 20, yPosition, {
-    fontSize: 11,
-    bold: true,
-  })
-
-  // Pied de page moderne
-  const pageCount = doc.getNumberOfPages()
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i)
-    doc.setFontSize(8)
-    doc.setTextColor(128, 128, 128)
-    doc.text(`Page ${i} sur ${pageCount}`, 105, 290, { align: "center" })
+    // Date de génération
+    doc.setTextColor(grayColor[0], grayColor[1], grayColor[2])
+    doc.setFontSize(10)
     doc.text(
       `Document généré le ${new Date().toLocaleDateString("fr-FR")} à ${new Date().toLocaleTimeString("fr-FR")}`,
-      105,
-      295,
-      { align: "center" },
+      pageWidth / 2,
+      yPosition,
+      {
+        align: "center",
+      },
     )
-  }
 
-  return doc.output("blob")
-}
+    // PAGE LOCATAIRE PRINCIPAL
+    doc.addPage()
+    yPosition = await addPageHeader("• LOCATAIRE PRINCIPAL")
 
-// Fonction utilitaire pour télécharger le PDF - IDENTIQUE À L'ORIGINAL
-export function downloadPDF(blob: Blob, filename = "dossier-location.pdf") {
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement("a")
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
-}
+    if (mainTenant) {
+      // Informations personnelles
+      yPosition = addSectionWithIcon("INFORMATIONS PERSONNELLES", yPosition, "•")
 
-// Fonction pour générer et télécharger le PDF - IDENTIQUE À L'ORIGINAL
-export async function generateAndDownloadRentalFilePDF(rentalFileData: RentalFileData, filename?: string) {
-  try {
-    const pdfBlob = await generateRentalFilePDF(rentalFileData)
-    const finalFilename = filename || `dossier-location-${rentalFileData.id}.pdf`
-    downloadPDF(pdfBlob, finalFilename)
-    return true
+      const colWidth = (pageWidth - 2 * margin - 20) / 2
+      const col2X = margin + colWidth + 20
+
+      let col1Y = yPosition
+      let col2Y = yPosition
+
+      col1Y = await addProperty("Nom", mainTenant.last_name || "", margin, col1Y, { background: true })
+      col2Y = await addProperty("Prénom", mainTenant.first_name || "", col2X, col2Y)
+
+      col1Y = await addProperty("Date de naissance", mainTenant.birth_date || "", margin, col1Y)
+      col2Y = await addProperty("Lieu de naissance", mainTenant.birth_place || "", col2X, col2Y, { background: true })
+
+      col1Y = await addProperty("Nationalité", mainTenant.nationality || "", margin, col1Y, { background: true })
+      col2Y = await addProperty("Situation logement", mainTenant.current_housing_situation || "", col2X, col2Y)
+
+      yPosition = Math.max(col1Y, col2Y) + 10
+
+      // Situation professionnelle
+      yPosition = addSectionWithIcon("SITUATION PROFESSIONNELLE", yPosition, "•")
+
+      const activity = rentalFile.MAIN_ACTIVITIES?.find((a: any) => a.value === mainTenant.main_activity)
+      yPosition = await addProperty(
+        "Activité principale",
+        activity?.label || mainTenant.main_activity || "",
+        margin,
+        yPosition,
+        { background: true, bold: true },
+      )
+
+      if (mainTenant.income_sources?.work_income?.type) {
+        yPosition = await addProperty("Type de revenus", mainTenant.income_sources.work_income.type, margin, yPosition)
+      }
+
+      yPosition += 10
+
+      // Revenus (section séparée avec fond moderne)
+      yPosition = addSectionWithIcon("REVENUS", yPosition, "•")
+
+      if (mainTenant.income_sources?.work_income?.amount) {
+        yPosition = await addAmount(
+          "Revenus du travail (mensuel)",
+          mainTenant.income_sources.work_income.amount,
+          margin,
+          yPosition,
+        )
+      }
+
+      // Aides sociales - INCLUSES MAINTENANT
+      if (mainTenant.income_sources?.social_aid && mainTenant.income_sources.social_aid.length > 0) {
+        for (let index = 0; index < mainTenant.income_sources.social_aid.length; index++) {
+          const aid = mainTenant.income_sources.social_aid[index]
+          if (aid.amount) {
+            const aidLabels: { [key: string]: string } = {
+              caf_msa: "Aide CAF/MSA",
+              france_travail: "Aide France Travail",
+              apl_aah: "APL/AAH",
+              autre: "Autre aide",
+            }
+            yPosition = await addAmount(
+              aidLabels[aid.type] || `Aide sociale ${index + 1}`,
+              aid.amount,
+              margin,
+              yPosition,
+            )
+          }
+        }
+      }
+
+      // Pensions/retraites - INCLUSES MAINTENANT
+      if (mainTenant.income_sources?.retirement_pension && mainTenant.income_sources.retirement_pension.length > 0) {
+        for (let index = 0; index < mainTenant.income_sources.retirement_pension.length; index++) {
+          const pension = mainTenant.income_sources.retirement_pension[index]
+          if (pension.amount) {
+            const pensionLabels: { [key: string]: string } = {
+              retraite: "Retraite",
+              pension_invalidite: "Pension d'invalidité",
+              pension_alimentaire: "Pension alimentaire",
+            }
+            yPosition = await addAmount(
+              pensionLabels[pension.type] || `Pension ${index + 1}`,
+              pension.amount,
+              margin,
+              yPosition,
+            )
+          }
+        }
+      }
+
+      // Revenus locatifs/rentes - INCLUS MAINTENANT
+      if (mainTenant.income_sources?.rent_income && mainTenant.income_sources.rent_income.length > 0) {
+        for (let index = 0; index < mainTenant.income_sources.rent_income.length; index++) {
+          const rent = mainTenant.income_sources.rent_income[index]
+          if (rent.amount) {
+            const rentLabels: { [key: string]: string } = {
+              revenus_locatifs: "Revenus locatifs",
+              rente_viagere: "Rente viagère",
+              autre_rente: "Autre rente",
+            }
+            yPosition = await addAmount(
+              rentLabels[rent.type] || `Revenu locatif ${index + 1}`,
+              rent.amount,
+              margin,
+              yPosition,
+            )
+          }
+        }
+      }
+
+      if (mainTenant.income_sources?.scholarship?.amount) {
+        yPosition = await addAmount("Bourse d'études", mainTenant.income_sources.scholarship.amount, margin, yPosition)
+      }
+
+      // Total des revenus du locataire principal
+      const mainTenantIncome = calculateTotalIncomeForPerson(mainTenant.income_sources)
+      if (mainTenantIncome > 0) {
+        yPosition += 5
+        yPosition = await addAmount("TOTAL REVENUS", mainTenantIncome, margin, yPosition)
+      }
+    }
+
+    // PAGES COLOCATAIRES/CONJOINT (même structure)
+    if (rentalFile.cotenants && rentalFile.cotenants.length > 0) {
+      for (let index = 0; index < rentalFile.cotenants.length; index++) {
+        const cotenant = rentalFile.cotenants[index]
+        const cotenantLabel = rentalFile.rental_situation === "couple" ? "CONJOINT(E)" : `COLOCATAIRE ${index + 1}`
+
+        doc.addPage()
+        yPosition = await addPageHeader(`• ${cotenantLabel}`)
+
+        yPosition = addSectionWithIcon("INFORMATIONS PERSONNELLES", yPosition, "•")
+
+        const colWidth = (pageWidth - 2 * margin - 20) / 2
+        const col2X = margin + colWidth + 20
+
+        let col1Y = yPosition
+        let col2Y = yPosition
+
+        col1Y = await addProperty("Nom", cotenant.last_name || "", margin, col1Y, { background: true })
+        col2Y = await addProperty("Prénom", cotenant.first_name || "", col2X, col2Y)
+
+        if (cotenant.birth_date) {
+          col1Y = await addProperty("Date de naissance", cotenant.birth_date, margin, col1Y)
+        }
+
+        if (cotenant.nationality) {
+          col2Y = await addProperty("Nationalité", cotenant.nationality, col2X, col2Y, { background: true })
+        }
+
+        yPosition = Math.max(col1Y, col2Y) + 10
+
+        // Situation professionnelle du colocataire
+        if (cotenant.main_activity) {
+          yPosition = addSectionWithIcon("SITUATION PROFESSIONNELLE", yPosition, "•")
+          const cotenantActivity = rentalFile.MAIN_ACTIVITIES?.find((a: any) => a.value === cotenant.main_activity)
+          yPosition = await addProperty(
+            "Activité principale",
+            cotenantActivity?.label || cotenant.main_activity,
+            margin,
+            yPosition,
+            { background: true, bold: true },
+          )
+        }
+
+        // Revenus du colocataire - TOUS INCLUS
+        if (cotenant.income_sources) {
+          yPosition += 10
+          yPosition = addSectionWithIcon("REVENUS", yPosition, "•")
+
+          if (cotenant.income_sources.work_income?.amount) {
+            yPosition = await addAmount(
+              "Revenus du travail (mensuel)",
+              cotenant.income_sources.work_income.amount,
+              margin,
+              yPosition,
+            )
+          }
+
+          // Aides sociales du colocataire
+          if (cotenant.income_sources.social_aid && cotenant.income_sources.social_aid.length > 0) {
+            for (let aidIndex = 0; aidIndex < cotenant.income_sources.social_aid.length; aidIndex++) {
+              const aid = cotenant.income_sources.social_aid[aidIndex]
+              if (aid.amount) {
+                const aidLabels: { [key: string]: string } = {
+                  caf_msa: "Aide CAF/MSA",
+                  france_travail: "Aide France Travail",
+                  apl_aah: "APL/AAH",
+                  autre: "Autre aide",
+                }
+                yPosition = await addAmount(
+                  aidLabels[aid.type] || `Aide sociale ${aidIndex + 1}`,
+                  aid.amount,
+                  margin,
+                  yPosition,
+                )
+              }
+            }
+          }
+
+          // Autres revenus du colocataire
+          if (cotenant.income_sources.retirement_pension && cotenant.income_sources.retirement_pension.length > 0) {
+            for (
+              let pensionIndex = 0;
+              pensionIndex < cotenant.income_sources.retirement_pension.length;
+              pensionIndex++
+            ) {
+              const pension = cotenant.income_sources.retirement_pension[pensionIndex]
+              if (pension.amount) {
+                yPosition = await addAmount(`Pension ${pensionIndex + 1}`, pension.amount, margin, yPosition)
+              }
+            }
+          }
+
+          if (cotenant.income_sources.scholarship?.amount) {
+            yPosition = await addAmount(
+              "Bourse d'études",
+              cotenant.income_sources.scholarship.amount,
+              margin,
+              yPosition,
+            )
+          }
+
+          // Total des revenus du colocataire
+          const cotenantIncome = calculateTotalIncomeForPerson(cotenant.income_sources)
+          if (cotenantIncome > 0) {
+            yPosition += 5
+            yPosition = await addAmount("TOTAL REVENUS", cotenantIncome, margin, yPosition)
+          }
+        }
+      }
+    }
+
+    // PAGES GARANTS - TOUS LES DOCUMENTS INCLUS
+    if (rentalFile.guarantors && rentalFile.guarantors.length > 0) {
+      for (let index = 0; index < rentalFile.guarantors.length; index++) {
+        const guarantor = rentalFile.guarantors[index]
+        doc.addPage()
+        yPosition = await addPageHeader(`• GARANT ${index + 1}`)
+
+        yPosition = addSectionWithIcon("TYPE DE GARANT", yPosition, "•")
+        let guarantorTypeLabel = "Personne physique"
+        if (guarantor.type === "moral_person") guarantorTypeLabel = "Personne morale"
+        else if (guarantor.type === "organism") guarantorTypeLabel = "Organisme de cautionnement"
+
+        yPosition = await addProperty("Type", guarantorTypeLabel, margin, yPosition, { bold: true, background: true })
+
+        if (guarantor.personal_info) {
+          const guarantorInfo = guarantor.personal_info
+
+          yPosition += 10
+          yPosition = addSectionWithIcon("INFORMATIONS PERSONNELLES", yPosition, "•")
+
+          const colWidth = (pageWidth - 2 * margin - 20) / 2
+          const col2X = margin + colWidth + 20
+
+          let col1Y = yPosition
+          let col2Y = yPosition
+
+          col1Y = await addProperty("Nom", guarantorInfo.last_name || "", margin, col1Y, { background: true })
+          col2Y = await addProperty("Prénom", guarantorInfo.first_name || "", col2X, col2Y)
+
+          if (guarantorInfo.birth_date) {
+            col1Y = await addProperty("Date de naissance", guarantorInfo.birth_date, margin, col1Y)
+          }
+
+          if (guarantorInfo.nationality) {
+            col2Y = await addProperty("Nationalité", guarantorInfo.nationality, col2X, col2Y, { background: true })
+          }
+
+          if (guarantorInfo.current_housing_situation) {
+            col1Y = await addProperty("Situation logement", guarantorInfo.current_housing_situation, margin, col1Y, {
+              background: true,
+            })
+          }
+
+          yPosition = Math.max(col1Y, col2Y) + 10
+
+          // Situation professionnelle du garant
+          if (guarantorInfo.main_activity) {
+            yPosition = addSectionWithIcon("SITUATION PROFESSIONNELLE", yPosition, "•")
+            const guarantorActivity = rentalFile.MAIN_ACTIVITIES?.find(
+              (a: any) => a.value === guarantorInfo.main_activity,
+            )
+            yPosition = await addProperty(
+              "Activité principale",
+              guarantorActivity?.label || guarantorInfo.main_activity,
+              margin,
+              yPosition,
+              { background: true, bold: true },
+            )
+          }
+
+          // Revenus du garant - TOUS INCLUS
+          if (guarantorInfo.income_sources) {
+            yPosition += 10
+            yPosition = addSectionWithIcon("REVENUS", yPosition, "•")
+
+            if (guarantorInfo.income_sources.work_income?.amount) {
+              yPosition = await addAmount(
+                "Revenus du travail (mensuel)",
+                guarantorInfo.income_sources.work_income.amount,
+                margin,
+                yPosition,
+              )
+            }
+
+            // Aides sociales du garant
+            if (guarantorInfo.income_sources.social_aid && guarantorInfo.income_sources.social_aid.length > 0) {
+              for (let aidIndex = 0; aidIndex < guarantorInfo.income_sources.social_aid.length; aidIndex++) {
+                const aid = guarantorInfo.income_sources.social_aid[aidIndex]
+                if (aid.amount) {
+                  yPosition = await addAmount(`Aide sociale ${aidIndex + 1}`, aid.amount, margin, yPosition)
+                }
+              }
+            }
+
+            // Autres revenus du garant
+            if (
+              guarantorInfo.income_sources.retirement_pension &&
+              guarantorInfo.income_sources.retirement_pension.length > 0
+            ) {
+              for (
+                let pensionIndex = 0;
+                pensionIndex < guarantorInfo.income_sources.retirement_pension.length;
+                pensionIndex++
+              ) {
+                const pension = guarantorInfo.income_sources.retirement_pension[pensionIndex]
+                if (pension.amount) {
+                  yPosition = await addAmount(`Pension ${pensionIndex + 1}`, pension.amount, margin, yPosition)
+                }
+              }
+            }
+
+            // Total des revenus du garant
+            const guarantorIncome = calculateTotalIncomeForPerson(guarantorInfo.income_sources)
+            if (guarantorIncome > 0) {
+              yPosition += 5
+              yPosition = await addAmount("TOTAL REVENUS", guarantorIncome, margin, yPosition)
+            }
+          }
+        } else if (guarantor.type === "organism") {
+          // Informations organisme (Visale, etc.)
+          yPosition += 10
+          yPosition = addSectionWithIcon("INFORMATIONS ORGANISME", yPosition, "•")
+
+          if (guarantor.organism_name) {
+            yPosition = await addProperty("Nom de l'organisme", guarantor.organism_name, margin, yPosition, {
+              background: true,
+              bold: true,
+            })
+          }
+
+          if (guarantor.guarantee_number) {
+            yPosition = await addProperty("Numéro de garantie", guarantor.guarantee_number, margin, yPosition)
+          }
+        } else if (guarantor.type === "moral_person") {
+          // Informations personne morale
+          yPosition += 10
+          yPosition = addSectionWithIcon("INFORMATIONS SOCIÉTÉ", yPosition, "•")
+
+          if (guarantor.company_name) {
+            yPosition = await addProperty("Nom de la société", guarantor.company_name, margin, yPosition, {
+              background: true,
+              bold: true,
+            })
+          }
+
+          if (guarantor.siret) {
+            yPosition = await addProperty("SIRET", guarantor.siret, margin, yPosition)
+          }
+
+          if (guarantor.legal_representative) {
+            yPosition = await addProperty("Représentant légal", guarantor.legal_representative, margin, yPosition, {
+              background: true,
+            })
+          }
+        }
+      }
+    }
+
+    // COLLECTE COMPLÈTE DES DOCUMENTS - TOUS TYPES INCLUS
+    const documentsToProcess: any[] = []
+
+    // Documents du locataire principal
+    if (mainTenant) {
+      // Documents d'identité
+      if (mainTenant.identity_documents && Array.isArray(mainTenant.identity_documents)) {
+        mainTenant.identity_documents.forEach((doc: string, index: number) => {
+          documentsToProcess.push({
+            url: doc,
+            name: `Locataire principal - Pièce d'identité ${index + 1}`,
+            category: "identity",
+          })
+        })
+      }
+
+      // Documents d'activité
+      if (mainTenant.activity_documents && Array.isArray(mainTenant.activity_documents)) {
+        mainTenant.activity_documents.forEach((doc: string, index: number) => {
+          documentsToProcess.push({
+            url: doc,
+            name: `Locataire principal - Justificatif d'activité ${index + 1}`,
+            category: "activity",
+          })
+        })
+      }
+
+      // Documents de revenus - TOUS TYPES
+      if (
+        mainTenant.income_sources?.work_income?.documents &&
+        Array.isArray(mainTenant.income_sources.work_income.documents)
+      ) {
+        mainTenant.income_sources.work_income.documents.forEach((doc: string, index: number) => {
+          documentsToProcess.push({
+            url: doc,
+            name: `Locataire principal - Justificatif de revenu ${index + 1}`,
+            category: "income",
+          })
+        })
+      }
+
+      // Documents d'aides sociales - INCLUS MAINTENANT
+      if (mainTenant.income_sources?.social_aid && Array.isArray(mainTenant.income_sources.social_aid)) {
+        mainTenant.income_sources.social_aid.forEach((aid: any, aidIndex: number) => {
+          if (aid.documents && Array.isArray(aid.documents)) {
+            aid.documents.forEach((doc: string, docIndex: number) => {
+              documentsToProcess.push({
+                url: doc,
+                name: `Locataire principal - Justificatif aide sociale ${aidIndex + 1}-${docIndex + 1}`,
+                category: "social_aid",
+              })
+            })
+          }
+        })
+      }
+
+      // Documents de pensions - INCLUS MAINTENANT
+      if (
+        mainTenant.income_sources?.retirement_pension &&
+        Array.isArray(mainTenant.income_sources.retirement_pension)
+      ) {
+        mainTenant.income_sources.retirement_pension.forEach((pension: any, pensionIndex: number) => {
+          if (pension.documents && Array.isArray(pension.documents)) {
+            pension.documents.forEach((doc: string, docIndex: number) => {
+              documentsToProcess.push({
+                url: doc,
+                name: `Locataire principal - Justificatif pension ${pensionIndex + 1}-${docIndex + 1}`,
+                category: "pension",
+              })
+            })
+          }
+        })
+      }
+
+      // Documents fiscaux
+      if (mainTenant.tax_situation?.documents && Array.isArray(mainTenant.tax_situation.documents)) {
+        mainTenant.tax_situation.documents.forEach((doc: string, index: number) => {
+          documentsToProcess.push({
+            url: doc,
+            name: `Locataire principal - Document fiscal ${index + 1}`,
+            category: "tax",
+          })
+        })
+      }
+
+      // Documents de logement - TOUS TYPES
+      if (
+        mainTenant.current_housing_documents?.quittances_loyer &&
+        Array.isArray(mainTenant.current_housing_documents.quittances_loyer)
+      ) {
+        mainTenant.current_housing_documents.quittances_loyer.forEach((doc: string, index: number) => {
+          documentsToProcess.push({
+            url: doc,
+            name: `Locataire principal - Quittance de loyer ${index + 1}`,
+            category: "housing",
+          })
+        })
+      }
+
+      if (
+        mainTenant.current_housing_documents?.attestation_hebergement &&
+        Array.isArray(mainTenant.current_housing_documents.attestation_hebergement)
+      ) {
+        mainTenant.current_housing_documents.attestation_hebergement.forEach((doc: string, index: number) => {
+          documentsToProcess.push({
+            url: doc,
+            name: `Locataire principal - Attestation d'hébergement ${index + 1}`,
+            category: "housing",
+          })
+        })
+      }
+
+      if (
+        mainTenant.current_housing_documents?.avis_taxe_fonciere &&
+        Array.isArray(mainTenant.current_housing_documents.avis_taxe_fonciere)
+      ) {
+        mainTenant.current_housing_documents.avis_taxe_fonciere.forEach((doc: string, index: number) => {
+          documentsToProcess.push({
+            url: doc,
+            name: `Locataire principal - Taxe foncière ${index + 1}`,
+            category: "housing",
+          })
+        })
+      }
+    }
+
+    // Documents des colocataires/conjoint - TOUS INCLUS
+    if (rentalFile.cotenants && Array.isArray(rentalFile.cotenants)) {
+      rentalFile.cotenants.forEach((cotenant: any, cIndex: number) => {
+        const cotenantLabel = rentalFile.rental_situation === "couple" ? "Conjoint(e)" : `Colocataire ${cIndex + 1}`
+
+        // Tous les types de documents pour les colocataires
+        if (cotenant.identity_documents && Array.isArray(cotenant.identity_documents)) {
+          cotenant.identity_documents.forEach((doc: string, index: number) => {
+            documentsToProcess.push({
+              url: doc,
+              name: `${cotenantLabel} - Pièce d'identité ${index + 1}`,
+              category: "cotenant_identity",
+            })
+          })
+        }
+
+        if (cotenant.activity_documents && Array.isArray(cotenant.activity_documents)) {
+          cotenant.activity_documents.forEach((doc: string, index: number) => {
+            documentsToProcess.push({
+              url: doc,
+              name: `${cotenantLabel} - Justificatif d'activité ${index + 1}`,
+              category: "cotenant_activity",
+            })
+          })
+        }
+
+        // Documents de revenus des colocataires
+        if (
+          cotenant.income_sources?.work_income?.documents &&
+          Array.isArray(cotenant.income_sources.work_income.documents)
+        ) {
+          cotenant.income_sources.work_income.documents.forEach((doc: string, index: number) => {
+            documentsToProcess.push({
+              url: doc,
+              name: `${cotenantLabel} - Justificatif de revenu ${index + 1}`,
+              category: "cotenant_income",
+            })
+          })
+        }
+
+        // Aides sociales des colocataires
+        if (cotenant.income_sources?.social_aid && Array.isArray(cotenant.income_sources.social_aid)) {
+          cotenant.income_sources.social_aid.forEach((aid: any, aidIndex: number) => {
+            if (aid.documents && Array.isArray(aid.documents)) {
+              aid.documents.forEach((doc: string, docIndex: number) => {
+                documentsToProcess.push({
+                  url: doc,
+                  name: `${cotenantLabel} - Justificatif aide sociale ${aidIndex + 1}-${docIndex + 1}`,
+                  category: "cotenant_social_aid",
+                })
+              })
+            }
+          })
+        }
+      })
+    }
+
+    // Documents des garants - TOUS TYPES INCLUS
+    if (rentalFile.guarantors && Array.isArray(rentalFile.guarantors)) {
+      rentalFile.guarantors.forEach((guarantor: any, gIndex: number) => {
+        if (guarantor.type === "physical" && guarantor.personal_info) {
+          // Tous les documents des garants physiques
+          if (guarantor.personal_info.identity_documents && Array.isArray(guarantor.personal_info.identity_documents)) {
+            guarantor.personal_info.identity_documents.forEach((doc: string, index: number) => {
+              documentsToProcess.push({
+                url: doc,
+                name: `Garant ${gIndex + 1} - Pièce d'identité ${index + 1}`,
+                category: "guarantor_identity",
+              })
+            })
+          }
+
+          if (guarantor.personal_info.activity_documents && Array.isArray(guarantor.personal_info.activity_documents)) {
+            guarantor.personal_info.activity_documents.forEach((doc: string, index: number) => {
+              documentsToProcess.push({
+                url: doc,
+                name: `Garant ${gIndex + 1} - Justificatif d'activité ${index + 1}`,
+                category: "guarantor_activity",
+              })
+            })
+          }
+
+          // Documents de revenus des garants
+          if (
+            guarantor.personal_info.income_sources?.work_income?.documents &&
+            Array.isArray(guarantor.personal_info.income_sources.work_income.documents)
+          ) {
+            guarantor.personal_info.income_sources.work_income.documents.forEach((doc: string, index: number) => {
+              documentsToProcess.push({
+                url: doc,
+                name: `Garant ${gIndex + 1} - Justificatif de revenu ${index + 1}`,
+                category: "guarantor_income",
+              })
+            })
+          }
+
+          // Quittances des garants - INCLUSES MAINTENANT
+          if (
+            guarantor.personal_info.current_housing_documents?.quittances_loyer &&
+            Array.isArray(guarantor.personal_info.current_housing_documents.quittances_loyer)
+          ) {
+            guarantor.personal_info.current_housing_documents.quittances_loyer.forEach((doc: string, index: number) => {
+              documentsToProcess.push({
+                url: doc,
+                name: `Garant ${gIndex + 1} - Quittance de loyer ${index + 1}`,
+                category: "guarantor_housing",
+              })
+            })
+          }
+
+          // Documents fiscaux des garants
+          if (
+            guarantor.personal_info.tax_situation?.documents &&
+            Array.isArray(guarantor.personal_info.tax_situation.documents)
+          ) {
+            guarantor.personal_info.tax_situation.documents.forEach((doc: string, index: number) => {
+              documentsToProcess.push({
+                url: doc,
+                name: `Garant ${gIndex + 1} - Document fiscal ${index + 1}`,
+                category: "guarantor_tax",
+              })
+            })
+          }
+        } else if (guarantor.type === "organism") {
+          // Documents Visale ou autres organismes
+          if (guarantor.organism_documents && Array.isArray(guarantor.organism_documents)) {
+            guarantor.organism_documents.forEach((doc: string, index: number) => {
+              documentsToProcess.push({
+                url: doc,
+                name: `Garant ${gIndex + 1} - Document organisme ${index + 1}`,
+                category: "guarantor_organism",
+              })
+            })
+          }
+        } else if (guarantor.type === "moral_person") {
+          // Documents Kbis et autres - INCLUS MAINTENANT
+          if (guarantor.kbis_documents && Array.isArray(guarantor.kbis_documents)) {
+            guarantor.kbis_documents.forEach((doc: string, index: number) => {
+              documentsToProcess.push({
+                url: doc,
+                name: `Garant ${gIndex + 1} - Document Kbis ${index + 1}`,
+                category: "guarantor_kbis",
+              })
+            })
+          }
+        }
+      })
+    }
+
+    console.log(`📋 ${documentsToProcess.length} documents à traiter`)
+
+    // Traiter tous les documents
+    for (const document of documentsToProcess) {
+      await processDocument(document.url, document.name, document.category)
+    }
+
+    // PAGE ANNEXES MODERNE
+    if (pdfsToMerge.length > 0 || imagesToAdd.length > 0) {
+      doc.addPage()
+      yPosition = await addPageHeader("• ANNEXES - PIÈCES JUSTIFICATIVES")
+
+      yPosition = addSectionWithIcon("LISTE DES DOCUMENTS INCLUS", yPosition, "•")
+
+      doc.setTextColor(0, 0, 0)
+      doc.setFontSize(11)
+      doc.setFont("helvetica", "normal")
+      doc.text("Les pièces justificatives suivantes sont intégrées dans ce document :", margin, yPosition)
+
+      yPosition += 15
+
+      // Organiser les documents par catégorie
+      const documentsByCategory: any = {}
+
+      pdfsToMerge.forEach((pdf) => {
+        if (!documentsByCategory[pdf.category]) documentsByCategory[pdf.category] = []
+        documentsByCategory[pdf.category].push({ name: pdf.name, type: "PDF", pages: pdf.pageCount })
+      })
+
+      imagesToAdd.forEach((img) => {
+        if (!documentsByCategory[img.category]) documentsByCategory[img.category] = []
+        documentsByCategory[img.category].push({ name: img.name, type: "Image", pages: 1 })
+      })
+
+      // Afficher par catégorie avec design moderne
+      const categoryLabels: any = {
+        identity: "• PIÈCES D'IDENTITÉ",
+        activity: "• JUSTIFICATIFS D'ACTIVITÉ",
+        income: "• JUSTIFICATIFS DE REVENUS",
+        social_aid: "• JUSTIFICATIFS D'AIDES SOCIALES",
+        pension: "• JUSTIFICATIFS DE PENSIONS",
+        tax: "• DOCUMENTS FISCAUX",
+        housing: "• JUSTIFICATIFS DE LOGEMENT",
+        cotenant_identity: "• PIÈCES D'IDENTITÉ (COLOCATAIRES)",
+        cotenant_activity: "• JUSTIFICATIFS D'ACTIVITÉ (COLOCATAIRES)",
+        cotenant_income: "• JUSTIFICATIFS DE REVENUS (COLOCATAIRES)",
+        cotenant_social_aid: "• JUSTIFICATIFS D'AIDES (COLOCATAIRES)",
+        guarantor_identity: "• PIÈCES D'IDENTITÉ (GARANTS)",
+        guarantor_activity: "• JUSTIFICATIFS D'ACTIVITÉ (GARANTS)",
+        guarantor_income: "• JUSTIFICATIFS DE REVENUS (GARANTS)",
+        guarantor_housing: "• QUITTANCES DE LOYER (GARANTS)",
+        guarantor_tax: "• DOCUMENTS FISCAUX (GARANTS)",
+        guarantor_organism: "• DOCUMENTS ORGANISME (GARANTS)",
+        guarantor_kbis: "• DOCUMENTS KBIS (GARANTS)",
+      }
+
+      let docCount = 1
+      Object.keys(documentsByCategory).forEach((category) => {
+        const categoryName = categoryLabels[category] || category.replace(/_/g, " ").toUpperCase()
+
+        // Titre de catégorie moderne
+        doc.setFontSize(10)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2])
+        doc.text(categoryName, margin, yPosition)
+        yPosition += 10
+
+        // Documents de cette catégorie
+        documentsByCategory[category].forEach((docItem: any) => {
+          doc.setFontSize(9)
+          doc.setFont("helvetica", "normal")
+          doc.setTextColor(0, 0, 0)
+          doc.text(
+            `   ${docCount}. ${docItem.name} (${docItem.type} - ${docItem.pages} page${docItem.pages > 1 ? "s" : ""})`,
+            margin,
+            yPosition,
+          )
+          yPosition += 8
+          docCount++
+        })
+
+        yPosition += 5
+      })
+
+      if (docCount === 1) {
+        doc.setTextColor(grayColor[0], grayColor[1], grayColor[2])
+        doc.text("Aucune pièce justificative fournie.", margin, yPosition)
+      }
+    }
+
+    // MERGE FINAL AVEC TÉLÉCHARGEMENT CORRECT
+    console.log(`🔄 Préparation du PDF final avec ${pdfsToMerge.length} PDF(s) et ${imagesToAdd.length} image(s)...`)
+
+    try {
+      // Convertir le PDF jsPDF en ArrayBuffer
+      const jsPdfOutput = doc.output("arraybuffer")
+      const mainPdfDoc = await PDFDocument.load(jsPdfOutput)
+
+      // Ajouter les images avec en-têtes modernes
+      for (const imageItem of imagesToAdd) {
+        try {
+          console.log(`🖼️ Ajout de l'image: ${imageItem.name}`)
+
+          const imagePage = mainPdfDoc.addPage()
+          const { width, height } = imagePage.getSize()
+
+          // En-tête moderne pour l'image
+          imagePage.drawRectangle({
+            x: 0,
+            y: height - 40,
+            width: width,
+            height: 40,
+            color: { r: primaryColor[0] / 255, g: primaryColor[1] / 255, b: primaryColor[2] / 255 },
+          })
+
+          imagePage.drawText(imageItem.name, {
+            x: 20,
+            y: height - 25,
+            size: 12,
+            color: { r: 1, g: 1, b: 1 },
+          })
+
+          // Traiter l'image
+          const base64Data = imageItem.data.split(",")[1]
+          const imageBytes = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0))
+
+          let pdfImage
+          if (imageItem.data.includes("image/jpeg") || imageItem.data.includes("image/jpg")) {
+            pdfImage = await mainPdfDoc.embedJpg(imageBytes)
+          } else {
+            pdfImage = await mainPdfDoc.embedPng(imageBytes)
+          }
+
+          // Calculer les dimensions avec marges
+          const imgWidth = pdfImage.width
+          const imgHeight = pdfImage.height
+          const availableWidth = width - 40
+          const availableHeight = height - 80
+
+          let finalWidth = availableWidth
+          let finalHeight = (imgHeight * availableWidth) / imgWidth
+
+          if (finalHeight > availableHeight) {
+            finalHeight = availableHeight
+            finalWidth = (imgWidth * availableHeight) / imgHeight
+          }
+
+          const xPos = (width - finalWidth) / 2
+          const yPos = (height - finalHeight - 40) / 2
+
+          // Bordure moderne autour de l'image
+          imagePage.drawRectangle({
+            x: xPos - 2,
+            y: yPos - 2,
+            width: finalWidth + 4,
+            height: finalHeight + 4,
+            borderColor: { r: 0.8, g: 0.8, b: 0.8 },
+            borderWidth: 1,
+          })
+
+          imagePage.drawImage(pdfImage, {
+            x: xPos,
+            y: yPos,
+            width: finalWidth,
+            height: finalHeight,
+          })
+
+          console.log(`✅ Image ajoutée: ${imageItem.name}`)
+        } catch (imageError) {
+          console.error(`❌ Erreur ajout image ${imageItem.name}:`, imageError)
+        }
+      }
+
+      // Merger les PDF
+      for (const pdfToMerge of pdfsToMerge) {
+        try {
+          console.log(`📄 Merge de ${pdfToMerge.name}...`)
+
+          const sourcePdfDoc = await PDFDocument.load(pdfToMerge.data)
+          const pageIndices = Array.from({ length: pdfToMerge.pageCount }, (_, i) => i)
+          const copiedPages = await mainPdfDoc.copyPages(sourcePdfDoc, pageIndices)
+
+          copiedPages.forEach((page) => {
+            mainPdfDoc.addPage(page)
+          })
+
+          console.log(`✅ ${pdfToMerge.name} mergé`)
+        } catch (mergeError) {
+          console.error(`❌ Erreur merge ${pdfToMerge.name}:`, mergeError)
+        }
+      }
+
+      // Sauvegarder le PDF final - MÉTHODE CORRECTE
+      const finalPdfBytes = await mainPdfDoc.save()
+      const fileName = `dossier-location-${tenantName.replace(/\s+/g, "-").toLowerCase()}.pdf`
+
+      const blob = new Blob([finalPdfBytes], { type: "application/pdf" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = fileName
+      a.click()
+      URL.revokeObjectURL(url)
+
+      console.log(`🎉 PDF final généré avec succès !`)
+    } catch (mergeError) {
+      console.error("❌ Erreur lors du merge final:", mergeError)
+
+      // Fallback : télécharger le PDF sans les annexes
+      const fileName = `dossier-location-${tenantName.replace(/\s+/g, "-").toLowerCase()}.pdf`
+      doc.save(fileName)
+    }
   } catch (error) {
-    console.error("Erreur lors de la génération du PDF:", error)
+    console.error("❌ Erreur génération PDF:", error)
     throw error
   }
 }
