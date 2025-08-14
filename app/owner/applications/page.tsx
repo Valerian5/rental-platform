@@ -9,12 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
+import { ModernApplicationCard } from "@/components/modern-application-card"
 import { VisitProposalManager } from "@/components/visit-proposal-manager"
 import { RefusalDialog } from "@/components/refusal-dialog"
 import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
-import { applicationEnrichmentService } from "@/lib/application-enrichment-service"
 import { Search, Filter, SortAsc, Settings, Users, CheckCircle, XCircle, AlertTriangle } from "lucide-react"
-import { ApplicationCardWithDossierFacileBadge } from "@/components/application-card-with-dossierfacile-badge"
 
 export default function ApplicationsPage() {
   const router = useRouter()
@@ -66,19 +65,6 @@ export default function ApplicationsPage() {
     }
   }
 
-  const loadRentalFile = async (tenantId: string) => {
-    try {
-      const rentalFileResponse = await fetch(`/api/rental-files?tenant_id=${tenantId}`)
-      if (rentalFileResponse.ok) {
-        const rentalFileData = await rentalFileResponse.json()
-        return rentalFileData.rental_file
-      }
-    } catch (error) {
-      console.error("Erreur chargement dossier location:", error)
-    }
-    return null
-  }
-
   const loadApplications = async (ownerId: string) => {
     try {
       console.log("🔍 Chargement des candidatures pour le propriétaire:", ownerId)
@@ -94,51 +80,120 @@ export default function ApplicationsPage() {
 
       if (data.applications && data.applications.length > 0) {
         // Enrichir les candidatures avec les données des dossiers de location
-        const enrichedApplications = await applicationEnrichmentService.enrichApplications(
-          data.applications,
-          loadRentalFile,
-        )
-
-        // Calculer les scores avec le service unifié
-        const applicationsWithScores = await Promise.all(
-          enrichedApplications.map(async (app) => {
+        const enrichedApplications = await Promise.all(
+          data.applications.map(async (app: any) => {
             try {
-              if (app.property?.owner_id && app.property?.price) {
-                console.log(`🎯 Calcul score pour candidature ${app.id}`)
-
-                const result = await scoringPreferencesService.calculateScore(
-                  app,
-                  app.property,
-                  app.property.owner_id,
-                  false, // Ne pas utiliser le cache pour avoir le score le plus récent
-                )
-
-                return {
-                  ...app,
-                  match_score: result.totalScore,
-                  scoring_compatible: result.compatible,
-                  scoring_breakdown: result.breakdown,
-                  scoring_model_used: result.model_used,
-                  scoring_recommendations: result.recommendations,
-                  scoring_warnings: result.warnings,
-                  scoring_exclusions: result.exclusions,
+              // Charger le dossier de location si disponible
+              let rentalFile = null
+              if (app.tenant_id) {
+                const rentalFileResponse = await fetch(`/api/rental-files?tenant_id=${app.tenant_id}`)
+                if (rentalFileResponse.ok) {
+                  const rentalFileData = await rentalFileResponse.json()
+                  rentalFile = rentalFileData.rental_file
                 }
               }
-              return app
+
+              // Calculer les revenus totaux (locataire principal + colocataires)
+              let totalIncome = app.income || 0
+              if (rentalFile?.main_tenant?.income_sources?.work_income?.amount) {
+                totalIncome = rentalFile.main_tenant.income_sources.work_income.amount
+              }
+
+              // Ajouter les revenus des colocataires
+              if (rentalFile?.cotenants && rentalFile.cotenants.length > 0) {
+                rentalFile.cotenants.forEach((cotenant: any) => {
+                  if (cotenant.income_sources?.work_income?.amount) {
+                    totalIncome += cotenant.income_sources.work_income.amount
+                  }
+                })
+              }
+
+              // Enrichir l'application avec les données du dossier de location
+              const enrichedApp = {
+                ...app,
+                income: totalIncome, // Revenus totaux
+                has_guarantor:
+                  (rentalFile?.guarantors && rentalFile.guarantors.length > 0) || app.has_guarantor || false,
+                profession: rentalFile?.main_tenant?.profession || app.profession || "Non spécifié",
+                company: rentalFile?.main_tenant?.company || app.company || "Non spécifié",
+                contract_type: rentalFile?.main_tenant?.main_activity || app.contract_type || "Non spécifié",
+                completion_percentage: rentalFile?.completion_percentage || 0,
+                documents_complete: rentalFile?.completion_percentage >= 80 || app.documents_complete || false,
+                rental_file_main_tenant: rentalFile?.main_tenant,
+                rental_file_guarantors: rentalFile?.guarantors || [],
+              }
+
+              // Calculer le score avec le service unifié
+              if (app.property?.owner_id && app.property?.price) {
+                try {
+                  // Préparer les données enrichies EXACTEMENT comme dans la page de détail
+                  const enrichedAppForScoring = {
+                    id: enrichedApp.id,
+                    income: totalIncome, // Utiliser les revenus totaux calculés
+                    has_guarantor:
+                      (rentalFile?.guarantors && rentalFile.guarantors.length > 0) || app.has_guarantor || false,
+                    guarantor_income:
+                      rentalFile?.guarantors?.[0]?.personal_info?.income_sources?.work_income?.amount ||
+                      app.guarantor_income ||
+                      0,
+                    contract_type: rentalFile?.main_tenant?.main_activity || app.contract_type || "Non spécifié",
+                    documents_complete:
+                      (rentalFile?.completion_percentage || 0) >= 80 || app.documents_complete || false,
+                    has_verified_documents: rentalFile?.has_verified_documents || false,
+                    presentation: rentalFile?.presentation_message || app.message || "",
+                    profession: rentalFile?.main_tenant?.profession || app.profession || "Non spécifié",
+                    company: rentalFile?.main_tenant?.company || app.company || "Non spécifié",
+                    completion_percentage: rentalFile?.completion_percentage || 0,
+                    seniority_months: rentalFile?.main_tenant?.professional_info?.seniority_months || 0,
+                    trial_period: rentalFile?.main_tenant?.professional_info?.trial_period || false,
+                  }
+
+                  console.log(`🔍 Données pour scoring candidature ${app.id}:`, {
+                    income: enrichedAppForScoring.income,
+                    has_guarantor: enrichedAppForScoring.has_guarantor,
+                    guarantor_income: enrichedAppForScoring.guarantor_income,
+                    contract_type: enrichedAppForScoring.contract_type,
+                    documents_complete: enrichedAppForScoring.documents_complete,
+                    completion_percentage: enrichedAppForScoring.completion_percentage,
+                  })
+
+                  const result = await scoringPreferencesService.calculateScore(
+                    enrichedAppForScoring,
+                    app.property,
+                    app.property.owner_id,
+                    false, // Ne pas utiliser le cache pour avoir le score le plus récent
+                  )
+
+                  enrichedApp.match_score = result.totalScore
+                  enrichedApp.scoring_compatible = result.compatible
+                  enrichedApp.scoring_breakdown = result.breakdown
+                  enrichedApp.scoring_model_used = result.model_used
+
+                  console.log(`📊 Score calculé pour candidature ${app.id}: ${result.totalScore}`)
+                } catch (error) {
+                  console.error("Erreur calcul score pour candidature:", app.id, error)
+                  enrichedApp.match_score = 50
+                  enrichedApp.scoring_compatible = false
+                  enrichedApp.scoring_breakdown = {}
+                  enrichedApp.scoring_model_used = "Erreur"
+                }
+              }
+
+              return enrichedApp
             } catch (error) {
-              console.error("❌ Erreur calcul score pour candidature:", app.id, error)
+              console.error("Erreur enrichissement candidature:", app.id, error)
               return {
                 ...app,
-                match_score: 50,
+                completion_percentage: 0,
+                documents_complete: app.documents_complete || false,
+                match_score: app.match_score || 50,
                 scoring_compatible: false,
-                scoring_breakdown: {},
-                scoring_model_used: "Erreur",
               }
             }
           }),
         )
 
-        setApplications(applicationsWithScores)
+        setApplications(enrichedApplications)
       } else {
         setApplications([])
       }
@@ -151,9 +206,8 @@ export default function ApplicationsPage() {
 
   const loadScoringPreferences = async (ownerId: string) => {
     try {
-      const preferences = await scoringPreferencesService.getOwnerPreferences(ownerId, false)
+      const preferences = await scoringPreferencesService.getOwnerPreferences(ownerId, true)
       setScoringPreferences(preferences)
-      console.log("📋 Préférences de scoring chargées:", preferences.name)
     } catch (error) {
       console.error("Erreur chargement préférences scoring:", error)
     }
@@ -213,13 +267,6 @@ export default function ApplicationsPage() {
     switch (action) {
       case "analyze":
         router.push(`/owner/applications/${applicationId}`)
-        break
-      case "view_dossierfacile":
-        if (application.dossierfacile_pdf_url) {
-          window.open(application.dossierfacile_pdf_url, "_blank")
-        } else {
-          toast.error("PDF DossierFacile non disponible")
-        }
         break
       case "propose_visit":
         setCurrentApplication(application)
@@ -551,10 +598,19 @@ export default function ApplicationsPage() {
         <div className="space-y-4">
           {filteredApplications.length > 0 ? (
             filteredApplications.map((application) => (
-              <ApplicationCardWithDossierFacileBadge
+              <ModernApplicationCard
                 key={application.id}
                 application={application}
+                isSelected={selectedApplications.includes(application.id)}
+                onSelect={(selected) => {
+                  if (selected) {
+                    setSelectedApplications([...selectedApplications, application.id])
+                  } else {
+                    setSelectedApplications(selectedApplications.filter((id) => id !== application.id))
+                  }
+                }}
                 onAction={(action) => handleApplicationAction(application.id, action)}
+                scoringPreferences={scoringPreferences}
               />
             ))
           ) : (
