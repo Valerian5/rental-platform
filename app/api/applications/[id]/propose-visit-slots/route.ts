@@ -52,16 +52,40 @@ export async function POST(request: Request, { params }: { params: { id: string 
       return NextResponse.json({ error: "Candidature non trouvée" }, { status: 404 })
     }
 
-    // Associer les créneaux à l'application
-    const { error: slotsError } = await supabase
+    // Vérifier que les créneaux existent et les associer à l'application
+    const { data: existingSlots, error: slotsCheckError } = await supabase
       .from("visit_slots")
-      .update({ application_id: applicationId })
+      .select("id, property_id, application_id")
       .in("id", slot_ids)
+
+    if (slotsCheckError) {
+      console.error("❌ Erreur vérification créneaux:", slotsCheckError)
+      return NextResponse.json({ error: "Erreur lors de la vérification des créneaux" }, { status: 500 })
+    }
+
+    if (!existingSlots || existingSlots.length === 0) {
+      console.error("❌ Aucun créneau trouvé avec les IDs:", slot_ids)
+      return NextResponse.json({ error: "Aucun créneau trouvé avec ces identifiants" }, { status: 404 })
+    }
+
+    console.log("✅ Créneaux trouvés:", existingSlots.length)
+
+    // Associer les créneaux à l'application
+    const { data: updatedSlots, error: slotsError } = await supabase
+      .from("visit_slots")
+      .update({
+        application_id: applicationId,
+        updated_at: new Date().toISOString(),
+      })
+      .in("id", slot_ids)
+      .select()
 
     if (slotsError) {
       console.error("❌ Erreur association créneaux:", slotsError)
       return NextResponse.json({ error: "Erreur lors de l'association des créneaux" }, { status: 500 })
     }
+
+    console.log("✅ Créneaux associés:", updatedSlots?.length || 0)
 
     // Mettre à jour le statut de la candidature
     const { error: updateError } = await supabase

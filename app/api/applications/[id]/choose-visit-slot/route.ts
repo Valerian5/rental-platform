@@ -13,22 +13,21 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 export const dynamic = "force-dynamic"
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
-  const applicationId = params.id
-
   try {
+    const applicationId = params.id
     const body = await request.json()
     const { slot_id } = body
-
-    console.log("🎯 Sélection créneau:", { applicationId, slot_id })
 
     if (!slot_id) {
       return NextResponse.json({ error: "ID du créneau requis" }, { status: 400 })
     }
 
+    console.log("🎯 Sélection créneau:", { applicationId, slot_id })
+
     // Vérifier que l'application existe
     const { data: application, error: appError } = await supabase
       .from("applications")
-      .select("id, property_id, tenant_id, status")
+      .select("id, property_id, tenant_id")
       .eq("id", applicationId)
       .single()
 
@@ -51,18 +50,31 @@ export async function POST(request: Request, { params }: { params: { id: string 
       return NextResponse.json({ error: "Créneau non trouvé ou indisponible" }, { status: 404 })
     }
 
-    // Créer une visite programmée
+    // Marquer les autres créneaux comme indisponibles
+    const { error: updateOthersError } = await supabase
+      .from("visit_slots")
+      .update({ is_available: false })
+      .eq("application_id", applicationId)
+      .neq("id", slot_id)
+
+    if (updateOthersError) {
+      console.error("❌ Erreur mise à jour autres créneaux:", updateOthersError)
+    }
+
+    // Créer une visite confirmée
     const { data: visit, error: visitError } = await supabase
       .from("visits")
       .insert({
-        tenant_id: application.tenant_id,
         property_id: application.property_id,
+        tenant_id: application.tenant_id,
         application_id: applicationId,
-        visit_slot_id: slot_id,
-        date: slot.date,
+        visit_date: slot.date,
         start_time: slot.start_time,
         end_time: slot.end_time,
         status: "scheduled",
+        visitor_name: "Locataire", // À améliorer avec les vraies données
+        visitor_email: "tenant@example.com", // À améliorer
+        visitor_phone: "0000000000", // À améliorer
         created_at: new Date().toISOString(),
       })
       .select()
@@ -71,20 +83,6 @@ export async function POST(request: Request, { params }: { params: { id: string 
     if (visitError) {
       console.error("❌ Erreur création visite:", visitError)
       return NextResponse.json({ error: "Erreur lors de la création de la visite" }, { status: 500 })
-    }
-
-    // Marquer le créneau comme réservé
-    const { error: updateSlotError } = await supabase
-      .from("visit_slots")
-      .update({
-        is_available: false,
-        current_bookings: (slot.current_bookings || 0) + 1,
-      })
-      .eq("id", slot_id)
-
-    if (updateSlotError) {
-      console.error("❌ Erreur mise à jour créneau:", updateSlotError)
-      // On continue même si la mise à jour du créneau échoue
     }
 
     // Mettre à jour le statut de la candidature
@@ -101,21 +99,15 @@ export async function POST(request: Request, { params }: { params: { id: string 
       return NextResponse.json({ error: "Erreur lors de la mise à jour de la candidature" }, { status: 500 })
     }
 
-    console.log("✅ Créneau sélectionné avec succès:", visit?.id)
+    console.log("✅ Créneau sélectionné avec succès:", visit)
 
     return NextResponse.json({
       success: true,
-      message: "Créneau de visite sélectionné avec succès",
-      visit: visit,
+      message: "Créneau sélectionné avec succès",
+      visit,
     })
-  } catch (e) {
-    console.error("❌ Erreur inattendue:", e)
-    return NextResponse.json(
-      {
-        error: "Erreur inattendue",
-        details: e instanceof Error ? e.message : "Erreur inconnue",
-      },
-      { status: 500 },
-    )
+  } catch (error) {
+    console.error("❌ Erreur serveur:", error)
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }

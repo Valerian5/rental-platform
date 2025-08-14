@@ -13,15 +13,13 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 export const dynamic = "force-dynamic"
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
-  const applicationId = params.id
-
   try {
-    console.log("🔍 Recherche créneaux disponibles pour candidature:", applicationId)
+    const applicationId = params.id
 
-    // Vérifier que l'application existe
+    // Récupérer l'application pour avoir l'ID de la propriété
     const { data: application, error: appError } = await supabase
       .from("applications")
-      .select("id, property_id, tenant_id, status")
+      .select("property_id")
       .eq("id", applicationId)
       .single()
 
@@ -30,12 +28,14 @@ export async function GET(request: Request, { params }: { params: { id: string }
       return NextResponse.json({ error: "Candidature non trouvée" }, { status: 404 })
     }
 
-    // Récupérer les créneaux de visite associés à cette candidature
+    // Récupérer les créneaux disponibles pour cette propriété
     const { data: slots, error: slotsError } = await supabase
       .from("visit_slots")
       .select("*")
-      .eq("application_id", applicationId)
+      .eq("property_id", application.property_id)
       .eq("is_available", true)
+      .is("application_id", null) // Créneaux non encore associés
+      .gte("date", new Date().toISOString().split("T")[0]) // Créneaux futurs uniquement
       .order("date", { ascending: true })
       .order("start_time", { ascending: true })
 
@@ -44,24 +44,13 @@ export async function GET(request: Request, { params }: { params: { id: string }
       return NextResponse.json({ error: "Erreur lors de la récupération des créneaux" }, { status: 500 })
     }
 
-    console.log("✅ Créneaux trouvés:", slots?.length || 0)
-
     return NextResponse.json({
       success: true,
       slots: slots || [],
-      application: {
-        id: application.id,
-        status: application.status,
-      },
+      total: slots?.length || 0,
     })
-  } catch (e) {
-    console.error("❌ Erreur inattendue:", e)
-    return NextResponse.json(
-      {
-        error: "Erreur inattendue",
-        details: e instanceof Error ? e.message : "Erreur inconnue",
-      },
-      { status: 500 },
-    )
+  } catch (error) {
+    console.error("❌ Erreur serveur:", error)
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }

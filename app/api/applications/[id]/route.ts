@@ -1,4 +1,4 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -10,21 +10,42 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export const dynamic = "force-dynamic"
+
+// GET - Récupérer une candidature par ID
+export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
-    const { id } = params
+    const applicationId = params.id
 
-    console.log("🔍 Recherche candidature ID:", id)
-
-    // Récupérer la candidature avec les informations du tenant et de la propriété
     const { data: application, error } = await supabase
       .from("applications")
       .select(`
         *,
-        property:properties(*),
-        tenant:users(*)
+        property:properties(
+          id,
+          title,
+          address,
+          city,
+          postal_code,
+          rent,
+          bedrooms,
+          bathrooms,
+          surface_area,
+          property_images(
+            id,
+            url,
+            is_primary
+          )
+        ),
+        tenant:users(
+          id,
+          first_name,
+          last_name,
+          email,
+          phone
+        )
       `)
-      .eq("id", id)
+      .eq("id", applicationId)
       .single()
 
     if (error) {
@@ -32,85 +53,65 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    console.log("✅ Candidature trouvée:", application?.id)
-    return NextResponse.json({ application })
+    if (!application) {
+      return NextResponse.json({ error: "Candidature non trouvée" }, { status: 404 })
+    }
+
+    return NextResponse.json({
+      success: true,
+      application,
+    })
   } catch (error) {
     console.error("❌ Erreur serveur:", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+// PATCH - Mettre à jour une candidature
+export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   try {
-    const { id } = params
+    const applicationId = params.id
     const body = await request.json()
-    const { status, notes } = body
 
-    console.log("🔄 Mise à jour candidature:", id, "nouveau statut:", status)
-
-    const updateData: any = {
-      status,
-      updated_at: new Date().toISOString(),
-    }
-
-    if (notes) {
-      updateData.notes = notes
-    }
-
-    const { data, error } = await supabase.from("applications").update(updateData).eq("id", id).select().single()
+    const { data: application, error } = await supabase
+      .from("applications")
+      .update({
+        ...body,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", applicationId)
+      .select()
+      .single()
 
     if (error) {
       console.error("❌ Erreur mise à jour candidature:", error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    console.log("✅ Candidature mise à jour:", data?.id)
-    return NextResponse.json({ success: true, application: data })
+    return NextResponse.json({
+      success: true,
+      message: "Candidature mise à jour avec succès",
+      application,
+    })
   } catch (error) {
     console.error("❌ Erreur serveur:", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+// DELETE - Retirer une candidature (marquer comme withdrawn)
+export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   try {
-    const { id } = params
-
-    console.log("🗑️ Suppression candidature:", id)
-
-    // Vérifier que la candidature existe
-    const { data: application, error: checkError } = await supabase
-      .from("applications")
-      .select("id, status, tenant_id")
-      .eq("id", id)
-      .single()
-
-    if (checkError || !application) {
-      console.error("❌ Candidature non trouvée:", checkError)
-      return NextResponse.json({ error: "Candidature non trouvée" }, { status: 404 })
-    }
-
-    // Vérifier que la candidature peut être supprimée
-    if (application.status === "accepted") {
-      return NextResponse.json({ error: "Impossible de supprimer une candidature acceptée" }, { status: 400 })
-    }
-
-    // Supprimer les créneaux de visite associés
-    const { error: slotsError } = await supabase.from("visit_slots").delete().eq("application_id", id)
-
-    if (slotsError) {
-      console.error("❌ Erreur suppression créneaux:", slotsError)
-      // On continue même si la suppression des créneaux échoue
-    }
+    const applicationId = params.id
 
     // Marquer la candidature comme retirée au lieu de la supprimer
-    const { data, error } = await supabase
+    const { data: application, error } = await supabase
       .from("applications")
       .update({
         status: "withdrawn",
         updated_at: new Date().toISOString(),
       })
-      .eq("id", id)
+      .eq("id", applicationId)
       .select()
       .single()
 
@@ -119,8 +120,11 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    console.log("✅ Candidature retirée:", data?.id)
-    return NextResponse.json({ success: true, message: "Candidature retirée avec succès" })
+    return NextResponse.json({
+      success: true,
+      message: "Candidature retirée avec succès",
+      application,
+    })
   } catch (error) {
     console.error("❌ Erreur serveur:", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })

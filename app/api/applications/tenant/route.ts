@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
 
     console.log("🔍 Recherche candidatures pour locataire:", tenantId)
 
-    // Récupérer les candidatures du locataire
+    // Récupérer les candidatures du locataire avec is_primary au lieu de is_main
     const { data: applications, error } = await supabase
       .from("applications")
       .select(`
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
           property_images(
             id,
             url,
-            is_main
+            is_primary
           )
         )
       `)

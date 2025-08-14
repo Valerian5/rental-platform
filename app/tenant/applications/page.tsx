@@ -54,7 +54,7 @@ interface Application {
     property_images?: Array<{
       id: string
       url: string
-      is_main: boolean
+      is_primary: boolean
     }>
   }
   visit_slots?: Array<{
@@ -327,7 +327,8 @@ export default function TenantApplicationsPage() {
       return "/placeholder.svg?height=200&width=300&text=Pas+d'image"
     }
 
-    const mainImage = property.property_images.find((img) => img.is_main)
+    // Utiliser is_primary au lieu de is_main
+    const mainImage = property.property_images.find((img) => img.is_primary)
     return mainImage ? mainImage.url : property.property_images[0].url
   }
 
