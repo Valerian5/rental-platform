@@ -71,33 +71,12 @@ export default function TenantApplicationsPage() {
         return
       }
 
-      // Récupérer les candidatures avec les informations des propriétés
-      const { data, error } = await supabase
-        .from("applications")
-        .select(`
-          id,
-          property_id,
-          status,
-          message,
-          created_at,
-          updated_at,
-          visit_slots,
-          properties (
-            id,
-            title,
-            location,
-            price,
-            images,
-            bedrooms,
-            bathrooms,
-            surface_area
-          )
-        `)
-        .eq("tenant_id", user.id)
-        .order("created_at", { ascending: false })
+      // Utiliser l'API tenant applications avec le bon paramètre
+      const response = await fetch(`/api/applications/tenant?tenant_id=${user.id}&limit=50`)
 
-      if (error) {
-        console.error("Erreur récupération candidatures:", error)
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error("❌ Erreur API:", errorData)
         toast({
           title: "Erreur",
           description: "Impossible de récupérer vos candidatures",
@@ -106,7 +85,31 @@ export default function TenantApplicationsPage() {
         return
       }
 
-      setApplications(data || [])
+      const data = await response.json()
+      console.log("✅ Candidatures récupérées:", data)
+
+      // Adapter les données au format attendu
+      const adaptedApplications = (data.applications || []).map((app: any) => ({
+        id: app.id,
+        property_id: app.property?.id || app.property_id,
+        status: app.status,
+        message: app.message,
+        created_at: app.created_at,
+        updated_at: app.updated_at,
+        visit_slots: [], // À implémenter si nécessaire
+        properties: {
+          id: app.property?.id || app.property_id,
+          title: app.property?.title || "Titre non disponible",
+          location: app.property?.address || app.property?.city || "Adresse non disponible",
+          price: app.property?.rent || app.property?.price || 0,
+          images: app.property?.property_images?.map((img: any) => img.url) || [],
+          bedrooms: app.property?.bedrooms || 0,
+          bathrooms: app.property?.bathrooms || 0,
+          surface_area: app.property?.surface_area || 0,
+        },
+      }))
+
+      setApplications(adaptedApplications)
     } catch (error) {
       console.error("Erreur:", error)
       toast({
