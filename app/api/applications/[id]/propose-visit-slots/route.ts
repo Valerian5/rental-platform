@@ -1,112 +1,113 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@/lib/supabase-server"
+import { NextResponse } from "next/server"
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export const dynamic = "force-dynamic"
+
+export async function POST(request: Request, { params }: { params: { id: string } }) {
+  const applicationId = params.id
+  const supabase = createClient()
+
   try {
-    const { id: applicationId } = params
-    const { slot_ids } = await request.json()
+    const body = await request.json()
+    console.log("📝 Body reçu:", body)
 
-    console.log("📅 Proposition créneaux:", { applicationId, slot_ids })
+    // Récupérer les slot_ids depuis le body
+    const { slot_ids, message, status } = body
 
     if (!slot_ids || !Array.isArray(slot_ids) || slot_ids.length === 0) {
-      return NextResponse.json({ error: "Aucun créneau sélectionné" }, { status: 400 })
+      console.error("❌ Aucun slot_ids fourni:", { slot_ids, body })
+      return new NextResponse(
+        JSON.stringify({
+          error: "Aucun créneau fourni",
+          details: "Le paramètre slot_ids est requis et doit être un tableau non vide",
+        }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        },
+      )
     }
 
-    // Vérifier que la candidature existe et appartient au propriétaire
+    console.log("🎯 Proposition de créneaux:", {
+      applicationId,
+      slot_ids,
+      message: message?.substring(0, 50) + "...",
+      status,
+    })
+
+    // Vérifier que l'application existe
     const { data: application, error: appError } = await supabase
       .from("applications")
-      .select(`
-        *,
-        property:properties!inner(
-          id,
-          owner_id,
-          title
-        )
-      `)
+      .select("id, property_id, tenant_id")
       .eq("id", applicationId)
       .single()
 
     if (appError || !application) {
-      console.error("❌ Candidature non trouvée:", appError)
-      return NextResponse.json({ error: "Candidature non trouvée" }, { status: 404 })
+      console.error("❌ Application non trouvée:", appError)
+      return new NextResponse(JSON.stringify({ error: "Candidature non trouvée" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      })
     }
 
-    console.log("✅ Candidature trouvée:", {
-      id: application.id,
-      property_id: application.property_id,
-      status: application.status,
-    })
-
-    // Vérifier que les créneaux existent et appartiennent à la propriété
-    const { data: slots, error: slotsError } = await supabase
-      .from("property_visit_slots")
-      .select("*")
-      .eq("property_id", application.property_id)
+    // Associer les créneaux à l'application
+    const { error: slotsError } = await supabase
+      .from("visit_slots")
+      .update({ application_id: applicationId })
       .in("id", slot_ids)
 
     if (slotsError) {
-      console.error("❌ Erreur récupération créneaux:", slotsError)
-      return NextResponse.json({ error: "Erreur lors de la vérification des créneaux" }, { status: 500 })
-    }
-
-    if (!slots || slots.length === 0) {
-      console.error("❌ Aucun créneau trouvé pour les IDs:", slot_ids)
-      return NextResponse.json({ error: "Aucun créneau trouvé" }, { status: 400 })
-    }
-
-    if (slots.length !== slot_ids.length) {
-      console.error("❌ Nombre de créneaux incorrect:", {
-        demandés: slot_ids.length,
-        trouvés: slots.length,
-        slot_ids,
-        slots_trouvés: slots.map((s) => s.id),
+      console.error("❌ Erreur association créneaux:", slotsError)
+      return new NextResponse(JSON.stringify({ error: "Erreur lors de l'association des créneaux" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
       })
-      return NextResponse.json({ error: "Certains créneaux sont invalides" }, { status: 400 })
     }
 
-    console.log("✅ Créneaux validés:", slots.length)
-
-    // Mettre à jour la candidature avec les créneaux proposés
-    const { data: updatedApplication, error: updateError } = await supabase
+    // Mettre à jour le statut de la candidature
+    const { error: updateError } = await supabase
       .from("applications")
       .update({
-        status: "visit_proposed",
-        proposed_slot_ids: slot_ids,
+        status: status || "visit_proposed",
         updated_at: new Date().toISOString(),
       })
       .eq("id", applicationId)
-      .select()
-      .single()
 
     if (updateError) {
-      console.error("❌ Erreur mise à jour candidature:", updateError)
-      return NextResponse.json({ error: "Erreur lors de la proposition" }, { status: 500 })
-    }
-
-    // Créer une notification pour le locataire
-    try {
-      await supabase.from("notifications").insert({
-        user_id: application.tenant_id,
-        title: "Créneaux de visite proposés",
-        content: `Des créneaux de visite ont été proposés pour ${application.property.title}`,
-        type: "visit_proposed",
-        action_url: `/tenant/applications/${applicationId}/select-visit-slot`,
+      console.error("❌ Erreur mise à jour statut:", updateError)
+      return new NextResponse(JSON.stringify({ error: "Erreur lors de la mise à jour du statut" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
       })
-      console.log("✅ Notification créée")
-    } catch (notifError) {
-      console.error("❌ Erreur notification:", notifError)
     }
 
-    console.log("✅ Créneaux proposés avec succès")
-
-    return NextResponse.json({
-      success: true,
-      application: updatedApplication,
-      message: "Créneaux proposés avec succès",
-      slots_count: slots.length,
+    console.log("✅ Créneaux proposés avec succès:", {
+      applicationId,
+      slotsCount: slot_ids.length,
+      newStatus: status || "visit_proposed",
     })
-  } catch (error) {
-    console.error("❌ Erreur serveur:", error)
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+
+    return new NextResponse(
+      JSON.stringify({
+        message: `${slot_ids.length} créneau(x) de visite proposé(s) avec succès`,
+        slotsCount: slot_ids.length,
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    )
+  } catch (e) {
+    console.error("❌ Erreur inattendue:", e)
+    return new NextResponse(
+      JSON.stringify({
+        error: "Erreur inattendue",
+        details: e instanceof Error ? e.message : "Erreur inconnue",
+      }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      },
+    )
   }
 }
