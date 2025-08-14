@@ -692,7 +692,7 @@ export async function generateRentalFilePDF(rentalFileData: RentalFileData): Pro
   return doc.output("blob")
 }
 
-// Fonction utilitaire pour télécharger le PDF
+// Fonction utilitaire pour télécharger le PDF - IDENTIQUE À L'ORIGINAL
 export function downloadPDF(blob: Blob, filename = "dossier-location.pdf") {
   const url = URL.createObjectURL(blob)
   const link = document.createElement("a")
@@ -704,7 +704,7 @@ export function downloadPDF(blob: Blob, filename = "dossier-location.pdf") {
   URL.revokeObjectURL(url)
 }
 
-// Fonction pour générer et télécharger le PDF
+// Fonction pour générer et télécharger le PDF - IDENTIQUE À L'ORIGINAL
 export async function generateAndDownloadRentalFilePDF(rentalFileData: RentalFileData, filename?: string) {
   try {
     const pdfBlob = await generateRentalFilePDF(rentalFileData)
