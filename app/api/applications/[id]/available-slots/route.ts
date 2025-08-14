@@ -1,54 +1,41 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+if (!supabaseUrl || !supabaseServiceKey) {
+  throw new Error("Variables d'environnement Supabase manquantes")
+}
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+export const dynamic = "force-dynamic"
+
+export async function GET(request: Request, { params }: { params: { id: string } }) {
+  const applicationId = params.id
+
   try {
-    const applicationId = params.id
+    console.log("🔍 Recherche créneaux disponibles pour candidature:", applicationId)
 
-    console.log("🔍 Récupération créneaux disponibles pour candidature:", applicationId)
-
-    // Vérifier que la candidature existe et est au bon statut
+    // Vérifier que l'application existe
     const { data: application, error: appError } = await supabase
       .from("applications")
-      .select(`
-        id,
-        status,
-        property_id,
-        property:properties (
-          id,
-          title,
-          address,
-          city,
-          price,
-          property_images (id, url, is_primary),
-          owner:users!properties_owner_id_fkey (first_name, last_name)
-        )
-      `)
+      .select("id, property_id, tenant_id, status")
       .eq("id", applicationId)
       .single()
 
     if (appError || !application) {
-      console.error("❌ Candidature introuvable:", appError)
-      return NextResponse.json({ error: "Candidature introuvable" }, { status: 404 })
+      console.error("❌ Application non trouvée:", appError)
+      return NextResponse.json({ error: "Candidature non trouvée" }, { status: 404 })
     }
 
-    if (application.status !== "visit_proposed") {
-      console.error("❌ Statut incorrect:", application.status)
-      return NextResponse.json(
-        { error: "Cette candidature n'est pas au stade de sélection de créneaux" },
-        { status: 400 },
-      )
-    }
-
-    // Récupérer les créneaux de visite pour cette propriété
+    // Récupérer les créneaux de visite associés à cette candidature
     const { data: slots, error: slotsError } = await supabase
-      .from("property_visit_slots")
+      .from("visit_slots")
       .select("*")
-      .eq("property_id", application.property_id)
+      .eq("application_id", applicationId)
       .eq("is_available", true)
-      .gte("date", new Date().toISOString().split("T")[0]) // Seulement les dates futures
       .order("date", { ascending: true })
       .order("start_time", { ascending: true })
 
@@ -57,17 +44,24 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Erreur lors de la récupération des créneaux" }, { status: 500 })
     }
 
-    // Filtrer les créneaux qui ont encore de la place
-    const availableSlots = (slots || []).filter((slot) => slot.current_bookings < slot.max_capacity)
-
-    console.log("✅ Créneaux disponibles trouvés:", availableSlots.length)
+    console.log("✅ Créneaux trouvés:", slots?.length || 0)
 
     return NextResponse.json({
-      application,
-      slots: availableSlots,
+      success: true,
+      slots: slots || [],
+      application: {
+        id: application.id,
+        status: application.status,
+      },
     })
-  } catch (error) {
-    console.error("❌ Erreur serveur:", error)
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+  } catch (e) {
+    console.error("❌ Erreur inattendue:", e)
+    return NextResponse.json(
+      {
+        error: "Erreur inattendue",
+        details: e instanceof Error ? e.message : "Erreur inconnue",
+      },
+      { status: 500 },
+    )
   }
 }
