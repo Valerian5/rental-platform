@@ -35,13 +35,14 @@ export async function GET(request: Request, { params }: { params: { id: string }
     }
 
     // Récupérer les créneaux disponibles pour cette propriété
+    const today = new Date().toISOString().split("T")[0]
+
     const { data: slots, error: slotsError } = await supabase
       .from("property_visit_slots")
       .select("*")
       .eq("property_id", application.property_id)
       .eq("is_available", true)
-      .gte("date", new Date().toISOString().split("T")[0]) // Créneaux futurs seulement
-      .lt("current_bookings", supabase.raw("max_capacity")) // Places disponibles
+      .gte("date", today) // Créneaux futurs seulement
       .order("date", { ascending: true })
       .order("start_time", { ascending: true })
 
@@ -50,11 +51,14 @@ export async function GET(request: Request, { params }: { params: { id: string }
       return NextResponse.json({ error: "Erreur lors de la récupération des créneaux" }, { status: 500 })
     }
 
-    console.log("✅ Créneaux disponibles:", slots?.length || 0)
+    // Filtrer les créneaux avec des places disponibles
+    const availableSlots = (slots || []).filter((slot) => slot.current_bookings < slot.max_capacity)
+
+    console.log("✅ Créneaux disponibles:", availableSlots.length)
 
     return NextResponse.json({
       success: true,
-      slots: slots || [],
+      slots: availableSlots,
     })
   } catch (error) {
     console.error("❌ Erreur serveur:", error)

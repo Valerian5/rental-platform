@@ -426,8 +426,11 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
     const otherDaysSlots = safeVisitSlots.filter((slot) => slot.date !== selectedDate)
     console.log("🚀 Créneaux autres jours:", otherDaysSlots.length)
 
+    // CORRECTION: Créer les créneaux avec les bonnes propriétés individuelles
     const newSlots: VisitSlot[] = dayConfig.selectedSlots.map((slotKey) => {
       const [startTime, endTime] = slotKey.split("-")
+
+      // CORRECTION: Chaque créneau garde ses propres propriétés
       return {
         date: selectedDate,
         start_time: formatTimeString(startTime),
