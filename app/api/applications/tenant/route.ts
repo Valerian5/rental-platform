@@ -14,84 +14,97 @@ export const dynamic = "force-dynamic"
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url)
-    const tenantId = searchParams.get("tenant_id")
+    console.log("🔍 Récupération des candidatures locataire...")
 
-    if (!tenantId) {
-      return NextResponse.json({ error: "ID du locataire requis" }, { status: 400 })
-    }
+    // Pour le debug, on va simuler un tenant_id
+    // En production, cela viendrait de l'authentification
+    const url = new URL(request.url)
+    const debugTenantId = url.searchParams.get("tenant_id")
 
-    console.log("🔍 Récupération candidatures pour locataire:", tenantId)
-
-    // Récupérer les candidatures avec les informations de la propriété et les créneaux proposés
-    const { data: applications, error } = await supabase
+    let query = supabase
       .from("applications")
       .select(`
         id,
+        tenant_id,
+        property_id,
         status,
         created_at,
         updated_at,
-        presentation,
-        property:properties!inner (
+        users!applications_tenant_id_fkey (
+          id,
+          first_name,
+          last_name,
+          email
+        ),
+        properties (
           id,
           title,
           address,
-          city,
-          postal_code,
           price,
-          bedrooms,
-          bathrooms,
-          surface,
-          property_images (
-            id,
-            url,
-            is_primary
-          )
+          city
         )
       `)
-      .eq("tenant_id", tenantId)
+      // CORRECTION: Exclure explicitement les candidatures withdrawn
+      .neq("status", "withdrawn")
       .order("created_at", { ascending: false })
+
+    // Si un tenant_id spécifique est fourni pour le debug
+    if (debugTenantId) {
+      query = query.eq("tenant_id", debugTenantId)
+    }
+
+    const { data: applications, error } = await query
 
     if (error) {
       console.error("❌ Erreur récupération candidatures:", error)
       return NextResponse.json({ error: "Erreur lors de la récupération des candidatures" }, { status: 500 })
     }
 
-    // Pour chaque candidature avec statut "visit_proposed", récupérer les créneaux disponibles
-    const applicationsWithSlots = await Promise.all(
-      applications.map(async (app) => {
-        if (app.status === "visit_proposed") {
-          // Récupérer les créneaux disponibles pour cette propriété
-          const { data: slots, error: slotsError } = await supabase
-            .from("property_visit_slots")
-            .select("*")
-            .eq("property_id", app.property.id)
-            .eq("is_available", true)
-            .gte("date", new Date().toISOString().split("T")[0]) // Créneaux futurs seulement
-            .order("date", { ascending: true })
-            .order("start_time", { ascending: true })
+    // Formater les données
+    const formattedApplications = (applications || []).map((app) => ({
+      id: app.id,
+      tenant_id: app.tenant_id,
+      property_id: app.property_id,
+      status: app.status,
+      tenant_name: app.users ? `${app.users.first_name} ${app.users.last_name}` : "Utilisateur inconnu",
+      tenant_email: app.users?.email || "Email inconnu",
+      property_title: app.properties?.title || "Propriété inconnue",
+      property_address: app.properties?.address || "Adresse inconnue",
+      property_price: app.properties?.price || 0,
+      property_city: app.properties?.city || "Ville inconnue",
+      created_at: app.created_at,
+      updated_at: app.updated_at,
+    }))
 
-          if (slotsError) {
-            console.error("❌ Erreur récupération créneaux:", slotsError)
-          }
-
-          return {
-            ...app,
-            proposed_visit_slots: slots || [],
-          }
-        }
-        return app
-      }),
+    // Statistiques pour le debug
+    const statusStats = formattedApplications.reduce(
+      (acc, app) => {
+        acc[app.status] = (acc[app.status] || 0) + 1
+        return acc
+      },
+      {} as Record<string, number>,
     )
 
-    console.log("✅ Candidatures récupérées:", applicationsWithSlots.length)
+    console.log("✅ Candidatures locataire récupérées:", formattedApplications.length)
+    console.log("📊 Statistiques par statut (sans withdrawn):", statusStats)
 
     return NextResponse.json({
       success: true,
-      applications: applicationsWithSlots,
+      applications: formattedApplications,
+      stats: {
+        total: formattedApplications.length,
+        byStatus: statusStats,
+        excludedWithdrawn: true,
+      },
     })
   } catch (error) {
     console.error("❌ Erreur serveur:", error)
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Erreur serveur",
+        details: error instanceof Error ? error.message : "Erreur inconnue",
+      },
+      { status: 500 },
+    )
   }
 }

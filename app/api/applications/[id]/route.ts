@@ -12,13 +12,14 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 export const dynamic = "force-dynamic"
 
+// GET - Récupérer une candidature spécifique
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   const applicationId = params.id
 
   try {
     console.log("🔍 Récupération candidature:", applicationId)
 
-    const { data: application, error: appError } = await supabase
+    const { data: application, error } = await supabase
       .from("applications")
       .select(`
         id,
@@ -39,31 +40,40 @@ export async function GET(request: Request, { params }: { params: { id: string }
           title,
           address,
           price,
-          property_type,
-          bedrooms,
-          bathrooms,
-          surface_area
+          city
         )
       `)
       .eq("id", applicationId)
       .single()
 
-    if (appError || !application) {
-      console.error("❌ Candidature non trouvée:", appError)
+    if (error || !application) {
+      console.error("❌ Candidature non trouvée:", error)
       return NextResponse.json({ error: "Candidature non trouvée" }, { status: 404 })
     }
 
-    console.log("✅ Candidature trouvée:", application.id)
+    const formattedApplication = {
+      id: application.id,
+      tenant_id: application.tenant_id,
+      property_id: application.property_id,
+      status: application.status,
+      tenant_name: application.users
+        ? `${application.users.first_name} ${application.users.last_name}`
+        : "Utilisateur inconnu",
+      tenant_email: application.users?.email || "Email inconnu",
+      tenant_phone: application.users?.phone || "Téléphone inconnu",
+      property_title: application.properties?.title || "Propriété inconnue",
+      property_address: application.properties?.address || "Adresse inconnue",
+      property_price: application.properties?.price || 0,
+      property_city: application.properties?.city || "Ville inconnue",
+      created_at: application.created_at,
+      updated_at: application.updated_at,
+    }
+
+    console.log("✅ Candidature récupérée:", formattedApplication.id)
 
     return NextResponse.json({
       success: true,
-      application: {
-        ...application,
-        tenant_name: `${application.users.first_name} ${application.users.last_name}`,
-        tenant_email: application.users.email,
-        tenant_phone: application.users.phone,
-        property: application.properties,
-      },
+      application: formattedApplication,
     })
   } catch (error) {
     console.error("❌ Erreur serveur:", error)
@@ -77,66 +87,75 @@ export async function GET(request: Request, { params }: { params: { id: string }
   }
 }
 
+// DELETE - Supprimer une candidature (retirer la candidature)
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   const applicationId = params.id
 
   try {
-    console.log("🗑️ Retrait candidature:", applicationId)
+    console.log("🗑️ Suppression candidature:", applicationId)
 
-    // Récupérer la candidature avec ses informations
-    const { data: application, error: appError } = await supabase
+    // D'abord, récupérer la candidature pour vérifier qu'elle existe
+    const { data: application, error: fetchError } = await supabase
       .from("applications")
-      .select("id, status, tenant_id, property_id")
+      .select("id, status")
       .eq("id", applicationId)
       .single()
 
-    if (appError || !application) {
-      console.error("❌ Candidature non trouvée:", appError)
+    if (fetchError || !application) {
+      console.error("❌ Candidature non trouvée:", fetchError)
       return NextResponse.json({ error: "Candidature non trouvée" }, { status: 404 })
     }
 
-    // Si la candidature a une visite programmée, la supprimer et libérer le créneau
-    if (application.status === "visit_scheduled") {
-      console.log("🔄 Suppression de la visite programmée...")
+    // Vérifier si la candidature peut être supprimée
+    if (application.status === "withdrawn") {
+      return NextResponse.json({ error: "Cette candidature a déjà été retirée" }, { status: 400 })
+    }
 
-      // Récupérer la visite pour obtenir l'ID du créneau
-      const { data: visit, error: visitError } = await supabase
-        .from("visits")
-        .select("id, notes")
-        .eq("application_id", applicationId)
-        .single()
+    // Récupérer les visites associées pour libérer les créneaux
+    const { data: visits, error: visitsError } = await supabase
+      .from("visits")
+      .select("id, notes")
+      .eq("application_id", applicationId)
+      .eq("status", "scheduled")
 
-      if (!visitError && visit) {
-        // Extraire l'ID du créneau depuis les notes
-        const slotIdMatch = visit.notes?.match(/Créneau sélectionné: ([a-f0-9-]+)/)
-        if (slotIdMatch) {
+    if (visitsError) {
+      console.error("❌ Erreur récupération visites:", visitsError)
+      return NextResponse.json({ error: "Erreur lors de la récupération des visites" }, { status: 500 })
+    }
+
+    // Libérer les créneaux de visite si nécessaire
+    if (visits && visits.length > 0) {
+      console.log("🔄 Libération de", visits.length, "créneaux de visite...")
+
+      for (const visit of visits) {
+        // Extraire l'ID du créneau depuis les notes (format: "Créneau sélectionné: {slot_id}")
+        const slotIdMatch = visit.notes?.match(/Créneau sélectionné: (.+)/)
+        if (slotIdMatch && slotIdMatch[1]) {
           const slotId = slotIdMatch[1]
-          console.log("🎯 Libération du créneau:", slotId)
 
-          // CORRECTION: Utiliser la fonction SQL pour décrémenter proprement
+          // Utiliser la fonction SQL pour décrémenter les réservations
           const { error: decrementError } = await supabase.rpc("decrement_slot_bookings", {
             slot_id: slotId,
           })
 
           if (decrementError) {
-            console.error("❌ Erreur libération créneau:", decrementError)
+            console.error("❌ Erreur libération créneau:", slotId, decrementError)
           } else {
-            console.log("✅ Créneau libéré avec succès")
+            console.log("✅ Créneau libéré:", slotId)
           }
         }
+      }
 
-        // Supprimer la visite
-        const { error: deleteVisitError } = await supabase.from("visits").delete().eq("id", visit.id)
+      // Supprimer les visites
+      const { error: deleteVisitsError } = await supabase.from("visits").delete().eq("application_id", applicationId)
 
-        if (deleteVisitError) {
-          console.error("❌ Erreur suppression visite:", deleteVisitError)
-        } else {
-          console.log("✅ Visite supprimée avec succès")
-        }
+      if (deleteVisitsError) {
+        console.error("❌ Erreur suppression visites:", deleteVisitsError)
+        return NextResponse.json({ error: "Erreur lors de la suppression des visites" }, { status: 500 })
       }
     }
 
-    // CORRECTION: Marquer la candidature comme retirée au lieu de la supprimer
+    // Marquer la candidature comme withdrawn au lieu de la supprimer
     const { error: updateError } = await supabase
       .from("applications")
       .update({
@@ -150,11 +169,78 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
       return NextResponse.json({ error: "Erreur lors du retrait de la candidature" }, { status: 500 })
     }
 
-    console.log("✅ Candidature retirée avec succès")
+    console.log("✅ Candidature retirée avec succès:", applicationId)
 
     return NextResponse.json({
       success: true,
       message: "Candidature retirée avec succès",
+      application_id: applicationId,
+      visits_removed: visits?.length || 0,
+    })
+  } catch (error) {
+    console.error("❌ Erreur serveur:", error)
+    return NextResponse.json(
+      {
+        error: "Erreur serveur",
+        details: error instanceof Error ? error.message : "Erreur inconnue",
+      },
+      { status: 500 },
+    )
+  }
+}
+
+// PUT - Mettre à jour une candidature
+export async function PUT(request: Request, { params }: { params: { id: string } }) {
+  const applicationId = params.id
+
+  try {
+    const body = await request.json()
+    const { status, ...otherUpdates } = body
+
+    console.log("🔄 Mise à jour candidature:", applicationId, "avec:", body)
+
+    // Vérifier que la candidature existe
+    const { data: existingApp, error: fetchError } = await supabase
+      .from("applications")
+      .select("id, status")
+      .eq("id", applicationId)
+      .single()
+
+    if (fetchError || !existingApp) {
+      console.error("❌ Candidature non trouvée:", fetchError)
+      return NextResponse.json({ error: "Candidature non trouvée" }, { status: 404 })
+    }
+
+    // Préparer les données de mise à jour
+    const updateData = {
+      ...otherUpdates,
+      updated_at: new Date().toISOString(),
+    }
+
+    // Ajouter le statut si fourni
+    if (status) {
+      updateData.status = status
+    }
+
+    // Effectuer la mise à jour
+    const { data: updatedApplication, error: updateError } = await supabase
+      .from("applications")
+      .update(updateData)
+      .eq("id", applicationId)
+      .select()
+      .single()
+
+    if (updateError) {
+      console.error("❌ Erreur mise à jour candidature:", updateError)
+      return NextResponse.json({ error: "Erreur lors de la mise à jour de la candidature" }, { status: 500 })
+    }
+
+    console.log("✅ Candidature mise à jour:", applicationId)
+
+    return NextResponse.json({
+      success: true,
+      message: "Candidature mise à jour avec succès",
+      application: updatedApplication,
     })
   } catch (error) {
     console.error("❌ Erreur serveur:", error)
