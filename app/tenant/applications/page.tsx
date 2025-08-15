@@ -42,6 +42,13 @@ interface Application {
   created_at: string
   updated_at: string
   presentation?: string
+  tenant: {
+    id: string
+    first_name: string
+    last_name: string
+    email: string
+    phone?: string
+  }
   property: {
     id: string
     title: string
@@ -134,6 +141,7 @@ export default function TenantApplicationsPage() {
 
       const data = await response.json()
       console.log("✅ Candidatures chargées:", data.applications?.length || 0)
+      console.log("🔍 Données reçues:", data)
 
       setApplications(data.applications || [])
     } catch (error) {
@@ -297,7 +305,13 @@ export default function TenantApplicationsPage() {
   }
 
   const getMainImage = (property: Application["property"]) => {
-    if (!property.property_images || property.property_images.length === 0) {
+    // Vérification de sécurité pour éviter l'erreur
+    if (
+      !property ||
+      !property.property_images ||
+      !Array.isArray(property.property_images) ||
+      property.property_images.length === 0
+    ) {
       return "/placeholder.svg?height=150&width=200&text=Pas+d'image"
     }
 
@@ -358,7 +372,7 @@ export default function TenantApplicationsPage() {
                       <div className="aspect-video md:aspect-[4/3] relative overflow-hidden">
                         <img
                           src={getMainImage(application.property) || "/placeholder.svg"}
-                          alt={application.property.title}
+                          alt={application.property?.title || "Propriété"}
                           className="w-full h-full object-cover"
                         />
                         <div className="absolute top-2 left-2">{getStatusBadge(application.status)}</div>
@@ -372,28 +386,30 @@ export default function TenantApplicationsPage() {
                         <div className="flex-1">
                           <div className="flex items-start justify-between mb-4">
                             <div className="flex-1">
-                              <h3 className="text-xl font-semibold mb-2">{application.property.title}</h3>
+                              <h3 className="text-xl font-semibold mb-2">
+                                {application.property?.title || "Propriété inconnue"}
+                              </h3>
                               <div className="flex items-center text-muted-foreground mb-2">
                                 <MapPin className="h-4 w-4 mr-1" />
                                 <span className="text-sm">
-                                  {application.property.address}, {application.property.city}{" "}
-                                  {application.property.postal_code}
+                                  {application.property?.address || "Adresse inconnue"},{" "}
+                                  {application.property?.city || ""} {application.property?.postal_code || ""}
                                 </span>
                               </div>
                               <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
-                                {application.property.bedrooms && (
+                                {application.property?.bedrooms && (
                                   <div className="flex items-center gap-1">
                                     <Bed className="h-4 w-4" />
                                     <span>{application.property.bedrooms} ch.</span>
                                   </div>
                                 )}
-                                {application.property.bathrooms && (
+                                {application.property?.bathrooms && (
                                   <div className="flex items-center gap-1">
                                     <Bath className="h-4 w-4" />
                                     <span>{application.property.bathrooms} sdb</span>
                                   </div>
                                 )}
-                                {application.property.surface && (
+                                {application.property?.surface && (
                                   <div className="flex items-center gap-1">
                                     <Square className="h-4 w-4" />
                                     <span>{application.property.surface} m²</span>
@@ -401,7 +417,7 @@ export default function TenantApplicationsPage() {
                                 )}
                               </div>
                               <p className="text-2xl font-bold text-green-600">
-                                {formatAmount(application.property.price)}
+                                {formatAmount(application.property?.price || 0)}
                                 <span className="text-sm font-normal text-muted-foreground">/mois</span>
                               </p>
                             </div>
@@ -445,7 +461,7 @@ export default function TenantApplicationsPage() {
                         <div className="flex items-center justify-between pt-4 border-t">
                           <Button
                             variant="outline"
-                            onClick={() => router.push(`/properties/${application.property.id}`)}
+                            onClick={() => router.push(`/properties/${application.property?.id}`)}
                           >
                             <Eye className="h-4 w-4 mr-2" />
                             Voir le logement
@@ -458,7 +474,7 @@ export default function TenantApplicationsPage() {
                                 setWithdrawDialog({
                                   isOpen: true,
                                   applicationId: application.id,
-                                  propertyTitle: application.property.title,
+                                  propertyTitle: application.property?.title || "Propriété",
                                 })
                               }
                               className="text-red-600 hover:text-red-700 hover:bg-red-50"
@@ -493,8 +509,8 @@ export default function TenantApplicationsPage() {
           {visitSlotDialog.application && (
             <TenantVisitSlotSelector
               applicationId={visitSlotDialog.application.id}
-              propertyTitle={visitSlotDialog.application.property.title}
-              propertyAddress={`${visitSlotDialog.application.property.address}, ${visitSlotDialog.application.property.city}`}
+              propertyTitle={visitSlotDialog.application.property?.title || "Propriété"}
+              propertyAddress={`${visitSlotDialog.application.property?.address || ""}, ${visitSlotDialog.application.property?.city || ""}`}
               ownerName="Propriétaire" // TODO: récupérer le nom du propriétaire
               onSlotSelected={handleSlotSelected}
               onCancel={() => setVisitSlotDialog({ isOpen: false, application: null })}
