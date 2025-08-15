@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
+import { TenantVisitSlotSelector } from "@/components/tenant-visit-slot-selector"
 import {
   ArrowLeft,
   Calendar,
@@ -57,15 +58,6 @@ interface Application {
       is_primary: boolean
     }>
   }
-  visit_slots?: Array<{
-    id: string
-    start_time: string
-    end_time: string
-    date: string
-    is_available: boolean
-    max_capacity: number
-    current_bookings: number
-  }>
   proposed_visit_slots?: Array<{
     id: string
     start_time: string
@@ -90,6 +82,13 @@ export default function TenantApplicationsPage() {
     isOpen: false,
     applicationId: null,
     propertyTitle: "",
+  })
+  const [visitSlotDialog, setVisitSlotDialog] = useState<{
+    isOpen: boolean
+    application: Application | null
+  }>({
+    isOpen: false,
+    application: null,
   })
   const [loadingActions, setLoadingActions] = useState<{ [key: string]: boolean }>({})
 
@@ -143,35 +142,23 @@ export default function TenantApplicationsPage() {
     }
   }
 
-  const handleChooseVisitSlot = async (applicationId: string, slotId: string) => {
-    try {
-      setLoadingActions((prev) => ({ ...prev, [slotId]: true }))
+  const handleOpenVisitSlotSelector = (application: Application) => {
+    setVisitSlotDialog({
+      isOpen: true,
+      application,
+    })
+  }
 
-      const response = await fetch(`/api/applications/${applicationId}/choose-visit-slot`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ slot_id: slotId }),
-      })
+  const handleSlotSelected = async (slotId: string) => {
+    // Fermer le dialog
+    setVisitSlotDialog({
+      isOpen: false,
+      application: null,
+    })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Erreur lors de la sélection du créneau")
-      }
-
-      const data = await response.json()
-      toast.success(data.message || "Créneau sélectionné avec succès")
-
-      // Recharger les candidatures
-      if (user) {
-        await loadApplications(user.id)
-      }
-    } catch (error) {
-      console.error("Erreur:", error)
-      toast.error(error instanceof Error ? error.message : "Erreur lors de la sélection du créneau")
-    } finally {
-      setLoadingActions((prev) => ({ ...prev, [slotId]: false }))
+    // Recharger les candidatures
+    if (user) {
+      await loadApplications(user.id)
     }
   }
 
@@ -215,23 +202,6 @@ export default function TenantApplicationsPage() {
       })
     } catch (e) {
       return "Date invalide"
-    }
-  }
-
-  const formatDateTime = (dateString: string, timeString: string) => {
-    try {
-      const date = new Date(dateString)
-      const [hours, minutes] = timeString.split(":")
-      return {
-        date: date.toLocaleDateString("fr-FR", {
-          weekday: "long",
-          day: "numeric",
-          month: "long",
-        }),
-        time: `${hours}:${minutes}`,
-      }
-    } catch (e) {
-      return { date: "Date invalide", time: "Heure invalide" }
     }
   }
 
@@ -307,7 +277,7 @@ export default function TenantApplicationsPage() {
       case "analyzing":
         return "Le propriétaire examine actuellement votre dossier."
       case "visit_proposed":
-        return "Bonne nouvelle ! Le propriétaire vous propose des créneaux de visite. Sélectionnez celui qui vous convient le mieux ci-dessous."
+        return "Bonne nouvelle ! Le propriétaire vous propose des créneaux de visite. Cliquez sur le bouton ci-dessous pour choisir votre créneau."
       case "visit_scheduled":
         return "Votre visite est confirmée ! Vous recevrez bientôt les détails par email."
       case "accepted":
@@ -331,7 +301,6 @@ export default function TenantApplicationsPage() {
       return "/placeholder.svg?height=200&width=300&text=Pas+d'image"
     }
 
-    // Utiliser is_primary au lieu de is_main
     const mainImage = property.property_images.find((img) => img.is_primary)
     return mainImage ? mainImage.url : property.property_images[0].url
   }
@@ -443,52 +412,23 @@ export default function TenantApplicationsPage() {
                             <AlertDescription>{getStatusMessage(application)}</AlertDescription>
                           </Alert>
 
-                          {/* Créneaux de visite */}
+                          {/* Bouton pour choisir un créneau de visite */}
                           {application.status === "visit_proposed" &&
                             application.proposed_visit_slots &&
                             application.proposed_visit_slots.length > 0 && (
                               <div className="mb-4">
-                                <h4 className="font-medium mb-3">Créneaux de visite proposés :</h4>
-                                <div className="space-y-2">
-                                  {application.proposed_visit_slots
-                                    .filter((slot) => slot.is_available && slot.current_bookings < slot.max_capacity)
-                                    .map((slot) => {
-                                      const { date, time } = formatDateTime(slot.date, slot.start_time)
-                                      const endTime = slot.end_time.split(":").slice(0, 2).join(":")
-                                      const availableSpots = slot.max_capacity - slot.current_bookings
-
-                                      return (
-                                        <div
-                                          key={slot.id}
-                                          className="flex items-center justify-between p-3 border rounded-lg"
-                                        >
-                                          <div>
-                                            <p className="font-medium capitalize">{date}</p>
-                                            <p className="text-sm text-muted-foreground">
-                                              {time} - {endTime}
-                                            </p>
-                                            {slot.max_capacity > 1 && (
-                                              <p className="text-xs text-muted-foreground">
-                                                {availableSpots} place(s) disponible(s)
-                                              </p>
-                                            )}
-                                          </div>
-                                          <Button
-                                            onClick={() => handleChooseVisitSlot(application.id, slot.id)}
-                                            disabled={loadingActions[slot.id] || availableSpots <= 0}
-                                            size="sm"
-                                          >
-                                            {loadingActions[slot.id] ? (
-                                              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                                            ) : (
-                                              <Calendar className="h-4 w-4 mr-2" />
-                                            )}
-                                            {availableSpots <= 0 ? "Complet" : "Choisir ce créneau"}
-                                          </Button>
-                                        </div>
-                                      )
-                                    })}
-                                </div>
+                                <Button
+                                  onClick={() => handleOpenVisitSlotSelector(application)}
+                                  className="w-full"
+                                  size="lg"
+                                >
+                                  <Calendar className="h-4 w-4 mr-2" />
+                                  Choisir un créneau de visite
+                                  <Badge variant="secondary" className="ml-2">
+                                    {application.proposed_visit_slots.length} disponible
+                                    {application.proposed_visit_slots.length > 1 ? "s" : ""}
+                                  </Badge>
+                                </Button>
                               </div>
                             )}
 
@@ -537,6 +477,31 @@ export default function TenantApplicationsPage() {
           </div>
         )}
       </div>
+
+      {/* Dialog de sélection de créneaux de visite */}
+      <Dialog
+        open={visitSlotDialog.isOpen}
+        onOpenChange={(open) => !open && setVisitSlotDialog({ isOpen: false, application: null })}
+      >
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Choisir un créneau de visite</DialogTitle>
+            <DialogDescription>
+              Sélectionnez le créneau qui vous convient le mieux pour visiter ce logement.
+            </DialogDescription>
+          </DialogHeader>
+          {visitSlotDialog.application && (
+            <TenantVisitSlotSelector
+              applicationId={visitSlotDialog.application.id}
+              propertyTitle={visitSlotDialog.application.property.title}
+              propertyAddress={`${visitSlotDialog.application.property.address}, ${visitSlotDialog.application.property.city}`}
+              ownerName="Propriétaire" // TODO: récupérer le nom du propriétaire
+              onSlotSelected={handleSlotSelected}
+              onCancel={() => setVisitSlotDialog({ isOpen: false, application: null })}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog de confirmation de retrait */}
       <Dialog

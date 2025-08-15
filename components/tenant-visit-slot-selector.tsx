@@ -13,6 +13,8 @@ interface VisitSlot {
   start_time: string
   end_time: string
   is_available: boolean
+  max_capacity: number
+  current_bookings: number
 }
 
 interface TenantVisitSlotSelectorProps {
@@ -80,7 +82,8 @@ export function TenantVisitSlotSelector({
       })
 
       if (response.ok) {
-        toast.success("Créneau de visite confirmé !")
+        const data = await response.json()
+        toast.success(data.message || "Créneau de visite confirmé !")
         onSlotSelected(selectedSlot)
       } else {
         const errorData = await response.json()
@@ -186,32 +189,42 @@ export function TenantVisitSlotSelector({
                   <CardContent>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       {slots
-                        .filter((slot) => slot.is_available)
+                        .filter((slot) => slot.is_available && slot.current_bookings < slot.max_capacity)
                         .sort((a, b) => a.start_time.localeCompare(b.start_time))
-                        .map((slot) => (
-                          <Button
-                            key={slot.id}
-                            variant={selectedSlot === slot.id ? "default" : "outline"}
-                            className="h-auto p-4 justify-start"
-                            onClick={() => setSelectedSlot(slot.id)}
-                          >
-                            <div className="flex items-center gap-3 w-full">
-                              <Clock className="h-4 w-4" />
-                              <div className="text-left">
-                                <p className="font-medium">
-                                  {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {(new Date(`2000-01-01T${slot.end_time}`).getTime() -
-                                    new Date(`2000-01-01T${slot.start_time}`).getTime()) /
-                                    (1000 * 60)}{" "}
-                                  min
-                                </p>
+                        .map((slot) => {
+                          const availableSpots = slot.max_capacity - slot.current_bookings
+                          return (
+                            <Button
+                              key={slot.id}
+                              variant={selectedSlot === slot.id ? "default" : "outline"}
+                              className="h-auto p-4 justify-start"
+                              onClick={() => setSelectedSlot(slot.id)}
+                              disabled={availableSpots <= 0}
+                            >
+                              <div className="flex items-center gap-3 w-full">
+                                <Clock className="h-4 w-4" />
+                                <div className="text-left">
+                                  <p className="font-medium">
+                                    {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {(new Date(`2000-01-01T${slot.end_time}`).getTime() -
+                                      new Date(`2000-01-01T${slot.start_time}`).getTime()) /
+                                      (1000 * 60)}{" "}
+                                    min
+                                  </p>
+                                  {slot.max_capacity > 1 && (
+                                    <p className="text-xs text-muted-foreground">
+                                      {availableSpots} place{availableSpots > 1 ? "s" : ""} disponible
+                                      {availableSpots > 1 ? "s" : ""}
+                                    </p>
+                                  )}
+                                </div>
+                                {selectedSlot === slot.id && <Check className="h-4 w-4 ml-auto" />}
                               </div>
-                              {selectedSlot === slot.id && <Check className="h-4 w-4 ml-auto" />}
-                            </div>
-                          </Button>
-                        ))}
+                            </Button>
+                          )
+                        })}
                     </div>
                   </CardContent>
                 </Card>

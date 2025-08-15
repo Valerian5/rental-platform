@@ -72,6 +72,17 @@ export async function POST(request: Request, { params }: { params: { id: string 
       return NextResponse.json({ error: "Une visite est déjà programmée pour cette candidature" }, { status: 400 })
     }
 
+    // Récupérer les informations du locataire pour la visite
+    const { data: tenant, error: tenantError } = await supabase
+      .from("users")
+      .select("first_name, last_name, email, phone")
+      .eq("id", application.tenant_id)
+      .single()
+
+    if (tenantError) {
+      console.error("❌ Erreur récupération locataire:", tenantError)
+    }
+
     // Créer la visite
     const { data: visit, error: visitError } = await supabase
       .from("visits")
@@ -80,10 +91,13 @@ export async function POST(request: Request, { params }: { params: { id: string 
         property_id: application.property_id,
         tenant_id: application.tenant_id,
         visit_slot_id: slot_id,
-        date: slot.date,
+        visit_date: slot.date,
         start_time: slot.start_time,
         end_time: slot.end_time,
         status: "scheduled",
+        visitor_name: tenant ? `${tenant.first_name} ${tenant.last_name}` : "Candidat",
+        visitor_email: tenant?.email || "candidat@example.com",
+        visitor_phone: tenant?.phone || "0000000000",
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })

@@ -1,4 +1,4 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -12,24 +12,27 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 export const dynamic = "force-dynamic"
 
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const tenantId = searchParams.get("tenant_id")
-    const limit = Number.parseInt(searchParams.get("limit") || "20")
 
     if (!tenantId) {
       return NextResponse.json({ error: "ID du locataire requis" }, { status: 400 })
     }
 
-    console.log("🔍 Recherche candidatures pour locataire:", tenantId)
+    console.log("🔍 Récupération candidatures pour locataire:", tenantId)
 
-    // Récupérer les candidatures du locataire avec price au lieu de rent
-    const { data: applications, error } = await supabase
+    // Récupérer les candidatures avec les informations de la propriété
+    const { data: applications, error: applicationsError } = await supabase
       .from("applications")
       .select(`
-        *,
-        property:properties!inner(
+        id,
+        status,
+        created_at,
+        updated_at,
+        presentation,
+        property:properties!inner (
           id,
           title,
           address,
@@ -39,7 +42,7 @@ export async function GET(request: NextRequest) {
           bedrooms,
           bathrooms,
           surface,
-          property_images(
+          property_images (
             id,
             url,
             is_primary
@@ -48,19 +51,20 @@ export async function GET(request: NextRequest) {
       `)
       .eq("tenant_id", tenantId)
       .order("created_at", { ascending: false })
-      .limit(limit)
 
-    if (error) {
-      console.error("❌ Erreur récupération candidatures:", error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    if (applicationsError) {
+      console.error("❌ Erreur récupération candidatures:", applicationsError)
+      return NextResponse.json({ error: "Erreur lors de la récupération des candidatures" }, { status: 500 })
     }
 
-    // Pour chaque candidature, récupérer les créneaux de visite associés
-    const enrichedApplications = await Promise.all(
+    console.log("✅ Candidatures récupérées:", applications?.length || 0)
+
+    // Pour chaque candidature avec statut visit_proposed, récupérer les créneaux disponibles
+    const applicationsWithSlots = await Promise.all(
       (applications || []).map(async (app) => {
-        try {
-          // Récupérer les créneaux de visite proposés pour cette propriété
-          const { data: visitSlots } = await supabase
+        if (app.status === "visit_proposed") {
+          // Récupérer les créneaux disponibles pour cette propriété
+          const { data: visitSlots, error: slotsError } = await supabase
             .from("property_visit_slots")
             .select("*")
             .eq("property_id", app.property.id)
@@ -68,38 +72,28 @@ export async function GET(request: NextRequest) {
             .order("date", { ascending: true })
             .order("start_time", { ascending: true })
 
-          // Récupérer les visites programmées pour cette candidature
-          const { data: visits } = await supabase.from("visits").select("*").eq("application_id", app.id)
+          if (!slotsError && visitSlots) {
+            // Filtrer les créneaux futurs et avec des places disponibles
+            const now = new Date()
+            const futureAvailableSlots = visitSlots.filter((slot) => {
+              const slotDateTime = new Date(`${slot.date}T${slot.start_time}`)
+              return slotDateTime > now && slot.current_bookings < slot.max_capacity
+            })
 
-          return {
-            ...app,
-            visit_slots: visitSlots || [],
-            proposed_visit_slots:
-              visitSlots?.filter((slot) => {
-                // Filtrer les créneaux futurs et disponibles
-                const slotDateTime = new Date(`${slot.date}T${slot.start_time}`)
-                return slotDateTime > new Date() && slot.current_bookings < slot.max_capacity
-              }) || [],
-            visits: visits || [],
-          }
-        } catch (error) {
-          console.error("❌ Erreur enrichissement candidature:", error)
-          return {
-            ...app,
-            visit_slots: [],
-            proposed_visit_slots: [],
-            visits: [],
+            return {
+              ...app,
+              proposed_visit_slots: futureAvailableSlots,
+            }
           }
         }
+        return app
       }),
     )
 
-    console.log("✅ Candidatures récupérées:", enrichedApplications.length)
-
     return NextResponse.json({
       success: true,
-      applications: enrichedApplications,
-      total: enrichedApplications.length,
+      applications: applicationsWithSlots,
+      total: applicationsWithSlots.length,
     })
   } catch (error) {
     console.error("❌ Erreur serveur:", error)
