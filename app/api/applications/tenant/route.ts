@@ -24,21 +24,21 @@ export async function GET(request: NextRequest) {
 
     console.log("🔍 Recherche candidatures pour locataire:", tenantId)
 
-    // Récupérer les candidatures du locataire avec is_primary au lieu de is_main
+    // Récupérer les candidatures du locataire avec price au lieu de rent
     const { data: applications, error } = await supabase
       .from("applications")
       .select(`
         *,
-        property:properties(
+        property:properties!inner(
           id,
           title,
           address,
           city,
           postal_code,
-          rent,
+          price,
           bedrooms,
           bathrooms,
-          surface_area,
+          surface,
           property_images(
             id,
             url,
@@ -59,21 +59,27 @@ export async function GET(request: NextRequest) {
     const enrichedApplications = await Promise.all(
       (applications || []).map(async (app) => {
         try {
-          // Récupérer les créneaux de visite proposés
+          // Récupérer les créneaux de visite proposés pour cette propriété
           const { data: visitSlots } = await supabase
-            .from("visit_slots")
+            .from("property_visit_slots")
             .select("*")
-            .eq("application_id", app.id)
+            .eq("property_id", app.property.id)
+            .eq("is_available", true)
             .order("date", { ascending: true })
             .order("start_time", { ascending: true })
 
-          // Récupérer les visites programmées
+          // Récupérer les visites programmées pour cette candidature
           const { data: visits } = await supabase.from("visits").select("*").eq("application_id", app.id)
 
           return {
             ...app,
             visit_slots: visitSlots || [],
-            proposed_visit_slots: visitSlots?.filter((slot) => slot.is_available) || [],
+            proposed_visit_slots:
+              visitSlots?.filter((slot) => {
+                // Filtrer les créneaux futurs et disponibles
+                const slotDateTime = new Date(`${slot.date}T${slot.start_time}`)
+                return slotDateTime > new Date() && slot.current_bookings < slot.max_capacity
+              }) || [],
             visits: visits || [],
           }
         } catch (error) {

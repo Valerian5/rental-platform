@@ -13,8 +13,9 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 export const dynamic = "force-dynamic"
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
+  const applicationId = params.id
+
   try {
-    const applicationId = params.id
     const body = await request.json()
     const { slot_id } = body
 
@@ -22,7 +23,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       return NextResponse.json({ error: "ID du créneau requis" }, { status: 400 })
     }
 
-    console.log("🎯 Sélection créneau:", { applicationId, slot_id })
+    console.log("🎯 Sélection de créneau:", { applicationId, slot_id })
 
     // Vérifier que l'application existe
     const { data: application, error: appError } = await supabase
@@ -42,12 +43,16 @@ export async function POST(request: Request, { params }: { params: { id: string 
       .select("*")
       .eq("id", slot_id)
       .eq("property_id", application.property_id)
-      .eq("is_available", true)
       .single()
 
     if (slotError || !slot) {
-      console.error("❌ Créneau non trouvé ou indisponible:", slotError)
-      return NextResponse.json({ error: "Créneau non trouvé ou indisponible" }, { status: 404 })
+      console.error("❌ Créneau non trouvé:", slotError)
+      return NextResponse.json({ error: "Créneau non trouvé" }, { status: 404 })
+    }
+
+    // Vérifier que le créneau est encore disponible
+    if (!slot.is_available || slot.current_bookings >= slot.max_capacity) {
+      return NextResponse.json({ error: "Créneau complet ou indisponible" }, { status: 400 })
     }
 
     // Vérifier que le créneau est dans le futur
@@ -56,7 +61,41 @@ export async function POST(request: Request, { params }: { params: { id: string 
       return NextResponse.json({ error: "Ce créneau est déjà passé" }, { status: 400 })
     }
 
-    // Incrémenter le nombre de réservations pour ce créneau
+    // Vérifier qu'il n'y a pas déjà une visite programmée pour cette candidature
+    const { data: existingVisit } = await supabase
+      .from("visits")
+      .select("id")
+      .eq("application_id", applicationId)
+      .single()
+
+    if (existingVisit) {
+      return NextResponse.json({ error: "Une visite est déjà programmée pour cette candidature" }, { status: 400 })
+    }
+
+    // Créer la visite
+    const { data: visit, error: visitError } = await supabase
+      .from("visits")
+      .insert({
+        application_id: applicationId,
+        property_id: application.property_id,
+        tenant_id: application.tenant_id,
+        visit_slot_id: slot_id,
+        date: slot.date,
+        start_time: slot.start_time,
+        end_time: slot.end_time,
+        status: "scheduled",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .select()
+      .single()
+
+    if (visitError) {
+      console.error("❌ Erreur création visite:", visitError)
+      return NextResponse.json({ error: "Erreur lors de la création de la visite" }, { status: 500 })
+    }
+
+    // Incrémenter le nombre de réservations du créneau
     const { error: updateSlotError } = await supabase
       .from("property_visit_slots")
       .update({
@@ -67,43 +106,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
     if (updateSlotError) {
       console.error("❌ Erreur mise à jour créneau:", updateSlotError)
-      return NextResponse.json({ error: "Erreur lors de la mise à jour du créneau" }, { status: 500 })
-    }
-
-    // Récupérer les informations du locataire pour la visite
-    const { data: tenant, error: tenantError } = await supabase
-      .from("users")
-      .select("first_name, last_name, email, phone")
-      .eq("id", application.tenant_id)
-      .single()
-
-    if (tenantError) {
-      console.error("❌ Erreur récupération locataire:", tenantError)
-    }
-
-    // Créer une visite programmée
-    const { data: visit, error: visitError } = await supabase
-      .from("visits")
-      .insert({
-        application_id: applicationId,
-        property_id: application.property_id,
-        tenant_id: application.tenant_id,
-        visit_date: slot.date,
-        start_time: slot.start_time,
-        end_time: slot.end_time,
-        status: "scheduled",
-        visitor_name: tenant ? `${tenant.first_name} ${tenant.last_name}` : "Candidat",
-        visitor_email: tenant?.email || "candidat@example.com",
-        visitor_phone: tenant?.phone || "0000000000",
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .select()
-      .single()
-
-    if (visitError) {
-      console.error("❌ Erreur création visite:", visitError)
-      return NextResponse.json({ error: "Erreur lors de la création de la visite" }, { status: 500 })
+      // On continue quand même, la visite est créée
     }
 
     // Mettre à jour le statut de la candidature
@@ -120,15 +123,27 @@ export async function POST(request: Request, { params }: { params: { id: string 
       return NextResponse.json({ error: "Erreur lors de la mise à jour de la candidature" }, { status: 500 })
     }
 
-    console.log("✅ Visite programmée avec succès:", visit?.id)
+    console.log("✅ Visite programmée avec succès:", {
+      applicationId,
+      visitId: visit.id,
+      slotId: slot_id,
+      date: slot.date,
+      time: `${slot.start_time} - ${slot.end_time}`,
+    })
 
     return NextResponse.json({
       success: true,
-      message: "Créneau sélectionné et visite programmée avec succès",
-      visit,
+      message: "Créneau sélectionné avec succès. Votre visite est programmée !",
+      visit: visit,
     })
-  } catch (error) {
-    console.error("❌ Erreur serveur:", error)
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+  } catch (e) {
+    console.error("❌ Erreur inattendue:", e)
+    return NextResponse.json(
+      {
+        error: "Erreur inattendue",
+        details: e instanceof Error ? e.message : "Erreur inconnue",
+      },
+      { status: 500 },
+    )
   }
 }
