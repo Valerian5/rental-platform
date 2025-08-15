@@ -47,10 +47,10 @@ interface Application {
     address: string
     city: string
     postal_code: string
-    rent: number
+    price: number
     bedrooms?: number
     bathrooms?: number
-    surface_area?: number
+    surface?: number
     property_images?: Array<{
       id: string
       url: string
@@ -63,6 +63,8 @@ interface Application {
     end_time: string
     date: string
     is_available: boolean
+    max_capacity: number
+    current_bookings: number
   }>
   proposed_visit_slots?: Array<{
     id: string
@@ -70,6 +72,8 @@ interface Application {
     end_time: string
     date: string
     is_available: boolean
+    max_capacity: number
+    current_bookings: number
   }>
 }
 
@@ -420,15 +424,15 @@ export default function TenantApplicationsPage() {
                                     <span>{application.property.bathrooms} sdb</span>
                                   </div>
                                 )}
-                                {application.property.surface_area && (
+                                {application.property.surface && (
                                   <div className="flex items-center gap-1">
                                     <Square className="h-4 w-4" />
-                                    <span>{application.property.surface_area} m²</span>
+                                    <span>{application.property.surface} m²</span>
                                   </div>
                                 )}
                               </div>
                               <p className="text-2xl font-bold text-green-600">
-                                {formatAmount(application.property.rent)}
+                                {formatAmount(application.property.price)}
                                 <span className="text-sm font-normal text-muted-foreground">/mois</span>
                               </p>
                             </div>
@@ -447,10 +451,12 @@ export default function TenantApplicationsPage() {
                                 <h4 className="font-medium mb-3">Créneaux de visite proposés :</h4>
                                 <div className="space-y-2">
                                   {application.proposed_visit_slots
-                                    .filter((slot) => slot.is_available)
+                                    .filter((slot) => slot.is_available && slot.current_bookings < slot.max_capacity)
                                     .map((slot) => {
                                       const { date, time } = formatDateTime(slot.date, slot.start_time)
                                       const endTime = slot.end_time.split(":").slice(0, 2).join(":")
+                                      const availableSpots = slot.max_capacity - slot.current_bookings
+
                                       return (
                                         <div
                                           key={slot.id}
@@ -461,10 +467,15 @@ export default function TenantApplicationsPage() {
                                             <p className="text-sm text-muted-foreground">
                                               {time} - {endTime}
                                             </p>
+                                            {slot.max_capacity > 1 && (
+                                              <p className="text-xs text-muted-foreground">
+                                                {availableSpots} place(s) disponible(s)
+                                              </p>
+                                            )}
                                           </div>
                                           <Button
                                             onClick={() => handleChooseVisitSlot(application.id, slot.id)}
-                                            disabled={loadingActions[slot.id]}
+                                            disabled={loadingActions[slot.id] || availableSpots <= 0}
                                             size="sm"
                                           >
                                             {loadingActions[slot.id] ? (
@@ -472,7 +483,7 @@ export default function TenantApplicationsPage() {
                                             ) : (
                                               <Calendar className="h-4 w-4 mr-2" />
                                             )}
-                                            Choisir ce créneau
+                                            {availableSpots <= 0 ? "Complet" : "Choisir ce créneau"}
                                           </Button>
                                         </div>
                                       )

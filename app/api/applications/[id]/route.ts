@@ -27,10 +27,10 @@ export async function GET(request: Request, { params }: { params: { id: string }
           address,
           city,
           postal_code,
-          rent,
+          price,
           bedrooms,
           bathrooms,
-          surface_area,
+          surface,
           property_images(
             id,
             url,

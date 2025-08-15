@@ -16,10 +16,12 @@ export async function GET(request: Request, { params }: { params: { id: string }
   try {
     const applicationId = params.id
 
-    // Récupérer l'application pour avoir l'ID de la propriété
+    console.log("🔍 Récupération créneaux pour candidature:", applicationId)
+
+    // Vérifier que l'application existe
     const { data: application, error: appError } = await supabase
       .from("applications")
-      .select("property_id")
+      .select("id, property_id, tenant_id, status")
       .eq("id", applicationId)
       .single()
 
@@ -28,14 +30,12 @@ export async function GET(request: Request, { params }: { params: { id: string }
       return NextResponse.json({ error: "Candidature non trouvée" }, { status: 404 })
     }
 
-    // Récupérer les créneaux disponibles pour cette propriété
-    const { data: slots, error: slotsError } = await supabase
-      .from("visit_slots")
+    // Récupérer les créneaux de visite disponibles pour cette propriété
+    const { data: visitSlots, error: slotsError } = await supabase
+      .from("property_visit_slots")
       .select("*")
       .eq("property_id", application.property_id)
       .eq("is_available", true)
-      .is("application_id", null) // Créneaux non encore associés
-      .gte("date", new Date().toISOString().split("T")[0]) // Créneaux futurs uniquement
       .order("date", { ascending: true })
       .order("start_time", { ascending: true })
 
@@ -44,10 +44,23 @@ export async function GET(request: Request, { params }: { params: { id: string }
       return NextResponse.json({ error: "Erreur lors de la récupération des créneaux" }, { status: 500 })
     }
 
+    console.log("✅ Créneaux récupérés:", visitSlots?.length || 0)
+
+    // Filtrer les créneaux futurs
+    const now = new Date()
+    const futureSlots = (visitSlots || []).filter((slot) => {
+      const slotDateTime = new Date(`${slot.date}T${slot.start_time}`)
+      return slotDateTime > now
+    })
+
     return NextResponse.json({
       success: true,
-      slots: slots || [],
-      total: slots?.length || 0,
+      slots: futureSlots,
+      total: futureSlots.length,
+      application: {
+        id: application.id,
+        status: application.status,
+      },
     })
   } catch (error) {
     console.error("❌ Erreur serveur:", error)

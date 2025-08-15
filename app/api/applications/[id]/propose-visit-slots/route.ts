@@ -19,15 +19,15 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const body = await request.json()
     console.log("📝 Body reçu:", body)
 
-    // Récupérer les slot_ids depuis le body
-    const { slot_ids, message, status } = body
+    // Récupérer les slots depuis le body (nouveau format avec start_time/end_time)
+    const { slots } = body
 
-    if (!slot_ids || !Array.isArray(slot_ids) || slot_ids.length === 0) {
-      console.error("❌ Aucun slot_ids fourni:", { slot_ids, body })
+    if (!slots || !Array.isArray(slots) || slots.length === 0) {
+      console.error("❌ Aucun créneau fourni:", { slots, body })
       return NextResponse.json(
         {
           error: "Aucun créneau fourni",
-          details: "Le paramètre slot_ids est requis et doit être un tableau non vide",
+          details: "Le paramètre slots est requis et doit être un tableau non vide",
         },
         { status: 400 },
       )
@@ -35,9 +35,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
     console.log("🎯 Proposition de créneaux:", {
       applicationId,
-      slot_ids,
-      message: message?.substring(0, 50) + "...",
-      status,
+      slotsCount: slots.length,
     })
 
     // Vérifier que l'application existe
@@ -52,46 +50,39 @@ export async function POST(request: Request, { params }: { params: { id: string 
       return NextResponse.json({ error: "Candidature non trouvée" }, { status: 404 })
     }
 
-    // Vérifier que les créneaux existent et les associer à l'application
-    const { data: existingSlots, error: slotsCheckError } = await supabase
-      .from("visit_slots")
-      .select("id, property_id, application_id")
-      .in("id", slot_ids)
+    // Créer les créneaux de visite dans la table property_visit_slots
+    const visitSlotsToCreate = slots.map((slot: any) => ({
+      property_id: application.property_id,
+      date: slot.start_time.split("T")[0], // Extraire la date
+      start_time: slot.start_time.split("T")[1], // Extraire l'heure de début
+      end_time: slot.end_time.split("T")[1], // Extraire l'heure de fin
+      max_capacity: 1,
+      is_group_visit: false,
+      current_bookings: 0,
+      is_available: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }))
 
-    if (slotsCheckError) {
-      console.error("❌ Erreur vérification créneaux:", slotsCheckError)
-      return NextResponse.json({ error: "Erreur lors de la vérification des créneaux" }, { status: 500 })
-    }
+    console.log("📅 Créneaux à créer:", visitSlotsToCreate)
 
-    if (!existingSlots || existingSlots.length === 0) {
-      console.error("❌ Aucun créneau trouvé avec les IDs:", slot_ids)
-      return NextResponse.json({ error: "Aucun créneau trouvé avec ces identifiants" }, { status: 404 })
-    }
-
-    console.log("✅ Créneaux trouvés:", existingSlots.length)
-
-    // Associer les créneaux à l'application
-    const { data: updatedSlots, error: slotsError } = await supabase
-      .from("visit_slots")
-      .update({
-        application_id: applicationId,
-        updated_at: new Date().toISOString(),
-      })
-      .in("id", slot_ids)
+    const { data: createdSlots, error: slotsError } = await supabase
+      .from("property_visit_slots")
+      .insert(visitSlotsToCreate)
       .select()
 
     if (slotsError) {
-      console.error("❌ Erreur association créneaux:", slotsError)
-      return NextResponse.json({ error: "Erreur lors de l'association des créneaux" }, { status: 500 })
+      console.error("❌ Erreur création créneaux:", slotsError)
+      return NextResponse.json({ error: "Erreur lors de la création des créneaux" }, { status: 500 })
     }
 
-    console.log("✅ Créneaux associés:", updatedSlots?.length || 0)
+    console.log("✅ Créneaux créés:", createdSlots?.length || 0)
 
     // Mettre à jour le statut de la candidature
     const { error: updateError } = await supabase
       .from("applications")
       .update({
-        status: status || "visit_proposed",
+        status: "visit_proposed",
         updated_at: new Date().toISOString(),
       })
       .eq("id", applicationId)
@@ -103,14 +94,14 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
     console.log("✅ Créneaux proposés avec succès:", {
       applicationId,
-      slotsCount: slot_ids.length,
-      newStatus: status || "visit_proposed",
+      slotsCount: slots.length,
+      newStatus: "visit_proposed",
     })
 
     return NextResponse.json({
       success: true,
-      message: `${slot_ids.length} créneau(x) de visite proposé(s) avec succès`,
-      slotsCount: slot_ids.length,
+      message: `${slots.length} créneau(x) de visite proposé(s) avec succès`,
+      slotsCount: slots.length,
     })
   } catch (e) {
     console.error("❌ Erreur inattendue:", e)
