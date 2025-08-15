@@ -18,74 +18,84 @@ export async function GET(request: Request) {
     const tenantId = searchParams.get("tenant_id")
 
     if (!tenantId) {
-      return NextResponse.json({ error: "ID du locataire requis" }, { status: 400 })
+      return NextResponse.json({ error: "ID du locataire manquant" }, { status: 400 })
     }
 
     console.log("🔍 Récupération candidatures pour locataire:", tenantId)
 
-    // Récupérer toutes les candidatures du locataire (y compris celles retirées)
-    const { data: applications, error: applicationsError } = await supabase
+    // Récupérer les candidatures du locataire (EXCLURE les candidatures retirées)
+    const { data: applications, error: appsError } = await supabase
       .from("applications")
       .select(`
         id,
+        property_id,
         status,
         created_at,
         updated_at,
-        presentation,
-        property:properties!inner (
+        properties (
           id,
           title,
           address,
-          city,
-          postal_code,
           price,
+          property_type,
           bedrooms,
           bathrooms,
-          surface,
-          property_images (
-            id,
-            url,
-            is_primary
-          )
+          surface_area,
+          images
         )
       `)
       .eq("tenant_id", tenantId)
-      .neq("status", "withdrawn") // Exclure les candidatures retirées
+      .neq("status", "withdrawn") // CORRECTION: Exclure les candidatures retirées
       .order("created_at", { ascending: false })
 
-    if (applicationsError) {
-      console.error("❌ Erreur récupération candidatures:", applicationsError)
+    if (appsError) {
+      console.error("❌ Erreur récupération candidatures:", appsError)
       return NextResponse.json({ error: "Erreur lors de la récupération des candidatures" }, { status: 500 })
     }
 
     console.log("✅ Candidatures récupérées:", applications?.length || 0)
 
-    // Pour chaque candidature avec statut visit_proposed, récupérer les créneaux disponibles
+    // Pour chaque candidature, récupérer les créneaux proposés si le statut est "visit_proposed"
     const applicationsWithSlots = await Promise.all(
       (applications || []).map(async (app) => {
-        if (app.status === "visit_proposed") {
-          try {
-            const { data: slots, error: slotsError } = await supabase
-              .from("property_visit_slots")
-              .select("*")
-              .eq("property_id", app.property.id)
-              .eq("is_available", true)
-              .gte("date", new Date().toISOString().split("T")[0])
-              .order("date", { ascending: true })
-              .order("start_time", { ascending: true })
+        let proposedSlots = []
 
-            if (!slotsError && slots) {
-              const availableSlots = slots.filter((slot) => slot.current_bookings < slot.max_capacity)
-              return {
-                ...app,
-                proposed_visit_slots: availableSlots,
-              }
-            }
-          } catch (error) {
-            console.error("❌ Erreur récupération créneaux pour candidature:", app.id, error)
+        if (app.status === "visit_proposed") {
+          // Récupérer les créneaux disponibles pour cette propriété
+          const { data: slots, error: slotsError } = await supabase
+            .from("property_visit_slots")
+            .select("*")
+            .eq("property_id", app.property_id)
+            .eq("is_available", true)
+            .gte("date", new Date().toISOString().split("T")[0]) // Seulement les créneaux futurs
+            .order("date", { ascending: true })
+            .order("start_time", { ascending: true })
+
+          if (!slotsError && slots) {
+            // Filtrer les créneaux avec des places disponibles
+            proposedSlots = slots.filter((slot) => slot.current_bookings < slot.max_capacity)
           }
         }
-        return app
+
+        // Si le statut est "visit_scheduled", récupérer les détails de la visite
+        let scheduledVisit = null
+        if (app.status === "visit_scheduled") {
+          const { data: visit, error: visitError } = await supabase
+            .from("visits")
+            .select("*")
+            .eq("application_id", app.id)
+            .single()
+
+          if (!visitError && visit) {
+            scheduledVisit = visit
+          }
+        }
+
+        return {
+          ...app,
+          proposed_slots: proposedSlots,
+          scheduled_visit: scheduledVisit,
+        }
       }),
     )
 
@@ -95,6 +105,12 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error("❌ Erreur serveur:", error)
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Erreur serveur",
+        details: error instanceof Error ? error.message : "Erreur inconnue",
+      },
+      { status: 500 },
+    )
   }
 }

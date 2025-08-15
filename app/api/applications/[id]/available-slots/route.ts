@@ -13,36 +13,40 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 export const dynamic = "force-dynamic"
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
+  const applicationId = params.id
+
   try {
-    const applicationId = params.id
+    console.log("🔍 Récupération des créneaux disponibles pour candidature:", applicationId)
 
-    console.log("🔍 Récupération créneaux pour candidature:", applicationId)
-
-    // Récupérer l'application pour obtenir l'ID de la propriété
+    // Récupérer la candidature et la propriété associée
     const { data: application, error: appError } = await supabase
       .from("applications")
-      .select("id, property_id, status")
+      .select(`
+        id,
+        property_id,
+        status,
+        properties (
+          id,
+          title,
+          address
+        )
+      `)
       .eq("id", applicationId)
       .single()
 
     if (appError || !application) {
-      console.error("❌ Application non trouvée:", appError)
+      console.error("❌ Candidature non trouvée:", appError)
       return NextResponse.json({ error: "Candidature non trouvée" }, { status: 404 })
     }
 
-    if (application.status !== "visit_proposed") {
-      return NextResponse.json({ error: "Aucun créneau de visite proposé pour cette candidature" }, { status: 400 })
-    }
+    console.log("✅ Candidature trouvée:", application.id, "pour propriété:", application.property_id)
 
-    // Récupérer les créneaux disponibles pour cette propriété
-    const today = new Date().toISOString().split("T")[0]
-
-    const { data: slots, error: slotsError } = await supabase
+    // Récupérer tous les créneaux de visite pour cette propriété
+    const { data: allSlots, error: slotsError } = await supabase
       .from("property_visit_slots")
       .select("*")
       .eq("property_id", application.property_id)
       .eq("is_available", true)
-      .gte("date", today) // Créneaux futurs seulement
       .order("date", { ascending: true })
       .order("start_time", { ascending: true })
 
@@ -51,17 +55,64 @@ export async function GET(request: Request, { params }: { params: { id: string }
       return NextResponse.json({ error: "Erreur lors de la récupération des créneaux" }, { status: 500 })
     }
 
-    // Filtrer les créneaux avec des places disponibles
-    const availableSlots = (slots || []).filter((slot) => slot.current_bookings < slot.max_capacity)
+    console.log("📅 Créneaux récupérés:", allSlots?.length || 0)
 
-    console.log("✅ Créneaux disponibles:", availableSlots.length)
+    // Filtrer les créneaux disponibles (futurs et avec places disponibles)
+    const now = new Date()
+    const today = now.toISOString().split("T")[0] // Format YYYY-MM-DD
+
+    const availableSlots = (allSlots || []).filter((slot) => {
+      // Vérifier que la date est future ou aujourd'hui
+      const slotDate = slot.date
+      if (slotDate < today) {
+        return false
+      }
+
+      // Si c'est aujourd'hui, vérifier que l'heure n'est pas passée
+      if (slotDate === today) {
+        const slotDateTime = new Date(`${slot.date}T${slot.start_time}`)
+        if (slotDateTime <= now) {
+          return false
+        }
+      }
+
+      // Vérifier qu'il y a des places disponibles
+      // CORRECTION: Utiliser une comparaison JavaScript au lieu de .raw()
+      return slot.current_bookings < slot.max_capacity
+    })
+
+    console.log("✅ Créneaux disponibles filtrés:", availableSlots.length)
+
+    // Formater les créneaux pour l'affichage
+    const formattedSlots = availableSlots.map((slot) => ({
+      id: slot.id,
+      date: slot.date,
+      start_time: slot.start_time,
+      end_time: slot.end_time,
+      max_capacity: slot.max_capacity,
+      current_bookings: slot.current_bookings,
+      is_group_visit: slot.is_group_visit,
+      available_spots: slot.max_capacity - slot.current_bookings,
+    }))
 
     return NextResponse.json({
       success: true,
-      slots: availableSlots,
+      application: {
+        id: application.id,
+        property_id: application.property_id,
+        status: application.status,
+        property: application.properties,
+      },
+      slots: formattedSlots,
     })
   } catch (error) {
     console.error("❌ Erreur serveur:", error)
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Erreur serveur",
+        details: error instanceof Error ? error.message : "Erreur inconnue",
+      },
+      { status: 500 },
+    )
   }
 }

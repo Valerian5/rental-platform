@@ -17,6 +17,8 @@ import {
   CheckCircle,
   Clock,
   Star,
+  Users,
+  User,
 } from "lucide-react"
 import { toast } from "sonner"
 import { getAuthHeaders } from "@/lib/auth-utils"
@@ -39,14 +41,19 @@ interface VisitSchedulerProps {
   propertyId?: string
 }
 
+interface SlotConfiguration {
+  isGroupVisit: boolean
+  capacity: number
+}
+
 interface DayConfiguration {
   date: string
   slotDuration: number
   startTime: string
   endTime: string
-  isGroupVisit: boolean
-  capacity: number
   selectedSlots: string[]
+  // NOUVEAU: Configuration individuelle par créneau
+  slotConfigurations: { [slotKey: string]: SlotConfiguration }
 }
 
 const DURATION_OPTIONS = [
@@ -124,9 +131,8 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
     slotDuration: 30,
     startTime: "08:00",
     endTime: "20:00",
-    isGroupVisit: false,
-    capacity: 1,
     selectedSlots: [],
+    slotConfigurations: {},
   })
   const [customDuration, setCustomDuration] = useState(45)
   const [isSaving, setIsSaving] = useState(false)
@@ -363,20 +369,31 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
           setCustomDuration(duration)
         }
 
+        // NOUVEAU: Créer les configurations individuelles pour chaque créneau existant
+        const slotConfigurations: { [slotKey: string]: SlotConfiguration } = {}
+        const selectedSlots: string[] = []
+
+        existingSlots.forEach((slot) => {
+          const slotKey = `${formatTimeString(slot.start_time)}-${formatTimeString(slot.end_time)}`
+          selectedSlots.push(slotKey)
+          slotConfigurations[slotKey] = {
+            isGroupVisit: slot.is_group_visit,
+            capacity: slot.max_capacity,
+          }
+        })
+
         // CORRECTION: Toujours utiliser une amplitude LARGE pour permettre d'ajouter facilement
         setDayConfig({
           date: dateStr,
           slotDuration: commonDuration,
           startTime: "08:00", // AMPLITUDE LARGE par défaut
           endTime: "20:00", // AMPLITUDE LARGE par défaut
-          isGroupVisit: firstSlot.is_group_visit,
-          capacity: firstSlot.max_capacity,
-          selectedSlots: existingSlots.map(
-            (slot) => `${formatTimeString(slot.start_time)}-${formatTimeString(slot.end_time)}`,
-          ),
+          selectedSlots,
+          slotConfigurations,
         })
 
         console.log("✅ Configuration restaurée avec amplitude large et", existingSlots.length, "créneaux sélectionnés")
+        console.log("✅ Configurations individuelles:", slotConfigurations)
       } catch (error) {
         console.error("Erreur parsing créneaux existants:", error)
         setDayConfig({
@@ -384,9 +401,8 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
           slotDuration: 30,
           startTime: "08:00",
           endTime: "20:00",
-          isGroupVisit: false,
-          capacity: 1,
           selectedSlots: [],
+          slotConfigurations: {},
         })
       }
     } else {
@@ -397,19 +413,57 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
         slotDuration: 30,
         startTime: "08:00",
         endTime: "20:00",
-        isGroupVisit: false,
-        capacity: 1,
         selectedSlots: [],
+        slotConfigurations: {},
       })
     }
   }
 
   const toggleSlot = (slotKey: string) => {
+    setDayConfig((prev) => {
+      const isCurrentlySelected = prev.selectedSlots.includes(slotKey)
+
+      if (isCurrentlySelected) {
+        // Désélectionner : retirer le créneau et sa configuration
+        const newSelectedSlots = prev.selectedSlots.filter((s) => s !== slotKey)
+        const newSlotConfigurations = { ...prev.slotConfigurations }
+        delete newSlotConfigurations[slotKey]
+
+        return {
+          ...prev,
+          selectedSlots: newSelectedSlots,
+          slotConfigurations: newSlotConfigurations,
+        }
+      } else {
+        // Sélectionner : ajouter le créneau avec configuration par défaut
+        const newSlotConfigurations = {
+          ...prev.slotConfigurations,
+          [slotKey]: {
+            isGroupVisit: false, // Par défaut individuel
+            capacity: 1, // Par défaut 1 personne
+          },
+        }
+
+        return {
+          ...prev,
+          selectedSlots: [...prev.selectedSlots, slotKey],
+          slotConfigurations: newSlotConfigurations,
+        }
+      }
+    })
+  }
+
+  // NOUVEAU: Fonction pour mettre à jour la configuration d'un créneau spécifique
+  const updateSlotConfiguration = (slotKey: string, config: Partial<SlotConfiguration>) => {
     setDayConfig((prev) => ({
       ...prev,
-      selectedSlots: prev.selectedSlots.includes(slotKey)
-        ? prev.selectedSlots.filter((s) => s !== slotKey)
-        : [...prev.selectedSlots, slotKey],
+      slotConfigurations: {
+        ...prev.slotConfigurations,
+        [slotKey]: {
+          ...prev.slotConfigurations[slotKey],
+          ...config,
+        },
+      },
     }))
   }
 
@@ -421,28 +475,32 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
 
     console.log("🚀 Application configuration pour", selectedDate)
     console.log("🚀 Créneaux sélectionnés:", dayConfig.selectedSlots)
+    console.log("🚀 Configurations individuelles:", dayConfig.slotConfigurations)
     console.log("🚀 Mode:", mode)
 
     const otherDaysSlots = safeVisitSlots.filter((slot) => slot.date !== selectedDate)
     console.log("🚀 Créneaux autres jours:", otherDaysSlots.length)
 
-    // CORRECTION: Créer les créneaux avec les bonnes propriétés individuelles
+    // CORRECTION: Créer les créneaux avec leurs configurations individuelles
     const newSlots: VisitSlot[] = dayConfig.selectedSlots.map((slotKey) => {
       const [startTime, endTime] = slotKey.split("-")
+      const slotConfig = dayConfig.slotConfigurations[slotKey] || {
+        isGroupVisit: false,
+        capacity: 1,
+      }
 
-      // CORRECTION: Chaque créneau garde ses propres propriétés
       return {
         date: selectedDate,
         start_time: formatTimeString(startTime),
         end_time: formatTimeString(endTime),
-        max_capacity: dayConfig.capacity,
-        is_group_visit: dayConfig.isGroupVisit,
+        max_capacity: slotConfig.capacity,
+        is_group_visit: slotConfig.isGroupVisit,
         current_bookings: 0,
         is_available: true,
       }
     })
 
-    console.log("🚀 Nouveaux créneaux créés:", newSlots)
+    console.log("🚀 Nouveaux créneaux créés avec configurations individuelles:", newSlots)
 
     const allSlots = [...otherDaysSlots, ...newSlots]
     console.log("🚀 Total créneaux après application:", allSlots.length)
@@ -464,7 +522,11 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
     const otherDaysSlots = safeVisitSlots.filter((slot) => slot.date !== selectedDate)
     onSlotsChange(otherDaysSlots)
 
-    setDayConfig((prev) => ({ ...prev, selectedSlots: [] }))
+    setDayConfig((prev) => ({
+      ...prev,
+      selectedSlots: [],
+      slotConfigurations: {},
+    }))
 
     if (mode === "management") {
       await saveSlotsToDatabase(otherDaysSlots)
@@ -492,6 +554,21 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
       (slot) =>
         slot.date === selectedDate && `${slot.start_time}-${slot.end_time}` === slotKey && slot.current_bookings > 0,
     )
+  }
+
+  // NOUVEAU: Fonction pour obtenir la configuration d'un créneau existant
+  const getExistingSlotConfig = (slotKey: string): SlotConfiguration | null => {
+    if (!selectedDate) return null
+    const existingSlot = safeVisitSlots.find(
+      (slot) => slot.date === selectedDate && `${slot.start_time}-${slot.end_time}` === slotKey,
+    )
+    if (existingSlot) {
+      return {
+        isGroupVisit: existingSlot.is_group_visit,
+        capacity: existingSlot.max_capacity,
+      }
+    }
+    return null
   }
 
   if (isLoading && !hasInitialLoad) {
@@ -611,7 +688,17 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
                               <Badge variant={slot.current_bookings > 0 ? "default" : "outline"}>
                                 {slot.current_bookings}/{slot.max_capacity}
                               </Badge>
-                              {slot.is_group_visit && <Badge variant="secondary">Groupe</Badge>}
+                              {slot.is_group_visit ? (
+                                <Badge variant="secondary">
+                                  <Users className="h-3 w-3 mr-1" />
+                                  Groupe
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline">
+                                  <User className="h-3 w-3 mr-1" />
+                                  Individuel
+                                </Badge>
+                              )}
                               {slot.current_bookings > 0 && <Badge variant="destructive">Réservé</Badge>}
                             </div>
                           </div>
@@ -675,57 +762,7 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
                   </div>
                 </div>
 
-                {/* Type de visite */}
-                <div className="space-y-3">
-                  <Label className="text-base font-medium">Type de visite</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      variant={!dayConfig.isGroupVisit ? "default" : "outline"}
-                      onClick={() => setDayConfig((prev) => ({ ...prev, isGroupVisit: false, capacity: 1 }))}
-                    >
-                      Individuelle
-                    </Button>
-                    <Button
-                      variant={dayConfig.isGroupVisit ? "default" : "outline"}
-                      onClick={() => setDayConfig((prev) => ({ ...prev, isGroupVisit: true }))}
-                    >
-                      Groupée
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Capacité */}
-                {dayConfig.isGroupVisit && (
-                  <div className="space-y-3">
-                    <Label className="text-base font-medium">Capacité par visite</Label>
-                    <div className="flex items-center justify-center gap-4 p-4 border rounded-lg">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setDayConfig((prev) => ({ ...prev, capacity: Math.max(1, prev.capacity - 1) }))}
-                        disabled={dayConfig.capacity <= 1}
-                      >
-                        <Minus className="h-4 w-4" />
-                      </Button>
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg font-medium">{dayConfig.capacity}</span>
-                        <span className="text-sm text-muted-foreground">
-                          {dayConfig.capacity === 1 ? "personne" : "personnes"}
-                        </span>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setDayConfig((prev) => ({ ...prev, capacity: Math.min(10, prev.capacity + 1) }))}
-                        disabled={dayConfig.capacity >= 10}
-                      >
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* CORRECTION: Créneaux avec badges pour les existants */}
+                {/* NOUVEAU: Créneaux avec configuration individuelle */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <Label className="text-base font-medium">Créneaux disponibles</Label>
@@ -736,37 +773,147 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
                   </div>
 
                   {timeSlots.length > 0 ? (
-                    <div className="border rounded-lg p-3 max-h-80 overflow-y-auto">
-                      <div className="grid grid-cols-2 gap-2">
+                    <div className="border rounded-lg p-3 max-h-96 overflow-y-auto">
+                      <div className="space-y-3">
                         {timeSlots.map((slot) => {
                           const isSelected = dayConfig.selectedSlots.includes(slot.key)
                           const isExisting = isExistingSlot(slot.key)
                           const isBooked = isBookedSlot(slot.key)
+                          const existingConfig = getExistingSlotConfig(slot.key)
+                          const currentConfig = dayConfig.slotConfigurations[slot.key] ||
+                            existingConfig || {
+                              isGroupVisit: false,
+                              capacity: 1,
+                            }
 
                           return (
                             <div
                               key={slot.key}
                               className={`
-                                flex items-center justify-between p-2 rounded border cursor-pointer transition-colors relative
-                                ${
-                                  isSelected
-                                    ? "bg-blue-100 border-blue-300 text-blue-800"
-                                    : "bg-gray-50 border-gray-200 hover:bg-gray-100"
-                                }
+                                border rounded-lg p-3 transition-colors
+                                ${isSelected ? "bg-blue-50 border-blue-300" : "bg-gray-50 border-gray-200"}
                                 ${isBooked ? "opacity-75" : ""}
                               `}
-                              onClick={() => !isBooked && toggleSlot(slot.key)}
                             >
-                              <span className="text-sm font-medium">{slot.label}</span>
-                              <div className="flex items-center gap-1">
-                                {isExisting && <Star className="h-3 w-3 text-yellow-600" title="Créneau existant" />}
-                                {isBooked && (
-                                  <Badge variant="destructive" className="text-xs px-1 py-0">
-                                    Réservé
-                                  </Badge>
-                                )}
-                                {isSelected && <CheckCircle className="h-4 w-4 text-blue-600" />}
+                              {/* En-tête du créneau */}
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => !isBooked && toggleSlot(slot.key)}
+                                    disabled={isBooked}
+                                    className={`
+                                      flex items-center gap-2 font-medium cursor-pointer
+                                      ${isSelected ? "text-blue-800" : "text-gray-900"}
+                                      ${isBooked ? "cursor-not-allowed" : "hover:text-blue-600"}
+                                    `}
+                                  >
+                                    {isSelected && <CheckCircle className="h-4 w-4 text-blue-600" />}
+                                    <span>{slot.label}</span>
+                                  </button>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  {isExisting && <Star className="h-3 w-3 text-yellow-600" title="Créneau existant" />}
+                                  {isBooked && (
+                                    <Badge variant="destructive" className="text-xs px-1 py-0">
+                                      Réservé
+                                    </Badge>
+                                  )}
+                                </div>
                               </div>
+
+                              {/* Configuration du créneau (si sélectionné) */}
+                              {isSelected && !isBooked && (
+                                <div className="space-y-3 pt-2 border-t border-gray-200">
+                                  {/* Type de visite */}
+                                  <div className="space-y-2">
+                                    <Label className="text-sm font-medium">Type de visite</Label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <Button
+                                        variant={!currentConfig.isGroupVisit ? "default" : "outline"}
+                                        size="sm"
+                                        onClick={() =>
+                                          updateSlotConfiguration(slot.key, {
+                                            isGroupVisit: false,
+                                            capacity: 1,
+                                          })
+                                        }
+                                      >
+                                        <User className="h-3 w-3 mr-1" />
+                                        Individuel
+                                      </Button>
+                                      <Button
+                                        variant={currentConfig.isGroupVisit ? "default" : "outline"}
+                                        size="sm"
+                                        onClick={() =>
+                                          updateSlotConfiguration(slot.key, {
+                                            isGroupVisit: true,
+                                            capacity: Math.max(2, currentConfig.capacity),
+                                          })
+                                        }
+                                      >
+                                        <Users className="h-3 w-3 mr-1" />
+                                        Groupe
+                                      </Button>
+                                    </div>
+                                  </div>
+
+                                  {/* Capacité (si visite groupée) */}
+                                  {currentConfig.isGroupVisit && (
+                                    <div className="space-y-2">
+                                      <Label className="text-sm font-medium">Capacité</Label>
+                                      <div className="flex items-center justify-center gap-2">
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() =>
+                                            updateSlotConfiguration(slot.key, {
+                                              capacity: Math.max(1, currentConfig.capacity - 1),
+                                            })
+                                          }
+                                          disabled={currentConfig.capacity <= 1}
+                                        >
+                                          <Minus className="h-3 w-3" />
+                                        </Button>
+                                        <span className="text-sm font-medium min-w-[60px] text-center">
+                                          {currentConfig.capacity}{" "}
+                                          {currentConfig.capacity === 1 ? "personne" : "personnes"}
+                                        </span>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() =>
+                                            updateSlotConfiguration(slot.key, {
+                                              capacity: Math.min(10, currentConfig.capacity + 1),
+                                            })
+                                          }
+                                          disabled={currentConfig.capacity >= 10}
+                                        >
+                                          <Plus className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Affichage de la configuration existante (si créneau existant et non sélectionné) */}
+                              {!isSelected && isExisting && existingConfig && (
+                                <div className="pt-2 border-t border-gray-200">
+                                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                                    {existingConfig.isGroupVisit ? (
+                                      <>
+                                        <Users className="h-3 w-3" />
+                                        <span>Groupe ({existingConfig.capacity} personnes)</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <User className="h-3 w-3" />
+                                        <span>Individuel</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           )
                         })}
@@ -776,21 +923,38 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() =>
+                          onClick={() => {
+                            const availableSlots = timeSlots.filter((slot) => !isBookedSlot(slot.key))
+                            const newSlotConfigurations = { ...dayConfig.slotConfigurations }
+
+                            availableSlots.forEach((slot) => {
+                              if (!newSlotConfigurations[slot.key]) {
+                                newSlotConfigurations[slot.key] = {
+                                  isGroupVisit: false,
+                                  capacity: 1,
+                                }
+                              }
+                            })
+
                             setDayConfig((prev) => ({
                               ...prev,
-                              selectedSlots: timeSlots
-                                .filter((slot) => !isBookedSlot(slot.key))
-                                .map((slot) => slot.key),
+                              selectedSlots: availableSlots.map((slot) => slot.key),
+                              slotConfigurations: newSlotConfigurations,
                             }))
-                          }
+                          }}
                         >
                           Tout sélectionner
                         </Button>
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => setDayConfig((prev) => ({ ...prev, selectedSlots: [] }))}
+                          onClick={() =>
+                            setDayConfig((prev) => ({
+                              ...prev,
+                              selectedSlots: [],
+                              slotConfigurations: {},
+                            }))
+                          }
                         >
                           Tout désélectionner
                         </Button>
@@ -807,6 +971,12 @@ export function VisitScheduler({ visitSlots = [], onSlotsChange, mode, propertyI
                             Réservé
                           </Badge>
                           <span>Créneau réservé (non modifiable)</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <User className="h-3 w-3" />
+                          <span>Visite individuelle</span>
+                          <Users className="h-3 w-3 ml-2" />
+                          <span>Visite groupée</span>
                         </div>
                       </div>
                     </div>

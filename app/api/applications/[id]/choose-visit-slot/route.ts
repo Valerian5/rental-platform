@@ -13,25 +13,27 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 export const dynamic = "force-dynamic"
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
+  const applicationId = params.id
+
   try {
-    const applicationId = params.id
-    const { slot_id } = await request.json()
+    const body = await request.json()
+    const { slot_id } = body
 
     console.log("🎯 Sélection créneau:", { applicationId, slot_id })
 
     if (!slot_id) {
-      return NextResponse.json({ error: "ID du créneau requis" }, { status: 400 })
+      return NextResponse.json({ error: "ID du créneau manquant" }, { status: 400 })
     }
 
-    // Récupérer l'application avec les informations du locataire
+    // Récupérer la candidature
     const { data: application, error: appError } = await supabase
       .from("applications")
       .select(`
         id,
-        property_id,
         tenant_id,
+        property_id,
         status,
-        tenant:users!applications_tenant_id_fkey (
+        users!applications_tenant_id_fkey (
           id,
           first_name,
           last_name,
@@ -43,15 +45,17 @@ export async function POST(request: Request, { params }: { params: { id: string 
       .single()
 
     if (appError || !application) {
-      console.error("❌ Application non trouvée:", appError)
+      console.error("❌ Candidature non trouvée:", appError)
       return NextResponse.json({ error: "Candidature non trouvée" }, { status: 404 })
     }
 
+    // Vérifier que la candidature est dans le bon statut
     if (application.status !== "visit_proposed") {
-      return NextResponse.json({ error: "Cette candidature n'a pas de créneaux de visite proposés" }, { status: 400 })
+      console.error("❌ Statut candidature invalide:", application.status)
+      return NextResponse.json({ error: "Cette candidature ne permet pas de sélectionner un créneau" }, { status: 400 })
     }
 
-    // Récupérer le créneau sélectionné
+    // Récupérer et vérifier le créneau
     const { data: slot, error: slotError } = await supabase
       .from("property_visit_slots")
       .select("*")
@@ -64,15 +68,20 @@ export async function POST(request: Request, { params }: { params: { id: string 
       return NextResponse.json({ error: "Créneau non trouvé" }, { status: 404 })
     }
 
-    // Vérifier que le créneau est disponible
-    if (!slot.is_available || slot.current_bookings >= slot.max_capacity) {
+    // Vérifications de disponibilité
+    const now = new Date()
+    const slotDateTime = new Date(`${slot.date}T${slot.start_time}`)
+
+    if (slotDateTime <= now) {
+      return NextResponse.json({ error: "Ce créneau est dans le passé" }, { status: 400 })
+    }
+
+    if (!slot.is_available) {
       return NextResponse.json({ error: "Ce créneau n'est plus disponible" }, { status: 400 })
     }
 
-    // Vérifier que le créneau est dans le futur
-    const slotDateTime = new Date(`${slot.date}T${slot.start_time}`)
-    if (slotDateTime <= new Date()) {
-      return NextResponse.json({ error: "Ce créneau est dans le passé" }, { status: 400 })
+    if (slot.current_bookings >= slot.max_capacity) {
+      return NextResponse.json({ error: "Ce créneau est complet" }, { status: 400 })
     }
 
     // Vérifier qu'il n'y a pas déjà une visite programmée pour cette candidature
@@ -80,7 +89,6 @@ export async function POST(request: Request, { params }: { params: { id: string 
       .from("visits")
       .select("id")
       .eq("application_id", applicationId)
-      .eq("status", "scheduled")
       .single()
 
     if (existingVisit) {
@@ -88,23 +96,22 @@ export async function POST(request: Request, { params }: { params: { id: string 
     }
 
     // Créer la visite
-    const visitDate = new Date(`${slot.date}T${slot.start_time}`)
-    const tenant = application.tenant
-
     const { data: visit, error: visitError } = await supabase
       .from("visits")
       .insert({
         application_id: applicationId,
         property_id: application.property_id,
         tenant_id: application.tenant_id,
-        visit_date: visitDate.toISOString(),
-        start_time: slot.start_time,
-        end_time: slot.end_time,
+        visit_date: slot.date,
+        visit_time: slot.start_time,
+        visit_end_time: slot.end_time,
         status: "scheduled",
-        visitor_name: `${tenant.first_name} ${tenant.last_name}`,
-        visitor_email: tenant.email,
-        visitor_phone: tenant.phone,
-        notes: `Visite programmée via le créneau ${slot_id}`,
+        tenant_name: `${application.users.first_name} ${application.users.last_name}`,
+        tenant_email: application.users.email,
+        tenant_phone: application.users.phone,
+        notes: `Créneau sélectionné: ${slot.id}`, // IMPORTANT: Stocker l'ID du créneau pour pouvoir le libérer plus tard
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
       .select()
       .single()
@@ -125,7 +132,9 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
     if (updateSlotError) {
       console.error("❌ Erreur mise à jour créneau:", updateSlotError)
-      // Ne pas faire échouer la requête, juste logger l'erreur
+      // Supprimer la visite créée en cas d'erreur
+      await supabase.from("visits").delete().eq("id", visit.id)
+      return NextResponse.json({ error: "Erreur lors de la réservation du créneau" }, { status: 500 })
     }
 
     // Mettre à jour le statut de la candidature
@@ -146,11 +155,23 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
     return NextResponse.json({
       success: true,
-      message: "Créneau de visite confirmé avec succès !",
-      visit: visit,
+      message: "Créneau de visite sélectionné avec succès",
+      visit: {
+        id: visit.id,
+        date: visit.visit_date,
+        time: visit.visit_time,
+        end_time: visit.visit_end_time,
+        status: visit.status,
+      },
     })
   } catch (error) {
     console.error("❌ Erreur serveur:", error)
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Erreur serveur",
+        details: error instanceof Error ? error.message : "Erreur inconnue",
+      },
+      { status: 500 },
+    )
   }
 }
