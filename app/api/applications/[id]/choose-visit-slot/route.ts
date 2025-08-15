@@ -83,21 +83,23 @@ export async function POST(request: Request, { params }: { params: { id: string 
       console.error("❌ Erreur récupération locataire:", tenantError)
     }
 
-    // Créer la visite
+    // Créer la visite avec la structure correcte de la table
+    const visitDate = new Date(`${slot.date}T${slot.start_time}`)
+
     const { data: visit, error: visitError } = await supabase
       .from("visits")
       .insert({
         application_id: applicationId,
         property_id: application.property_id,
         tenant_id: application.tenant_id,
-        visit_slot_id: slot_id,
-        visit_date: slot.date,
+        visit_date: visitDate.toISOString(),
         start_time: slot.start_time,
         end_time: slot.end_time,
         status: "scheduled",
         visitor_name: tenant ? `${tenant.first_name} ${tenant.last_name}` : "Candidat",
         visitor_email: tenant?.email || "candidat@example.com",
         visitor_phone: tenant?.phone || "0000000000",
+        notes: `Visite programmée via le créneau ${slot_id}`,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })

@@ -23,8 +23,8 @@ export async function GET(request: Request) {
 
     console.log("🔍 Récupération candidatures pour locataire:", tenantId)
 
-    // Récupérer les candidatures avec les informations de la propriété
-    const { data: applications, error: applicationsError } = await supabase
+    // Récupérer les candidatures avec les informations de la propriété et les créneaux proposés
+    const { data: applications, error } = await supabase
       .from("applications")
       .select(`
         id,
@@ -52,48 +52,43 @@ export async function GET(request: Request) {
       .eq("tenant_id", tenantId)
       .order("created_at", { ascending: false })
 
-    if (applicationsError) {
-      console.error("❌ Erreur récupération candidatures:", applicationsError)
+    if (error) {
+      console.error("❌ Erreur récupération candidatures:", error)
       return NextResponse.json({ error: "Erreur lors de la récupération des candidatures" }, { status: 500 })
     }
 
-    console.log("✅ Candidatures récupérées:", applications?.length || 0)
-
-    // Pour chaque candidature avec statut visit_proposed, récupérer les créneaux disponibles
+    // Pour chaque candidature avec statut "visit_proposed", récupérer les créneaux disponibles
     const applicationsWithSlots = await Promise.all(
-      (applications || []).map(async (app) => {
+      applications.map(async (app) => {
         if (app.status === "visit_proposed") {
           // Récupérer les créneaux disponibles pour cette propriété
-          const { data: visitSlots, error: slotsError } = await supabase
+          const { data: slots, error: slotsError } = await supabase
             .from("property_visit_slots")
             .select("*")
             .eq("property_id", app.property.id)
             .eq("is_available", true)
+            .gte("date", new Date().toISOString().split("T")[0]) // Créneaux futurs seulement
             .order("date", { ascending: true })
             .order("start_time", { ascending: true })
 
-          if (!slotsError && visitSlots) {
-            // Filtrer les créneaux futurs et avec des places disponibles
-            const now = new Date()
-            const futureAvailableSlots = visitSlots.filter((slot) => {
-              const slotDateTime = new Date(`${slot.date}T${slot.start_time}`)
-              return slotDateTime > now && slot.current_bookings < slot.max_capacity
-            })
+          if (slotsError) {
+            console.error("❌ Erreur récupération créneaux:", slotsError)
+          }
 
-            return {
-              ...app,
-              proposed_visit_slots: futureAvailableSlots,
-            }
+          return {
+            ...app,
+            proposed_visit_slots: slots || [],
           }
         }
         return app
       }),
     )
 
+    console.log("✅ Candidatures récupérées:", applicationsWithSlots.length)
+
     return NextResponse.json({
       success: true,
       applications: applicationsWithSlots,
-      total: applicationsWithSlots.length,
     })
   } catch (error) {
     console.error("❌ Erreur serveur:", error)

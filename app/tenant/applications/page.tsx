@@ -298,7 +298,7 @@ export default function TenantApplicationsPage() {
 
   const getMainImage = (property: Application["property"]) => {
     if (!property.property_images || property.property_images.length === 0) {
-      return "/placeholder.svg?height=200&width=300&text=Pas+d'image"
+      return "/placeholder.svg?height=150&width=200&text=Pas+d'image"
     }
 
     const mainImage = property.property_images.find((img) => img.is_primary)
@@ -352,26 +352,26 @@ export default function TenantApplicationsPage() {
             {applications.map((application) => (
               <Card key={application.id} className="overflow-hidden">
                 <CardContent className="p-0">
-                  <div className="grid md:grid-cols-3 gap-0">
-                    {/* Image du bien */}
+                  <div className="grid md:grid-cols-4 gap-0">
+                    {/* Image du bien - taille réduite */}
                     <div className="relative">
-                      <div className="aspect-video md:aspect-square relative overflow-hidden">
+                      <div className="aspect-video md:aspect-[4/3] relative overflow-hidden">
                         <img
                           src={getMainImage(application.property) || "/placeholder.svg"}
                           alt={application.property.title}
                           className="w-full h-full object-cover"
                         />
-                        <div className="absolute top-3 left-3">{getStatusBadge(application.status)}</div>
+                        <div className="absolute top-2 left-2">{getStatusBadge(application.status)}</div>
                       </div>
                     </div>
 
-                    {/* Contenu principal */}
-                    <div className="md:col-span-2 p-6">
+                    {/* Contenu principal - plus d'espace */}
+                    <div className="md:col-span-3 p-6">
                       <div className="flex flex-col h-full">
                         {/* En-tête */}
                         <div className="flex-1">
                           <div className="flex items-start justify-between mb-4">
-                            <div>
+                            <div className="flex-1">
                               <h3 className="text-xl font-semibold mb-2">{application.property.title}</h3>
                               <div className="flex items-center text-muted-foreground mb-2">
                                 <MapPin className="h-4 w-4 mr-1" />
