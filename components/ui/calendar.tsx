@@ -13,6 +13,8 @@ export interface CalendarProps {
   onSelect?: (date: Date | undefined) => void
   disabled?: (date: Date) => boolean
   mode?: "single" | "multiple" | "range"
+  hasVisitsOnDate?: (date: Date) => boolean
+  getVisitCountForDate?: (date: Date) => number
 }
 
 function Calendar({
@@ -23,6 +25,8 @@ function Calendar({
   onSelect,
   disabled,
   mode = "single",
+  hasVisitsOnDate,
+  getVisitCountForDate,
   ...props
 }: CalendarProps) {
   const [currentMonth, setCurrentMonth] = React.useState(new Date())
@@ -92,6 +96,14 @@ function Calendar({
     return disabled ? disabled(date) : false
   }
 
+  const hasVisits = (date: Date) => {
+    return hasVisitsOnDate ? hasVisitsOnDate(date) : false
+  }
+
+  const getVisitCount = (date: Date) => {
+    return getVisitCountForDate ? getVisitCountForDate(date) : 0
+  }
+
   // Generate calendar days
   const calendarDays = []
 
@@ -136,13 +148,13 @@ function Calendar({
     <div className={cn("p-3", className)} {...props}>
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <Button variant="outline" size="sm" onClick={goToPreviousMonth} className="h-7 w-7 p-0">
+        <Button variant="outline" size="sm" onClick={goToPreviousMonth} className="h-7 w-7 p-0 bg-transparent">
           <ChevronLeft className="h-4 w-4" />
         </Button>
         <div className="text-sm font-medium">
           {monthNames[month]} {year}
         </div>
-        <Button variant="outline" size="sm" onClick={goToNextMonth} className="h-7 w-7 p-0">
+        <Button variant="outline" size="sm" onClick={goToNextMonth} className="h-7 w-7 p-0 bg-transparent">
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
@@ -158,24 +170,36 @@ function Calendar({
 
       {/* Calendar grid */}
       <div className="grid grid-cols-7 gap-1">
-        {calendarDays.map((day, index) => (
-          <button
-            key={index}
-            onClick={() => handleDateClick(day.date)}
-            disabled={day.isDisabled}
-            className={cn(
-              "h-8 w-8 text-sm rounded-md hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground disabled:opacity-50 disabled:cursor-not-allowed",
-              {
-                "text-muted-foreground": !day.isCurrentMonth && showOutsideDays,
-                "bg-primary text-primary-foreground": day.isSelected,
-                "bg-accent text-accent-foreground": day.isToday && !day.isSelected,
-                hidden: !day.isCurrentMonth && !showOutsideDays,
-              },
-            )}
-          >
-            {day.date.getDate()}
-          </button>
-        ))}
+        {calendarDays.map((day, index) => {
+          const dayHasVisits = hasVisits(day.date)
+          const visitCount = getVisitCount(day.date)
+
+          return (
+            <button
+              key={index}
+              onClick={() => handleDateClick(day.date)}
+              disabled={day.isDisabled}
+              className={cn(
+                "h-8 w-8 text-sm rounded-md hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground disabled:opacity-50 disabled:cursor-not-allowed relative",
+                {
+                  "text-muted-foreground": !day.isCurrentMonth && showOutsideDays,
+                  "bg-primary text-primary-foreground": day.isSelected,
+                  "bg-accent text-accent-foreground": day.isToday && !day.isSelected,
+                  hidden: !day.isCurrentMonth && !showOutsideDays,
+                  "ring-2 ring-blue-500 ring-offset-1": dayHasVisits && day.isCurrentMonth && !day.isSelected,
+                  "bg-blue-50": dayHasVisits && day.isCurrentMonth && !day.isSelected && !day.isToday,
+                },
+              )}
+            >
+              {day.date.getDate()}
+              {dayHasVisits && day.isCurrentMonth && (
+                <div className="absolute -top-1 -right-1 h-3 w-3 bg-blue-500 rounded-full flex items-center justify-center">
+                  <span className="text-[8px] text-white font-bold">{visitCount > 9 ? "9+" : visitCount}</span>
+                </div>
+              )}
+            </button>
+          )
+        })}
       </div>
     </div>
   )

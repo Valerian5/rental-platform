@@ -7,310 +7,265 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tabs, TabsContent } from "@/components/ui/tabs"
+import { Calendar } from "@/components/ui/calendar"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { PageHeader } from "@/components/page-header"
 import { authService } from "@/lib/auth-service"
-import { visitService } from "@/lib/visit-service"
 import { toast } from "sonner"
-import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, addWeeks, subWeeks } from "date-fns"
-import { fr } from "date-fns/locale"
 import {
   CalendarIcon,
   Clock,
-  MapPin,
   User,
   Phone,
   Mail,
-  Check,
-  X,
+  Building2,
   Filter,
   Search,
-  ChevronLeft,
-  ChevronRight,
-  List,
-  CalendarIcon as CalendarViewIcon,
   Eye,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
 } from "lucide-react"
-import { PageHeader } from "@/components/page-header"
 
 interface Visit {
   id: string
-  property_id: string
-  visitor_name: string
-  visitor_email: string
-  visitor_phone: string
   visit_date: string
   visit_time: string
-  status: "scheduled" | "completed" | "cancelled" | "no_show"
-  notes: string
+  status: string
+  created_at: string
+  tenant: {
+    id: string
+    first_name: string
+    last_name: string
+    email: string
+    phone?: string
+  }
   property: {
+    id: string
     title: string
     address: string
-    type: string
+    city: string
+    property_images?: Array<{ url: string; is_primary: boolean }>
+  }
+  application?: {
+    id: string
+    status: string
   }
 }
 
-export default function VisitsPage() {
+export default function OwnerVisitsPage() {
   const router = useRouter()
-  const [loading, setLoading] = useState(true)
+  const [currentUser, setCurrentUser] = useState<any>(null)
   const [visits, setVisits] = useState<Visit[]>([])
   const [filteredVisits, setFilteredVisits] = useState<Visit[]>([])
-  const [properties, setProperties] = useState<any[]>([])
-  const [currentWeek, setCurrentWeek] = useState(new Date())
-  const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar")
-  const [filters, setFilters] = useState({
-    status: "all",
-    property: "all",
-    search: "",
-  })
+  const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined)
+  const [viewMode, setViewMode] = useState<"list" | "calendar">("list")
 
-  useEffect(() => {
-    checkAuthAndLoadData()
-  }, [])
-
-  useEffect(() => {
-    applyFilters()
-  }, [visits, filters])
-
-  // Fonction utilitaire pour extraire la date au format YYYY-MM-DD
-  const extractDate = (dateString: string) => {
-    if (!dateString) return ""
-    // Si c'est déjà au bon format, on le retourne
-    if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) return dateString
-    // Sinon on extrait la partie date de l'ISO string
-    return dateString.split("T")[0]
+  const statusConfig = {
+    scheduled: { label: "Programmée", variant: "default" as const, icon: Clock },
+    completed: { label: "Terminée", variant: "outline" as const, icon: CheckCircle },
+    cancelled: { label: "Annulée", variant: "destructive" as const, icon: XCircle },
+    pending: { label: "En attente", variant: "secondary" as const, icon: AlertCircle },
   }
 
-  const checkAuthAndLoadData = async () => {
-    try {
-      const user = await authService.getCurrentUser()
-      if (!user || user.user_type !== "owner") {
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const user = await authService.getCurrentUser()
+        if (!user || user.user_type !== "owner") {
+          router.push("/login")
+          return
+        }
+
+        setCurrentUser(user)
+        await loadVisits(user.id)
+      } catch (error) {
+        console.error("Erreur auth:", error)
         router.push("/login")
-        return
+      } finally {
+        setLoading(false)
       }
-
-      await loadVisits(user.id)
-      await loadProperties(user.id)
-    } catch (error) {
-      console.error("Erreur auth:", error)
-      router.push("/login")
-    } finally {
-      setLoading(false)
     }
-  }
+
+    fetchData()
+  }, [router])
 
   const loadVisits = async (ownerId: string) => {
     try {
-      const data = await visitService.getOwnerVisits(ownerId)
-      setVisits(data)
+      const response = await fetch(`/api/visits?owner_id=${ownerId}`)
+      if (response.ok) {
+        const data = await response.json()
+        setVisits(data.visits || [])
+        setFilteredVisits(data.visits || [])
+      } else {
+        toast.error("Erreur lors du chargement des visites")
+      }
     } catch (error) {
       console.error("Erreur chargement visites:", error)
       toast.error("Erreur lors du chargement des visites")
     }
   }
 
-  const loadProperties = async (ownerId: string) => {
-    try {
-      const response = await fetch(`/api/properties?owner_id=${ownerId}`)
-      if (response.ok) {
-        const data = await response.json()
-        setProperties(data.properties || [])
-      }
-    } catch (error) {
-      console.error("Erreur chargement propriétés:", error)
-    }
-  }
+  // Filtrage des visites
+  useEffect(() => {
+    let filtered = visits
 
-  const applyFilters = () => {
-    let filtered = [...visits]
-
-    if (filters.status !== "all") {
-      filtered = filtered.filter((visit) => visit.status === filters.status)
-    }
-
-    if (filters.property !== "all") {
-      filtered = filtered.filter((visit) => visit.property_id === filters.property)
-    }
-
-    if (filters.search) {
-      const search = filters.search.toLowerCase()
+    // Filtre par recherche
+    if (searchQuery) {
       filtered = filtered.filter(
         (visit) =>
-          visit.visitor_name.toLowerCase().includes(search) ||
-          visit.property.title.toLowerCase().includes(search) ||
-          visit.property.address.toLowerCase().includes(search),
+          visit.tenant.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          visit.tenant.last_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          visit.property.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          visit.property.address.toLowerCase().includes(searchQuery.toLowerCase()),
       )
     }
 
-    setFilteredVisits(filtered)
-  }
-
-  const handleStatusChange = async (visitId: string, newStatus: Visit["status"]) => {
-    try {
-      await visitService.updateVisitStatus(visitId, newStatus)
-      toast.success("Statut de la visite mis à jour")
-
-      const user = await authService.getCurrentUser()
-      if (user) {
-        await loadVisits(user.id)
-      }
-    } catch (error) {
-      console.error("Erreur mise à jour statut:", error)
-      toast.error("Erreur lors de la mise à jour")
+    // Filtre par statut
+    if (statusFilter !== "all") {
+      filtered = filtered.filter((visit) => visit.status === statusFilter)
     }
+
+    // Filtre par date
+    if (selectedDate) {
+      filtered = filtered.filter((visit) => {
+        const visitDate = new Date(visit.visit_date)
+        return visitDate.toDateString() === selectedDate.toDateString()
+      })
+    }
+
+    setFilteredVisits(filtered)
+  }, [visits, searchQuery, statusFilter, selectedDate])
+
+  const getPropertyImage = (property: Visit["property"]) => {
+    if (!property.property_images?.length) {
+      return "/placeholder.svg?height=80&width=80&text=Apt"
+    }
+    const primaryImage = property.property_images.find((img) => img.is_primary)
+    return primaryImage?.url || property.property_images[0]?.url || "/placeholder.svg?height=80&width=80&text=Apt"
   }
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "scheduled":
-        return <Badge variant="default">Programmée</Badge>
-      case "completed":
-        return (
-          <Badge variant="default" className="bg-green-100 text-green-800">
-            Effectuée
-          </Badge>
-        )
-      case "cancelled":
-        return <Badge variant="secondary">Annulée</Badge>
-      case "no_show":
-        return <Badge variant="destructive">Absent</Badge>
-      default:
-        return <Badge variant="outline">{status}</Badge>
+    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending
+    const Icon = config.icon
+    return (
+      <Badge variant={config.variant} className="flex items-center gap-1">
+        <Icon className="h-3 w-3 flex-shrink-0" />
+        <span className="truncate">{config.label}</span>
+      </Badge>
+    )
+  }
+
+  const formatDateTime = (date: string, time: string) => {
+    const visitDate = new Date(date)
+    return {
+      date: visitDate.toLocaleDateString("fr-FR", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }),
+      time: time,
     }
   }
 
-  // Génération de la vue calendrier
-  const getWeekDays = () => {
-    const start = startOfWeek(currentWeek, { weekStartsOn: 1 })
-    const end = endOfWeek(currentWeek, { weekStartsOn: 1 })
-    return eachDayOfInterval({ start, end })
-  }
-
-  const getVisitsForDay = (day: Date) => {
-    const dayStr = format(day, "yyyy-MM-dd")
-    const dayVisits = filteredVisits.filter((visit) => {
-      const visitDate = extractDate(visit.visit_date)
-      const matches = visitDate === dayStr
-      if (matches) {
-        console.log("📅 Visite trouvée pour", dayStr, ":", {
-          id: visit.id,
-          visitor_name: visit.visitor_name,
-          visit_time: visit.visit_time || visit.start_time,
-          status: visit.status,
-          visitDate,
-          dayStr,
-        })
+  const getVisitsByDate = () => {
+    const visitsByDate: { [key: string]: Visit[] } = {}
+    filteredVisits.forEach((visit) => {
+      const dateKey = new Date(visit.visit_date).toDateString()
+      if (!visitsByDate[dateKey]) {
+        visitsByDate[dateKey] = []
       }
-      return matches
+      visitsByDate[dateKey].push(visit)
     })
-    return dayVisits
+    return visitsByDate
   }
 
-  const navigateWeek = (direction: "prev" | "next") => {
-    setCurrentWeek(direction === "prev" ? subWeeks(currentWeek, 1) : addWeeks(currentWeek, 1))
+  const stats = {
+    total: visits.length,
+    scheduled: visits.filter((v) => v.status === "scheduled").length,
+    completed: visits.filter((v) => v.status === "completed").length,
+    cancelled: visits.filter((v) => v.status === "cancelled").length,
   }
 
-  const getTimeSlots = () => {
-    const slots = []
-    for (let hour = 8; hour <= 20; hour++) {
-      slots.push(`${hour.toString().padStart(2, "0")}:00`)
-      slots.push(`${hour.toString().padStart(2, "0")}:30`)
-    }
-    return slots
+  const hasVisitsOnDate = (date: Date) => {
+    return filteredVisits.some((visit) => {
+      const visitDate = new Date(visit.visit_date)
+      return visitDate.toDateString() === date.toDateString()
+    })
+  }
+
+  const getVisitCountForDate = (date: Date) => {
+    return filteredVisits.filter((visit) => {
+      const visitDate = new Date(visit.visit_date)
+      return visitDate.toDateString() === date.toDateString()
+    }).length
   }
 
   if (loading) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 max-w-full overflow-x-hidden">
         <PageHeader title="Visites" description="Chargement..." />
-        <div className="grid gap-4">
-          {[...Array(3)].map((_, i) => (
-            <Card key={i} className="animate-pulse">
-              <CardContent className="p-6">
-                <div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div>
-                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="flex items-center justify-center h-96">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
       </div>
     )
   }
 
-  const weekDays = getWeekDays()
-  const timeSlots = getTimeSlots()
-  const upcomingVisits = visits.filter((visit) => {
-    const visitDate = extractDate(visit.visit_date)
-    const visitTime = visit.visit_time || visit.start_time || "00:00"
-    const visitDateTime = new Date(`${visitDate}T${visitTime}`)
-    return visitDateTime > new Date() && visit.status === "scheduled"
-  })
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <PageHeader title="Visites" description={`${visits.length} visite${visits.length > 1 ? "s" : ""} au total`}>
-        <div className="flex items-center gap-2">
-          <Button
-            variant={viewMode === "calendar" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setViewMode("calendar")}
-          >
-            <CalendarViewIcon className="h-4 w-4 mr-2" />
-            Calendrier
-          </Button>
-          <Button variant={viewMode === "list" ? "default" : "outline"} size="sm" onClick={() => setViewMode("list")}>
-            <List className="h-4 w-4 mr-2" />
-            Liste
-          </Button>
-        </div>
-      </PageHeader>
+    <div className="space-y-6 p-4 max-w-full overflow-x-hidden">
+      <PageHeader title="Visites" description="Gérez les visites de vos propriétés" />
 
-      {/* Statistiques rapides */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {/* Statistiques */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center">
-              <CalendarIcon className="h-8 w-8 text-blue-600" />
-              <div className="ml-4">
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Total</p>
+                <p className="text-2xl font-bold">{stats.total}</p>
+              </div>
+              <CalendarIcon className="h-8 w-8 text-muted-foreground flex-shrink-0" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex items-center justify-between">
+              <div>
                 <p className="text-sm font-medium text-muted-foreground">Programmées</p>
-                <p className="text-2xl font-bold">{visits.filter((v) => v.status === "scheduled").length}</p>
+                <p className="text-2xl font-bold text-blue-600">{stats.scheduled}</p>
               </div>
+              <Clock className="h-8 w-8 text-blue-600 flex-shrink-0" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center">
-              <Check className="h-8 w-8 text-green-600" />
-              <div className="ml-4">
-                <p className="text-sm font-medium text-muted-foreground">Effectuées</p>
-                <p className="text-2xl font-bold">{visits.filter((v) => v.status === "completed").length}</p>
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Terminées</p>
+                <p className="text-2xl font-bold text-green-600">{stats.completed}</p>
               </div>
+              <CheckCircle className="h-8 w-8 text-green-600 flex-shrink-0" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center">
-              <X className="h-8 w-8 text-red-600" />
-              <div className="ml-4">
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex items-center justify-between">
+              <div>
                 <p className="text-sm font-medium text-muted-foreground">Annulées</p>
-                <p className="text-2xl font-bold">{visits.filter((v) => v.status === "cancelled").length}</p>
+                <p className="text-2xl font-bold text-red-600">{stats.cancelled}</p>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center">
-              <Clock className="h-8 w-8 text-yellow-600" />
-              <div className="ml-4">
-                <p className="text-sm font-medium text-muted-foreground">À venir</p>
-                <p className="text-2xl font-bold">{upcomingVisits.length}</p>
-              </div>
+              <XCircle className="h-8 w-8 text-red-600 flex-shrink-0" />
             </div>
           </CardContent>
         </Card>
@@ -318,245 +273,297 @@ export default function VisitsPage() {
 
       {/* Filtres */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <Filter className="h-5 w-5 mr-2" />
-            Filtres
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <CardContent className="p-4 sm:p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground flex-shrink-0" />
               <Input
                 placeholder="Rechercher..."
-                value={filters.search}
-                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                className="pl-10"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8"
               />
             </div>
 
-            <Select value={filters.status} onValueChange={(value) => setFilters({ ...filters, status: value })}>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger>
+                <Filter className="h-4 w-4 mr-2 flex-shrink-0" />
                 <SelectValue placeholder="Statut" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Tous les statuts</SelectItem>
                 <SelectItem value="scheduled">Programmées</SelectItem>
-                <SelectItem value="completed">Effectuées</SelectItem>
+                <SelectItem value="completed">Terminées</SelectItem>
                 <SelectItem value="cancelled">Annulées</SelectItem>
-                <SelectItem value="no_show">Absents</SelectItem>
               </SelectContent>
             </Select>
 
-            <Select value={filters.property} onValueChange={(value) => setFilters({ ...filters, property: value })}>
-              <SelectTrigger>
-                <SelectValue placeholder="Propriété" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Toutes les propriétés</SelectItem>
-                {properties.map((property) => (
-                  <SelectItem key={property.id} value={property.id}>
-                    {property.title}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Button
+              variant={selectedDate ? "default" : "outline"}
+              onClick={() => setSelectedDate(selectedDate ? undefined : new Date())}
+              className="justify-start"
+            >
+              <CalendarIcon className="h-4 w-4 mr-2 flex-shrink-0" />
+              <span className="truncate">{selectedDate ? "Date sélectionnée" : "Filtrer par date"}</span>
+            </Button>
 
-            <Button variant="outline" onClick={() => setFilters({ status: "all", property: "all", search: "" })}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSearchQuery("")
+                setStatusFilter("all")
+                setSelectedDate(undefined)
+              }}
+              className="w-full sm:w-auto"
+            >
               Réinitialiser
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Contenu principal */}
-      <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as "calendar" | "list")}>
-        <TabsContent value="calendar">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Vue Calendrier</CardTitle>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => navigateWeek("prev")}>
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <span className="font-medium min-w-[200px] text-center">
-                    {format(weekDays[0], "d MMM", { locale: fr })} - {format(weekDays[6], "d MMM yyyy", { locale: fr })}
-                  </span>
-                  <Button variant="outline" size="sm" onClick={() => navigateWeek("next")}>
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setCurrentWeek(new Date())}>
-                    Aujourd'hui
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-8 gap-1">
-                {/* En-tête avec les heures */}
-                <div className="p-2"></div>
-                {weekDays.map((day) => (
-                  <div key={day.toISOString()} className="p-2 text-center border-b">
-                    <div className="font-medium">{format(day, "EEE", { locale: fr })}</div>
-                    <div className={`text-lg ${isSameDay(day, new Date()) ? "text-blue-600 font-bold" : ""}`}>
-                      {format(day, "d")}
-                    </div>
-                  </div>
-                ))}
+      {/* Onglets Vue */}
+      <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as "list" | "calendar")}>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="list">Vue liste</TabsTrigger>
+          <TabsTrigger value="calendar">Vue calendrier</TabsTrigger>
+        </TabsList>
 
-                {/* Grille horaire */}
-                {timeSlots.map((timeSlot) => (
-                  <div key={timeSlot} className="contents">
-                    <div className="p-2 text-xs text-muted-foreground border-r">{timeSlot}</div>
-                    {weekDays.map((day) => {
-                      const dayVisits = getVisitsForDay(day).filter((visit) => {
-                        const visitTime = visit.visit_time || visit.start_time
-                        const timeMatches = visitTime === timeSlot
-                        return timeMatches
-                      })
-                      return (
-                        <div key={`${day.toISOString()}-${timeSlot}`} className="p-1 border-r border-b min-h-[60px]">
-                          {dayVisits.map((visit) => (
-                            <div
-                              key={visit.id}
-                              className={`
-                                p-2 rounded text-xs cursor-pointer mb-1
-                                ${visit.status === "scheduled" || visit.status === "confirmed" ? "bg-blue-100 text-blue-800 border border-blue-200" : ""}
-                                ${visit.status === "completed" ? "bg-green-100 text-green-800 border border-green-200" : ""}
-                                ${visit.status === "cancelled" ? "bg-gray-100 text-gray-800 border border-gray-200" : ""}
-                                ${visit.status === "no_show" ? "bg-red-100 text-red-800 border border-red-200" : ""}
-                              `}
-                              onClick={() => {
-                                // Ouvrir un modal ou naviguer vers les détails
-                                console.log("Voir détails visite:", visit.id)
-                              }}
-                            >
-                              <div className="font-medium truncate">{visit.visitor_name}</div>
-                              <div className="truncate">{visit.property.title}</div>
+        <TabsContent value="list" className="space-y-4">
+          {filteredVisits.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <CalendarIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <h3 className="text-lg font-semibold mb-2">Aucune visite</h3>
+                <p className="text-muted-foreground">
+                  {visits.length === 0
+                    ? "Aucune visite programmée pour le moment"
+                    : "Aucune visite ne correspond aux filtres sélectionnés"}
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {filteredVisits.map((visit) => {
+                const { date, time } = formatDateTime(visit.visit_date, visit.visit_time)
+                return (
+                  <Card key={visit.id} className="hover:shadow-md transition-shadow">
+                    <CardContent className="p-4 sm:p-6">
+                      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                        {/* Image de la propriété */}
+                        {/* <div className="flex-shrink-0">
+                          <img
+                            src={getPropertyImage(visit.property) || "/placeholder.svg"}
+                            alt={visit.property.title}
+                            className="w-full lg:w-20 h-48 lg:h-20 object-cover rounded-lg"
+                          />
+                        </div> */}
+
+                        {/* Informations principales */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
+                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                              <User className="h-6 w-6 text-white" />
                             </div>
-                          ))}
+                            <div className="min-w-0 flex-1">
+                              <h3 className="text-lg font-semibold truncate">
+                                {visit.tenant.first_name} {visit.tenant.last_name}
+                              </h3>
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-muted-foreground">
+                                <div className="flex items-center min-w-0">
+                                  <Mail className="h-4 w-4 mr-1 flex-shrink-0" />
+                                  <span className="truncate">{visit.tenant.email}</span>
+                                </div>
+                                <div className="flex items-center">
+                                  <Phone className="h-4 w-4 mr-1 flex-shrink-0" />
+                                  <span className="truncate">{visit.tenant.phone}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {/* Informations visiteur */}
+                            {/* <div className="space-y-2">
+                              <h4 className="font-medium text-sm text-muted-foreground">Visiteur</h4>
+                              <div className="space-y-1">
+                                <p className="flex items-center gap-2 text-sm">
+                                  <User className="h-4 w-4 flex-shrink-0" />
+                                  <span className="truncate">
+                                    {visit.tenant.first_name} {visit.tenant.last_name}
+                                  </span>
+                                </p>
+                                <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                                  <Mail className="h-4 w-4 flex-shrink-0" />
+                                  <span className="truncate">{visit.tenant.email}</span>
+                                </p>
+                                {visit.tenant.phone && (
+                                  <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <Phone className="h-4 w-4 flex-shrink-0" />
+                                    <span className="truncate">{visit.tenant.phone}</span>
+                                  </p>
+                                )}
+                              </div>
+                            </div> */}
+
+                            {/* Informations visite */}
+                            <div className="space-y-2">
+                              <h4 className="font-medium text-sm text-muted-foreground">Visite</h4>
+                              <div className="space-y-1">
+                                <p className="flex items-center gap-2 text-sm">
+                                  <CalendarIcon className="h-4 w-4 flex-shrink-0" />
+                                  <span className="truncate">{date}</span>
+                                </p>
+                                <p className="flex items-center gap-2 text-sm">
+                                  <Clock className="h-4 w-4 flex-shrink-0" />
+                                  <span className="truncate">{time}</span>
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex flex-col sm:flex-row lg:flex-col gap-2 w-full lg:w-auto">
+                            <Button variant="outline" size="sm" className="w-full sm:w-auto bg-transparent">
+                              <Eye className="h-4 w-4 mr-2 flex-shrink-0" />
+                              Voir détails
+                            </Button>
+                            {visit.application && (
+                              <Button variant="outline" size="sm" className="w-full sm:w-auto bg-transparent">
+                                <Building2 className="h-4 w-4 mr-2 flex-shrink-0" />
+                                Voir candidature
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                      )
-                    })}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
         </TabsContent>
 
-        <TabsContent value="list">
-          <div className="space-y-4">
-            {filteredVisits.length === 0 ? (
+        <TabsContent value="calendar" className="space-y-4">
+          <div className="overflow-x-auto">
+            <div className="min-w-[800px]">
               <Card>
-                <CardContent className="p-12 text-center">
-                  <CalendarIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">Aucune visite</h3>
-                  <p className="text-muted-foreground">
-                    {filters.status !== "all" || filters.property !== "all" || filters.search
-                      ? "Aucune visite ne correspond à vos filtres"
-                      : "Vous n'avez pas encore de visites programmées"}
-                  </p>
+                <CardHeader>
+                  <CardTitle>Calendrier des visites</CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 sm:p-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-1">
+                      <Calendar
+                        mode="single"
+                        selected={selectedDate}
+                        onSelect={setSelectedDate}
+                        className="rounded-md border"
+                        hasVisitsOnDate={hasVisitsOnDate}
+                        getVisitCountForDate={getVisitCountForDate}
+                      />
+                    </div>
+                    <div className="lg:col-span-2">
+                      {selectedDate ? (
+                        <div className="space-y-4">
+                          <h3 className="font-semibold">Visites du {selectedDate.toLocaleDateString("fr-FR")}</h3>
+                          {(() => {
+                            const dayVisits = filteredVisits.filter((visit) => {
+                              const visitDate = new Date(visit.visit_date)
+                              return visitDate.toDateString() === selectedDate.toDateString()
+                            })
+
+                            if (dayVisits.length === 0) {
+                              return <p className="text-muted-foreground">Aucune visite ce jour</p>
+                            }
+
+                            return (
+                              <div className="space-y-3">
+                                {dayVisits.map((visit) => (
+                                  <div
+                                    key={visit.id}
+                                    className="p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+                                  >
+                                    <div className="flex items-center justify-between mb-2">
+                                      <p className="font-medium truncate">{visit.visit_time}</p>
+                                      {getStatusBadge(visit.status)}
+                                    </div>
+                                    <p className="text-sm font-medium truncate">{visit.property.title}</p>
+                                    <p className="text-sm text-muted-foreground truncate">
+                                      {visit.property.address}, {visit.property.city}
+                                    </p>
+                                    <p className="text-sm text-muted-foreground truncate">
+                                      {visit.tenant.first_name} {visit.tenant.last_name}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            )
+                          })()}
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <h3 className="font-semibold">Prochaines visites</h3>
+                          {(() => {
+                            const upcomingVisits = filteredVisits
+                              .filter((visit) => {
+                                const visitDate = new Date(visit.visit_date)
+                                return visitDate >= new Date() && visit.status === "scheduled"
+                              })
+                              .sort((a, b) => new Date(a.visit_date).getTime() - new Date(b.visit_date).getTime())
+                              .slice(0, 5)
+
+                            if (upcomingVisits.length === 0) {
+                              return (
+                                <div className="text-center py-8">
+                                  <CalendarIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                                  <p className="text-muted-foreground">Aucune visite programmée à venir</p>
+                                  <p className="text-sm text-muted-foreground mt-2">
+                                    Sélectionnez une date dans le calendrier pour voir les visites
+                                  </p>
+                                </div>
+                              )
+                            }
+
+                            return (
+                              <div className="space-y-3">
+                                {upcomingVisits.map((visit) => {
+                                  const { date, time } = formatDateTime(visit.visit_date, visit.visit_time)
+                                  return (
+                                    <div
+                                      key={visit.id}
+                                      className="p-3 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+                                      onClick={() => setSelectedDate(new Date(visit.visit_date))}
+                                    >
+                                      <div className="flex items-center justify-between mb-2">
+                                        <p className="font-medium truncate">{time}</p>
+                                        {getStatusBadge(visit.status)}
+                                      </div>
+                                      <p className="text-sm font-medium truncate">{visit.property.title}</p>
+                                      <p className="text-sm text-muted-foreground truncate">
+                                        {visit.property.address}, {visit.property.city}
+                                      </p>
+                                      <p className="text-sm text-muted-foreground truncate">
+                                        {visit.tenant.first_name} {visit.tenant.last_name}
+                                      </p>
+                                      <p className="text-xs text-blue-600 mt-1">{date}</p>
+                                    </div>
+                                  )
+                                })}
+                                <p className="text-xs text-muted-foreground text-center mt-4">
+                                  Cliquez sur une visite ou sélectionnez une date dans le calendrier
+                                </p>
+                              </div>
+                            )
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
-            ) : (
-              filteredVisits.map((visit) => (
-                <Card key={visit.id}>
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-4 mb-4">
-                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                            <User className="h-6 w-6 text-white" />
-                          </div>
-                          <div>
-                            <h3 className="text-lg font-semibold">{visit.visitor_name}</h3>
-                            <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                              <div className="flex items-center">
-                                <Mail className="h-4 w-4 mr-1" />
-                                {visit.visitor_email}
-                              </div>
-                              <div className="flex items-center">
-                                <Phone className="h-4 w-4 mr-1" />
-                                {visit.visitor_phone}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <h4 className="font-medium mb-2">Propriété</h4>
-                            <div className="space-y-1 text-sm">
-                              <p className="font-medium">{visit.property.title}</p>
-                              <div className="flex items-center text-muted-foreground">
-                                <MapPin className="h-4 w-4 mr-1" />
-                                {visit.property.address}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div>
-                            <h4 className="font-medium mb-2">Date et heure</h4>
-                            <div className="space-y-1 text-sm">
-                              <div className="flex items-center">
-                                <CalendarIcon className="h-4 w-4 mr-1" />
-                                {format(new Date(extractDate(visit.visit_date)), "PPP", { locale: fr })}
-                              </div>
-                              <div className="flex items-center">
-                                <Clock className="h-4 w-4 mr-1" />
-                                {visit.visit_time || visit.start_time}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {visit.notes && (
-                          <div className="mt-4">
-                            <h4 className="font-medium mb-2">Notes</h4>
-                            <p className="text-sm text-muted-foreground bg-gray-50 p-3 rounded-lg">{visit.notes}</p>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex flex-col items-end space-y-3">
-                        {getStatusBadge(visit.status)}
-
-                        <div className="flex flex-col space-y-2">
-                          {visit.status === "scheduled" && (
-                            <div className="flex space-x-2">
-                              <Button
-                                size="sm"
-                                variant="default"
-                                onClick={() => handleStatusChange(visit.id, "completed")}
-                                className="bg-green-600 hover:bg-green-700"
-                              >
-                                <Check className="h-4 w-4 mr-1" />
-                                Effectuée
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => handleStatusChange(visit.id, "cancelled")}
-                              >
-                                <X className="h-4 w-4 mr-1" />
-                                Annuler
-                              </Button>
-                            </div>
-                          )}
-                          <Button size="sm" variant="outline">
-                            <Eye className="h-4 w-4 mr-1" />
-                            Détails
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            )}
+            </div>
           </div>
         </TabsContent>
       </Tabs>
