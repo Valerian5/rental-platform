@@ -561,6 +561,12 @@ export const rentalFileService = {
     const totalRequired = diagnostic.required.length
     const completed = diagnostic.required.filter((item) => item.completed).length
 
+    console.log(`📊 Score calculation: ${completed}/${totalRequired} completed`, {
+      rental_situation: fileData.rental_situation,
+      has_cotenants: fileData.cotenants?.length || 0,
+      diagnostic_items: diagnostic.required.map((item) => ({ item: item.item, completed: item.completed })),
+    })
+
     return totalRequired > 0 ? Math.round((completed / totalRequired) * 100) : 0
   },
 
@@ -768,7 +774,7 @@ export const rentalFileService = {
       description: "Avis d'imposition ou justificatif fiscal",
     })
 
-    // Situation de location (obligatoire) - CORRECTION ICI
+    // Situation de location (obligatoire)
     required.push({
       category: "Situation de location",
       item: "Type de location",
@@ -784,30 +790,110 @@ export const rentalFileService = {
       description: "Message de présentation pour les propriétaires",
     })
 
-    // Colocataires (si applicable)
-    if (fileData.rental_situation === "colocation" || fileData.rental_situation === "couple") {
-      const expectedCotenants = fileData.rental_situation === "couple" ? 1 : 1 // Au moins 1
-      const hasCotenants = fileData.cotenants && fileData.cotenants.length >= expectedCotenants
+    // Colocataires/Conjoint (si applicable) - CORRECTION ICI
+    if (fileData.rental_situation === "couple") {
+      // Pour un couple, on attend exactement 1 conjoint
+      const hasConjoint = fileData.cotenants && fileData.cotenants.length >= 1
+
+      required.push({
+        category: "Conjoint(e)",
+        item: "Profil conjoint(e)",
+        completed: hasConjoint,
+        description: "Profil complet du/de la conjoint(e)",
+      })
+
+      // Si on a un conjoint, vérifier sa complétude (version simplifiée)
+      if (hasConjoint && fileData.cotenants && fileData.cotenants.length > 0) {
+        const conjoint = fileData.cotenants[0]
+
+        // Éléments essentiels pour le conjoint
+        required.push({
+          category: "Conjoint(e)",
+          item: "Nom et prénom conjoint(e)",
+          completed: !!(conjoint.first_name?.trim() && conjoint.last_name?.trim()),
+          description: "Nom et prénom du/de la conjoint(e)",
+        })
+
+        required.push({
+          category: "Conjoint(e)",
+          item: "Pièce d'identité conjoint(e)",
+          completed: !!(conjoint.identity_documents?.length > 0),
+          description: "Pièce d'identité du/de la conjoint(e)",
+        })
+
+        required.push({
+          category: "Conjoint(e)",
+          item: "Activité conjoint(e)",
+          completed: !!conjoint.main_activity,
+          description: "Activité professionnelle du/de la conjoint(e)",
+        })
+
+        required.push({
+          category: "Conjoint(e)",
+          item: "Revenus conjoint(e)",
+          completed: !!(conjoint.income_sources && Object.keys(conjoint.income_sources).length > 0),
+          description: "Revenus du/de la conjoint(e)",
+        })
+
+        required.push({
+          category: "Conjoint(e)",
+          item: "Avis d'imposition conjoint(e)",
+          completed: !!(conjoint.tax_situation?.documents?.length > 0),
+          description: "Avis d'imposition du/de la conjoint(e)",
+        })
+      }
+    } else if (fileData.rental_situation === "colocation") {
+      // Pour une colocation, on attend au moins 1 colocataire
+      const hasColocataires = fileData.cotenants && fileData.cotenants.length >= 1
 
       required.push({
         category: "Colocataires",
-        item: fileData.rental_situation === "couple" ? "Profil conjoint(e)" : "Profils colocataires",
-        completed: hasCotenants,
-        description: `Profil(s) des ${fileData.rental_situation === "couple" ? "conjoint(e)" : "colocataires"}`,
+        item: "Au moins un colocataire",
+        completed: hasColocataires,
+        description: "Profil d'au moins un colocataire",
       })
 
-      // Vérifier la complétude de chaque colocataire
-      fileData.cotenants?.forEach((cotenant: any, index: number) => {
-        const cotenantDiagnostic = this.getDiagnostic({ main_tenant: cotenant })
-        cotenantDiagnostic.required.forEach((item) => {
+      // Si on a des colocataires, vérifier leur complétude (version simplifiée)
+      if (hasColocataires && fileData.cotenants) {
+        fileData.cotenants.forEach((colocataire: any, index: number) => {
+          const colocNumber = index + 1
+
           required.push({
-            category: `${fileData.rental_situation === "couple" ? "Conjoint(e)" : `Colocataire ${index + 1}`}`,
-            item: item.item,
-            completed: item.completed,
-            description: item.description,
+            category: `Colocataire ${colocNumber}`,
+            item: `Nom et prénom colocataire ${colocNumber}`,
+            completed: !!(colocataire.first_name?.trim() && colocataire.last_name?.trim()),
+            description: `Nom et prénom du colocataire ${colocNumber}`,
+          })
+
+          required.push({
+            category: `Colocataire ${colocNumber}`,
+            item: `Pièce d'identité colocataire ${colocNumber}`,
+            completed: !!(colocataire.identity_documents?.length > 0),
+            description: `Pièce d'identité du colocataire ${colocNumber}`,
+          })
+
+          required.push({
+            category: `Colocataire ${colocNumber}`,
+            item: `Activité colocataire ${colocNumber}`,
+            completed: !!colocataire.main_activity,
+            description: `Activité professionnelle du colocataire ${colocNumber}`,
+          })
+
+          required.push({
+            category: `Colocataire ${colocNumber}`,
+            item: `Revenus colocataire ${colocNumber}`,
+            completed: !!(colocataire.income_sources && Object.keys(colocataire.income_sources).length > 0),
+            description: `Revenus du colocataire ${colocNumber}`,
+          })
+
+          required.push({
+            category: `Colocataire ${colocNumber}`,
+            item: `Avis d'imposition colocataire ${colocNumber}`,
+            completed: !!(colocataire.tax_situation?.documents?.length > 0),
+            description: `Avis d'imposition du colocataire ${colocNumber}`,
           })
         })
-      })
+      }
     }
 
     // Garants (optionnel mais recommandé)

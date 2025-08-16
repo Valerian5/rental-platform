@@ -145,24 +145,34 @@ export function ModernApplicationCard({
     }
   }
 
-  const getRentalSituationBadge = () => {
-    if (application.rental_situation === "couple") {
-      return (
-        <Badge variant="outline" className="text-pink-700 border-pink-300 bg-pink-50">
-          <Heart className="h-3 w-3 mr-1" />
-          En couple
-        </Badge>
-      )
+  const getRentalSituationInfo = () => {
+    if (!application.rental_situation) return null
+
+    switch (application.rental_situation) {
+      case "alone":
+        return (
+          <div className="flex items-center gap-1">
+            <User className="h-3.5 w-3.5 text-slate-500" />
+            <span className="text-sm text-slate-600">Seul(e)</span>
+          </div>
+        )
+      case "couple":
+        return (
+          <div className="flex items-center gap-1">
+            <Heart className="h-3.5 w-3.5 text-pink-500" />
+            <span className="text-sm text-pink-700 font-medium">En couple</span>
+          </div>
+        )
+      case "colocation":
+        return (
+          <div className="flex items-center gap-1">
+            <Users className="h-3.5 w-3.5 text-blue-500" />
+            <span className="text-sm text-blue-700 font-medium">Colocation</span>
+          </div>
+        )
+      default:
+        return null
     }
-    if (application.rental_situation === "colocation") {
-      return (
-        <Badge variant="outline" className="text-blue-700 border-blue-300 bg-blue-50">
-          <Users className="h-3 w-3 mr-1" />
-          Colocation
-        </Badge>
-      )
-    }
-    return null
   }
 
   const getActionButtons = () => {
@@ -310,7 +320,6 @@ export function ModernApplicationCard({
           </div>
           <div className="flex items-center gap-2">
             {getStatusBadge()}
-            {getRentalSituationBadge()}
             <CircularScore score={calculatedScore} loading={false} showDetails={false} size="sm" />
           </div>
         </div>
@@ -328,14 +337,16 @@ export function ModernApplicationCard({
             <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
             <span>{formatDate(application.created_at)}</span>
           </div>
-          <div className="flex items-center gap-1">
-            {application.has_guarantor ? (
-              <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-            ) : (
-              <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
-            )}
-            <span>{application.has_guarantor ? "Avec garant" : "Sans garant"}</span>
-          </div>
+          {getRentalSituationInfo() || (
+            <div className="flex items-center gap-1">
+              {application.has_guarantor ? (
+                <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+              ) : (
+                <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+              )}
+              <span>{application.has_guarantor ? "Avec garant" : "Sans garant"}</span>
+            </div>
+          )}
         </div>
 
         {expanded && (
@@ -381,6 +392,15 @@ export function ModernApplicationCard({
                 <p className="text-muted-foreground">Type de contrat</p>
                 <p className="font-medium">{application.contract_type || "Non spécifié"}</p>
               </div>
+              {application.has_guarantor && (
+                <div>
+                  <p className="text-muted-foreground">Garants</p>
+                  <p className="flex items-center">
+                    <CheckCircle className="h-3.5 w-3.5 text-green-500 mr-1" />
+                    <span>Avec garant</span>
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}
