@@ -19,7 +19,8 @@ import {
   Clock,
   AlertCircle,
   Eye,
-  BarChart3,
+  Heart,
+  Users,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 
@@ -56,6 +57,7 @@ interface ApplicationCardProps {
     scoring_warnings?: string[]
     scoring_compatible?: boolean
     scoring_model_used?: string
+    rental_situation?: "alone" | "couple" | "colocation"
   }
   isSelected?: boolean
   onSelect?: (selected: boolean) => void
@@ -72,33 +74,12 @@ export function ModernApplicationCard({
 }: ApplicationCardProps) {
   const [expanded, setExpanded] = useState(false)
   const [calculatedScore, setCalculatedScore] = useState<number>(application.match_score)
-  const [scoreLoading, setScoreLoading] = useState(false)
-  const [scoreBreakdown, setScoreBreakdown] = useState<any>(application.scoring_breakdown || null)
-  const [scoreRecommendations, setScoreRecommendations] = useState<string[]>(application.scoring_recommendations || [])
-  const [scoreWarnings, setScoreWarnings] = useState<string[]>(application.scoring_warnings || [])
-  const [scoreCompatible, setScoreCompatible] = useState<boolean | undefined>(application.scoring_compatible)
-  const [modelUsed, setModelUsed] = useState<string>(application.scoring_model_used || "")
   const router = useRouter()
 
   // Utiliser les scores déjà calculés depuis la page parent
   useEffect(() => {
     if (application.match_score !== undefined) {
       setCalculatedScore(application.match_score)
-    }
-    if (application.scoring_breakdown) {
-      setScoreBreakdown(application.scoring_breakdown)
-    }
-    if (application.scoring_recommendations) {
-      setScoreRecommendations(application.scoring_recommendations)
-    }
-    if (application.scoring_warnings) {
-      setScoreWarnings(application.scoring_warnings)
-    }
-    if (application.scoring_compatible !== undefined) {
-      setScoreCompatible(application.scoring_compatible)
-    }
-    if (application.scoring_model_used) {
-      setModelUsed(application.scoring_model_used)
     }
   }, [application])
 
@@ -164,21 +145,34 @@ export function ModernApplicationCard({
     }
   }
 
-  const getActionButtons = () => {
-    const viewAnalysisButton = (
-      <Button size="sm" variant="outline" onClick={() => router.push(`/owner/applications/${application.id}`)}>
-        <BarChart3 className="h-4 w-4 mr-1" />
-        Voir analyse
-      </Button>
-    )
+  const getRentalSituationBadge = () => {
+    if (application.rental_situation === "couple") {
+      return (
+        <Badge variant="outline" className="text-pink-700 border-pink-300 bg-pink-50">
+          <Heart className="h-3 w-3 mr-1" />
+          En couple
+        </Badge>
+      )
+    }
+    if (application.rental_situation === "colocation") {
+      return (
+        <Badge variant="outline" className="text-blue-700 border-blue-300 bg-blue-50">
+          <Users className="h-3 w-3 mr-1" />
+          Colocation
+        </Badge>
+      )
+    }
+    return null
+  }
 
+  const getActionButtons = () => {
     switch (application.status) {
       case "pending":
         return (
           <>
-            <Button size="sm" variant="default" onClick={() => onAction("analyze")}>
+            <Button size="sm" variant="default" onClick={() => router.push(`/owner/applications/${application.id}`)}>
               <Eye className="h-4 w-4 mr-1" />
-              Analyser
+              Voir analyse
             </Button>
             <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
               <MessageSquare className="h-4 w-4 mr-1" />
@@ -214,7 +208,6 @@ export function ModernApplicationCard({
               <MessageSquare className="h-4 w-4 mr-1" />
               Contacter
             </Button>
-            {viewAnalysisButton}
           </>
         )
       case "visit_scheduled":
@@ -232,7 +225,6 @@ export function ModernApplicationCard({
               <MessageSquare className="h-4 w-4 mr-1" />
               Contacter
             </Button>
-            {viewAnalysisButton}
           </>
         )
       case "waiting_tenant_confirmation":
@@ -246,7 +238,6 @@ export function ModernApplicationCard({
               <MessageSquare className="h-4 w-4 mr-1" />
               Contacter
             </Button>
-            {viewAnalysisButton}
           </>
         )
       case "accepted":
@@ -261,7 +252,6 @@ export function ModernApplicationCard({
               <MessageSquare className="h-4 w-4 mr-1" />
               Contacter
             </Button>
-            {viewAnalysisButton}
           </>
         )
       case "rejected":
@@ -275,7 +265,6 @@ export function ModernApplicationCard({
               <MessageSquare className="h-4 w-4 mr-1" />
               Contacter
             </Button>
-            {viewAnalysisButton}
           </>
         )
       default:
@@ -289,7 +278,6 @@ export function ModernApplicationCard({
               <MessageSquare className="h-4 w-4 mr-1" />
               Contacter
             </Button>
-            {viewAnalysisButton}
           </>
         )
     }
@@ -322,17 +310,8 @@ export function ModernApplicationCard({
           </div>
           <div className="flex items-center gap-2">
             {getStatusBadge()}
-            <CircularScore
-              score={calculatedScore}
-              loading={scoreLoading}
-              showDetails={false}
-              breakdown={scoreBreakdown}
-              recommendations={scoreRecommendations}
-              warnings={scoreWarnings}
-              compatible={scoreCompatible}
-              modelUsed={modelUsed}
-              size="sm"
-            />
+            {getRentalSituationBadge()}
+            <CircularScore score={calculatedScore} loading={false} showDetails={false} size="sm" />
           </div>
         </div>
 
@@ -403,23 +382,6 @@ export function ModernApplicationCard({
                 <p className="font-medium">{application.contract_type || "Non spécifié"}</p>
               </div>
             </div>
-
-            {/* Affichage du breakdown détaillé si disponible */}
-            {scoreBreakdown && (
-              <div className="mt-4 pt-4 border-t">
-                <h4 className="font-medium mb-2 text-sm">Détail du score</h4>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  {Object.entries(scoreBreakdown).map(([key, item]: [string, any]) => (
-                    <div key={key} className="flex justify-between">
-                      <span className="capitalize">{key.replace("_", " ")}:</span>
-                      <span className="font-medium">
-                        {item.score}/{item.max}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
 

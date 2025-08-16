@@ -37,6 +37,10 @@ import {
   MapPin,
   Euro,
   Home,
+  Star,
+  TrendingUp,
+  Award,
+  Heart,
 } from "lucide-react"
 import { TenantAndGuarantorDocumentsSection } from "@/components/TenantAndGuarantorDocumentsSection"
 
@@ -386,7 +390,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       case "analyzing":
         return (
           <>
-            <Button onClick={handleProposeVisit}>
+            <Button onClick={handleProposeVisit} className="bg-blue-600 hover:bg-blue-700">
               <Calendar className="h-4 w-4 mr-2" />
               Proposer une visite
             </Button>
@@ -416,7 +420,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       case "visit_scheduled":
         return (
           <>
-            <Button onClick={handleAccept}>
+            <Button onClick={handleAccept} className="bg-green-600 hover:bg-green-700">
               <CheckCircle className="h-4 w-4 mr-2" />
               Accepter le dossier
             </Button>
@@ -447,7 +451,10 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       case "approved":
         return (
           <>
-            <Button onClick={() => router.push(`/owner/leases/new?application=${application.id}`)}>
+            <Button
+              onClick={() => router.push(`/owner/leases/new?application=${application.id}`)}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
               <FileText className="h-4 w-4 mr-2" />
               Générer le bail
             </Button>
@@ -543,234 +550,338 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       </PageHeader>
 
       <div className="p-6 space-y-6">
-        {/* Score et actions */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div className="flex items-center gap-4">
-            {scoringResult && (
-              <div className="flex items-center gap-3">
-                <CircularScore score={scoringResult.totalScore} size="lg" />
-                <div>
-                  <h2 className="text-xl font-semibold">Score de compatibilité</h2>
-                  <p className="text-sm text-muted-foreground">Modèle: {scoringResult.model_used}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    {scoringResult.compatible ? (
-                      <Badge variant="outline" className="text-green-600 border-green-600">
-                        <CheckCircle className="h-3 w-3 mr-1" />
-                        Compatible
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-red-600 border-red-600">
-                        <XCircle className="h-3 w-3 mr-1" />
-                        Non compatible
-                      </Badge>
+        {/* Score et actions - Design amélioré */}
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+            <div className="flex items-center gap-6">
+              {scoringResult && (
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <CircularScore score={scoringResult.totalScore} size="xl" />
+                    {scoringResult.compatible && (
+                      <div className="absolute -top-1 -right-1">
+                        <div className="bg-green-500 text-white rounded-full p-1">
+                          <CheckCircle className="h-3 w-3" />
+                        </div>
+                      </div>
                     )}
                   </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Score de compatibilité</h2>
+                    <p className="text-sm text-gray-600 mb-2">Modèle: {scoringResult.model_used}</p>
+                    <div className="flex items-center gap-3">
+                      {scoringResult.compatible ? (
+                        <Badge variant="outline" className="text-green-700 border-green-300 bg-green-50">
+                          <Award className="h-3 w-3 mr-1" />
+                          Profil compatible
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-red-700 border-red-300 bg-red-50">
+                          <AlertTriangle className="h-3 w-3 mr-1" />
+                          Profil à risque
+                        </Badge>
+                      )}
+                      {scoringResult.totalScore >= 80 && (
+                        <Badge variant="outline" className="text-blue-700 border-blue-300 bg-blue-50">
+                          <Star className="h-3 w-3 mr-1" />
+                          Excellent candidat
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => router.push("/owner/scoring-preferences-simple")} size="sm">
-              <Settings className="h-4 w-4 mr-2" />
-              Modifier critères
-            </Button>
-            {getActionButtons()}
+              )}
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Button
+                variant="outline"
+                onClick={() => router.push("/owner/scoring-preferences-simple")}
+                size="sm"
+                className="border-gray-300"
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                Modifier critères
+              </Button>
+              {getActionButtons()}
+            </div>
           </div>
         </div>
 
         <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid grid-cols-3 mb-4">
-            <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
-            <TabsTrigger value="financial">Analyse financière</TabsTrigger>
-            <TabsTrigger value="documents">Documents</TabsTrigger>
+          <TabsList className="grid grid-cols-3 mb-6 bg-gray-100">
+            <TabsTrigger value="overview" className="data-[state=active]:bg-white">
+              Vue d'ensemble
+            </TabsTrigger>
+            <TabsTrigger value="financial" className="data-[state=active]:bg-white">
+              Analyse financière
+            </TabsTrigger>
+            <TabsTrigger value="documents" className="data-[state=active]:bg-white">
+              Documents
+            </TabsTrigger>
           </TabsList>
 
-          {/* Vue d'ensemble */}
+          {/* Vue d'ensemble - Design amélioré */}
           <TabsContent value="overview" className="space-y-6">
-            <div className="grid gap-6 md:grid-cols-2">
-              {/* Informations du candidat */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <User className="h-5 w-5" />
-                    Informations du candidat principal
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Nom complet</label>
-                    <p className="text-lg">
-                      {tenant.first_name || mainTenant.first_name || "Prénom"}{" "}
-                      {tenant.last_name || mainTenant.last_name || "Nom"}
-                    </p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Email</label>
-                    <div className="flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-muted-foreground" />
-                      <p>{tenant.email || "Non renseigné"}</p>
+            {/* Résumé rapide en haut */}
+            <div className="grid gap-4 md:grid-cols-4">
+              <Card className="border-l-4 border-l-blue-500">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5 text-blue-500" />
+                    <div>
+                      <p className="text-sm text-gray-600">Revenus mensuels</p>
+                      <p className="text-lg font-bold text-green-600">{formatAmount(totalIncome)}</p>
                     </div>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Téléphone</label>
-                    <div className="flex items-center gap-2">
-                      <Phone className="h-4 w-4 text-muted-foreground" />
-                      <p>{tenant.phone || "Non renseigné"}</p>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Date de naissance</label>
-                    <p>{mainTenant.birth_date ? formatDate(mainTenant.birth_date) : "Non renseigné"}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Lieu de naissance</label>
-                    <p>{mainTenant.birth_place || "Non renseigné"}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Nationalité</label>
-                    <p>{mainTenant.nationality || "Non renseigné"}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Date de candidature</label>
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <p>{formatDate(application.created_at)}</p>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Statut du dossier</label>
-                    <div className="flex items-center gap-2">
-                      {isComplete ? (
-                        <Badge className="bg-green-100 text-green-800 hover:bg-green-200">
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                          Complet ({completionPercentage}%)
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-200">
-                          <AlertTriangle className="h-3 w-3 mr-1" />
-                          Incomplet ({completionPercentage}%)
-                        </Badge>
-                      )}
-                    </div>
-                    {!isComplete && <Progress value={completionPercentage} className="mt-2" />}
                   </div>
                 </CardContent>
               </Card>
 
-              {/* Informations du bien */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Building className="h-5 w-5" />
-                    Bien concerné
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Titre</label>
-                    <p className="text-lg">{property.title || "Titre non spécifié"}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Adresse</label>
-                    <div className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-muted-foreground" />
-                      <p>{property.address || "Adresse non spécifiée"}</p>
+              <Card className="border-l-4 border-l-purple-500">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2">
+                    <Building className="h-5 w-5 text-purple-500" />
+                    <div>
+                      <p className="text-sm text-gray-600">Ratio revenus/loyer</p>
+                      <p className="text-lg font-bold">{rentRatio !== "N/A" ? `${rentRatio}x` : "N/A"}</p>
                     </div>
                   </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Ville</label>
-                    <p>{property.city || "Ville non spécifiée"}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Loyer</label>
-                    <div className="flex items-center gap-2">
-                      <Euro className="h-4 w-4 text-muted-foreground" />
-                      <p className="text-lg font-semibold text-green-600">{formatAmount(property.price)}</p>
+                </CardContent>
+              </Card>
+
+              <Card className="border-l-4 border-l-green-500">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2">
+                    <Shield className="h-5 w-5 text-green-500" />
+                    <div>
+                      <p className="text-sm text-gray-600">Garants</p>
+                      <p className="text-lg font-bold">
+                        {hasGuarantor ? `${rentalFile?.guarantors?.length || 1}` : "0"}
+                      </p>
                     </div>
                   </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Charges</label>
-                    <p>{formatAmount(property.charges)}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Type</label>
-                    <div className="flex items-center gap-2">
-                      <Home className="h-4 w-4 text-muted-foreground" />
-                      <p>{property.type || "Non spécifié"}</p>
+                </CardContent>
+              </Card>
+
+              <Card className="border-l-4 border-l-amber-500">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-amber-500" />
+                    <div>
+                      <p className="text-sm text-gray-600">Complétude</p>
+                      <p className="text-lg font-bold">{completionPercentage}%</p>
                     </div>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Surface</label>
-                    <p>{property.surface ? `${property.surface} m²` : "Non spécifié"}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Nombre de pièces</label>
-                    <p>{property.rooms ? `${property.rooms} pièces` : "Non spécifié"}</p>
                   </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Informations professionnelles et financières */}
+            <div className="grid gap-6 lg:grid-cols-3">
+              {/* Informations du candidat principal - Design amélioré */}
+              <Card className="lg:col-span-2">
+                <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-t-lg">
+                  <CardTitle className="flex items-center gap-2 text-blue-800">
+                    <User className="h-5 w-5" />
+                    Candidat principal
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6 space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Nom complet</label>
+                        <p className="text-lg font-semibold text-gray-900">
+                          {tenant.first_name || mainTenant.first_name || "Prénom"}{" "}
+                          {tenant.last_name || mainTenant.last_name || "Nom"}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Email</label>
+                        <div className="flex items-center gap-2">
+                          <Mail className="h-4 w-4 text-gray-400" />
+                          <p className="text-gray-900">{tenant.email || "Non renseigné"}</p>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Téléphone</label>
+                        <div className="flex items-center gap-2">
+                          <Phone className="h-4 w-4 text-gray-400" />
+                          <p className="text-gray-900">{tenant.phone || "Non renseigné"}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Date de naissance</label>
+                        <p className="text-gray-900">
+                          {mainTenant.birth_date ? formatDate(mainTenant.birth_date) : "Non renseigné"}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Lieu de naissance</label>
+                        <p className="text-gray-900">{mainTenant.birth_place || "Non renseigné"}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Nationalité</label>
+                        <p className="text-gray-900">{mainTenant.nationality || "Non renseigné"}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Statut du dossier</label>
+                        <div className="flex items-center gap-2 mt-1">
+                          {isComplete ? (
+                            <Badge className="bg-green-100 text-green-800 hover:bg-green-200">
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Complet ({completionPercentage}%)
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-200">
+                              <AlertTriangle className="h-3 w-3 mr-1" />
+                              Incomplet ({completionPercentage}%)
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <label className="text-sm font-medium text-gray-500">Date de candidature</label>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Calendar className="h-4 w-4 text-gray-400" />
+                          <p className="text-gray-900">{formatDate(application.created_at)}</p>
+                        </div>
+                      </div>
+                    </div>
+                    {!isComplete && <Progress value={completionPercentage} className="mt-3" />}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Informations du bien - Design amélioré */}
+              <Card>
+                <CardHeader className="bg-gradient-to-r from-green-50 to-green-100 rounded-t-lg">
+                  <CardTitle className="flex items-center gap-2 text-green-800">
+                    <Building className="h-5 w-5" />
+                    Bien concerné
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6 space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Titre</label>
+                    <p className="text-lg font-semibold text-gray-900">{property.title || "Titre non spécifié"}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Adresse</label>
+                    <div className="flex items-start gap-2">
+                      <MapPin className="h-4 w-4 text-gray-400 mt-0.5" />
+                      <div>
+                        <p className="text-gray-900">{property.address || "Adresse non spécifiée"}</p>
+                        <p className="text-sm text-gray-600">{property.city || "Ville non spécifiée"}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Loyer</label>
+                      <div className="flex items-center gap-2">
+                        <Euro className="h-4 w-4 text-green-500" />
+                        <p className="text-lg font-bold text-green-600">{formatAmount(property.price)}</p>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Charges</label>
+                      <p className="text-gray-900">{formatAmount(property.charges)}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Type</label>
+                      <div className="flex items-center gap-2">
+                        <Home className="h-4 w-4 text-gray-400" />
+                        <p className="text-gray-900">{property.type || "Non spécifié"}</p>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Surface</label>
+                      <p className="text-gray-900">{property.surface ? `${property.surface} m²` : "Non spécifié"}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Nombre de pièces</label>
+                    <p className="text-gray-900">{property.rooms ? `${property.rooms} pièces` : "Non spécifié"}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Informations professionnelles et financières - Design amélioré */}
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+              <CardHeader className="bg-gradient-to-r from-purple-50 to-purple-100 rounded-t-lg">
+                <CardTitle className="flex items-center gap-2 text-purple-800">
                   <Briefcase className="h-5 w-5" />
                   Situation professionnelle et financière
                 </CardTitle>
               </CardHeader>
-              <CardContent className="grid gap-4 md:grid-cols-3">
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Profession</label>
-                  <p>{profession}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Entreprise</label>
-                  <p>{company}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Type de contrat</label>
-                  <p>{contractType}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Revenus mensuels</label>
-                  <p className="text-lg font-semibold text-green-600">{formatAmount(totalIncome)}</p>
-                  {rentalFile?.cotenants && rentalFile.cotenants.length > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      Incluant {rentalFile.cotenants.length} colocataire(s)
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Ratio revenus/loyer</label>
-                  <p className="text-lg font-semibold">
-                    {rentRatio !== "N/A" ? (
-                      <>
-                        {rentRatio}x
-                        {Number(rentRatio) >= 3 ? (
-                          <Badge className="ml-2 bg-green-100 text-green-800 hover:bg-green-200">Excellent</Badge>
-                        ) : Number(rentRatio) >= 2.5 ? (
-                          <Badge className="ml-2 bg-green-100 text-green-800 hover:bg-green-200">Bon</Badge>
-                        ) : Number(rentRatio) >= 2 ? (
-                          <Badge className="ml-2 bg-amber-100 text-amber-800 hover:bg-amber-200">Acceptable</Badge>
-                        ) : (
-                          <Badge className="ml-2 bg-red-100 text-red-800 hover:bg-red-200">Insuffisant</Badge>
+              <CardContent className="p-6">
+                <div className="grid gap-6 md:grid-cols-3">
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Profession</label>
+                      <p className="text-gray-900 font-medium">{profession}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Entreprise</label>
+                      <p className="text-gray-900">{company}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Type de contrat</label>
+                      <p className="text-gray-900">{contractType}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Revenus mensuels</label>
+                      <p className="text-xl font-bold text-green-600">{formatAmount(totalIncome)}</p>
+                      {rentalFile?.cotenants && rentalFile.cotenants.length > 0 && (
+                        <p className="text-xs text-gray-500">Incluant {rentalFile.cotenants.length} colocataire(s)</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Ratio revenus/loyer</label>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xl font-bold">{rentRatio !== "N/A" ? `${rentRatio}x` : "N/A"}</p>
+                        {rentRatio !== "N/A" && (
+                          <>
+                            {Number(rentRatio) >= 3 ? (
+                              <Badge className="bg-green-100 text-green-800 hover:bg-green-200">Excellent</Badge>
+                            ) : Number(rentRatio) >= 2.5 ? (
+                              <Badge className="bg-green-100 text-green-800 hover:bg-green-200">Bon</Badge>
+                            ) : Number(rentRatio) >= 2 ? (
+                              <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-200">Acceptable</Badge>
+                            ) : (
+                              <Badge className="bg-red-100 text-red-800 hover:bg-red-200">Insuffisant</Badge>
+                            )}
+                          </>
                         )}
-                      </>
-                    ) : (
-                      "N/A"
-                    )}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Garants</label>
-                  {hasGuarantor ? (
-                    <Badge className="bg-green-100 text-green-800 hover:bg-green-200">
-                      {rentalFile?.guarantors?.length || 1} garant(s)
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary">Sans garant</Badge>
-                  )}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Garants</label>
+                      <div className="flex items-center gap-2">
+                        {hasGuarantor ? (
+                          <Badge className="bg-green-100 text-green-800 hover:bg-green-200">
+                            <Shield className="h-3 w-3 mr-1" />
+                            {rentalFile?.guarantors?.length || 1} garant(s)
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary">Sans garant</Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -778,16 +889,22 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             {/* Situation de location */}
             {rentalFile?.rental_situation && (
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                <CardHeader className="bg-gradient-to-r from-indigo-50 to-indigo-100 rounded-t-lg">
+                  <CardTitle className="flex items-center gap-2 text-indigo-800">
                     <Users className="h-5 w-5" />
                     Situation de location
+                    {rentalFile.rental_situation === "couple" && (
+                      <Badge variant="outline" className="ml-2 text-pink-700 border-pink-300 bg-pink-50">
+                        <Heart className="h-3 w-3 mr-1" />
+                        En couple
+                      </Badge>
+                    )}
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-6">
                   <div className="mb-4">
-                    <label className="text-sm font-medium text-muted-foreground">Type de location</label>
-                    <p className="text-lg">
+                    <label className="text-sm font-medium text-gray-500">Type de location</label>
+                    <p className="text-lg font-semibold text-gray-900">
                       {rentalFile.rental_situation === "alone" && "Seul(e)"}
                       {rentalFile.rental_situation === "couple" && "En couple"}
                       {rentalFile.rental_situation === "colocation" && "En colocation"}
@@ -797,44 +914,60 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                   {/* Colocataires/Conjoint */}
                   {rentalFile.cotenants && rentalFile.cotenants.length > 0 && (
                     <div className="space-y-4">
-                      <h4 className="font-medium">
-                        {rentalFile.rental_situation === "couple" ? "Conjoint(e)" : "Colocataires"} (
-                        {rentalFile.cotenants.length})
+                      <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                        {rentalFile.rental_situation === "couple" ? (
+                          <>
+                            <Heart className="h-4 w-4 text-pink-500" />
+                            Conjoint(e)
+                          </>
+                        ) : (
+                          <>
+                            <Users className="h-4 w-4 text-blue-500" />
+                            Colocataires
+                          </>
+                        )}{" "}
+                        ({rentalFile.cotenants.length})
                       </h4>
                       {rentalFile.cotenants.map((cotenant: any, index: number) => (
-                        <div key={index} className="border rounded-lg p-4">
-                          <h5 className="font-medium mb-2">
-                            {rentalFile.rental_situation === "couple" ? "Conjoint(e)" : `Colocataire ${index + 1}`}
-                          </h5>
-                          <div className="grid gap-2 md:grid-cols-3">
-                            <div>
-                              <label className="text-sm font-medium text-muted-foreground">Nom</label>
-                              <p>
-                                {cotenant.first_name} {cotenant.last_name}
-                              </p>
+                        <Card key={index} className="border-l-4 border-l-indigo-300">
+                          <CardContent className="p-4">
+                            <h5 className="font-medium mb-3 text-gray-900">
+                              {rentalFile.rental_situation === "couple" ? "Conjoint(e)" : `Colocataire ${index + 1}`}
+                            </h5>
+                            <div className="grid gap-3 md:grid-cols-3">
+                              <div>
+                                <label className="text-sm font-medium text-gray-500">Nom</label>
+                                <p className="text-gray-900 font-medium">
+                                  {cotenant.first_name} {cotenant.last_name}
+                                </p>
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium text-gray-500">Profession</label>
+                                <p className="text-gray-900">{cotenant.profession || "Non spécifié"}</p>
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium text-gray-500">Activité</label>
+                                <p className="text-gray-900">{cotenant.main_activity || "Non spécifié"}</p>
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium text-gray-500">Revenus</label>
+                                <p className="text-green-600 font-semibold">
+                                  {formatAmount(cotenant.income_sources?.work_income?.amount)}
+                                </p>
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium text-gray-500">Date de naissance</label>
+                                <p className="text-gray-900">
+                                  {cotenant.birth_date ? formatDate(cotenant.birth_date) : "Non spécifié"}
+                                </p>
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium text-gray-500">Nationalité</label>
+                                <p className="text-gray-900">{cotenant.nationality || "Non spécifié"}</p>
+                              </div>
                             </div>
-                            <div>
-                              <label className="text-sm font-medium text-muted-foreground">Profession</label>
-                              <p>{cotenant.profession || "Non spécifié"}</p>
-                            </div>
-                            <div>
-                              <label className="text-sm font-medium text-muted-foreground">Activité</label>
-                              <p>{cotenant.main_activity || "Non spécifié"}</p>
-                            </div>
-                            <div>
-                              <label className="text-sm font-medium text-muted-foreground">Revenus</label>
-                              <p>{formatAmount(cotenant.income_sources?.work_income?.amount)}</p>
-                            </div>
-                            <div>
-                              <label className="text-sm font-medium text-muted-foreground">Date de naissance</label>
-                              <p>{cotenant.birth_date ? formatDate(cotenant.birth_date) : "Non spécifié"}</p>
-                            </div>
-                            <div>
-                              <label className="text-sm font-medium text-muted-foreground">Nationalité</label>
-                              <p>{cotenant.nationality || "Non spécifié"}</p>
-                            </div>
-                          </div>
-                        </div>
+                          </CardContent>
+                        </Card>
                       ))}
                     </div>
                   )}
@@ -845,16 +978,18 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             {/* Message de candidature */}
             {(application.presentation || application.message || rentalFile?.presentation_message) && (
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <FileText className="h-5 w-5" />
+                <CardHeader className="bg-gradient-to-r from-amber-50 to-amber-100 rounded-t-lg">
+                  <CardTitle className="flex items-center gap-2 text-amber-800">
+                    <MessageSquare className="h-5 w-5" />
                     Message de candidature
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="whitespace-pre-wrap">
-                    {application.presentation || application.message || rentalFile?.presentation_message}
-                  </p>
+                <CardContent className="p-6">
+                  <div className="bg-gray-50 rounded-lg p-4 border-l-4 border-l-amber-400">
+                    <p className="whitespace-pre-wrap text-gray-900 leading-relaxed">
+                      {application.presentation || application.message || rentalFile?.presentation_message}
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
             )}
@@ -862,72 +997,82 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             {/* Informations sur les garants */}
             {rentalFile?.guarantors && rentalFile.guarantors.length > 0 && (
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                <CardHeader className="bg-gradient-to-r from-green-50 to-green-100 rounded-t-lg">
+                  <CardTitle className="flex items-center gap-2 text-green-800">
                     <Shield className="h-5 w-5" />
                     Garants ({rentalFile.guarantors.length})
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-6">
                   <div className="space-y-4">
                     {rentalFile.guarantors.map((guarantor: any, index: number) => (
-                      <div key={index} className="border rounded-lg p-4">
-                        <h4 className="font-medium mb-2">Garant {index + 1}</h4>
-                        <div className="grid gap-2 md:grid-cols-3">
-                          <div>
-                            <label className="text-sm font-medium text-muted-foreground">Type</label>
-                            <p>
-                              {guarantor.type === "physical" && "Personne physique"}
-                              {guarantor.type === "organism" && "Organisme"}
-                              {guarantor.type === "moral_person" && "Personne morale"}
-                            </p>
-                          </div>
-                          {guarantor.type === "physical" && guarantor.personal_info && (
-                            <>
-                              <div>
-                                <label className="text-sm font-medium text-muted-foreground">Nom</label>
-                                <p>
-                                  {guarantor.personal_info.first_name} {guarantor.personal_info.last_name}
-                                </p>
-                              </div>
-                              <div>
-                                <label className="text-sm font-medium text-muted-foreground">Revenus</label>
-                                <p>{formatAmount(guarantor.personal_info.income_sources?.work_income?.amount)}</p>
-                              </div>
-                              <div>
-                                <label className="text-sm font-medium text-muted-foreground">Activité</label>
-                                <p>{guarantor.personal_info.main_activity || "Non spécifié"}</p>
-                              </div>
-                              <div>
-                                <label className="text-sm font-medium text-muted-foreground">Profession</label>
-                                <p>{guarantor.personal_info.profession || "Non spécifié"}</p>
-                              </div>
-                              <div>
-                                <label className="text-sm font-medium text-muted-foreground">Situation logement</label>
-                                <p>{guarantor.personal_info.current_housing_situation || "Non spécifié"}</p>
-                              </div>
-                            </>
-                          )}
-                          {guarantor.type === "organism" && (
-                            <>
-                              <div>
-                                <label className="text-sm font-medium text-muted-foreground">Organisme</label>
-                                <p>{guarantor.organism_name || "Non spécifié"}</p>
-                              </div>
-                              <div>
-                                <label className="text-sm font-medium text-muted-foreground">Type d'organisme</label>
-                                <p>{guarantor.organism_type || "Non spécifié"}</p>
-                              </div>
-                            </>
-                          )}
-                          {guarantor.type === "moral_person" && (
+                      <Card key={index} className="border-l-4 border-l-green-300">
+                        <CardContent className="p-4">
+                          <h4 className="font-medium mb-3 text-gray-900">Garant {index + 1}</h4>
+                          <div className="grid gap-3 md:grid-cols-3">
                             <div>
-                              <label className="text-sm font-medium text-muted-foreground">Entreprise</label>
-                              <p>{guarantor.company_name || "Non spécifié"}</p>
+                              <label className="text-sm font-medium text-gray-500">Type</label>
+                              <p className="text-gray-900">
+                                {guarantor.type === "physical" && "Personne physique"}
+                                {guarantor.type === "organism" && "Organisme"}
+                                {guarantor.type === "moral_person" && "Personne morale"}
+                              </p>
                             </div>
-                          )}
-                        </div>
-                      </div>
+                            {guarantor.type === "physical" && guarantor.personal_info && (
+                              <>
+                                <div>
+                                  <label className="text-sm font-medium text-gray-500">Nom</label>
+                                  <p className="text-gray-900 font-medium">
+                                    {guarantor.personal_info.first_name} {guarantor.personal_info.last_name}
+                                  </p>
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium text-gray-500">Revenus</label>
+                                  <p className="text-green-600 font-semibold">
+                                    {formatAmount(guarantor.personal_info.income_sources?.work_income?.amount)}
+                                  </p>
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium text-gray-500">Activité</label>
+                                  <p className="text-gray-900">
+                                    {guarantor.personal_info.main_activity || "Non spécifié"}
+                                  </p>
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium text-gray-500">Profession</label>
+                                  <p className="text-gray-900">
+                                    {guarantor.personal_info.profession || "Non spécifié"}
+                                  </p>
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium text-gray-500">Situation logement</label>
+                                  <p className="text-gray-900">
+                                    {guarantor.personal_info.current_housing_situation || "Non spécifié"}
+                                  </p>
+                                </div>
+                              </>
+                            )}
+                            {guarantor.type === "organism" && (
+                              <>
+                                <div>
+                                  <label className="text-sm font-medium text-gray-500">Organisme</label>
+                                  <p className="text-gray-900">{guarantor.organism_name || "Non spécifié"}</p>
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium text-gray-500">Type d'organisme</label>
+                                  <p className="text-gray-900">{guarantor.organism_type || "Non spécifié"}</p>
+                                </div>
+                              </>
+                            )}
+                            {guarantor.type === "moral_person" && (
+                              <div>
+                                <label className="text-sm font-medium text-gray-500">Entreprise</label>
+                                <p className="text-gray-900">{guarantor.company_name || "Non spécifié"}</p>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
                     ))}
                   </div>
                 </CardContent>

@@ -528,7 +528,7 @@ export const rentalFileService = {
 
     try {
       // Calculer le pourcentage de complétion si les données complètes sont fournies
-      if (updates.main_tenant) {
+      if (updates.main_tenant || updates.rental_situation !== undefined) {
         updates.completion_percentage = this.calculateCompletionPercentage(updates as any)
       }
 
@@ -768,7 +768,7 @@ export const rentalFileService = {
       description: "Avis d'imposition ou justificatif fiscal",
     })
 
-    // Situation de location (obligatoire)
+    // Situation de location (obligatoire) - CORRECTION ICI
     required.push({
       category: "Situation de location",
       item: "Type de location",
