@@ -75,6 +75,7 @@ export async function POST(request: NextRequest) {
       property_id: body.property_id,
       tenant_id: body.tenant_id,
       application_id: body.application_id,
+      visit_slot_id: body.visit_slot_id, // AJOUT: Référence vers le créneau
       visit_date: body.visit_date, // timestamp with time zone
       start_time: body.start_time, // time without time zone
       end_time: body.end_time, // time without time zone

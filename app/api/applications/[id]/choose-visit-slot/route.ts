@@ -112,6 +112,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
         tenant_email: application.users.email,
         visitor_phone: application.users.phone,
         notes: `Créneau sélectionné: ${slot.id}`, // IMPORTANT: Stocker l'ID du créneau pour pouvoir le libérer plus tard
+        visit_slot_id: slot_id, // AJOUT: Le champ attendu par le trigger
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -120,7 +121,13 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
     if (visitError) {
       console.error("❌ Erreur création visite:", visitError)
-      return NextResponse.json({ error: "Erreur lors de la création de la visite" }, { status: 500 })
+      return NextResponse.json(
+        {
+          error: "Erreur lors de la création de la visite",
+          details: visitError.message,
+        },
+        { status: 500 },
+      )
     }
 
     // Incrémenter le nombre de réservations du créneau
@@ -177,4 +184,3 @@ export async function POST(request: Request, { params }: { params: { id: string 
     )
   }
 }
-

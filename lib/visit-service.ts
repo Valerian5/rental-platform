@@ -5,6 +5,7 @@ export interface Visit {
   property_id: string
   tenant_id?: string
   application_id?: string
+  visit_slot_id?: string // AJOUT: Référence vers le créneau
   visitor_name: string
   tenant_email: string
   visitor_phone: string
@@ -133,11 +134,27 @@ export const visitService = {
     console.log("📅 VisitService.deleteVisit", visitId)
 
     try {
+      // Récupérer la visite pour libérer le créneau si nécessaire
+      const { data: visit } = await supabase.from("visits").select("visit_slot_id").eq("id", visitId).single()
+
+      // Supprimer la visite
       const { error } = await supabase.from("visits").delete().eq("id", visitId)
 
       if (error) {
         console.error("❌ Erreur suppression visite:", error)
         throw new Error(error.message)
+      }
+
+      // Si la visite avait un créneau associé, décrémenter le compteur
+      if (visit?.visit_slot_id) {
+        const { error: slotError } = await supabase.rpc("decrement_slot_bookings", {
+          slot_id: visit.visit_slot_id,
+        })
+
+        if (slotError) {
+          console.error("❌ Erreur libération créneau:", slotError)
+          // On ne bloque pas la suppression si la libération échoue
+        }
       }
 
       console.log("✅ Visite supprimée")
