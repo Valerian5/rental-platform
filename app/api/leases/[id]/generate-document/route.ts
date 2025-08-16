@@ -1,6 +1,97 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
 
+// Fonction utilitaire pour extraire et formater les informations des locataires
+function extractTenantsInfo(rentalFileData: any, lease: any) {
+  const allTenants = []
+
+  if (rentalFileData?.main_tenant) {
+    // Locataire principal du dossier de location
+    const mainTenant = rentalFileData.main_tenant
+    allTenants.push({
+      nom: mainTenant.last_name || "",
+      prenom: mainTenant.first_name || "",
+      email: mainTenant.email || lease.locataire_email || "",
+      profession: mainTenant.profession || "",
+      activite_principale: mainTenant.main_activity || "",
+      entreprise: mainTenant.company || "",
+      type: "principal",
+      date_naissance: mainTenant.birth_date || "",
+      lieu_naissance: mainTenant.birth_place || "",
+      nationalite: mainTenant.nationality || "française",
+    })
+
+    // Ajouter conjoints/colocataires si présents
+    if (rentalFileData.cotenants && rentalFileData.cotenants.length > 0) {
+      rentalFileData.cotenants.forEach((cotenant) => {
+        allTenants.push({
+          nom: cotenant.last_name || "",
+          prenom: cotenant.first_name || "",
+          email: cotenant.email || "",
+          profession: cotenant.profession || "",
+          activite_principale: cotenant.main_activity || "",
+          entreprise: cotenant.company || "",
+          type: rentalFileData.rental_situation === "couple" ? "conjoint" : "colocataire",
+          date_naissance: cotenant.birth_date || "",
+          lieu_naissance: cotenant.birth_place || "",
+          nationalite: cotenant.nationality || "française",
+        })
+      })
+    }
+  } else {
+    // Fallback sur les données du bail si pas de dossier de location
+    allTenants.push({
+      nom: lease.locataire_nom_prenom?.split(" ").slice(-1)[0] || "",
+      prenom: lease.locataire_nom_prenom?.split(" ").slice(0, -1).join(" ") || "",
+      email: lease.locataire_email || "",
+      profession: "",
+      type: "principal",
+    })
+  }
+
+  return {
+    allTenants,
+    tenantNames: allTenants.map((t) => `${t.prenom} ${t.nom}`).filter(Boolean),
+    tenantEmails: allTenants.map((t) => t.email).filter(Boolean),
+    mainTenant: allTenants[0],
+    hasCotenants: allTenants.length > 1,
+    situationLocation: rentalFileData?.rental_situation || "seul",
+  }
+}
+
+// Fonction pour générer les clauses spécifiques aux baux multiples
+function generateMultipleTenantsClauses(tenantsInfo: any): Record<string, string> {
+  const clauses: Record<string, string> = {}
+
+  if (tenantsInfo.hasCotenants) {
+    if (tenantsInfo.situationLocation === "couple") {
+      clauses.clause_solidarite_couple = `
+Les parties conviennent que Monsieur/Madame ${tenantsInfo.mainTenant.prenom} ${tenantsInfo.mainTenant.nom} 
+et Monsieur/Madame ${tenantsInfo.allTenants[1]?.prenom} ${tenantsInfo.allTenants[1]?.nom} 
+sont solidairement responsables du paiement du loyer et des charges, ainsi que de l'exécution 
+de toutes les obligations du présent bail.`
+
+      clauses.clause_couple_separation = `
+En cas de séparation des conjoints, chacun d'eux demeure tenu solidairement des obligations 
+résultant du présent contrat jusqu'à son terme ou jusqu'à la libération accordée par le bailleur.`
+    } else if (tenantsInfo.situationLocation === "colocation") {
+      clauses.clause_solidarite_colocation = `
+Les colocataires suivants :
+${tenantsInfo.allTenants.map((t) => `- ${t.prenom} ${t.nom}${t.profession ? ` (${t.profession})` : ""}`).join("\n")}
+
+sont solidairement responsables du paiement de l'intégralité du loyer et des charges, 
+ainsi que de l'exécution de toutes les obligations du présent bail.`
+
+      clauses.clause_depart_colocataire = `
+En cas de départ d'un colocataire, les colocataires restants demeurent solidairement 
+responsables de l'intégralité du loyer et des charges jusqu'au terme du bail ou 
+jusqu'à la libération accordée par le bailleur.`
+    }
+  }
+
+  return clauses
+}
+
 // Moteur de template amélioré avec mise en forme
 function compileTemplate(template: string, data: any): string {
   let result = template
@@ -165,6 +256,54 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     console.log("📋 [GENERATE] Bail récupéré:", lease.id, "- Type:", lease.lease_type)
 
+    // 1.1. Récupérer le dossier de location pour obtenir les informations des colocataires
+    let rentalFileData = null
+    try {
+      const { data: rentalFile, error: rentalFileError } = await supabase
+        .from("applications")
+        .select(`
+          *,
+          tenant:users!applications_tenant_id_fkey (
+            first_name,
+            last_name,
+            email,
+            phone
+          )
+        `)
+        .eq("tenant_id", lease.tenant_id)
+        .single()
+
+      if (!rentalFileError && rentalFile) {
+        const applicationData = safeParseJSON(rentalFile.application_data, {})
+
+        rentalFileData = {
+          main_tenant: {
+            first_name: rentalFile.tenant?.first_name || applicationData.personal_info?.first_name,
+            last_name: rentalFile.tenant?.last_name || applicationData.personal_info?.last_name,
+            email: rentalFile.tenant?.email || applicationData.personal_info?.email,
+            phone: rentalFile.tenant?.phone || applicationData.personal_info?.phone,
+            profession: applicationData.professional_info?.profession,
+            company: applicationData.professional_info?.company,
+            birth_date: applicationData.personal_info?.birth_date,
+            birth_place: applicationData.personal_info?.birth_place,
+            nationality: applicationData.personal_info?.nationality || "française",
+          },
+          rental_situation: applicationData.rental_situation || "seul",
+          cotenants: applicationData.cotenants || [],
+        }
+
+        console.log("📁 [GENERATE] Dossier de candidature trouvé:", {
+          rental_situation: rentalFileData.rental_situation,
+          cotenants_count: rentalFileData.cotenants?.length || 0,
+          main_tenant: rentalFileData.main_tenant?.first_name + " " + rentalFileData.main_tenant?.last_name,
+        })
+      } else {
+        console.log("⚠️ [GENERATE] Aucun dossier de candidature trouvé pour le locataire")
+      }
+    } catch (error) {
+      console.log("⚠️ [GENERATE] Erreur récupération dossier de candidature:", error)
+    }
+
     // 2. Vérifier que les données essentielles sont présentes
     const requiredFields = [
       "bailleur_nom_prenom",
@@ -212,9 +351,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     // 4. Préparer les données pour le template avec parsing sécurisé
     const metadata = safeParseJSON(lease.metadata, {})
-    const locataires = safeParseJSON(metadata.locataires, [])
     const garants = safeParseJSON(metadata.garants, [])
     const clauses = safeParseJSON(metadata.clauses, {})
+
+    // Extraire les informations des locataires depuis le dossier de location
+    const tenantsInfo = extractTenantsInfo(rentalFileData, lease)
+
+    // Générer les clauses spécifiques aux baux multiples
+    const multipleTenantsClauses = generateMultipleTenantsClauses(tenantsInfo)
 
     const templateData: Record<string, any> = {
       // === PARTIES ===
@@ -240,19 +384,52 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       personne_morale_mandataire_nom: lease.personne_morale_mandataire_nom || "",
       personne_morale_mandataire_adresse: lease.personne_morale_mandataire_adresse || "",
 
-      // === LOCATAIRES ===
-      nom_locataire: lease.locataire_nom_prenom || "[Nom du locataire]",
-      locataire_nom_prenom: lease.locataire_nom_prenom || "[Nom du locataire]",
-      locataire_email: lease.locataire_email || "[Email du locataire]",
+      // === LOCATAIRES MULTIPLES ===
+      nom_locataire: tenantsInfo.tenantNames.join(", ") || "[Nom du locataire]",
+      locataire_nom_prenom: tenantsInfo.tenantNames.join(", ") || "[Nom du locataire]",
+      locataire_email: tenantsInfo.tenantEmails.join(", ") || "[Email du locataire]",
       telephone_locataire: lease.telephone_locataire || "",
       locataire_domicile: lease.locataire_domicile || "",
+
+      // Informations détaillées des locataires
       locataires_list:
-        Array.isArray(locataires) && locataires.length > 0
-          ? locataires
-              .map((loc: any) => `${loc.nom || ""} ${loc.prenom || ""} - ${loc.email || ""}`)
-              .filter(Boolean)
+        tenantsInfo.allTenants.length > 0
+          ? tenantsInfo.allTenants
+              .map((tenant) => {
+                let info = `${tenant.prenom} ${tenant.nom}`
+                if (tenant.profession) info += ` (${tenant.profession})`
+                if (tenant.entreprise) info += ` - ${tenant.entreprise}`
+                if (tenant.email) info += ` - ${tenant.email}`
+                if (tenant.type !== "principal") info += ` [${tenant.type}]`
+                return info
+              })
               .join("<br/>")
           : "[Aucun locataire]",
+
+      // Informations de situation
+      situation_location: tenantsInfo.situationLocation,
+      nombre_locataires: tenantsInfo.allTenants.length,
+      type_bail:
+        tenantsInfo.situationLocation === "couple"
+          ? "Bail conjoint"
+          : tenantsInfo.situationLocation === "colocation"
+            ? "Bail en colocation"
+            : "Bail individuel",
+
+      // Informations du locataire principal
+      locataire_principal_nom: tenantsInfo.mainTenant?.nom || "",
+      locataire_principal_prenom: tenantsInfo.mainTenant?.prenom || "",
+      locataire_principal_profession: tenantsInfo.mainTenant?.profession || "",
+      locataire_principal_entreprise: tenantsInfo.mainTenant?.entreprise || "",
+
+      // Informations des colocataires/conjoints si présents
+      a_colocataires: tenantsInfo.hasCotenants ? "Oui" : "Non",
+      colocataires_details: tenantsInfo.hasCotenants
+        ? tenantsInfo.allTenants
+            .slice(1)
+            .map((tenant) => `${tenant.prenom} ${tenant.nom}${tenant.profession ? ` (${tenant.profession})` : ""}`)
+            .join(", ")
+        : "",
 
       // === LOGEMENT ===
       localisation_logement:
@@ -373,6 +550,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       travaux_locataire: clauses.travaux_locataire?.enabled ? clauses.travaux_locataire.text : "",
       travaux_entre_locataires: clauses.travaux_entre_locataires?.enabled ? clauses.travaux_entre_locataires.text : "",
 
+      // Clauses spécifiques aux baux multiples
+      ...multipleTenantsClauses,
+
       // === HONORAIRES ===
       montant_plafond_honoraires: lease.plafond_honoraires_locataire || "",
       honoraires_locataire: lease.honoraires_locataire_visite || "",
@@ -392,7 +572,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       usage_prevu: lease.usage_prevu || "résidence principale",
     }
 
-    console.log("📊 [GENERATE] Données template préparées:", Object.keys(templateData).length, "champs")
+    console.log("📊 [GENERATE] Données template préparées:", {
+      total_fields: Object.keys(templateData).length,
+      locataires_count: tenantsInfo.allTenants.length,
+      situation_location: tenantsInfo.situationLocation,
+      has_cotenants: tenantsInfo.hasCotenants,
+      tenant_names: tenantsInfo.tenantNames,
+    })
 
     // 5. Compiler le template
     const generatedDocument = compileTemplate(template.template_content, templateData)
