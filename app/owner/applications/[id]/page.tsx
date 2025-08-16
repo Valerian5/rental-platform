@@ -38,6 +38,7 @@ import {
   Euro,
   Home,
 } from "lucide-react"
+import { TenantAndGuarantorDocumentsSection } from "@/components/TenantAndGuarantorDocumentsSection"
 
 export default function ApplicationDetailsPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -1233,13 +1234,16 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-8">
-                  <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">Section documents en cours de développement</p>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Les documents seront affichés ici une fois la fonctionnalité implémentée
-                  </p>
-                </div>
+                {user && (
+                  <TenantAndGuarantorDocumentsSection
+                    applicationId={application.id}
+                    mainTenant={rentalFile?.main_tenant}
+                    guarantors={rentalFile?.guarantors || []}
+                    userId={user.id}
+                    userName={`${user.first_name} ${user.last_name}`}
+                    rentalFile={rentalFile}
+                  />
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -1260,4 +1264,49 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       )}
     </>
   )
+}
+
+function flattenDocuments(application: any): any[] {
+  if (!application) return []
+
+  const now = new Date().toISOString()
+  const docs: any[] = []
+
+  // Documents du locataire principal
+  if (application.documents) {
+    application.documents.forEach((doc: any) => {
+      docs.push({
+        document_id: doc.id || `doc-${docs.length}`,
+        label: doc.type || "Document",
+        file_url: doc.url,
+        category: doc.category || "other",
+        verified: doc.verified || false,
+        created_at: doc.created_at || now,
+        file_type: doc.file_type,
+      })
+    })
+  }
+
+  // Documents des garants
+  if (application.guarantors) {
+    application.guarantors.forEach((guarantor: any, index: number) => {
+      if (guarantor.documents) {
+        guarantor.documents.forEach((doc: any) => {
+          docs.push({
+            document_id: doc.id || `guarantor-${index}-doc-${docs.length}`,
+            label: `${doc.type || "Document"} (Garant ${index + 1})`,
+            file_url: doc.url,
+            category: doc.category || "other",
+            verified: doc.verified || false,
+            created_at: doc.created_at || now,
+            guarantor_id: guarantor.id || index.toString(),
+            guarantor_name: guarantor.name || `Garant ${index + 1}`,
+            file_type: doc.file_type,
+          })
+        })
+      }
+    })
+  }
+
+  return docs
 }
