@@ -620,7 +620,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             </TabsTrigger>
           </TabsList>
 
-          {/* Vue d'ensemble - Sans couleurs de gradients */}
+          {/* Vue d'ensemble - Design amélioré */}
           <TabsContent value="overview" className="space-y-6">
             {/* Résumé rapide en haut */}
             <div className="grid gap-4 md:grid-cols-4">
@@ -676,10 +676,10 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             </div>
 
             <div className="grid gap-6 lg:grid-cols-3">
-              {/* Informations du candidat principal */}
+              {/* Informations du candidat principal - Design amélioré */}
               <Card className="lg:col-span-2">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-t-lg">
+                  <CardTitle className="flex items-center gap-2 text-blue-800">
                     <User className="h-5 w-5" />
                     Candidat principal
                   </CardTitle>
@@ -758,10 +758,10 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                 </CardContent>
               </Card>
 
-              {/* Informations du bien */}
+              {/* Informations du bien - Design amélioré */}
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                <CardHeader className="bg-gradient-to-r from-green-50 to-green-100 rounded-t-lg">
+                  <CardTitle className="flex items-center gap-2 text-green-800">
                     <Building className="h-5 w-5" />
                     Bien concerné
                   </CardTitle>
@@ -815,10 +815,10 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               </Card>
             </div>
 
-            {/* Informations professionnelles et financières */}
+            {/* Informations professionnelles et financières - Design amélioré */}
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+              <CardHeader className="bg-gradient-to-r from-purple-50 to-purple-100 rounded-t-lg">
+                <CardTitle className="flex items-center gap-2 text-purple-800">
                   <Briefcase className="h-5 w-5" />
                   Situation professionnelle et financière
                 </CardTitle>
@@ -889,20 +889,14 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             {/* Situation de location */}
             {rentalFile?.rental_situation && (
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                <CardHeader className="bg-gradient-to-r from-indigo-50 to-indigo-100 rounded-t-lg">
+                  <CardTitle className="flex items-center gap-2 text-indigo-800">
                     <Users className="h-5 w-5" />
                     Situation de location
                     {rentalFile.rental_situation === "couple" && (
                       <Badge variant="outline" className="ml-2 text-pink-700 border-pink-300 bg-pink-50">
                         <Heart className="h-3 w-3 mr-1" />
                         En couple
-                      </Badge>
-                    )}
-                    {rentalFile.rental_situation === "colocation" && (
-                      <Badge variant="outline" className="ml-2 text-blue-700 border-blue-300 bg-blue-50">
-                        <Users className="h-3 w-3 mr-1" />
-                        Colocation
                       </Badge>
                     )}
                   </CardTitle>
@@ -969,7 +963,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                               </div>
                               <div>
                                 <label className="text-sm font-medium text-gray-500">Nationalité</label>
-                                <p className="text-gray-900">{cotenant.nationality || "Non renseigné"}</p>
+                                <p className="text-gray-900">{cotenant.nationality || "Non spécifié"}</p>
                               </div>
                             </div>
                           </CardContent>
@@ -984,8 +978,8 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             {/* Message de candidature */}
             {(application.presentation || application.message || rentalFile?.presentation_message) && (
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                <CardHeader className="bg-gradient-to-r from-amber-50 to-amber-100 rounded-t-lg">
+                  <CardTitle className="flex items-center gap-2 text-amber-800">
                     <MessageSquare className="h-5 w-5" />
                     Message de candidature
                   </CardTitle>
@@ -1003,8 +997,8 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             {/* Informations sur les garants */}
             {rentalFile?.guarantors && rentalFile.guarantors.length > 0 && (
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                <CardHeader className="bg-gradient-to-r from-green-50 to-green-100 rounded-t-lg">
+                  <CardTitle className="flex items-center gap-2 text-green-800">
                     <Shield className="h-5 w-5" />
                     Garants ({rentalFile.guarantors.length})
                   </CardTitle>
