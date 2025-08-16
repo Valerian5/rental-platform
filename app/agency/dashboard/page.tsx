@@ -1,5 +1,7 @@
 "use client"
 
+import { CardFooter } from "@/components/ui/card"
+
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -15,9 +17,10 @@ import {
   MessageSquare,
   Bell,
   Search,
+  TrendingUp,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useToast } from "@/hooks/use-toast"
@@ -52,6 +55,7 @@ export default function AgencyDashboardPage() {
     applications: 0,
     visits: 0,
     leases: 0,
+    performance: 0,
   })
 
   useEffect(() => {
@@ -106,16 +110,41 @@ export default function AgencyDashboardPage() {
 
   const fetchAgencyStats = async (agencyId: string) => {
     try {
-      // In a real implementation, this would fetch actual stats from the API
-      // For now, we'll use dummy data
+      // Charger les vraies statistiques depuis l'API
+      const [propertiesRes, applicationsRes, visitsRes, leasesRes] = await Promise.all([
+        fetch(`/api/agencies/${agencyId}/properties`).catch(() => ({ ok: false })),
+        fetch(`/api/applications?agency_id=${agencyId}`).catch(() => ({ ok: false })),
+        fetch(`/api/visits?agency_id=${agencyId}`).catch(() => ({ ok: false })),
+        fetch(`/api/leases?agency_id=${agencyId}`).catch(() => ({ ok: false })),
+      ])
+
+      const properties = propertiesRes.ok ? await propertiesRes.json() : { properties: [] }
+      const applications = applicationsRes.ok ? await applicationsRes.json() : { applications: [] }
+      const visits = visitsRes.ok ? await visitsRes.json() : { visits: [] }
+      const leases = leasesRes.ok ? await leasesRes.json() : { leases: [] }
+
+      const activeLeases = leases.leases?.filter((lease: any) => lease.status === "active") || []
+      const totalRevenue = activeLeases.reduce((sum: number, lease: any) => sum + (lease.monthly_rent || 0), 0)
+      const occupancyRate =
+        properties.properties?.length > 0 ? (activeLeases.length / properties.properties.length) * 100 : 0
+
       setStats({
-        properties: 12,
-        applications: 24,
-        visits: 8,
-        leases: 6,
+        properties: properties.properties?.length || 0,
+        applications: applications.applications?.length || 0,
+        visits: visits.visits?.length || 0,
+        leases: activeLeases.length,
+        performance: Math.round(occupancyRate),
       })
     } catch (error) {
       console.error("Error fetching agency stats:", error)
+      // Fallback avec des valeurs par défaut
+      setStats({
+        properties: 0,
+        applications: 0,
+        visits: 0,
+        leases: 0,
+        performance: 0,
+      })
     }
   }
 
@@ -146,10 +175,8 @@ export default function AgencyDashboardPage() {
     <div className="container mx-auto py-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold">Agency Dashboard</h1>
-          <p className="text-muted-foreground">
-            Welcome back, {user.first_name} {user.last_name}
-          </p>
+          <h1 className="text-3xl font-bold">Tableau de bord Agence</h1>
+          <p className="text-gray-600">Bienvenue {user.first_name} !</p>
         </div>
         <div className="flex items-center gap-4">
           <div className="relative">
@@ -170,8 +197,9 @@ export default function AgencyDashboardPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Properties</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Propriétés</CardTitle>
+            <Building2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.properties}</div>
@@ -179,8 +207,9 @@ export default function AgencyDashboardPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Applications</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Clients</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.applications}</div>
@@ -188,8 +217,9 @@ export default function AgencyDashboardPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Scheduled Visits</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Visites</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.visits}</div>
@@ -197,12 +227,13 @@ export default function AgencyDashboardPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Active Leases</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Performance</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.leases}</div>
-            <p className="text-xs text-muted-foreground">2 expiring soon</p>
+            <div className="text-2xl font-bold">{stats.performance}%</div>
+            <p className="text-xs text-muted-foreground">Taux de location</p>
           </CardContent>
         </Card>
       </div>
@@ -214,48 +245,43 @@ export default function AgencyDashboardPage() {
             <CardDescription>Latest actions on the platform</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-start gap-4">
-                <div className="rounded-full bg-blue-100 p-2">
-                  <Home className="h-4 w-4 text-blue-600" />
+            {stats.properties === 0 ? (
+              <div className="text-center py-8">
+                <Building2 className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500 mb-4">Aucune activité récente</p>
+                <p className="text-sm text-gray-400">Commencez par ajouter des propriétés pour voir l'activité</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-start gap-4">
+                  <div className="rounded-full bg-blue-100 p-2">
+                    <Home className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{stats.properties} propriétés gérées</p>
+                    <p className="text-xs text-muted-foreground">Portfolio actuel</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium">New property added</p>
-                  <p className="text-xs text-muted-foreground">3-bedroom apartment in Paris</p>
-                  <p className="text-xs text-muted-foreground">2 hours ago</p>
+                <div className="flex items-start gap-4">
+                  <div className="rounded-full bg-green-100 p-2">
+                    <Users className="h-4 w-4 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{stats.applications} candidatures reçues</p>
+                    <p className="text-xs text-muted-foreground">Total des demandes</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-4">
+                  <div className="rounded-full bg-purple-100 p-2">
+                    <FileText className="h-4 w-4 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{stats.leases} baux actifs</p>
+                    <p className="text-xs text-muted-foreground">Contrats en cours</p>
+                  </div>
                 </div>
               </div>
-              <div className="flex items-start gap-4">
-                <div className="rounded-full bg-green-100 p-2">
-                  <Users className="h-4 w-4 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium">New application received</p>
-                  <p className="text-xs text-muted-foreground">For studio apartment in Lyon</p>
-                  <p className="text-xs text-muted-foreground">5 hours ago</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-4">
-                <div className="rounded-full bg-amber-100 p-2">
-                  <Calendar className="h-4 w-4 text-amber-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium">Visit scheduled</p>
-                  <p className="text-xs text-muted-foreground">For 2-bedroom house in Marseille</p>
-                  <p className="text-xs text-muted-foreground">Yesterday</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-4">
-                <div className="rounded-full bg-purple-100 p-2">
-                  <FileText className="h-4 w-4 text-purple-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium">Lease signed</p>
-                  <p className="text-xs text-muted-foreground">1-bedroom apartment in Nice</p>
-                  <p className="text-xs text-muted-foreground">2 days ago</p>
-                </div>
-              </div>
-            </div>
+            )}
           </CardContent>
         </Card>
 

@@ -32,21 +32,6 @@ interface RecentActivity {
   visits: any[]
 }
 
-// Fonction helper pour les appels API avec fallback
-const fetchWithFallback = async (url: string, fallbackData: any = []) => {
-  try {
-    const response = await fetch(url)
-    if (!response.ok) {
-      console.warn(`API ${url} returned ${response.status}, using fallback`)
-      return { success: true, data: fallbackData }
-    }
-    return await response.json()
-  } catch (error) {
-    console.warn(`API ${url} failed, using fallback:`, error)
-    return { success: true, data: fallbackData }
-  }
-}
-
 export default function TenantDashboard() {
   const [user, setUser] = useState<any>(null)
   const [stats, setStats] = useState<DashboardStats>({
@@ -71,7 +56,6 @@ export default function TenantDashboard() {
     try {
       setLoading(true)
 
-      // Récupérer l'utilisateur connecté
       const {
         data: { user: currentUser },
       } = await supabase.auth.getUser()
@@ -86,26 +70,28 @@ export default function TenantDashboard() {
 
       setUser(currentUser)
 
-      // Récupérer les données avec fallback gracieux
+      // Récupérer les vraies données depuis la DB
       const [applicationsRes, favoritesRes, visitsRes] = await Promise.all([
-        fetchWithFallback(`/api/applications/tenant?tenant_id=${currentUser.id}&limit=5`),
-        fetchWithFallback(`/api/favorites?user_id=${currentUser.id}&limit=5`),
-        fetchWithFallback(`/api/visits/tenant?tenant_id=${currentUser.id}&limit=5`),
+        fetch(`/api/applications/tenant?tenant_id=${currentUser.id}`).catch(() => ({ ok: false })),
+        fetch(`/api/favorites?user_id=${currentUser.id}`).catch(() => ({ ok: false })),
+        fetch(`/api/visits/tenant?tenant_id=${currentUser.id}`).catch(() => ({ ok: false })),
       ])
 
-      // Mettre à jour les statistiques
+      const applications = applicationsRes.ok ? await applicationsRes.json() : { applications: [] }
+      const favorites = favoritesRes.ok ? await favoritesRes.json() : { favorites: [] }
+      const visits = visitsRes.ok ? await visitsRes.json() : { visits: [] }
+
       setStats({
-        applications: applicationsRes.data?.length || 0,
-        favorites: favoritesRes.data?.length || 0,
-        visits: visitsRes.data?.length || 0,
-        messages: 0, // À implémenter plus tard
+        applications: applications.applications?.length || 0,
+        favorites: favorites.favorites?.length || 0,
+        visits: visits.visits?.length || 0,
+        messages: 0, // À implémenter avec l'API messages
       })
 
-      // Mettre à jour l'activité récente
       setRecentActivity({
-        applications: applicationsRes.data || [],
-        favorites: favoritesRes.data || [],
-        visits: visitsRes.data || [],
+        applications: applications.applications?.slice(0, 3) || [],
+        favorites: favorites.favorites?.slice(0, 3) || [],
+        visits: visits.visits?.slice(0, 3) || [],
       })
     } catch (error) {
       console.error("Erreur récupération données dashboard:", error)
@@ -184,7 +170,7 @@ export default function TenantDashboard() {
         <p className="text-gray-600">Voici un aperçu de votre activité de recherche de logement</p>
       </div>
 
-      {/* Statistiques rapides */}
+      {/* Statistiques réelles */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <Card>
           <CardContent className="p-6">
@@ -291,7 +277,7 @@ export default function TenantDashboard() {
         </CardContent>
       </Card>
 
-      {/* Activité récente */}
+      {/* Activité récente avec vraies données */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Candidatures récentes */}
         <Card>
@@ -316,11 +302,11 @@ export default function TenantDashboard() {
               </div>
             ) : (
               <div className="space-y-4">
-                {recentActivity.applications.slice(0, 3).map((application) => (
+                {recentActivity.applications.map((application) => (
                   <div key={application.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div className="flex-1">
-                      <p className="font-medium text-sm">{application.properties?.title || "Logement"}</p>
-                      <p className="text-xs text-gray-600">{application.properties?.location || "Localisation"}</p>
+                      <p className="font-medium text-sm">{application.property?.title || "Logement"}</p>
+                      <p className="text-xs text-gray-600">{application.property?.address || "Adresse"}</p>
                       <p className="text-xs text-gray-500">
                         {new Date(application.created_at).toLocaleDateString("fr-FR")}
                       </p>
@@ -359,17 +345,17 @@ export default function TenantDashboard() {
               </div>
             ) : (
               <div className="space-y-4">
-                {recentActivity.favorites.slice(0, 3).map((favorite) => (
+                {recentActivity.favorites.map((favorite) => (
                   <div key={favorite.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div className="flex-1">
-                      <p className="font-medium text-sm">{favorite.properties?.title || "Logement"}</p>
-                      <p className="text-xs text-gray-600">{favorite.properties?.location || "Localisation"}</p>
+                      <p className="font-medium text-sm">{favorite.property?.title || "Logement"}</p>
+                      <p className="text-xs text-gray-600">{favorite.property?.address || "Adresse"}</p>
                       <p className="text-xs text-gray-500">
                         Ajouté le {new Date(favorite.created_at).toLocaleDateString("fr-FR")}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold text-sm">{favorite.properties?.price || 0}€</p>
+                      <p className="font-semibold text-sm">{favorite.property?.price || 0}€</p>
                       <p className="text-xs text-gray-500">par mois</p>
                     </div>
                   </div>

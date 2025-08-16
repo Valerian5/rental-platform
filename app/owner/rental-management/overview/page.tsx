@@ -7,8 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Receipt, AlertTriangle, Wrench, Shield, TrendingUp, Calculator, Clock, Euro, Home, Plus } from "lucide-react"
 import { authService } from "@/lib/auth-service"
-import { rentalManagementService } from "@/lib/rental-management-service"
 import Link from "next/link"
+import { PageHeader } from "@/components/page-header"
 
 export default function RentalManagementOverview() {
   const [currentUser, setCurrentUser] = useState<any>(null)
@@ -31,7 +31,7 @@ export default function RentalManagementOverview() {
         if (!user || user.user_type !== "owner") return
 
         setCurrentUser(user)
-        await loadOverviewData(user.id)
+        await loadRealOverviewData(user.id)
       } catch (error) {
         console.error("Erreur initialisation:", error)
       } finally {
@@ -42,47 +42,65 @@ export default function RentalManagementOverview() {
     initializeData()
   }, [])
 
-  const loadOverviewData = async (ownerId: string) => {
+  const loadRealOverviewData = async (ownerId: string) => {
     try {
-      // Charger les statistiques générales
-      const leases = await rentalManagementService.getOwnerLeases(ownerId)
-      const activeLeases = leases.filter((lease) => lease.status === "active")
+      // Charger les vraies données depuis la DB
+      const [leasesRes, incidentsRes, maintenanceRes, documentsRes] = await Promise.all([
+        fetch(`/api/leases?owner_id=${ownerId}`).catch(() => ({ ok: false })),
+        fetch(`/api/incidents/owner/${ownerId}`).catch(() => ({ ok: false })),
+        fetch(`/api/maintenance?owner_id=${ownerId}`).catch(() => ({ ok: false })),
+        fetch(`/api/documents/expiring?owner_id=${ownerId}`).catch(() => ({ ok: false })),
+      ])
 
-      // Calculer les revenus mensuels
-      const monthlyIncome = activeLeases.reduce((sum, lease) => sum + lease.monthly_rent + lease.charges, 0)
+      const leases = leasesRes.ok ? await leasesRes.json() : { leases: [] }
+      const incidents = incidentsRes.ok ? await incidentsRes.json() : { incidents: [] }
+      const maintenance = maintenanceRes.ok ? await maintenanceRes.json() : { maintenance: [] }
+      const documents = documentsRes.ok ? await documentsRes.json() : { documents: [] }
 
-      // Simuler d'autres statistiques (à implémenter selon vos besoins)
+      const activeLeases = leases.leases?.filter((lease: any) => lease.status === "active") || []
+      const monthlyIncome = activeLeases.reduce(
+        (sum: number, lease: any) => sum + (lease.monthly_rent || 0) + (lease.charges || 0),
+        0,
+      )
+
       setStats({
-        totalLeases: leases.length,
+        totalLeases: leases.leases?.length || 0,
         activeLeases: activeLeases.length,
-        pendingReceipts: 3, // À calculer depuis rent_receipts
-        openIncidents: 2, // À calculer depuis incidents
-        scheduledMaintenance: 1, // À calculer depuis maintenance_works
-        expiringDocuments: 1, // À calculer depuis annual_documents
+        pendingReceipts: 0, // À calculer depuis rent_receipts
+        openIncidents: incidents.incidents?.filter((i: any) => i.status === "open").length || 0,
+        scheduledMaintenance: maintenance.maintenance?.filter((m: any) => m.status === "scheduled").length || 0,
+        expiringDocuments: documents.documents?.length || 0,
         monthlyIncome,
       })
 
-      // Activité récente simulée
-      setRecentActivity([
-        {
-          type: "receipt",
-          message: "Quittance novembre générée",
-          date: "2024-11-01",
-          status: "success",
-        },
-        {
-          type: "incident",
-          message: "Incident plomberie signalé",
-          date: "2024-10-28",
-          status: "warning",
-        },
-        {
-          type: "maintenance",
-          message: "Révision chaudière programmée",
-          date: "2024-10-25",
-          status: "info",
-        },
-      ])
+      // Activité récente réelle
+      const activities = []
+
+      // Ajouter les incidents récents
+      if (incidents.incidents) {
+        incidents.incidents.slice(0, 2).forEach((incident: any) => {
+          activities.push({
+            type: "incident",
+            message: `Incident: ${incident.title}`,
+            date: incident.created_at,
+            status: incident.status === "open" ? "warning" : "success",
+          })
+        })
+      }
+
+      // Ajouter les maintenances récentes
+      if (maintenance.maintenance) {
+        maintenance.maintenance.slice(0, 2).forEach((work: any) => {
+          activities.push({
+            type: "maintenance",
+            message: `Maintenance: ${work.title}`,
+            date: work.scheduled_date,
+            status: "info",
+          })
+        })
+      }
+
+      setRecentActivity(activities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 3))
     } catch (error) {
       console.error("Erreur chargement données:", error)
     }
@@ -152,6 +170,8 @@ export default function RentalManagementOverview() {
 
   return (
     <div className="space-y-6">
+      <PageHeader title="Gestion Locative" description="Vue d'ensemble de vos locations actives" />
+
       {/* Statistiques principales */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
@@ -194,10 +214,10 @@ export default function RentalManagementOverview() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Quittances en Attente</p>
-                <p className="text-3xl font-bold text-purple-600">{stats.pendingReceipts}</p>
+                <p className="text-sm font-medium text-gray-600">Maintenances Programmées</p>
+                <p className="text-3xl font-bold text-purple-600">{stats.scheduledMaintenance}</p>
               </div>
-              <Receipt className="h-8 w-8 text-purple-600" />
+              <Wrench className="h-8 w-8 text-purple-600" />
             </div>
           </CardContent>
         </Card>
@@ -247,28 +267,39 @@ export default function RentalManagementOverview() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {recentActivity.map((activity, index) => (
-              <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="flex items-center space-x-3">
-                  {activity.type === "receipt" && <Receipt className="h-5 w-5 text-blue-600" />}
-                  {activity.type === "incident" && <AlertTriangle className="h-5 w-5 text-orange-600" />}
-                  {activity.type === "maintenance" && <Wrench className="h-5 w-5 text-green-600" />}
-                  <div>
-                    <p className="font-medium">{activity.message}</p>
-                    <p className="text-sm text-gray-600">{new Date(activity.date).toLocaleDateString("fr-FR")}</p>
+          {recentActivity.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <Clock className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+              <p>Aucune activité récente</p>
+              <p className="text-sm">Les dernières actions apparaîtront ici</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {recentActivity.map((activity, index) => (
+                <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    {activity.type === "incident" && <AlertTriangle className="h-5 w-5 text-orange-600" />}
+                    {activity.type === "maintenance" && <Wrench className="h-5 w-5 text-green-600" />}
+                    <div>
+                      <p className="font-medium">{activity.message}</p>
+                      <p className="text-sm text-gray-600">{new Date(activity.date).toLocaleDateString("fr-FR")}</p>
+                    </div>
                   </div>
+                  <Badge
+                    variant={
+                      activity.status === "success"
+                        ? "default"
+                        : activity.status === "warning"
+                          ? "secondary"
+                          : "outline"
+                    }
+                  >
+                    {activity.status === "success" ? "Terminé" : activity.status === "warning" ? "En cours" : "Prévu"}
+                  </Badge>
                 </div>
-                <Badge
-                  variant={
-                    activity.status === "success" ? "default" : activity.status === "warning" ? "secondary" : "outline"
-                  }
-                >
-                  {activity.status === "success" ? "Terminé" : activity.status === "warning" ? "En cours" : "Prévu"}
-                </Badge>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -280,17 +311,29 @@ export default function RentalManagementOverview() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Button className="h-auto p-4 flex flex-col items-center space-y-2">
+            <Button className="h-auto p-4 flex flex-col items-center space-y-2" disabled>
               <Plus className="h-6 w-6" />
               <span>Générer quittances du mois</span>
+              <span className="text-xs opacity-70">(Bientôt disponible)</span>
             </Button>
-            <Button variant="outline" className="h-auto p-4 flex flex-col items-center space-y-2">
-              <AlertTriangle className="h-6 w-6" />
-              <span>Signaler un incident</span>
+            <Button
+              variant="outline"
+              className="h-auto p-4 flex flex-col items-center space-y-2 bg-transparent"
+              asChild
+            >
+              <Link href="/owner/rental-management/incidents">
+                <AlertTriangle className="h-6 w-6" />
+                <span>Voir les incidents</span>
+              </Link>
             </Button>
-            <Button variant="outline" className="h-auto p-4 flex flex-col items-center space-y-2">
+            <Button
+              variant="outline"
+              className="h-auto p-4 flex flex-col items-center space-y-2 bg-transparent"
+              disabled
+            >
               <Calculator className="h-6 w-6" />
               <span>Calculer révision loyer</span>
+              <span className="text-xs opacity-70">(Bientôt disponible)</span>
             </Button>
           </div>
         </CardContent>

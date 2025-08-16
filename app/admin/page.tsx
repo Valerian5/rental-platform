@@ -12,13 +12,12 @@ import {
   Users,
   Settings,
   BarChart,
-  Home,
-  Bell,
-  MessageSquare,
   Menu,
   Save,
   UserPlus,
   Shield,
+  Building2,
+  BarChart3,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -492,142 +491,7 @@ function AdminContent() {
         <main className="p-6">
           {activeTab === "dashboard" && (
             <div className="space-y-6">
-              <h2 className="text-2xl font-bold">Tableau de bord</h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Propriétaires</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">24</div>
-                    <p className="text-xs text-muted-foreground">+3 ce mois-ci</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Locataires</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">156</div>
-                    <p className="text-xs text-muted-foreground">+12 ce mois-ci</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Biens</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">87</div>
-                    <p className="text-xs text-muted-foreground">42 disponibles</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Contrats</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">45</div>
-                    <p className="text-xs text-muted-foreground">+5 ce mois-ci</p>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Activité récente</CardTitle>
-                    <CardDescription>Les dernières actions sur la plateforme</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="flex items-start gap-4">
-                        <div className="rounded-full bg-blue-100 p-2">
-                          <Home className="h-4 w-4 text-blue-600" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium">Nouveau bien ajouté</p>
-                          <p className="text-xs text-muted-foreground">Appartement 3 pièces à Paris</p>
-                          <p className="text-xs text-muted-foreground">Il y a 2 heures</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-4">
-                        <div className="rounded-full bg-green-100 p-2">
-                          <Users className="h-4 w-4 text-green-600" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium">Nouveau propriétaire inscrit</p>
-                          <p className="text-xs text-muted-foreground">Jean Dupont</p>
-                          <p className="text-xs text-muted-foreground">Il y a 5 heures</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-4">
-                        <div className="rounded-full bg-amber-100 p-2">
-                          <FileText className="h-4 w-4 text-amber-600" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium">Contrat signé</p>
-                          <p className="text-xs text-muted-foreground">Studio à Lyon</p>
-                          <p className="text-xs text-muted-foreground">Il y a 1 jour</p>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Tâches administratives</CardTitle>
-                    <CardDescription>Actions à effectuer</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="rounded-full bg-red-100 p-2">
-                            <Bell className="h-4 w-4 text-red-600" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium">Vérifier les documents</p>
-                            <p className="text-xs text-muted-foreground">3 dossiers en attente</p>
-                          </div>
-                        </div>
-                        <Button size="sm" variant="outline">
-                          Voir
-                        </Button>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="rounded-full bg-blue-100 p-2">
-                            <MessageSquare className="h-4 w-4 text-blue-600" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium">Messages non lus</p>
-                            <p className="text-xs text-muted-foreground">5 messages</p>
-                          </div>
-                        </div>
-                        <Button size="sm" variant="outline">
-                          Voir
-                        </Button>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="rounded-full bg-amber-100 p-2">
-                            <Settings className="h-4 w-4 text-amber-600" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium">Mise à jour système</p>
-                            <p className="text-xs text-muted-foreground">Nouvelle version disponible</p>
-                          </div>
-                        </div>
-                        <Button size="sm" variant="outline">
-                          Installer
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
+              <AdminDashboard user={currentUser} />
             </div>
           )}
 
@@ -1336,6 +1200,123 @@ function AdminContent() {
             </div>
           )}
         </main>
+      </div>
+    </div>
+  )
+}
+
+function AdminDashboard({ user }) {
+  const [stats, setStats] = useState({
+    users: 0,
+    properties: 0,
+    leases: 0,
+    revenue: 0,
+  })
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadRealAdminStats()
+  }, [])
+
+  const loadRealAdminStats = async () => {
+    try {
+      const [usersRes, propertiesRes, leasesRes] = await Promise.all([
+        fetch("/api/admin/stats/users").catch(() => ({ ok: false })),
+        fetch("/api/admin/stats/properties").catch(() => ({ ok: false })),
+        fetch("/api/admin/stats/leases").catch(() => ({ ok: false })),
+      ])
+
+      const users = usersRes.ok ? await usersRes.json() : { count: 0 }
+      const properties = propertiesRes.ok ? await propertiesRes.json() : { count: 0 }
+      const leases = leasesRes.ok ? await leasesRes.json() : { count: 0, revenue: 0 }
+
+      setStats({
+        users: users.count || 0,
+        properties: properties.count || 0,
+        leases: leases.count || 0,
+        revenue: leases.revenue || 0,
+      })
+    } catch (error) {
+      console.error("Erreur chargement stats admin:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold">Tableau de bord</h1>
+          <p className="text-gray-600">Chargement...</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-6">
+                <div className="animate-pulse">
+                  <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
+                  <div className="h-8 bg-gray-200 rounded w-3/4"></div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold">Tableau de bord</h1>
+        <p className="text-gray-600">Bienvenue {user?.first_name} !</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Utilisateurs</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.users}</div>
+            <p className="text-xs text-muted-foreground">Total inscrits</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Propriétés</CardTitle>
+            <Building2 className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.properties}</div>
+            <p className="text-xs text-muted-foreground">Total publiées</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Contrats</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.leases}</div>
+            <p className="text-xs text-muted-foreground">Baux signés</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Revenus</CardTitle>
+            <BarChart3 className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">€{stats.revenue.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">Revenus mensuels</p>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
