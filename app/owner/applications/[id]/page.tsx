@@ -12,7 +12,7 @@ import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { VisitProposalManager } from "@/components/visit-proposal-manager"
-import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
+import { scoringPreferencesService } from "@/lib/services/scoring-preferences-service"
 import { applicationEnrichmentService } from "@/lib/application-enrichment-service"
 import { CircularScore } from "@/components/circular-score"
 import {
@@ -149,7 +149,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
 
       // Calculer le score si on a les préférences
       if (scoringPreferences) {
-        await calculateScore(enrichedApplication, rentalFile)
+        await recalculateScore(enrichedApplication, ownerId)
       }
     } catch (error) {
       console.error("Erreur chargement candidature:", error)
@@ -157,27 +157,34 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
     }
   }
 
-  const calculateScore = async (application: any, rentalFile: any) => {
+  const recalculateScore = async (app: any, ownerId?: string) => {
+    if (!app || !app.property || !app.property.owner_id) return
+
     try {
-      console.log("🎯 Calcul du score pour la candidature:", application.id)
+      console.log(`🎯 Recalcul score pour candidature ${app.id}`)
 
-      const response = await fetch("/api/scoring/calculate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          application,
-          rentalFile,
-          preferences: scoringPreferences,
-        }),
-      })
+      const result = await scoringPreferencesService.calculateScore(
+        app,
+        app.property,
+        ownerId || app.property.owner_id,
+        false, // Ne pas utiliser le cache pour avoir le score le plus récent
+      )
 
-      if (response.ok) {
-        const result = await response.json()
-        setScoringResult(result)
-        console.log("✅ Score calculé:", result.totalScore)
-      }
+      setScoringResult(result)
+      console.log(`📊 Score recalculé: ${result.totalScore}/100 - Compatible: ${result.compatible}`)
     } catch (error) {
-      console.error("Erreur calcul score:", error)
+      console.error("❌ Erreur recalcul score:", error)
+      setScoringResult({
+        totalScore: 50,
+        breakdown: {},
+        compatible: false,
+        model_used: "Erreur",
+        model_version: "error",
+        calculated_at: new Date().toISOString(),
+        recommendations: [],
+        warnings: [],
+        exclusions: [],
+      })
     }
   }
 
@@ -872,7 +879,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                           <div>
                             <p className="font-medium text-red-700">Période d'essai en cours</p>
                             <p className="text-sm text-muted-foreground">
-                              Le candidat est encore en période d'essai, ce qui représente un risque.
+                              Le candidat est encore en période d'essai, ce qui représente un risque supplémentaire.
                             </p>
                           </div>
                         </div>
@@ -889,7 +896,8 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                     Garanties
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="p-6">
+
+                <CardContent>
                   {hasGuarantor ? (
                     <div className="space-y-4">
                       <div className="flex items-start gap-2">
