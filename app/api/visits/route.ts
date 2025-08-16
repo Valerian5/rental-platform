@@ -70,7 +70,24 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     console.log("📅 API Visits POST", body)
 
-    const { data, error } = await supabase.from("visits").insert(body).select().single()
+    // Valider et formater les données selon la structure de la table
+    const visitData = {
+      property_id: body.property_id,
+      tenant_id: body.tenant_id,
+      application_id: body.application_id,
+      visit_date: body.visit_date, // timestamp with time zone
+      start_time: body.start_time, // time without time zone
+      end_time: body.end_time, // time without time zone
+      status: body.status || "scheduled",
+      visitor_name: body.visitor_name,
+      tenant_email: body.tenant_email,
+      visitor_phone: body.visitor_phone,
+      notes: body.notes,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }
+
+    const { data, error } = await supabase.from("visits").insert(visitData).select().single()
 
     if (error) {
       console.error("❌ Erreur création visite:", error)
@@ -89,6 +106,9 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json()
     const { id, ...updateData } = body
     console.log("📅 API Visits PATCH", { id, updateData })
+
+    // Ajouter updated_at
+    updateData.updated_at = new Date().toISOString()
 
     const { data, error } = await supabase.from("visits").update(updateData).eq("id", id).select().single()
 

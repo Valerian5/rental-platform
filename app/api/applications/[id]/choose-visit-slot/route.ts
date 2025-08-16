@@ -95,20 +95,22 @@ export async function POST(request: Request, { params }: { params: { id: string 
       return NextResponse.json({ error: "Une visite est déjà programmée pour cette candidature" }, { status: 400 })
     }
 
-    // Créer la visite
+    // Créer la visite avec les bonnes colonnes selon la structure de la table
+    const visitDate = new Date(`${slot.date}T${slot.start_time}`)
+
     const { data: visit, error: visitError } = await supabase
       .from("visits")
       .insert({
         application_id: applicationId,
         property_id: application.property_id,
         tenant_id: application.tenant_id,
-        visit_date: slot.date,
-        visit_time: slot.start_time,
-        visit_end_time: slot.end_time,
+        visit_date: visitDate.toISOString(), // timestamp with time zone
+        start_time: slot.start_time, // time without time zone
+        end_time: slot.end_time, // time without time zone
         status: "scheduled",
-        tenant_name: `${application.users.first_name} ${application.users.last_name}`,
+        visitor_name: `${application.users.first_name} ${application.users.last_name}`,
         tenant_email: application.users.email,
-        tenant_phone: application.users.phone,
+        visitor_phone: application.users.phone,
         notes: `Créneau sélectionné: ${slot.id}`, // IMPORTANT: Stocker l'ID du créneau pour pouvoir le libérer plus tard
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -158,9 +160,9 @@ export async function POST(request: Request, { params }: { params: { id: string 
       message: "Créneau de visite sélectionné avec succès",
       visit: {
         id: visit.id,
-        date: visit.visit_date,
-        time: visit.visit_time,
-        end_time: visit.visit_end_time,
+        date: slot.date,
+        start_time: visit.start_time,
+        end_time: visit.end_time,
         status: visit.status,
       },
     })
@@ -175,3 +177,4 @@ export async function POST(request: Request, { params }: { params: { id: string 
     )
   }
 }
+

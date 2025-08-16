@@ -189,8 +189,8 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
   }
 }
 
-// PUT - Mettre à jour une candidature
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+// PATCH - Mettre à jour une candidature
+export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   const applicationId = params.id
 
   try {

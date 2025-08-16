@@ -4,13 +4,13 @@ export interface Visit {
   id: string
   property_id: string
   tenant_id?: string
+  application_id?: string
   visitor_name: string
-  visitor_email: string
+  tenant_email: string
   visitor_phone: string
-  visit_date: string
-  visit_time?: string
-  start_time?: string
-  end_time?: string
+  visit_date: string // timestamp with time zone
+  start_time?: string // time without time zone
+  end_time?: string // time without time zone
   status: "scheduled" | "completed" | "cancelled" | "no_show" | "proposed" | "confirmed"
   notes?: string
   created_at: string
@@ -288,7 +288,7 @@ export const visitService = {
     console.log("📅 VisitService.getUpcomingVisits", { userId, userType })
 
     try {
-      const today = new Date().toISOString().split("T")[0]
+      const today = new Date().toISOString()
 
       let query = supabase
         .from("visits")
