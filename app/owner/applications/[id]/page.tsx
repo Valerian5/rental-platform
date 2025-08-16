@@ -12,7 +12,7 @@ import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { VisitProposalManager } from "@/components/visit-proposal-manager"
-import { scoringPreferencesService } from "@/lib/services/scoring-preferences-service"
+import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
 import { applicationEnrichmentService } from "@/lib/application-enrichment-service"
 import { CircularScore } from "@/components/circular-score"
 import {
