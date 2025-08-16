@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { type NextRequest, NextResponse } from "next/server"
+import { createServerClient } from "@/lib/supabase-server"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -8,87 +8,49 @@ if (!supabaseUrl || !supabaseServiceKey) {
   throw new Error("Variables d'environnement Supabase manquantes")
 }
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
 export const dynamic = "force-dynamic"
 
 // GET - Récupérer une candidature spécifique
-export async function GET(request: Request, { params }: { params: { id: string } }) {
-  const applicationId = params.id
-
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    console.log("🔍 Récupération candidature:", applicationId)
+    const supabase = createServerClient()
+    const applicationId = params.id
 
-    const { data: application, error } = await supabase
+    console.log("🔍 Chargement détails candidature:", applicationId)
+
+    // Récupérer la candidature avec toutes les relations
+    const { data: application, error: appError } = await supabase
       .from("applications")
       .select(`
-        id,
-        tenant_id,
-        property_id,
-        status,
-        created_at,
-        updated_at,
-        users!applications_tenant_id_fkey (
-          id,
-          first_name,
-          last_name,
-          email,
-          phone
-        ),
-        properties (
-          id,
-          title,
-          address,
-          price,
-          city
-        )
+        *,
+        property:properties(*),
+        tenant:users(*)
       `)
       .eq("id", applicationId)
       .single()
 
-    if (error || !application) {
-      console.error("❌ Candidature non trouvée:", error)
+    if (appError) {
+      console.error("❌ Erreur récupération candidature:", appError)
       return NextResponse.json({ error: "Candidature non trouvée" }, { status: 404 })
     }
 
-    const formattedApplication = {
+    console.log("✅ Candidature chargée:", {
       id: application.id,
-      tenant_id: application.tenant_id,
-      property_id: application.property_id,
+      tenant: application.tenant?.first_name + " " + application.tenant?.last_name,
+      property: application.property?.title,
       status: application.status,
-      tenant_name: application.users
-        ? `${application.users.first_name} ${application.users.last_name}`
-        : "Utilisateur inconnu",
-      tenant_email: application.users?.email || "Email inconnu",
-      tenant_phone: application.users?.phone || "Téléphone inconnu",
-      property_title: application.properties?.title || "Propriété inconnue",
-      property_address: application.properties?.address || "Adresse inconnue",
-      property_price: application.properties?.price || 0,
-      property_city: application.properties?.city || "Ville inconnue",
-      created_at: application.created_at,
-      updated_at: application.updated_at,
-    }
-
-    console.log("✅ Candidature récupérée:", formattedApplication.id)
-
-    return NextResponse.json({
-      success: true,
-      application: formattedApplication,
     })
+
+    return NextResponse.json({ application })
   } catch (error) {
-    console.error("❌ Erreur serveur:", error)
-    return NextResponse.json(
-      {
-        error: "Erreur serveur",
-        details: error instanceof Error ? error.message : "Erreur inconnue",
-      },
-      { status: 500 },
-    )
+    console.error("❌ Erreur API applications/[id]:", error)
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }
 
 // DELETE - Supprimer une candidature (retirer la candidature)
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+  const supabase = createServerClient() // Declare supabase here
   const applicationId = params.id
 
   try {
@@ -190,66 +152,34 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
 }
 
 // PATCH - Mettre à jour une candidature
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
-  const applicationId = params.id
-
+export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const supabase = createServerClient()
+    const applicationId = params.id
     const body = await request.json()
-    const { status, ...otherUpdates } = body
 
-    console.log("🔄 Mise à jour candidature:", applicationId, "avec:", body)
+    console.log("🔄 Mise à jour candidature:", applicationId, body)
 
-    // Vérifier que la candidature existe
-    const { data: existingApp, error: fetchError } = await supabase
+    // Mettre à jour la candidature
+    const { data, error } = await supabase
       .from("applications")
-      .select("id, status")
-      .eq("id", applicationId)
-      .single()
-
-    if (fetchError || !existingApp) {
-      console.error("❌ Candidature non trouvée:", fetchError)
-      return NextResponse.json({ error: "Candidature non trouvée" }, { status: 404 })
-    }
-
-    // Préparer les données de mise à jour
-    const updateData = {
-      ...otherUpdates,
-      updated_at: new Date().toISOString(),
-    }
-
-    // Ajouter le statut si fourni
-    if (status) {
-      updateData.status = status
-    }
-
-    // Effectuer la mise à jour
-    const { data: updatedApplication, error: updateError } = await supabase
-      .from("applications")
-      .update(updateData)
+      .update({
+        ...body,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", applicationId)
       .select()
       .single()
 
-    if (updateError) {
-      console.error("❌ Erreur mise à jour candidature:", updateError)
-      return NextResponse.json({ error: "Erreur lors de la mise à jour de la candidature" }, { status: 500 })
+    if (error) {
+      console.error("❌ Erreur mise à jour candidature:", error)
+      return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
-    console.log("✅ Candidature mise à jour:", applicationId)
-
-    return NextResponse.json({
-      success: true,
-      message: "Candidature mise à jour avec succès",
-      application: updatedApplication,
-    })
+    console.log("✅ Candidature mise à jour")
+    return NextResponse.json({ application: data })
   } catch (error) {
-    console.error("❌ Erreur serveur:", error)
-    return NextResponse.json(
-      {
-        error: "Erreur serveur",
-        details: error instanceof Error ? error.message : "Erreur inconnue",
-      },
-      { status: 500 },
-    )
+    console.error("❌ Erreur PATCH applications/[id]:", error)
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }

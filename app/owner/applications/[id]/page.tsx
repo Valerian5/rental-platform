@@ -12,7 +12,6 @@ import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { VisitProposalManager } from "@/components/visit-proposal-manager"
-import { TenantAndGuarantorDocumentsSection } from "@/components/TenantAndGuarantorDocumentsSection"
 import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
 import { applicationEnrichmentService } from "@/lib/application-enrichment-service"
 import { CircularScore } from "@/components/circular-score"
@@ -32,6 +31,12 @@ import {
   CreditCard,
   AlertCircle,
   Settings,
+  Users,
+  Phone,
+  Mail,
+  MapPin,
+  Euro,
+  Home,
 } from "lucide-react"
 
 export default function ApplicationDetailsPage({ params }: { params: { id: string } }) {
@@ -44,7 +49,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const [showVisitDialog, setShowVisitDialog] = useState(false)
   const [currentApplication, setCurrentApplication] = useState<any>(null)
   const [showRefuseDialog, setShowRefuseDialog] = useState(false)
-  const [documents, setDocuments] = useState<any[]>([])
   const [scoringResult, setScoringResult] = useState<any>(null)
   const [scoringPreferences, setScoringPreferences] = useState<any>(null)
 
@@ -108,7 +112,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       }
 
       setApplication(data.application)
-      setDocuments(flattenDocuments(data.application))
 
       // Charger le dossier de location
       let rentalFile = null
@@ -322,7 +325,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
     }
   }
 
-  const formatAmount = (amount: number | undefined) => {
+  const formatAmount = (amount: number | undefined | null) => {
     if (amount === null || amount === undefined) return "Non spécifié"
     try {
       return new Intl.NumberFormat("fr-FR", {
@@ -510,24 +513,24 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const property = application.property || {}
   const mainTenant = rentalFile?.main_tenant || {}
 
-  // Utiliser les données enrichies
+  // Utiliser les données enrichies ou les données de base
   const totalIncome = application.income || 0
   const hasGuarantor = application.has_guarantor || false
-  const profession = application.profession || "Non spécifié"
-  const company = application.company || "Non spécifié"
-  const contractType = application.contract_type || "Non spécifié"
+  const profession = application.profession || mainTenant.profession || "Non spécifié"
+  const company = application.company || mainTenant.company || "Non spécifié"
+  const contractType = application.contract_type || mainTenant.main_activity || "Non spécifié"
 
   const rentRatio = totalIncome && property.price ? (totalIncome / property.price).toFixed(1) : "N/A"
 
   // Statut du dossier basé sur completion_percentage
-  const completionPercentage = application.completion_percentage || 0
-  const isComplete = application.documents_complete || false
+  const completionPercentage = application.completion_percentage || rentalFile?.completion_percentage || 0
+  const isComplete = application.documents_complete || completionPercentage >= 80
 
   return (
     <>
       <PageHeader
-        title={`Candidature de ${tenant.first_name} ${tenant.last_name}`}
-        description={`Pour ${property.title}`}
+        title={`Candidature de ${tenant.first_name || "Prénom"} ${tenant.last_name || "Nom"}`}
+        description={`Pour ${property.title || "le bien"}`}
       >
         <div className="flex items-center gap-2">
           {getStatusBadge()}
@@ -589,27 +592,49 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <User className="h-5 w-5" />
-                    Informations du candidat
+                    Informations du candidat principal
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Nom complet</label>
                     <p className="text-lg">
-                      {tenant.first_name} {tenant.last_name}
+                      {tenant.first_name || mainTenant.first_name || "Prénom"}{" "}
+                      {tenant.last_name || mainTenant.last_name || "Nom"}
                     </p>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Email</label>
-                    <p>{tenant.email}</p>
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-muted-foreground" />
+                      <p>{tenant.email || "Non renseigné"}</p>
+                    </div>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Téléphone</label>
-                    <p>{tenant.phone || "Non renseigné"}</p>
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-muted-foreground" />
+                      <p>{tenant.phone || "Non renseigné"}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Date de naissance</label>
+                    <p>{mainTenant.birth_date ? formatDate(mainTenant.birth_date) : "Non renseigné"}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Lieu de naissance</label>
+                    <p>{mainTenant.birth_place || "Non renseigné"}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Nationalité</label>
+                    <p>{mainTenant.nationality || "Non renseigné"}</p>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Date de candidature</label>
-                    <p>{formatDate(application.created_at)}</p>
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <p>{formatDate(application.created_at)}</p>
+                    </div>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Statut du dossier</label>
@@ -642,19 +667,44 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                 <CardContent className="space-y-4">
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Titre</label>
-                    <p className="text-lg">{property.title}</p>
+                    <p className="text-lg">{property.title || "Titre non spécifié"}</p>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Adresse</label>
-                    <p>{property.address}</p>
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-muted-foreground" />
+                      <p>{property.address || "Adresse non spécifiée"}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Ville</label>
+                    <p>{property.city || "Ville non spécifiée"}</p>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Loyer</label>
-                    <p>{formatAmount(property.price)}</p>
+                    <div className="flex items-center gap-2">
+                      <Euro className="h-4 w-4 text-muted-foreground" />
+                      <p className="text-lg font-semibold text-green-600">{formatAmount(property.price)}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Charges</label>
+                    <p>{formatAmount(property.charges)}</p>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Type</label>
-                    <p>{property.type || "Non spécifié"}</p>
+                    <div className="flex items-center gap-2">
+                      <Home className="h-4 w-4 text-muted-foreground" />
+                      <p>{property.type || "Non spécifié"}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Surface</label>
+                    <p>{property.surface ? `${property.surface} m²` : "Non spécifié"}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Nombre de pièces</label>
+                    <p>{property.rooms ? `${property.rooms} pièces` : "Non spécifié"}</p>
                   </div>
                 </CardContent>
               </Card>
@@ -724,8 +774,75 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               </CardContent>
             </Card>
 
+            {/* Situation de location */}
+            {rentalFile?.rental_situation && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="h-5 w-5" />
+                    Situation de location
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="mb-4">
+                    <label className="text-sm font-medium text-muted-foreground">Type de location</label>
+                    <p className="text-lg">
+                      {rentalFile.rental_situation === "alone" && "Seul(e)"}
+                      {rentalFile.rental_situation === "couple" && "En couple"}
+                      {rentalFile.rental_situation === "colocation" && "En colocation"}
+                    </p>
+                  </div>
+
+                  {/* Colocataires/Conjoint */}
+                  {rentalFile.cotenants && rentalFile.cotenants.length > 0 && (
+                    <div className="space-y-4">
+                      <h4 className="font-medium">
+                        {rentalFile.rental_situation === "couple" ? "Conjoint(e)" : "Colocataires"} (
+                        {rentalFile.cotenants.length})
+                      </h4>
+                      {rentalFile.cotenants.map((cotenant: any, index: number) => (
+                        <div key={index} className="border rounded-lg p-4">
+                          <h5 className="font-medium mb-2">
+                            {rentalFile.rental_situation === "couple" ? "Conjoint(e)" : `Colocataire ${index + 1}`}
+                          </h5>
+                          <div className="grid gap-2 md:grid-cols-3">
+                            <div>
+                              <label className="text-sm font-medium text-muted-foreground">Nom</label>
+                              <p>
+                                {cotenant.first_name} {cotenant.last_name}
+                              </p>
+                            </div>
+                            <div>
+                              <label className="text-sm font-medium text-muted-foreground">Profession</label>
+                              <p>{cotenant.profession || "Non spécifié"}</p>
+                            </div>
+                            <div>
+                              <label className="text-sm font-medium text-muted-foreground">Activité</label>
+                              <p>{cotenant.main_activity || "Non spécifié"}</p>
+                            </div>
+                            <div>
+                              <label className="text-sm font-medium text-muted-foreground">Revenus</label>
+                              <p>{formatAmount(cotenant.income_sources?.work_income?.amount)}</p>
+                            </div>
+                            <div>
+                              <label className="text-sm font-medium text-muted-foreground">Date de naissance</label>
+                              <p>{cotenant.birth_date ? formatDate(cotenant.birth_date) : "Non spécifié"}</p>
+                            </div>
+                            <div>
+                              <label className="text-sm font-medium text-muted-foreground">Nationalité</label>
+                              <p>{cotenant.nationality || "Non spécifié"}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Message de candidature */}
-            {application.presentation && (
+            {(application.presentation || application.message || rentalFile?.presentation_message) && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -734,7 +851,9 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="whitespace-pre-wrap">{application.presentation}</p>
+                  <p className="whitespace-pre-wrap">
+                    {application.presentation || application.message || rentalFile?.presentation_message}
+                  </p>
                 </CardContent>
               </Card>
             )}
@@ -756,26 +875,56 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                         <div className="grid gap-2 md:grid-cols-3">
                           <div>
                             <label className="text-sm font-medium text-muted-foreground">Type</label>
-                            <p>{guarantor.type === "physical" ? "Personne physique" : "Personne morale"}</p>
-                          </div>
-                          <div>
-                            <label className="text-sm font-medium text-muted-foreground">Nom</label>
                             <p>
-                              {guarantor.personal_info?.first_name} {guarantor.personal_info?.last_name}
+                              {guarantor.type === "physical" && "Personne physique"}
+                              {guarantor.type === "organism" && "Organisme"}
+                              {guarantor.type === "moral_person" && "Personne morale"}
                             </p>
                           </div>
-                          <div>
-                            <label className="text-sm font-medium text-muted-foreground">Revenus</label>
-                            <p>{formatAmount(guarantor.personal_info?.income_sources?.work_income?.amount)}</p>
-                          </div>
-                          <div>
-                            <label className="text-sm font-medium text-muted-foreground">Activité</label>
-                            <p>{guarantor.personal_info?.main_activity || "Non spécifié"}</p>
-                          </div>
-                          <div>
-                            <label className="text-sm font-medium text-muted-foreground">Situation logement</label>
-                            <p>{guarantor.personal_info?.current_housing_situation || "Non spécifié"}</p>
-                          </div>
+                          {guarantor.type === "physical" && guarantor.personal_info && (
+                            <>
+                              <div>
+                                <label className="text-sm font-medium text-muted-foreground">Nom</label>
+                                <p>
+                                  {guarantor.personal_info.first_name} {guarantor.personal_info.last_name}
+                                </p>
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium text-muted-foreground">Revenus</label>
+                                <p>{formatAmount(guarantor.personal_info.income_sources?.work_income?.amount)}</p>
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium text-muted-foreground">Activité</label>
+                                <p>{guarantor.personal_info.main_activity || "Non spécifié"}</p>
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium text-muted-foreground">Profession</label>
+                                <p>{guarantor.personal_info.profession || "Non spécifié"}</p>
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium text-muted-foreground">Situation logement</label>
+                                <p>{guarantor.personal_info.current_housing_situation || "Non spécifié"}</p>
+                              </div>
+                            </>
+                          )}
+                          {guarantor.type === "organism" && (
+                            <>
+                              <div>
+                                <label className="text-sm font-medium text-muted-foreground">Organisme</label>
+                                <p>{guarantor.organism_name || "Non spécifié"}</p>
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium text-muted-foreground">Type d'organisme</label>
+                                <p>{guarantor.organism_type || "Non spécifié"}</p>
+                              </div>
+                            </>
+                          )}
+                          {guarantor.type === "moral_person" && (
+                            <div>
+                              <label className="text-sm font-medium text-muted-foreground">Entreprise</label>
+                              <p>{guarantor.company_name || "Non spécifié"}</p>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -1084,16 +1233,13 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {user && (
-                  <TenantAndGuarantorDocumentsSection
-                    applicationId={application.id}
-                    mainTenant={rentalFile?.main_tenant}
-                    guarantors={rentalFile?.guarantors || []}
-                    userId={user.id}
-                    userName={`${user.first_name} ${user.last_name}`}
-                    rentalFile={rentalFile}
-                  />
-                )}
+                <div className="text-center py-8">
+                  <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">Section documents en cours de développement</p>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Les documents seront affichés ici une fois la fonctionnalité implémentée
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -1114,49 +1260,4 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       )}
     </>
   )
-}
-
-function flattenDocuments(application: any): any[] {
-  if (!application) return []
-
-  const now = new Date().toISOString()
-  const docs: any[] = []
-
-  // Documents du locataire principal
-  if (application.documents) {
-    application.documents.forEach((doc: any) => {
-      docs.push({
-        document_id: doc.id || `doc-${docs.length}`,
-        label: doc.type || "Document",
-        file_url: doc.url,
-        category: doc.category || "other",
-        verified: doc.verified || false,
-        created_at: doc.created_at || now,
-        file_type: doc.file_type,
-      })
-    })
-  }
-
-  // Documents des garants
-  if (application.guarantors) {
-    application.guarantors.forEach((guarantor: any, index: number) => {
-      if (guarantor.documents) {
-        guarantor.documents.forEach((doc: any) => {
-          docs.push({
-            document_id: doc.id || `guarantor-${index}-doc-${docs.length}`,
-            label: `${doc.type || "Document"} (Garant ${index + 1})`,
-            file_url: doc.url,
-            category: doc.category || "other",
-            verified: doc.verified || false,
-            created_at: doc.created_at || now,
-            guarantor_id: guarantor.id || index.toString(),
-            guarantor_name: guarantor.name || `Garant ${index + 1}`,
-            file_type: doc.file_type,
-          })
-        })
-      }
-    })
-  }
-
-  return docs
 }
