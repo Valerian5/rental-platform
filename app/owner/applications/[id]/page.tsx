@@ -21,7 +21,6 @@ import {
   Briefcase,
   Shield,
   FileText,
-  MessageSquare,
   CheckCircle,
   XCircle,
   Calendar,
@@ -148,341 +147,161 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       const enrichedApplication = await applicationEnrichmentService.enrichApplication(data.application, rentalFile)
       setApplication(enrichedApplication)
 
-      // Calculer le score avec le service unifié
-      await recalculateScore(enrichedApplication, ownerId)
+      // Calculer le score si on a les préférences
+      if (scoringPreferences) {
+        await calculateScore(enrichedApplication, rentalFile)
+      }
     } catch (error) {
-      console.error("Erreur:", error)
-      toast.error("Erreur lors du chargement des détails")
+      console.error("Erreur chargement candidature:", error)
+      toast.error("Erreur lors du chargement de la candidature")
     }
   }
 
-  const recalculateScore = async (app: any, ownerId?: string) => {
-    if (!app || !app.property || !app.property.owner_id) return
-
+  const calculateScore = async (application: any, rentalFile: any) => {
     try {
-      console.log(`🎯 Recalcul score pour candidature ${app.id}`)
+      console.log("🎯 Calcul du score pour la candidature:", application.id)
 
-      const result = await scoringPreferencesService.calculateScore(
-        app,
-        app.property,
-        ownerId || app.property.owner_id,
-        false, // Ne pas utiliser le cache pour avoir le score le plus récent
-      )
-
-      setScoringResult(result)
-      console.log(`📊 Score recalculé: ${result.totalScore}/100 - Compatible: ${result.compatible}`)
-    } catch (error) {
-      console.error("❌ Erreur recalcul score:", error)
-      setScoringResult({
-        totalScore: 50,
-        breakdown: {},
-        compatible: false,
-        model_used: "Erreur",
-        model_version: "error",
-        calculated_at: new Date().toISOString(),
-        recommendations: [],
-        warnings: [],
-        exclusions: [],
+      const response = await fetch("/api/scoring/calculate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          application,
+          rentalFile,
+          preferences: scoringPreferences,
+        }),
       })
+
+      if (response.ok) {
+        const result = await response.json()
+        setScoringResult(result)
+        console.log("✅ Score calculé:", result.totalScore)
+      }
+    } catch (error) {
+      console.error("Erreur calcul score:", error)
     }
   }
 
-  const updateApplicationStatus = async (newStatus: string, notes?: string) => {
+  const updateApplicationStatus = async (status: string) => {
     try {
-      const response = await fetch(`/api/applications/${params.id}`, {
+      const response = await fetch(`/api/applications/${params.id}/status`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          status: newStatus,
-          notes: notes || undefined,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
       })
 
       if (response.ok) {
-        const statusMessages: { [key: string]: string } = {
-          analyzing: "Candidature en cours d'analyse",
-          accepted: "Candidature acceptée",
-          rejected: "Candidature refusée",
-          visit_proposed: "Visite proposée au candidat",
-          visit_scheduled: "Visite planifiée",
-          waiting_tenant_confirmation: "En attente de confirmation du locataire",
-        }
-
-        toast.success(statusMessages[newStatus] || "Statut mis à jour")
-        setApplication({ ...application, status: newStatus })
-        return true
-      } else {
-        toast.error("Erreur lors de la mise à jour du statut")
-        return false
+        setApplication((prev: any) => ({ ...prev, status }))
       }
     } catch (error) {
-      console.error("Erreur:", error)
-      toast.error("Erreur lors de la mise à jour du statut")
-      return false
+      console.error("Erreur mise à jour statut:", error)
     }
   }
 
-  const handleProposeVisit = () => {
-    setCurrentApplication(application)
-    setShowVisitDialog(true)
-  }
-
-  const handleVisitProposed = async (slots: any[]) => {
+  const handleAcceptApplication = async () => {
     try {
-      const response = await fetch(`/api/applications/${params.id}/propose-visit-slots`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ slots }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        toast.error(errorData.message || "Erreur lors de la proposition de visite")
-        return
-      }
-
-      const data = await response.json()
-      toast.success(data.message || "Créneaux de visite proposés avec succès")
-      setShowVisitDialog(false)
-
-      if (user) {
-        await loadApplicationDetails(user.id)
-      }
+      await updateApplicationStatus("accepted")
+      toast.success("Candidature acceptée")
     } catch (error) {
-      console.error("Erreur:", error)
-      toast.error("Erreur lors de la proposition de visite")
+      toast.error("Erreur lors de l'acceptation")
     }
   }
 
-  const handleRefuse = () => {
-    setShowRefuseDialog(true)
-  }
-
-  const handleRefuseConfirm = async (reason: string, type: string) => {
-    let notes = ""
-
-    const refusalReasons: { [key: string]: string } = {
-      insufficient_income: "Revenus insuffisants",
-      incomplete_file: "Dossier incomplet",
-      missing_guarantor: "Absence de garant",
-      unstable_situation: "Situation professionnelle instable",
-      other: reason,
-    }
-
-    notes = refusalReasons[type] || reason
-
-    const success = await updateApplicationStatus("rejected", notes)
-    if (success) {
-      setShowRefuseDialog(false)
-    }
-  }
-
-  const handleAccept = async () => {
-    await updateApplicationStatus("accepted")
-  }
-
-  const handleContact = async () => {
-    if (!application?.tenant_id || !application?.property_id) {
-      toast.error("Impossible de contacter ce locataire")
-      return
-    }
-
+  const handleRefuseApplication = async () => {
     try {
-      const response = await fetch("/api/conversations", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          tenant_id: application.tenant_id,
-          owner_id: user.id,
-          property_id: application.property_id,
-          subject: `Candidature pour ${application.property?.title || "le bien"}`,
-        }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        router.push(`/owner/messaging?conversation_id=${data.conversation.id}`)
-      } else {
-        router.push(`/owner/messaging?tenant_id=${application.tenant_id}`)
-      }
+      await updateApplicationStatus("refused")
+      toast.success("Candidature refusée")
     } catch (error) {
-      console.error("Erreur création conversation:", error)
-      router.push(`/owner/messaging?tenant_id=${application.tenant_id}`)
+      toast.error("Erreur lors du refus")
     }
   }
 
-  const formatDate = (dateString: string | undefined) => {
-    if (!dateString) return "Non spécifié"
-    try {
-      return new Date(dateString).toLocaleDateString("fr-FR", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      })
-    } catch (e) {
-      return "Date invalide"
-    }
-  }
-
-  const formatAmount = (amount: number | undefined | null) => {
-    if (amount === null || amount === undefined) return "Non spécifié"
-    try {
-      return new Intl.NumberFormat("fr-FR", {
-        style: "currency",
-        currency: "EUR",
-        maximumFractionDigits: 0,
-      }).format(amount)
-    } catch (e) {
-      return "Montant invalide"
-    }
+  const handleVisitProposed = () => {
+    setShowVisitDialog(false)
+    toast.success("Créneaux de visite proposés")
   }
 
   const getStatusBadge = () => {
     if (!application) return null
 
-    switch (application.status) {
-      case "pending":
-        return <Badge variant="outline">En attente</Badge>
-      case "analyzing":
-        return <Badge variant="secondary">En analyse</Badge>
-      case "visit_proposed":
-        return (
-          <Badge variant="secondary" className="bg-purple-100 text-purple-800 hover:bg-purple-200">
-            Visite proposée
-          </Badge>
-        )
-      case "visit_scheduled":
-        return (
-          <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200">
-            Visite planifiée
-          </Badge>
-        )
-      case "accepted":
-      case "approved":
-        return (
-          <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-200">
-            Acceptée
-          </Badge>
-        )
-      case "rejected":
-        return <Badge variant="destructive">Refusée</Badge>
-      case "waiting_tenant_confirmation":
-        return (
-          <Badge variant="outline" className="bg-amber-100 text-amber-800 hover:bg-amber-200">
-            En attente de confirmation
-          </Badge>
-        )
-      default:
-        return <Badge variant="outline">Statut inconnu</Badge>
+    const statusConfig = {
+      pending: { label: "En attente", variant: "secondary" as const, icon: Clock },
+      analyzing: { label: "En cours d'analyse", variant: "default" as const, icon: AlertCircle },
+      accepted: { label: "Acceptée", variant: "default" as const, icon: CheckCircle },
+      refused: { label: "Refusée", variant: "destructive" as const, icon: XCircle },
+      visit_scheduled: { label: "Visite programmée", variant: "outline" as const, icon: Calendar },
     }
+
+    const config = statusConfig[application.status as keyof typeof statusConfig] || statusConfig.pending
+    const Icon = config.icon
+
+    return (
+      <Badge variant={config.variant} className="flex items-center gap-1">
+        <Icon className="h-3 w-3" />
+        {config.label}
+      </Badge>
+    )
   }
 
   const getActionButtons = () => {
     if (!application) return null
 
     switch (application.status) {
+      case "pending":
       case "analyzing":
         return (
           <>
-            <Button onClick={handleProposeVisit} className="bg-blue-600 hover:bg-blue-700">
+            <Button
+              onClick={() => {
+                setCurrentApplication(application)
+                setShowVisitDialog(true)
+              }}
+              size="sm"
+              className="bg-blue-600 hover:bg-blue-700"
+            >
               <Calendar className="h-4 w-4 mr-2" />
-              Proposer une visite
+              Proposer visite
             </Button>
-            <Button variant="destructive" onClick={handleRefuse}>
-              <XCircle className="h-4 w-4 mr-2" />
-              Refuser
-            </Button>
-            <Button variant="outline" onClick={handleContact}>
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Contacter
-            </Button>
-          </>
-        )
-      case "visit_proposed":
-        return (
-          <>
-            <Button variant="outline" disabled>
-              <Clock className="h-4 w-4 mr-2" />
-              En attente de réponse
-            </Button>
-            <Button variant="outline" onClick={handleContact}>
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Contacter
-            </Button>
-          </>
-        )
-      case "visit_scheduled":
-        return (
-          <>
-            <Button onClick={handleAccept} className="bg-green-600 hover:bg-green-700">
+            <Button onClick={handleAcceptApplication} size="sm" className="bg-green-600 hover:bg-green-700">
               <CheckCircle className="h-4 w-4 mr-2" />
-              Accepter le dossier
+              Accepter
             </Button>
-            <Button variant="destructive" onClick={handleRefuse}>
+            <Button onClick={handleRefuseApplication} variant="destructive" size="sm">
               <XCircle className="h-4 w-4 mr-2" />
               Refuser
-            </Button>
-            <Button variant="outline" onClick={handleContact}>
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Contacter
-            </Button>
-          </>
-        )
-      case "waiting_tenant_confirmation":
-        return (
-          <>
-            <Button variant="outline" disabled>
-              <Clock className="h-4 w-4 mr-2" />
-              En attente du locataire
-            </Button>
-            <Button variant="outline" onClick={handleContact}>
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Contacter
             </Button>
           </>
         )
       case "accepted":
-      case "approved":
         return (
-          <>
-            <Button
-              onClick={() => router.push(`/owner/leases/new?application=${application.id}`)}
-              className="bg-purple-600 hover:bg-purple-700"
-            >
-              <FileText className="h-4 w-4 mr-2" />
-              Générer le bail
-            </Button>
-            <Button variant="outline" onClick={handleContact}>
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Contacter
-            </Button>
-          </>
-        )
-      case "rejected":
-        return (
-          <>
-            <Button variant="outline" onClick={handleContact}>
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Contacter
-            </Button>
-          </>
+          <Button
+            onClick={() => router.push(`/owner/leases/create?application_id=${application.id}`)}
+            size="sm"
+            className="bg-purple-600 hover:bg-purple-700"
+          >
+            <FileText className="h-4 w-4 mr-2" />
+            Créer le bail
+          </Button>
         )
       default:
-        return (
-          <>
-            <Button variant="outline" onClick={handleContact}>
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Contacter
-            </Button>
-          </>
-        )
+        return null
     }
+  }
+
+  const formatAmount = (amount: number | null | undefined) => {
+    if (!amount) return "Non spécifié"
+    return new Intl.NumberFormat("fr-FR", {
+      style: "currency",
+      currency: "EUR",
+      minimumFractionDigits: 0,
+    }).format(amount)
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("fr-FR", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    })
   }
 
   if (loading) {
@@ -550,8 +369,8 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       </PageHeader>
 
       <div className="p-6 space-y-6">
-        {/* Score et actions - Design amélioré */}
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100">
+        {/* Score et actions - Design simplifié */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
             <div className="flex items-center gap-6">
               {scoringResult && (
@@ -620,7 +439,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             </TabsTrigger>
           </TabsList>
 
-          {/* Vue d'ensemble - Design amélioré */}
+          {/* Vue d'ensemble - Design uniforme */}
           <TabsContent value="overview" className="space-y-6">
             {/* Résumé rapide en haut */}
             <div className="grid gap-4 md:grid-cols-4">
@@ -676,10 +495,10 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             </div>
 
             <div className="grid gap-6 lg:grid-cols-3">
-              {/* Informations du candidat principal - Design amélioré */}
+              {/* Informations du candidat principal - Design uniforme */}
               <Card className="lg:col-span-2">
-                <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-t-lg">
-                  <CardTitle className="flex items-center gap-2 text-blue-800">
+                <CardHeader className="bg-gray-50 rounded-t-lg">
+                  <CardTitle className="flex items-center gap-2 text-gray-800">
                     <User className="h-5 w-5" />
                     Candidat principal
                   </CardTitle>
@@ -758,10 +577,10 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                 </CardContent>
               </Card>
 
-              {/* Informations du bien - Design amélioré */}
+              {/* Informations du bien - Design uniforme */}
               <Card>
-                <CardHeader className="bg-gradient-to-r from-green-50 to-green-100 rounded-t-lg">
-                  <CardTitle className="flex items-center gap-2 text-green-800">
+                <CardHeader className="bg-gray-50 rounded-t-lg">
+                  <CardTitle className="flex items-center gap-2 text-gray-800">
                     <Building className="h-5 w-5" />
                     Bien concerné
                   </CardTitle>
@@ -815,10 +634,10 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               </Card>
             </div>
 
-            {/* Informations professionnelles et financières - Design amélioré */}
+            {/* Informations professionnelles et financières - Design uniforme */}
             <Card>
-              <CardHeader className="bg-gradient-to-r from-purple-50 to-purple-100 rounded-t-lg">
-                <CardTitle className="flex items-center gap-2 text-purple-800">
+              <CardHeader className="bg-gray-50 rounded-t-lg">
+                <CardTitle className="flex items-center gap-2 text-gray-800">
                   <Briefcase className="h-5 w-5" />
                   Situation professionnelle et financière
                 </CardTitle>
@@ -889,8 +708,8 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             {/* Situation de location */}
             {rentalFile?.rental_situation && (
               <Card>
-                <CardHeader className="bg-gradient-to-r from-indigo-50 to-indigo-100 rounded-t-lg">
-                  <CardTitle className="flex items-center gap-2 text-indigo-800">
+                <CardHeader className="bg-gray-50 rounded-t-lg">
+                  <CardTitle className="flex items-center gap-2 text-gray-800">
                     <Users className="h-5 w-5" />
                     Situation de location
                     {rentalFile.rental_situation === "couple" && (
@@ -902,178 +721,31 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6">
-                  <div className="mb-4">
-                    <label className="text-sm font-medium text-gray-500">Type de location</label>
-                    <p className="text-lg font-semibold text-gray-900">
-                      {rentalFile.rental_situation === "alone" && "Seul(e)"}
-                      {rentalFile.rental_situation === "couple" && "En couple"}
-                      {rentalFile.rental_situation === "colocation" && "En colocation"}
-                    </p>
-                  </div>
-
-                  {/* Colocataires/Conjoint */}
-                  {rentalFile.cotenants && rentalFile.cotenants.length > 0 && (
-                    <div className="space-y-4">
-                      <h4 className="font-semibold text-gray-900 flex items-center gap-2">
-                        {rentalFile.rental_situation === "couple" ? (
-                          <>
-                            <Heart className="h-4 w-4 text-pink-500" />
-                            Conjoint(e)
-                          </>
-                        ) : (
-                          <>
-                            <Users className="h-4 w-4 text-blue-500" />
-                            Colocataires
-                          </>
-                        )}{" "}
-                        ({rentalFile.cotenants.length})
-                      </h4>
-                      {rentalFile.cotenants.map((cotenant: any, index: number) => (
-                        <Card key={index} className="border-l-4 border-l-indigo-300">
-                          <CardContent className="p-4">
-                            <h5 className="font-medium mb-3 text-gray-900">
-                              {rentalFile.rental_situation === "couple" ? "Conjoint(e)" : `Colocataire ${index + 1}`}
-                            </h5>
-                            <div className="grid gap-3 md:grid-cols-3">
-                              <div>
-                                <label className="text-sm font-medium text-gray-500">Nom</label>
-                                <p className="text-gray-900 font-medium">
-                                  {cotenant.first_name} {cotenant.last_name}
-                                </p>
-                              </div>
-                              <div>
-                                <label className="text-sm font-medium text-gray-500">Profession</label>
-                                <p className="text-gray-900">{cotenant.profession || "Non spécifié"}</p>
-                              </div>
-                              <div>
-                                <label className="text-sm font-medium text-gray-500">Activité</label>
-                                <p className="text-gray-900">{cotenant.main_activity || "Non spécifié"}</p>
-                              </div>
-                              <div>
-                                <label className="text-sm font-medium text-gray-500">Revenus</label>
-                                <p className="text-green-600 font-semibold">
-                                  {formatAmount(cotenant.income_sources?.work_income?.amount)}
-                                </p>
-                              </div>
-                              <div>
-                                <label className="text-sm font-medium text-gray-500">Date de naissance</label>
-                                <p className="text-gray-900">
-                                  {cotenant.birth_date ? formatDate(cotenant.birth_date) : "Non spécifié"}
-                                </p>
-                              </div>
-                              <div>
-                                <label className="text-sm font-medium text-gray-500">Nationalité</label>
-                                <p className="text-gray-900">{cotenant.nationality || "Non spécifié"}</p>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Message de candidature */}
-            {(application.presentation || application.message || rentalFile?.presentation_message) && (
-              <Card>
-                <CardHeader className="bg-gradient-to-r from-amber-50 to-amber-100 rounded-t-lg">
-                  <CardTitle className="flex items-center gap-2 text-amber-800">
-                    <MessageSquare className="h-5 w-5" />
-                    Message de candidature
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-6">
-                  <div className="bg-gray-50 rounded-lg p-4 border-l-4 border-l-amber-400">
-                    <p className="whitespace-pre-wrap text-gray-900 leading-relaxed">
-                      {application.presentation || application.message || rentalFile?.presentation_message}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Informations sur les garants */}
-            {rentalFile?.guarantors && rentalFile.guarantors.length > 0 && (
-              <Card>
-                <CardHeader className="bg-gradient-to-r from-green-50 to-green-100 rounded-t-lg">
-                  <CardTitle className="flex items-center gap-2 text-green-800">
-                    <Shield className="h-5 w-5" />
-                    Garants ({rentalFile.guarantors.length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-6">
                   <div className="space-y-4">
-                    {rentalFile.guarantors.map((guarantor: any, index: number) => (
-                      <Card key={index} className="border-l-4 border-l-green-300">
-                        <CardContent className="p-4">
-                          <h4 className="font-medium mb-3 text-gray-900">Garant {index + 1}</h4>
-                          <div className="grid gap-3 md:grid-cols-3">
-                            <div>
-                              <label className="text-sm font-medium text-gray-500">Type</label>
-                              <p className="text-gray-900">
-                                {guarantor.type === "physical" && "Personne physique"}
-                                {guarantor.type === "organism" && "Organisme"}
-                                {guarantor.type === "moral_person" && "Personne morale"}
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Type de location</label>
+                      <p className="text-gray-900 capitalize">{rentalFile.rental_situation}</p>
+                    </div>
+                    {rentalFile.cotenants && rentalFile.cotenants.length > 0 && (
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Colocataires</label>
+                        <div className="space-y-2 mt-2">
+                          {rentalFile.cotenants.map((cotenant: any, index: number) => (
+                            <div key={index} className="p-3 bg-gray-50 rounded-lg">
+                              <p className="font-medium">
+                                {cotenant.first_name} {cotenant.last_name}
                               </p>
+                              <p className="text-sm text-gray-600">{cotenant.email}</p>
+                              {cotenant.income_sources?.work_income?.amount && (
+                                <p className="text-sm text-green-600">
+                                  Revenus: {formatAmount(cotenant.income_sources.work_income.amount)}
+                                </p>
+                              )}
                             </div>
-                            {guarantor.type === "physical" && guarantor.personal_info && (
-                              <>
-                                <div>
-                                  <label className="text-sm font-medium text-gray-500">Nom</label>
-                                  <p className="text-gray-900 font-medium">
-                                    {guarantor.personal_info.first_name} {guarantor.personal_info.last_name}
-                                  </p>
-                                </div>
-                                <div>
-                                  <label className="text-sm font-medium text-gray-500">Revenus</label>
-                                  <p className="text-green-600 font-semibold">
-                                    {formatAmount(guarantor.personal_info.income_sources?.work_income?.amount)}
-                                  </p>
-                                </div>
-                                <div>
-                                  <label className="text-sm font-medium text-gray-500">Activité</label>
-                                  <p className="text-gray-900">
-                                    {guarantor.personal_info.main_activity || "Non spécifié"}
-                                  </p>
-                                </div>
-                                <div>
-                                  <label className="text-sm font-medium text-gray-500">Profession</label>
-                                  <p className="text-gray-900">
-                                    {guarantor.personal_info.profession || "Non spécifié"}
-                                  </p>
-                                </div>
-                                <div>
-                                  <label className="text-sm font-medium text-gray-500">Situation logement</label>
-                                  <p className="text-gray-900">
-                                    {guarantor.personal_info.current_housing_situation || "Non spécifié"}
-                                  </p>
-                                </div>
-                              </>
-                            )}
-                            {guarantor.type === "organism" && (
-                              <>
-                                <div>
-                                  <label className="text-sm font-medium text-gray-500">Organisme</label>
-                                  <p className="text-gray-900">{guarantor.organism_name || "Non spécifié"}</p>
-                                </div>
-                                <div>
-                                  <label className="text-sm font-medium text-gray-500">Type d'organisme</label>
-                                  <p className="text-gray-900">{guarantor.organism_type || "Non spécifié"}</p>
-                                </div>
-                              </>
-                            )}
-                            {guarantor.type === "moral_person" && (
-                              <div>
-                                <label className="text-sm font-medium text-gray-500">Entreprise</label>
-                                <p className="text-gray-900">{guarantor.company_name || "Non spécifié"}</p>
-                              </div>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -1084,120 +756,41 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
           <TabsContent value="financial" className="space-y-6">
             <div className="grid gap-6 md:grid-cols-2">
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                <CardHeader className="bg-gray-50 rounded-t-lg">
+                  <CardTitle className="flex items-center gap-2 text-gray-800">
                     <CreditCard className="h-5 w-5" />
-                    Revenus et charges
+                    Revenus et stabilité
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="p-6">
                   <div className="space-y-2">
                     <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Revenus du locataire principal</span>
-                      <span className="font-medium">
-                        {formatAmount(
-                          rentalFile?.main_tenant?.income_sources?.work_income?.amount || application.income,
-                        )}
-                      </span>
+                      <span className="text-sm text-muted-foreground">Revenus mensuels nets</span>
+                      <span className="font-medium">{formatAmount(totalIncome)}</span>
                     </div>
-
-                    {rentalFile?.cotenants && rentalFile.cotenants.length > 0 && (
-                      <>
-                        {rentalFile.cotenants.map((cotenant: any, index: number) => (
-                          <div key={index} className="flex justify-between">
-                            <span className="text-sm text-muted-foreground">
-                              Revenus {cotenant.first_name} {cotenant.last_name}
-                            </span>
-                            <span className="font-medium">
-                              {formatAmount(cotenant.income_sources?.work_income?.amount || 0)}
-                            </span>
-                          </div>
-                        ))}
-                        <div className="flex justify-between pt-2 border-t">
-                          <span className="text-sm font-medium text-muted-foreground">Total des revenus</span>
-                          <span className="font-bold text-green-600">{formatAmount(totalIncome)}</span>
-                        </div>
-                      </>
-                    )}
-
                     <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Loyer proposé</span>
+                      <span className="text-sm text-muted-foreground">Loyer mensuel</span>
                       <span className="font-medium">{formatAmount(property.price)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Charges estimées</span>
-                      <span className="font-medium">{formatAmount(property.charges || 0)}</span>
-                    </div>
-                    <div className="flex justify-between pt-2 border-t">
-                      <span className="font-medium">Ratio revenus/loyer</span>
-                      <span className="font-bold">{rentRatio !== "N/A" ? `${rentRatio}x` : "N/A"}</span>
-                    </div>
-                  </div>
-
-                  <div className="pt-4">
-                    <h4 className="font-medium mb-2">Analyse du ratio</h4>
-                    {rentRatio !== "N/A" ? (
-                      <div className="space-y-2">
-                        {Number(rentRatio) >= 3 ? (
-                          <div className="flex items-start gap-2">
-                            <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
-                            <div>
-                              <p className="font-medium text-green-700">Excellent ratio (≥ 3)</p>
-                              <p className="text-sm text-muted-foreground">
-                                Le candidat dispose de revenus largement suffisants pour assumer le loyer.
-                              </p>
-                            </div>
-                          </div>
-                        ) : Number(rentRatio) >= 2.5 ? (
-                          <div className="flex items-start gap-2">
-                            <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
-                            <div>
-                              <p className="font-medium text-green-700">Bon ratio (≥ 2.5)</p>
-                              <p className="text-sm text-muted-foreground">
-                                Le candidat dispose de revenus confortables par rapport au loyer demandé.
-                              </p>
-                            </div>
-                          </div>
-                        ) : Number(rentRatio) >= 2 ? (
-                          <div className="flex items-start gap-2">
-                            <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
-                            <div>
-                              <p className="font-medium text-amber-700">Ratio acceptable (≥ 2)</p>
-                              <p className="text-sm text-muted-foreground">
-                                Le candidat dispose de revenus suffisants mais sa marge financière est limitée.
-                              </p>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-start gap-2">
-                            <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
-                            <div>
-                              <p className="font-medium text-red-700">Ratio insuffisant ({"<"} 2)</p>
-                              <p className="text-sm text-muted-foreground">
-                                Le candidat risque d'avoir des difficultés à assumer le loyer sur la durée.
-                              </p>
-                            </div>
-                          </div>
+                      <span className="text-sm text-muted-foreground">Ratio revenus/loyer</span>
+                      <span className="font-medium">
+                        {rentRatio !== "N/A" ? `${rentRatio}x` : "N/A"}
+                        {rentRatio !== "N/A" && (
+                          <>
+                            {Number(rentRatio) >= 3 ? (
+                              <Badge className="ml-2 bg-green-100 text-green-800 hover:bg-green-200">Excellent</Badge>
+                            ) : Number(rentRatio) >= 2.5 ? (
+                              <Badge className="ml-2 bg-green-100 text-green-800 hover:bg-green-200">Bon</Badge>
+                            ) : Number(rentRatio) >= 2 ? (
+                              <Badge className="ml-2 bg-amber-100 text-amber-800 hover:bg-amber-200">Acceptable</Badge>
+                            ) : (
+                              <Badge className="ml-2 bg-red-100 text-red-800 hover:bg-red-200">Insuffisant</Badge>
+                            )}
+                          </>
                         )}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">
-                        Impossible de calculer le ratio (revenus ou loyer non spécifiés).
-                      </p>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Shield className="h-5 w-5" />
-                    Stabilité financière
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
+                      </span>
+                    </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-muted-foreground">Type de contrat</span>
                       <span className="font-medium">{contractType}</span>
@@ -1288,97 +881,98 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                   </div>
                 </CardContent>
               </Card>
-            </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="h-5 w-5" />
-                  Garanties
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {hasGuarantor ? (
-                  <div className="space-y-4">
+              <Card>
+                <CardHeader className="bg-gray-50 rounded-t-lg">
+                  <CardTitle className="flex items-center gap-2 text-gray-800">
+                    <Shield className="h-5 w-5" />
+                    Garanties
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+                  {hasGuarantor ? (
+                    <div className="space-y-4">
+                      <div className="flex items-start gap-2">
+                        <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-green-700">
+                            {rentalFile?.guarantors?.length || 1} garant(s) disponible(s)
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            La présence de garant(s) renforce considérablement la sécurité financière du dossier.
+                          </p>
+                        </div>
+                      </div>
+
+                      {rentalFile?.guarantors?.map((guarantor: any, index: number) => {
+                        const guarantorIncome = guarantor.personal_info?.income_sources?.work_income?.amount || 0
+                        const guarantorRatio =
+                          guarantorIncome && property.price ? (guarantorIncome / property.price).toFixed(1) : "N/A"
+
+                        return (
+                          <div key={index} className="border rounded-lg p-4">
+                            <h4 className="font-medium mb-2">Garant {index + 1}</h4>
+                            <div className="space-y-2">
+                              <div className="flex justify-between">
+                                <span className="text-sm text-muted-foreground">Revenus mensuels</span>
+                                <span className="font-medium">{formatAmount(guarantorIncome)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-sm text-muted-foreground">Ratio revenus/loyer</span>
+                                <span className="font-medium">
+                                  {guarantorRatio !== "N/A" ? `${guarantorRatio}x` : "N/A"}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-sm text-muted-foreground">Type de contrat</span>
+                                <span className="font-medium">
+                                  {guarantor.personal_info?.main_activity || "Non spécifié"}
+                                </span>
+                              </div>
+                            </div>
+
+                            {guarantorRatio !== "N/A" && (
+                              <div className="mt-2 pt-2 border-t">
+                                {Number(guarantorRatio) >= 3 ? (
+                                  <Badge className="bg-green-100 text-green-800">Excellent garant</Badge>
+                                ) : Number(guarantorRatio) >= 2 ? (
+                                  <Badge className="bg-green-100 text-green-800">Bon garant</Badge>
+                                ) : (
+                                  <Badge className="bg-amber-100 text-amber-800">Garant limité</Badge>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
                     <div className="flex items-start gap-2">
-                      <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+                      <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
                       <div>
-                        <p className="font-medium text-green-700">
-                          {rentalFile?.guarantors?.length || 1} garant(s) disponible(s)
-                        </p>
+                        <p className="font-medium text-red-700">Aucun garant</p>
                         <p className="text-sm text-muted-foreground">
-                          La présence de garant(s) renforce considérablement la sécurité financière du dossier.
+                          L'absence de garant augmente le risque financier, surtout si le ratio revenus/loyer est
+                          faible.
                         </p>
                       </div>
                     </div>
-
-                    {rentalFile?.guarantors?.map((guarantor: any, index: number) => {
-                      const guarantorIncome = guarantor.personal_info?.income_sources?.work_income?.amount || 0
-                      const guarantorRatio =
-                        guarantorIncome && property.price ? (guarantorIncome / property.price).toFixed(1) : "N/A"
-
-                      return (
-                        <div key={index} className="border rounded-lg p-4">
-                          <h4 className="font-medium mb-2">Garant {index + 1}</h4>
-                          <div className="space-y-2">
-                            <div className="flex justify-between">
-                              <span className="text-sm text-muted-foreground">Revenus mensuels</span>
-                              <span className="font-medium">{formatAmount(guarantorIncome)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-sm text-muted-foreground">Ratio revenus/loyer</span>
-                              <span className="font-medium">
-                                {guarantorRatio !== "N/A" ? `${guarantorRatio}x` : "N/A"}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-sm text-muted-foreground">Type de contrat</span>
-                              <span className="font-medium">
-                                {guarantor.personal_info?.main_activity || "Non spécifié"}
-                              </span>
-                            </div>
-                          </div>
-
-                          {guarantorRatio !== "N/A" && (
-                            <div className="mt-2 pt-2 border-t">
-                              {Number(guarantorRatio) >= 3 ? (
-                                <Badge className="bg-green-100 text-green-800">Excellent garant</Badge>
-                              ) : Number(guarantorRatio) >= 2 ? (
-                                <Badge className="bg-green-100 text-green-800">Bon garant</Badge>
-                              ) : (
-                                <Badge className="bg-amber-100 text-amber-800">Garant limité</Badge>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-red-700">Aucun garant</p>
-                      <p className="text-sm text-muted-foreground">
-                        L'absence de garant augmente le risque financier, surtout si le ratio revenus/loyer est faible.
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           {/* Documents */}
           <TabsContent value="documents" className="space-y-6">
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+              <CardHeader className="bg-gray-50 rounded-t-lg">
+                <CardTitle className="flex items-center gap-2 text-gray-800">
                   <FileText className="h-5 w-5" />
                   Documents fournis
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-6">
                 {user && (
                   <TenantAndGuarantorDocumentsSection
                     applicationId={application.id}

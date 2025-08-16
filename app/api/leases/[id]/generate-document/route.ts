@@ -150,86 +150,6 @@ function formatEquipments(types: any, details: any = {}, autres = ""): string {
   return list.join(", ")
 }
 
-// Fonction pour récupérer les données du dossier de location
-async function getRentalFileData(tenantId: string) {
-  try {
-    console.log("📋 [RENTAL_FILE] Récupération dossier pour tenant:", tenantId)
-
-    const { data: rentalFile, error } = await supabase
-      .from("rental_files")
-      .select("*")
-      .eq("tenant_id", tenantId)
-      .single()
-
-    if (error) {
-      console.log("⚠️ [RENTAL_FILE] Pas de dossier trouvé:", error.message)
-      return null
-    }
-
-    console.log("✅ [RENTAL_FILE] Dossier récupéré:", {
-      id: rentalFile.id,
-      rental_situation: rentalFile.rental_situation,
-      cotenants_count: rentalFile.cotenants?.length || 0,
-      guarantors_count: rentalFile.guarantors?.length || 0,
-    })
-
-    return rentalFile
-  } catch (error) {
-    console.error("❌ [RENTAL_FILE] Erreur récupération:", error)
-    return null
-  }
-}
-
-// Fonction pour formater les informations des colocataires/conjoints
-function formatCotenants(cotenants: any[], rentalSituation: string): string {
-  if (!cotenants || cotenants.length === 0) return ""
-
-  const label = rentalSituation === "couple" ? "conjoint(e)" : "colocataire"
-
-  return cotenants
-    .map((cotenant, index) => {
-      const name = `${cotenant.first_name || ""} ${cotenant.last_name || ""}`.trim()
-      const birthDate = cotenant.birth_date ? new Date(cotenant.birth_date).toLocaleDateString("fr-FR") : ""
-      const birthPlace = cotenant.birth_place || ""
-      const nationality = cotenant.nationality || ""
-      const profession = cotenant.profession || ""
-      const activity = cotenant.main_activity || ""
-      const income = cotenant.income_sources?.work_income?.amount || 0
-
-      let cotenantInfo = `${label} ${index + 1}: ${name}`
-      if (birthDate) cotenantInfo += `, né(e) le ${birthDate}`
-      if (birthPlace) cotenantInfo += ` à ${birthPlace}`
-      if (nationality) cotenantInfo += `, de nationalité ${nationality}`
-      if (profession) cotenantInfo += `, profession: ${profession}`
-      if (activity) cotenantInfo += ` (${activity})`
-      if (income > 0) cotenantInfo += `, revenus: ${income.toLocaleString("fr-FR")} €/mois`
-
-      return cotenantInfo
-    })
-    .join(";\n")
-}
-
-// Fonction pour calculer les revenus totaux
-function calculateTotalIncome(mainTenant: any, cotenants: any[]): number {
-  let total = 0
-
-  // Revenus du locataire principal
-  if (mainTenant?.income_sources?.work_income?.amount) {
-    total += Number(mainTenant.income_sources.work_income.amount)
-  }
-
-  // Revenus des colocataires/conjoints
-  if (cotenants && cotenants.length > 0) {
-    cotenants.forEach((cotenant) => {
-      if (cotenant.income_sources?.work_income?.amount) {
-        total += Number(cotenant.income_sources.work_income.amount)
-      }
-    })
-  }
-
-  return total
-}
-
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const leaseId = params.id
@@ -245,13 +165,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     console.log("📋 [GENERATE] Bail récupéré:", lease.id, "- Type:", lease.lease_type)
 
-    // 2. Récupérer le dossier de location pour les informations des colocataires/conjoints
-    let rentalFile = null
-    if (lease.tenant_id) {
-      rentalFile = await getRentalFileData(lease.tenant_id)
-    }
-
-    // 3. Vérifier que les données essentielles sont présentes
+    // 2. Vérifier que les données essentielles sont présentes
     const requiredFields = [
       "bailleur_nom_prenom",
       "locataire_nom_prenom",
@@ -277,7 +191,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       )
     }
 
-    // 4. Récupérer le template approprié
+    // 3. Récupérer le template approprié
     const { data: template, error: templateError } = await supabase
       .from("lease_templates")
       .select("*")
@@ -296,25 +210,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     console.log("📄 [GENERATE] Template récupéré:", template.name)
 
-    // 5. Préparer les données pour le template avec parsing sécurisé
+    // 4. Préparer les données pour le template avec parsing sécurisé
     const metadata = safeParseJSON(lease.metadata, {})
     const locataires = safeParseJSON(metadata.locataires, [])
     const garants = safeParseJSON(metadata.garants, [])
     const clauses = safeParseJSON(metadata.clauses, {})
-
-    // Données des colocataires/conjoints depuis le dossier de location
-    const cotenants = rentalFile?.cotenants || []
-    const mainTenant = rentalFile?.main_tenant || {}
-    const rentalSituation = rentalFile?.rental_situation || "alone"
-
-    // Calculer les revenus totaux
-    const totalIncome = calculateTotalIncome(mainTenant, cotenants)
-
-    console.log("👥 [GENERATE] Situation de location:", {
-      rental_situation: rentalSituation,
-      cotenants_count: cotenants.length,
-      total_income: totalIncome,
-    })
 
     const templateData: Record<string, any> = {
       // === PARTIES ===
@@ -346,51 +246,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       locataire_email: lease.locataire_email || "[Email du locataire]",
       telephone_locataire: lease.telephone_locataire || "",
       locataire_domicile: lease.locataire_domicile || "",
-
-      // Informations détaillées du locataire principal depuis le dossier
-      locataire_date_naissance: mainTenant.birth_date
-        ? new Date(mainTenant.birth_date).toLocaleDateString("fr-FR")
-        : "",
-      locataire_lieu_naissance: mainTenant.birth_place || "",
-      locataire_nationalite: mainTenant.nationality || "",
-      locataire_profession: mainTenant.profession || "",
-      locataire_activite: mainTenant.main_activity || "",
-      locataire_revenus: mainTenant.income_sources?.work_income?.amount || 0,
-
-      // Situation de location
-      situation_location:
-        rentalSituation === "alone"
-          ? "Seul(e)"
-          : rentalSituation === "couple"
-            ? "En couple"
-            : rentalSituation === "colocation"
-              ? "En colocation"
-              : "Non spécifié",
-
-      // Colocataires/Conjoints
-      colocataires_conjoints: formatCotenants(cotenants, rentalSituation),
-      nombre_colocataires: cotenants.length,
-      revenus_totaux: totalIncome,
-
-      // Liste formatée pour les templates
-      locataires_list: (() => {
-        const list = []
-
-        // Locataire principal
-        if (lease.locataire_nom_prenom) {
-          list.push(`${lease.locataire_nom_prenom} - ${lease.locataire_email || ""}`)
-        }
-
-        // Colocataires/Conjoints
-        cotenants.forEach((cotenant: any, index: number) => {
-          const name = `${cotenant.first_name || ""} ${cotenant.last_name || ""}`.trim()
-          const email = cotenant.email || ""
-          const label = rentalSituation === "couple" ? "Conjoint(e)" : `Colocataire ${index + 1}`
-          list.push(`${name} (${label}) - ${email}`)
-        })
-
-        return list.length > 0 ? list.join("<br/>") : "[Aucun locataire]"
-      })(),
+      locataires_list:
+        Array.isArray(locataires) && locataires.length > 0
+          ? locataires
+              .map((loc: any) => `${loc.nom || ""} ${loc.prenom || ""} - ${loc.email || ""}`)
+              .filter(Boolean)
+              .join("<br/>")
+          : "[Aucun locataire]",
 
       // === LOGEMENT ===
       localisation_logement:
@@ -470,20 +332,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       date_paiement: lease.date_paiement || `le ${lease.jour_paiement_loyer || "1"} de chaque mois`,
       lieu_paiement: lease.lieu_paiement || "Virement bancaire",
 
-      // Total loyer avec revenus totaux pour le ratio
+      // Total loyer
       montant_total_loyer: (() => {
         const loyer = Number(lease.montant_loyer_mensuel) || 0
         const charges = Number(lease.montant_charges) || 0
         return (loyer + charges).toFixed(2) + " €"
-      })(),
-
-      // Ratio revenus/loyer avec revenus totaux
-      ratio_revenus_loyer: (() => {
-        const loyer = Number(lease.montant_loyer_mensuel) || 0
-        if (totalIncome > 0 && loyer > 0) {
-          return (totalIncome / loyer).toFixed(1) + "x"
-        }
-        return "N/A"
       })(),
 
       // Dépenses énergie
@@ -540,21 +393,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     console.log("📊 [GENERATE] Données template préparées:", Object.keys(templateData).length, "champs")
-    console.log("👥 [GENERATE] Données colocataires/conjoints:", {
-      situation: templateData.situation_location,
-      nombre: templateData.nombre_colocataires,
-      revenus_totaux: templateData.revenus_totaux,
-      ratio: templateData.ratio_revenus_loyer,
-    })
 
-    // 6. Compiler le template
+    // 5. Compiler le template
     const generatedDocument = compileTemplate(template.template_content, templateData)
     console.log("✅ [GENERATE] Document généré, longueur:", generatedDocument.length, "caractères")
 
-    // 7. Convertir en HTML avec mise en forme
+    // 6. Convertir en HTML avec mise en forme
     const formattedHTML = formatAsHTML(generatedDocument)
 
-    // 8. Sauvegarder le document généré
+    // 7. Sauvegarder le document généré
     const { data: updateResult, error: updateError } = await supabase
       .from("leases")
       .update({
@@ -589,11 +436,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         completionRate: 100,
         totalFields: Object.keys(templateData).length,
         missingFields: [],
-        rentalSituation: {
-          type: rentalSituation,
-          cotenants_count: cotenants.length,
-          total_income: totalIncome,
-        },
       },
     })
   } catch (error) {

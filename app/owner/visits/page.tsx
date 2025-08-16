@@ -33,13 +33,9 @@ interface Visit {
   visit_time: string
   status: string
   created_at: string
-  tenant: {
-    id: string
-    first_name: string
-    last_name: string
-    email: string
-    phone?: string
-  }
+  visitor_name: string
+  visitor_phone?: string
+  tenant_email?: string
   property: {
     id: string
     title: string
@@ -117,8 +113,7 @@ export default function OwnerVisitsPage() {
     if (searchQuery) {
       filtered = filtered.filter(
         (visit) =>
-          visit.tenant.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          visit.tenant.last_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          visit.visitor_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
           visit.property.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
           visit.property.address.toLowerCase().includes(searchQuery.toLowerCase()),
       )
@@ -366,17 +361,15 @@ export default function OwnerVisitsPage() {
                               <User className="h-6 w-6 text-white" />
                             </div>
                             <div className="min-w-0 flex-1">
-                              <h3 className="text-lg font-semibold truncate">
-                                {visit.tenant.first_name} {visit.tenant.last_name}
-                              </h3>
+                              <h3 className="text-lg font-semibold truncate">{visit.visitor_name || "Visiteur"}</h3>
                               <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-muted-foreground">
                                 <div className="flex items-center min-w-0">
                                   <Mail className="h-4 w-4 mr-1 flex-shrink-0" />
-                                  <span className="truncate">{visit.tenant.email}</span>
+                                  <span className="truncate">{visit.tenant_email || "Email non renseigné"}</span>
                                 </div>
                                 <div className="flex items-center">
                                   <Phone className="h-4 w-4 mr-1 flex-shrink-0" />
-                                  <span className="truncate">{visit.tenant.phone}</span>
+                                  <span className="truncate">{visit.visitor_phone || "Téléphone non renseigné"}</span>
                                 </div>
                               </div>
                             </div>
@@ -390,17 +383,17 @@ export default function OwnerVisitsPage() {
                                 <p className="flex items-center gap-2 text-sm">
                                   <User className="h-4 w-4 flex-shrink-0" />
                                   <span className="truncate">
-                                    {visit.tenant.first_name} {visit.tenant.last_name}
+                                    {visit.visitor_name || "Visiteur"}
                                   </span>
                                 </p>
                                 <p className="flex items-center gap-2 text-sm text-muted-foreground">
                                   <Mail className="h-4 w-4 flex-shrink-0" />
-                                  <span className="truncate">{visit.tenant.email}</span>
+                                  <span className="truncate">{visit.tenant_email || "Email non renseigné"}</span>
                                 </p>
-                                {visit.tenant.phone && (
+                                {visit.visitor_phone && (
                                   <p className="flex items-center gap-2 text-sm text-muted-foreground">
                                     <Phone className="h-4 w-4 flex-shrink-0" />
-                                    <span className="truncate">{visit.tenant.phone}</span>
+                                    <span className="truncate">{visit.visitor_phone || "Téléphone non renseigné"}</span>
                                   </p>
                                 )}
                               </div>
@@ -494,7 +487,7 @@ export default function OwnerVisitsPage() {
                                       {visit.property.address}, {visit.property.city}
                                     </p>
                                     <p className="text-sm text-muted-foreground truncate">
-                                      {visit.tenant.first_name} {visit.tenant.last_name}
+                                      {visit.visitor_name || "Visiteur"}
                                     </p>
                                   </div>
                                 ))}
@@ -545,7 +538,7 @@ export default function OwnerVisitsPage() {
                                         {visit.property.address}, {visit.property.city}
                                       </p>
                                       <p className="text-sm text-muted-foreground truncate">
-                                        {visit.tenant.first_name} {visit.tenant.last_name}
+                                        {visit.visitor_name || "Visiteur"}
                                       </p>
                                       <p className="text-xs text-blue-600 mt-1">{date}</p>
                                     </div>
