@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Clock, Check, MapPin, User, AlertTriangle, RefreshCw } from 'lucide-react'
+import { Calendar, Clock, Check, MapPin, User, AlertTriangle, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 
 interface VisitSlot {
@@ -15,6 +15,7 @@ interface VisitSlot {
   is_available: boolean
   max_capacity: number
   current_bookings: number
+  available_spots?: number
 }
 
 interface TenantVisitSlotSelectorProps {
@@ -57,7 +58,7 @@ export function TenantVisitSlotSelector({
       console.log("🔍 Chargement créneaux pour candidature:", applicationId)
 
       const response = await fetch(`/api/applications/${applicationId}/available-slots`)
-      
+
       console.log("📡 Réponse API:", response.status, response.statusText)
 
       if (response.ok) {
@@ -66,8 +67,9 @@ export function TenantVisitSlotSelector({
         console.log("✅ Créneaux disponibles:", data.slots?.length || 0)
 
         if (data.success && Array.isArray(data.slots)) {
+          console.log("🔍 Détail des créneaux:", data.slots)
           setAvailableSlots(data.slots)
-          
+
           if (data.slots.length === 0) {
             setError("Aucun créneau de visite disponible pour cette propriété.")
           }
@@ -177,6 +179,8 @@ export function TenantVisitSlotSelector({
     )
   }
 
+  console.log("🎯 Rendu du composant avec", availableSlots.length, "créneaux")
+
   // Grouper les créneaux par date
   const slotsByDate = availableSlots.reduce(
     (acc, slot) => {
@@ -188,6 +192,8 @@ export function TenantVisitSlotSelector({
     },
     {} as Record<string, VisitSlot[]>,
   )
+
+  console.log("🎯 Créneaux groupés par date:", Object.keys(slotsByDate).length, "dates")
 
   return (
     <div className="space-y-6">
@@ -213,6 +219,20 @@ export function TenantVisitSlotSelector({
               <p className="text-sm">Propriétaire : {ownerName}</p>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Debug info */}
+      <Card className="bg-blue-50 border-blue-200">
+        <CardContent className="p-4">
+          <p className="text-sm text-blue-700">
+            <strong>Debug:</strong> {availableSlots.length} créneaux chargés, {Object.keys(slotsByDate).length} dates
+          </p>
+          {availableSlots.length > 0 && (
+            <p className="text-xs text-blue-600 mt-1">
+              Premier créneau: {availableSlots[0].date} {availableSlots[0].start_time}-{availableSlots[0].end_time}
+            </p>
+          )}
         </CardContent>
       </Card>
 
