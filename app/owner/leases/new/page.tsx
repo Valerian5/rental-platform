@@ -483,8 +483,14 @@ const clauseCategories = [
   }
 
   const prefillFormFromApplication = async (app: any, currentUser: any) => {
-    const property = app.property
-    const tenant = app.tenant
+    // Récupère le rental_file
+    const rentalFile = app.rental_file
+  
+    // Compose le tableau de locataires
+    const allLocataires = [
+      ...(rentalFile?.main_tenant ? [rentalFile.main_tenant] : []),
+      ...(Array.isArray(rentalFile?.cotenants) ? rentalFile.cotenants : [])
+    ]
 
     setFormData((prev) => ({
       ...prev,
@@ -495,16 +501,12 @@ const clauseCategories = [
       bailleur_email: currentUser.email || "",
       bailleur_telephone: currentUser.phone || "",
       bailleur_adresse: currentUser.address || "",
-      locataires: tenant
-        ? [
-            {
-              prenom: tenant.first_name || "",
-              nom: tenant.last_name || "",
-              email: tenant.email || "",
-              date_naissance: tenant.birth_date ? new Date(tenant.birth_date) : null,
-            },
-          ]
-        : [],
+      locataires: allLocataires.map((loc: any) => ({
+        prenom: loc.first_name || "",
+        nom: loc.last_name || "",
+        email: loc.email || "",
+        date_naissance: loc.birth_date ? new Date(loc.birth_date) : null,
+      })),
       nombre_pieces: property?.rooms || "",
       surface_habitable: property?.surface || "",
       adresse_logement: property?.address || "",

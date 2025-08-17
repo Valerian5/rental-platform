@@ -16,34 +16,28 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const supabase = createServerClient()
     const applicationId = params.id
 
-    console.log("🔍 Chargement détails candidature:", applicationId)
-
-    // Récupérer la candidature avec toutes les relations
+    // Récupérer la candidature avec toutes les relations + rental_file
     const { data: application, error: appError } = await supabase
       .from("applications")
       .select(`
         *,
         property:properties(*),
-        tenant:users(*)
+        tenant:users(*),
+        rental_file:rental_files!applications_tenant_id_fkey(
+          id,
+          main_tenant,
+          cotenants
+        )
       `)
       .eq("id", applicationId)
       .single()
 
     if (appError) {
-      console.error("❌ Erreur récupération candidature:", appError)
       return NextResponse.json({ error: "Candidature non trouvée" }, { status: 404 })
     }
 
-    console.log("✅ Candidature chargée:", {
-      id: application.id,
-      tenant: application.tenant?.first_name + " " + application.tenant?.last_name,
-      property: application.property?.title,
-      status: application.status,
-    })
-
     return NextResponse.json({ application })
   } catch (error) {
-    console.error("❌ Erreur API applications/[id]:", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }
