@@ -18,18 +18,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     console.log("🔍 Chargement détails candidature:", applicationId)
 
-    // Récupérer la candidature avec toutes les relations + rental_file
+    // 1. Récupère la candidature
     const { data: application, error: appError } = await supabase
       .from("applications")
       .select(`
         *,
         property:properties(*),
-        tenant:users(*),
-        rental_file:rental_files!applications_tenant_id_fkey(
-          id,
-          main_tenant,
-          cotenants
-        )
+        tenant:users(*)
       `)
       .eq("id", applicationId)
       .single()
@@ -39,17 +34,19 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Candidature non trouvée" }, { status: 404 })
     }
 
-    // Log les infos pour debug
-    console.log("✅ Candidature chargée:", {
-      id: application.id,
-      tenant: application.tenant?.first_name + " " + application.tenant?.last_name,
-      property: application.property?.title,
-      status: application.status,
-      rental_file: !!application.rental_file,
-      cotenants: Array.isArray(application.rental_file?.cotenants) ? application.rental_file.cotenants.length : 0,
-    })
+    // 2. Récupère le dossier rental_file du tenant
+    let rentalFile = null
+    if (application.tenant_id) {
+      const { data: rf, error: rfError } = await supabase
+        .from("rental_files")
+        .select("id, main_tenant, cotenants")
+        .eq("tenant_id", application.tenant_id)
+        .single()
+      if (!rfError && rf) rentalFile = rf
+    }
 
-    return NextResponse.json({ application })
+    // 3. Renvoie tout
+    return NextResponse.json({ application: { ...application, rental_file: rentalFile } })
   } catch (error) {
     console.error("❌ Erreur API applications/[id]:", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
