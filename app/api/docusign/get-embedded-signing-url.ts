@@ -59,7 +59,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       authenticationMethod: "none",
       clientUserId: "1234", // doit être identique à celui du Signer
       recipientId: "1",
-      returnUrl: process.env.DOCUSIGN_RETURN_URL || "https://tonsite.fr/lease/signed",
+      returnUrl: process.env.DOCUSIGN_RETURN_URL || "https://rental-platform-h5sj.vercel.app/lease/signed",
       userName: signerName,
       email: signerEmail,
     });
