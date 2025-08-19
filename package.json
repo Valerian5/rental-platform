@@ -80,6 +80,7 @@
     "zod": "^3.22.4",
     "handlebars": "^4.7.8",
 	"@supabase/ssr": "^0.x.x",
+	"docusign-esign": "^6.1.0",
     "@types/handlebars": "^4.1.0"
   },
   "devDependencies": {

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -279,6 +280,37 @@ export default function LeaseDetailPage() {
     }
   }
 
+  const [ownerSigningUrl, setOwnerSigningUrl] = useState<string | null>(null);
+  const [ownerSigningIframeOpen, setOwnerSigningIframeOpen] = useState(false);
+  
+  const openOwnerEmbeddedSigning = async () => {
+    setSigning(true);
+    try {
+      // Ici, tu dois encoder le PDF en base64 si ce n'est pas déjà fait
+      const response = await fetch("/api/docusign/get-embedded-signing-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          leaseDocumentBase64: lease.generated_document_base64, // ou la bonne source
+          signerEmail: lease.bailleur_email,
+          signerName: lease.bailleur_nom_prenom,
+          clientUserId: "proprietaire",
+        }),
+      });
+      const data = await response.json();
+      if (response.ok && data.embeddedSigningUrl) {
+        setOwnerSigningUrl(data.embeddedSigningUrl);
+        setOwnerSigningIframeOpen(true);
+      } else {
+        toast.error(data.error || "Erreur DocuSign");
+      }
+    } catch (error) {
+      toast.error("Erreur DocuSign");
+    } finally {
+      setSigning(false);
+    }
+  };
+
   const statusInfo = getStatusInfo(lease.status)
 
   return (
@@ -553,45 +585,51 @@ export default function LeaseDetailPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <h3 className="font-semibold flex items-center gap-2">
-                      <User className="h-4 w-4" />
-                      Signature du propriétaire
-                    </h3>
-                    {lease.signed_by_owner ? (
-                      <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                        <div className="flex items-center gap-2 text-green-700 mb-2">
-                          <CheckCircle className="h-4 w-4" />
-                          <span className="font-medium">Signé</span>
-                        </div>
-                        <p className="text-sm text-green-600">
-                          Signé le {new Date(lease.owner_signature_date!).toLocaleDateString("fr-FR")} à{" "}
-                          {new Date(lease.owner_signature_date!).toLocaleTimeString("fr-FR", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="p-4 bg-gray-50 border rounded-lg">
-                        <p className="text-gray-600 mb-3">En attente de votre signature</p>
-                        {(lease.status === "sent_to_tenant" || lease.status === "signed_by_tenant") && (
-                          <Button onClick={signAsOwner} disabled={signing} className="bg-green-600 hover:bg-green-700">
-                            {signing ? (
-                              <>
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                Signature...
-                              </>
-                            ) : (
-                              <>
-                                <CheckCircle className="h-4 w-4 mr-2" />
-                                Signer maintenant
-                              </>
-                            )}
-                          </Button>
-                        )}
-                      </div>
-                    )}
+                <div className="space-y-4">
+  <h3 className="font-semibold flex items-center gap-2">
+    <User className="h-4 w-4" />
+    Signature du propriétaire
+  </h3>
+  {lease.signed_by_owner ? (
+    ... // déjà signé
+  ) : (
+    <div className="p-4 bg-gray-50 border rounded-lg">
+      <p className="text-gray-600 mb-3">En attente de votre signature</p>
+      {(lease.status === "sent_to_tenant" || lease.status === "signed_by_tenant") && (
+        <>
+          <Button onClick={openOwnerEmbeddedSigning} disabled={signing} className="bg-green-600 hover:bg-green-700">
+            {signing ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                Ouverture DocuSign...
+              </>
+            ) : (
+              <>
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Signature électronique DocuSign
+              </>
+            )}
+          </Button>
+          {ownerSigningIframeOpen && ownerSigningUrl && (
+            <div className="my-6">
+              <iframe
+                src={ownerSigningUrl}
+                title="Signature électronique DocuSign"
+                width="100%"
+                height="700px"
+                style={{ border: "none" }}
+              />
+              <Button variant="outline" onClick={() => setOwnerSigningIframeOpen(false)} className="mt-4">
+                Fermer
+              </Button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )}
+</div>
+                    
                   </div>
 
                   <div className="space-y-4">
