@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -30,12 +29,15 @@ interface Lease {
   lease_type: string
   status: string
   bailleur_nom_prenom: string
+  bailleur_email?: string
   locataire_nom_prenom: string
+  locataire_email?: string
   adresse_logement: string
   montant_loyer_mensuel: number
   date_prise_effet: string
   duree_contrat: string
-  generated_document?: string
+  generated_document?: string           // PDF base64 ou URL selon ton modèle
+  generated_document_base64?: string    // PDF en base64 (nécessaire pour DocuSign)
   document_generated_at?: string
   sent_to_tenant_at?: string
   signed_by_owner?: boolean
@@ -57,16 +59,16 @@ export default function LeaseDetailPage() {
   const [sending, setSending] = useState(false)
   const [signing, setSigning] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [ownerSigningUrl, setOwnerSigningUrl] = useState<string | null>(null)
+  const [ownerSigningIframeOpen, setOwnerSigningIframeOpen] = useState(false)
 
   const loadLease = async () => {
     try {
       setLoading(true)
       const response = await fetch(`/api/leases/${leaseId}`)
-
       if (!response.ok) {
         throw new Error("Erreur lors du chargement du bail")
       }
-
       const data = await response.json()
       setLease(data.lease)
     } catch (error) {
@@ -81,13 +83,10 @@ export default function LeaseDetailPage() {
     try {
       setGenerating(true)
       setError(null)
-
       const response = await fetch(`/api/leases/${leaseId}/generate-document`, {
         method: "POST",
       })
-
       const data = await response.json()
-
       if (!response.ok) {
         if (data.redirectTo) {
           router.push(data.redirectTo)
@@ -95,7 +94,6 @@ export default function LeaseDetailPage() {
         }
         throw new Error(data.error || "Erreur lors de la génération")
       }
-
       toast.success("Document généré avec succès")
       await loadLease()
     } catch (error) {
@@ -112,17 +110,13 @@ export default function LeaseDetailPage() {
     try {
       setSending(true)
       setError(null)
-
       const response = await fetch(`/api/leases/${leaseId}/send-to-tenant`, {
         method: "POST",
       })
-
       const data = await response.json()
-
       if (!response.ok) {
         throw new Error(data.error || "Erreur lors de l'envoi")
       }
-
       toast.success("Bail envoyé au locataire avec succès")
       await loadLease()
     } catch (error) {
@@ -135,35 +129,30 @@ export default function LeaseDetailPage() {
     }
   }
 
-  const signAsOwner = async () => {
+  // Signature propriétaire par DocuSign Embedded
+  const openOwnerEmbeddedSigning = async () => {
+    if (!lease) return
+    setSigning(true)
     try {
-      setSigning(true)
-      setError(null)
-
-      const response = await fetch(`/api/leases/${leaseId}/sign-owner`, {
+      const response = await fetch("/api/docusign/get-embedded-signing-url", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ownerId: "current-owner-id",
-          signature: "Signature électronique simple",
+          leaseDocumentBase64: lease.generated_document_base64, // à adapter selon ton modèle
+          signerEmail: lease.bailleur_email || "",             // à adapter selon ton modèle
+          signerName: lease.bailleur_nom_prenom,
+          clientUserId: "proprietaire",
         }),
       })
-
       const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || "Erreur lors de la signature")
+      if (response.ok && data.embeddedSigningUrl) {
+        setOwnerSigningUrl(data.embeddedSigningUrl)
+        setOwnerSigningIframeOpen(true)
+      } else {
+        toast.error(data.error || "Erreur DocuSign")
       }
-
-      toast.success("Bail signé avec succès")
-      await loadLease()
     } catch (error) {
-      console.error("Erreur signature:", error)
-      const errorMessage = error instanceof Error ? error.message : "Erreur inconnue"
-      setError(errorMessage)
-      toast.error(errorMessage)
+      toast.error("Erreur DocuSign")
     } finally {
       setSigning(false)
     }
@@ -280,37 +269,6 @@ export default function LeaseDetailPage() {
     }
   }
 
-  const [ownerSigningUrl, setOwnerSigningUrl] = useState<string | null>(null);
-  const [ownerSigningIframeOpen, setOwnerSigningIframeOpen] = useState(false);
-  
-  const openOwnerEmbeddedSigning = async () => {
-    setSigning(true);
-    try {
-      // Ici, tu dois encoder le PDF en base64 si ce n'est pas déjà fait
-      const response = await fetch("/api/docusign/get-embedded-signing-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          leaseDocumentBase64: lease.generated_document_base64, // ou la bonne source
-          signerEmail: lease.bailleur_email,
-          signerName: lease.bailleur_nom_prenom,
-          clientUserId: "proprietaire",
-        }),
-      });
-      const data = await response.json();
-      if (response.ok && data.embeddedSigningUrl) {
-        setOwnerSigningUrl(data.embeddedSigningUrl);
-        setOwnerSigningIframeOpen(true);
-      } else {
-        toast.error(data.error || "Erreur DocuSign");
-      }
-    } catch (error) {
-      toast.error("Erreur DocuSign");
-    } finally {
-      setSigning(false);
-    }
-  };
-
   const statusInfo = getStatusInfo(lease.status)
 
   return (
@@ -351,22 +309,6 @@ export default function LeaseDetailPage() {
                     <>
                       <Send className="h-4 w-4 mr-2" />
                       Envoyer au locataire
-                    </>
-                  )}
-                </Button>
-              )}
-
-              {(lease.status === "sent_to_tenant" || lease.status === "signed_by_tenant") && !lease.signed_by_owner && (
-                <Button onClick={signAsOwner} disabled={signing} className="bg-green-600 hover:bg-green-700">
-                  {signing ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Signature...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                      Signer le bail
                     </>
                   )}
                 </Button>
@@ -585,53 +527,65 @@ export default function LeaseDetailPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-  <h3 className="font-semibold flex items-center gap-2">
-    <User className="h-4 w-4" />
-    Signature du propriétaire
-  </h3>
-  {lease.signed_by_owner ? (
-    ... // déjà signé
-  ) : (
-    <div className="p-4 bg-gray-50 border rounded-lg">
-      <p className="text-gray-600 mb-3">En attente de votre signature</p>
-      {(lease.status === "sent_to_tenant" || lease.status === "signed_by_tenant") && (
-        <>
-          <Button onClick={openOwnerEmbeddedSigning} disabled={signing} className="bg-green-600 hover:bg-green-700">
-            {signing ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Ouverture DocuSign...
-              </>
-            ) : (
-              <>
-                <CheckCircle className="h-4 w-4 mr-2" />
-                Signature électronique DocuSign
-              </>
-            )}
-          </Button>
-          {ownerSigningIframeOpen && ownerSigningUrl && (
-            <div className="my-6">
-              <iframe
-                src={ownerSigningUrl}
-                title="Signature électronique DocuSign"
-                width="100%"
-                height="700px"
-                style={{ border: "none" }}
-              />
-              <Button variant="outline" onClick={() => setOwnerSigningIframeOpen(false)} className="mt-4">
-                Fermer
-              </Button>
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  )}
-</div>
-                    
+                  {/* Signature propriétaire : DocuSign Embedded */}
+                  <div className="space-y-4">
+                    <h3 className="font-semibold flex items-center gap-2">
+                      <User className="h-4 w-4" />
+                      Signature du propriétaire
+                    </h3>
+                    {lease.signed_by_owner ? (
+                      <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                        <div className="flex items-center gap-2 text-green-700 mb-2">
+                          <CheckCircle className="h-4 w-4" />
+                          <span className="font-medium">Signé</span>
+                        </div>
+                        <p className="text-sm text-green-600">
+                          Signé le {new Date(lease.owner_signature_date!).toLocaleDateString("fr-FR")} à{" "}
+                          {new Date(lease.owner_signature_date!).toLocaleTimeString("fr-FR", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="p-4 bg-gray-50 border rounded-lg">
+                        <p className="text-gray-600 mb-3">En attente de votre signature</p>
+                        {(lease.status === "sent_to_tenant" || lease.status === "signed_by_tenant") && (
+                          <>
+                            <Button onClick={openOwnerEmbeddedSigning} disabled={signing} className="bg-green-600 hover:bg-green-700">
+                              {signing ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                  Ouverture DocuSign...
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle className="h-4 w-4 mr-2" />
+                                  Signature électronique DocuSign
+                                </>
+                              )}
+                            </Button>
+                            {ownerSigningIframeOpen && ownerSigningUrl && (
+                              <div className="my-6">
+                                <iframe
+                                  src={ownerSigningUrl}
+                                  title="Signature électronique DocuSign"
+                                  width="100%"
+                                  height="700px"
+                                  style={{ border: "none" }}
+                                />
+                                <Button variant="outline" onClick={() => setOwnerSigningIframeOpen(false)} className="mt-4">
+                                  Fermer
+                                </Button>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
 
+                  {/* Signature locataire : statut uniquement */}
                   <div className="space-y-4">
                     <h3 className="font-semibold flex items-center gap-2">
                       <User className="h-4 w-4" />
@@ -694,7 +648,7 @@ export default function LeaseDetailPage() {
                   </div>
 
                   {lease.document_generated_at && (
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center gap-3 p-3 bg-green-600 rounded-full bg-opacity-10">
                       <div className="h-2 w-2 bg-green-600 rounded-full"></div>
                       <div className="flex-1">
                         <p className="font-medium">Document généré</p>
@@ -716,7 +670,7 @@ export default function LeaseDetailPage() {
                   )}
 
                   {lease.sent_to_tenant_at && (
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center gap-3 p-3 bg-blue-600 rounded-full bg-opacity-10">
                       <div className="h-2 w-2 bg-blue-600 rounded-full"></div>
                       <div className="flex-1">
                         <p className="font-medium">Envoyé au locataire</p>
@@ -738,19 +692,19 @@ export default function LeaseDetailPage() {
                   )}
 
                   {lease.tenant_signature_date && (
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center gap-3 p-3 bg-green-600 rounded-full bg-opacity-10">
                       <div className="h-2 w-2 bg-green-600 rounded-full"></div>
                       <div className="flex-1">
                         <p className="font-medium">Signé par le locataire</p>
                         <p className="text-sm text-gray-600">
-                          {new Date(lease.tenant_signature_date).toLocaleDateString("fr-FR", {
+                          {new Date(lease.tenant_signature_date!).toLocaleDateString("fr-FR", {
                             weekday: "long",
                             year: "numeric",
                             month: "long",
                             day: "numeric",
                           })}{" "}
                           à{" "}
-                          {new Date(lease.tenant_signature_date).toLocaleTimeString("fr-FR", {
+                          {new Date(lease.tenant_signature_date!).toLocaleTimeString("fr-FR", {
                             hour: "2-digit",
                             minute: "2-digit",
                           })}
@@ -760,19 +714,19 @@ export default function LeaseDetailPage() {
                   )}
 
                   {lease.owner_signature_date && (
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center gap-3 p-3 bg-green-600 rounded-full bg-opacity-10">
                       <div className="h-2 w-2 bg-green-600 rounded-full"></div>
                       <div className="flex-1">
                         <p className="font-medium">Signé par le propriétaire</p>
                         <p className="text-sm text-gray-600">
-                          {new Date(lease.owner_signature_date).toLocaleDateString("fr-FR", {
+                          {new Date(lease.owner_signature_date!).toLocaleDateString("fr-FR", {
                             weekday: "long",
                             year: "numeric",
                             month: "long",
                             day: "numeric",
                           })}{" "}
                           à{" "}
-                          {new Date(lease.owner_signature_date).toLocaleTimeString("fr-FR", {
+                          {new Date(lease.owner_signature_date!).toLocaleTimeString("fr-FR", {
                             hour: "2-digit",
                             minute: "2-digit",
                           })}
@@ -781,7 +735,7 @@ export default function LeaseDetailPage() {
                     </div>
                   )}
 
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-3 p-3 bg-gray-400 rounded-full bg-opacity-10">
                     <div className="h-2 w-2 bg-gray-400 rounded-full"></div>
                     <div className="flex-1">
                       <p className="font-medium">Dernière modification</p>
