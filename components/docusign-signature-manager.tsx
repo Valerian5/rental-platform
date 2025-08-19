@@ -118,7 +118,7 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
     }
   }, [leaseStatus])
 
-  if (leaseStatus === "draft") {
+  if (leaseStatus === "draft" || (leaseStatus !== "sent_for_signature" && !signatureStatus)) {
     return (
       <Card>
         <CardHeader>
@@ -131,7 +131,7 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
           <Alert>
             <FileText className="h-4 w-4" />
             <AlertDescription>
-              Le document doit être généré avant de pouvoir être envoyé pour signature.
+              Envoyez ce bail pour signature électronique via DocuSign pour une expérience professionnelle et sécurisée.
             </AlertDescription>
           </Alert>
 

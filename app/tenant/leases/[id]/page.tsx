@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Separator } from "@/components/ui/separator"
+import { DocuSignSignatureManager } from "@/components/docusign-signature-manager"
 import {
   FileText,
   Calendar,
@@ -539,12 +540,22 @@ export default function TenantLeaseDetailPage() {
           </TabsContent>
 
           <TabsContent value="signature" className="space-y-6">
+            {lease.status === "sent_for_signature" && (
+              <DocuSignSignatureManager
+                leaseId={leaseId}
+                leaseStatus={lease.status}
+                onStatusChange={(newStatus) => {
+                  setLease((prev) => (prev ? { ...prev, status: newStatus } : null))
+                }}
+              />
+            )}
+
             {canSign ? (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <CheckCircle className="h-5 w-5" />
-                    Signature du bail
+                    Signature électronique simple
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
