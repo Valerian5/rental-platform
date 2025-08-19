@@ -134,6 +134,8 @@ export default function LeaseDetailPage() {
         }),
       })
       const data = await response.json()
+      console.log("Réponse DocuSign API:", data)
+      toast.error(data.error || "Erreur DocuSign")
       if (response.ok && data.embeddedSigningUrl) {
         setOwnerSigningUrl(data.embeddedSigningUrl)
         setOwnerSigningIframeOpen(true)
