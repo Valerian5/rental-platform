@@ -1,33 +1,16 @@
-// /app/api/docusign/consent/route.ts
-import { NextRequest, NextResponse } from "next/server"
+import type { NextApiRequest, NextApiResponse } from "next"
 
-export const runtime = "nodejs"
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  try {
+    const consentUrl = new URL("https://account-d.docusign.com/oauth/auth")
+    consentUrl.searchParams.set("response_type", "code")
+    consentUrl.searchParams.set("scope", "signature impersonation")
+    consentUrl.searchParams.set("client_id", process.env.DOCUSIGN_INTEGRATION_KEY || "")
+    consentUrl.searchParams.set("redirect_uri", `${process.env.NEXT_PUBLIC_SITE_URL}/api/docusign-callback`)
 
-function getAuthHost() {
-  const env = process.env.DOCUSIGN_ENV?.toLowerCase() || "demo"
-  return env === "production" ? "account.docusign.com" : "account-d.docusign.com"
-}
-
-// Redirect the user to DocuSign to grant consent (one-time)
-export async function GET(req: NextRequest) {
-  const clientId = process.env.DOCUSIGN_INTEGRATION_KEY
-  const redirectUri = process.env.DOCUSIGN_REDIRECT_URI
-
-  if (!clientId || !redirectUri) {
-    return NextResponse.json(
-      { error: "Missing DOCUSIGN_INTEGRATION_KEY or DOCUSIGN_REDIRECT_URI env vars" },
-      { status: 500 }
-    )
+    return res.redirect(consentUrl.toString())
+  } catch (err: any) {
+    console.error("❌ Erreur génération consent URL:", err)
+    res.status(500).json({ error: "Erreur génération consent URL" })
   }
-
-  const authHost = getAuthHost()
-  const scopes = encodeURIComponent("signature impersonation")
-
-  const url = new URL(`https://${authHost}/oauth/auth`)
-  url.searchParams.set("response_type", "code") // we only need consent; code can be ignored for JWT
-  url.searchParams.set("scope", "signature impersonation")
-  url.searchParams.set("client_id", clientId)
-  url.searchParams.set("redirect_uri", redirectUri)
-
-  return NextResponse.redirect(url.toString())
 }
