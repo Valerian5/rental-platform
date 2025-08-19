@@ -1,3 +1,4 @@
+import * as docusign from "docusign-esign"
 import { supabase } from "./supabase"
 
 export interface DocuSignEnvelope {
@@ -28,28 +29,61 @@ export interface DocuSignDocument {
 class DocuSignService {
   private baseUrl: string
   private accountId: string
-  private accessToken: string
+  private accessToken: string | null = null
+  private tokenExpiry: number = 0
 
   constructor() {
     this.baseUrl = process.env.DOCUSIGN_BASE_URL || "https://demo.docusign.net/restapi"
     this.accountId = process.env.DOCUSIGN_ACCOUNT_ID || ""
-    this.accessToken = process.env.DOCUSIGN_ACCESS_TOKEN || ""
+  }
+
+  private async getAccessToken(): Promise<string> {
+    const now = Math.floor(Date.now() / 1000)
+    if (this.accessToken && now < this.tokenExpiry - 60) {
+      return this.accessToken
+    }
+
+    const integratorKey = process.env.DOCUSIGN_INTEGRATION_KEY!
+    const userId = process.env.DOCUSIGN_USER_ID!
+    const privateKey = (process.env.DOCUSIGN_PRIVATE_KEY || "").replace(/\\n/g, "\n")
+
+    const apiClient = new docusign.ApiClient()
+    apiClient.setOAuthBasePath("account-d.docusign.com") // demo, change to account.docusign.com in prod
+
+    const results = await apiClient.requestJWTUserToken(
+      integratorKey,
+      userId,
+      "signature impersonation",
+      privateKey,
+      3600
+    )
+
+    this.accessToken = results.body.access_token
+    this.tokenExpiry = now + results.body.expires_in
+
+    // récupérer baseUri + accountId dynamiques
+    const userInfo = await apiClient.getUserInfo(this.accessToken)
+    const account = userInfo.accounts?.find((a) => a.isDefault) || userInfo.accounts?.[0]
+
+    if (account) {
+      this.baseUrl = `${account.baseUri}/restapi`
+      this.accountId = account.accountId
+    }
+
+    return this.accessToken!
   }
 
   private async makeRequest(endpoint: string, method = "GET", body?: any) {
+    const token = await this.getAccessToken()
     const url = `${this.baseUrl}/v2.1/accounts/${this.accountId}${endpoint}`
 
     const headers: Record<string, string> = {
-      Authorization: `Bearer ${this.accessToken}`,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
       Accept: "application/json",
     }
 
-    const config: RequestInit = {
-      method,
-      headers,
-    }
-
+    const config: RequestInit = { method, headers }
     if (body && (method === "POST" || method === "PUT")) {
       config.body = JSON.stringify(body)
     }
@@ -122,11 +156,12 @@ class DocuSignService {
   }
 
   async downloadCompletedDocument(envelopeId: string, documentId = "combined"): Promise<Blob> {
+    const token = await this.getAccessToken()
     const url = `${this.baseUrl}/v2.1/accounts/${this.accountId}/envelopes/${envelopeId}/documents/${documentId}`
 
     const response = await fetch(url, {
       headers: {
-        Authorization: `Bearer ${this.accessToken}`,
+        Authorization: `Bearer ${token}`,
         Accept: "application/pdf",
       },
     })
@@ -162,10 +197,8 @@ class DocuSignService {
     try {
       console.log("📝 [DOCUSIGN] Envoi du bail pour signature:", leaseId)
 
-      // Convertir le HTML en base64
       const documentBase64 = Buffer.from(documentContent).toString("base64")
 
-      // Créer les documents
       const documents: DocuSignDocument[] = [
         {
           documentId: "1",
@@ -175,7 +208,6 @@ class DocuSignService {
         },
       ]
 
-      // Créer les destinataires
       const recipients: DocuSignRecipient[] = [
         {
           email: ownerEmail,
@@ -193,7 +225,6 @@ class DocuSignService {
         },
       ]
 
-      // Créer l'enveloppe
       const envelope = await this.createEnvelope(
         documents,
         recipients,
@@ -202,14 +233,11 @@ class DocuSignService {
         "sent",
       )
 
-      // Créer les URLs de signature intégrée
       const returnUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/owner/leases/${leaseId}?signed=true`
 
       const ownerSigningUrl = await this.createEmbeddedSigningView(envelope.envelopeId, ownerEmail, returnUrl)
-
       const tenantSigningUrl = await this.createEmbeddedSigningView(envelope.envelopeId, tenantEmail, returnUrl)
 
-      // Sauvegarder l'ID de l'enveloppe dans la base de données
       await supabase
         .from("leases")
         .update({
@@ -241,7 +269,6 @@ class DocuSignService {
     completedDocument?: Blob
   }> {
     try {
-      // Récupérer l'ID de l'enveloppe depuis la base de données
       const { data: lease, error } = await supabase
         .from("leases")
         .select("docusign_envelope_id")
@@ -252,14 +279,12 @@ class DocuSignService {
         throw new Error("Enveloppe DocuSign non trouvée")
       }
 
-      // Vérifier le statut de l'enveloppe
       const envelope = await this.getEnvelopeStatus(lease.docusign_envelope_id)
 
       let ownerSigned = false
       let tenantSigned = false
       let completedDocument: Blob | undefined
 
-      // Vérifier les signatures individuelles
       const recipients = await this.makeRequest(`/envelopes/${lease.docusign_envelope_id}/recipients`)
 
       recipients.signers?.forEach((signer: any) => {
@@ -271,11 +296,9 @@ class DocuSignService {
         }
       })
 
-      // Si tout est signé, télécharger le document
       if (envelope.status === "completed") {
         completedDocument = await this.downloadCompletedDocument(lease.docusign_envelope_id)
 
-        // Mettre à jour le statut du bail
         await supabase
           .from("leases")
           .update({
