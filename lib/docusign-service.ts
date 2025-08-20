@@ -164,14 +164,26 @@ class DocuSignService {
           routingOrder: r.routingOrder,
           roleName: r.roleName || "Signataire",
           clientUserId: r.clientUserId || r.email, // required for embedded signing
-          tabs: {
-            signHereTabs: [
-              { documentId: "1", pageNumber: "1", xPosition: "100", yPosition: "100" },
-            ],
-            dateSignedTabs: [
-              { documentId: "1", pageNumber: "1", xPosition: "300", yPosition: "100" },
-            ],
-          },
+			tabs: {
+			  signHereTabs: [
+				{
+				  anchorString: r.roleName === "Bailleur" ? "/signee_proprietaire1/" : "/signee_locataire1/",
+				  anchorUnits: "pixels",
+				  anchorXOffset: "0",
+				  anchorYOffset: "0",
+				  documentId: "1",
+				},
+			  ],
+			  dateSignedTabs: [
+				{
+				  anchorString: r.roleName === "Bailleur" ? "/signee_proprietaire1/" : "/signee_locataire1/",
+				  anchorUnits: "pixels",
+				  anchorXOffset: "200", // décalage horizontal si tu veux la date à droite
+				  anchorYOffset: "0",
+				  documentId: "1",
+				},
+			  ],
+			},
         })),
       },
       status,
