@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken"
 import { supabase } from "./supabase"
 
+// --- Types ---
 export interface DocuSignEnvelope {
   envelopeId: string
   status: string
@@ -27,42 +28,49 @@ export interface DocuSignDocument {
   fileExtension: string
 }
 
+// --- Service ---
 class DocuSignService {
-  private baseUrl: string | null
   private accountId: string | null
+  private baseApiUrl: string | null // e.g. https://demo.docusign.net/restapi
   private accessToken: string | null
-  private tokenExpiration: number
+  private tokenExpiry: number
 
   constructor() {
-    this.baseUrl = process.env.DOCUSIGN_BASE_URL || null
     this.accountId = process.env.DOCUSIGN_ACCOUNT_ID || null
+    this.baseApiUrl = process.env.DOCUSIGN_BASE_URL || null
     this.accessToken = null
-    this.tokenExpiration = 0
+    this.tokenExpiry = 0
   }
 
-  // -------------------- AUTH --------------------
+  // Choose OAuth host (demo by default)
+  private getOAuthHost() {
+    return process.env.DOCUSIGN_OAUTH_BASE || "account-d.docusign.com"
+  }
+
+  // --- Auth: JWT creation & token fetch ---
   private generateJWT(): string {
     const privateKey = (process.env.DOCUSIGN_PRIVATE_KEY || "").replace(/\\n/g, "\n")
-
-    return jwt.sign(
-      {
-        iss: process.env.DOCUSIGN_INTEGRATION_KEY,
-        sub: process.env.DOCUSIGN_USER_ID,
-        aud: "account-d.docusign.com",
-        scope: "signature impersonation",
-      },
-      privateKey,
-      { algorithm: "RS256", expiresIn: "1h" },
-    )
+    const now = Math.floor(Date.now() / 1000)
+    const payload = {
+      iss: process.env.DOCUSIGN_INTEGRATION_KEY,
+      sub: process.env.DOCUSIGN_USER_ID,
+      aud: this.getOAuthHost(),
+      iat: now,
+      exp: now + 3600,
+      scope: "signature impersonation",
+    }
+    return jwt.sign(payload, privateKey, { algorithm: "RS256" })
   }
 
   private async getAccessToken(): Promise<string> {
-    if (this.accessToken && Date.now() < this.tokenExpiration - 60_000) {
+    if (this.accessToken && Date.now() < this.tokenExpiry - 60_000) {
       return this.accessToken
     }
 
     const assertion = this.generateJWT()
-    const res = await fetch("https://account-d.docusign.com/oauth/token", {
+    const oauthHost = this.getOAuthHost()
+
+    const res = await fetch(`https://${oauthHost}/oauth/token`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -78,54 +86,60 @@ class DocuSignService {
 
     const data = (await res.json()) as { access_token: string; expires_in: number }
     this.accessToken = data.access_token
-    this.tokenExpiration = Date.now() + data.expires_in * 1000
+    this.tokenExpiry = Date.now() + data.expires_in * 1000
 
-    // Fetch baseUri/accountId once if missing
-    if (!this.baseUrl || !this.accountId) {
-      const uiRes = await fetch("https://account-d.docusign.com/oauth/userinfo", {
+    // If baseApiUrl/accountId are not set, resolve from /userinfo
+    if (!this.baseApiUrl || !this.accountId) {
+      const ui = await fetch(`https://${oauthHost}/oauth/userinfo`, {
         headers: { Authorization: `Bearer ${this.accessToken}` },
       })
-      if (!uiRes.ok) {
-        const text = await uiRes.text()
-        throw new Error(`DocuSign UserInfo Error: ${uiRes.status} - ${text}`)
+      if (!ui.ok) {
+        const text = await ui.text()
+        throw new Error(`DocuSign UserInfo Error: ${ui.status} - ${text}`)
       }
-      const userInfo = (await uiRes.json()) as any
+      const userInfo = (await ui.json()) as any
       const account = userInfo.accounts?.find((a: any) => a.is_default) || userInfo.accounts?.[0]
-      this.accountId = this.accountId || account?.account_id
-      this.baseUrl = this.baseUrl || (account?.base_uri ? `${account.base_uri}/restapi` : null)
-      if (!this.baseUrl || !this.accountId) {
-        throw new Error("Impossible de déterminer baseUrl/accountId DocuSign")
+      this.accountId = this.accountId || account?.account_id || null
+      this.baseApiUrl = this.baseApiUrl || (account?.base_uri ? `${account.base_uri}/restapi` : null)
+      if (!this.accountId || !this.baseApiUrl) {
+        throw new Error("Impossible de déterminer accountId/baseApiUrl DocuSign")
       }
     }
 
     return this.accessToken
   }
 
+  // --- Helpers ---
+  private assertAbsoluteReturnUrl(url: string) {
+    if (!url || !/^https?:\/\//i.test(url)) {
+      throw new Error("NEXT_PUBLIC_SITE_URL invalide : returnUrl doit être absolu (https://...) ")
+    }
+  }
+
   private async makeRequest(endpoint: string, method = "GET", body?: any) {
     const token = await this.getAccessToken()
-    const url = `${this.baseUrl}/v2.1/accounts/${this.accountId}${endpoint}`
+    const url = `${this.baseApiUrl}/v2.1/accounts/${this.accountId}${endpoint}`
 
     const headers: Record<string, string> = {
       Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
       Accept: "application/json",
+      "Content-Type": "application/json",
     }
 
-    const config: RequestInit = { method, headers }
-    if (body && (method === "POST" || method === "PUT")) {
-      config.body = JSON.stringify(body)
+    const init: RequestInit = { method, headers }
+    if (body !== undefined && (method === "POST" || method === "PUT" || method === "PATCH")) {
+      init.body = JSON.stringify(body)
     }
 
-    const response = await fetch(url, config)
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`DocuSign API Error: ${response.status} - ${errorText}`)
+    const res = await fetch(url, init)
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(`DocuSign API Error: ${res.status} - ${text}`)
     }
-
-    return response.json()
+    return res.json()
   }
 
-  // -------------------- API WRAPPERS --------------------
+  // --- Core API wrappers ---
   async createEnvelope(
     documents: DocuSignDocument[],
     recipients: DocuSignRecipient[],
@@ -135,21 +149,21 @@ class DocuSignService {
   ): Promise<DocuSignEnvelope> {
     const envelopeDefinition = {
       emailSubject,
-      emailMessage,
-      documents: documents.map((doc) => ({
-        documentId: doc.documentId,
-        name: doc.name,
-        fileExtension: doc.fileExtension,
-        documentBase64: doc.documentBase64,
+      emailBlurb: emailMessage,
+      documents: documents.map((d) => ({
+        documentId: d.documentId,
+        name: d.name,
+        fileExtension: d.fileExtension,
+        documentBase64: d.documentBase64,
       })),
       recipients: {
-        signers: recipients.map((recipient) => ({
-          email: recipient.email,
-          name: recipient.name,
-          recipientId: recipient.recipientId,
-          routingOrder: recipient.routingOrder,
-          roleName: recipient.roleName || "Signataire",
-          clientUserId: recipient.clientUserId || recipient.email, // 👈 requis pour embedded signing
+        signers: recipients.map((r) => ({
+          email: r.email,
+          name: r.name,
+          recipientId: r.recipientId,
+          routingOrder: r.routingOrder,
+          roleName: r.roleName || "Signataire",
+          clientUserId: r.clientUserId || r.email, // required for embedded signing
           tabs: {
             signHereTabs: [
               { documentId: "1", pageNumber: "1", xPosition: "100", yPosition: "100" },
@@ -176,14 +190,11 @@ class DocuSignService {
 
   async downloadCompletedDocument(envelopeId: string, documentId = "combined"): Promise<Blob> {
     const token = await this.getAccessToken()
-    const url = `${this.baseUrl}/v2.1/accounts/${this.accountId}/envelopes/${envelopeId}/documents/${documentId}`
+    const url = `${this.baseApiUrl}/v2.1/accounts/${this.accountId}/envelopes/${envelopeId}/documents/${documentId}`
 
-    const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/pdf" },
-    })
-
-    if (!response.ok) throw new Error(`Erreur téléchargement document: ${response.status}`)
-    return response.blob()
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: "application/pdf" } })
+    if (!res.ok) throw new Error(`Erreur téléchargement document: ${res.status}`)
+    return res.blob()
   }
 
   async createEmbeddedSigningView(
@@ -192,23 +203,20 @@ class DocuSignService {
     recipientName: string,
     returnUrl: string,
   ): Promise<string> {
-    if (!returnUrl || !/^https?:\/\//i.test(returnUrl)) {
-      throw new Error("NEXT_PUBLIC_SITE_URL invalide : returnUrl doit être absolu (https://...)")
-    }
-
+    this.assertAbsoluteReturnUrl(returnUrl)
     const viewRequest = {
       returnUrl,
       authenticationMethod: "none",
       email: recipientEmail,
       userName: recipientName,
-      clientUserId: recipientEmail, // 👈 doit matcher l'enveloppe
+      clientUserId: recipientEmail, // must match the signer in the envelope
     }
-
-    const response = await this.makeRequest(`/envelopes/${envelopeId}/views/recipient`, "POST", viewRequest)
-    return response.url
+    const res = await this.makeRequest(`/envelopes/${envelopeId}/views/recipient`, "POST", viewRequest)
+    return res.url
   }
 
-  // -------------------- BUSINESS LOGIC --------------------
+  // --- Business logic ---
+  // Parallel signing (routingOrder "1" for both) since order does not matter
   async sendLeaseForSignature(
     leaseId: string,
     documentContent: string, // HTML string
@@ -217,61 +225,62 @@ class DocuSignService {
     tenantEmail: string,
     tenantName: string,
   ): Promise<{ envelopeId: string; signingUrls: { owner: string; tenant: string } }> {
-    try {
-      console.log("📝 [DOCUSIGN] Envoi du bail pour signature:", leaseId)
+    console.log("📝 [DOCUSIGN] Envoi du bail pour signature (parallèle):", leaseId)
 
-      // HTML -> base64
-      const documentBase64 = Buffer.from(documentContent).toString("base64")
+    // HTML -> base64
+    const documentBase64 = Buffer.from(documentContent).toString("base64")
 
-      const documents: DocuSignDocument[] = [
-        { documentId: "1", name: `Contrat de bail - ${leaseId}.html`, fileExtension: "html", documentBase64 },
-      ]
+    const documents: DocuSignDocument[] = [
+      { documentId: "1", name: `Contrat de bail - ${leaseId}.html`, fileExtension: "html", documentBase64 },
+    ]
 
-      const recipients: DocuSignRecipient[] = [
-        { email: ownerEmail, name: ownerName, recipientId: "1", routingOrder: "1", roleName: "Bailleur", clientUserId: ownerEmail },
-        { email: tenantEmail, name: tenantName, recipientId: "2", routingOrder: "2", roleName: "Locataire", clientUserId: tenantEmail },
-      ]
+    const recipients: DocuSignRecipient[] = [
+      { email: ownerEmail, name: ownerName, recipientId: "1", routingOrder: "1", roleName: "Bailleur", clientUserId: ownerEmail },
+      { email: tenantEmail, name: tenantName, recipientId: "2", routingOrder: "1", roleName: "Locataire", clientUserId: tenantEmail },
+    ]
 
-      const envelope = await this.createEnvelope(
-        documents,
-        recipients,
-        `Signature du contrat de bail - ${leaseId}`,
-        "Veuillez signer ce contrat de bail en cliquant sur le lien ci-dessous.",
-        "sent",
-      )
+    const envelope = await this.createEnvelope(
+      documents,
+      recipients,
+      `Signature du contrat de bail - ${leaseId}`,
+      "Veuillez signer ce contrat de bail en cliquant sur le lien ci-dessous.",
+      "sent",
+    )
 
-      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || ""
-      const returnUrl = `${siteUrl}/owner/leases/${leaseId}?signed=true`
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || ""
+    const returnUrl = `${siteUrl}/leases/${leaseId}?signed=true` // page neutre commune
 
-      const ownerSigningUrl = await this.createEmbeddedSigningView(
-        envelope.envelopeId,
-        ownerEmail,
-        ownerName,
-        returnUrl,
-      )
-      const tenantSigningUrl = await this.createEmbeddedSigningView(
-        envelope.envelopeId,
-        tenantEmail,
-        tenantName,
-        returnUrl,
-      )
+    const ownerSigningUrl = await this.createEmbeddedSigningView(
+      envelope.envelopeId,
+      ownerEmail,
+      ownerName,
+      returnUrl,
+    )
+    const tenantSigningUrl = await this.createEmbeddedSigningView(
+      envelope.envelopeId,
+      tenantEmail,
+      tenantName,
+      returnUrl,
+    )
 
-      await supabase
-        .from("leases")
-        .update({
-          docusign_envelope_id: envelope.envelopeId,
-          status: "sent_for_signature",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", leaseId)
+    await supabase
+      .from("leases")
+      .update({
+        docusign_envelope_id: envelope.envelopeId,
+        status: "sent_for_signature",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", leaseId)
 
-      console.log("✅ [DOCUSIGN] Enveloppe créée:", envelope.envelopeId)
+    console.log("✅ [DOCUSIGN] Enveloppe créée:", envelope.envelopeId)
 
-      return { envelopeId: envelope.envelopeId, signingUrls: { owner: ownerSigningUrl, tenant: tenantSigningUrl } }
-    } catch (error) {
-      console.error("❌ [DOCUSIGN] Erreur envoi signature:", error)
-      throw error
-    }
+    return { envelopeId: envelope.envelopeId, signingUrls: { owner: ownerSigningUrl, tenant: tenantSigningUrl } }
+  }
+
+  async getTenantSigningUrl(envelopeId: string, leaseId: string, tenantEmail: string, tenantName: string) {
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || ""
+    const returnUrl = `${siteUrl}/tenant/leases/${leaseId}?signed=true`
+    return await this.createEmbeddedSigningView(envelopeId, tenantEmail, tenantName, returnUrl)
   }
 
   async checkSignatureStatus(leaseId: string): Promise<{
@@ -280,50 +289,42 @@ class DocuSignService {
     tenantSigned: boolean
     completedDocument?: Blob
   }> {
-    try {
-      const { data: lease, error } = await supabase
+    const { data: lease, error } = await supabase
+      .from("leases")
+      .select("docusign_envelope_id")
+      .eq("id", leaseId)
+      .single()
+
+    if (error || !lease?.docusign_envelope_id) throw new Error("Enveloppe DocuSign non trouvée")
+
+    const envelope = await this.getEnvelopeStatus(lease.docusign_envelope_id)
+
+    let ownerSigned = false
+    let tenantSigned = false
+    let completedDocument: Blob | undefined
+
+    const recipients = await this.makeRequest(`/envelopes/${lease.docusign_envelope_id}/recipients`)
+    recipients.signers?.forEach((signer: any) => {
+      if (signer.roleName === "Bailleur" && signer.status === "completed") ownerSigned = true
+      if (signer.roleName === "Locataire" && signer.status === "completed") tenantSigned = true
+    })
+
+    if (envelope.status === "completed") {
+      completedDocument = await this.downloadCompletedDocument(lease.docusign_envelope_id)
+      await supabase
         .from("leases")
-        .select("docusign_envelope_id")
+        .update({
+          status: "active",
+          signed_by_owner: ownerSigned,
+          signed_by_tenant: tenantSigned,
+          owner_signature_date: ownerSigned ? new Date().toISOString() : null,
+          tenant_signature_date: tenantSigned ? new Date().toISOString() : null,
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", leaseId)
-        .single()
-
-      if (error || !lease?.docusign_envelope_id) {
-        throw new Error("Enveloppe DocuSign non trouvée")
-      }
-
-      const envelope = await this.getEnvelopeStatus(lease.docusign_envelope_id)
-
-      let ownerSigned = false
-      let tenantSigned = false
-      let completedDocument: Blob | undefined
-
-      const recipients = await this.makeRequest(`/envelopes/${lease.docusign_envelope_id}/recipients`)
-      recipients.signers?.forEach((signer: any) => {
-        if (signer.roleName === "Bailleur" && signer.status === "completed") ownerSigned = true
-        if (signer.roleName === "Locataire" && signer.status === "completed") tenantSigned = true
-      })
-
-      if (envelope.status === "completed") {
-        completedDocument = await this.downloadCompletedDocument(lease.docusign_envelope_id)
-
-        await supabase
-          .from("leases")
-          .update({
-            status: "active",
-            signed_by_owner: ownerSigned,
-            signed_by_tenant: tenantSigned,
-            owner_signature_date: ownerSigned ? new Date().toISOString() : null,
-            tenant_signature_date: tenantSigned ? new Date().toISOString() : null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", leaseId)
-      }
-
-      return { status: envelope.status, ownerSigned, tenantSigned, completedDocument }
-    } catch (error) {
-      console.error("❌ [DOCUSIGN] Erreur vérification statut:", error)
-      throw error
     }
+
+    return { status: envelope.status, ownerSigned, tenantSigned, completedDocument }
   }
 }
 
