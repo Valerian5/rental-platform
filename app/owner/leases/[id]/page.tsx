@@ -21,7 +21,7 @@ import {
   Download,
 } from "lucide-react"
 import { LeaseDocumentDisplay } from "@/components/lease-document-display"
-import { LeaseAnnexesManager } from "@/components/LeaseAnnexesManage"
+import { LeaseAnnexesManager } from "@/components/lease-annexes-manager"
 import { DocuSignSignatureManager } from "@/components/docusign-signature-manager"
 import { toast } from "sonner"
 
@@ -280,15 +280,11 @@ export default function LeaseDetailPage() {
     }
   }
 
-  export default function LeasePage({ params }: { params: { id: string } }) {
-    const leaseId = params.id
-
   const statusInfo = getStatusInfo(lease.status)
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto p-6 space-y-6">
-        {/* En-tête amélioré */}
         <div className="bg-white rounded-lg shadow-sm border p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -547,12 +543,12 @@ export default function LeaseDetailPage() {
           </TabsContent>
 
           <TabsContent value="annexes" className="space-y-6">
-            <LeaseAnnexesManager leaseId={leaseId} />
+            <LeaseAnnexesManager leaseId={lease.id} />
           </TabsContent>
 
           <TabsContent value="signatures" className="space-y-6">
             <DocuSignSignatureManager
-              leaseId={leaseId}
+              leaseId={lease.id}
               leaseStatus={lease.status}
               onStatusChange={(newStatus) => {
                 setLease((prev) => (prev ? { ...prev, status: newStatus } : null))

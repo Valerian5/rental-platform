@@ -1,76 +1,120 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { type NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@/lib/supabase";
 
+export const dynamic = "force-dynamic";
+
+const BUCKET_NAME = "lease-annexes";
+
+// GET - Récupérer les annexes d'un bail
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const leaseId = params.id
+    const supabase = createServerClient();
+    const leaseId = params.id;
 
-    const { data: annexes, error } = await supabase
+    const { data, error } = await supabase
       .from("lease_annexes")
       .select("*")
       .eq("lease_id", leaseId)
-      .order("uploaded_at", { ascending: false })
+      .order("created_at", { ascending: true });
 
-    if (error) {
-      console.error("Erreur récupération annexes:", error)
-      return NextResponse.json({ success: false, error: "Erreur lors de la récupération" }, { status: 500 })
-    }
+    if (error) throw error;
 
-    return NextResponse.json({
-      success: true,
-      annexes: annexes || [],
-    })
+    return NextResponse.json({ annexes: data });
   } catch (error) {
-    console.error("Erreur:", error)
-    return NextResponse.json({ success: false, error: "Erreur serveur" }, { status: 500 })
+    console.error("❌ Erreur API GET annexes:", error);
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
   }
 }
 
+// POST - Ajouter une annexe
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const leaseId = params.id
-    const formData = await request.formData()
-    const file = formData.get("file") as File
+    const supabase = createServerClient();
+    const leaseId = params.id;
+    const formData = await request.formData();
+    const file = formData.get("file") as File;
 
     if (!file) {
-      return NextResponse.json({ success: false, error: "Aucun fichier fourni" }, { status: 400 })
+      return NextResponse.json({ error: "Aucun fichier fourni" }, { status: 400 });
     }
 
-    // Upload vers Supabase Storage
-    const fileName = `${Date.now()}-${file.name}`
-    const filePath = `leases/${leaseId}/annexes/${fileName}`
+    const filePath = `${leaseId}/${Date.now()}-${file.name}`;
 
-    const { data: uploadData, error: uploadError } = await supabase.storage.from("lease-annexes").upload(filePath, file)
+    // 1. Upload to Supabase Storage
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(filePath, file);
 
     if (uploadError) {
-      console.error("Erreur upload:", uploadError)
-      return NextResponse.json({ success: false, error: "Erreur lors de l'upload" }, { status: 500 })
+        console.error("❌ Erreur d'upload Supabase:", uploadError);
+        // L'erreur RLS se produira ici si les permissions du bucket sont incorrectes
+        return NextResponse.json({ error: "Erreur lors de l'upload du fichier." }, { status: 500 });
     }
 
-    // Enregistrer en base
-    const { data: annexe, error: dbError } = await supabase
+    // 2. Add entry to 'lease_annexes' table
+    const { data, error: dbError } = await supabase
       .from("lease_annexes")
       .insert({
         lease_id: leaseId,
         name: file.name,
-        file_path: uploadData.path,
+        file_path: filePath,
         file_size: file.size,
-        uploaded_at: new Date().toISOString(),
       })
       .select()
-      .single()
+      .single();
 
     if (dbError) {
-      console.error("Erreur base de données:", dbError)
-      return NextResponse.json({ success: false, error: "Erreur lors de l'enregistrement" }, { status: 500 })
+        console.error("❌ Erreur DB lors de l'ajout de l'annexe:", dbError);
+        // L'erreur RLS se produira ici si les permissions de la table sont incorrectes
+        return NextResponse.json({ error: "Erreur lors de la sauvegarde de l'annexe." }, { status: 500 });
     }
 
-    return NextResponse.json({
-      success: true,
-      annexe,
-    })
+    return NextResponse.json({ success: true, annexe: data });
+
   } catch (error) {
-    console.error("Erreur:", error)
-    return NextResponse.json({ success: false, error: "Erreur serveur" }, { status: 500 })
+    console.error("❌ Erreur API POST annexes:", error);
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
   }
+}
+
+// DELETE - Supprimer une annexe
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+    try {
+        const supabase = createServerClient();
+        const annexeId = params.id; // L'ID de l'annexe est passé dans l'URL
+        
+        // 1. Récupérer le chemin du fichier avant de supprimer l'entrée de la BDD
+        const { data: annexe, error: fetchError } = await supabase
+            .from("lease_annexes")
+            .select("file_path")
+            .eq("id", annexeId)
+            .single();
+
+        if (fetchError || !annexe) {
+            return NextResponse.json({ error: "Annexe non trouvée" }, { status: 404 });
+        }
+
+        // 2. Supprimer de la base de données
+        const { error: dbError } = await supabase
+            .from("lease_annexes")
+            .delete()
+            .eq("id", annexeId);
+
+        if (dbError) throw dbError;
+
+        // 3. Supprimer du stockage
+        const { error: storageError } = await supabase.storage
+            .from(BUCKET_NAME)
+            .remove([annexe.file_path]);
+        
+        if (storageError) {
+            // Log l'erreur mais ne bloque pas la réponse, car la référence en BDD est déjà supprimée
+            console.error("Erreur suppression fichier du storage:", storageError);
+        }
+
+        return NextResponse.json({ success: true });
+    } catch (error) {
+        console.error("❌ Erreur API DELETE annexe:", error);
+        return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
+    }
 }

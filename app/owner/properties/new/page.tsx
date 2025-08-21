@@ -11,12 +11,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { ArrowLeft, ArrowRight, Home, Upload, FileText, Check, Calendar } from "lucide-react"
+import { ArrowLeft, ArrowRight, Home, Upload, Check, Calendar } from "lucide-react"
 import Link from "next/link"
 import { propertyService } from "@/lib/property-service"
 import { authService } from "@/lib/auth-service"
 import { FileUpload } from "@/components/file-upload"
-import { PropertyDocumentsUpload } from "@/components/property-documents-upload"
 import { VisitScheduler } from "@/components/visit-scheduler"
 import { toast } from "sonner"
 
@@ -111,20 +110,16 @@ export default function NewPropertyPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [uploadedImages, setUploadedImages] = useState<string[]>([])
-  const [uploadedDocuments, setUploadedDocuments] = useState<any[]>([])
   const [visitSlots, setVisitSlots] = useState<any[]>([])
   const [createdPropertyId, setCreatedPropertyId] = useState<string | null>(null)
 
   const [formData, setFormData] = useState<PropertyFormData>({
-    // Informations de base
     title: "",
     description: "",
     address: "",
     city: "",
     postal_code: "",
     hide_exact_address: false,
-
-    // Caractéristiques du bien
     surface: 0,
     construction_year: null,
     price: 0,
@@ -137,14 +132,10 @@ export default function NewPropertyPage() {
     bathrooms: 0,
     floor: null,
     total_floors: null,
-
-    // Extérieur
     balcony: false,
     terrace: false,
     garden: false,
     loggia: false,
-
-    // Équipements
     equipped_kitchen: false,
     bathtub: false,
     shower: false,
@@ -161,20 +152,12 @@ export default function NewPropertyPage() {
     elevator: false,
     intercom: false,
     digicode: false,
-
-    // Informations financières
     fees: 0,
-
-    // Disponibilité
     available: true,
     availability_date: "",
-
-    // Autres informations
     energy_class: "",
     ges_class: "",
     heating_type: "",
-
-    // Champ technique
     owner_id: "",
   })
 
@@ -202,76 +185,35 @@ export default function NewPropertyPage() {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
-  // Fonction sécurisée pour gérer les images uploadées
   const handleFilesUploaded = (urls: string[] | undefined) => {
-    console.log("📸 handleFilesUploaded appelé avec:", urls)
-    const safeUrls = Array.isArray(urls) ? urls : []
-    console.log("📸 URLs sécurisées:", safeUrls)
-    setUploadedImages(safeUrls)
+    setUploadedImages(Array.isArray(urls) ? urls : [])
   }
 
   const validateStep = (step: number): boolean => {
-    console.log(`🔍 Validation étape ${step}`)
-
     switch (step) {
       case 1:
-        const isValid1 = !!(
-          formData.title &&
-          formData.description &&
-          formData.address &&
-          formData.city &&
-          formData.postal_code &&
-          formData.price > 0 &&
-          formData.surface > 0
-        )
-        console.log("✅ Étape 1 valide:", isValid1)
-        return isValid1
-
+        return !!(formData.title && formData.description && formData.address && formData.city && formData.postal_code && formData.price > 0 && formData.surface > 0)
       case 2:
-        const imagesCount = Array.isArray(uploadedImages) ? uploadedImages.length : 0
-        const isValid2 = imagesCount > 0
-        console.log("📸 Images uploadées:", imagesCount, "- Valide:", isValid2)
-        return isValid2
-
+        return uploadedImages.length > 0
       case 3:
-        const slotsCount = Array.isArray(visitSlots) ? visitSlots.length : 0
-        const isValid3 = slotsCount > 0
-        console.log("📅 Créneaux de visite:", slotsCount, "- Valide:", isValid3)
-        return isValid3
-
-      case 4:
-        console.log("✅ Étape 4 valide (documents optionnels)")
-        return true // Documents optionnels pour l'instant
-
+        return visitSlots.length > 0
       default:
         return true
     }
   }
 
   const nextStep = async () => {
-    console.log(`🚀 nextStep appelé - Étape actuelle: ${currentStep}`)
-
     if (validateStep(currentStep)) {
-      // Si on passe de l'étape 2 à 3, créer la propriété
       if (currentStep === 2 && !createdPropertyId) {
-        console.log("🏠 Création de la propriété...")
         setIsSubmitting(true)
-
         try {
           const property = await propertyService.createProperty(formData)
           setCreatedPropertyId(property.id)
-          console.log("✅ Propriété créée:", property.id)
-
-          // Uploader les images si présentes
-          const safeImages = Array.isArray(uploadedImages) ? uploadedImages : []
-          if (safeImages.length > 0) {
-            console.log("📸 Upload des images:", safeImages.length)
-            await propertyService.uploadPropertyImages(property.id, safeImages)
+          if (uploadedImages.length > 0) {
+            await propertyService.uploadPropertyImages(property.id, uploadedImages)
           }
-
           toast.success("Propriété créée, vous pouvez maintenant configurer les créneaux de visite")
         } catch (error: any) {
-          console.error("❌ Erreur création propriété:", error)
           toast.error("Erreur lors de la création de la propriété")
           setIsSubmitting(false)
           return
@@ -279,57 +221,38 @@ export default function NewPropertyPage() {
           setIsSubmitting(false)
         }
       }
-
-      console.log(`➡️ Passage à l'étape ${currentStep + 1}`)
       setCurrentStep((prev) => prev + 1)
     } else {
-      console.log("❌ Validation échouée pour l'étape", currentStep)
-
-      // Message d'erreur spécifique selon l'étape
       let errorMessage = "Veuillez remplir tous les champs obligatoires"
-
-      if (currentStep === 1) {
-        errorMessage = "Veuillez remplir tous les champs obligatoires (titre, description, adresse, prix, surface)"
-      } else if (currentStep === 2) {
-        errorMessage = "Veuillez ajouter au moins une photo de votre bien"
-      } else if (currentStep === 3) {
-        errorMessage = "Veuillez définir au moins un créneau de visite"
-      }
-
+      if (currentStep === 1) errorMessage = "Veuillez remplir tous les champs obligatoires (titre, description, adresse, prix, surface)"
+      else if (currentStep === 2) errorMessage = "Veuillez ajouter au moins une photo de votre bien"
+      else if (currentStep === 3) errorMessage = "Veuillez définir au moins un créneau de visite"
       toast.error(errorMessage)
     }
   }
 
   const prevStep = () => {
-    console.log(`⬅️ Retour à l'étape ${currentStep - 1}`)
     setCurrentStep((prev) => prev - 1)
   }
 
   const handleSubmit = async () => {
-    if (!validateStep(1)) {
-      toast.error("Veuillez remplir tous les champs obligatoires")
+    if (!validateStep(1) || !validateStep(2) || !validateStep(3)) {
+      toast.error("Veuillez remplir toutes les étapes obligatoires")
       return
     }
 
     setIsSubmitting(true)
-
     try {
       let propertyId = createdPropertyId
-
-      // Si la propriété n'a pas encore été créée, la créer maintenant
       if (!propertyId) {
         const property = await propertyService.createProperty(formData)
         propertyId = property.id
-
-        // Uploader les images si présentes
-        const safeImages = Array.isArray(uploadedImages) ? uploadedImages : []
-        if (safeImages.length > 0) {
-          await propertyService.uploadPropertyImages(propertyId, safeImages)
+        if (uploadedImages.length > 0) {
+          await propertyService.uploadPropertyImages(propertyId, uploadedImages)
         }
       }
 
-      // Sauvegarder les créneaux de visite si définis
-      if (Array.isArray(visitSlots) && visitSlots.length > 0) {
+      if (visitSlots.length > 0) {
         await propertyService.savePropertyVisitSlots(propertyId, visitSlots)
       }
 
@@ -343,30 +266,8 @@ export default function NewPropertyPage() {
     }
   }
 
-  const getStepProgress = () => {
-    return (currentStep / 5) * 100
-  }
-
-  const isStepCompleted = (step: number) => {
-    if (step < currentStep) return true
-    if (step === currentStep) return validateStep(step)
-    return false
-  }
-
-  // Fonction sécurisée pour obtenir le nombre d'images
-  const getImagesCount = () => {
-    return Array.isArray(uploadedImages) ? uploadedImages.length : 0
-  }
-
-  // Fonction sécurisée pour obtenir le nombre de documents
-  const getDocumentsCount = () => {
-    return Array.isArray(uploadedDocuments) ? uploadedDocuments.length : 0
-  }
-
-  // Fonction sécurisée pour obtenir le nombre de créneaux
-  const getSlotsCount = () => {
-    return Array.isArray(visitSlots) ? visitSlots.length : 0
-  }
+  const getStepProgress = () => (currentStep / 4) * 100
+  const isStepCompleted = (step: number) => step < currentStep
 
   if (!currentUser) {
     return (
@@ -393,7 +294,7 @@ export default function NewPropertyPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Créer une nouvelle annonce</h1>
-            <p className="text-gray-600 mt-2">Étape {currentStep} sur 5</p>
+            <p className="text-gray-600 mt-2">Étape {currentStep} sur 4</p>
           </div>
           <div className="text-right">
             <Progress value={getStepProgress()} className="w-32 mb-2" />
@@ -409,8 +310,7 @@ export default function NewPropertyPage() {
             { step: 1, title: "Informations", icon: Home },
             { step: 2, title: "Photos", icon: Upload },
             { step: 3, title: "Créneaux", icon: Calendar },
-            { step: 4, title: "Documents", icon: FileText },
-            { step: 5, title: "Publication", icon: Check },
+            { step: 4, title: "Publication", icon: Check },
           ].map(({ step, title, icon: Icon }) => (
             <div key={step} className="flex items-center">
               <div
@@ -433,8 +333,8 @@ export default function NewPropertyPage() {
                   {title}
                 </p>
               </div>
-              {step < 5 && (
-                <div className={`w-16 h-0.5 ml-4 ${isStepCompleted(step) ? "bg-blue-600" : "bg-gray-300"}`} />
+              {step < 4 && (
+                <div className={`w-24 h-0.5 ml-4 ${isStepCompleted(step) ? "bg-blue-600" : "bg-gray-300"}`} />
               )}
             </div>
           ))}
@@ -513,7 +413,7 @@ export default function NewPropertyPage() {
                       <Checkbox
                         id="hide_exact_address"
                         checked={formData.hide_exact_address}
-                        onCheckedChange={(checked) => handleInputChange("hide_exact_address", checked)}
+                        onCheckedChange={(checked) => handleInputChange("hide_exact_address", checked as boolean)}
                       />
                       <Label htmlFor="hide_exact_address">Masquer l'adresse exacte sur l'annonce publique</Label>
                     </div>
@@ -629,7 +529,7 @@ export default function NewPropertyPage() {
                     <Checkbox
                       id="furnished"
                       checked={formData.furnished}
-                      onCheckedChange={(checked) => handleInputChange("furnished", checked)}
+                      onCheckedChange={(checked) => handleInputChange("furnished", checked as boolean)}
                     />
                     <Label htmlFor="furnished">Logement meublé</Label>
                   </div>
@@ -644,7 +544,7 @@ export default function NewPropertyPage() {
                     <Checkbox
                       id="balcony"
                       checked={formData.balcony}
-                      onCheckedChange={(checked) => handleInputChange("balcony", checked)}
+                      onCheckedChange={(checked) => handleInputChange("balcony", checked as boolean)}
                     />
                     <Label htmlFor="balcony">Balcon</Label>
                   </div>
@@ -652,7 +552,7 @@ export default function NewPropertyPage() {
                     <Checkbox
                       id="terrace"
                       checked={formData.terrace}
-                      onCheckedChange={(checked) => handleInputChange("terrace", checked)}
+                      onCheckedChange={(checked) => handleInputChange("terrace", checked as boolean)}
                     />
                     <Label htmlFor="terrace">Terrasse</Label>
                   </div>
@@ -660,7 +560,7 @@ export default function NewPropertyPage() {
                     <Checkbox
                       id="garden"
                       checked={formData.garden}
-                      onCheckedChange={(checked) => handleInputChange("garden", checked)}
+                      onCheckedChange={(checked) => handleInputChange("garden", checked as boolean)}
                     />
                     <Label htmlFor="garden">Jardin</Label>
                   </div>
@@ -668,7 +568,7 @@ export default function NewPropertyPage() {
                     <Checkbox
                       id="loggia"
                       checked={formData.loggia}
-                      onCheckedChange={(checked) => handleInputChange("loggia", checked)}
+                      onCheckedChange={(checked) => handleInputChange("loggia", checked as boolean)}
                     />
                     <Label htmlFor="loggia">Loggia</Label>
                   </div>
@@ -683,7 +583,7 @@ export default function NewPropertyPage() {
                     <Checkbox
                       id="equipped_kitchen"
                       checked={formData.equipped_kitchen}
-                      onCheckedChange={(checked) => handleInputChange("equipped_kitchen", checked)}
+                      onCheckedChange={(checked) => handleInputChange("equipped_kitchen", checked as boolean)}
                     />
                     <Label htmlFor="equipped_kitchen">Cuisine équipée</Label>
                   </div>
@@ -691,7 +591,7 @@ export default function NewPropertyPage() {
                     <Checkbox
                       id="bathtub"
                       checked={formData.bathtub}
-                      onCheckedChange={(checked) => handleInputChange("bathtub", checked)}
+                      onCheckedChange={(checked) => handleInputChange("bathtub", checked as boolean)}
                     />
                     <Label htmlFor="bathtub">Baignoire</Label>
                   </div>
@@ -699,7 +599,7 @@ export default function NewPropertyPage() {
                     <Checkbox
                       id="shower"
                       checked={formData.shower}
-                      onCheckedChange={(checked) => handleInputChange("shower", checked)}
+                      onCheckedChange={(checked) => handleInputChange("shower", checked as boolean)}
                     />
                     <Label htmlFor="shower">Douche</Label>
                   </div>
@@ -707,7 +607,7 @@ export default function NewPropertyPage() {
                     <Checkbox
                       id="dishwasher"
                       checked={formData.dishwasher}
-                      onCheckedChange={(checked) => handleInputChange("dishwasher", checked)}
+                      onCheckedChange={(checked) => handleInputChange("dishwasher", checked as boolean)}
                     />
                     <Label htmlFor="dishwasher">Lave-vaisselle</Label>
                   </div>
@@ -715,7 +615,7 @@ export default function NewPropertyPage() {
                     <Checkbox
                       id="washing_machine"
                       checked={formData.washing_machine}
-                      onCheckedChange={(checked) => handleInputChange("washing_machine", checked)}
+                      onCheckedChange={(checked) => handleInputChange("washing_machine", checked as boolean)}
                     />
                     <Label htmlFor="washing_machine">Lave-linge</Label>
                   </div>
@@ -723,7 +623,7 @@ export default function NewPropertyPage() {
                     <Checkbox
                       id="dryer"
                       checked={formData.dryer}
-                      onCheckedChange={(checked) => handleInputChange("dryer", checked)}
+                      onCheckedChange={(checked) => handleInputChange("dryer", checked as boolean)}
                     />
                     <Label htmlFor="dryer">Sèche-linge</Label>
                   </div>
@@ -731,7 +631,7 @@ export default function NewPropertyPage() {
                     <Checkbox
                       id="fridge"
                       checked={formData.fridge}
-                      onCheckedChange={(checked) => handleInputChange("fridge", checked)}
+                      onCheckedChange={(checked) => handleInputChange("fridge", checked as boolean)}
                     />
                     <Label htmlFor="fridge">Réfrigérateur</Label>
                   </div>
@@ -739,7 +639,7 @@ export default function NewPropertyPage() {
                     <Checkbox
                       id="oven"
                       checked={formData.oven}
-                      onCheckedChange={(checked) => handleInputChange("oven", checked)}
+                      onCheckedChange={(checked) => handleInputChange("oven", checked as boolean)}
                     />
                     <Label htmlFor="oven">Four</Label>
                   </div>
@@ -747,7 +647,7 @@ export default function NewPropertyPage() {
                     <Checkbox
                       id="microwave"
                       checked={formData.microwave}
-                      onCheckedChange={(checked) => handleInputChange("microwave", checked)}
+                      onCheckedChange={(checked) => handleInputChange("microwave", checked as boolean)}
                     />
                     <Label htmlFor="microwave">Micro-ondes</Label>
                   </div>
@@ -755,7 +655,7 @@ export default function NewPropertyPage() {
                     <Checkbox
                       id="air_conditioning"
                       checked={formData.air_conditioning}
-                      onCheckedChange={(checked) => handleInputChange("air_conditioning", checked)}
+                      onCheckedChange={(checked) => handleInputChange("air_conditioning", checked as boolean)}
                     />
                     <Label htmlFor="air_conditioning">Climatisation</Label>
                   </div>
@@ -763,7 +663,7 @@ export default function NewPropertyPage() {
                     <Checkbox
                       id="fireplace"
                       checked={formData.fireplace}
-                      onCheckedChange={(checked) => handleInputChange("fireplace", checked)}
+                      onCheckedChange={(checked) => handleInputChange("fireplace", checked as boolean)}
                     />
                     <Label htmlFor="fireplace">Cheminée</Label>
                   </div>
@@ -771,7 +671,7 @@ export default function NewPropertyPage() {
                     <Checkbox
                       id="parking"
                       checked={formData.parking}
-                      onCheckedChange={(checked) => handleInputChange("parking", checked)}
+                      onCheckedChange={(checked) => handleInputChange("parking", checked as boolean)}
                     />
                     <Label htmlFor="parking">Parking</Label>
                   </div>
@@ -779,7 +679,7 @@ export default function NewPropertyPage() {
                     <Checkbox
                       id="cellar"
                       checked={formData.cellar}
-                      onCheckedChange={(checked) => handleInputChange("cellar", checked)}
+                      onCheckedChange={(checked) => handleInputChange("cellar", checked as boolean)}
                     />
                     <Label htmlFor="cellar">Cave</Label>
                   </div>
@@ -787,7 +687,7 @@ export default function NewPropertyPage() {
                     <Checkbox
                       id="elevator"
                       checked={formData.elevator}
-                      onCheckedChange={(checked) => handleInputChange("elevator", checked)}
+                      onCheckedChange={(checked) => handleInputChange("elevator", checked as boolean)}
                     />
                     <Label htmlFor="elevator">Ascenseur</Label>
                   </div>
@@ -795,7 +695,7 @@ export default function NewPropertyPage() {
                     <Checkbox
                       id="intercom"
                       checked={formData.intercom}
-                      onCheckedChange={(checked) => handleInputChange("intercom", checked)}
+                      onCheckedChange={(checked) => handleInputChange("intercom", checked as boolean)}
                     />
                     <Label htmlFor="intercom">Interphone</Label>
                   </div>
@@ -803,7 +703,7 @@ export default function NewPropertyPage() {
                     <Checkbox
                       id="digicode"
                       checked={formData.digicode}
-                      onCheckedChange={(checked) => handleInputChange("digicode", checked)}
+                      onCheckedChange={(checked) => handleInputChange("digicode", checked as boolean)}
                     />
                     <Label htmlFor="digicode">Digicode</Label>
                   </div>
@@ -874,7 +774,7 @@ export default function NewPropertyPage() {
                     <Checkbox
                       id="available"
                       checked={formData.available}
-                      onCheckedChange={(checked) => handleInputChange("available", checked)}
+                      onCheckedChange={(checked) => handleInputChange("available", checked as boolean)}
                     />
                     <Label htmlFor="available">Bien disponible à la location</Label>
                   </div>
@@ -999,49 +899,9 @@ export default function NewPropertyPage() {
             </CardContent>
           </Card>
         )}
-
-        {/* Étape 4: Documents */}
+        
+        {/* Étape 4: Publication */}
         {currentStep === 4 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <FileText className="h-5 w-5 mr-2" />
-                Documents du bien (optionnel)
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                <h3 className="font-semibold text-blue-800 mb-2">📋 Documents optionnels</h3>
-                <div className="text-blue-700 text-sm space-y-2">
-                  <p>
-                    • Les documents ne sont <strong>pas obligatoires</strong> pour publier votre annonce
-                  </p>
-                  <p>
-                    • Ils seront <strong>requis lors de la création du bail</strong> avec le locataire
-                  </p>
-                  <p>• Vous pourrez les ajouter plus tard depuis la page de gestion du bien</p>
-                  <p>• Avoir les documents dès maintenant facilite le processus de location</p>
-                </div>
-              </div>
-
-              {!createdPropertyId ? (
-                <div className="text-center py-8">
-                  <p className="text-gray-600">Création de la propriété en cours...</p>
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mt-2"></div>
-                </div>
-              ) : (
-                <PropertyDocumentsUpload
-                  propertyId={createdPropertyId}
-                  onDocumentsChange={setUploadedDocuments}
-                  showRequiredOnly={false}
-                />
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Étape 5: Publication */}
-        {currentStep === 5 && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
@@ -1087,18 +947,13 @@ export default function NewPropertyPage() {
                   <h4 className="font-semibold mb-2">Statut</h4>
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <Badge variant={getImagesCount() > 0 ? "default" : "secondary"}>
-                        {getImagesCount() > 0 ? "✓" : "○"} Photos ({getImagesCount()})
+                      <Badge variant={uploadedImages.length > 0 ? "default" : "secondary"}>
+                        {uploadedImages.length > 0 ? "✓" : "○"} Photos ({uploadedImages.length})
                       </Badge>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant={getSlotsCount() > 0 ? "default" : "secondary"}>
-                        {getSlotsCount() > 0 ? "✓" : "○"} Créneaux ({getSlotsCount()})
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={getDocumentsCount() > 0 ? "default" : "secondary"}>
-                        {getDocumentsCount() > 0 ? "✓" : "○"} Documents ({getDocumentsCount()})
+                      <Badge variant={visitSlots.length > 0 ? "default" : "secondary"}>
+                        {visitSlots.length > 0 ? "✓" : "○"} Créneaux ({visitSlots.length})
                       </Badge>
                     </div>
                   </div>
@@ -1117,8 +972,8 @@ export default function NewPropertyPage() {
         </Button>
 
         <div className="flex gap-2">
-          {currentStep < 5 ? (
-            <Button onClick={nextStep} disabled={!validateStep(currentStep)}>
+          {currentStep < 4 ? (
+            <Button onClick={nextStep} disabled={isSubmitting}>
               Suivant
               <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
