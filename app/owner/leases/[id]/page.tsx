@@ -21,7 +21,7 @@ import {
   Download,
 } from "lucide-react"
 import { LeaseDocumentDisplay } from "@/components/lease-document-display"
-import { LeaseAnnexesManager } from "@/components/lease-annexes-manager"
+import { LeaseAnnexesManager } from "@/components/LeaseAnnexesManage"
 import { DocuSignSignatureManager } from "@/components/docusign-signature-manager"
 import { toast } from "sonner"
 
@@ -279,6 +279,9 @@ export default function LeaseDetailPage() {
         return <Badge variant="secondary">{type}</Badge>
     }
   }
+
+  export default function LeasePage({ params }: { params: { id: string } }) {
+    const leaseId = params.id
 
   const statusInfo = getStatusInfo(lease.status)
 
