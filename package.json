@@ -82,6 +82,7 @@
 	"@supabase/ssr": "^0.x.x",
 	"docusign-esign": "^6.1.0",
 	"@react-email/components": "^0.0.19",
+	"resend": "^3.2.0",
     "@react-email/html": "^0.0.8",
     "@react-email/render": "^0.0.9",
     "@types/handlebars": "^4.1.0"
