@@ -21,12 +21,13 @@ import {
   Download,
 } from "lucide-react"
 import { LeaseDocumentDisplay } from "@/components/lease-document-display"
-import { LeaseAnnexesManager } from "@/components/lease-annexes-manager"
+import { PropertyDocumentsUpload } from "@/components/property-documents-upload" // <-- MODIFICATION: Utilisation du bon composant
 import { DocuSignSignatureManager } from "@/components/docusign-signature-manager"
 import { toast } from "sonner"
 
 interface Lease {
   id: string
+  property_id: string // Ajout de l'ID de la propriété, nécessaire pour le composant d'upload
   lease_type: string
   status: string
   bailleur_nom_prenom: string
@@ -285,6 +286,7 @@ export default function LeaseDetailPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto p-6 space-y-6">
+        {/* En-tête amélioré */}
         <div className="bg-white rounded-lg shadow-sm border p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -543,7 +545,7 @@ export default function LeaseDetailPage() {
           </TabsContent>
 
           <TabsContent value="annexes" className="space-y-6">
-            <LeaseAnnexesManager leaseId={lease.id} />
+            <PropertyDocumentsUpload propertyId={lease.property_id} />
           </TabsContent>
 
           <TabsContent value="signatures" className="space-y-6">
@@ -572,7 +574,7 @@ export default function LeaseDetailPage() {
                           <CheckCircle className="h-4 w-4" />
                           <span className="font-medium">Signé</span>
                         </div>
-                        <p className="text-sm text-green-600">
+                        <p className="text-sm text-gray-600">
                           Signé le {new Date(lease.owner_signature_date!).toLocaleDateString("fr-FR")} à{" "}
                           {new Date(lease.owner_signature_date!).toLocaleTimeString("fr-FR", {
                             hour: "2-digit",
@@ -613,7 +615,7 @@ export default function LeaseDetailPage() {
                           <CheckCircle className="h-4 w-4" />
                           <span className="font-medium">Signé</span>
                         </div>
-                        <p className="text-sm text-green-600">
+                        <p className="text-sm text-gray-600">
                           Signé le {new Date(lease.tenant_signature_date!).toLocaleDateString("fr-FR")} à{" "}
                           {new Date(lease.tenant_signature_date!).toLocaleTimeString("fr-FR", {
                             hour: "2-digit",
