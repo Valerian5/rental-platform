@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { FileText, Check, AlertTriangle, X, Loader2 } from "lucide-react"
-import { FileUpload, UploadedFile } from "@/components/file-upload" // NOTE: On suppose que FileUpload exporte le type UploadedFile { url: string, name: string, size: number }
+import { FileUpload, UploadedFile } from "@/components/file-upload"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
 
@@ -22,7 +22,7 @@ interface PropertyDocument {
 
 interface PropertyDocumentsUploadProps {
   leaseId: string
-  propertyId: string // Gardé pour le chemin de stockage
+  propertyId: string
   onDocumentsChange?: (documents: any[]) => void
   showRequiredOnly?: boolean
 }
@@ -40,7 +40,6 @@ const ALL_DOCUMENTS_TEMPLATE: PropertyDocument[] = [
     { id: "audit_energetique", name: "Audit Énergétique", type: "energie", required: false, description: "Obligatoire pour les passoires thermiques (F et G) depuis 2023", uploaded: false },
     { id: "carnet_entretien", name: "Carnet d'Entretien", type: "entretien", required: false, description: "Historique des travaux et entretiens", uploaded: false },
 ];
-
 
 export function PropertyDocumentsUpload({
   leaseId,
@@ -96,7 +95,6 @@ export function PropertyDocumentsUpload({
 
     const uploadedFile = uploadedFiles[0];
     
-    // MODIFIÉ : La vérification est plus souple et on prépare des valeurs de secours.
     if (!uploadedFile || !uploadedFile.url) {
         toast.error("L'URL du fichier est manquante après l'envoi. L'opération est annulée.");
         console.error("Objet 'uploadedFile' reçu est invalide ou ne contient pas d'URL:", uploadedFile);
@@ -106,14 +104,11 @@ export function PropertyDocumentsUpload({
     setUploadingDocuments((prev) => new Set(prev).add(documentId));
 
     try {
-      // Préparation des données avec des valeurs de secours
-      // Si le nom n'est pas fourni, on le déduit de l'URL.
       const finalFileName = uploadedFile.name || uploadedFile.url.split('/').pop() || "fichier_inconnu";
-      // Si la taille n'est pas fournie, on met 0 et on avertit dans la console.
       const finalFileSize = uploadedFile.size || 0;
 
       if (finalFileSize === 0) {
-        console.warn(`La taille du fichier pour '${finalFileName}' est manquante. Valeur par défaut : 0. Pensez à mettre à jour le composant FileUpload pour qu'il retourne la taille.`);
+        console.warn(`La taille du fichier pour '${finalFileName}' est manquante. Valeur par défaut : 0.`);
       }
 
       const annexData = {
@@ -128,7 +123,7 @@ export function PropertyDocumentsUpload({
 
       if (error) throw error;
 
-      await fetchExistingAnnexes(); // Re-fetch to ensure consistency
+      await fetchExistingAnnexes();
       toast.success("Document téléversé avec succès");
 
       if (onDocumentsChange) {
@@ -148,19 +143,16 @@ export function PropertyDocumentsUpload({
 
   const handleDocumentRemove = async (documentId: string) => {
     try {
-      // Logique pour supprimer le fichier du bucket de stockage
       const documentToRemove = documents.find(doc => doc.id === documentId);
       if (documentToRemove && documentToRemove.url) {
         const filePath = `${leaseId}/annexes/${documentToRemove.url.split('/').pop()}`;
         const { error: storageError } = await supabase.storage.from('lease-annexes').remove([filePath]);
         if (storageError) {
-            // On n'arrête pas le processus, mais on signale l'erreur
-            console.error("Erreur lors de la suppression du fichier dans le bucket:", storageError.message);
-            toast.warning("Le fichier n'a pas pu être supprimé du stockage, mais la référence a été enlevée.");
+            console.error("Erreur suppression bucket:", storageError.message);
+            toast.warning("Le fichier n'a pas pu être supprimé du stockage.");
         }
       }
 
-      // Logique pour supprimer l'entrée dans la base de données
       const { error } = await supabase
         .from("lease_annexes")
         .delete()
@@ -169,7 +161,7 @@ export function PropertyDocumentsUpload({
 
       if (error) throw error;
       
-      await fetchExistingAnnexes(); // Re-fetch to update the list
+      await fetchExistingAnnexes();
       toast.success("Document supprimé");
 
        if (onDocumentsChange) {
@@ -189,7 +181,7 @@ export function PropertyDocumentsUpload({
                 <p className="ml-4 text-gray-600">Chargement des annexes...</p>
             </CardContent>
         </Card>
-    )
+    );
   }
 
   const requiredDocuments = documents.filter((doc) => doc.required);
@@ -266,7 +258,7 @@ export function PropertyDocumentsUpload({
               <FileText className="h-5 w-5 mr-2" />
               Documents optionnels
             </CardTitle>
-          </Header>
+          </CardHeader>
           <CardContent className="space-y-4">
             {optionalDocuments.map((document) => (
               <div key={document.id} className="border rounded-lg p-4">
