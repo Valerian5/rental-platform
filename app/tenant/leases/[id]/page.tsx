@@ -47,13 +47,31 @@ interface Lease {
   updated_at: string
 }
 
+// MODIFIÉ : Interface pour correspondre aux données de la DB + ajout d'un nom lisible
 interface Annexe {
   id: string
-  name: string
-  file_path: string
+  name: string // Nom lisible (ex: "Diagnostic de Performance...")
+  file_name: string // Nom du fichier (ex: "dpe.pdf")
+  file_url: string
   file_size: number
   uploaded_at: string
+  annex_type: string // L'identifiant (ex: "dpe")
 }
+
+// MODIFIÉ : Ajout du template pour mapper les noms des annexes
+const ANNEXES_TEMPLATE = [
+    { id: "dpe", name: "Diagnostic de Performance Énergétique (DPE)" },
+    { id: "erp", name: "État des Risques et Pollutions (ERP)" },
+    { id: "assurance_pno", name: "Assurance Propriétaire Non Occupant (PNO)" },
+    { id: "diagnostic_plomb", name: "Diagnostic Plomb (CREP)" },
+    { id: "diagnostic_amiante", name: "Diagnostic Amiante" },
+    { id: "diagnostic_gaz", name: "Diagnostic Gaz" },
+    { id: "diagnostic_electricite", name: "Diagnostic Électricité" },
+    { id: "reglement_copropriete", name: "Règlement de Copropriété" },
+    { id: "charges_copropriete", name: "Relevé des Charges de Copropriété" },
+    { id: "audit_energetique", name: "Audit Énergétique" },
+    { id: "carnet_entretien", name: "Carnet d'Entretien" },
+];
 
 export default function TenantLeaseDetailPage() {
   const params = useParams()
@@ -87,12 +105,23 @@ export default function TenantLeaseDetailPage() {
     }
   }
 
+  // MODIFIÉ : Logique de chargement et de mapping des annexes
   const loadAnnexes = async () => {
     try {
       const response = await fetch(`/api/leases/${leaseId}/annexes`)
       if (response.ok) {
         const data = await response.json()
-        setAnnexes(data.annexes || [])
+        const rawAnnexes = data.annexes || []
+        
+        // On associe un nom lisible à chaque annexe
+        const formattedAnnexes = rawAnnexes.map((annexe: any) => {
+            const template = ANNEXES_TEMPLATE.find(t => t.id === annexe.annex_type);
+            return {
+                ...annexe,
+                name: template ? template.name : annexe.file_name, // Fallback sur le nom du fichier
+            };
+        });
+        setAnnexes(formattedAnnexes)
       }
     } catch (error) {
       console.error("Erreur chargement annexes:", error)
@@ -517,14 +546,17 @@ export default function TenantLeaseDetailPage() {
                           <div>
                             <p className="font-medium">{annexe.name}</p>
                             <p className="text-sm text-gray-600">
-                              {(annexe.file_size / 1024).toFixed(1)} KB •{" "}
+                              {(annexe.file_size / 1024).toFixed(1)} KB • Ajouté le{" "}
                               {new Date(annexe.uploaded_at).toLocaleDateString("fr-FR")}
                             </p>
                           </div>
                         </div>
-                        <Button variant="outline" size="sm">
-                          <Download className="h-4 w-4 mr-2" />
-                          Télécharger
+                        {/* MODIFIÉ : Le bouton est maintenant un lien fonctionnel */}
+                        <Button asChild variant="outline" size="sm">
+                           <a href={annexe.file_url} target="_blank" rel="noopener noreferrer" download={annexe.file_name}>
+                                <Download className="h-4 w-4 mr-2" />
+                                Télécharger
+                           </a>
                         </Button>
                       </div>
                     ))}
