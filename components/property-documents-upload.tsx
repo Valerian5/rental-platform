@@ -95,6 +95,13 @@ export function PropertyDocumentsUpload({
     if (uploadedFiles.length === 0) return;
 
     const uploadedFile = uploadedFiles[0];
+    
+    // MODIFIÉ : Ajout d'une vérification pour s'assurer que les données du fichier sont complètes
+    if (!uploadedFile || !uploadedFile.name || !uploadedFile.url || typeof uploadedFile.size === 'undefined') {
+        toast.error("Les informations du fichier sont incomplètes. L'envoi a probablement été bloqué par les politiques de sécurité du stockage (RLS).");
+        return;
+    }
+
     setUploadingDocuments((prev) => new Set(prev).add(documentId));
 
     try {
