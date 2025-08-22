@@ -21,13 +21,13 @@ import {
   Download,
 } from "lucide-react"
 import { LeaseDocumentDisplay } from "@/components/lease-document-display"
-import { PropertyDocumentsUpload } from "@/components/property-documents-upload" // <-- MODIFICATION: Utilisation du bon composant
+import { PropertyDocumentsUpload } from "@/components/property-documents-upload"
 import { DocuSignSignatureManager } from "@/components/docusign-signature-manager"
 import { toast } from "sonner"
 
 interface Lease {
   id: string
-  property_id: string // Ajout de l'ID de la propriété, nécessaire pour le composant d'upload
+  property_id: string
   lease_type: string
   status: string
   bailleur_nom_prenom: string
@@ -545,7 +545,8 @@ export default function LeaseDetailPage() {
           </TabsContent>
 
           <TabsContent value="annexes" className="space-y-6">
-            <PropertyDocumentsUpload propertyId={lease.property_id} />
+            {/* MODIFIÉ : Ajout du prop leaseId */}
+            <PropertyDocumentsUpload leaseId={lease.id} propertyId={lease.property_id} />
           </TabsContent>
 
           <TabsContent value="signatures" className="space-y-6">

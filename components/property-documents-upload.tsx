@@ -6,11 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { FileText, Check, AlertTriangle, X } from "lucide-react"
-import { FileUpload } from "@/components/file-upload"
+import { FileUpload, UploadedFile } from "@/components/file-upload" // Supposant que FileUpload exporte ce type
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
 
-interface LeaseAnnex {
+interface PropertyDocument {
   id: string
   name: string
   type: string
@@ -20,13 +20,14 @@ interface LeaseAnnex {
   url?: string
 }
 
-interface LeaseAnnexesUploadProps {
+interface PropertyDocumentsUploadProps {
+  leaseId: string // MODIFIÉ : Ajout du leaseId pour la DB
   propertyId: string
-  onAnnexesChange?: (documents: any[]) => void
+  onDocumentsChange?: (documents: any[]) => void
   showRequiredOnly?: boolean
 }
 
-const REQUIRED_ANNEXES: LeaseAnnex[] = [
+const REQUIRED_DOCUMENTS: PropertyDocument[] = [
   {
     id: "dpe",
     name: "Diagnostic de Performance Énergétique (DPE)",
@@ -85,7 +86,7 @@ const REQUIRED_ANNEXES: LeaseAnnex[] = [
   },
 ]
 
-const OPTIONAL_ANNEXES: LeaseAnnex[] = [
+const OPTIONAL_DOCUMENTS: PropertyDocument[] = [
   {
     id: "reglement_copropriete",
     name: "Règlement de Copropriété",
@@ -120,121 +121,134 @@ const OPTIONAL_ANNEXES: LeaseAnnex[] = [
   },
 ]
 
-export function LeaseAnnexesUpload({
+export function PropertyDocumentsUpload({
+  leaseId, // MODIFIÉ
   propertyId,
-  onAnnexesChange,
+  onDocumentsChange,
   showRequiredOnly = false,
-}: LeaseAnnexesUploadProps) {
-  const [annexes, setAnnexes] = useState<LeaseAnnex[]>([])
-  const [uploadingAnnexes, setUploadingAnnexes] = useState<Set<string>>(new Set())
+}: PropertyDocumentsUploadProps) {
+  const [documents, setDocuments] = useState<PropertyDocument[]>([])
+  const [uploadingDocuments, setUploadingDocuments] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    const all = showRequiredOnly ? REQUIRED_ANNEXES : [...REQUIRED_ANNEXES, ...OPTIONAL_ANNEXES]
-    setAnnexes(all.map((doc) => ({ ...doc })))
+    const allDocuments = showRequiredOnly ? REQUIRED_DOCUMENTS : [...REQUIRED_DOCUMENTS, ...OPTIONAL_DOCUMENTS]
+    setDocuments(allDocuments.map((doc) => ({ ...doc })))
   }, [showRequiredOnly])
 
-  const handleAnnexUpload = async (annexId: string, files: string[]) => {
-    if (files.length === 0) return
-    const fileUrl = files[0]
+  // MODIFIÉ : La fonction accepte un objet plus riche pour inclure nom et taille du fichier
+  const handleDocumentUpload = async (documentId: string, uploadedFiles: UploadedFile[]) => {
+    if (uploadedFiles.length === 0) return
 
-    setUploadingAnnexes((prev) => new Set([...prev, annexId]))
+    const uploadedFile = uploadedFiles[0]
+    setUploadingDocuments((prev) => new Set([...prev, documentId]))
 
     try {
-      const urlParts = fileUrl.split("/")
-      const fileName = urlParts[urlParts.length - 1]
-
+      // MODIFIÉ : Structure des données pour correspondre à la table `lease_annexes`
       const annexData = {
-        lease_id: propertyId, // ⚡ on mappe propertyId → lease_id
-        annex_type: annexId,
-        annex_name: fileName,
-        file_url: fileUrl,
-        uploaded_at: new Date().toISOString(),
+        lease_id: leaseId,
+        annex_type: documentId,
+        file_name: uploadedFile.name,
+        file_url: uploadedFile.url,
+        file_size: uploadedFile.size,
       }
 
-      const { error } = await supabase.from("lease_annexes").insert(annexData)
+      console.log("💾 Sauvegarde de l'annexe:", annexData)
+
+      // MODIFIÉ : Insertion dans la table `lease_annexes`
+      const { data, error } = await supabase.from("lease_annexes").insert(annexData).select().single()
 
       if (error) {
         console.error("❌ Erreur sauvegarde annexe:", error)
-        throw new Error(error.message)
+        throw new Error(`Erreur sauvegarde: ${error.message}`)
       }
 
-      setAnnexes((prev) =>
-        prev.map((doc) => (doc.id === annexId ? { ...doc, uploaded: true, url: fileUrl } : doc)),
+      console.log("✅ Annexe sauvegardée avec ID:", data.id)
+
+      setDocuments((prev) =>
+        prev.map((doc) => (doc.id === documentId ? { ...doc, uploaded: true, url: uploadedFile.url } : doc)),
       )
 
-      toast.success("Annexe uploadée avec succès")
+      toast.success("Document uploadé avec succès")
 
-      if (onAnnexesChange) {
-        const updated = annexes.map((doc) =>
-          doc.id === annexId ? { ...doc, uploaded: true, url: fileUrl } : doc,
+      if (onDocumentsChange) {
+        const updatedDocs = documents.map((doc) =>
+          doc.id === documentId ? { ...doc, uploaded: true, url: uploadedFile.url } : doc,
         )
-        onAnnexesChange(updated.filter((doc) => doc.uploaded))
+        onDocumentsChange(updatedDocs.filter((doc) => doc.uploaded))
       }
     } catch (error: any) {
-      toast.error(`Erreur upload: ${error.message}`)
+      console.error("❌ Erreur upload document:", error)
+      toast.error(`Erreur lors de l'upload: ${error.message || "Erreur inconnue"}`)
     } finally {
-      setUploadingAnnexes((prev) => {
+      setUploadingDocuments((prev) => {
         const newSet = new Set(prev)
-        newSet.delete(annexId)
+        newSet.delete(documentId)
         return newSet
       })
     }
   }
 
-  const handleAnnexRemove = async (annexId: string) => {
+  const handleDocumentRemove = async (documentId: string) => {
     try {
-      const annex = annexes.find((doc) => doc.id === annexId)
-      if (!annex || !annex.uploaded) return
+      // MODIFIÉ : Suppression dans la table `lease_annexes` en utilisant leaseId
+      const { error: deleteError } = await supabase
+        .from("lease_annexes")
+        .delete()
+        .eq("lease_id", leaseId)
+        .eq("annex_type", documentId)
 
-      if (annex.url) {
-        await supabase.from("lease_annexes").delete().eq("lease_id", propertyId).eq("annex_type", annexId)
+      if (deleteError) {
+        console.warn("⚠️ Erreur suppression DB:", deleteError)
+        throw new Error(deleteError.message)
       }
 
-      setAnnexes((prev) =>
-        prev.map((doc) => (doc.id === annexId ? { ...doc, uploaded: false, url: undefined } : doc)),
+      console.log("✅ Annexe supprimée de la DB")
+
+      setDocuments((prev) =>
+        prev.map((doc) => (doc.id === documentId ? { ...doc, uploaded: false, url: undefined } : doc)),
       )
 
-      if (onAnnexesChange) {
-        const updated = annexes
-          .map((doc) => (doc.id === annexId ? { ...doc, uploaded: false, url: undefined } : doc))
+      if (onDocumentsChange) {
+        const updatedDocs = documents
+          .map((doc) => (doc.id === documentId ? { ...doc, uploaded: false, url: undefined } : doc))
           .filter((doc) => doc.uploaded)
-        onAnnexesChange(updated)
+        onDocumentsChange(updatedDocs)
       }
 
-      toast.success("Annexe supprimée")
+      toast.success("Document supprimé")
     } catch (error: any) {
-      toast.error(`Erreur suppression: ${error.message}`)
+      console.error("❌ Erreur suppression:", error)
+      toast.error(`Erreur lors de la suppression: ${error.message}`)
     }
   }
 
-  const required = annexes.filter((doc) => doc.required)
-  const optional = annexes.filter((doc) => !doc.required)
-  const uploadedRequired = required.filter((doc) => doc.uploaded).length
-  const totalRequired = required.length
+  const requiredDocuments = documents.filter((doc) => doc.required)
+  const optionalDocuments = documents.filter((doc) => !doc.required)
+  const uploadedRequired = requiredDocuments.filter((doc) => doc.uploaded).length
+  const totalRequired = requiredDocuments.length
   const completionPercentage = (uploadedRequired / totalRequired) * 100
 
   return (
     <div className="space-y-6">
-      {/* Progression */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span className="flex items-center">
               <FileText className="h-5 w-5 mr-2" />
-              Annexes du bail
+              Documents du bien (Annexes au bail)
             </span>
-            <Badge variant="outline">Optionnel</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
             <p className="text-amber-800 text-sm">
-              <strong>💡 Info :</strong> Ces annexes sont requises pour la signature du bail avec votre locataire.
+              <strong>💡 Information :</strong> Ces documents sont requis pour la validité du bail. Assurez-vous
+              de les joindre avant la signature.
             </p>
           </div>
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span>Annexes obligatoires uploadées</span>
+              <span>Documents obligatoires uploadés</span>
               <span>
                 {uploadedRequired}/{totalRequired}
               </span>
@@ -244,47 +258,52 @@ export function LeaseAnnexesUpload({
         </CardContent>
       </Card>
 
-      {/* Annexes obligatoires */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center text-orange-600">
             <AlertTriangle className="h-5 w-5 mr-2" />
-            Annexes obligatoires
+            Documents requis pour le bail
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {required.map((doc) => (
-            <div key={doc.id} className="border rounded-lg p-4">
+          {requiredDocuments.map((document) => (
+            <div key={document.id} className="border rounded-lg p-4">
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1">
                   <h4 className="font-medium flex items-center">
-                    {doc.name}
-                    {doc.uploaded && <Check className="h-4 w-4 ml-2 text-green-600" />}
+                    {document.name}
+                    {document.uploaded && <Check className="h-4 w-4 ml-2 text-green-600" />}
                   </h4>
-                  <p className="text-sm text-gray-600 mt-1">{doc.description}</p>
+                  <p className="text-sm text-gray-600 mt-1">{document.description}</p>
                 </div>
                 <div className="flex items-center space-x-2">
-                  {doc.uploaded && (
-                    <Button variant="outline" size="sm" onClick={() => handleAnnexRemove(doc.id)}>
+                  {document.uploaded && (
+                    <Button variant="outline" size="sm" onClick={() => handleDocumentRemove(document.id)}>
                       <X className="h-4 w-4" />
                     </Button>
                   )}
-                  <Badge variant={doc.uploaded ? "default" : "secondary"}>
-                    {doc.uploaded ? "Uploadé" : "Requis"}
+                  <Badge variant={document.uploaded ? "default" : "secondary"}>
+                    {document.uploaded ? "Uploadé" : "Requis"}
                   </Badge>
                 </div>
               </div>
 
-              {!doc.uploaded && (
+              {!document.uploaded && (
                 <div className="mt-3">
                   <FileUpload
-                    onFilesUploaded={(files) => handleAnnexUpload(doc.id, files)}
+                    onFilesUploaded={(files) => handleDocumentUpload(document.id, files)}
                     maxFiles={1}
                     acceptedTypes={["application/pdf", "image/*"]}
-                    folder={`leases/${propertyId}/annexes`}
-                    bucket="lease-annexes"
-                    disabled={uploadingAnnexes.has(doc.id)}
+                    folder={`properties/${propertyId}/documents`}
+                    bucket="lease-annexes" // MODIFIÉ : Bucket pour les annexes
+                    disabled={uploadingDocuments.has(document.id)}
                   />
+                  {uploadingDocuments.has(document.id) && (
+                    <div className="flex items-center mt-2 text-sm text-gray-600">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                      Upload en cours...
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -292,48 +311,53 @@ export function LeaseAnnexesUpload({
         </CardContent>
       </Card>
 
-      {/* Annexes optionnelles */}
       {!showRequiredOnly && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center text-blue-600">
               <FileText className="h-5 w-5 mr-2" />
-              Annexes optionnelles
+              Documents optionnels
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {optional.map((doc) => (
-              <div key={doc.id} className="border rounded-lg p-4">
+            {optionalDocuments.map((document) => (
+              <div key={document.id} className="border rounded-lg p-4">
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1">
                     <h4 className="font-medium flex items-center">
-                      {doc.name}
-                      {doc.uploaded && <Check className="h-4 w-4 ml-2 text-green-600" />}
+                      {document.name}
+                      {document.uploaded && <Check className="h-4 w-4 ml-2 text-green-600" />}
                     </h4>
-                    <p className="text-sm text-gray-600 mt-1">{doc.description}</p>
+                    <p className="text-sm text-gray-600 mt-1">{document.description}</p>
                   </div>
                   <div className="flex items-center space-x-2">
-                    {doc.uploaded && (
-                      <Button variant="outline" size="sm" onClick={() => handleAnnexRemove(doc.id)}>
+                    {document.uploaded && (
+                      <Button variant="outline" size="sm" onClick={() => handleDocumentRemove(document.id)}>
                         <X className="h-4 w-4" />
                       </Button>
                     )}
-                    <Badge variant={doc.uploaded ? "default" : "outline"}>
-                      {doc.uploaded ? "Uploadé" : "Optionnel"}
+                    <Badge variant={document.uploaded ? "default" : "outline"}>
+                      {document.uploaded ? "Uploadé" : "Optionnel"}
                     </Badge>
                   </div>
                 </div>
 
-                {!doc.uploaded && (
+                {!document.uploaded && (
                   <div className="mt-3">
                     <FileUpload
-                      onFilesUploaded={(files) => handleAnnexUpload(doc.id, files)}
+                      onFilesUploaded={(files) => handleDocumentUpload(document.id, files)}
                       maxFiles={1}
                       acceptedTypes={["application/pdf", "image/*"]}
-                      folder={`leases/${propertyId}/annexes`}
-                      bucket="lease-annexes"
-                      disabled={uploadingAnnexes.has(doc.id)}
+                      folder={`properties/${propertyId}/documents`}
+                      bucket="lease-annexes" // MODIFIÉ : Bucket pour les annexes
+                      disabled={uploadingDocuments.has(document.id)}
                     />
+                    {uploadingDocuments.has(document.id) && (
+                      <div className="flex items-center mt-2 text-sm text-gray-600">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                        Upload en cours...
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
