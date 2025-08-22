@@ -745,6 +745,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                 </div>
               </CardContent>
             </Card>
+            )}
 
             {/* Situation de location */}
             {rentalFile?.rental_situation && (
@@ -791,7 +792,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                 </CardContent>
               </Card>
             )}
-          </TabsContent>
 
             {/* Message de candidature */}
             {application.presentation && (
