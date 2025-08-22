@@ -12,6 +12,7 @@ import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { VisitProposalManager } from "@/components/visit-proposal-manager"
+import { TenantAndGuarantorDocumentsSection } from "@/components/TenantAndGuarantorDocumentsSection"
 import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
 import { applicationEnrichmentService } from "@/lib/application-enrichment-service"
 import { CircularScore } from "@/components/circular-score"
@@ -27,13 +28,13 @@ import {
   Calendar,
   Clock,
   Building,
+  BarChart3,
   AlertTriangle,
   CreditCard,
   AlertCircle,
   Settings,
   TrendingUp,
 } from "lucide-react"
-import { TenantAndGuarantorDocumentsSection } from "@/components/TenantAndGuarantorDocumentsSection"
 
 export default function ApplicationDetailsPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -45,6 +46,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const [showVisitDialog, setShowVisitDialog] = useState(false)
   const [currentApplication, setCurrentApplication] = useState<any>(null)
   const [showRefuseDialog, setShowRefuseDialog] = useState(false)
+  const [documents, setDocuments] = useState<any[]>([])
   const [scoringResult, setScoringResult] = useState<any>(null)
   const [scoringPreferences, setScoringPreferences] = useState<any>(null)
 
@@ -108,6 +110,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       }
 
       setApplication(data.application)
+      setDocuments(flattenDocuments(data.application))
 
       // Charger le dossier de location
       let rentalFile = null
@@ -139,13 +142,11 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       const enrichedApplication = await applicationEnrichmentService.enrichApplication(data.application, rentalFile)
       setApplication(enrichedApplication)
 
-      // Calculer le score si on a les préférences
-      if (scoringPreferences) {
-        await recalculateScore(enrichedApplication, ownerId)
-      }
+      // Calculer le score avec le service unifié
+      await recalculateScore(enrichedApplication, ownerId)
     } catch (error) {
-      console.error("Erreur chargement candidature:", error)
-      toast.error("Erreur lors du chargement de la candidature")
+      console.error("Erreur:", error)
+      toast.error("Erreur lors du chargement des détails")
     }
   }
 
@@ -180,127 +181,318 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
     }
   }
 
-  const updateApplicationStatus = async (status: string) => {
+  const updateApplicationStatus = async (newStatus: string, notes?: string) => {
     try {
-      const response = await fetch(`/api/applications/${params.id}/status`, {
+      const response = await fetch(`/api/applications/${params.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status: newStatus,
+          notes: notes || undefined,
+        }),
       })
 
       if (response.ok) {
-        setApplication((prev: any) => ({ ...prev, status }))
+        const statusMessages: { [key: string]: string } = {
+          analyzing: "Candidature en cours d'analyse",
+          accepted: "Candidature acceptée",
+          rejected: "Candidature refusée",
+          visit_proposed: "Visite proposée au candidat",
+          visit_scheduled: "Visite planifiée",
+          waiting_tenant_confirmation: "En attente de confirmation du locataire",
+        }
+
+        toast.success(statusMessages[newStatus] || "Statut mis à jour")
+        setApplication({ ...application, status: newStatus })
+        return true
+      } else {
+        toast.error("Erreur lors de la mise à jour du statut")
+        return false
       }
     } catch (error) {
-      console.error("Erreur mise à jour statut:", error)
+      console.error("Erreur:", error)
+      toast.error("Erreur lors de la mise à jour du statut")
+      return false
     }
   }
 
-  const handleAcceptApplication = async () => {
+  const handleProposeVisit = () => {
+    setCurrentApplication(application)
+    setShowVisitDialog(true)
+  }
+
+  const handleVisitProposed = async (slots: any[]) => {
     try {
-      await updateApplicationStatus("accepted")
-      toast.success("Candidature acceptée")
+      const response = await fetch(`/api/applications/${params.id}/propose-visit-slots`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ slots }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        toast.error(errorData.message || "Erreur lors de la proposition de visite")
+        return
+      }
+
+      const data = await response.json()
+      toast.success(data.message || "Créneaux de visite proposés avec succès")
+      setShowVisitDialog(false)
+
+      if (user) {
+        await loadApplicationDetails(user.id)
+      }
     } catch (error) {
-      toast.error("Erreur lors de l'acceptation")
+      console.error("Erreur:", error)
+      toast.error("Erreur lors de la proposition de visite")
     }
   }
 
-  const handleRefuseApplication = async () => {
+  const handleRefuse = () => {
+    setShowRefuseDialog(true)
+  }
+
+  const handleRefuseConfirm = async (reason: string, type: string) => {
+    let notes = ""
+
+    const refusalReasons: { [key: string]: string } = {
+      insufficient_income: "Revenus insuffisants",
+      incomplete_file: "Dossier incomplet",
+      missing_guarantor: "Absence de garant",
+      unstable_situation: "Situation professionnelle instable",
+      other: reason,
+    }
+
+    notes = refusalReasons[type] || reason
+
+    const success = await updateApplicationStatus("rejected", notes)
+    if (success) {
+      setShowRefuseDialog(false)
+    }
+  }
+
+  const handleAccept = async () => {
+    await updateApplicationStatus("accepted")
+  }
+
+  const handleContact = async () => {
+    if (!application?.tenant_id || !application?.property_id) {
+      toast.error("Impossible de contacter ce locataire")
+      return
+    }
+
     try {
-      await updateApplicationStatus("refused")
-      toast.success("Candidature refusée")
+      const response = await fetch("/api/conversations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          tenant_id: application.tenant_id,
+          owner_id: user.id,
+          property_id: application.property_id,
+          subject: `Candidature pour ${application.property?.title || "le bien"}`,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        router.push(`/owner/messaging?conversation_id=${data.conversation.id}`)
+      } else {
+        router.push(`/owner/messaging?tenant_id=${application.tenant_id}`)
+      }
     } catch (error) {
-      toast.error("Erreur lors du refus")
+      console.error("Erreur création conversation:", error)
+      router.push(`/owner/messaging?tenant_id=${application.tenant_id}`)
     }
   }
 
-  const handleVisitProposed = () => {
-    setShowVisitDialog(false)
-    toast.success("Créneaux de visite proposés")
+  const handleViewAnalysis = () => {
+    setActiveTab("financial")
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
+  const formatDate = (dateString: string | undefined) => {
+    if (!dateString) return "Non spécifié"
+    try {
+      return new Date(dateString).toLocaleDateString("fr-FR", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      })
+    } catch (e) {
+      return "Date invalide"
+    }
+  }
+
+  const formatAmount = (amount: number | undefined) => {
+    if (amount === null || amount === undefined) return "Non spécifié"
+    try {
+      return new Intl.NumberFormat("fr-FR", {
+        style: "currency",
+        currency: "EUR",
+        maximumFractionDigits: 0,
+      }).format(amount)
+    } catch (e) {
+      return "Montant invalide"
+    }
   }
 
   const getStatusBadge = () => {
     if (!application) return null
 
-    const statusConfig = {
-      pending: { label: "En attente", variant: "secondary" as const, icon: Clock },
-      analyzing: { label: "En cours d'analyse", variant: "default" as const, icon: AlertCircle },
-      accepted: { label: "Acceptée", variant: "default" as const, icon: CheckCircle },
-      refused: { label: "Refusée", variant: "destructive" as const, icon: XCircle },
-      visit_scheduled: { label: "Visite programmée", variant: "outline" as const, icon: Calendar },
+    switch (application.status) {
+      case "pending":
+        return <Badge variant="outline">En attente</Badge>
+      case "analyzing":
+        return <Badge variant="secondary">En analyse</Badge>
+      case "visit_proposed":
+        return (
+          <Badge variant="secondary" className="bg-purple-100 text-purple-800 hover:bg-purple-200">
+            Visite proposée
+          </Badge>
+        )
+      case "visit_scheduled":
+        return (
+          <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200">
+            Visite planifiée
+          </Badge>
+        )
+      case "accepted":
+      case "approved":
+        return (
+          <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-200">
+            Acceptée
+          </Badge>
+        )
+      case "rejected":
+        return <Badge variant="destructive">Refusée</Badge>
+      case "waiting_tenant_confirmation":
+        return (
+          <Badge variant="outline" className="bg-amber-100 text-amber-800 hover:bg-amber-200">
+            En attente de confirmation
+          </Badge>
+        )
+      default:
+        return <Badge variant="outline">Statut inconnu</Badge>
     }
-
-    const config = statusConfig[application.status as keyof typeof statusConfig] || statusConfig.pending
-    const Icon = config.icon
-
-    return (
-      <Badge variant={config.variant} className="flex items-center gap-1">
-        <Icon className="h-3 w-3" />
-        {config.label}
-      </Badge>
-    )
   }
 
   const getActionButtons = () => {
     if (!application) return null
 
+    const viewAnalysisButton =
+      application.status !== "analyzing" ? (
+        <Button variant="outline" onClick={handleViewAnalysis}>
+          <BarChart3 className="h-4 w-4 mr-2" />
+          Voir analyse
+        </Button>
+      ) : null
+
     switch (application.status) {
-      case "pending":
       case "analyzing":
         return (
           <>
-            <Button
-              onClick={() => {
-                setCurrentApplication(application)
-                setShowVisitDialog(true)
-              }}
-              size="sm"
-              className="bg-blue-600 hover:bg-blue-700"
-            >
+            <Button onClick={handleProposeVisit}>
               <Calendar className="h-4 w-4 mr-2" />
-              Proposer visite
+              Proposer une visite
             </Button>
-            <Button onClick={handleAcceptApplication} size="sm" className="bg-green-600 hover:bg-green-700">
-              <CheckCircle className="h-4 w-4 mr-2" />
-              Accepter
-            </Button>
-            <Button onClick={handleRefuseApplication} variant="destructive" size="sm">
+            <Button variant="destructive" onClick={handleRefuse}>
               <XCircle className="h-4 w-4 mr-2" />
               Refuser
             </Button>
+            <Button variant="outline" onClick={handleContact}>
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Contacter
+            </Button>
+          </>
+        )
+      case "visit_proposed":
+        return (
+          <>
+            <Button variant="outline" disabled>
+              <Clock className="h-4 w-4 mr-2" />
+              En attente de réponse
+            </Button>
+            <Button variant="outline" onClick={handleContact}>
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Contacter
+            </Button>
+            {viewAnalysisButton}
+          </>
+        )
+      case "visit_scheduled":
+        return (
+          <>
+            <Button onClick={handleAccept}>
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Accepter le dossier
+            </Button>
+            <Button variant="destructive" onClick={handleRefuse}>
+              <XCircle className="h-4 w-4 mr-2" />
+              Refuser
+            </Button>
+            <Button variant="outline" onClick={handleContact}>
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Contacter
+            </Button>
+            {viewAnalysisButton}
+          </>
+        )
+      case "waiting_tenant_confirmation":
+        return (
+          <>
+            <Button variant="outline" disabled>
+              <Clock className="h-4 w-4 mr-2" />
+              En attente du locataire
+            </Button>
+            <Button variant="outline" onClick={handleContact}>
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Contacter
+            </Button>
+            {viewAnalysisButton}
           </>
         )
       case "accepted":
+      case "approved":
         return (
-          <Button
-            onClick={() => router.push(`/owner/leases/create?application_id=${application.id}`)}
-            size="sm"
-            className="bg-purple-600 hover:bg-purple-700"
-          >
-            <FileText className="h-4 w-4 mr-2" />
-            Créer le bail
-          </Button>
+          <>
+            <Button onClick={() => router.push(`/owner/leases/new?application=${application.id}`)}>
+              <FileText className="h-4 w-4 mr-2" />
+              Générer le bail
+            </Button>
+            <Button variant="outline" onClick={handleContact}>
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Contacter
+            </Button>
+            {viewAnalysisButton}
+          </>
+        )
+      case "rejected":
+        return (
+          <>
+            <Button variant="outline" onClick={handleContact}>
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Contacter
+            </Button>
+            {viewAnalysisButton}
+          </>
         )
       default:
-        return null
+        return (
+          <>
+            <Button variant="outline" onClick={handleContact}>
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Contacter
+            </Button>
+            {viewAnalysisButton}
+          </>
+        )
     }
-  }
-
-  const formatAmount = (amount: number | null | undefined) => {
-    if (!amount) return "Non spécifié"
-    return new Intl.NumberFormat("fr-FR", {
-      style: "currency",
-      currency: "EUR",
-      minimumFractionDigits: 0,
-    }).format(amount)
-  }
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("fr-FR", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    })
   }
 
   if (loading) {
@@ -339,24 +531,24 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const property = application.property || {}
   const mainTenant = rentalFile?.main_tenant || {}
 
-  // Utiliser les données enrichies ou les données de base
+  // Utiliser les données enrichies
   const totalIncome = application.income || 0
   const hasGuarantor = application.has_guarantor || false
-  const profession = application.profession || mainTenant.profession || "Non spécifié"
-  const company = application.company || mainTenant.company || "Non spécifié"
-  const contractType = application.contract_type || mainTenant.main_activity || "Non spécifié"
+  const profession = application.profession || "Non spécifié"
+  const company = application.company || "Non spécifié"
+  const contractType = application.contract_type || "Non spécifié"
 
   const rentRatio = totalIncome && property.price ? (totalIncome / property.price).toFixed(1) : "N/A"
 
   // Statut du dossier basé sur completion_percentage
-  const completionPercentage = application.completion_percentage || rentalFile?.completion_percentage || 0
-  const isComplete = application.documents_complete || completionPercentage >= 80
+  const completionPercentage = application.completion_percentage || 0
+  const isComplete = application.documents_complete || false
 
   return (
     <>
       <PageHeader
-        title={`Candidature de ${tenant.first_name || "Prénom"} ${tenant.last_name || "Nom"}`}
-        description={`Pour ${property.title || "le bien"}`}
+        title={`Candidature de ${tenant.first_name} ${tenant.last_name}`}
+        description={`Pour ${property.title}`}
       >
         <div className="flex items-center gap-2">
           {getStatusBadge()}
@@ -368,6 +560,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       </PageHeader>
 
       <div className="p-6 space-y-6">
+        {/* Score et actions */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex items-center gap-4">
             {scoringResult && (
@@ -553,11 +746,12 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               </CardContent>
             </Card>
 
+            {/* Message de candidature */}
             {application.presentation && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <MessageSquare className="h-5 w-5" />
+                    <FileText className="h-5 w-5" />
                     Message de candidature
                   </CardTitle>
                 </CardHeader>
@@ -567,6 +761,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               </Card>
             )}
 
+            {/* Informations sur les garants */}
             {rentalFile?.guarantors && rentalFile.guarantors.length > 0 && (
               <Card>
                 <CardHeader>
@@ -612,6 +807,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             )}
           </TabsContent>
 
+          {/* Analyse scoring */}
           <TabsContent value="scoring" className="space-y-6">
             {scoringResult ? (
               <>
@@ -736,6 +932,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             )}
           </TabsContent>
 
+          {/* Analyse financière */}
           <TabsContent value="financial" className="space-y-6">
             <div className="grid gap-6 md:grid-cols-2">
               <Card>
