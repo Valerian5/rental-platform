@@ -1,137 +1,186 @@
-import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase";
-import { sendApplicationStatusUpdateEmail } from "@/lib/email-service";
+import { NextResponse } from "next/server"
+import { createClient } from "@supabase/supabase-js"
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error("Variables d'environnement Supabase manquantes");
+  throw new Error("Variables d'environnement Supabase manquantes")
 }
 
-export const dynamic = "force-dynamic";
+const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-// POST - Choisir un créneau de visite
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export const dynamic = "force-dynamic"
+
+export async function POST(request: Request, { params }: { params: { id: string } }) {
+  const applicationId = params.id
+
   try {
-    const supabase = createServerClient();
-    const applicationId = params.id;
-    const { slot_id } = await request.json();
+    const body = await request.json()
+    const { slot_id } = body
 
-    console.log("📅 Réservation créneau:", applicationId, slot_id);
+    console.log("🎯 Sélection créneau:", { applicationId, slot_id })
 
-    // 1. Récupérer la candidature
+    if (!slot_id) {
+      return NextResponse.json({ error: "ID du créneau manquant" }, { status: 400 })
+    }
+
+    // Récupérer la candidature
     const { data: application, error: appError } = await supabase
       .from("applications")
-      .select(
-        `
-        *,
-        tenant:users(*),
-        property:properties(*, agency:agencies(logo_url))
-      `
-      )
+      .select(`
+        id,
+        tenant_id,
+        property_id,
+        status,
+        users!applications_tenant_id_fkey (
+          id,
+          first_name,
+          last_name,
+          email,
+          phone
+        )
+      `)
       .eq("id", applicationId)
-      .single();
+      .single()
 
     if (appError || !application) {
-      console.error("❌ Erreur récupération candidature:", appError);
-      return NextResponse.json(
-        { error: "Candidature non trouvée" },
-        { status: 404 }
-      );
+      console.error("❌ Candidature non trouvée:", appError)
+      return NextResponse.json({ error: "Candidature non trouvée" }, { status: 404 })
     }
 
-    // 2. Vérifier que le créneau existe et a encore de la place
+    // Vérifier que la candidature est dans le bon statut
+    if (application.status !== "visit_proposed") {
+      console.error("❌ Statut candidature invalide:", application.status)
+      return NextResponse.json({ error: "Cette candidature ne permet pas de sélectionner un créneau" }, { status: 400 })
+    }
+
+    // Récupérer et vérifier le créneau
     const { data: slot, error: slotError } = await supabase
-      .from("visit_slots")
+      .from("property_visit_slots")
       .select("*")
       .eq("id", slot_id)
-      .single();
+      .eq("property_id", application.property_id)
+      .single()
 
     if (slotError || !slot) {
-      console.error("❌ Créneau introuvable:", slotError);
-      return NextResponse.json(
-        { error: "Créneau introuvable" },
-        { status: 404 }
-      );
+      console.error("❌ Créneau non trouvé:", slotError)
+      return NextResponse.json({ error: "Créneau non trouvé" }, { status: 404 })
     }
 
-    if (slot.current_bookings >= slot.max_bookings) {
-      return NextResponse.json(
-        { error: "Ce créneau est complet" },
-        { status: 400 }
-      );
+    // Vérifications de disponibilité
+    const now = new Date()
+    const slotDateTime = new Date(`${slot.date}T${slot.start_time}`)
+
+    if (slotDateTime <= now) {
+      return NextResponse.json({ error: "Ce créneau est dans le passé" }, { status: 400 })
     }
 
-    // 3. Créer la visite (⚠️ ajouter property_id obligatoire)
-    const { data: visit, error: insertError } = await supabase
+    if (!slot.is_available) {
+      return NextResponse.json({ error: "Ce créneau n'est plus disponible" }, { status: 400 })
+    }
+
+    if (slot.current_bookings >= slot.max_capacity) {
+      return NextResponse.json({ error: "Ce créneau est complet" }, { status: 400 })
+    }
+
+    // Vérifier qu'il n'y a pas déjà une visite programmée pour cette candidature
+    const { data: existingVisit, error: visitCheckError } = await supabase
+      .from("visits")
+      .select("id")
+      .eq("application_id", applicationId)
+      .single()
+
+    if (existingVisit) {
+      return NextResponse.json({ error: "Une visite est déjà programmée pour cette candidature" }, { status: 400 })
+    }
+
+    // Créer la visite avec les bonnes colonnes selon la structure de la table
+    const visitDate = new Date(`${slot.date}T${slot.start_time}`)
+
+    const { data: visit, error: visitError } = await supabase
       .from("visits")
       .insert({
         application_id: applicationId,
-        property_id: application.property_id, // ✅ fixé ici
+        property_id: application.property_id,
+        tenant_id: application.tenant_id,
+        visit_date: visitDate.toISOString(), // timestamp with time zone
+        start_time: slot.start_time, // time without time zone
+        end_time: slot.end_time, // time without time zone
         status: "scheduled",
-        notes: `Créneau sélectionné: ${slot_id}`,
+        visitor_name: `${application.users.first_name} ${application.users.last_name}`,
+        tenant_email: application.users.email,
+        visitor_phone: application.users.phone,
+        notes: `Créneau sélectionné: ${slot.id}`, // IMPORTANT: Stocker l'ID du créneau pour pouvoir le libérer plus tard
+        visit_slot_id: slot_id, // AJOUT: Le champ attendu par le trigger
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
-      .select("*")
-      .single();
+      .select()
+      .single()
 
-    if (insertError) {
-      console.error("❌ Erreur insertion visite:", insertError);
+    if (visitError) {
+      console.error("❌ Erreur création visite:", visitError)
       return NextResponse.json(
-        { error: "Erreur lors de la réservation" },
-        { status: 500 }
-      );
+        {
+          error: "Erreur lors de la création de la visite",
+          details: visitError.message,
+        },
+        { status: 500 },
+      )
     }
 
-    // 4. Incrémenter le nombre de réservations sur le créneau
-    const { error: incrementError } = await supabase.rpc(
-      "increment_slot_bookings",
-      { slot_id }
-    );
+    // Incrémenter le nombre de réservations du créneau
+    const { error: updateSlotError } = await supabase
+      .from("property_visit_slots")
+      .update({
+        current_bookings: slot.current_bookings + 1,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", slot_id)
 
-    if (incrementError) {
-      console.error("❌ Erreur incrémentation créneau:", incrementError);
+    if (updateSlotError) {
+      console.error("❌ Erreur mise à jour créneau:", updateSlotError)
+      // Supprimer la visite créée en cas d'erreur
+      await supabase.from("visits").delete().eq("id", visit.id)
+      return NextResponse.json({ error: "Erreur lors de la réservation du créneau" }, { status: 500 })
     }
 
-    // 5. Notifier par email (locataire + propriétaire)
-    if (application.tenant && application.property) {
-      const logoUrl = application.property.agency?.logo_url ?? undefined;
+    // Mettre à jour le statut de la candidature
+    const { error: updateAppError } = await supabase
+      .from("applications")
+      .update({
+        status: "visit_scheduled",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", applicationId)
 
-      // Email au locataire
-      await sendApplicationStatusUpdateEmail(
-        application.tenant,
-        application.property,
-        "Votre visite a été planifiée",
-        logoUrl
-      ).catch(console.error);
-
-      // Email au propriétaire
-      if (application.property.owner_id) {
-        const { data: owner } = await supabase
-          .from("users")
-          .select("*")
-          .eq("id", application.property.owner_id)
-          .single();
-
-        if (owner) {
-          await sendApplicationStatusUpdateEmail(
-            owner,
-            application.property,
-            "Un locataire a réservé un créneau de visite",
-            logoUrl
-          ).catch(console.error);
-        }
-      }
+    if (updateAppError) {
+      console.error("❌ Erreur mise à jour candidature:", updateAppError)
+      return NextResponse.json({ error: "Erreur lors de la mise à jour de la candidature" }, { status: 500 })
     }
 
-    console.log("✅ Créneau réservé avec succès:", visit.id);
+    console.log("✅ Visite programmée avec succès:", visit.id)
 
-    return NextResponse.json({ success: true, visit });
+    return NextResponse.json({
+      success: true,
+      message: "Créneau de visite sélectionné avec succès",
+      visit: {
+        id: visit.id,
+        date: slot.date,
+        start_time: visit.start_time,
+        end_time: visit.end_time,
+        status: visit.status,
+      },
+    })
   } catch (error) {
-    console.error("❌ Erreur API choose-visit-slot:", error);
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
+    console.error("❌ Erreur serveur:", error)
+    return NextResponse.json(
+      {
+        error: "Erreur serveur",
+        details: error instanceof Error ? error.message : "Erreur inconnue",
+      },
+      { status: 500 },
+    )
   }
 }
