@@ -333,8 +333,8 @@ export function PropertyDocumentsUpload({
                     onFilesUploaded={(files) => handleDocumentUpload(document.id, files)}
                     maxFiles={1}
                     acceptedTypes={["application/pdf", "image/*"]}
-                    folder={`properties/${propertyId}/documents`}
-                    bucket="property-documents"
+                    folder={`lease/${leaseId}/annexes`}
+                    bucket="lease-annexes"
                     disabled={uploadingDocuments.has(document.id)}
                   />
                   {uploadingDocuments.has(document.id) && (
