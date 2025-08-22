@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { FileText, Check, AlertTriangle, X, Loader2 } from "lucide-react"
-import { FileUpload, UploadedFile } from "@/components/file-upload"
+import { FileUpload, UploadedFile } from "@/components/file-upload" // Le type UploadedFile peut être plus simple
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
 
@@ -90,41 +90,34 @@ export function PropertyDocumentsUpload({
     }
   }, [leaseId, fetchExistingAnnexes]);
 
-  const handleDocumentUpload = async (documentId: string, uploadedFiles: UploadedFile[]) => {
-    if (uploadedFiles.length === 0) return;
-
-    const uploadedFile = uploadedFiles[0];
-    
-    if (!uploadedFile || !uploadedFile.url) {
-        toast.error("L'URL du fichier est manquante après l'envoi. L'opération est annulée.");
-        console.error("Objet 'uploadedFile' reçu est invalide ou ne contient pas d'URL:", uploadedFile);
+  // MODIFIÉ : La fonction accepte maintenant un tableau d'URLs (strings)
+  const handleDocumentUpload = async (documentId: string, files: string[]) => {
+    if (files.length === 0 || !files[0]) {
+        toast.error("Aucune URL de fichier n'a été retournée après l'envoi.");
         return;
     }
 
+    const fileUrl = files[0];
     setUploadingDocuments((prev) => new Set(prev).add(documentId));
 
     try {
-      const finalFileName = uploadedFile.name || uploadedFile.url.split('/').pop() || "fichier_inconnu";
-      const finalFileSize = uploadedFile.size || 0;
-
-      if (finalFileSize === 0) {
-        console.warn(`La taille du fichier pour '${finalFileName}' est manquante. Valeur par défaut : 0.`);
-      }
-
+      // On déduit le nom du fichier depuis l'URL
+      const fileName = fileUrl.split('/').pop()?.split('?')[0] || "fichier_annexe";
+      
       const annexData = {
         lease_id: leaseId,
         annex_type: documentId,
-        file_name: finalFileName,
-        file_url: uploadedFile.url,
-        file_size: finalFileSize,
+        file_name: decodeURI(fileName), // On décode le nom du fichier au cas où il contiendrait des caractères spéciaux
+        file_url: fileUrl,
+        file_size: 0, // On met 0 car le composant enfant ne nous retourne pas la taille
       };
 
-      const { data, error } = await supabase.from("lease_annexes").insert(annexData).select().single();
+      const { error } = await supabase.from("lease_annexes").insert(annexData);
 
       if (error) throw error;
 
       await fetchExistingAnnexes();
-      toast.success("Document téléversé avec succès");
+      toast.success("Document téléversé et enregistré avec succès !");
 
       if (onDocumentsChange) {
         onDocumentsChange(documents.filter(d => d.uploaded));
@@ -237,7 +230,7 @@ export function PropertyDocumentsUpload({
               {!document.uploaded && (
                 <div className="mt-4">
                   <FileUpload
-                    onFilesUploaded={(files) => handleDocumentUpload(document.id, files)}
+                    onFilesUploaded={(files: string[]) => handleDocumentUpload(document.id, files)}
                     maxFiles={1}
                     acceptedTypes={["application/pdf", "image/*"]}
                     folder={`${leaseId}/annexes`}
@@ -282,7 +275,7 @@ export function PropertyDocumentsUpload({
                 {!document.uploaded && (
                   <div className="mt-4">
                     <FileUpload
-                      onFilesUploaded={(files) => handleDocumentUpload(document.id, files)}
+                      onFilesUploaded={(files: string[]) => handleDocumentUpload(document.id, files)}
                       maxFiles={1}
                       acceptedTypes={["application/pdf", "image/*"]}
                       folder={`${leaseId}/annexes`}
