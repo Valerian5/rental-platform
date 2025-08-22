@@ -746,6 +746,53 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               </CardContent>
             </Card>
 
+            {/* Situation de location */}
+            {rentalFile?.rental_situation && (
+              <Card>
+                <CardHeader className="bg-gray-50 rounded-t-lg">
+                  <CardTitle className="flex items-center gap-2 text-gray-800">
+                    <Users className="h-5 w-5" />
+                    Situation de location
+                    {rentalFile.rental_situation === "couple" && (
+                      <Badge variant="outline" className="ml-2 text-pink-700 border-pink-300 bg-pink-50">
+                        <Heart className="h-3 w-3 mr-1" />
+                        En couple
+                      </Badge>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Type de location</label>
+                      <p className="text-gray-900 capitalize">{rentalFile.rental_situation}</p>
+                    </div>
+                    {rentalFile.cotenants && rentalFile.cotenants.length > 0 && (
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Colocataires</label>
+                        <div className="space-y-2 mt-2">
+                          {rentalFile.cotenants.map((cotenant: any, index: number) => (
+                            <div key={index} className="p-3 bg-gray-50 rounded-lg">
+                              <p className="font-medium">
+                                {cotenant.first_name} {cotenant.last_name}
+                              </p>
+                              <p className="text-sm text-gray-600">{cotenant.email}</p>
+                              {cotenant.income_sources?.work_income?.amount && (
+                                <p className="text-sm text-green-600">
+                                  Revenus: {formatAmount(cotenant.income_sources.work_income.amount)}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
             {/* Message de candidature */}
             {application.presentation && (
               <Card>
@@ -802,131 +849,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                       </div>
                     ))}
                   </div>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-
-          {/* Analyse scoring */}
-          <TabsContent value="scoring" className="space-y-6">
-            {scoringResult ? (
-              <>
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <TrendingUp className="h-5 w-5" />
-                      Détail du scoring
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="text-center">
-                      <CircularScore score={scoringResult.totalScore} size="xl" />
-                      <p className="text-sm text-muted-foreground mt-2">Modèle: {scoringResult.model_used}</p>
-                      <div className="flex items-center justify-center gap-2 mt-2">
-                        {scoringResult.compatible ? (
-                          <Badge variant="outline" className="text-green-600 border-green-600">
-                            <CheckCircle className="h-3 w-3 mr-1" />
-                            Compatible
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-red-600 border-red-600">
-                            <XCircle className="h-3 w-3 mr-1" />
-                            Non compatible
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Détail des scores */}
-                    <div className="space-y-4">
-                      <h4 className="font-medium">Détail par critère</h4>
-                      {Object.entries(scoringResult.breakdown).map(([key, data]: [string, any]) => (
-                        <div key={key} className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium">
-                              {key === "income_ratio" && "Revenus/Loyer"}
-                              {key === "professional_stability" && "Stabilité professionnelle"}
-                              {key === "guarantor" && "Garants"}
-                              {key === "file_quality" && "Qualité du dossier"}
-                              {key === "property_coherence" && "Cohérence avec le bien"}
-                              {key === "income_distribution" && "Répartition des revenus"}
-                            </span>
-                            <span className="text-sm font-medium">
-                              {data.score}/{data.max}
-                            </span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div
-                              className={`h-2 rounded-full ${data.compatible ? "bg-green-500" : "bg-red-500"}`}
-                              style={{ width: `${(data.score / data.max) * 100}%` }}
-                            ></div>
-                          </div>
-                          <p className="text-xs text-muted-foreground">{data.details}</p>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Avertissements */}
-                    {scoringResult.warnings.length > 0 && (
-                      <div className="space-y-2">
-                        <h4 className="font-medium text-orange-600 flex items-center gap-2">
-                          <AlertTriangle className="h-4 w-4" />
-                          Avertissements
-                        </h4>
-                        <ul className="space-y-1">
-                          {scoringResult.warnings.map((warning: string, index: number) => (
-                            <li key={index} className="text-sm text-orange-600">
-                              • {warning}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {/* Exclusions */}
-                    {scoringResult.exclusions.length > 0 && (
-                      <div className="space-y-2">
-                        <h4 className="font-medium text-red-600 flex items-center gap-2">
-                          <XCircle className="h-4 w-4" />
-                          Règles d'exclusion
-                        </h4>
-                        <ul className="space-y-1">
-                          {scoringResult.exclusions.map((exclusion: string, index: number) => (
-                            <li key={index} className="text-sm text-red-600">
-                              • {exclusion}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {/* Recommandations */}
-                    {scoringResult.recommendations.length > 0 && (
-                      <div className="space-y-2">
-                        <h4 className="font-medium text-blue-600 flex items-center gap-2">
-                          <TrendingUp className="h-4 w-4" />
-                          Recommandations
-                        </h4>
-                        <ul className="space-y-1">
-                          {scoringResult.recommendations.map((recommendation: string, index: number) => (
-                            <li key={index} className="text-sm text-blue-600">
-                              • {recommendation}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </>
-            ) : (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-10">
-                  <Clock className="h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-medium">Calcul du score en cours...</h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Veuillez patienter pendant l'analyse de la candidature.
-                  </p>
                 </CardContent>
               </Card>
             )}
