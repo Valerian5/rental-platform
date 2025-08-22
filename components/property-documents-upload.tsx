@@ -224,7 +224,7 @@ export function PropertyDocumentsUpload({
                     onFilesUploaded={(files) => handleDocumentUpload(document.id, files)}
                     maxFiles={1}
                     acceptedTypes={["application/pdf", "image/*"]}
-                    folder={`properties/${propertyId}/annexes`}
+                    folder={`${leaseId}/annexes`}
                     bucket="lease-annexes"
                     disabled={uploadingDocuments.has(document.id)}
                   />
@@ -269,7 +269,7 @@ export function PropertyDocumentsUpload({
                       onFilesUploaded={(files) => handleDocumentUpload(document.id, files)}
                       maxFiles={1}
                       acceptedTypes={["application/pdf", "image/*"]}
-                      folder={`properties/${propertyId}/annexes`}
+                      folder={`${leaseId}/annexes`}
                       bucket="lease-annexes"
                       disabled={uploadingDocuments.has(document.id)}
                     />
