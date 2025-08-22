@@ -96,21 +96,32 @@ export function PropertyDocumentsUpload({
 
     const uploadedFile = uploadedFiles[0];
     
-    // MODIFIÉ : Ajout d'une vérification pour s'assurer que les données du fichier sont complètes
-    if (!uploadedFile || !uploadedFile.name || !uploadedFile.url || typeof uploadedFile.size === 'undefined') {
-        toast.error("Les informations du fichier sont incomplètes. L'envoi a probablement été bloqué par les politiques de sécurité du stockage (RLS).");
+    // MODIFIÉ : La vérification est plus souple et on prépare des valeurs de secours.
+    if (!uploadedFile || !uploadedFile.url) {
+        toast.error("L'URL du fichier est manquante après l'envoi. L'opération est annulée.");
+        console.error("Objet 'uploadedFile' reçu est invalide ou ne contient pas d'URL:", uploadedFile);
         return;
     }
 
     setUploadingDocuments((prev) => new Set(prev).add(documentId));
 
     try {
+      // Préparation des données avec des valeurs de secours
+      // Si le nom n'est pas fourni, on le déduit de l'URL.
+      const finalFileName = uploadedFile.name || uploadedFile.url.split('/').pop() || "fichier_inconnu";
+      // Si la taille n'est pas fournie, on met 0 et on avertit dans la console.
+      const finalFileSize = uploadedFile.size || 0;
+
+      if (finalFileSize === 0) {
+        console.warn(`La taille du fichier pour '${finalFileName}' est manquante. Valeur par défaut : 0. Pensez à mettre à jour le composant FileUpload pour qu'il retourne la taille.`);
+      }
+
       const annexData = {
         lease_id: leaseId,
         annex_type: documentId,
-        file_name: uploadedFile.name,
+        file_name: finalFileName,
         file_url: uploadedFile.url,
-        file_size: uploadedFile.size,
+        file_size: finalFileSize,
       };
 
       const { data, error } = await supabase.from("lease_annexes").insert(annexData).select().single();
@@ -125,7 +136,7 @@ export function PropertyDocumentsUpload({
       }
 
     } catch (error: any) {
-      toast.error(`Erreur lors du téléversement: ${error.message}`);
+      toast.error(`Erreur lors de l'enregistrement de l'annexe: ${error.message}`);
     } finally {
       setUploadingDocuments((prev) => {
         const newSet = new Set(prev);
@@ -137,6 +148,19 @@ export function PropertyDocumentsUpload({
 
   const handleDocumentRemove = async (documentId: string) => {
     try {
+      // Logique pour supprimer le fichier du bucket de stockage
+      const documentToRemove = documents.find(doc => doc.id === documentId);
+      if (documentToRemove && documentToRemove.url) {
+        const filePath = `${leaseId}/annexes/${documentToRemove.url.split('/').pop()}`;
+        const { error: storageError } = await supabase.storage.from('lease-annexes').remove([filePath]);
+        if (storageError) {
+            // On n'arrête pas le processus, mais on signale l'erreur
+            console.error("Erreur lors de la suppression du fichier dans le bucket:", storageError.message);
+            toast.warning("Le fichier n'a pas pu être supprimé du stockage, mais la référence a été enlevée.");
+        }
+      }
+
+      // Logique pour supprimer l'entrée dans la base de données
       const { error } = await supabase
         .from("lease_annexes")
         .delete()
@@ -242,7 +266,7 @@ export function PropertyDocumentsUpload({
               <FileText className="h-5 w-5 mr-2" />
               Documents optionnels
             </CardTitle>
-          </CardHeader>
+          </Header>
           <CardContent className="space-y-4">
             {optionalDocuments.map((document) => (
               <div key={document.id} className="border rounded-lg p-4">
