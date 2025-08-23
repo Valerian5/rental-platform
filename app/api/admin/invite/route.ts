@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
 import { randomBytes } from "crypto"
+import { sendAdminInvitationEmail } from "@/lib/email-service"
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
     // Vérifier si l'utilisateur est admin
     const { data: profile, error: profileError } = await supabase
       .from("users")
-      .select("user_type")
+      .select("user_type, first_name, last_name")
       .eq("id", user.id)
       .single()
 
@@ -105,8 +106,8 @@ export async function POST(request: NextRequest) {
     const { error: inviteError } = await supabase.from("admin_invitations").insert({
       email,
       invitation_token: invitationToken,
-      invited_by: user.id, // récupérer l'ID de l'admin actuel
-      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 jours
+      invited_by: user.id,
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
     })
 
     if (inviteError) {
@@ -121,16 +122,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // TODO: Envoyer l'email d'invitation
-    console.log("📧 Email d'invitation à envoyer à:", email)
-    console.log("🔗 Token d'invitation:", invitationToken)
+    const inviterName = `${profile.first_name || ""} ${profile.last_name || ""}`.trim() || "Un administrateur"
+    const invitationLink = `${process.env.NEXT_PUBLIC_SITE_URL}/admin/accept-invitation?token=${invitationToken}`
+
+    try {
+      await sendAdminInvitationEmail(email, invitationLink, inviterName, process.env.LOGO_URL)
+      console.log("✅ Email d'invitation envoyé à:", email)
+    } catch (emailError) {
+      console.error("❌ Erreur envoi email invitation:", emailError)
+      // Don't fail the invitation creation if email fails
+    }
 
     return NextResponse.json({
       success: true,
-      message: "Invitation créée avec succès",
+      message: "Invitation créée et envoyée avec succès",
       data: {
         email,
-        token: invitationToken, // En développement seulement
+        invitationLink: process.env.NODE_ENV === "development" ? invitationLink : undefined,
       },
     })
   } catch (error) {
