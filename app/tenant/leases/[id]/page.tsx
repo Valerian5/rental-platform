@@ -6,9 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Separator } from "@/components/ui/separator"
-import { DocuSignSignatureManager } from "@/components/docusign-signature-manager"
+import { SignatureMethodSelector } from "@/components/signature-method-selector"
 import {
   FileText,
   Calendar,
@@ -60,18 +59,18 @@ interface Annexe {
 
 // MODIFIÉ : Ajout du template pour mapper les noms des annexes
 const ANNEXES_TEMPLATE = [
-    { id: "dpe", name: "Diagnostic de Performance Énergétique (DPE)" },
-    { id: "erp", name: "État des Risques et Pollutions (ERP)" },
-    { id: "assurance_pno", name: "Assurance Propriétaire Non Occupant (PNO)" },
-    { id: "diagnostic_plomb", name: "Diagnostic Plomb (CREP)" },
-    { id: "diagnostic_amiante", name: "Diagnostic Amiante" },
-    { id: "diagnostic_gaz", name: "Diagnostic Gaz" },
-    { id: "diagnostic_electricite", name: "Diagnostic Électricité" },
-    { id: "reglement_copropriete", name: "Règlement de Copropriété" },
-    { id: "charges_copropriete", name: "Relevé des Charges de Copropriété" },
-    { id: "audit_energetique", name: "Audit Énergétique" },
-    { id: "carnet_entretien", name: "Carnet d'Entretien" },
-];
+  { id: "dpe", name: "Diagnostic de Performance Énergétique (DPE)" },
+  { id: "erp", name: "État des Risques et Pollutions (ERP)" },
+  { id: "assurance_pno", name: "Assurance Propriétaire Non Occupant (PNO)" },
+  { id: "diagnostic_plomb", name: "Diagnostic Plomb (CREP)" },
+  { id: "diagnostic_amiante", name: "Diagnostic Amiante" },
+  { id: "diagnostic_gaz", name: "Diagnostic Gaz" },
+  { id: "diagnostic_electricite", name: "Diagnostic Électricité" },
+  { id: "reglement_copropriete", name: "Règlement de Copropriété" },
+  { id: "charges_copropriete", name: "Relevé des Charges de Copropriété" },
+  { id: "audit_energetique", name: "Audit Énergétique" },
+  { id: "carnet_entretien", name: "Carnet d'Entretien" },
+]
 
 export default function TenantLeaseDetailPage() {
   const params = useParams()
@@ -112,15 +111,15 @@ export default function TenantLeaseDetailPage() {
       if (response.ok) {
         const data = await response.json()
         const rawAnnexes = data.annexes || []
-        
+
         // On associe un nom lisible à chaque annexe
         const formattedAnnexes = rawAnnexes.map((annexe: any) => {
-            const template = ANNEXES_TEMPLATE.find(t => t.id === annexe.annex_type);
-            return {
-                ...annexe,
-                name: template ? template.name : annexe.file_name, // Fallback sur le nom du fichier
-            };
-        });
+          const template = ANNEXES_TEMPLATE.find((t) => t.id === annexe.annex_type)
+          return {
+            ...annexe,
+            name: template ? template.name : annexe.file_name, // Fallback sur le nom du fichier
+          }
+        })
         setAnnexes(formattedAnnexes)
       }
     } catch (error) {
@@ -553,10 +552,15 @@ export default function TenantLeaseDetailPage() {
                         </div>
                         {/* MODIFIÉ : Le bouton est maintenant un lien fonctionnel */}
                         <Button asChild variant="outline" size="sm">
-                           <a href={annexe.file_url} target="_blank" rel="noopener noreferrer" download={annexe.file_name}>
-                                <Download className="h-4 w-4 mr-2" />
-                                Télécharger
-                           </a>
+                          <a
+                            href={annexe.file_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            download={annexe.file_name}
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            Télécharger
+                          </a>
                         </Button>
                       </div>
                     ))}
@@ -572,109 +576,14 @@ export default function TenantLeaseDetailPage() {
           </TabsContent>
 
           <TabsContent value="signature" className="space-y-6">
-            {lease.status === "sent_for_signature" && (
-              <DocuSignSignatureManager
-                leaseId={leaseId}
-                leaseStatus={lease.status}
-                onStatusChange={(newStatus) => {
-                  setLease((prev) => (prev ? { ...prev, status: newStatus } : null))
-                }}
-              />
-            )}
-
-            {canSign ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <CheckCircle className="h-5 w-5" />
-                    Signature électronique simple
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <h3 className="font-semibold text-blue-800 mb-2">Avant de signer</h3>
-                    <ul className="text-blue-700 text-sm space-y-1">
-                      <li>• Lisez attentivement l'ensemble du contrat</li>
-                      <li>• Vérifiez toutes les informations (loyer, charges, durée, etc.)</li>
-                      <li>• Consultez les annexes si disponibles</li>
-                      <li>• Assurez-vous de comprendre tous vos droits et obligations</li>
-                      <li>• Contactez le propriétaire si vous avez des questions</li>
-                    </ul>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="accept-terms"
-                        checked={acceptTerms}
-                        onCheckedChange={(checked) => setAcceptTerms(checked as boolean)}
-                      />
-                      <label
-                        htmlFor="accept-terms"
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                      >
-                        J'ai lu et j'accepte les termes de ce contrat de bail
-                      </label>
-                    </div>
-
-                    <Button
-                      onClick={signLease}
-                      disabled={!acceptTerms || signing}
-                      className="w-full bg-green-600 hover:bg-green-700"
-                      size="lg"
-                    >
-                      {signing ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                          Signature en cours...
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle className="h-4 w-4 mr-2" />
-                          Signer le bail électroniquement
-                        </>
-                      )}
-                    </Button>
-
-                    {error && (
-                      <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-                        <p className="text-red-600 text-sm">{error}</p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ) : lease.signed_by_tenant ? (
-              <Card>
-                <CardContent className="p-8">
-                  <div className="text-center">
-                    <CheckCircle className="h-16 w-16 text-green-600 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold mb-2">Bail signé</h3>
-                    <p className="text-gray-600 mb-4">
-                      Vous avez signé ce bail le {new Date(lease.tenant_signature_date!).toLocaleDateString("fr-FR")}
-                    </p>
-                    {!lease.signed_by_owner && (
-                      <p className="text-sm text-orange-600">En attente de la signature du propriétaire</p>
-                    )}
-                    {lease.signed_by_owner && (
-                      <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
-                        <p className="text-green-700 font-medium">✅ Bail entièrement signé et actif</p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card>
-                <CardContent className="p-8">
-                  <div className="text-center">
-                    <Clock className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold mb-2">Signature non disponible</h3>
-                    <p className="text-gray-600">Ce bail n'est pas encore prêt à être signé.</p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+            <SignatureMethodSelector
+              leaseId={leaseId}
+              leaseStatus={lease.status}
+              userType="tenant"
+              onStatusChange={(newStatus) => {
+                setLease((prev) => (prev ? { ...prev, status: newStatus } : null))
+              }}
+            />
           </TabsContent>
         </Tabs>
       </div>

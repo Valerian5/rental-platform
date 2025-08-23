@@ -19,13 +19,13 @@ import {
   Clock,
   ArrowLeft,
   Download,
-  RefreshCcw,
   XCircle,
   Mail,
 } from "lucide-react"
 import { LeaseDocumentDisplay } from "@/components/lease-document-display"
 import { PropertyDocumentsUpload } from "@/components/property-documents-upload"
-import { DocuSignSignatureManager } from "@/components/docusign-signature-manager"
+import { SignatureMethodSelector } from "@/components/signature-method-selector"
+import { CautionnementGenerator } from "@/components/cautionnement-generator"
 import { toast } from "sonner"
 
 /** --- Types DocuSign (statut par signataire) --- */
@@ -82,6 +82,7 @@ interface Lease {
 
   /** Optionnels si votre API / DB les expose déjà */
   docusign_envelope_id?: string | null
+  bailleur_adresse?: string
 }
 
 export default function LeaseDetailPage() {
@@ -247,11 +248,11 @@ export default function LeaseDetailPage() {
   /** --- Helpers d'affichage / mapping DocuSign -> UI --- */
   const ownerRecipient = useMemo(
     () => signatureStatus?.recipients?.find((r) => r.role?.toLowerCase() === "owner"),
-    [signatureStatus]
+    [signatureStatus],
   )
   const tenantRecipient = useMemo(
     () => signatureStatus?.recipients?.find((r) => r.role?.toLowerCase() === "tenant"),
-    [signatureStatus]
+    [signatureStatus],
   )
 
   const ownerIsSigned = useMemo(() => {
@@ -472,9 +473,9 @@ export default function LeaseDetailPage() {
           <TabsList className="bg-white">
             <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
             <TabsTrigger value="document">Document</TabsTrigger>
-            <TabsTrigger value="annexes">Annexes</TabsTrigger>
             <TabsTrigger value="signatures">Signatures</TabsTrigger>
-            <TabsTrigger value="history">Historique</TabsTrigger>
+            <TabsTrigger value="cautionnement">Acte de cautionnement</TabsTrigger>
+            <TabsTrigger value="documents">Documents</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
@@ -674,375 +675,36 @@ export default function LeaseDetailPage() {
             )}
           </TabsContent>
 
-          <TabsContent value="annexes" className="space-y-6">
-            {/* On passe leaseId + propertyId. Le composant gère le bucket (ex: lease-annexes) côté props/implémentation. */}
-            <PropertyDocumentsUpload leaseId={lease.id} propertyId={lease.property_id} />
-          </TabsContent>
-
           <TabsContent value="signatures" className="space-y-6">
-            <DocuSignSignatureManager
+            <SignatureMethodSelector
               leaseId={lease.id}
               leaseStatus={lease.status}
+              userType="owner"
               onStatusChange={(newStatus) => {
                 setLease((prev) => (prev ? { ...prev, status: newStatus } : null))
-                // on rafraîchit silencieusement l'état DocuSign
                 loadSignatureStatus({ silent: true })
               }}
             />
-
-            {/* --- Suivi DocuSign par signataire --- */}
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Suivi DocuSign</CardTitle>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => loadSignatureStatus()}
-                    disabled={sigLoading}
-                    title="Rafraîchir le statut"
-                  >
-                    {sigLoading ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
-                        Actualisation...
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCcw className="h-4 w-4 mr-2" />
-                        Actualiser
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {!signatureStatus ? (
-                  <div className="p-4 rounded-lg border bg-gray-50 text-gray-600">
-                    Aucune enveloppe DocuSign détectée pour ce bail (encore non envoyée ou en cours de préparation).
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
-                      {signatureStatus.envelopeId && (
-                        <span>
-                          <span className="font-medium">Enveloppe :</span> {signatureStatus.envelopeId}
-                        </span>
-                      )}
-                      {signatureStatus.envelopeStatus && (
-                        <span>
-                          <span className="font-medium">Statut :</span> {signatureStatus.envelopeStatus}
-                        </span>
-                      )}
-                      {signatureStatus.updatedAt && (
-                        <span>
-                          <span className="font-medium">Mis à jour :</span>{" "}
-                          {new Date(signatureStatus.updatedAt).toLocaleString("fr-FR", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            day: "2-digit",
-                            month: "2-digit",
-                            year: "numeric",
-                          })}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="space-y-3">
-                      {signatureStatus.recipients?.map((r) => {
-                        const meta = labelFromStatus(r.status)
-                        const Tone =
-                          meta.tone === "success"
-                            ? "text-green-700 bg-green-50 border-green-200"
-                            : meta.tone === "danger"
-                            ? "text-red-700 bg-red-50 border-red-200"
-                            : meta.tone === "info"
-                            ? "text-blue-700 bg-blue-50 border-blue-200"
-                            : "text-gray-700 bg-gray-50 border-gray-200"
-                        const Icon = meta.Icon
-                        return (
-                          <div
-                            key={`${r.role}-${r.email}`}
-                            className={`p-4 rounded-lg border ${Tone} flex items-center justify-between`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <Icon className="h-5 w-5" />
-                              <div>
-                                <p className="font-medium capitalize">
-                                  {r.role || "signataire"}{" "}
-                                  <span className="text-gray-500 normal-case font-normal">{r.email}</span>
-                                </p>
-                                <p className="text-sm">
-                                  Statut : <span className="font-medium">{meta.label}</span>
-                                  {r.deliveredAt && (
-                                    <>
-                                      {" "}
-                                      • Ouvert le{" "}
-                                      {new Date(r.deliveredAt).toLocaleString("fr-FR", {
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                        day: "2-digit",
-                                        month: "2-digit",
-                                        year: "numeric",
-                                      })}
-                                    </>
-                                  )}
-                                  {r.completedAt && (
-                                    <>
-                                      {" "}
-                                      • Signé le{" "}
-                                      {new Date(r.completedAt).toLocaleString("fr-FR", {
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                        day: "2-digit",
-                                        month: "2-digit",
-                                        year: "numeric",
-                                      })}
-                                    </>
-                                  )}
-                                  {r.status?.toLowerCase() === "declined" && r.declineReason && (
-                                    <>
-                                      {" "}
-                                      • Motif du refus : <span className="italic">{r.declineReason}</span>
-                                    </>
-                                  )}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Processus traditionnel (inchangé, mais reflète maintenant l'état calculé) */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Processus de signature traditionnel</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <h3 className="font-semibold flex items-center gap-2">
-                      <User className="h-4 w-4" />
-                      Signature du propriétaire
-                    </h3>
-                    {ownerIsSigned ? (
-                      <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                        <div className="flex items-center gap-2 text-green-700 mb-2">
-                          <CheckCircle className="h-4 w-4" />
-                          <span className="font-medium">Signé</span>
-                        </div>
-                        {ownerSignedAt && (
-                          <p className="text-sm text-gray-600">
-                            Signé le{" "}
-                            {new Date(ownerSignedAt).toLocaleDateString("fr-FR")} à{" "}
-                            {new Date(ownerSignedAt).toLocaleTimeString("fr-FR", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </p>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="p-4 bg-gray-50 border rounded-lg">
-                        <p className="text-gray-600 mb-3">En attente de votre signature</p>
-                        {(lease.status === "sent_to_tenant" || lease.status === "signed_by_tenant") && (
-                          <Button onClick={signAsOwner} disabled={signing} className="bg-green-600 hover:bg-green-700">
-                            {signing ? (
-                              <>
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                Signature...
-                              </>
-                            ) : (
-                              <>
-                                <CheckCircle className="h-4 w-4 mr-2" />
-                                Signer maintenant
-                              </>
-                            )}
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-4">
-                    <h3 className="font-semibold flex items-center gap-2">
-                      <User className="h-4 w-4" />
-                      Signature du locataire
-                    </h3>
-                    {tenantIsSigned ? (
-                      <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                        <div className="flex items-center gap-2 text-green-700 mb-2">
-                          <CheckCircle className="h-4 w-4" />
-                          <span className="font-medium">Signé</span>
-                        </div>
-                        {tenantSignedAt && (
-                          <p className="text-sm text-gray-600">
-                            Signé le{" "}
-                            {new Date(tenantSignedAt).toLocaleDateString("fr-FR")} à{" "}
-                            {new Date(tenantSignedAt).toLocaleTimeString("fr-FR", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </p>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="p-4 bg-gray-50 border rounded-lg">
-                        <p className="text-gray-600">
-                          {lease.status === "draft"
-                            ? "Le bail doit d'abord être envoyé au locataire"
-                            : "En attente de la signature du locataire"}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </TabsContent>
 
-          <TabsContent value="history" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Historique des modifications</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <div className="h-2 w-2 bg-blue-600 rounded-full"></div>
-                    <div className="flex-1">
-                      <p className="font-medium">Bail créé</p>
-                      <p className="text-sm text-gray-600">
-                        {new Date(lease.created_at).toLocaleDateString("fr-FR", {
-                          weekday: "long",
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                        })}{" "}
-                        à{" "}
-                        {new Date(lease.created_at).toLocaleTimeString("fr-FR", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                    </div>
-                  </div>
+          <TabsContent value="cautionnement" className="space-y-6">
+            <CautionnementGenerator
+              leaseId={lease.id}
+              leaseData={{
+                locataire_nom_prenom: lease.locataire_nom_prenom,
+                bailleur_nom_prenom: lease.bailleur_nom_prenom,
+                bailleur_adresse: lease.bailleur_adresse || "",
+                adresse_logement: lease.adresse_logement,
+                montant_loyer_mensuel: lease.montant_loyer_mensuel,
+                date_prise_effet: lease.date_prise_effet,
+                duree_contrat: lease.duree_contrat,
+              }}
+            />
+          </TabsContent>
 
-                  {lease.document_generated_at && (
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                      <div className="h-2 w-2 bg-green-600 rounded-full"></div>
-                      <div className="flex-1">
-                        <p className="font-medium">Document généré</p>
-                        <p className="text-sm text-gray-600">
-                          {new Date(lease.document_generated_at).toLocaleDateString("fr-FR", {
-                            weekday: "long",
-                            year: "numeric",
-                            month: "long",
-                            day: "numeric",
-                          })}{" "}
-                          à{" "}
-                          {new Date(lease.document_generated_at).toLocaleTimeString("fr-FR", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {lease.sent_to_tenant_at && (
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                      <div className="h-2 w-2 bg-blue-600 rounded-full"></div>
-                      <div className="flex-1">
-                        <p className="font-medium">Envoyé au locataire</p>
-                        <p className="text-sm text-gray-600">
-                          {new Date(lease.sent_to_tenant_at).toLocaleDateString("fr-FR", {
-                            weekday: "long",
-                            year: "numeric",
-                            month: "long",
-                            day: "numeric",
-                          })}{" "}
-                          à{" "}
-                          {new Date(lease.sent_to_tenant_at).toLocaleTimeString("fr-FR", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {tenantSignedAt && (
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                      <div className="h-2 w-2 bg-green-600 rounded-full"></div>
-                      <div className="flex-1">
-                        <p className="font-medium">Signé par le locataire</p>
-                        <p className="text-sm text-gray-600">
-                          {new Date(tenantSignedAt).toLocaleDateString("fr-FR", {
-                            weekday: "long",
-                            year: "numeric",
-                            month: "long",
-                            day: "numeric",
-                          })}{" "}
-                          à{" "}
-                          {new Date(tenantSignedAt).toLocaleTimeString("fr-FR", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {ownerSignedAt && (
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                      <div className="h-2 w-2 bg-green-600 rounded-full"></div>
-                      <div className="flex-1">
-                        <p className="font-medium">Signé par le propriétaire</p>
-                        <p className="text-sm text-gray-600">
-                          {new Date(ownerSignedAt).toLocaleDateString("fr-FR", {
-                            weekday: "long",
-                            year: "numeric",
-                            month: "long",
-                            day: "numeric",
-                          })}{" "}
-                          à{" "}
-                          {new Date(ownerSignedAt).toLocaleTimeString("fr-FR", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <div className="h-2 w-2 bg-gray-400 rounded-full"></div>
-                    <div className="flex-1">
-                      <p className="font-medium">Dernière modification</p>
-                      <p className="text-sm text-gray-600">
-                        {new Date(lease.updated_at).toLocaleDateString("fr-FR", {
-                          weekday: "long",
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                        })}{" "}
-                        à{" "}
-                        {new Date(lease.updated_at).toLocaleTimeString("fr-FR", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+          <TabsContent value="documents" className="space-y-6">
+            {/* On passe leaseId + propertyId. Le composant gère le bucket (ex: lease-annexes) côté props/implémentation. */}
+            <PropertyDocumentsUpload leaseId={lease.id} propertyId={lease.property_id} />
           </TabsContent>
         </Tabs>
       </div>

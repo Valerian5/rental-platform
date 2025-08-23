@@ -15,6 +15,7 @@ import { HeaderPreview } from "@/components/settings/header-preview"
 import { LogoUploader } from "@/components/settings/logo-uploader"
 import { FontSelector } from "@/components/settings/font-selector"
 import { ThemePreview } from "@/components/settings/theme-preview"
+import { Crown } from "lucide-react"
 
 export default function SettingsPage() {
   return (
@@ -580,6 +581,51 @@ export default function SettingsPage() {
                 </div>
               </div>
             </CardContent>
+          </Card>
+
+          {/* Premium Features Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Crown className="h-5 w-5 text-yellow-500" />
+                Fonctionnalités Premium
+              </CardTitle>
+              <CardDescription>Activez ou désactivez les fonctionnalités premium de la plateforme</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Signature électronique DocuSign</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Permettre la signature électronique sécurisée via DocuSign
+                    </p>
+                  </div>
+                  <Switch />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Templates avancés</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Accès aux templates de documents avancés et personnalisables
+                    </p>
+                  </div>
+                  <Switch />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Intégrations API</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Intégrations avec des services tiers (comptabilité, banques, etc.)
+                    </p>
+                  </div>
+                  <Switch />
+                </div>
+              </div>
+            </CardContent>
+            <CardFooter>
+              <Button className="ml-auto">Enregistrer les fonctionnalités</Button>
+            </CardFooter>
           </Card>
         </TabsContent>
       </Tabs>
