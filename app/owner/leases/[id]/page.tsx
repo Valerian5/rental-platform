@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -19,12 +19,46 @@ import {
   Clock,
   ArrowLeft,
   Download,
+  RefreshCcw,
+  XCircle,
+  Mail,
 } from "lucide-react"
 import { LeaseDocumentDisplay } from "@/components/lease-document-display"
 import { PropertyDocumentsUpload } from "@/components/property-documents-upload"
 import { DocuSignSignatureManager } from "@/components/docusign-signature-manager"
 import { toast } from "sonner"
 
+/** --- Types DocuSign (statut par signataire) --- */
+type RecipientStatus =
+  | "created"
+  | "sent"
+  | "delivered"
+  | "completed"
+  | "declined"
+  | "voided"
+  | "autoresponded"
+  | "authenticationFailed"
+  | string
+
+interface SignatureRecipient {
+  role: string // 'owner' | 'tenant' | autre
+  name: string
+  email: string
+  status: RecipientStatus
+  completedAt?: string | null
+  deliveredAt?: string | null
+  declinedAt?: string | null
+  declineReason?: string | null
+}
+
+interface SignatureStatusPayload {
+  envelopeId?: string | null
+  recipients: SignatureRecipient[]
+  envelopeStatus?: string // e.g. 'completed', 'sent'
+  updatedAt?: string
+}
+
+/** --- Type Lease existant (on garde et on étend optionnellement) --- */
 interface Lease {
   id: string
   property_id: string
@@ -45,6 +79,9 @@ interface Lease {
   tenant_signature_date?: string
   created_at: string
   updated_at: string
+
+  /** Optionnels si votre API / DB les expose déjà */
+  docusign_envelope_id?: string | null
 }
 
 export default function LeaseDetailPage() {
@@ -58,6 +95,10 @@ export default function LeaseDetailPage() {
   const [sending, setSending] = useState(false)
   const [signing, setSigning] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  /** --- Nouvel état : statut DocuSign par signataire --- */
+  const [sigLoading, setSigLoading] = useState(false)
+  const [signatureStatus, setSignatureStatus] = useState<SignatureStatusPayload | null>(null)
 
   const loadLease = async () => {
     try {
@@ -75,6 +116,29 @@ export default function LeaseDetailPage() {
       setError(error instanceof Error ? error.message : "Erreur inconnue")
     } finally {
       setLoading(false)
+    }
+  }
+
+  /** --- Récupération du statut de signature DocuSign --- */
+  const loadSignatureStatus = async (opts?: { silent?: boolean }) => {
+    try {
+      if (!opts?.silent) setSigLoading(true)
+      const res = await fetch(`/api/leases/${leaseId}/signature-status`)
+      if (res.status === 404) {
+        // Pas d’enveloppe DocuSign encore créée : on ne spam pas d’erreurs
+        setSignatureStatus(null)
+        return
+      }
+      if (!res.ok) {
+        throw new Error("Impossible de récupérer le statut de signature")
+      }
+      const data: SignatureStatusPayload = await res.json()
+      setSignatureStatus(data)
+    } catch (e) {
+      console.error("Erreur statut signature:", e)
+      if (!opts?.silent) toast.error(e instanceof Error ? e.message : "Erreur de statut DocuSign")
+    } finally {
+      if (!opts?.silent) setSigLoading(false)
     }
   }
 
@@ -126,6 +190,7 @@ export default function LeaseDetailPage() {
 
       toast.success("Bail envoyé au locataire avec succès")
       await loadLease()
+      await loadSignatureStatus({ silent: true })
     } catch (error) {
       console.error("Erreur envoi:", error)
       const errorMessage = error instanceof Error ? error.message : "Erreur inconnue"
@@ -158,8 +223,8 @@ export default function LeaseDetailPage() {
         throw new Error(data.error || "Erreur lors de la signature")
       }
 
-      toast.success("Bail signé avec succès")
-      await loadLease()
+      toast.success("Email DocuSign envoyé au propriétaire")
+      await loadSignatureStatus({ silent: true })
     } catch (error) {
       console.error("Erreur signature:", error)
       const errorMessage = error instanceof Error ? error.message : "Erreur inconnue"
@@ -172,9 +237,60 @@ export default function LeaseDetailPage() {
 
   useEffect(() => {
     if (leaseId) {
+      // Charge le bail et le statut DocuSign (sans polling pour éviter trop d'appels)
       loadLease()
+      loadSignatureStatus({ silent: true })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leaseId])
+
+  /** --- Helpers d'affichage / mapping DocuSign -> UI --- */
+  const ownerRecipient = useMemo(
+    () => signatureStatus?.recipients?.find((r) => r.role?.toLowerCase() === "owner"),
+    [signatureStatus]
+  )
+  const tenantRecipient = useMemo(
+    () => signatureStatus?.recipients?.find((r) => r.role?.toLowerCase() === "tenant"),
+    [signatureStatus]
+  )
+
+  const ownerIsSigned = useMemo(() => {
+    if (ownerRecipient) return ownerRecipient.status?.toLowerCase() === "completed"
+    return !!lease?.signed_by_owner
+  }, [ownerRecipient, lease])
+
+  const tenantIsSigned = useMemo(() => {
+    if (tenantRecipient) return tenantRecipient.status?.toLowerCase() === "completed"
+    return !!lease?.signed_by_tenant
+  }, [tenantRecipient, lease])
+
+  const ownerSignedAt = useMemo(() => {
+    if (ownerRecipient?.completedAt) return ownerRecipient.completedAt
+    return lease?.owner_signature_date || null
+  }, [ownerRecipient, lease])
+
+  const tenantSignedAt = useMemo(() => {
+    if (tenantRecipient?.completedAt) return tenantRecipient.completedAt
+    return lease?.tenant_signature_date || null
+  }, [tenantRecipient, lease])
+
+  const labelFromStatus = (status?: RecipientStatus) => {
+    switch ((status || "").toLowerCase()) {
+      case "completed":
+        return { label: "Signé", tone: "success" as const, Icon: CheckCircle }
+      case "delivered":
+        return { label: "Ouvert", tone: "info" as const, Icon: Mail }
+      case "sent":
+      case "created":
+        return { label: "Envoyé", tone: "muted" as const, Icon: Clock }
+      case "declined":
+        return { label: "Refusé", tone: "danger" as const, Icon: XCircle }
+      case "voided":
+        return { label: "Annulé", tone: "danger" as const, Icon: XCircle }
+      default:
+        return { label: "En attente", tone: "muted" as const, Icon: Clock }
+    }
+  }
 
   if (loading) {
     return (
@@ -326,7 +442,7 @@ export default function LeaseDetailPage() {
                 </Button>
               )}
 
-              {(lease.status === "sent_to_tenant" || lease.status === "signed_by_tenant") && !lease.signed_by_owner && (
+              {(lease.status === "sent_to_tenant" || lease.status === "signed_by_tenant") && !ownerIsSigned && (
                 <Button onClick={signAsOwner} disabled={signing} className="bg-green-600 hover:bg-green-700">
                   {signing ? (
                     <>
@@ -444,7 +560,7 @@ export default function LeaseDetailPage() {
               </Card>
             </div>
 
-            {/* Statut des signatures */}
+            {/* Statut des signatures (désormais alimenté par DocuSign si dispo) */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -454,44 +570,58 @@ export default function LeaseDetailPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
+                  {/* Propriétaire */}
                   <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                     <div className="flex items-center gap-3">
-                      <div
-                        className={`h-3 w-3 rounded-full ${lease.signed_by_owner ? "bg-green-500" : "bg-gray-300"}`}
-                      ></div>
+                      <div className={`h-3 w-3 rounded-full ${ownerIsSigned ? "bg-green-500" : "bg-gray-300"}`}></div>
                       <div>
                         <p className="font-medium">Propriétaire</p>
                         <p className="text-sm text-gray-600">{lease.bailleur_nom_prenom}</p>
+                        {ownerRecipient && (
+                          <p className="text-xs text-gray-500">
+                            {labelFromStatus(ownerRecipient.status).label}
+                            {ownerRecipient.email ? ` • ${ownerRecipient.email}` : ""}
+                          </p>
+                        )}
                       </div>
                     </div>
-                    {lease.signed_by_owner ? (
+                    {ownerIsSigned ? (
                       <div className="text-right">
                         <Badge className="bg-green-600">Signé</Badge>
-                        <p className="text-xs text-gray-600 mt-1">
-                          {new Date(lease.owner_signature_date!).toLocaleDateString("fr-FR")}
-                        </p>
+                        {ownerSignedAt && (
+                          <p className="text-xs text-gray-600 mt-1">
+                            {new Date(ownerSignedAt).toLocaleDateString("fr-FR")}
+                          </p>
+                        )}
                       </div>
                     ) : (
                       <Badge variant="outline">En attente</Badge>
                     )}
                   </div>
 
+                  {/* Locataire */}
                   <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                     <div className="flex items-center gap-3">
-                      <div
-                        className={`h-3 w-3 rounded-full ${lease.signed_by_tenant ? "bg-green-500" : "bg-gray-300"}`}
-                      ></div>
+                      <div className={`h-3 w-3 rounded-full ${tenantIsSigned ? "bg-green-500" : "bg-gray-300"}`}></div>
                       <div>
                         <p className="font-medium">Locataire</p>
                         <p className="text-sm text-gray-600">{lease.locataire_nom_prenom}</p>
+                        {tenantRecipient && (
+                          <p className="text-xs text-gray-500">
+                            {labelFromStatus(tenantRecipient.status).label}
+                            {tenantRecipient.email ? ` • ${tenantRecipient.email}` : ""}
+                          </p>
+                        )}
                       </div>
                     </div>
-                    {lease.signed_by_tenant ? (
+                    {tenantIsSigned ? (
                       <div className="text-right">
                         <Badge className="bg-green-600">Signé</Badge>
-                        <p className="text-xs text-gray-600 mt-1">
-                          {new Date(lease.tenant_signature_date!).toLocaleDateString("fr-FR")}
-                        </p>
+                        {tenantSignedAt && (
+                          <p className="text-xs text-gray-600 mt-1">
+                            {new Date(tenantSignedAt).toLocaleDateString("fr-FR")}
+                          </p>
+                        )}
                       </div>
                     ) : (
                       <Badge variant="outline">En attente</Badge>
@@ -545,7 +675,7 @@ export default function LeaseDetailPage() {
           </TabsContent>
 
           <TabsContent value="annexes" className="space-y-6">
-            {/* MODIFIÉ : Ajout du prop leaseId */}
+            {/* On passe leaseId + propertyId. Le composant gère le bucket (ex: lease-annexes) côté props/implémentation. */}
             <PropertyDocumentsUpload leaseId={lease.id} propertyId={lease.property_id} />
           </TabsContent>
 
@@ -555,9 +685,140 @@ export default function LeaseDetailPage() {
               leaseStatus={lease.status}
               onStatusChange={(newStatus) => {
                 setLease((prev) => (prev ? { ...prev, status: newStatus } : null))
+                // on rafraîchit silencieusement l'état DocuSign
+                loadSignatureStatus({ silent: true })
               }}
             />
 
+            {/* --- Suivi DocuSign par signataire --- */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Suivi DocuSign</CardTitle>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => loadSignatureStatus()}
+                    disabled={sigLoading}
+                    title="Rafraîchir le statut"
+                  >
+                    {sigLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                        Actualisation...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCcw className="h-4 w-4 mr-2" />
+                        Actualiser
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {!signatureStatus ? (
+                  <div className="p-4 rounded-lg border bg-gray-50 text-gray-600">
+                    Aucune enveloppe DocuSign détectée pour ce bail (encore non envoyée ou en cours de préparation).
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
+                      {signatureStatus.envelopeId && (
+                        <span>
+                          <span className="font-medium">Enveloppe :</span> {signatureStatus.envelopeId}
+                        </span>
+                      )}
+                      {signatureStatus.envelopeStatus && (
+                        <span>
+                          <span className="font-medium">Statut :</span> {signatureStatus.envelopeStatus}
+                        </span>
+                      )}
+                      {signatureStatus.updatedAt && (
+                        <span>
+                          <span className="font-medium">Mis à jour :</span>{" "}
+                          {new Date(signatureStatus.updatedAt).toLocaleString("fr-FR", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                          })}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="space-y-3">
+                      {signatureStatus.recipients?.map((r) => {
+                        const meta = labelFromStatus(r.status)
+                        const Tone =
+                          meta.tone === "success"
+                            ? "text-green-700 bg-green-50 border-green-200"
+                            : meta.tone === "danger"
+                            ? "text-red-700 bg-red-50 border-red-200"
+                            : meta.tone === "info"
+                            ? "text-blue-700 bg-blue-50 border-blue-200"
+                            : "text-gray-700 bg-gray-50 border-gray-200"
+                        const Icon = meta.Icon
+                        return (
+                          <div
+                            key={`${r.role}-${r.email}`}
+                            className={`p-4 rounded-lg border ${Tone} flex items-center justify-between`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Icon className="h-5 w-5" />
+                              <div>
+                                <p className="font-medium capitalize">
+                                  {r.role || "signataire"}{" "}
+                                  <span className="text-gray-500 normal-case font-normal">{r.email}</span>
+                                </p>
+                                <p className="text-sm">
+                                  Statut : <span className="font-medium">{meta.label}</span>
+                                  {r.deliveredAt && (
+                                    <>
+                                      {" "}
+                                      • Ouvert le{" "}
+                                      {new Date(r.deliveredAt).toLocaleString("fr-FR", {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                        day: "2-digit",
+                                        month: "2-digit",
+                                        year: "numeric",
+                                      })}
+                                    </>
+                                  )}
+                                  {r.completedAt && (
+                                    <>
+                                      {" "}
+                                      • Signé le{" "}
+                                      {new Date(r.completedAt).toLocaleString("fr-FR", {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                        day: "2-digit",
+                                        month: "2-digit",
+                                        year: "numeric",
+                                      })}
+                                    </>
+                                  )}
+                                  {r.status?.toLowerCase() === "declined" && r.declineReason && (
+                                    <>
+                                      {" "}
+                                      • Motif du refus : <span className="italic">{r.declineReason}</span>
+                                    </>
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Processus traditionnel (inchangé, mais reflète maintenant l'état calculé) */}
             <Card>
               <CardHeader>
                 <CardTitle>Processus de signature traditionnel</CardTitle>
@@ -569,19 +830,22 @@ export default function LeaseDetailPage() {
                       <User className="h-4 w-4" />
                       Signature du propriétaire
                     </h3>
-                    {lease.signed_by_owner ? (
+                    {ownerIsSigned ? (
                       <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                         <div className="flex items-center gap-2 text-green-700 mb-2">
                           <CheckCircle className="h-4 w-4" />
                           <span className="font-medium">Signé</span>
                         </div>
-                        <p className="text-sm text-gray-600">
-                          Signé le {new Date(lease.owner_signature_date!).toLocaleDateString("fr-FR")} à{" "}
-                          {new Date(lease.owner_signature_date!).toLocaleTimeString("fr-FR", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
+                        {ownerSignedAt && (
+                          <p className="text-sm text-gray-600">
+                            Signé le{" "}
+                            {new Date(ownerSignedAt).toLocaleDateString("fr-FR")} à{" "}
+                            {new Date(ownerSignedAt).toLocaleTimeString("fr-FR", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </p>
+                        )}
                       </div>
                     ) : (
                       <div className="p-4 bg-gray-50 border rounded-lg">
@@ -610,19 +874,22 @@ export default function LeaseDetailPage() {
                       <User className="h-4 w-4" />
                       Signature du locataire
                     </h3>
-                    {lease.signed_by_tenant ? (
+                    {tenantIsSigned ? (
                       <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                         <div className="flex items-center gap-2 text-green-700 mb-2">
                           <CheckCircle className="h-4 w-4" />
                           <span className="font-medium">Signé</span>
                         </div>
-                        <p className="text-sm text-gray-600">
-                          Signé le {new Date(lease.tenant_signature_date!).toLocaleDateString("fr-FR")} à{" "}
-                          {new Date(lease.tenant_signature_date!).toLocaleTimeString("fr-FR", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
+                        {tenantSignedAt && (
+                          <p className="text-sm text-gray-600">
+                            Signé le{" "}
+                            {new Date(tenantSignedAt).toLocaleDateString("fr-FR")} à{" "}
+                            {new Date(tenantSignedAt).toLocaleTimeString("fr-FR", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </p>
+                        )}
                       </div>
                     ) : (
                       <div className="p-4 bg-gray-50 border rounded-lg">
@@ -710,20 +977,20 @@ export default function LeaseDetailPage() {
                     </div>
                   )}
 
-                  {lease.tenant_signature_date && (
+                  {tenantSignedAt && (
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                       <div className="h-2 w-2 bg-green-600 rounded-full"></div>
                       <div className="flex-1">
                         <p className="font-medium">Signé par le locataire</p>
                         <p className="text-sm text-gray-600">
-                          {new Date(lease.tenant_signature_date).toLocaleDateString("fr-FR", {
+                          {new Date(tenantSignedAt).toLocaleDateString("fr-FR", {
                             weekday: "long",
                             year: "numeric",
                             month: "long",
                             day: "numeric",
                           })}{" "}
                           à{" "}
-                          {new Date(lease.tenant_signature_date).toLocaleTimeString("fr-FR", {
+                          {new Date(tenantSignedAt).toLocaleTimeString("fr-FR", {
                             hour: "2-digit",
                             minute: "2-digit",
                           })}
@@ -732,20 +999,20 @@ export default function LeaseDetailPage() {
                     </div>
                   )}
 
-                  {lease.owner_signature_date && (
+                  {ownerSignedAt && (
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                       <div className="h-2 w-2 bg-green-600 rounded-full"></div>
                       <div className="flex-1">
                         <p className="font-medium">Signé par le propriétaire</p>
                         <p className="text-sm text-gray-600">
-                          {new Date(lease.owner_signature_date).toLocaleDateString("fr-FR", {
+                          {new Date(ownerSignedAt).toLocaleDateString("fr-FR", {
                             weekday: "long",
                             year: "numeric",
                             month: "long",
                             day: "numeric",
                           })}{" "}
                           à{" "}
-                          {new Date(lease.owner_signature_date).toLocaleTimeString("fr-FR", {
+                          {new Date(ownerSignedAt).toLocaleTimeString("fr-FR", {
                             hour: "2-digit",
                             minute: "2-digit",
                           })}
