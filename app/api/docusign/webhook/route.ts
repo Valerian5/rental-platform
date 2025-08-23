@@ -1,58 +1,76 @@
-import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase";
-import { XMLParser } from "fast-xml-parser";
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase-server-client';
+import xml2js from 'xml2js';
 
+// Configuration du parser XML
+const parser = new xml2js.Parser({ explicitArray: false });
+
+/**
+ * Gère les notifications webhook de Docusign.
+ * Cette fonction est appelée par Docusign à chaque changement de statut d'une enveloppe.
+ */
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.text();
-    console.log("📩 Webhook DocuSign:", body);
+    const rawBody = await req.text();
+    const supabase = createClient();
 
-    const parser = new XMLParser({ ignoreAttributes: false });
-    const json = parser.parse(body);
+    // Parse le corps de la requête XML en objet JavaScript
+    const result = await parser.parseStringPromise(rawBody);
 
-    const envelope = json?.DocuSignEnvelopeInformation?.EnvelopeStatus;
-    const envelopeId = envelope?.EnvelopeID;
-    const envelopeStatus = envelope?.Status;
+    const envelopeStatus = result.DocuSignEnvelopeInformation.EnvelopeStatus;
+    const envelopeId = envelopeStatus.EnvelopeID;
+    const status = envelopeStatus.Status;
 
-    if (!envelopeId || !envelopeStatus) {
-      console.warn("❌ Webhook sans EnvelopeID ou Status");
-      return NextResponse.json({ ok: false });
+    // Trouve le bail correspondant à l'enveloppe Docusign
+    const { data: lease, error: fetchError } = await supabase
+      .from('leases')
+      .select('id, signatures_detail')
+      .eq('docusign_envelope_id', envelopeId)
+      .single();
+
+    if (fetchError || !lease) {
+      console.error('Bail non trouvé pour envelopeId:', envelopeId, fetchError);
+      return NextResponse.json({ status: 'error', message: 'Lease not found' }, { status: 404 });
     }
 
-    // Récupère la liste des destinataires
-    let recipients = envelope?.RecipientStatuses?.RecipientStatus || [];
-    if (!Array.isArray(recipients)) recipients = [recipients]; // normaliser en tableau
+    // Extrait et formate les statuts de chaque signataire
+    const recipientStatuses = envelopeStatus.RecipientStatuses.RecipientStatus;
+    const signaturesDetail = Array.isArray(recipientStatuses) 
+      ? recipientStatuses.map((recipient: any) => ({
+          name: recipient.UserName,
+          email: recipient.Email,
+          status: recipient.Status,
+          signedDate: recipient.Signed,
+          deliveredDate: recipient.Delivered,
+        }))
+      : [{ // Gère le cas où il n'y a qu'un seul signataire
+          name: recipientStatuses.UserName,
+          email: recipientStatuses.Email,
+          status: recipientStatuses.Status,
+          signedDate: recipientStatuses.Signed,
+          deliveredDate: recipientStatuses.Delivered,
+      }];
 
-    const supabase = createServerClient();
-
-    // Construire un objet avec les statuts par signataire
-    const signatures: Record<string, any> = {};
-    for (const r of recipients) {
-      signatures[r.Email] = {
-        status: r.Status, // Sent, Delivered, Completed, Declined...
-        signed_at: r.Signed || null,
-      };
-    }
-
-    // Mise à jour du bail
-    const { error } = await supabase
-      .from("leases")
+    // Met à jour la table 'leases' avec le nouveau statut et les détails de signature
+    const { error: updateError } = await supabase
+      .from('leases')
       .update({
-        signature_status: envelopeStatus.toLowerCase(),
-        signed_at: envelopeStatus === "Completed" ? new Date().toISOString() : null,
-        signatures_detail: signatures, // JSONB dans ta table leases
+        docusign_status: status,
+        signatures_detail: signaturesDetail,
+        // Si le statut est "Completed", on enregistre la date de complétion
+        ...(status === 'Completed' && { docusign_completed_at: new Date().toISOString(), status: 'active' }),
       })
-      .eq("docusign_envelope_id", envelopeId);
+      .eq('docusign_envelope_id', envelopeId);
 
-    if (error) {
-      console.error("❌ Erreur update lease:", error);
-    } else {
-      console.log(`✅ Lease mis à jour (envelope: ${envelopeId}, status: ${envelopeStatus})`);
+    if (updateError) {
+      console.error('Erreur lors de la mise à jour du bail:', updateError);
+      throw updateError;
     }
 
-    return NextResponse.json({ ok: true });
+    console.log(`Statut du bail ${lease.id} mis à jour à ${status}`);
+    return NextResponse.json({ status: 'ok' });
   } catch (error) {
-    console.error("❌ Erreur webhook:", error);
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
+    console.error('Erreur lors du traitement du webhook Docusign:', error);
+    return NextResponse.json({ status: 'error', message: 'Internal Server Error' }, { status: 500 });
   }
 }
