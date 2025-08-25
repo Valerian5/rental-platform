@@ -1,9 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase-server-client';
-import xml2js from 'xml2js';
+import { type NextRequest, NextResponse } from "next/server"
+import { createClient } from "@/lib/supabase-server-client"
+import { NotificationsService } from "@/lib/notifications-service"
+import xml2js from "xml2js"
 
 // Configuration du parser XML
-const parser = new xml2js.Parser({ explicitArray: false });
+const parser = new xml2js.Parser({ explicitArray: false })
+
+const processedEnvelopes = new Map<string, number>()
+const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
 
 /**
  * Gère les notifications webhook de Docusign.
@@ -11,31 +15,38 @@ const parser = new xml2js.Parser({ explicitArray: false });
  */
 export async function POST(req: NextRequest) {
   try {
-    const rawBody = await req.text();
-    const supabase = createClient();
+    const rawBody = await req.text()
+    const supabase = createClient()
 
     // Parse le corps de la requête XML en objet JavaScript
-    const result = await parser.parseStringPromise(rawBody);
+    const result = await parser.parseStringPromise(rawBody)
 
-    const envelopeStatus = result.DocuSignEnvelopeInformation.EnvelopeStatus;
-    const envelopeId = envelopeStatus.EnvelopeID;
-    const status = envelopeStatus.Status;
+    const envelopeStatus = result.DocuSignEnvelopeInformation.EnvelopeStatus
+    const envelopeId = envelopeStatus.EnvelopeID
+    const status = envelopeStatus.Status
+
+    const now = Date.now()
+    const lastProcessed = processedEnvelopes.get(envelopeId)
+    if (lastProcessed && now - lastProcessed < CACHE_DURATION) {
+      console.log(`⏭️ Enveloppe ${envelopeId} déjà traitée récemment, ignorée`)
+      return NextResponse.json({ status: "ok", message: "Already processed" })
+    }
 
     // Trouve le bail correspondant à l'enveloppe Docusign
     const { data: lease, error: fetchError } = await supabase
-      .from('leases')
-      .select('id, signatures_detail')
-      .eq('docusign_envelope_id', envelopeId)
-      .single();
+      .from("leases")
+      .select("id, signatures_detail, agency_id")
+      .eq("docusign_envelope_id", envelopeId)
+      .single()
 
     if (fetchError || !lease) {
-      console.error('Bail non trouvé pour envelopeId:', envelopeId, fetchError);
-      return NextResponse.json({ status: 'error', message: 'Lease not found' }, { status: 404 });
+      console.error("Bail non trouvé pour envelopeId:", envelopeId, fetchError)
+      return NextResponse.json({ status: "error", message: "Lease not found" }, { status: 404 })
     }
 
     // Extrait et formate les statuts de chaque signataire
-    const recipientStatuses = envelopeStatus.RecipientStatuses.RecipientStatus;
-    const signaturesDetail = Array.isArray(recipientStatuses) 
+    const recipientStatuses = envelopeStatus.RecipientStatuses.RecipientStatus
+    const signaturesDetail = Array.isArray(recipientStatuses)
       ? recipientStatuses.map((recipient: any) => ({
           name: recipient.UserName,
           email: recipient.Email,
@@ -43,34 +54,57 @@ export async function POST(req: NextRequest) {
           signedDate: recipient.Signed,
           deliveredDate: recipient.Delivered,
         }))
-      : [{ // Gère le cas où il n'y a qu'un seul signataire
-          name: recipientStatuses.UserName,
-          email: recipientStatuses.Email,
-          status: recipientStatuses.Status,
-          signedDate: recipientStatuses.Signed,
-          deliveredDate: recipientStatuses.Delivered,
-      }];
+      : [
+          {
+            // Gère le cas où il n'y a qu'un seul signataire
+            name: recipientStatuses.UserName,
+            email: recipientStatuses.Email,
+            status: recipientStatuses.Status,
+            signedDate: recipientStatuses.Signed,
+            deliveredDate: recipientStatuses.Delivered,
+          },
+        ]
 
     // Met à jour la table 'leases' avec le nouveau statut et les détails de signature
     const { error: updateError } = await supabase
-      .from('leases')
+      .from("leases")
       .update({
         docusign_status: status,
         signatures_detail: signaturesDetail,
         // Si le statut est "Completed", on enregistre la date de complétion
-        ...(status === 'Completed' && { docusign_completed_at: new Date().toISOString(), status: 'active' }),
+        ...(status === "Completed" && { docusign_completed_at: new Date().toISOString(), status: "active" }),
       })
-      .eq('docusign_envelope_id', envelopeId);
+      .eq("docusign_envelope_id", envelopeId)
 
     if (updateError) {
-      console.error('Erreur lors de la mise à jour du bail:', updateError);
-      throw updateError;
+      console.error("Erreur lors de la mise à jour du bail:", updateError)
+      throw updateError
     }
 
-    console.log(`Statut du bail ${lease.id} mis à jour à ${status}`);
-    return NextResponse.json({ status: 'ok' });
+    if (["Sent", "Delivered", "Completed", "Declined"].includes(status)) {
+      try {
+        await NotificationsService.sendDocusignStatusUpdate(lease.id, status, signaturesDetail)
+        console.log(`📧 Notification envoyée pour bail ${lease.id}, statut: ${status}`)
+      } catch (emailError) {
+        console.error("❌ Erreur envoi notification email:", emailError)
+        // Ne pas faire échouer le webhook si l'email échoue
+      }
+    }
+
+    processedEnvelopes.set(envelopeId, now)
+
+    if (processedEnvelopes.size > 1000) {
+      for (const [id, timestamp] of processedEnvelopes.entries()) {
+        if (now - timestamp > CACHE_DURATION) {
+          processedEnvelopes.delete(id)
+        }
+      }
+    }
+
+    console.log(`✅ Statut du bail ${lease.id} mis à jour à ${status}`)
+    return NextResponse.json({ status: "ok" })
   } catch (error) {
-    console.error('Erreur lors du traitement du webhook Docusign:', error);
-    return NextResponse.json({ status: 'error', message: 'Internal Server Error' }, { status: 500 });
+    console.error("Erreur lors du traitement du webhook Docusign:", error)
+    return NextResponse.json({ status: "error", message: "Internal Server Error" }, { status: 500 })
   }
 }

@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
-import { put } from "@vercel/blob"
+import { SupabaseStorageService } from "@/lib/supabase-storage-service"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -17,6 +17,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ success: false, error: "Type de signataire invalide" }, { status: 400 })
     }
 
+    if (file.type !== "application/pdf") {
+      return NextResponse.json({ success: false, error: "Seuls les fichiers PDF sont acceptés" }, { status: 400 })
+    }
+
     const supabase = createServerClient()
 
     // Vérifier que le bail existe
@@ -26,12 +30,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ success: false, error: "Bail non trouvé" }, { status: 404 })
     }
 
-    // Upload du fichier vers Vercel Blob
-    const filename = `lease-${leaseId}-signed-${signerType}-${Date.now()}.pdf`
-    const blob = await put(filename, file, {
-      access: "public",
-      addRandomSuffix: false,
-    })
+    const uploadResult = await SupabaseStorageService.uploadFile(file, "lease-documents", `signed-documents/${leaseId}`)
 
     // Mettre à jour le bail avec le document signé
     const updateData: any = {
@@ -41,11 +40,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     if (signerType === "owner") {
       updateData.signed_by_owner = true
       updateData.owner_signature_date = new Date().toISOString()
-      updateData.owner_signed_document_url = blob.url
+      updateData.owner_signed_document_url = uploadResult.url
     } else {
       updateData.signed_by_tenant = true
       updateData.tenant_signature_date = new Date().toISOString()
-      updateData.tenant_signed_document_url = blob.url
+      updateData.tenant_signed_document_url = uploadResult.url
     }
 
     // Si les deux parties ont signé, marquer le bail comme actif
@@ -65,7 +64,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({
       success: true,
       message: "Document signé uploadé avec succès",
-      documentUrl: blob.url,
+      documentUrl: uploadResult.url,
       leaseStatus: updateData.status,
     })
   } catch (error) {
