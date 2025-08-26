@@ -1,5 +1,5 @@
 import { supabase } from "./supabase"
-import { emailService } from "./email-service"
+import { emailService } from "lib/email-service"
 
 export interface Notification {
   id: string
