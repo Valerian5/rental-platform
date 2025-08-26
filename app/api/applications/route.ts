@@ -217,7 +217,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    // --- AJOUT DE LA NOTIFICATION ---
+    // --- AJOUT ENVOI EMAIL + NOTIF ---
     if (data) {
       const { data: tenant } = await supabase
         .from("users")
@@ -233,17 +233,26 @@ export async function POST(request: NextRequest) {
 
       if (tenant && property && property.owner) {
         const logoUrl = property.owner.agency?.logo_url ?? undefined;
-        
-        // Notifier le locataire
-        sendApplicationReceivedEmail(tenant, property, logoUrl).catch(console.error);
 
-        // Notifier le propriétaire
-        sendNewApplicationNotificationToOwner(property.owner, tenant, property, logoUrl).catch(console.error);
+        // Email locataire
+        sendApplicationReceivedEmail(tenant, property, logoUrl).catch(
+          console.error
+        );
+
+        // Email propriétaire
+        sendNewApplicationNotificationToOwner(
+          property.owner,
+          tenant,
+          property,
+          logoUrl
+        ).catch(console.error);
       } else {
-        console.error("Impossible de trouver toutes les informations pour l'envoi des emails de candidature.");
+        console.error(
+          "Impossible de trouver toutes les infos pour l'envoi des emails."
+        );
       }
     }
-    // --- FIN DE L'AJOUT ---
+    // --- FIN AJOUT ---
 
     return NextResponse.json({ application: data });
   } catch (error) {
