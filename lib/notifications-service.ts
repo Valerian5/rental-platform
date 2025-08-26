@@ -1,5 +1,4 @@
 import { supabase } from "./supabase"
-import { emailService } from "lib/email-service"
 
 export interface Notification {
   id: string
@@ -72,12 +71,8 @@ export const notificationsService = {
     }
   },
 
-  async createNotification(
-    userId: string,
-    notificationData: Partial<Notification>,
-    emailData?: any,
-  ): Promise<Notification> {
-    console.log("🔔 NotificationsService.createNotification", { userId, notificationData, emailData })
+  async createNotification(userId: string, notificationData: Partial<Notification>): Promise<Notification> {
+    console.log("🔔 NotificationsService.createNotification", { userId, notificationData })
 
     try {
       const { data, error } = await supabase
@@ -100,47 +95,11 @@ export const notificationsService = {
       }
 
       console.log("✅ Notification créée:", data.id)
-
-      if (emailData && emailData.userEmail && emailData.template) {
-        try {
-          console.log("📧 Envoi email automatique pour notification:", emailData.template)
-
-          const emailSent = await emailService.sendEmail({
-            to: emailData.userEmail,
-            template: emailData.template,
-            data: emailData.data || {},
-          })
-
-          if (emailSent) {
-            console.log("✅ Email de notification envoyé")
-          } else {
-            console.log("⚠️ Échec envoi email de notification")
-          }
-        } catch (emailError) {
-          console.error("❌ Erreur envoi email notification:", emailError)
-          // On ne bloque pas le processus si l'email échoue
-        }
-      }
-
       return data as Notification
     } catch (error) {
       console.error("❌ Erreur dans createNotification:", error)
       throw error
     }
-  },
-
-  async createNotificationWithEmail(
-    userId: string,
-    userEmail: string,
-    notificationData: Partial<Notification>,
-    emailTemplate: string,
-    emailData: Record<string, any>,
-  ): Promise<Notification> {
-    return this.createNotification(userId, notificationData, {
-      userEmail,
-      template: emailTemplate,
-      data: emailData,
-    })
   },
 
   async markAsRead(notificationId: string): Promise<void> {
@@ -208,25 +167,12 @@ export const notificationsService = {
     const tenantName = `${tenantData.first_name || ""} ${tenantData.last_name || ""}`.trim() || "Un locataire"
     const propertyTitle = propertyData.title || "votre bien"
 
-    await this.createNotificationWithEmail(
-      propertyData.owner_id,
-      ownerData.email,
-      {
-        title: "Nouvelle candidature",
-        content: `${tenantName} a postulé pour ${propertyTitle}`,
-        type: "application_received",
-        action_url: `/owner/applications/${applicationData.id}`,
-      },
-      "application_received",
-      {
-        ownerName: `${ownerData.first_name || ""} ${ownerData.last_name || ""}`.trim(),
-        tenantName,
-        propertyTitle,
-        propertyAddress: `${propertyData.address}, ${propertyData.city}`,
-        income: applicationData.income || 0,
-        applicationUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/owner/applications/${applicationData.id}`,
-      },
-    )
+    await this.createNotification(ownerData.id, {
+      title: "Nouvelle candidature",
+      content: `${tenantName} a postulé pour ${propertyTitle}`,
+      type: "application_received",
+      action_url: `/owner/applications/${applicationData.id}`,
+    })
   },
 
   // Notifications pour les changements de statut de candidature
@@ -435,45 +381,20 @@ export const notificationsService = {
     })
 
     // Notification au locataire
-    await this.createNotificationWithEmail(
-      tenantData.id,
-      tenantData.email,
-      {
-        title: "Visite confirmée",
-        content: `Votre visite pour ${propertyData.title} est confirmée le ${visitDate}`,
-        type: "visit_scheduled",
-        action_url: `/tenant/visits`,
-      },
-      "visit_scheduled",
-      {
-        tenantName: `${tenantData.first_name || ""} ${tenantData.last_name || ""}`.trim(),
-        propertyTitle: propertyData.title,
-        propertyAddress: `${propertyData.address}, ${propertyData.city}`,
-        visitDate,
-        visitUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/tenant/visits`,
-      },
-    )
+    await this.createNotification(tenantData.id, {
+      title: "Visite confirmée",
+      content: `Votre visite pour ${propertyData.title} est confirmée le ${visitDate}`,
+      type: "visit_scheduled",
+      action_url: `/tenant/visits`,
+    })
 
     // Notification au propriétaire
-    await this.createNotificationWithEmail(
-      propertyData.owner_id,
-      ownerData.email,
-      {
-        title: "Visite programmée",
-        content: `Une visite est programmée pour ${propertyData.title} le ${visitDate}`,
-        type: "visit_scheduled",
-        action_url: `/owner/visits`,
-      },
-      "visit_scheduled_owner",
-      {
-        ownerName: `${ownerData.first_name || ""} ${ownerData.last_name || ""}`.trim(),
-        tenantName: `${tenantData.first_name || ""} ${tenantData.last_name || ""}`.trim(),
-        propertyTitle: propertyData.title,
-        propertyAddress: `${propertyData.address}, ${propertyData.city}`,
-        visitDate,
-        visitUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/owner/visits`,
-      },
-    )
+    await this.createNotification(ownerData.id, {
+      title: "Visite programmée",
+      content: `Une visite est programmée pour ${propertyData.title} le ${visitDate}`,
+      type: "visit_scheduled",
+      action_url: `/owner/visits`,
+    })
   },
 
   async notifyVisitCancelled(
@@ -644,10 +565,7 @@ export const notificationsService = {
         }
 
         if (shouldNotify) {
-          await this.createNotificationWithEmail(user.id, user.email, notificationData, `agency_${eventType}`, {
-            userName: `${user.first_name || ""} ${user.last_name || ""}`.trim(),
-            ...eventData,
-          })
+          await this.createNotification(user.id, notificationData)
         }
       }
     } catch (error) {
@@ -750,24 +668,12 @@ export const notificationsService = {
 
     const signerName = `${signerData.first_name} ${signerData.last_name}`
 
-    await this.createNotificationWithEmail(
-      signerData.id,
-      signerData.email,
-      {
-        title: "Signature électronique requise",
-        content: `Votre bail pour ${propertyData.title} est prêt à être signé`,
-        type: "docusign_signature_request",
-        action_url: signingUrl,
-      },
-      "docusign_signature_request",
-      {
-        signerName,
-        propertyTitle: propertyData.title,
-        propertyAddress: `${propertyData.address}, ${propertyData.city}`,
-        signingUrl,
-        signerType: signerType === "tenant" ? "locataire" : "propriétaire",
-      },
-    )
+    await this.createNotification(signerData.id, {
+      title: "Signature électronique requise",
+      content: `Votre bail pour ${propertyData.title} est prêt à être signé`,
+      type: "docusign_signature_request",
+      action_url: signingUrl,
+    })
   },
 
   async notifyDocuSignSignatureCompleted(leaseData: any, allPartiesData: any, propertyData: any) {
@@ -775,23 +681,12 @@ export const notificationsService = {
 
     // Notify all parties that the lease is fully signed
     for (const party of allPartiesData) {
-      await this.createNotificationWithEmail(
-        party.id,
-        party.email,
-        {
-          title: "Bail entièrement signé",
-          content: `Le bail pour ${propertyData.title} a été signé par toutes les parties`,
-          type: "docusign_completed",
-          action_url: `/leases/${leaseData.id}`,
-        },
-        "docusign_completed",
-        {
-          partyName: `${party.first_name} ${party.last_name}`,
-          propertyTitle: propertyData.title,
-          propertyAddress: `${propertyData.address}, ${propertyData.city}`,
-          leaseUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/leases/${leaseData.id}`,
-        },
-      )
+      await this.createNotification(party.id, {
+        title: "Bail entièrement signé",
+        content: `Le bail pour ${propertyData.title} a été signé par toutes les parties`,
+        type: "docusign_completed",
+        action_url: `/leases/${leaseData.id}`,
+      })
     }
   },
 }
