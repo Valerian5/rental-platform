@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
+import { emailService } from "@/lib/email-service"
 
 export async function GET(request: NextRequest) {
   try {
@@ -95,6 +96,65 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
+    if (data && data.status === "scheduled") {
+      try {
+        // Get tenant and property details for email
+        const { data: tenant } = await supabase.from("users").select("*").eq("id", data.tenant_id).single()
+
+        const { data: property } = await supabase
+          .from("properties")
+          .select("*, owner:users(*)")
+          .eq("id", data.property_id)
+          .single()
+
+        if (tenant && property && property.owner) {
+          // Send confirmation email to tenant
+          await emailService.sendEmail({
+            to: tenant.email,
+            template: "visit_scheduled",
+            data: {
+              tenantName: `${tenant.first_name} ${tenant.last_name}`,
+              propertyTitle: property.title,
+              propertyAddress: `${property.address}, ${property.city}`,
+              visitDate: new Date(data.visit_date).toLocaleDateString("fr-FR", {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+              visitUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/tenant/visits`,
+            },
+          })
+
+          // Send notification email to owner
+          await emailService.sendEmail({
+            to: property.owner.email,
+            template: "visit_scheduled_owner",
+            data: {
+              ownerName: `${property.owner.first_name} ${property.owner.last_name}`,
+              tenantName: `${tenant.first_name} ${tenant.last_name}`,
+              propertyTitle: property.title,
+              propertyAddress: `${property.address}, ${property.city}`,
+              visitDate: new Date(data.visit_date).toLocaleDateString("fr-FR", {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+              visitUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/owner/visits`,
+            },
+          })
+        }
+      } catch (emailError) {
+        console.error("❌ Erreur envoi email visite:", emailError)
+        // Don't fail the API call if email fails
+      }
+    }
+
     return NextResponse.json({ visit: data })
   } catch (error) {
     console.error("❌ Erreur API visits POST:", error)
@@ -116,6 +176,53 @@ export async function PATCH(request: NextRequest) {
     if (error) {
       console.error("❌ Erreur mise à jour visite:", error)
       return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
+    if (data && updateData.status && ["cancelled", "completed"].includes(updateData.status)) {
+      try {
+        // Get visit details with tenant and property info
+        const { data: visitDetails } = await supabase
+          .from("visits")
+          .select(`
+            *,
+            tenant:users!visits_tenant_id_fkey(*),
+            property:properties(*, owner:users(*))
+          `)
+          .eq("id", id)
+          .single()
+
+        if (visitDetails && visitDetails.tenant && visitDetails.property && visitDetails.property.owner) {
+          const template = updateData.status === "cancelled" ? "visit_cancelled" : "visit_completed"
+
+          // Notify tenant
+          await emailService.sendEmail({
+            to: visitDetails.tenant.email,
+            template,
+            data: {
+              tenantName: `${visitDetails.tenant.first_name} ${visitDetails.tenant.last_name}`,
+              propertyTitle: visitDetails.property.title,
+              propertyAddress: `${visitDetails.property.address}, ${visitDetails.property.city}`,
+              visitDate: new Date(visitDetails.visit_date).toLocaleDateString("fr-FR"),
+              status: updateData.status,
+            },
+          })
+
+          // Notify owner
+          await emailService.sendEmail({
+            to: visitDetails.property.owner.email,
+            template: `${template}_owner`,
+            data: {
+              ownerName: `${visitDetails.property.owner.first_name} ${visitDetails.property.owner.last_name}`,
+              tenantName: `${visitDetails.tenant.first_name} ${visitDetails.tenant.last_name}`,
+              propertyTitle: visitDetails.property.title,
+              visitDate: new Date(visitDetails.visit_date).toLocaleDateString("fr-FR"),
+              status: updateData.status,
+            },
+          })
+        }
+      } catch (emailError) {
+        console.error("❌ Erreur envoi email mise à jour visite:", emailError)
+      }
     }
 
     return NextResponse.json({ visit: data })

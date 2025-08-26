@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { emailService } from "@/lib/email-service"
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
@@ -104,6 +105,66 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     if (error) {
       console.error("Erreur mise à jour incident:", error)
       return NextResponse.json({ success: false, error: "Erreur lors de la mise à jour" }, { status: 500 })
+    }
+
+    if (status && ["resolved", "in_progress", "cancelled"].includes(status)) {
+      try {
+        // Get incident details with tenant and owner info
+        const { data: incident } = await supabase
+          .from("incidents")
+          .select(`
+            *,
+            property:properties(*),
+            lease:leases(
+              tenant:users!leases_tenant_id_fkey(*),
+              owner:users!leases_owner_id_fkey(*)
+            )
+          `)
+          .eq("id", incidentId)
+          .single()
+
+        if (incident && incident.lease) {
+          const statusMessages = {
+            resolved: "résolu",
+            in_progress: "en cours de traitement",
+            cancelled: "annulé",
+          }
+
+          // Notify tenant
+          if (incident.lease.tenant) {
+            await emailService.sendEmail({
+              to: incident.lease.tenant.email,
+              template: "incident_status_update",
+              data: {
+                tenantName: `${incident.lease.tenant.first_name} ${incident.lease.tenant.last_name}`,
+                incidentTitle: incident.title,
+                propertyTitle: incident.property.title,
+                status: statusMessages[status as keyof typeof statusMessages] || status,
+                resolutionNotes: resolution_notes || "",
+                incidentUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/tenant/incidents/${incidentId}`,
+              },
+            })
+          }
+
+          // Notify owner if status is resolved
+          if (status === "resolved" && incident.lease.owner) {
+            await emailService.sendEmail({
+              to: incident.lease.owner.email,
+              template: "incident_resolved_owner",
+              data: {
+                ownerName: `${incident.lease.owner.first_name} ${incident.lease.owner.last_name}`,
+                incidentTitle: incident.title,
+                propertyTitle: incident.property.title,
+                resolutionNotes: resolution_notes || "",
+                cost: cost || 0,
+                incidentUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/owner/incidents/${incidentId}`,
+              },
+            })
+          }
+        }
+      } catch (emailError) {
+        console.error("❌ Erreur envoi email statut incident:", emailError)
+      }
     }
 
     return NextResponse.json({
