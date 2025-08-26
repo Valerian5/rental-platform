@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -16,8 +17,76 @@ import { LogoUploader } from "@/components/settings/logo-uploader"
 import { FontSelector } from "@/components/settings/font-selector"
 import { ThemePreview } from "@/components/settings/theme-preview"
 import { Crown } from "lucide-react"
+import { toast } from "sonner"
+import { premiumFeaturesService } from "@/lib/premium-features-service"
+
+interface PremiumFeatures {
+  electronic_signature: boolean
+  advanced_templates: boolean
+  api_integrations: boolean
+}
 
 export default function SettingsPage() {
+  const [premiumFeatures, setPremiumFeatures] = useState<PremiumFeatures>({
+    electronic_signature: false,
+    advanced_templates: false,
+    api_integrations: false,
+  })
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    loadPremiumFeatures()
+  }, [])
+
+  const loadPremiumFeatures = async () => {
+    try {
+      const features = await premiumFeaturesService.getPremiumFeatures()
+      setPremiumFeatures(features)
+    } catch (error) {
+      console.error("Erreur chargement premium features:", error)
+      toast.error("Erreur lors du chargement des fonctionnalités premium")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handlePremiumFeatureToggle = (feature: keyof PremiumFeatures, enabled: boolean) => {
+    setPremiumFeatures((prev) => ({
+      ...prev,
+      [feature]: enabled,
+    }))
+  }
+
+  const savePremiumFeatures = async () => {
+    try {
+      setSaving(true)
+
+      const response = await fetch("/api/admin/settings/premium-features", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ features: premiumFeatures }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Erreur lors de la sauvegarde")
+      }
+
+      premiumFeaturesService.clearCache()
+
+      toast.success("Fonctionnalités premium sauvegardées avec succès")
+    } catch (error) {
+      console.error("Erreur sauvegarde premium features:", error)
+      toast.error(error instanceof Error ? error.message : "Erreur lors de la sauvegarde")
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div className="container mx-auto py-10">
       <div className="mb-8">
@@ -34,7 +103,6 @@ export default function SettingsPage() {
         </TabsList>
 
         <TabsContent value="appearance" className="space-y-6">
-          {/* Theme Customization */}
           <Card>
             <CardHeader>
               <CardTitle>Personnalisation du thème</CardTitle>
@@ -43,7 +111,6 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Logo Upload */}
               <div className="space-y-4">
                 <h3 className="text-lg font-medium">Logo</h3>
                 <LogoUploader />
@@ -51,7 +118,6 @@ export default function SettingsPage() {
 
               <Separator />
 
-              {/* Color Scheme */}
               <div className="space-y-4">
                 <h3 className="text-lg font-medium">Schéma de couleurs</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -77,7 +143,6 @@ export default function SettingsPage() {
 
               <Separator />
 
-              {/* Typography */}
               <div className="space-y-4">
                 <h3 className="text-lg font-medium">Typographie</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -131,7 +196,6 @@ export default function SettingsPage() {
 
               <Separator />
 
-              {/* Header Style */}
               <div className="space-y-4">
                 <h3 className="text-lg font-medium">Style de l'en-tête</h3>
                 <RadioGroup defaultValue="standard">
@@ -159,7 +223,6 @@ export default function SettingsPage() {
             </CardFooter>
           </Card>
 
-          {/* Additional Appearance Settings */}
           <Card>
             <CardHeader>
               <CardTitle>Options supplémentaires</CardTitle>
@@ -583,7 +646,6 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Premium Features Section */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -593,38 +655,63 @@ export default function SettingsPage() {
               <CardDescription>Activez ou désactivez les fonctionnalités premium de la plateforme</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Signature électronique DocuSign</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Permettre la signature électronique sécurisée via DocuSign
-                    </p>
-                  </div>
-                  <Switch />
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                  <span className="ml-2">Chargement...</span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Templates avancés</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Accès aux templates de documents avancés et personnalisables
-                    </p>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Signature électronique DocuSign</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Permettre la signature électronique sécurisée via DocuSign
+                      </p>
+                    </div>
+                    <Switch
+                      checked={premiumFeatures.electronic_signature}
+                      onCheckedChange={(checked) => handlePremiumFeatureToggle("electronic_signature", checked)}
+                    />
                   </div>
-                  <Switch />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Intégrations API</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Intégrations avec des services tiers (comptabilité, banques, etc.)
-                    </p>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Templates avancés</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Accès aux templates de documents avancés et personnalisables
+                      </p>
+                    </div>
+                    <Switch
+                      checked={premiumFeatures.advanced_templates}
+                      onCheckedChange={(checked) => handlePremiumFeatureToggle("advanced_templates", checked)}
+                    />
                   </div>
-                  <Switch />
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Intégrations API</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Intégrations avec des services tiers (comptabilité, banques, etc.)
+                      </p>
+                    </div>
+                    <Switch
+                      checked={premiumFeatures.api_integrations}
+                      onCheckedChange={(checked) => handlePremiumFeatureToggle("api_integrations", checked)}
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
             </CardContent>
             <CardFooter>
-              <Button className="ml-auto">Enregistrer les fonctionnalités</Button>
+              <Button className="ml-auto" onClick={savePremiumFeatures} disabled={saving || loading}>
+                {saving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Sauvegarde...
+                  </>
+                ) : (
+                  "Enregistrer les fonctionnalités"
+                )}
+              </Button>
             </CardFooter>
           </Card>
         </TabsContent>
