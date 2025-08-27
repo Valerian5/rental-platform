@@ -8,18 +8,20 @@ import WelcomeEmail from "@/components/emails/welcome-email"
 import PasswordResetEmail from "@/components/emails/password-reset-email"
 import ApplicationReceivedEmail from "@/components/emails/application-received-email"
 import ApplicationStatusUpdateEmail from "@/components/emails/application-status-update-email"
+import ApplicationWithdrawnEmail from "@/components/emails/application-withdrawn-email"
 import VisitProposalEmail from "@/components/emails/visit-proposal-email"
 import VisitReminderEmail from "@/components/emails/visit-reminder-email"
+import VisitScheduledEmail from "@/components/emails/VisitScheduledEmail"
 import NewLeaseEmail from "@/components/emails/new-lease-email"
 import RentReminderEmail from "@/components/emails/rent-reminder-email"
 import PaymentConfirmationEmail from "@/components/emails/payment-confirmation-email"
 import NewMessageNotificationEmail from "@/components/emails/new-message-notification-email"
 import IncidentConfirmationEmail from "@/components/emails/incident-confirmation-email"
+import IncidentResponseEmail from "@/components/emails/incident-response-email"
 import SavedSearchAlertEmail from "@/components/emails/saved-search-alert-email"
 import NewApplicationNotificationToOwnerEmail from "@/components/emails/new-application-notification-to-owner-email"
 import InviteUserEmail from "@/components/emails/invite-user-email"
-import VisitScheduledEmail from "@/components/emails/VisitScheduledEmail"
-
+import DocumentReminderEmail from "@/components/emails/document-reminder-email"
 
 // Initialisation du client Resend
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -35,10 +37,12 @@ export enum NotificationType {
   SAVED_SEARCH_ALERT = "savedSearchAlert",
   NEW_APPLICATION = "newApplication",
   INCIDENT_REPORTED = "incidentReported",
+  INCIDENT_RESPONSE = "incidentResponse",
   DOCUSIGN_SIGNATURE_REQUEST = "docuSignSignatureRequest",
   DOCUSIGN_COMPLETED = "docuSignCompleted",
   LEASE_DOCUMENT_SHARED = "leaseDocumentShared",
   ADMIN_INVITATION = "adminInvitation",
+  DOCUMENT_REMINDER = "documentReminder",
 }
 
 export type NotificationSettings = {
@@ -123,84 +127,38 @@ export async function sendApplicationReceivedEmail(user: User, property: Propert
 export async function sendApplicationStatusUpdateEmail(
   user: User,
   property: Property,
-  status: "Acceptée" | "Refusée",
+  status: string,
   logoUrl?: string,
 ) {
+  const statusMessages = {
+    pending: "en attente",
+    under_review: "en cours d'analyse", 
+    accepted: "acceptée",
+    rejected: "refusée"
+  }
+  
+  const statusText = statusMessages[status as keyof typeof statusMessages] || status
+  
   await sendEmail(
     user,
     NotificationType.APPLICATION_STATUS_UPDATE,
-    `Votre candidature pour "${property.title}" a été ${status.toLowerCase()}`,
-    ApplicationStatusUpdateEmail({ userName: user.name, propertyTitle: property.title, status, logoUrl }),
+    `Votre candidature pour "${property.title}" est ${statusText}`,
+    ApplicationStatusUpdateEmail({ userName: user.name, propertyTitle: property.title, status: statusText, logoUrl }),
   )
 }
 
-
-// --- Notification mise à jour de statut ---
-export async function sendApplicationStatusUpdateEmail(
-  tenant: any,
-  property: any,
-  owner: any,
-  newStatus: string
-) {
-  try {
-    let statusMessage = ""
-    switch (newStatus) {
-      case "pending":
-        statusMessage = "Votre candidature est en attente."
-        break
-      case "in_review":
-        statusMessage = "Votre candidature est en cours d'analyse."
-        break
-      case "accepted":
-        statusMessage = "Félicitations ! Votre candidature a été acceptée."
-        break
-      case "rejected":
-        statusMessage = "Votre candidature a été refusée."
-        break
-      default:
-        statusMessage = `Statut mis à jour : ${newStatus}`
-    }
-
-    // Email pour le candidat
-    await sendEmail({
-      to: tenant.email,
-      subject: `Mise à jour de votre candidature - ${property.title}`,
-      react: (
-        <div>
-          <h1>Mise à jour de votre candidature</h1>
-          <p>
-            Bonjour <strong>{tenant.full_name}</strong>,
-          </p>
-          <p>{statusMessage}</p>
-          <p>
-            Bien concerné : <strong>{property.title}</strong>
-          </p>
-        </div>
-      ),
-    })
-
-    // Email pour le propriétaire (optionnel)
-    await sendEmail({
-      to: owner.email,
-      subject: `Statut candidature mis à jour - ${property.title}`,
-      react: (
-        <div>
-          <h1>Statut candidature mis à jour</h1>
-          <p>
-            Le statut de la candidature de <strong>{tenant.full_name}</strong> pour le
-            bien <strong>{property.title}</strong> est maintenant :
-          </p>
-          <p>
-            <strong>{newStatus}</strong>
-          </p>
-        </div>
-      ),
-    })
-  } catch (error) {
-    console.error("❌ Erreur envoi email mise à jour candidature:", error)
-  }
+export async function sendApplicationWithdrawnEmail(user: User, property: Property, logoUrl?: string) {
+  await sendEmail(
+    user,
+    null,
+    `Votre candidature pour ${property.title} a été retirée`,
+    ApplicationWithdrawnEmail({
+      userName: user.name,
+      propertyTitle: property.title,
+      logoUrl,
+    }),
+  )
 }
-
 
 export async function sendVisitProposalEmail(user: User, property: Property, visitSlots: Date[], logoUrl?: string) {
   await sendEmail(
@@ -227,38 +185,6 @@ export async function sendVisitReminderEmail(user: User, visit: Visit, logoUrl?:
     VisitReminderEmail({ userName: user.name, visitDate: formattedDate, property: visit.property, logoUrl }),
   )
 }
-
-export async function sendVisitScheduledEmail(
-  owner: { name: string; email: string },
-  property: { id: string; title: string },
-  visitDate: Date,
-  tenant: { first_name: string; last_name: string; email: string },
-  logoUrl?: string,
-) {
-  const formattedDate = visitDate.toLocaleDateString("fr-FR", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
-
-  await sendEmail(
-    owner,
-    null,
-    `Nouvelle visite programmée pour ${property.title}`,
-    VisitScheduledEmail({
-      ownerName: owner.name,
-      propertyTitle: property.title,
-      tenantName: `${tenant.first_name} ${tenant.last_name}`,
-      tenantEmail: tenant.email,
-      visitDate: formattedDate,
-      logoUrl,
-    }),
-  )
-}
-
 
 export async function sendNewLeaseEmail(user: User, property: Property, leaseUrl: string, logoUrl?: string) {
   await sendEmail(
@@ -305,12 +231,54 @@ export async function sendIncidentConfirmationEmail(user: User, property: Proper
   )
 }
 
+export async function sendIncidentResponseEmail(
+  user: User, 
+  responderName: string, 
+  incidentTitle: string, 
+  propertyTitle: string,
+  message: string,
+  logoUrl?: string
+) {
+  await sendEmail(
+    user,
+    NotificationType.INCIDENT_RESPONSE,
+    `Réponse à votre incident "${incidentTitle}"`,
+    IncidentResponseEmail({ 
+      userName: user.name, 
+      responderName, 
+      incidentTitle, 
+      propertyTitle,
+      message,
+      logoUrl 
+    }),
+  )
+}
+
 export async function sendSavedSearchAlertEmail(user: User, newProperties: Property[], logoUrl?: string) {
   await sendEmail(
     user,
     NotificationType.SAVED_SEARCH_ALERT,
     "De nouveaux biens correspondent à votre recherche !",
     SavedSearchAlertEmail({ userName: user.name, properties: newProperties, logoUrl }),
+  )
+}
+
+export async function sendDocumentReminderEmail(
+  user: User, 
+  propertyTitle: string, 
+  missingDocuments: string[], 
+  logoUrl?: string
+) {
+  await sendEmail(
+    user,
+    NotificationType.DOCUMENT_REMINDER,
+    "Rappel : Documents obligatoires à fournir",
+    DocumentReminderEmail({ 
+      userName: user.name, 
+      propertyTitle, 
+      missingDocuments, 
+      logoUrl 
+    }),
   )
 }
 
