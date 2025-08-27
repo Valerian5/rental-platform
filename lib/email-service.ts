@@ -24,8 +24,14 @@ import InviteUserEmail from "@/components/emails/invite-user-email"
 import DocumentReminderEmail from "@/components/emails/document-reminder-email"
 
 // Initialisation du client Resend
+if (!process.env.RESEND_API_KEY) {
+	console.error("RESEND_API_KEY manquant")
+}
 const resend = new Resend(process.env.RESEND_API_KEY)
-const fromEmail = "Louer Ici <notifications@louerici.fr>"
+
+// Forcer un expéditeur valide Resend
+const DEFAULT_FROM = "Louer Ici <notifications@louerici.fr>"
+const fromEmail = DEFAULT_FROM
 
 // --- TYPES ET ENUMS ---
 
@@ -80,25 +86,41 @@ async function sendEmail(
     throw new Error("Configuration email incomplète.")
   }
 
+  if (!process.env.RESEND_API_KEY) {
+    console.error("RESEND_API_KEY non défini")
+    throw new Error("Clé API Resend manquante")
+  }
+
   if (notificationType && user.notificationSettings?.[notificationType] === false) {
     console.log(`Notification ${notificationType} bloquée par les préférences de l'utilisateur ${user.email}.`)
     return
   }
 
   try {
-    const { data, error } = await resend.emails.send({
+    const payload = {
       from: fromEmail,
       to: user.email,
       subject,
       react: reactElement,
+    }
+
+    console.log("📨 Envoi email via Resend:", {
+      to: payload.to,
+      subject: payload.subject,
+      hasReact: !!payload.react,
     })
 
-    if (error) throw error
+    const { data, error } = await resend.emails.send(payload)
 
-    console.log(`Email '${subject}' envoyé à ${user.email}. ID: ${data?.id}`)
+    if (error) {
+      console.error("❌ Resend erreur brute:", error)
+      throw error
+    }
+
+    console.log(`✅ Email '${subject}' envoyé à ${user.email}. ID: ${data?.id}`)
     return data
   } catch (error) {
-    console.error(`Erreur lors de l'envoi de l'email à ${user.email}:`, error)
+    console.error(`❌ Erreur lors de l'envoi de l'email à ${user.email}:`, error)
     throw error
   }
 }
@@ -132,13 +154,17 @@ export async function sendApplicationStatusUpdateEmail(
 ) {
   const statusMessages = {
     pending: "en attente",
-    under_review: "en cours d'analyse", 
+    under_review: "en cours d'analyse",
     accepted: "acceptée",
-    rejected: "refusée"
+    rejected: "refusée",
+    withdrawn: "retirée",
+    "en analyse": "en cours d'analyse",
+    "acceptée": "acceptée",
+    "refusée": "refusée",
   }
-  
+
   const statusText = statusMessages[status as keyof typeof statusMessages] || status
-  
+
   await sendEmail(
     user,
     NotificationType.APPLICATION_STATUS_UPDATE,
@@ -232,9 +258,9 @@ export async function sendIncidentConfirmationEmail(user: User, property: Proper
 }
 
 export async function sendIncidentResponseEmail(
-  user: User, 
-  responderName: string, 
-  incidentTitle: string, 
+  user: User,
+  responderName: string,
+  incidentTitle: string,
   propertyTitle: string,
   message: string,
   logoUrl?: string
@@ -243,13 +269,13 @@ export async function sendIncidentResponseEmail(
     user,
     NotificationType.INCIDENT_RESPONSE,
     `Réponse à votre incident "${incidentTitle}"`,
-    IncidentResponseEmail({ 
-      userName: user.name, 
-      responderName, 
-      incidentTitle, 
+    IncidentResponseEmail({
+      userName: user.name,
+      responderName,
+      incidentTitle,
       propertyTitle,
       message,
-      logoUrl 
+      logoUrl
     }),
   )
 }
@@ -264,20 +290,20 @@ export async function sendSavedSearchAlertEmail(user: User, newProperties: Prope
 }
 
 export async function sendDocumentReminderEmail(
-  user: User, 
-  propertyTitle: string, 
-  missingDocuments: string[], 
+  user: User,
+  propertyTitle: string,
+  missingDocuments: string[],
   logoUrl?: string
 ) {
   await sendEmail(
     user,
     NotificationType.DOCUMENT_REMINDER,
     "Rappel : Documents obligatoires à fournir",
-    DocumentReminderEmail({ 
-      userName: user.name, 
-      propertyTitle, 
-      missingDocuments, 
-      logoUrl 
+    DocumentReminderEmail({
+      userName: user.name,
+      propertyTitle,
+      missingDocuments,
+      logoUrl
     }),
   )
 }
