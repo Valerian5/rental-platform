@@ -1,12 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import {
-  sendApplicationReceivedEmail,
-  sendNewApplicationNotificationToOwner,
-  sendApplicationStatusUpdateEmail,
-  sendApplicationWithdrawnEmail,
-  sendDocumentReminderEmail
-} from "@/lib/email-service";
+import { sendNewApplicationNotificationToOwner } from "@/lib/email-service";
 
 export async function GET(request: NextRequest) {
   try {
@@ -42,56 +36,52 @@ export async function GET(request: NextRequest) {
       }
 
       console.log(`📊 ${applications?.length || 0} candidatures trouvées`);
-
-      // Récupérer les visites séparément pour chaque candidature
-      const enrichedApplications = await Promise.all(
-        (applications || []).map(async (app) => {
-          try {
-            // Récupérer les visites pour cette candidature
-            const { data: visits } = await supabase
-              .from("visits")
-              .select("*")
-              .eq("tenant_id", tenantId)
-              .eq("property_id", app.property_id)
-              .order("visit_date", { ascending: true });
-
-            // Récupérer les créneaux proposés si ils existent
-            let proposedSlots = [];
-            if (
-              app.proposed_slot_ids &&
-              Array.isArray(app.proposed_slot_ids) &&
-              app.proposed_slot_ids.length > 0
-            ) {
-              const { data: slots } = await supabase
-                .from("property_visit_slots")
-                .select("*")
-                .in("id", app.proposed_slot_ids)
-                .order("date", { ascending: true });
-
-              proposedSlots = slots || [];
-            }
-
-            return {
-              ...app,
-              visits: visits || [],
-              proposed_visit_slots: proposedSlots,
-            };
-          } catch (enrichError) {
-            console.error("❌ Erreur enrichissement candidature:", enrichError);
-            return {
-              ...app,
-              visits: [],
-              proposed_visit_slots: [],
-            };
-          }
-        })
-      );
-
-      console.log(
-        `✅ ${enrichedApplications.length} candidatures enrichies pour le locataire`
-      );
-      return NextResponse.json({ applications: enrichedApplications });
+      return NextResponse.json({ applications });
     }
+
+          // Récupérer les visites séparément pour chaque candidature
+          const enrichedApplications = await Promise.all(
+            (applications || []).map(async (app) => {
+              try {
+                // Récupérer les visites pour cette candidature
+                const { data: visits } = await supabase
+                  .from("visits")
+                  .select("*")
+                  .eq("tenant_id", tenantId)
+                  .eq("property_id", app.property_id)
+                  .order("visit_date", { ascending: true })
+    
+                // Récupérer les créneaux proposés si ils existent
+                let proposedSlots = []
+                if (app.proposed_slot_ids && Array.isArray(app.proposed_slot_ids) && app.proposed_slot_ids.length > 0) {
+                  const { data: slots } = await supabase
+                    .from("property_visit_slots")
+                    .select("*")
+                    .in("id", app.proposed_slot_ids)
+                    .order("date", { ascending: true })
+    
+                  proposedSlots = slots || []
+                }
+    
+                return {
+                  ...app,
+                  visits: visits || [],
+                  proposed_visit_slots: proposedSlots,
+                }
+              } catch (enrichError) {
+                console.error("❌ Erreur enrichissement candidature:", enrichError)
+                return {
+                  ...app,
+                  visits: [],
+                  proposed_visit_slots: [],
+                }
+              }
+            }),
+          )
+    
+          console.log(`✅ ${enrichedApplications.length} candidatures enrichies pour le locataire`)
+          return NextResponse.json({ applications: enrichedApplications })
+        }
 
     if (ownerId) {
       // Récupérer les candidatures pour un propriétaire
@@ -141,6 +131,40 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
+            // Enrichir avec les visites et dossiers de location pour chaque candidature
+            const enrichedApplications = await Promise.all(
+              (applications || []).map(async (app) => {
+                try {
+                  // Récupérer les visites
+                  const { data: visits } = await supabase
+                    .from("visits")
+                    .select("*")
+                    .eq("tenant_id", app.tenant_id)
+                    .eq("property_id", app.property_id)
+      
+                  // Récupérer le dossier de location
+                  const { data: rentalFile } = await supabase
+                    .from("rental_files")
+                    .select("*")
+                    .eq("tenant_id", app.tenant_id)
+                    .single()
+      
+                  return {
+                    ...app,
+                    visits: visits || [],
+                    rental_file: rentalFile || null,
+                  }
+                } catch (enrichError) {
+                  console.error("❌ Erreur enrichissement candidature:", enrichError)
+                  return {
+                    ...app,
+                    visits: [],
+                    rental_file: null,
+                  }
+                }
+              }),
+            )
+
       console.log(`📊 ${applications?.length || 0} candidatures trouvées pour le propriétaire`);
       return NextResponse.json({ applications });
     }
@@ -185,42 +209,56 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    // --- AJOUT ENVOI EMAIL + NOTIF ---
+    // --- ENVOI EMAIL AU PROPRIÉTAIRE ---
     if (data) {
-      const { data: tenant } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", body.tenant_id)
-        .single();
-
+      // Récupérer le propriétaire et le locataire
       const { data: property } = await supabase
         .from("properties")
-        .select("*, owner:users(*, agency:agencies(*))")
-        .eq("id", body.property_id)
+        .select("id, title, address, owner_id")
+        .eq("id", data.property_id)
         .single();
 
-      if (tenant && property && property.owner) {
-        const logoUrl = property.owner.agency?.logo_url ?? undefined;
+      const { data: owner } = property?.owner_id
+        ? await supabase
+            .from("users")
+            .select("id, email, first_name, last_name")
+            .eq("id", property.owner_id)
+            .single()
+        : { data: null };
 
-        // Email locataire
-        sendApplicationReceivedEmail(tenant, property, logoUrl).catch(
-          console.error
-        );
+      const { data: tenant } = data.tenant_id
+        ? await supabase
+            .from("users")
+            .select("id, email, first_name, last_name")
+            .eq("id", data.tenant_id)
+            .single()
+        : { data: null };
 
-        // Email propriétaire
-        sendNewApplicationNotificationToOwner(
-          property.owner,
-          tenant,
-          property,
-          logoUrl
-        ).catch(console.error);
-      } else {
-        console.error(
-          "Impossible de trouver toutes les infos pour l'envoi des emails."
-        );
+      if (owner && tenant && property) {
+        try {
+          await sendNewApplicationNotificationToOwner(
+            {
+              id: owner.id,
+              name: `${owner.first_name} ${owner.last_name}`,
+              email: owner.email,
+            },
+            {
+              id: tenant.id,
+              name: `${tenant.first_name} ${tenant.last_name}`,
+              email: tenant.email,
+            },
+            {
+              id: property.id,
+              title: property.title,
+              address: property.address,
+            }
+          );
+        } catch (e) {
+          console.error("Erreur envoi email nouvelle candidature au propriétaire:", e);
+        }
       }
     }
-    // --- FIN AJOUT ---
+    // --- FIN ENVOI EMAIL ---
 
     return NextResponse.json({ application: data });
   } catch (error) {
@@ -229,116 +267,34 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function PATCH(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { id, status, ...updateData } = body;
-    
-    console.log("📋 API Applications PATCH", { id, status, updateData });
-
-    if (!id) {
-      return NextResponse.json({ error: "ID de candidature requis" }, { status: 400 });
-    }
-
-    // Ajouter updated_at
-    updateData.updated_at = new Date().toISOString();
-
-    const { data, error } = await supabase
-      .from("applications")
-      .update(updateData)
-      .eq("id", id)
-      .select(`
-        *,
-        tenant:users!applications_tenant_id_fkey(*),
-        property:properties(*, owner:users(*, agency:agencies(*)))
-      `)
-      .single();
-
-    if (error) {
-      console.error("❌ Erreur mise à jour candidature:", error);
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
-    // Envoyer notification email si le statut a changé
-    if (status && data.tenant && data.property) {
-      try {
-        const logoUrl = data.property.owner?.agency?.logo_url ?? undefined;
-        
-        if (status === 'withdrawn') {
-          // Candidature retirée - notifier le propriétaire
-          if (data.property.owner) {
-            await sendApplicationWithdrawnEmail(
-              {
-                id: data.property.owner.id,
-                name: `${data.property.owner.first_name} ${data.property.owner.last_name}`,
-                email: data.property.owner.email
-              },
-              data.property,
-              logoUrl
-            );
-          }
-        } else {
-          // Mise à jour de statut - notifier le locataire
-          await sendApplicationStatusUpdateEmail(
-            {
-              id: data.tenant.id,
-              name: `${data.tenant.first_name} ${data.tenant.last_name}`,
-              email: data.tenant.email
-            },
-            data.property,
-            status,
-            logoUrl
-          );
-        }
-      } catch (emailError) {
-        console.error("❌ Erreur envoi email mise à jour candidature:", emailError);
-      }
-    }
-
-    return NextResponse.json({ application: data });
-  } catch (error) {
-    console.error("❌ Erreur API applications PATCH:", error);
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
-  }
-}
-
 export async function DELETE(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const applicationId = searchParams.get("id");
-    const tenantId = searchParams.get("tenant_id");
+    const { searchParams } = new URL(request.url)
+    const applicationId = searchParams.get("id")
+    const tenantId = searchParams.get("tenant_id")
 
     if (!applicationId || !tenantId) {
-      return NextResponse.json(
-        { error: "ID candidature et tenant_id requis" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "ID candidature et tenant_id requis" }, { status: 400 })
     }
 
-    console.log("🗑️ Suppression candidature:", { applicationId, tenantId });
+    console.log("🗑️ Suppression candidature:", { applicationId, tenantId })
 
-    // Récupérer les détails avant suppression pour l'email
-    const { data: application, error: fetchError } = await supabase
+    // Vérifier que la candidature appartient au locataire
+    const { data: application, error: checkError } = await supabase
       .from("applications")
-      .select("id, tenant_id, status, property_id, property:properties(*, owner:users(*, agency:agencies(*)))")
+      .select("id, tenant_id, status, property_id")
       .eq("id", applicationId)
       .eq("tenant_id", tenantId)
-      .single();
+      .single()
 
-    if (fetchError) {
-      console.error("❌ Candidature non trouvée:", fetchError);
-      return NextResponse.json(
-        { error: "Candidature non trouvée" },
-        { status: 404 }
-      );
+    if (checkError) {
+      console.error("❌ Candidature non trouvée:", checkError)
+      return NextResponse.json({ error: "Candidature non trouvée" }, { status: 404 })
     }
 
     // Vérifier que la candidature peut être supprimée
     if (application.status === "accepted") {
-      return NextResponse.json(
-        { error: "Impossible de retirer une candidature acceptée" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Impossible de retirer une candidature acceptée" }, { status: 400 })
     }
 
     // Supprimer les visites associées si elles existent
@@ -347,10 +303,10 @@ export async function DELETE(request: NextRequest) {
       .delete()
       .eq("tenant_id", tenantId)
       .eq("property_id", application.property_id)
-      .in("status", ["scheduled", "proposed"]);
+      .in("status", ["scheduled", "proposed"])
 
     if (visitError) {
-      console.error("❌ Erreur suppression visites:", visitError);
+      console.error("❌ Erreur suppression visites:", visitError)
       // On continue même si la suppression des visites échoue
     }
 
@@ -359,35 +315,17 @@ export async function DELETE(request: NextRequest) {
       .from("applications")
       .delete()
       .eq("id", applicationId)
-      .eq("tenant_id", tenantId);
+      .eq("tenant_id", tenantId)
 
     if (deleteError) {
-      console.error("❌ Erreur suppression candidature:", deleteError);
-      return NextResponse.json({ error: deleteError.message }, { status: 500 });
+      console.error("❌ Erreur suppression candidature:", deleteError)
+      return NextResponse.json({ error: deleteError.message }, { status: 500 })
     }
 
-    // Envoyer email de confirmation de retrait
-    if (application.property?.owner) {
-      try {
-        const logoUrl = application.property.owner.agency?.logo_url ?? undefined;
-        await sendApplicationWithdrawnEmail(
-          {
-            id: application.property.owner.id,
-            name: `${application.property.owner.first_name} ${application.property.owner.last_name}`,
-            email: application.property.owner.email
-          },
-          application.property,
-          logoUrl
-        );
-      } catch (emailError) {
-        console.error("❌ Erreur envoi email retrait candidature:", emailError);
-      }
-    }
-
-    console.log("✅ Candidature supprimée");
-    return NextResponse.json({ success: true });
+    console.log("✅ Candidature supprimée")
+    return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("❌ Erreur API applications DELETE:", error);
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
+    console.error("❌ Erreur API applications DELETE:", error)
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }

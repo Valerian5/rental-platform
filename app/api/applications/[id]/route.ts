@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
-import { sendNewApplicationNotificationToOwner } from "@/lib/email-service"
+import { sendApplicationStatusUpdateEmail } from "@/lib/email-service"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -54,88 +54,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-// POST - Créer une nouvelle candidature et notifier le propriétaire
-export async function POST(request: Request, { params }: { params: { id: string } }) {
-  const supabase = createServerClient()
-  try {
-    const body = await request.json()
-    // On suppose que le body contient tenant_id, property_id, etc.
-    const { tenant_id, property_id } = body
-
-    // 1. Créer la candidature
-    const { data: application, error } = await supabase
-      .from("applications")
-      .insert({
-        ...body,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .select()
-      .single()
-
-    if (error) {
-      console.error("❌ Erreur création candidature:", error)
-      return NextResponse.json({ error: error.message }, { status: 400 })
-    }
-
-    // 2. Récupérer le propriétaire du bien et le locataire
-    const { data: property } = await supabase
-      .from("properties")
-      .select("id, title, address, owner_id")
-      .eq("id", property_id)
-      .single()
-
-    const { data: owner } = property?.owner_id
-      ? await supabase
-          .from("users")
-          .select("id, email, first_name, last_name")
-          .eq("id", property.owner_id)
-          .single()
-      : { data: null }
-
-    const { data: tenant } = tenant_id
-      ? await supabase
-          .from("users")
-          .select("id, email, first_name, last_name")
-          .eq("id", tenant_id)
-          .single()
-      : { data: null }
-
-    // 3. Envoyer l'email au propriétaire si tout est OK
-    if (owner && tenant && property) {
-      try {
-        await sendNewApplicationNotificationToOwner(
-          {
-            id: owner.id,
-            name: `${owner.first_name} ${owner.last_name}`,
-            email: owner.email,
-          },
-          {
-            id: tenant.id,
-            name: `${tenant.first_name} ${tenant.last_name}`,
-            email: tenant.email,
-          },
-          {
-            id: property.id,
-            title: property.title,
-            address: property.address,
-          }
-        )
-      } catch (e) {
-        console.error("Erreur envoi email nouvelle candidature au propriétaire:", e)
-      }
-    }
-
-    return NextResponse.json({ application })
-  } catch (error) {
-    console.error("❌ Erreur POST applications/[id]:", error)
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
-  }
-}
-
 // DELETE - Supprimer une candidature (retirer la candidature)
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
-  const supabase = createServerClient() // Declare supabase here
+  const supabase = createServerClient()
   const applicationId = params.id
 
   try {
@@ -253,12 +174,40 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
         updated_at: new Date().toISOString(),
       })
       .eq("id", applicationId)
-      .select()
+      .select(`
+        *,
+        tenant:users!applications_tenant_id_fkey(*),
+        property:properties(*, owner:users(*, agency:agencies(*)))
+      `)
       .single()
 
     if (error) {
       console.error("❌ Erreur mise à jour candidature:", error)
       return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
+    // Envoi email au locataire pour les statuts importants
+    if (
+      body.status &&
+      data.tenant &&
+      data.property &&
+      ["en analyse", "acceptée", "refusée", "withdrawn", "in_review", "accepted", "rejected"].includes(body.status)
+    ) {
+      try {
+        const logoUrl = data.property.owner?.agency?.logo_url ?? undefined
+        await sendApplicationStatusUpdateEmail(
+          {
+            id: data.tenant.id,
+            name: `${data.tenant.first_name} ${data.tenant.last_name}`,
+            email: data.tenant.email,
+          },
+          data.property,
+          body.status,
+          logoUrl
+        )
+      } catch (emailError) {
+        console.error("❌ Erreur envoi email statut candidature:", emailError)
+      }
     }
 
     console.log("✅ Candidature mise à jour")
