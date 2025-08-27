@@ -134,51 +134,6 @@ export async function sendApplicationStatusUpdateEmail(
   )
 }
 
-// --- Notification candidature retirée ---
-export async function sendApplicationWithdrawnEmail(
-  tenant: any,
-  property: any,
-  owner: any
-) {
-  try {
-    // Email pour le propriétaire
-    await sendEmail({
-      to: owner.email,
-      subject: `Candidature retirée - ${property.title}`,
-      react: (
-        <div>
-          <h1>Candidature retirée</h1>
-          <p>
-            Le candidat <strong>{tenant.full_name}</strong> a retiré sa candidature
-            pour le bien <strong>{property.title}</strong>.
-          </p>
-          <p>Vous pouvez maintenant consulter les autres candidatures.</p>
-        </div>
-      ),
-    })
-
-    // Email pour le candidat
-    await sendEmail({
-      to: tenant.email,
-      subject: `Vous avez retiré votre candidature - ${property.title}`,
-      react: (
-        <div>
-          <h1>Candidature retirée</h1>
-          <p>
-            Vous avez retiré votre candidature pour le bien
-            <strong> {property.title}</strong>.
-          </p>
-          <p>
-            Merci de nous avoir informés. Vous pouvez toujours postuler à d’autres
-            biens disponibles sur notre plateforme.
-          </p>
-        </div>
-      ),
-    })
-  } catch (error) {
-    console.error("❌ Erreur envoi email retrait candidature:", error)
-  }
-}
 
 // --- Notification mise à jour de statut ---
 export async function sendApplicationStatusUpdateEmail(
