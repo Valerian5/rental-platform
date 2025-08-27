@@ -23,7 +23,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     // Vérifier que l'application existe
     const { data: application, error: appError } = await supabase
       .from("applications")
-      .select("id, property_id, status, user_id")
+      .select("id, property_id, status, tenant_id")
       .eq("id", applicationId)
       .single()
 
@@ -32,10 +32,24 @@ export async function POST(request: Request, { params }: { params: { id: string 
       return NextResponse.json({ error: "Candidature non trouvée" }, { status: 404 })
     }
 
+    // Récupérer le locataire et le bien pour l'email (une seule fois, utilisable dans tous les cas)
+    const { data: tenant } = await supabase
+      .from("users")
+      .select("id, email, first_name, last_name")
+      .eq("id", application.tenant_id)
+      .single()
+
+    const { data: property } = await supabase
+      .from("properties")
+      .select("id, title, address")
+      .eq("id", application.property_id)
+      .single()
+
     // Cas 1: Réception de slot_ids (IDs de créneaux existants)
     if (body.slot_ids && Array.isArray(body.slot_ids)) {
       console.log("🎯 Association de créneaux existants:", { applicationId, slot_ids: body.slot_ids })
 
+      // Vérifier que tous les créneaux existent et appartiennent à la bonne propriété
       const { data: existingSlots, error: slotsError } = await supabase
         .from("property_visit_slots")
         .select("*")
@@ -50,6 +64,10 @@ export async function POST(request: Request, { params }: { params: { id: string 
         )
       }
 
+      // Marquer les créneaux comme proposés pour cette candidature
+      // (On pourrait créer une table de liaison application_visit_slots si nécessaire)
+
+      // Mettre à jour le statut de la candidature
       const { error: updateError } = await supabase
         .from("applications")
         .update({
@@ -63,12 +81,25 @@ export async function POST(request: Request, { params }: { params: { id: string 
         return NextResponse.json({ error: "Erreur lors de la mise à jour de la candidature" }, { status: 500 })
       }
 
-      // 🔔 Envoi de l'email
-      const { data: user } = await supabase.from("users").select("id, name, email").eq("id", application.user_id).single()
-      const { data: property } = await supabase.from("properties").select("id, title").eq("id", application.property_id).single()
-      if (user && property) {
-        const slotDates = finalSlots.map((s) => new Date(`${s.date}T${s.start_time}`))
-        await sendVisitProposalEmail(user, property, slotDates)
+      // ENVOI EMAIL AU LOCATAIRE
+      if (tenant && property && existingSlots && existingSlots.length > 0) {
+        try {
+          await sendVisitProposalEmail(
+            {
+              id: tenant.id,
+              name: `${tenant.first_name} ${tenant.last_name}`,
+              email: tenant.email,
+            },
+            {
+              id: property.id,
+              title: property.title,
+              address: property.address,
+            },
+            existingSlots.map((slot: any) => new Date(slot.date + "T" + slot.start_time))
+          )
+        } catch (e) {
+          console.error("Erreur envoi email proposition visite:", e)
+        }
       }
 
       console.log("✅ Créneaux associés avec succès")
@@ -85,6 +116,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
       const slotIds = body.slots.map((slot: any) => slot.id)
 
+      // Vérifier que tous les créneaux existent
       const { data: existingSlots, error: slotsError } = await supabase
         .from("property_visit_slots")
         .select("*")
@@ -96,6 +128,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
         return NextResponse.json({ error: "Certains créneaux n'existent pas" }, { status: 400 })
       }
 
+      // Mettre à jour le statut de la candidature
       const { error: updateError } = await supabase
         .from("applications")
         .update({
@@ -109,12 +142,25 @@ export async function POST(request: Request, { params }: { params: { id: string 
         return NextResponse.json({ error: "Erreur lors de la mise à jour de la candidature" }, { status: 500 })
       }
 
-      // 🔔 Envoi de l'email
-      const { data: user } = await supabase.from("users").select("id, name, email").eq("id", application.user_id).single()
-      const { data: property } = await supabase.from("properties").select("id, title").eq("id", application.property_id).single()
-      if (user && property) {
-        const slotDates = finalSlots.map((s) => new Date(`${s.date}T${s.start_time}`))
-        await sendVisitProposalEmail(user, property, slotDates)
+      // ENVOI EMAIL AU LOCATAIRE
+      if (tenant && property && existingSlots && existingSlots.length > 0) {
+        try {
+          await sendVisitProposalEmail(
+            {
+              id: tenant.id,
+              name: `${tenant.first_name} ${tenant.last_name}`,
+              email: tenant.email,
+            },
+            {
+              id: property.id,
+              title: property.title,
+              address: property.address,
+            },
+            existingSlots.map((slot: any) => new Date(slot.date + "T" + slot.start_time))
+          )
+        } catch (e) {
+          console.error("Erreur envoi email proposition visite:", e)
+        }
       }
 
       console.log("✅ Créneaux existants associés avec succès")
@@ -130,13 +176,16 @@ export async function POST(request: Request, { params }: { params: { id: string 
       console.log("🎯 Création de nouveaux créneaux:", { applicationId, slotsCount: body.slots.length })
 
       const slotsToCreate = body.slots.map((slot: any) => {
+        // Gérer les différents formats de date/heure
         let date, start_time, end_time
 
         if (slot.date && slot.start_time && slot.end_time) {
+          // Format avec champs séparés
           date = slot.date
           start_time = slot.start_time
           end_time = slot.end_time
         } else if (slot.start_time && slot.start_time.includes("T")) {
+          // Format datetime complet
           const startDateTime = new Date(slot.start_time)
           const endDateTime = new Date(slot.end_time)
 
@@ -164,6 +213,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
       console.log("📅 Créneaux à créer:", slotsToCreate)
 
+      // Créer les créneaux
       const { data: createdSlots, error: createError } = await supabase
         .from("property_visit_slots")
         .insert(slotsToCreate)
@@ -174,6 +224,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
         return NextResponse.json({ error: "Erreur lors de la création des créneaux" }, { status: 500 })
       }
 
+      // Mettre à jour le statut de la candidature
       const { error: updateError } = await supabase
         .from("applications")
         .update({
@@ -187,12 +238,25 @@ export async function POST(request: Request, { params }: { params: { id: string 
         return NextResponse.json({ error: "Erreur lors de la mise à jour de la candidature" }, { status: 500 })
       }
 
-      // 🔔 Envoi de l'email
-      const { data: user } = await supabase.from("users").select("id, name, email").eq("id", application.user_id).single()
-      const { data: property } = await supabase.from("properties").select("id, title").eq("id", application.property_id).single()
-      if (user && property) {
-        const slotDates = finalSlots.map((s) => new Date(`${s.date}T${s.start_time}`))
-        await sendVisitProposalEmail(user, property, slotDates)
+      // ENVOI EMAIL AU LOCATAIRE
+      if (tenant && property && createdSlots && createdSlots.length > 0) {
+        try {
+          await sendVisitProposalEmail(
+            {
+              id: tenant.id,
+              name: `${tenant.first_name} ${tenant.last_name}`,
+              email: tenant.email,
+            },
+            {
+              id: property.id,
+              title: property.title,
+              address: property.address,
+            },
+            createdSlots.map((slot: any) => new Date(slot.date + "T" + slot.start_time))
+          )
+        } catch (e) {
+          console.error("Erreur envoi email proposition visite:", e)
+        }
       }
 
       console.log("✅ Nouveaux créneaux créés avec succès:", createdSlots?.length)
@@ -203,6 +267,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       })
     }
 
+    // Aucun format reconnu
     console.error("❌ Aucun créneau fourni:", { slots: body.slots, slot_ids: body.slot_ids, body })
     return NextResponse.json({ error: "Aucun créneau fourni" }, { status: 400 })
   } catch (error) {
