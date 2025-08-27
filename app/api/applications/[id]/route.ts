@@ -1,9 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
-import {
-  sendApplicationStatusUpdateEmail,
-  sendApplicationWithdrawnEmail,
-} from "@/lib/email-service"
+import { sendNewApplicationNotificationToOwner } from "@/lib/email-service"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -57,6 +54,85 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
+// POST - Créer une nouvelle candidature et notifier le propriétaire
+export async function POST(request: Request, { params }: { params: { id: string } }) {
+  const supabase = createServerClient()
+  try {
+    const body = await request.json()
+    // On suppose que le body contient tenant_id, property_id, etc.
+    const { tenant_id, property_id } = body
+
+    // 1. Créer la candidature
+    const { data: application, error } = await supabase
+      .from("applications")
+      .insert({
+        ...body,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error("❌ Erreur création candidature:", error)
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
+    // 2. Récupérer le propriétaire du bien et le locataire
+    const { data: property } = await supabase
+      .from("properties")
+      .select("id, title, address, owner_id")
+      .eq("id", property_id)
+      .single()
+
+    const { data: owner } = property?.owner_id
+      ? await supabase
+          .from("users")
+          .select("id, email, first_name, last_name")
+          .eq("id", property.owner_id)
+          .single()
+      : { data: null }
+
+    const { data: tenant } = tenant_id
+      ? await supabase
+          .from("users")
+          .select("id, email, first_name, last_name")
+          .eq("id", tenant_id)
+          .single()
+      : { data: null }
+
+    // 3. Envoyer l'email au propriétaire si tout est OK
+    if (owner && tenant && property) {
+      try {
+        await sendNewApplicationNotificationToOwner(
+          {
+            id: owner.id,
+            name: `${owner.first_name} ${owner.last_name}`,
+            email: owner.email,
+          },
+          {
+            id: tenant.id,
+            name: `${tenant.first_name} ${tenant.last_name}`,
+            email: tenant.email,
+          },
+          {
+            id: property.id,
+            title: property.title,
+            address: property.address,
+          }
+        )
+      } catch (e) {
+        console.error("Erreur envoi email nouvelle candidature au propriétaire:", e)
+      }
+    }
+
+    return NextResponse.json({ application })
+  } catch (error) {
+    console.error("❌ Erreur POST applications/[id]:", error)
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+  }
+}
+
 // DELETE - Supprimer une candidature (retirer la candidature)
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   const supabase = createServerClient() // Declare supabase here
@@ -68,7 +144,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     // D'abord, récupérer la candidature pour vérifier qu'elle existe
     const { data: application, error: fetchError } = await supabase
       .from("applications")
-      .select("id, status, tenant_id, property_id")
+      .select("id, status")
       .eq("id", applicationId)
       .single()
 
@@ -99,10 +175,12 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
       console.log("🔄 Libération de", visits.length, "créneaux de visite...")
 
       for (const visit of visits) {
+        // Extraire l'ID du créneau depuis les notes (format: "Créneau sélectionné: {slot_id}")
         const slotIdMatch = visit.notes?.match(/Créneau sélectionné: (.+)/)
         if (slotIdMatch && slotIdMatch[1]) {
           const slotId = slotIdMatch[1]
 
+          // Utiliser la fonction SQL pour décrémenter les réservations
           const { error: decrementError } = await supabase.rpc("decrement_slot_bookings", {
             slot_id: slotId,
           })
@@ -115,6 +193,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
         }
       }
 
+      // Supprimer les visites
       const { error: deleteVisitsError } = await supabase.from("visits").delete().eq("application_id", applicationId)
 
       if (deleteVisitsError) {
@@ -138,18 +217,6 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     }
 
     console.log("✅ Candidature retirée avec succès:", applicationId)
-
-    // --- ENVOI EMAIL (candidature retirée) ---
-    try {
-      const { data: tenant } = await supabase.from("users").select("*").eq("id", application.tenant_id).single()
-      const { data: property } = await supabase.from("properties").select("*, owner:users(*)").eq("id", application.property_id).single()
-      if (tenant && property && property.owner) {
-        await sendApplicationWithdrawnEmail(tenant, property, property.owner).catch(console.error)
-      }
-    } catch (mailError) {
-      console.error("❌ Erreur envoi email retrait candidature:", mailError)
-    }
-    // --- FIN ---
 
     return NextResponse.json({
       success: true,
@@ -178,6 +245,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     console.log("🔄 Mise à jour candidature:", applicationId, body)
 
+    // Mettre à jour la candidature
     const { data, error } = await supabase
       .from("applications")
       .update({
@@ -192,20 +260,6 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       console.error("❌ Erreur mise à jour candidature:", error)
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
-
-    // --- ENVOI EMAIL (si changement de statut) ---
-    if (body.status && data) {
-      try {
-        const { data: tenant } = await supabase.from("users").select("*").eq("id", data.tenant_id).single()
-        const { data: property } = await supabase.from("properties").select("*, owner:users(*)").eq("id", data.property_id).single()
-        if (tenant && property && property.owner) {
-          await sendApplicationStatusUpdateEmail(tenant, property, property.owner, body.status).catch(console.error)
-        }
-      } catch (mailError) {
-        console.error("❌ Erreur envoi email mise à jour candidature:", mailError)
-      }
-    }
-    // --- FIN ---
 
     console.log("✅ Candidature mise à jour")
     return NextResponse.json({ application: data })
