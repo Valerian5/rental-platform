@@ -318,7 +318,7 @@ export async function sendNewApplicationNotificationToOwner(
 ) {
   await sendEmail(
     owner,
-    NotificationType.NEW_APPLICATION,
+    null,
     `Nouvelle candidature pour : ${property.title}`,
     NewApplicationNotificationToOwnerEmail({
       ownerName: owner.name,
