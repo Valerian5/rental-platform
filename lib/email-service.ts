@@ -25,7 +25,7 @@ import DocumentReminderEmail from "@/components/emails/document-reminder-email"
 
 // Initialisation du client Resend
 const resend = new Resend(process.env.RESEND_API_KEY)
-const fromEmail = process.env.EMAIL_FROM
+const fromEmail = "Louer Ici <notifications@louerici.fr>"
 
 // --- TYPES ET ENUMS ---
 
