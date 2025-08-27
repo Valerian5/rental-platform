@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { sendVisitScheduledEmail } from "@/lib/email-service"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -85,7 +86,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     }
 
     // Vérifier qu'il n'y a pas déjà une visite programmée pour cette candidature
-    const { data: existingVisit, error: visitCheckError } = await supabase
+    const { data: existingVisit } = await supabase
       .from("visits")
       .select("id")
       .eq("application_id", applicationId)
@@ -104,15 +105,15 @@ export async function POST(request: Request, { params }: { params: { id: string 
         application_id: applicationId,
         property_id: application.property_id,
         tenant_id: application.tenant_id,
-        visit_date: visitDate.toISOString(), // timestamp with time zone
-        start_time: slot.start_time, // time without time zone
-        end_time: slot.end_time, // time without time zone
+        visit_date: visitDate.toISOString(),
+        start_time: slot.start_time,
+        end_time: slot.end_time,
         status: "scheduled",
         visitor_name: `${application.users.first_name} ${application.users.last_name}`,
         tenant_email: application.users.email,
         visitor_phone: application.users.phone,
-        notes: `Créneau sélectionné: ${slot.id}`, // IMPORTANT: Stocker l'ID du créneau pour pouvoir le libérer plus tard
-        visit_slot_id: slot_id, // AJOUT: Le champ attendu par le trigger
+        notes: `Créneau sélectionné: ${slot.id}`,
+        visit_slot_id: slot_id,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -122,10 +123,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     if (visitError) {
       console.error("❌ Erreur création visite:", visitError)
       return NextResponse.json(
-        {
-          error: "Erreur lors de la création de la visite",
-          details: visitError.message,
-        },
+        { error: "Erreur lors de la création de la visite", details: visitError.message },
         { status: 500 },
       )
     }
@@ -141,7 +139,6 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
     if (updateSlotError) {
       console.error("❌ Erreur mise à jour créneau:", updateSlotError)
-      // Supprimer la visite créée en cas d'erreur
       await supabase.from("visits").delete().eq("id", visit.id)
       return NextResponse.json({ error: "Erreur lors de la réservation du créneau" }, { status: 500 })
     }
@@ -158,6 +155,25 @@ export async function POST(request: Request, { params }: { params: { id: string 
     if (updateAppError) {
       console.error("❌ Erreur mise à jour candidature:", updateAppError)
       return NextResponse.json({ error: "Erreur lors de la mise à jour de la candidature" }, { status: 500 })
+    }
+
+    // 🔔 Envoi de l'email au propriétaire
+    const { data: property } = await supabase
+      .from("properties")
+      .select("id, title, owner_id, users!properties_owner_id_fkey(email, first_name, last_name)")
+      .eq("id", application.property_id)
+      .single()
+
+    if (property?.users?.email) {
+      await sendVisitScheduledEmail(
+        {
+          name: `${property.users.first_name} ${property.users.last_name}`,
+          email: property.users.email,
+        },
+        property,
+        visitDate,
+        application.users,
+      )
     }
 
     console.log("✅ Visite programmée avec succès:", visit.id)

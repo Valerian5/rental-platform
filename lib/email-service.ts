@@ -18,6 +18,8 @@ import IncidentConfirmationEmail from "@/components/emails/incident-confirmation
 import SavedSearchAlertEmail from "@/components/emails/saved-search-alert-email"
 import NewApplicationNotificationToOwnerEmail from "@/components/emails/new-application-notification-to-owner-email"
 import InviteUserEmail from "@/components/emails/invite-user-email"
+import VisitScheduledEmail from "@/components/emails/VisitScheduledEmail"
+
 
 // Initialisation du client Resend
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -132,6 +134,119 @@ export async function sendApplicationStatusUpdateEmail(
   )
 }
 
+// --- Notification candidature retirée ---
+export async function sendApplicationWithdrawnEmail(
+  tenant: any,
+  property: any,
+  owner: any
+) {
+  try {
+    // Email pour le propriétaire
+    await sendEmail({
+      to: owner.email,
+      subject: `Candidature retirée - ${property.title}`,
+      react: (
+        <div>
+          <h1>Candidature retirée</h1>
+          <p>
+            Le candidat <strong>{tenant.full_name}</strong> a retiré sa candidature
+            pour le bien <strong>{property.title}</strong>.
+          </p>
+          <p>Vous pouvez maintenant consulter les autres candidatures.</p>
+        </div>
+      ),
+    })
+
+    // Email pour le candidat
+    await sendEmail({
+      to: tenant.email,
+      subject: `Vous avez retiré votre candidature - ${property.title}`,
+      react: (
+        <div>
+          <h1>Candidature retirée</h1>
+          <p>
+            Vous avez retiré votre candidature pour le bien
+            <strong> {property.title}</strong>.
+          </p>
+          <p>
+            Merci de nous avoir informés. Vous pouvez toujours postuler à d’autres
+            biens disponibles sur notre plateforme.
+          </p>
+        </div>
+      ),
+    })
+  } catch (error) {
+    console.error("❌ Erreur envoi email retrait candidature:", error)
+  }
+}
+
+// --- Notification mise à jour de statut ---
+export async function sendApplicationStatusUpdateEmail(
+  tenant: any,
+  property: any,
+  owner: any,
+  newStatus: string
+) {
+  try {
+    let statusMessage = ""
+    switch (newStatus) {
+      case "pending":
+        statusMessage = "Votre candidature est en attente."
+        break
+      case "in_review":
+        statusMessage = "Votre candidature est en cours d'analyse."
+        break
+      case "accepted":
+        statusMessage = "Félicitations ! Votre candidature a été acceptée."
+        break
+      case "rejected":
+        statusMessage = "Votre candidature a été refusée."
+        break
+      default:
+        statusMessage = `Statut mis à jour : ${newStatus}`
+    }
+
+    // Email pour le candidat
+    await sendEmail({
+      to: tenant.email,
+      subject: `Mise à jour de votre candidature - ${property.title}`,
+      react: (
+        <div>
+          <h1>Mise à jour de votre candidature</h1>
+          <p>
+            Bonjour <strong>{tenant.full_name}</strong>,
+          </p>
+          <p>{statusMessage}</p>
+          <p>
+            Bien concerné : <strong>{property.title}</strong>
+          </p>
+        </div>
+      ),
+    })
+
+    // Email pour le propriétaire (optionnel)
+    await sendEmail({
+      to: owner.email,
+      subject: `Statut candidature mis à jour - ${property.title}`,
+      react: (
+        <div>
+          <h1>Statut candidature mis à jour</h1>
+          <p>
+            Le statut de la candidature de <strong>{tenant.full_name}</strong> pour le
+            bien <strong>{property.title}</strong> est maintenant :
+          </p>
+          <p>
+            <strong>{newStatus}</strong>
+          </p>
+        </div>
+      ),
+    })
+  } catch (error) {
+    console.error("❌ Erreur envoi email mise à jour candidature:", error)
+  }
+}
+
+
 export async function sendVisitProposalEmail(user: User, property: Property, visitSlots: Date[], logoUrl?: string) {
   await sendEmail(
     user,
@@ -157,6 +272,38 @@ export async function sendVisitReminderEmail(user: User, visit: Visit, logoUrl?:
     VisitReminderEmail({ userName: user.name, visitDate: formattedDate, property: visit.property, logoUrl }),
   )
 }
+
+export async function sendVisitScheduledEmail(
+  owner: { name: string; email: string },
+  property: { id: string; title: string },
+  visitDate: Date,
+  tenant: { first_name: string; last_name: string; email: string },
+  logoUrl?: string,
+) {
+  const formattedDate = visitDate.toLocaleDateString("fr-FR", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+
+  await sendEmail(
+    owner,
+    null,
+    `Nouvelle visite programmée pour ${property.title}`,
+    VisitScheduledEmail({
+      ownerName: owner.name,
+      propertyTitle: property.title,
+      tenantName: `${tenant.first_name} ${tenant.last_name}`,
+      tenantEmail: tenant.email,
+      visitDate: formattedDate,
+      logoUrl,
+    }),
+  )
+}
+
 
 export async function sendNewLeaseEmail(user: User, property: Property, leaseUrl: string, logoUrl?: string) {
   await sendEmail(
