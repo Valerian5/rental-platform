@@ -32,8 +32,6 @@ export async function POST(request: Request, { params }: { params: { id: string 
       return NextResponse.json({ error: "Candidature non trouvée" }, { status: 404 })
     }
 
-    let finalSlots: any[] = []
-
     // Cas 1: Réception de slot_ids (IDs de créneaux existants)
     if (body.slot_ids && Array.isArray(body.slot_ids)) {
       console.log("🎯 Association de créneaux existants:", { applicationId, slot_ids: body.slot_ids })
@@ -51,8 +49,6 @@ export async function POST(request: Request, { params }: { params: { id: string 
           { status: 400 },
         )
       }
-
-      finalSlots = existingSlots
 
       const { error: updateError } = await supabase
         .from("applications")
@@ -99,8 +95,6 @@ export async function POST(request: Request, { params }: { params: { id: string 
         console.error("❌ Créneaux non trouvés:", slotsError)
         return NextResponse.json({ error: "Certains créneaux n'existent pas" }, { status: 400 })
       }
-
-      finalSlots = existingSlots
 
       const { error: updateError } = await supabase
         .from("applications")
@@ -179,8 +173,6 @@ export async function POST(request: Request, { params }: { params: { id: string 
         console.error("❌ Erreur création créneaux:", createError)
         return NextResponse.json({ error: "Erreur lors de la création des créneaux" }, { status: 500 })
       }
-
-      finalSlots = createdSlots || []
 
       const { error: updateError } = await supabase
         .from("applications")
