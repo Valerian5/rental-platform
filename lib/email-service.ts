@@ -1,6 +1,5 @@
 // /lib/email-service.ts
 
-import "server-only"
 import { Resend } from "resend"
 import React from "react"
 
@@ -28,20 +27,20 @@ import DocumentReminderEmail from "@/components/emails/document-reminder-email"
 const DEFAULT_FROM = "Louer Ici <notifications@louerici.fr>"
 const fromEmail = DEFAULT_FROM
 
-// --- LAZY RESEND CLIENT (server-only) ---
+// --- LAZY RESEND CLIENT (runtime guard) ---
 let resendClient: Resend | null = null
 
 function getResend(): Resend {
-  if (typeof window !== "undefined") {
-    throw new Error("Email service must be used on the server only.")
-  }
-  if (!process.env.RESEND_API_KEY) {
-    throw new Error("RESEND_API_KEY non défini")
-  }
-  if (!resendClient) {
-    resendClient = new Resend(process.env.RESEND_API_KEY)
-  }
-  return resendClient
+	if (typeof window !== "undefined") {
+		throw new Error("Email service must be used on the server only.")
+	}
+	if (!process.env.RESEND_API_KEY) {
+		throw new Error("RESEND_API_KEY non défini")
+	}
+	if (!resendClient) {
+		resendClient = new Resend(process.env.RESEND_API_KEY)
+	}
+	return resendClient
 }
 
 // --- TYPES ET ENUMS ---
