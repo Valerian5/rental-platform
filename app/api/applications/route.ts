@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
+import { createServerClient } from "@/lib/supabase"
 import { sendNewApplicationNotificationToOwner } from "@/lib/email-service"
 
 export async function GET(request: NextRequest) {
@@ -46,7 +47,7 @@ export async function GET(request: NextRequest) {
 							.order("visit_date", { ascending: true })
 
 						// Récupérer les créneaux proposés si ils existent
-						let proposedSlots = []
+						let proposedSlots: any[] = []
 						if (app.proposed_slot_ids && Array.isArray(app.proposed_slot_ids) && app.proposed_slot_ids.length > 0) {
 							const { data: slots } = await supabase
 								.from("property_visit_slots")
@@ -184,23 +185,23 @@ export async function POST(request: NextRequest) {
 			return NextResponse.json({ error: error.message }, { status: 400 })
 		}
 
-		// --- ENVOI EMAIL AU PROPRIÉTAIRE ---
+		// --- ENVOI EMAIL AU PROPRIÉTAIRE (via Service Role pour contourner RLS en lecture) ---
 		if (data) {
-			console.log("🔔 Préparation email propriétaire pour application:", data.id)
+			const server = createServerClient()
 
-			// Récupérer le propriétaire et le locataire
-			const { data: property } = await supabase
+			// Récupérer le propriétaire et le locataire AVEC LE CLIENT SERVICE
+			const { data: property } = await server
 				.from("properties")
 				.select("id, title, address, owner_id")
 				.eq("id", data.property_id)
 				.single()
 
 			const { data: owner } = property?.owner_id
-				? await supabase.from("users").select("id, email, first_name, last_name").eq("id", property.owner_id).single()
+				? await server.from("users").select("id, email, first_name, last_name").eq("id", property.owner_id).single()
 				: { data: null }
 
 			const { data: tenant } = data.tenant_id
-				? await supabase.from("users").select("id, email, first_name, last_name").eq("id", data.tenant_id).single()
+				? await server.from("users").select("id, email, first_name, last_name").eq("id", data.tenant_id).single()
 				: { data: null }
 
 			console.log("📧 Données email propriétaire:", {
