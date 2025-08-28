@@ -1,6 +1,6 @@
-import { supabase, createServerClient } from "./supabase"
+import { supabase } from "./supabase"
 import { notificationsService } from "./notifications-service"
-import { sendNewApplicationNotificationToOwner } from "./email-service"
+// Suppression de l'import email-service pour éviter tout appel côté client
 
 export interface ApplicationData {
   property_id: string
@@ -53,34 +53,47 @@ export const applicationService = {
 
       console.log("✅ Candidature créée:", data)
 
-      // Récupérer les informations du propriétaire et du locataire pour les notifications
+      // --- ENVOI EMAIL VIA API ROUTE (server-only) ---
       try {
-        // Utiliser un client Service Role pour contourner d'éventuelles règles RLS lors de la lecture des emails
-        const server = createServerClient()
+        // Appel à une API route pour gérer l'envoi d'email côté serveur uniquement
+        const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/api/applications/send-notification`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            application_id: data.id,
+            tenant_id: applicationData.tenant_id,
+            property_id: applicationData.property_id,
+            type: "new_application"
+          }),
+        })
 
-        // Récupérer la propriété pour avoir l'ID du propriétaire
-        const { data: property } = await server
+        if (!response.ok) {
+          console.error("❌ Erreur API notification:", response.status)
+        } else {
+          console.log("✅ Notification/email envoyée via API")
+        }
+      } catch (apiError) {
+        console.error("❌ Erreur appel API notification:", apiError)
+      }
+
+      // Créer une notification interne (celle-ci peut rester côté client)
+      try {
+        // Récupérer les informations du propriétaire et du locataire pour la notification
+        const { data: property } = await supabase
           .from("properties")
-          .select("id, title, address, owner_id")
+          .select("owner_id, title")
           .eq("id", applicationData.property_id)
           .single()
 
         if (property) {
           // Récupérer les informations du locataire
-          const { data: tenant } = await server
+          const { data: tenant } = await supabase
             .from("users")
-            .select("id, email, first_name, last_name")
+            .select("first_name, last_name")
             .eq("id", applicationData.tenant_id)
             .single()
-
-          // Récupérer les informations du propriétaire (dont email)
-          const { data: owner } = property.owner_id
-            ? await server
-                .from("users")
-                .select("id, email, first_name, last_name")
-                .eq("id", property.owner_id)
-                .single()
-            : { data: null }
 
           // Créer une notification pour le propriétaire
           if (property.owner_id && tenant) {
@@ -95,34 +108,6 @@ export const applicationService = {
             })
 
             console.log("✅ Notification créée pour le propriétaire")
-
-            // Envoyer également un email au propriétaire si possible
-            if (owner?.email) {
-              try {
-                await sendNewApplicationNotificationToOwner(
-                  {
-                    id: owner.id,
-                    name: `${owner.first_name} ${owner.last_name}`,
-                    email: owner.email,
-                  },
-                  {
-                    id: tenant.id,
-                    name: tenantName,
-                    email: tenant.email,
-                  },
-                  {
-                    id: property.id,
-                    title: property.title,
-                    address: property.address || "",
-                  },
-                )
-                console.log("✅ Email propriétaire envoyé pour nouvelle candidature:", owner.email)
-              } catch (mailErr) {
-                console.error("❌ Erreur envoi email propriétaire (nouvelle candidature):", mailErr)
-              }
-            } else {
-              console.warn("⚠️ Email propriétaire non envoyé: adresse email introuvable")
-            }
           }
         }
       } catch (notifError) {
