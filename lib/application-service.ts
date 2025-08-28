@@ -1,6 +1,5 @@
-import { supabase, createServerClient } from "./supabase"
+import { supabase } from "./supabase"
 import { notificationsService } from "./notifications-service"
-import { sendNewApplicationNotificationToOwner } from "./email-service"
 
 export interface ApplicationData {
   property_id: string
@@ -35,7 +34,6 @@ export const applicationService = {
         .single()
 
       if (checkError && checkError.code !== "PGRST116") {
-        // PGRST116 = no rows found
         console.error("❌ Erreur vérification candidature existante:", checkError)
         throw new Error("Erreur lors de la vérification")
       }
@@ -53,81 +51,57 @@ export const applicationService = {
 
       console.log("✅ Candidature créée:", data)
 
-      // Récupérer les informations du propriétaire et du locataire pour les notifications
+      // Récupérer les informations du propriétaire et du locataire pour les notifications + email
       try {
-        // Utiliser un client Service Role pour contourner d'éventuelles règles RLS lors de la lecture des emails
-        const server = createServerClient()
-
         // Récupérer la propriété pour avoir l'ID du propriétaire
-        const { data: property } = await server
+        const { data: property } = await supabase
           .from("properties")
-          .select("id, title, address, owner_id")
+          .select("owner_id, title")
           .eq("id", applicationData.property_id)
           .single()
 
         if (property) {
           // Récupérer les informations du locataire
-          const { data: tenant } = await server
+          const { data: tenant } = await supabase
             .from("users")
-            .select("id, email, first_name, last_name")
+            .select("first_name, last_name")
             .eq("id", applicationData.tenant_id)
             .single()
 
-          // Récupérer les informations du propriétaire (dont email)
-          const { data: owner } = property.owner_id
-            ? await server
-                .from("users")
-                .select("id, email, first_name, last_name")
-                .eq("id", property.owner_id)
-                .single()
-            : { data: null }
-
-          // Créer une notification pour le propriétaire
           if (property.owner_id && tenant) {
             const tenantName = `${tenant.first_name || ""} ${tenant.last_name || ""}`.trim() || "Un locataire"
             const propertyTitle = property.title || "votre bien"
 
+            // ✅ Notification interne
             await notificationsService.createNotification(property.owner_id, {
               title: "Nouvelle candidature",
               content: `${tenantName} a postulé pour ${propertyTitle}`,
               type: "application",
               action_url: `/owner/applications?id=${data.id}`,
             })
-
             console.log("✅ Notification créée pour le propriétaire")
 
-            // Envoyer également un email au propriétaire si possible
+            // ✅ Envoi d'email
+            const { data: owner } = await supabase
+              .from("users")
+              .select("email, first_name")
+              .eq("id", property.owner_id)
+              .single()
+
             if (owner?.email) {
-              try {
-                await sendNewApplicationNotificationToOwner(
-                  {
-                    id: owner.id,
-                    name: `${owner.first_name} ${owner.last_name}`,
-                    email: owner.email,
-                  },
-                  {
-                    id: tenant.id,
-                    name: tenantName,
-                    email: tenant.email,
-                  },
-                  {
-                    id: property.id,
-                    title: property.title,
-                    address: property.address || "",
-                  },
-                )
-                console.log("✅ Email propriétaire envoyé pour nouvelle candidature:", owner.email)
-              } catch (mailErr) {
-                console.error("❌ Erreur envoi email propriétaire (nouvelle candidature):", mailErr)
-              }
-            } else {
-              console.warn("⚠️ Email propriétaire non envoyé: adresse email introuvable")
+              await notificationsService.sendEmail({
+                to: owner.email,
+                subject: "Nouvelle candidature reçue",
+                text: `${tenantName} vient de postuler pour ${propertyTitle}. Connectez-vous à votre espace propriétaire pour consulter les détails.`,
+                html: `<p><strong>${tenantName}</strong> vient de postuler pour <strong>${propertyTitle}</strong>.</p>
+                       <p><a href="${process.env.APP_URL}/owner/applications?id=${data.id}">Voir la candidature</a></p>`,
+              })
+              console.log("📧 Email envoyé au propriétaire")
             }
           }
         }
       } catch (notifError) {
-        console.error("❌ Erreur création notification:", notifError)
-        // On ne bloque pas le processus si la notification échoue
+        console.error("❌ Erreur création notification/email:", notifError)
       }
 
       return data
