@@ -1,5 +1,6 @@
 import { supabase } from "./supabase"
 import { notificationsService } from "./notifications-service"
+import { sendApplicationReceivedEmail, sendNewApplicationNotificationToOwner } from "./email-service"
 
 export interface ApplicationData {
   property_id: string
@@ -51,24 +52,31 @@ export const applicationService = {
 
       console.log("✅ Candidature créée:", data)
 
-      // Récupérer les informations du propriétaire et du locataire pour les notifications + email
+      // 🔔 Notifications + Emails
       try {
-        // Récupérer la propriété pour avoir l'ID du propriétaire
+        // Récupérer la propriété + propriétaire
         const { data: property } = await supabase
           .from("properties")
-          .select("owner_id, title")
+          .select("id, owner_id, title, address")
           .eq("id", applicationData.property_id)
           .single()
 
         if (property) {
-          // Récupérer les informations du locataire
+          // Récupérer les infos du locataire
           const { data: tenant } = await supabase
             .from("users")
-            .select("first_name, last_name")
+            .select("id, first_name, last_name, email")
             .eq("id", applicationData.tenant_id)
             .single()
 
-          if (property.owner_id && tenant) {
+          // Récupérer les infos du propriétaire
+          const { data: owner } = await supabase
+            .from("users")
+            .select("id, first_name, last_name, email")
+            .eq("id", property.owner_id)
+            .single()
+
+          if (tenant && owner) {
             const tenantName = `${tenant.first_name || ""} ${tenant.last_name || ""}`.trim() || "Un locataire"
             const propertyTitle = property.title || "votre bien"
 
@@ -79,29 +87,28 @@ export const applicationService = {
               type: "application",
               action_url: `/owner/applications?id=${data.id}`,
             })
+
             console.log("✅ Notification créée pour le propriétaire")
 
-            // ✅ Envoi d'email
-            const { data: owner } = await supabase
-              .from("users")
-              .select("email, first_name")
-              .eq("id", property.owner_id)
-              .single()
+            // ✅ Email au locataire
+            await sendApplicationReceivedEmail(
+              { id: tenant.id, name: tenantName, email: tenant.email },
+              { id: property.id, title: propertyTitle, address: property.address },
+            )
 
-            if (owner?.email) {
-              await notificationsService.sendEmail({
-                to: owner.email,
-                subject: "Nouvelle candidature reçue",
-                text: `${tenantName} vient de postuler pour ${propertyTitle}. Connectez-vous à votre espace propriétaire pour consulter les détails.`,
-                html: `<p><strong>${tenantName}</strong> vient de postuler pour <strong>${propertyTitle}</strong>.</p>
-                       <p><a href="${process.env.APP_URL}/owner/applications?id=${data.id}">Voir la candidature</a></p>`,
-              })
-              console.log("📧 Email envoyé au propriétaire")
-            }
+            // ✅ Email au propriétaire
+            await sendNewApplicationNotificationToOwner(
+              { id: owner.id, name: `${owner.first_name || ""} ${owner.last_name || ""}`.trim(), email: owner.email },
+              { id: tenant.id, name: tenantName, email: tenant.email },
+              { id: property.id, title: propertyTitle, address: property.address },
+            )
+
+            console.log("✅ Emails envoyés au locataire et au propriétaire")
           }
         }
       } catch (notifError) {
         console.error("❌ Erreur création notification/email:", notifError)
+        // On ne bloque pas le processus si la notification ou l’email échoue
       }
 
       return data
