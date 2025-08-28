@@ -26,16 +26,16 @@ export const applicationService = {
     console.log("📝 ApplicationService.createApplication", applicationData)
 
     try {
-      // Vérifier si une candidature existe déjà
+      // Vérifier si une candidature existe déjà avec une requête corrigée
       const { data: existing, error: checkError } = await supabase
         .from("applications")
         .select("id, status")
         .eq("property_id", applicationData.property_id)
         .eq("tenant_id", applicationData.tenant_id)
-        .single()
+        .neq("status", "withdrawn") // Vérifier qu'elle n'est pas retirée
+        .maybeSingle() // Utiliser maybeSingle au lieu de single pour éviter l'erreur 406
 
-      if (checkError && checkError.code !== "PGRST116") {
-        // PGRST116 = no rows found
+      if (checkError) {
         console.error("❌ Erreur vérification candidature existante:", checkError)
         throw new Error("Erreur lors de la vérification")
       }
@@ -53,10 +53,10 @@ export const applicationService = {
 
       console.log("✅ Candidature créée:", data)
 
-      // --- ENVOI EMAIL VIA API ROUTE (server-only) ---
+      // --- ENVOI EMAIL VIA API ROUTE (avec URL relative pour éviter CORS) ---
       try {
-        // Appel à une API route pour gérer l'envoi d'email côté serveur uniquement
-        const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/api/applications/send-notification`, {
+        // Utiliser une URL relative au lieu d'une URL absolue pour éviter les problèmes CORS
+        const response = await fetch("/api/applications/send-notification", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -70,7 +70,8 @@ export const applicationService = {
         })
 
         if (!response.ok) {
-          console.error("❌ Erreur API notification:", response.status)
+          const errorText = await response.text()
+          console.error("❌ Erreur API notification:", response.status, errorText)
         } else {
           console.log("✅ Notification/email envoyée via API")
         }
@@ -132,10 +133,10 @@ export const applicationService = {
         .select("id, status")
         .eq("property_id", propertyId)
         .eq("tenant_id", tenantId)
-        .single()
+        .neq("status", "withdrawn")
+        .maybeSingle()
 
-      if (error && error.code !== "PGRST116") {
-        // PGRST116 = no rows found
+      if (error) {
         console.error("❌ Erreur vérification candidature:", error)
         throw new Error(error.message)
       }
