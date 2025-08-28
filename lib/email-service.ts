@@ -1,5 +1,6 @@
 // /lib/email-service.ts
 
+import "server-only"
 import { Resend } from "resend"
 import React from "react"
 
@@ -23,15 +24,25 @@ import NewApplicationNotificationToOwnerEmail from "@/components/emails/new-appl
 import InviteUserEmail from "@/components/emails/invite-user-email"
 import DocumentReminderEmail from "@/components/emails/document-reminder-email"
 
-// Initialisation du client Resend
-if (!process.env.RESEND_API_KEY) {
-	console.error("RESEND_API_KEY manquant")
-}
-const resend = new Resend(process.env.RESEND_API_KEY)
-
-// Forcer un expéditeur valide Resend
+// --- CONFIG EXPÉDITEUR ---
 const DEFAULT_FROM = "Louer Ici <notifications@louerici.fr>"
 const fromEmail = DEFAULT_FROM
+
+// --- LAZY RESEND CLIENT (server-only) ---
+let resendClient: Resend | null = null
+
+function getResend(): Resend {
+  if (typeof window !== "undefined") {
+    throw new Error("Email service must be used on the server only.")
+  }
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error("RESEND_API_KEY non défini")
+  }
+  if (!resendClient) {
+    resendClient = new Resend(process.env.RESEND_API_KEY)
+  }
+  return resendClient
+}
 
 // --- TYPES ET ENUMS ---
 
@@ -81,14 +92,13 @@ async function sendEmail(
   subject: string,
   reactElement: React.ReactElement,
 ) {
+  if (typeof window !== "undefined") {
+    throw new Error("sendEmail must be called on the server only.")
+  }
+
   if (!fromEmail) {
     console.error("EMAIL_FROM n'est pas défini.")
     throw new Error("Configuration email incomplète.")
-  }
-
-  if (!process.env.RESEND_API_KEY) {
-    console.error("RESEND_API_KEY non défini")
-    throw new Error("Clé API Resend manquante")
   }
 
   if (notificationType && user.notificationSettings?.[notificationType] === false) {
@@ -97,6 +107,8 @@ async function sendEmail(
   }
 
   try {
+    const resend = getResend()
+
     const payload = {
       from: fromEmail,
       to: user.email,
@@ -104,18 +116,9 @@ async function sendEmail(
       react: reactElement,
     }
 
-    console.log("📨 Envoi email via Resend:", {
-      to: payload.to,
-      subject: payload.subject,
-      hasReact: !!payload.react,
-    })
-
     const { data, error } = await resend.emails.send(payload)
 
-    if (error) {
-      console.error("❌ Resend erreur brute:", error)
-      throw error
-    }
+    if (error) throw error
 
     console.log(`✅ Email '${subject}' envoyé à ${user.email}. ID: ${data?.id}`)
     return data
@@ -318,7 +321,7 @@ export async function sendNewApplicationNotificationToOwner(
 ) {
   await sendEmail(
     owner,
-    null,
+    NotificationType.NEW_APPLICATION,
     `Nouvelle candidature pour : ${property.title}`,
     NewApplicationNotificationToOwnerEmail({
       ownerName: owner.name,
