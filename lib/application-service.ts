@@ -26,14 +26,14 @@ export const applicationService = {
     console.log("📝 ApplicationService.createApplication", applicationData)
 
     try {
-      // Vérifier si une candidature existe déjà avec une requête corrigée
+      // Vérifier si une candidature existe déjà
       const { data: existing, error: checkError } = await supabase
         .from("applications")
         .select("id, status")
         .eq("property_id", applicationData.property_id)
         .eq("tenant_id", applicationData.tenant_id)
-        .neq("status", "withdrawn") // Vérifier qu'elle n'est pas retirée
-        .maybeSingle() // Utiliser maybeSingle au lieu de single pour éviter l'erreur 406
+        .neq("status", "withdrawn")
+        .maybeSingle()
 
       if (checkError) {
         console.error("❌ Erreur vérification candidature existante:", checkError)
@@ -53,9 +53,9 @@ export const applicationService = {
 
       console.log("✅ Candidature créée:", data)
 
-      // --- ENVOI EMAIL VIA API ROUTE (avec URL relative pour éviter CORS) ---
+      // --- ENVOI EMAIL VIA API ROUTE (server-only) ---
       try {
-        // Utiliser une URL relative au lieu d'une URL absolue pour éviter les problèmes CORS
+        // Appel à une API route pour gérer l'envoi d'email côté serveur uniquement
         const response = await fetch("/api/applications/send-notification", {
           method: "POST",
           headers: {
@@ -70,8 +70,7 @@ export const applicationService = {
         })
 
         if (!response.ok) {
-          const errorText = await response.text()
-          console.error("❌ Erreur API notification:", response.status, errorText)
+          console.error("❌ Erreur API notification:", response.status)
         } else {
           console.log("✅ Notification/email envoyée via API")
         }
@@ -392,6 +391,45 @@ export const applicationService = {
 
       console.log("✅ Statut mis à jour:", data)
 
+      // --- ENVOI EMAIL POUR MISE À JOUR DE STATUT ---
+      try {
+        // Récupérer les informations de la propriété et du locataire
+        const { data: application } = await supabase
+          .from("applications")
+          .select(`
+            tenant_id,
+            property:properties(id, title, address, owner_id)
+          `)
+          .eq("id", applicationId)
+          .single()
+
+        if (application && application.tenant_id) {
+          // Appel à l'API pour envoyer l'email
+          const response = await fetch("/api/applications/send-notification", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              application_id: applicationId,
+              tenant_id: application.tenant_id,
+              property_id: application.property.id,
+              type: "status_update",
+              status: status,
+              notes: notes
+            }),
+          })
+
+          if (!response.ok) {
+            console.error("❌ Erreur API notification statut:", response.status)
+          } else {
+            console.log("✅ Email de mise à jour de statut envoyé")
+          }
+        }
+      } catch (apiError) {
+        console.error("❌ Erreur appel API notification statut:", apiError)
+      }
+
       // Créer une notification pour le locataire
       try {
         // Récupérer les informations de la propriété
@@ -418,6 +456,9 @@ export const applicationService = {
           } else if (status === "visit_proposed") {
             notificationTitle = "Créneaux de visite proposés"
             notificationContent = `Des créneaux de visite ont été proposés pour ${propertyTitle}`
+          } else if (status === "analyzing" || status === "under_review") {
+            notificationTitle = "Candidature en cours d'analyse"
+            notificationContent = `Votre candidature pour ${propertyTitle} est en cours d'analyse.`
           }
 
           if (notificationTitle) {

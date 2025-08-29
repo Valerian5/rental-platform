@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
-import { sendApplicationReceivedEmail, sendNewApplicationNotificationToOwner } from "@/lib/email-service"
+import { 
+  sendApplicationReceivedEmail, 
+  sendNewApplicationNotificationToOwner,
+  sendApplicationStatusUpdateEmail 
+} from "@/lib/email-service"
 
 export async function POST(request: NextRequest) {
   try {
-    const { application_id, tenant_id, property_id, type } = await request.json()
+    const { application_id, tenant_id, property_id, type, status, notes } = await request.json()
 
     if (!tenant_id || !property_id || !type) {
       return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 })
@@ -33,6 +37,7 @@ export async function POST(request: NextRequest) {
           .single()
       : { data: null }
 
+    // Gestion des nouvelles candidatures
     if (type === "new_application" && tenant && owner && property) {
       try {
         // Email au locataire
@@ -50,8 +55,25 @@ export async function POST(request: NextRequest) {
 
         console.log("✅ Emails envoyés pour nouvelle candidature")
       } catch (emailError) {
-        console.error("❌ Erreur envoi emails:", emailError)
+        console.error("❌ Erreur envoi emails nouvelle candidature:", emailError)
         return NextResponse.json({ error: "Erreur envoi emails" }, { status: 500 })
+      }
+    }
+
+    // Gestion des mises à jour de statut
+    if (type === "status_update" && tenant && property && status) {
+      try {
+        // Email au locataire pour la mise à jour de statut
+        await sendApplicationStatusUpdateEmail(
+          { id: tenant.id, name: `${tenant.first_name} ${tenant.last_name}`, email: tenant.email },
+          { id: property.id, title: property.title, address: property.address },
+          status
+        )
+
+        console.log(`✅ Email de mise à jour de statut envoyé au locataire: ${status}`)
+      } catch (emailError) {
+        console.error("❌ Erreur envoi email mise à jour statut:", emailError)
+        return NextResponse.json({ error: "Erreur envoi email" }, { status: 500 })
       }
     }
 
