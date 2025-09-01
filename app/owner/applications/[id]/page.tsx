@@ -44,6 +44,9 @@ import {
   Award,
   Heart,
 } from "lucide-react"
+import { PostVisitManager } from "@/components/post-visit-manager"
+import { VisitHistorySummary } from "@/components/visit-history-summary"
+import { CandidateFeedbackDisplay } from "@/components/candidate-feedback-display"
 
 export default function ApplicationDetailsPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -605,10 +608,11 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
         </div>
 
         <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid grid-cols-4 mb-4">
+          <TabsList className="grid grid-cols-5 mb-4">
             <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
             <TabsTrigger value="scoring">Analyse scoring</TabsTrigger>
             <TabsTrigger value="financial">Analyse financière</TabsTrigger>
+            <TabsTrigger value="visits">Visites</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
           </TabsList>
 
@@ -728,13 +732,13 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                       <>
                         {rentRatio}x
                         {Number(rentRatio) >= 3 ? (
-                          <Badge className="ml-2 bg-green-100 text-green-800 hover:bg-green-200">Excellent</Badge>
+                          <Badge className="ml-2 bg-green-100 text-green-800">Excellent</Badge>
                         ) : Number(rentRatio) >= 2.5 ? (
-                          <Badge className="ml-2 bg-green-100 text-green-800 hover:bg-green-200">Bon</Badge>
+                          <Badge className="ml-2 bg-green-100 text-green-800">Bon</Badge>
                         ) : Number(rentRatio) >= 2 ? (
-                          <Badge className="ml-2 bg-amber-100 text-amber-800 hover:bg-amber-200">Acceptable</Badge>
+                          <Badge className="ml-2 bg-amber-100 text-amber-800">Acceptable</Badge>
                         ) : (
-                          <Badge className="ml-2 bg-red-100 text-red-800 hover:bg-red-200">Insuffisant</Badge>
+                          <Badge className="ml-2 bg-red-100 text-red-800">Insuffisant</Badge>
                         )}
                       </>
                     ) : (
@@ -1152,6 +1156,142 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             </Card>
           </TabsContent>
 
+          {/* Visites */}
+          <TabsContent value="visits" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5" />
+                  Gestion des visites
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Section des visites programmées */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Visites programmées</h3>
+                  {application.visits && application.visits.length > 0 ? (
+                    application.visits
+                      .filter((visit: any) => ["scheduled", "confirmed", "proposed"].includes(visit.status))
+                      .map((visit: any) => (
+                        <Card key={visit.id} className="border-l-4 border-l-blue-500">
+                          <CardContent className="p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <Clock className="h-4 w-4 text-blue-600" />
+                                <span className="font-medium">
+                                  {visit.visit_date && new Date(visit.visit_date).toLocaleDateString("fr-FR", {
+                                    weekday: "long",
+                                    year: "numeric",
+                                    month: "long",
+                                    day: "numeric",
+                                  })}
+                                </span>
+                              </div>
+                              <Badge variant="outline">
+                                {visit.status === "scheduled" ? "Programmée" : 
+                                 visit.status === "confirmed" ? "Confirmée" : "Proposée"}
+                              </Badge>
+                            </div>
+                            
+                            {visit.visit_time && (
+                              <div className="text-sm text-muted-foreground mb-2">
+                                Horaire : {visit.visit_time}
+                              </div>
+                            )}
+                            
+                            {visit.notes && (
+                              <div className="text-sm text-muted-foreground mb-3">
+                                Notes : {visit.notes}
+                              </div>
+                            )}
+                            
+                            <div className="flex gap-2">
+                              <Button variant="outline" size="sm">
+                                <Calendar className="h-4 w-4 mr-2" />
+                                Modifier la visite
+                              </Button>
+                              <Button variant="outline" size="sm">
+                                <MessageSquare className="h-4 w-4 mr-2" />
+                                Contacter le candidat
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))
+                  ) : (
+                    <div className="text-center py-8">
+                      <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                      <p className="text-muted-foreground">Aucune visite programmée</p>
+                      <Button 
+                        onClick={handleProposeVisit} 
+                        className="mt-2"
+                        disabled={!application || application.status === "rejected"}
+                      >
+                        Proposer une visite
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Section des visites terminées avec gestion post-visite */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Visites terminées</h3>
+                  {application.visits && application.visits.length > 0 ? (
+                    application.visits
+                      .filter((visit: any) => visit.status === "completed")
+                      .map((visit: any) => (
+                        <div key={visit.id}>
+                          <PostVisitManager
+                            visit={{
+                              ...visit,
+                              property: application.property,
+                              tenant: application.tenant
+                            }}
+                            onVisitUpdate={handleVisitUpdate}
+                            userType="owner"
+                          />
+                        </div>
+                      ))
+                  ) : (
+                    <div className="text-center py-4">
+                      <p className="text-muted-foreground">Aucune visite terminée</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Section des statistiques de visite */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <div className="text-2xl font-bold text-blue-600">
+                        {application.visits?.filter((v: any) => ["scheduled", "confirmed"].includes(v.status)).length || 0}
+                      </div>
+                      <p className="text-sm text-muted-foreground">Visites programmées</p>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <div className="text-2xl font-bold text-green-600">
+                        {application.visits?.filter((v: any) => v.status === "completed").length || 0}
+                      </div>
+                      <p className="text-sm text-muted-foreground">Visites terminées</p>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <div className="text-2xl font-bold text-purple-600">
+                        {application.visits?.filter((v: any) => v.tenant_interest === "interested").length || 0}
+                      </div>
+                      <p className="text-sm text-muted-foreground">Candidats intéressés</p>
+                    </CardContent>
+                  </Card>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           {/* Documents */}
           <TabsContent value="documents" className="space-y-6">
             <Card>
@@ -1237,4 +1377,38 @@ function flattenDocuments(application: any): any[] {
   }
 
   return docs
+}
+
+const handleVisitUpdate = async (visitId: string, updates: any) => {
+  try {
+    const response = await fetch(`/api/visits/${visitId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(updates),
+    })
+
+    if (response.ok) {
+      // Mettre à jour la visite localement
+      setApplication(prevApp => ({
+        ...prevApp,
+        visits: prevApp.visits?.map((visit: any) => 
+          visit.id === visitId ? { ...visit, ...updates } : visit
+        ) || []
+      }))
+      
+      toast.success("Visite mise à jour avec succès")
+      
+      // Recharger les détails de l'application si nécessaire
+      if (user) {
+        await loadApplicationDetails(user.id)
+      }
+    } else {
+      toast.error("Erreur lors de la mise à jour")
+    }
+  } catch (error) {
+    console.error("Erreur mise à jour visite:", error)
+    toast.error("Erreur lors de la mise à jour")
+  }
 }
