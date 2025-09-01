@@ -1,525 +1,300 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import Link from "next/link"
-import { Calendar, Clock, MapPin, User } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { PageHeader } from "@/components/page-header"
+import { EnhancedVisitCalendar } from "@/components/enhanced-visit-calendar"
 import { authService } from "@/lib/auth-service"
-import { visitService } from "@/lib/visit-service"
 import { toast } from "sonner"
+import {
+  CalendarIcon,
+  Clock,
+  CheckCircle,
+  XCircle,
+  Filter,
+  Search,
+} from "lucide-react"
 
-export default function VisitsPage() {
-  const [activeTab, setActiveTab] = useState("upcoming")
-  const [visits, setVisits] = useState<any[]>([])
+interface Visit {
+  id: string
+  visit_date: string
+  visit_time: string
+  start_time?: string
+  end_time?: string
+  status: string
+  created_at: string
+  visitor_name: string
+  visitor_phone?: string
+  tenant_email?: string
+  property: {
+    id: string
+    title: string
+    address: string
+    city: string
+    property_images?: Array<{ url: string; is_primary: boolean }>
+  }
+  application?: {
+    id: string
+    status: string
+  }
+  tenant_interest?: "interested" | "not_interested"
+  feedback?: {
+    rating: number
+    comment: string
+    submitted_at: string
+  }
+}
+
+export default function OwnerVisitsPage() {
+  const router = useRouter()
   const [currentUser, setCurrentUser] = useState<any>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [selectedVisit, setSelectedVisit] = useState<any>(null)
-  const [feedbackDialog, setFeedbackDialog] = useState(false)
-  const [feedbackRating, setFeedbackRating] = useState<number>(0)
-  const [feedbackComment, setFeedbackComment] = useState("")
+  const [visits, setVisits] = useState<Visit[]>([])
+  const [filteredVisits, setFilteredVisits] = useState<Visit[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
+
+  const statusConfig = {
+    scheduled: { label: "Programmée", variant: "default" as const, icon: Clock },
+    completed: { label: "Terminée", variant: "outline" as const, icon: CheckCircle },
+    cancelled: { label: "Annulée", variant: "destructive" as const, icon: XCircle },
+    interested: { label: "Intéressé", variant: "default" as const, icon: CheckCircle },
+    not_interested: { label: "Pas intéressé", variant: "destructive" as const, icon: XCircle },
+  }
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        console.log("🏠 Chargement des visites locataire...")
-        setIsLoading(true)
-
         const user = await authService.getCurrentUser()
-        if (!user || user.user_type !== "tenant") {
-          toast.error("Vous devez être connecté en tant que locataire")
+        if (!user || user.user_type !== "owner") {
+          router.push("/login")
           return
         }
 
         setCurrentUser(user)
-        console.log("👤 Utilisateur locataire:", user.id)
-
-        // Récupérer les visites du locataire
-        const visitsData = await visitService.getTenantVisits(user.id)
-        console.log("📅 Visites récupérées:", visitsData.length)
-        console.log("📅 Structure première visite:", visitsData[0]) // Debug
-        setVisits(visitsData)
+        await loadVisits(user.id)
       } catch (error) {
-        console.error("❌ Erreur chargement visites:", error)
-        toast.error("Erreur lors du chargement des visites")
+        console.error("Erreur auth:", error)
+        router.push("/login")
       } finally {
-        setIsLoading(false)
+        setLoading(false)
       }
     }
 
     fetchData()
-  }, [])
+  }, [router])
 
-  // Fonction utilitaire pour extraire la date au format YYYY-MM-DD
-  const extractDate = (dateString: string) => {
-    if (!dateString) return ""
-    // Si c'est déjà au bon format, on le retourne
-    if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) return dateString
-    // Sinon on extrait la partie date de l'ISO string
-    return dateString.split("T")[0]
-  }
-
-  const upcomingVisits = visits.filter((visit) => {
-    const visitDate = extractDate(visit.visit_date)
-    const visitTime = visit.start_time || visit.visit_time || "00:00"
-    const visitDateTime = new Date(`${visitDate}T${visitTime}`)
-    const now = new Date()
-    const isUpcoming = visitDateTime > now
-    const hasValidStatus = ["scheduled", "confirmed", "proposed"].includes(visit.status)
-
-    console.log("🔍 Analyse visite:", {
-      id: visit.id,
-      original_date: visit.visit_date,
-      extracted_date: visitDate,
-      time: visitTime,
-      status: visit.status,
-      dateTime: visitDateTime.toISOString(),
-      now: now.toISOString(),
-      isUpcoming,
-      hasValidStatus,
-      willShow: isUpcoming && hasValidStatus,
-    })
-
-    return isUpcoming && hasValidStatus
-  })
-
-  console.log("📅 Visites à venir filtrées:", upcomingVisits.length)
-
-  const pastVisits = visits.filter((visit) => {
-    const visitDate = extractDate(visit.visit_date)
-    const visitTime = visit.start_time || visit.visit_time || "00:00"
-    const visitDateTime = new Date(`${visitDate}T${visitTime}`)
-    return visitDateTime <= new Date() || ["completed", "cancelled", "no_show"].includes(visit.status)
-  })
-
-  const getStatusBadgeVariant = (status: string) => {
-    switch (status) {
-      case "proposed":
-        return "secondary"
-      case "confirmed":
-      case "scheduled":
-        return "default"
-      case "completed":
-        return "default"
-      case "cancelled":
-      case "no_show":
-        return "destructive"
-      default:
-        return "outline"
-    }
-  }
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "proposed":
-        return "Proposée"
-      case "confirmed":
-        return "Confirmée"
-      case "scheduled":
-        return "Programmée"
-      case "completed":
-        return "Terminée"
-      case "cancelled":
-        return "Annulée"
-      case "no_show":
-        return "Absent"
-      default:
-        return status
-    }
-  }
-
-  const formatDateTime = (dateString: string, timeString?: string) => {
-    const date = new Date(extractDate(dateString))
-    const time = timeString || "00:00"
-
-    return {
-      date: date.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }),
-      time: time,
-      full: `${date.toLocaleDateString("fr-FR", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      })} à ${time}`,
-    }
-  }
-
-  const handleConfirmVisit = async (visitId: string) => {
+  const loadVisits = async (ownerId: string) => {
     try {
-      await visitService.updateVisitStatus(visitId, "confirmed")
-      toast.success("Visite confirmée")
-
-      // Recharger les visites
-      const visitsData = await visitService.getTenantVisits(currentUser.id)
-      setVisits(visitsData)
+      const response = await fetch(`/api/visits?owner_id=${ownerId}`)
+      if (response.ok) {
+        const data = await response.json()
+        setVisits(data.visits || [])
+        setFilteredVisits(data.visits || [])
+      } else {
+        toast.error("Erreur lors du chargement des visites")
+      }
     } catch (error) {
-      console.error("❌ Erreur confirmation visite:", error)
-      toast.error("Erreur lors de la confirmation")
+      console.error("Erreur chargement visites:", error)
+      toast.error("Erreur lors du chargement des visites")
     }
   }
 
-  const handleCancelVisit = async (visitId: string) => {
+  // Filtrage des visites
+  useEffect(() => {
+    let filtered = visits
+
+    // Filtre par recherche
+    if (searchQuery) {
+      filtered = filtered.filter(
+        (visit) =>
+          visit.visitor_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          visit.property.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          visit.property.address.toLowerCase().includes(searchQuery.toLowerCase()),
+      )
+    }
+
+    // Filtre par statut
+    if (statusFilter !== "all") {
+      filtered = filtered.filter((visit) => visit.status === statusFilter)
+    }
+
+    setFilteredVisits(filtered)
+  }, [visits, searchQuery, statusFilter])
+
+  const handleVisitUpdate = async (visitId: string, updates: any) => {
     try {
-      await visitService.updateVisitStatus(visitId, "cancelled")
-      toast.success("Visite annulée")
+      const response = await fetch(`/api/visits/${visitId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updates),
+      })
 
-      // Recharger les visites
-      const visitsData = await visitService.getTenantVisits(currentUser.id)
-      setVisits(visitsData)
+      if (response.ok) {
+        // Mettre à jour la visite localement
+        setVisits(prevVisits => 
+          prevVisits.map(visit => 
+            visit.id === visitId ? { ...visit, ...updates } : visit
+          )
+        )
+        setFilteredVisits(prevVisits => 
+          prevVisits.map(visit => 
+            visit.id === visitId ? { ...visit, ...updates } : visit
+          )
+        )
+        
+        toast.success("Visite mise à jour avec succès")
+      } else {
+        toast.error("Erreur lors de la mise à jour")
+      }
     } catch (error) {
-      console.error("❌ Erreur annulation visite:", error)
-      toast.error("Erreur lors de l'annulation")
+      console.error("Erreur mise à jour visite:", error)
+      toast.error("Erreur lors de la mise à jour")
     }
   }
 
-  const handleSubmitFeedback = async () => {
-    if (!selectedVisit) return
-
-    try {
-      // Ici on pourrait ajouter un service pour les feedbacks
-      toast.success("Avis enregistré")
-      setFeedbackDialog(false)
-    } catch (error) {
-      console.error("❌ Erreur feedback:", error)
-      toast.error("Erreur lors de l'enregistrement")
-    }
+  const stats = {
+    total: visits.length,
+    scheduled: visits.filter((v) => v.status === "scheduled").length,
+    completed: visits.filter((v) => v.status === "completed").length,
+    interested: visits.filter((v) => v.status === "interested" || v.tenant_interest === "interested").length,
+    not_interested: visits.filter((v) => v.status === "not_interested" || v.tenant_interest === "not_interested").length,
   }
 
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="container mx-auto py-6">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center space-y-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="text-gray-600">Chargement de vos visites...</p>
+      <div className="space-y-6 max-w-full overflow-x-hidden">
+        <PageHeader title="Visites" description="Chargement..." />
+        <div className="flex items-center justify-center h-96">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6 p-4 max-w-full overflow-x-hidden">
+      <PageHeader title="Visites" description="Gérez les visites de vos propriétés" />
+
+      {/* Statistiques */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <Card>
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Total</p>
+                <p className="text-2xl font-bold">{stats.total}</p>
+              </div>
+              <CalendarIcon className="h-8 w-8 text-muted-foreground flex-shrink-0" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Programmées</p>
+                <p className="text-2xl font-bold text-blue-600">{stats.scheduled}</p>
+              </div>
+              <Clock className="h-8 w-8 text-blue-600 flex-shrink-0" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Terminées</p>
+                <p className="text-2xl font-bold text-green-600">{stats.completed}</p>
+              </div>
+              <CheckCircle className="h-8 w-8 text-green-600 flex-shrink-0" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Intéressés</p>
+                <p className="text-2xl font-bold text-green-600">{stats.interested}</p>
+              </div>
+              <CheckCircle className="h-8 w-8 text-green-600 flex-shrink-0" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Pas intéressés</p>
+                <p className="text-2xl font-bold text-red-600">{stats.not_interested}</p>
+              </div>
+              <XCircle className="h-8 w-8 text-red-600 flex-shrink-0" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filtres */}
+      <Card>
+        <CardContent className="p-4 sm:p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground flex-shrink-0" />
+              <Input
+                placeholder="Rechercher..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8"
+              />
+            </div>
+
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger>
+                <Filter className="h-4 w-4 mr-2 flex-shrink-0" />
+                <SelectValue placeholder="Statut" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les statuts</SelectItem>
+                <SelectItem value="scheduled">Programmées</SelectItem>
+                <SelectItem value="completed">Terminées</SelectItem>
+                <SelectItem value="interested">Intéressés</SelectItem>
+                <SelectItem value="not_interested">Pas intéressés</SelectItem>
+                <SelectItem value="cancelled">Annulées</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSearchQuery("")
+                setStatusFilter("all")
+              }}
+              className="w-full sm:w-auto"
+            >
+              Réinitialiser
+            </Button>
           </div>
-        </div>
-      </div>
-    )
-  }
+        </CardContent>
+      </Card>
 
-  if (!currentUser) {
-    return (
-      <div className="container mx-auto py-6">
-        <div className="text-center">
-          <p className="text-red-600">Vous devez être connecté pour voir vos visites</p>
-          <Link href="/login">
-            <Button className="mt-4">Se connecter</Button>
-          </Link>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="container mx-auto py-6">
-      <h1 className="text-2xl font-bold mb-6">Mes visites</h1>
-
-      <Tabs defaultValue={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="mb-6">
-          <TabsTrigger value="upcoming">À venir ({upcomingVisits.length})</TabsTrigger>
-          <TabsTrigger value="past">Passées ({pastVisits.length})</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="upcoming" className="space-y-6">
-          {upcomingVisits.length > 0 ? (
-            upcomingVisits.map((visit) => (
-              <Card key={visit.id} className="overflow-hidden">
-                <CardContent className="p-0">
-                  <div className="flex flex-col md:flex-row">
-                    <div className="w-full md:w-1/3 h-48 md:h-auto">
-                      <img
-                        src={visit.property?.property_images?.[0]?.url || "/placeholder.svg?height=200&width=300"}
-                        alt={visit.property?.title || "Propriété"}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div className="flex-1 p-6">
-                      <div className="flex justify-between items-start mb-4">
-                        <div>
-                          <h2 className="text-xl font-semibold">{visit.property?.title || "Propriété"}</h2>
-                          <div className="flex items-center text-muted-foreground mt-1">
-                            <MapPin className="h-4 w-4 mr-1" />
-                            {visit.property?.address || "Adresse non disponible"}
-                          </div>
-                        </div>
-                        <Badge variant={getStatusBadgeVariant(visit.status)}>{getStatusText(visit.status)}</Badge>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div className="flex items-start">
-                          <Calendar className="h-5 w-5 mr-2 text-blue-600" />
-                          <div>
-                            <p className="font-medium">
-                              {formatDateTime(visit.visit_date, visit.start_time || visit.visit_time).date}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              {formatDateTime(visit.visit_date, visit.start_time || visit.visit_time).time}
-                            </p>
-                          </div>
-                        </div>
-                        {visit.property?.owner && (
-                          <div className="flex items-start">
-                            <User className="h-5 w-5 mr-2 text-blue-600" />
-                            <div>
-                              <p className="font-medium">
-                                {visit.property.owner.first_name} {visit.property.owner.last_name}
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                {visit.property.owner.phone || visit.property.owner.email}
-                              </p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {visit.notes && (
-                        <div className="bg-gray-50 p-3 rounded-md mb-4">
-                          <p className="text-sm">{visit.notes}</p>
-                        </div>
-                      )}
-
-                      <div className="flex flex-wrap gap-2 justify-end">
-                        <Button variant="outline" size="sm" asChild>
-                          <Link href={`/properties/${visit.property_id}`}>Voir l'annonce</Link>
-                        </Button>
-
-                        {visit.status === "proposed" && (
-                          <>
-                            <Button size="sm" onClick={() => handleConfirmVisit(visit.id)}>
-                              Confirmer la visite
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => handleCancelVisit(visit.id)}>
-                              Refuser
-                            </Button>
-                          </>
-                        )}
-
-                        {visit.status === "confirmed" && (
-                          <Button size="sm" variant="destructive" onClick={() => handleCancelVisit(visit.id)}>
-                            Annuler la visite
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))
-          ) : (
-            <div className="text-center py-12">
-              <div className="bg-gray-100 p-6 rounded-full inline-block mb-4">
-                <Calendar className="h-8 w-8 text-gray-400" />
-              </div>
-              <h3 className="text-lg font-semibold mb-2">Aucune visite à venir</h3>
-              <p className="text-muted-foreground mb-4">
-                Vous n'avez pas encore de visites programmées. Postulez à des annonces pour organiser des visites.
-              </p>
-              <Button asChild>
-                <Link href="/properties">Voir les annonces</Link>
-              </Button>
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="past" className="space-y-6">
-          {pastVisits.length > 0 ? (
-            pastVisits.map((visit) => (
-              <Card key={visit.id} className="overflow-hidden">
-                <CardContent className="p-0">
-                  <div className="flex flex-col md:flex-row">
-                    <div className="w-full md:w-1/3 h-48 md:h-auto">
-                      <img
-                        src={visit.property?.property_images?.[0]?.url || "/placeholder.svg?height=200&width=300"}
-                        alt={visit.property?.title || "Propriété"}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div className="flex-1 p-6">
-                      <div className="flex justify-between items-start mb-4">
-                        <div>
-                          <h2 className="text-xl font-semibold">{visit.property?.title || "Propriété"}</h2>
-                          <div className="flex items-center text-muted-foreground mt-1">
-                            <MapPin className="h-4 w-4 mr-1" />
-                            {visit.property?.address || "Adresse non disponible"}
-                          </div>
-                        </div>
-                        <Badge variant={getStatusBadgeVariant(visit.status)}>{getStatusText(visit.status)}</Badge>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div className="flex items-start">
-                          <Calendar className="h-5 w-5 mr-2 text-blue-600" />
-                          <div>
-                            <p className="font-medium">
-                              {formatDateTime(visit.visit_date, visit.start_time || visit.visit_time).date}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              {formatDateTime(visit.visit_date, visit.start_time || visit.visit_time).time}
-                            </p>
-                          </div>
-                        </div>
-                        {visit.property?.owner && (
-                          <div className="flex items-start">
-                            <User className="h-5 w-5 mr-2 text-blue-600" />
-                            <div>
-                              <p className="font-medium">
-                                {visit.property.owner.first_name} {visit.property.owner.last_name}
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                {visit.property.owner.phone || visit.property.owner.email}
-                              </p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {visit.notes && (
-                        <div className="bg-gray-50 p-3 rounded-md mb-4">
-                          <p className="text-sm">{visit.notes}</p>
-                        </div>
-                      )}
-
-                      {visit.feedback && (
-                        <div className="bg-blue-50 p-3 rounded-md mb-4">
-                          <div className="flex items-center mb-1">
-                            <p className="font-medium text-blue-800">Votre avis sur ce bien</p>
-                            <div className="ml-2 flex">
-                              {[...Array(5)].map((_, i) => (
-                                <StarComponent
-                                  key={i}
-                                  className={`h-4 w-4 ${
-                                    i < visit.feedback.rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
-                                  }`}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                          <p className="text-sm text-blue-700">{visit.feedback.comment}</p>
-                        </div>
-                      )}
-
-                      <div className="flex flex-wrap gap-2 justify-end">
-                        <Button variant="outline" size="sm" asChild>
-                          <Link href={`/properties/${visit.property_id}`}>Voir l'annonce</Link>
-                        </Button>
-                        {visit.status === "completed" && !visit.feedback && (
-                          <Dialog open={feedbackDialog} onOpenChange={setFeedbackDialog}>
-                            <DialogTrigger asChild>
-                              <Button
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedVisit(visit)
-                                  setFeedbackRating(0)
-                                  setFeedbackComment("")
-                                }}
-                              >
-                                Donner mon avis
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>Votre avis sur la visite</DialogTitle>
-                                <DialogDescription>
-                                  Partagez votre expérience concernant la visite de {selectedVisit?.property?.title}
-                                </DialogDescription>
-                              </DialogHeader>
-                              <div className="space-y-4 py-4">
-                                <div className="space-y-2">
-                                  <Label>Comment évaluez-vous ce bien ?</Label>
-                                  <div className="flex gap-1">
-                                    {[1, 2, 3, 4, 5].map((rating) => (
-                                      <Button
-                                        key={rating}
-                                        type="button"
-                                        variant="outline"
-                                        size="icon"
-                                        className={`h-10 w-10 ${
-                                          feedbackRating >= rating ? "bg-yellow-50 border-yellow-300" : ""
-                                        }`}
-                                        onClick={() => setFeedbackRating(rating)}
-                                      >
-                                        <StarComponent
-                                          className={`h-5 w-5 ${
-                                            feedbackRating >= rating
-                                              ? "fill-yellow-400 text-yellow-400"
-                                              : "text-gray-300"
-                                          }`}
-                                        />
-                                      </Button>
-                                    ))}
-                                  </div>
-                                </div>
-                                <div className="space-y-2">
-                                  <Label htmlFor="comment">Commentaire</Label>
-                                  <Textarea
-                                    id="comment"
-                                    placeholder="Partagez votre impression sur ce bien..."
-                                    value={feedbackComment}
-                                    onChange={(e) => setFeedbackComment(e.target.value)}
-                                    rows={4}
-                                  />
-                                </div>
-                              </div>
-                              <div className="flex justify-end gap-2">
-                                <Button variant="outline" onClick={() => setFeedbackDialog(false)}>
-                                  Annuler
-                                </Button>
-                                <Button onClick={handleSubmitFeedback} disabled={feedbackRating === 0}>
-                                  Envoyer mon avis
-                                </Button>
-                              </div>
-                            </DialogContent>
-                          </Dialog>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))
-          ) : (
-            <div className="text-center py-12">
-              <div className="bg-gray-100 p-6 rounded-full inline-block mb-4">
-                <Clock className="h-8 w-8 text-gray-400" />
-              </div>
-              <h3 className="text-lg font-semibold mb-2">Aucune visite passée</h3>
-              <p className="text-muted-foreground">L'historique de vos visites apparaîtra ici.</p>
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+      {/* Calendrier des visites */}
+      <EnhancedVisitCalendar
+        visits={filteredVisits}
+        userType="owner"
+        onVisitUpdate={handleVisitUpdate}
+      />
     </div>
-  )
-}
-
-// Composant Star pour les évaluations
-function StarComponent(props: any) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      {...props}
-    >
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-    </svg>
   )
 }
