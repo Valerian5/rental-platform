@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PageHeader } from "@/components/page-header"
 import { EnhancedVisitCalendar } from "@/components/enhanced-visit-calendar"
+import { OwnerVisitFeedback } from "@/components/owner-visit-feedback"
 import { authService } from "@/lib/auth-service"
 import { toast } from "sonner"
 import {
@@ -18,16 +19,7 @@ import {
   XCircle,
   Filter,
   Search,
-  Building,
-  MessageSquare,
-  AlertTriangle,
-  Star,
-  Heart,
-  Calendar,
 } from "lucide-react"
-import { VisitHistorySummary } from "@/components/visit-history-summary"
-import { CandidateFeedbackDisplay } from "@/components/candidate-feedback-display"
-import { OwnerVisitFeedback } from "@/components/owner-visit-feedback"
 
 interface Visit {
   id: string
@@ -57,6 +49,7 @@ interface Visit {
     comment: string
     submitted_at: string
   }
+  owner_feedback?: any
 }
 
 export default function OwnerVisitsPage() {
@@ -98,7 +91,7 @@ export default function OwnerVisitsPage() {
     fetchData()
   }, [router])
 
-  // Ajouter cette fonction pour marquer automatiquement les visites passées
+  // Fonction pour marquer automatiquement les visites passées comme "completed"
   const markPastVisitsAsCompleted = (visits: Visit[]) => {
     const now = new Date()
     return visits.map(visit => {
@@ -113,7 +106,6 @@ export default function OwnerVisitsPage() {
     })
   }
 
-  // Modifier la fonction loadVisits pour inclure cette logique
   const loadVisits = async (ownerId: string) => {
     try {
       const response = await fetch(`/api/visits?owner_id=${ownerId}`)
@@ -179,6 +171,7 @@ export default function OwnerVisitsPage() {
         toast.success("Visite mise à jour avec succès")
       } else {
         toast.error("Erreur lors de la mise à jour")
+      }
     } catch (error) {
       console.error("Erreur mise à jour visite:", error)
       toast.error("Erreur lors de la mise à jour")

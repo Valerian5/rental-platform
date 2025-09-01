@@ -2,15 +2,14 @@
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { authService } from "@/lib/auth-service"
 import { visitService } from "@/lib/visit-service"
 import { toast } from "sonner"
 import { CalendarIcon, Clock, CheckCircle, XCircle, Filter, Search, MapPin, User } from "lucide-react"
-import { TenantVisitFeedback } from "@/components/tenant-visit-feedback"
 
 export default function VisitsPage() {
   const [visits, setVisits] = useState<any[]>([])
@@ -350,12 +349,6 @@ export default function VisitsPage() {
                         </Badge>
                       )}
                     </div>
-
-                    {/* Composant de feedback locataire pour les visites terminées */}
-                    <TenantVisitFeedback
-                      visit={visit}
-                      onFeedbackSubmit={handleVisitUpdate}
-                    />
                   </div>
                 </div>
               </CardContent>
