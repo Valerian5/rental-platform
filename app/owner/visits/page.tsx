@@ -98,13 +98,30 @@ export default function OwnerVisitsPage() {
     fetchData()
   }, [router])
 
+  // Ajouter cette fonction pour marquer automatiquement les visites passées
+  const markPastVisitsAsCompleted = (visits: Visit[]) => {
+    const now = new Date()
+    return visits.map(visit => {
+      if (visit.status === "scheduled" || visit.status === "confirmed") {
+        const visitDateTime = new Date(`${visit.visit_date}T${visit.visit_time || "00:00"}`)
+        // Si la visite est passée de plus de 30 minutes, la marquer comme terminée
+        if (visitDateTime < now && (now.getTime() - visitDateTime.getTime()) > 30 * 60 * 1000) {
+          return { ...visit, status: "completed" }
+        }
+      }
+      return visit
+    })
+  }
+
+  // Modifier la fonction loadVisits pour inclure cette logique
   const loadVisits = async (ownerId: string) => {
     try {
       const response = await fetch(`/api/visits?owner_id=${ownerId}`)
       if (response.ok) {
         const data = await response.json()
-        setVisits(data.visits || [])
-        setFilteredVisits(data.visits || [])
+        const visitsWithCompletedStatus = markPastVisitsAsCompleted(data.visits || [])
+        setVisits(visitsWithCompletedStatus)
+        setFilteredVisits(visitsWithCompletedStatus)
       } else {
         toast.error("Erreur lors du chargement des visites")
       }
