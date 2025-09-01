@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,6 +11,9 @@ import { visitService } from "@/lib/visit-service"
 import { toast } from "sonner"
 import { CalendarIcon, Clock, CheckCircle, XCircle, Filter, Search, MapPin, User } from "lucide-react"
 
+// ====================================
+// Page principale
+// ====================================
 export default function VisitsPage() {
   const [visits, setVisits] = useState<any[]>([])
   const [filteredVisits, setFilteredVisits] = useState<any[]>([])
@@ -19,33 +22,31 @@ export default function VisitsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
 
+  // ====================================
+  // Chargement des données utilisateur + visites
+  // ====================================
   useEffect(() => {
     const fetchData = async () => {
       try {
-        console.log("�� Chargement des visites locataire...")
+        console.log("⏳ Chargement des visites locataire...")
         setIsLoading(true)
 
         const user = await authService.getCurrentUser()
         console.log("🔐 Utilisateur récupéré:", user)
-        
+
         if (!user) {
-          console.log("❌ Aucun utilisateur connecté")
           toast.error("Vous devez être connecté pour voir vos visites")
           return
         }
 
         if (user.user_type !== "tenant") {
-          console.log("❌ Mauvais type d'utilisateur:", user.user_type)
           toast.error("Accès réservé aux locataires")
           return
         }
 
         setCurrentUser(user)
-        console.log("�� Utilisateur locataire:", user.id)
 
-        // Récupérer les visites du locataire
         const visitsData = await visitService.getTenantVisits(user.id)
-        console.log("�� Visites récupérées:", visitsData.length)
         setVisits(visitsData)
         setFilteredVisits(visitsData)
       } catch (error) {
@@ -59,11 +60,12 @@ export default function VisitsPage() {
     fetchData()
   }, [])
 
+  // ====================================
   // Filtrage des visites
+  // ====================================
   useEffect(() => {
     let filtered = visits
 
-    // Filtre par recherche
     if (searchQuery) {
       filtered = filtered.filter(
         (visit) =>
@@ -72,7 +74,6 @@ export default function VisitsPage() {
       )
     }
 
-    // Filtre par statut
     if (statusFilter !== "all") {
       filtered = filtered.filter((visit) => visit.status === statusFilter)
     }
@@ -80,23 +81,24 @@ export default function VisitsPage() {
     setFilteredVisits(filtered)
   }, [visits, searchQuery, statusFilter])
 
+  // ====================================
+  // Gestion des mises à jour de visites
+  // ====================================
   const handleVisitUpdate = async (visitId: string, updates: any) => {
     try {
-      // Mettre à jour la visite via le service
       await visitService.updateVisitStatus(visitId, updates.status || updates.tenant_interest)
-      
-      // Mettre à jour localement
-      setVisits(prevVisits => 
-        prevVisits.map(visit => 
+
+      setVisits(prevVisits =>
+        prevVisits.map(visit =>
           visit.id === visitId ? { ...visit, ...updates } : visit
         )
       )
-      setFilteredVisits(prevVisits => 
-        prevVisits.map(visit => 
+      setFilteredVisits(prevVisits =>
+        prevVisits.map(visit =>
           visit.id === visitId ? { ...visit, ...updates } : visit
         )
       )
-      
+
       toast.success("Visite mise à jour avec succès")
     } catch (error) {
       console.error("Erreur mise à jour visite:", error)
@@ -104,6 +106,80 @@ export default function VisitsPage() {
     }
   }
 
+  // ====================================
+  // Fonctions utilitaires
+  // ====================================
+  function getStatusBadgeVariant(status: string) {
+    switch (status) {
+      case "proposed":
+        return "secondary"
+      case "confirmed":
+      case "scheduled":
+      case "completed":
+        return "default"
+      case "cancelled":
+        return "destructive"
+      default:
+        return "outline"
+    }
+  }
+
+  function getStatusText(status: string) {
+    switch (status) {
+      case "proposed":
+        return "Proposée"
+      case "confirmed":
+        return "Confirmée"
+      case "scheduled":
+        return "Programmée"
+      case "completed":
+        return "Terminée"
+      case "cancelled":
+        return "Annulée"
+      default:
+        return status
+    }
+  }
+
+  function formatDateTime(dateString: string, timeString?: string) {
+    const date = new Date(dateString)
+    const time = timeString || "00:00"
+
+    return {
+      date: date.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }),
+      time,
+    }
+  }
+
+  async function handleConfirmVisit(visitId: string) {
+    try {
+      await visitService.updateVisitStatus(visitId, "confirmed")
+      toast.success("Visite confirmée")
+      const visitsData = await visitService.getTenantVisits(currentUser.id)
+      setVisits(visitsData)
+      setFilteredVisits(visitsData)
+    } catch (error) {
+      console.error("❌ Erreur confirmation visite:", error)
+      toast.error("Erreur lors de la confirmation")
+    }
+  }
+
+  async function handleCancelVisit(visitId: string) {
+    try {
+      await visitService.updateVisitStatus(visitId, "cancelled")
+      toast.success("Visite annulée")
+      const visitsData = await visitService.getTenantVisits(currentUser.id)
+      setVisits(visitsData)
+      setFilteredVisits(visitsData)
+    } catch (error) {
+      console.error("❌ Erreur annulation visite:", error)
+      toast.error("Erreur lors de l'annulation")
+    }
+  }
+
+  // ====================================
+  // Statistiques
+  // ====================================
   const stats = {
     total: visits.length,
     upcoming: visits.filter((v) => {
@@ -115,6 +191,9 @@ export default function VisitsPage() {
     not_interested: visits.filter((v) => v.tenant_interest === "not_interested").length,
   }
 
+  // ====================================
+  // Rendu principal
+  // ====================================
   if (isLoading) {
     return (
       <div className="container mx-auto py-6">
@@ -261,7 +340,7 @@ export default function VisitsPage() {
                   ? "Aucune visite programmée pour le moment"
                   : "Aucune visite ne correspond aux filtres sélectionnés"}
               </p>
-            </Card>
+            </CardContent>
           </Card>
         ) : (
           filteredVisits.map((visit) => (
@@ -342,7 +421,6 @@ export default function VisitsPage() {
                         </Button>
                       )}
 
-                      {/* Affichage de l'intérêt si déjà défini */}
                       {visit.tenant_interest && (
                         <Badge variant={visit.tenant_interest === "interested" ? "default" : "destructive"}>
                           {visit.tenant_interest === "interested" ? "Intéressé" : "Pas intéressé"}
@@ -358,78 +436,4 @@ export default function VisitsPage() {
       </div>
     </div>
   )
-
-  // Fonctions utilitaires
-  function getStatusBadgeVariant(status: string) {
-    switch (status) {
-      case "proposed":
-        return "secondary"
-      case "confirmed":
-      case "scheduled":
-        return "default"
-      case "completed":
-        return "default"
-      case "cancelled":
-        return "destructive"
-      default:
-        return "outline"
-    }
-  }
-
-  function getStatusText(status: string) {
-    switch (status) {
-      case "proposed":
-        return "Proposée"
-      case "confirmed":
-        return "Confirmée"
-      case "scheduled":
-        return "Programmée"
-      case "completed":
-        return "Terminée"
-      case "cancelled":
-        return "Annulée"
-      default:
-        return status
-    }
-  }
-
-  function formatDateTime(dateString: string, timeString?: string) {
-    const date = new Date(dateString)
-    const time = timeString || "00:00"
-
-    return {
-      date: date.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }),
-      time: time,
-    }
-  }
-
-  async function handleConfirmVisit(visitId: string) {
-    try {
-      await visitService.updateVisitStatus(visitId, "confirmed")
-      toast.success("Visite confirmée")
-      
-      // Recharger les visites
-      const visitsData = await visitService.getTenantVisits(currentUser.id)
-      setVisits(visitsData)
-      setFilteredVisits(visitsData)
-    } catch (error) {
-      console.error("❌ Erreur confirmation visite:", error)
-      toast.error("Erreur lors de la confirmation")
-    }
-  }
-
-  async function handleCancelVisit(visitId: string) {
-    try {
-      await visitService.updateVisitStatus(visitId, "cancelled")
-      toast.success("Visite annulée")
-      
-      // Recharger les visites
-      const visitsData = await visitService.getTenantVisits(currentUser.id)
-      setVisits(visitsData)
-      setFilteredVisits(visitsData)
-    } catch (error) {
-      console.error("❌ Erreur annulation visite:", error)
-      toast.error("Erreur lors de l'annulation")
-    }
-  }
 }
