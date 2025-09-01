@@ -47,6 +47,9 @@ import {
 import { PostVisitManager } from "@/components/post-visit-manager"
 import { VisitHistorySummary } from "@/components/visit-history-summary"
 import { CandidateFeedbackDisplay } from "@/components/candidate-feedback-display"
+import { Label } from "@/components/ui/label"
+import { OwnerVisitFeedback } from "@/components/owner-visit-feedback"
+import { TenantVisitFeedback } from "@/components/tenant-visit-feedback"
 
 export default function ApplicationDetailsPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -1233,23 +1236,175 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                   )}
                 </div>
 
-                {/* Section des visites terminées avec gestion post-visite */}
+                {/* Section des visites terminées avec feedbacks */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Visites terminées</h3>
                   {application.visits && application.visits.length > 0 ? (
                     application.visits
                       .filter((visit: any) => visit.status === "completed")
                       .map((visit: any) => (
-                        <div key={visit.id}>
-                          <PostVisitManager
-                            visit={{
-                              ...visit,
-                              property: application.property,
-                              tenant: application.tenant
-                            }}
-                            onVisitUpdate={handleVisitUpdate}
-                            userType="owner"
-                          />
+                        <div key={visit.id} className="space-y-4">
+                          {/* Affichage du feedback propriétaire */}
+                          {visit.owner_feedback && (
+                            <Card className="border-l-4 border-l-green-500">
+                              <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                  <MessageSquare className="h-5 w-5 text-green-500" />
+                                  Feedback propriétaire
+                                </CardTitle>
+                              </CardHeader>
+                              <CardContent>
+                                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-3">
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">Ponctualité</Label>
+                                    <p className="text-sm font-medium">
+                                      {visit.owner_feedback.punctuality === "early" ? "En avance" :
+                                       visit.owner_feedback.punctuality === "on_time" ? "À l'heure" : "En retard"}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">Présentation</Label>
+                                    <p className="text-sm font-medium">
+                                      {visit.owner_feedback.presentation === "well_groomed" ? "Soigné" :
+                                       visit.owner_feedback.presentation === "correct" ? "Correct" : "Négligé"}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">Comportement</Label>
+                                    <p className="text-sm font-medium">
+                                      {visit.owner_feedback.behavior === "polite_respectful" ? "Poli" :
+                                       visit.owner_feedback.behavior === "correct" ? "Correct" : "Problématique"}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">Intérêt</Label>
+                                    <p className="text-sm font-medium">
+                                      {visit.owner_feedback.interest === "very_interested" ? "Très intéressé" :
+                                       visit.owner_feedback.interest === "interested" ? "Intéressé" : "Peu intéressé"}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">Impression</Label>
+                                    {visit.owner_feedback.generalImpression === "very_good" && (
+                                      <Badge className="bg-green-100 text-green-800 border-green-200">Très bon profil</Badge>
+                                    )}
+                                    {visit.owner_feedback.generalImpression === "to_review" && (
+                                      <Badge className="bg-amber-100 text-amber-800 border-amber-200">À revoir</Badge>
+                                    )}
+                                    {visit.owner_feedback.generalImpression === "not_retained" && (
+                                      <Badge className="bg-red-100 text-red-800 border-red-200">Pas retenu</Badge>
+                                    )}
+                                  </div>
+                                </div>
+                                {visit.owner_feedback.comment && (
+                                  <div className="bg-gray-50 p-3 rounded-md">
+                                    <p className="text-sm text-gray-700">{visit.owner_feedback.comment}</p>
+                                  </div>
+                                )}
+                              </CardContent>
+                            </Card>
+                          )}
+
+                          {/* Affichage du feedback locataire */}
+                          {visit.tenant_feedback && (
+                            <Card className="border-l-4 border-l-blue-500">
+                              <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                  <MessageSquare className="h-5 w-5 text-blue-500" />
+                                  Feedback locataire
+                                </CardTitle>
+                              </CardHeader>
+                              <CardContent>
+                                <div className="flex items-center justify-between mb-3">
+                                  <span className="text-sm font-medium">Intérêt :</span>
+                                  {visit.tenant_feedback.interest === "yes" && (
+                                    <Badge className="bg-green-100 text-green-800 border-green-200">
+                                      Oui, je souhaite déposer un dossier
+                                    </Badge>
+                                  )}
+                                  {visit.tenant_feedback.interest === "unsure" && (
+                                    <Badge className="bg-amber-100 text-amber-800 border-amber-200">
+                                      Pas sûr, j'hésite
+                                    </Badge>
+                                  )}
+                                  {visit.tenant_feedback.interest === "no" && (
+                                    <Badge className="bg-red-100 text-red-800 border-red-200">
+                                      Non, pas intéressé
+                                    </Badge>
+                                  )}
+                                </div>
+                                
+                                {visit.tenant_feedback.comment && (
+                                  <div className="bg-blue-50 p-3 rounded-md">
+                                    <p className="text-sm text-blue-700">{visit.tenant_feedback.comment}</p>
+                                  </div>
+                                )}
+                              </CardContent>
+                            </Card>
+                          )}
+
+                          {/* Actions selon les feedbacks */}
+                          {visit.owner_feedback && visit.tenant_feedback && (
+                            <Card className="border-l-4 border-l-purple-500">
+                              <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                  <CheckCircle className="h-5 w-5 text-purple-500" />
+                                  Actions recommandées
+                                </CardTitle>
+                              </CardHeader>
+                              <CardContent>
+                                <div className="space-y-3">
+                                  {visit.owner_feedback.generalImpression === "not_retained" && (
+                                    <div className="flex items-center gap-2">
+                                      <AlertTriangle className="h-5 w-5 text-red-500" />
+                                      <span className="text-sm text-red-700">
+                                        Candidat non retenu - Recommandé de refuser la candidature
+                                      </span>
+                                      <Button 
+                                        size="sm" 
+                                        variant="destructive"
+                                        onClick={() => handleRefuse()}
+                                      >
+                                        Refuser la candidature
+                                      </Button>
+                                    </div>
+                                  )}
+                                  
+                                  {visit.owner_feedback.generalImpression === "very_good" && 
+                                   visit.tenant_feedback.interest === "yes" && (
+                                    <div className="flex items-center gap-2">
+                                      <CheckCircle className="h-5 w-5 text-green-500" />
+                                      <span className="text-sm text-green-700">
+                                        Excellent profil - Recommandé d'accepter la candidature
+                                      </span>
+                                      <Button 
+                                        size="sm" 
+                                        onClick={() => handleAccept()}
+                                      >
+                                        Accepter la candidature
+                                      </Button>
+                                    </div>
+                                  )}
+                                  
+                                  {visit.owner_feedback.generalImpression === "to_review" && (
+                                    <div className="flex items-center gap-2">
+                                      <AlertTriangle className="h-5 w-5 text-amber-500" />
+                                      <span className="text-sm text-amber-700">
+                                        Profil à revoir - Demander plus d'informations
+                                      </span>
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline"
+                                        onClick={() => handleContact()}
+                                      >
+                                        Contacter le candidat
+                                      </Button>
+                                    </div>
+                                  )}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          )}
                         </div>
                       ))
                   ) : (
@@ -1282,7 +1437,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                   <Card>
                     <CardContent className="p-4 text-center">
                       <div className="text-2xl font-bold text-purple-600">
-                        {application.visits?.filter((v: any) => v.tenant_interest === "interested").length || 0}
+                        {application.visits?.filter((v: any) => v.tenant_feedback?.interest === "yes").length || 0}
                       </div>
                       <p className="text-sm text-muted-foreground">Candidats intéressés</p>
                     </CardContent>

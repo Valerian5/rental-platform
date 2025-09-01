@@ -18,7 +18,16 @@ import {
   XCircle,
   Filter,
   Search,
+  Building,
+  MessageSquare,
+  AlertTriangle,
+  Star,
+  Heart,
+  Calendar,
 } from "lucide-react"
+import { VisitHistorySummary } from "@/components/visit-history-summary"
+import { CandidateFeedbackDisplay } from "@/components/candidate-feedback-display"
+import { OwnerVisitFeedback } from "@/components/owner-visit-feedback"
 
 interface Visit {
   id: string
