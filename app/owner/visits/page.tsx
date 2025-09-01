@@ -179,7 +179,6 @@ export default function OwnerVisitsPage() {
         toast.success("Visite mise à jour avec succès")
       } else {
         toast.error("Erreur lors de la mise à jour")
-      }
     } catch (error) {
       console.error("Erreur mise à jour visite:", error)
       toast.error("Erreur lors de la mise à jour")

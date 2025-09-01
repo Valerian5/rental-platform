@@ -44,12 +44,8 @@ import {
   Award,
   Heart,
 } from "lucide-react"
-import { PostVisitManager } from "@/components/post-visit-manager"
 import { VisitHistorySummary } from "@/components/visit-history-summary"
 import { CandidateFeedbackDisplay } from "@/components/candidate-feedback-display"
-import { Label } from "@/components/ui/label"
-import { OwnerVisitFeedback } from "@/components/owner-visit-feedback"
-import { TenantVisitFeedback } from "@/components/tenant-visit-feedback"
 
 export default function ApplicationDetailsPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -308,306 +304,238 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
         },
         body: JSON.stringify({
           tenant_id: application.tenant_id,
-          owner_id: user.id,
+          owner_id: application.property.owner_id,
           property_id: application.property_id,
-          subject: `Candidature pour ${application.property?.title || "le bien"}`,
+          initial_message: `Bonjour, j'ai regardé votre candidature pour ${application.property.title}. J'aimerais discuter avec vous.`,
         }),
       })
 
       if (response.ok) {
-        const data = await response.json()
-        router.push(`/owner/messaging?conversation_id=${data.conversation.id}`)
+        toast.success("Conversation créée avec succès")
+        // Rediriger vers la messagerie
+        router.push("/messaging")
       } else {
-        router.push(`/owner/messaging?tenant_id=${application.tenant_id}`)
+        toast.error("Erreur lors de la création de la conversation")
       }
     } catch (error) {
-      console.error("Erreur création conversation:", error)
-      router.push(`/owner/messaging?tenant_id=${application.tenant_id}`)
+      console.error("Erreur:", error)
+      toast.error("Erreur lors de la création de la conversation")
     }
   }
 
-  const handleViewAnalysis = () => {
-    setActiveTab("financial")
-    window.scrollTo({ top: 0, behavior: "smooth" })
-  }
-
-  const formatDate = (dateString: string | undefined) => {
-    if (!dateString) return "Non spécifié"
+  const handleVisitUpdate = async (visitId: string, updates: any) => {
     try {
-      return new Date(dateString).toLocaleDateString("fr-FR", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
+      const response = await fetch(`/api/visits/${visitId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updates),
       })
-    } catch (e) {
-      return "Date invalide"
-    }
-  }
 
-  const formatAmount = (amount: number | undefined) => {
-    if (amount === null || amount === undefined) return "Non spécifié"
-    try {
-      return new Intl.NumberFormat("fr-FR", {
-        style: "currency",
-        currency: "EUR",
-        maximumFractionDigits: 0,
-      }).format(amount)
-    } catch (e) {
-      return "Montant invalide"
-    }
-  }
-
-  const getStatusBadge = () => {
-    if (!application) return null
-
-    switch (application.status) {
-      case "pending":
-        return <Badge variant="outline">En attente</Badge>
-      case "analyzing":
-        return <Badge variant="secondary">En analyse</Badge>
-      case "visit_proposed":
-        return (
-          <Badge variant="secondary" className="bg-purple-100 text-purple-800 hover:bg-purple-200">
-            Visite proposée
-          </Badge>
-        )
-      case "visit_scheduled":
-        return (
-          <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200">
-            Visite planifiée
-          </Badge>
-        )
-      case "accepted":
-      case "approved":
-        return (
-          <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-200">
-            Acceptée
-          </Badge>
-        )
-      case "rejected":
-        return <Badge variant="destructive">Refusée</Badge>
-      case "waiting_tenant_confirmation":
-        return (
-          <Badge variant="outline" className="bg-amber-100 text-amber-800 hover:bg-amber-200">
-            En attente de confirmation
-          </Badge>
-        )
-      default:
-        return <Badge variant="outline">Statut inconnu</Badge>
-    }
-  }
-
-  const getActionButtons = () => {
-    if (!application) return null
-
-    const viewAnalysisButton =
-      application.status !== "analyzing" ? (
-        <Button variant="outline" onClick={handleViewAnalysis}>
-          <BarChart3 className="h-4 w-4 mr-2" />
-          Voir analyse
-        </Button>
-      ) : null
-
-    switch (application.status) {
-      case "analyzing":
-        return (
-          <>
-            <Button onClick={handleProposeVisit}>
-              <Calendar className="h-4 w-4 mr-2" />
-              Proposer une visite
-            </Button>
-            <Button variant="destructive" onClick={handleRefuse}>
-              <XCircle className="h-4 w-4 mr-2" />
-              Refuser
-            </Button>
-            <Button variant="outline" onClick={handleContact}>
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Contacter
-            </Button>
-          </>
-        )
-      case "visit_proposed":
-        return (
-          <>
-            <Button variant="outline" disabled>
-              <Clock className="h-4 w-4 mr-2" />
-              En attente de réponse
-            </Button>
-            <Button variant="outline" onClick={handleContact}>
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Contacter
-            </Button>
-            {viewAnalysisButton}
-          </>
-        )
-      case "visit_scheduled":
-        return (
-          <>
-            <Button onClick={handleAccept}>
-              <CheckCircle className="h-4 w-4 mr-2" />
-              Accepter le dossier
-            </Button>
-            <Button variant="destructive" onClick={handleRefuse}>
-              <XCircle className="h-4 w-4 mr-2" />
-              Refuser
-            </Button>
-            <Button variant="outline" onClick={handleContact}>
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Contacter
-            </Button>
-            {viewAnalysisButton}
-          </>
-        )
-      case "waiting_tenant_confirmation":
-        return (
-          <>
-            <Button variant="outline" disabled>
-              <Clock className="h-4 w-4 mr-2" />
-              En attente du locataire
-            </Button>
-            <Button variant="outline" onClick={handleContact}>
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Contacter
-            </Button>
-            {viewAnalysisButton}
-          </>
-        )
-      case "accepted":
-      case "approved":
-        return (
-          <>
-            <Button onClick={() => router.push(`/owner/leases/new?application=${application.id}`)}>
-              <FileText className="h-4 w-4 mr-2" />
-              Générer le bail
-            </Button>
-            <Button variant="outline" onClick={handleContact}>
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Contacter
-            </Button>
-            {viewAnalysisButton}
-          </>
-        )
-      case "rejected":
-        return (
-          <>
-            <Button variant="outline" onClick={handleContact}>
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Contacter
-            </Button>
-            {viewAnalysisButton}
-          </>
-        )
-      default:
-        return (
-          <>
-            <Button variant="outline" onClick={handleContact}>
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Contacter
-            </Button>
-            {viewAnalysisButton}
-          </>
-        )
+      if (response.ok) {
+        // Mettre à jour la visite localement
+        setApplication(prevApp => ({
+          ...prevApp,
+          visits: prevApp.visits?.map((visit: any) => 
+            visit.id === visitId ? { ...visit, ...updates } : visit
+          ) || []
+        }))
+        
+        toast.success("Visite mise à jour avec succès")
+        
+        // Recharger les détails de l'application si nécessaire
+        if (user) {
+          await loadApplicationDetails(user.id)
+        }
+      } else {
+        toast.error("Erreur lors de la mise à jour")
+    } catch (error) {
+      console.error("Erreur mise à jour visite:", error)
+      toast.error("Erreur lors de la mise à jour")
     }
   }
 
   if (loading) {
     return (
-      <div className="container mx-auto py-6 space-y-6">
-        <Skeleton className="h-8 w-64" />
-        <div className="grid gap-6 md:grid-cols-2">
-          <Skeleton className="h-64" />
-          <Skeleton className="h-64" />
+      <div className="space-y-6">
+        <PageHeader title="Détails de la candidature" description="Chargement..." />
+        <div className="space-y-6">
+          <Skeleton className="h-64 w-full" />
+          <Skeleton className="h-96 w-full" />
         </div>
-        <Skeleton className="h-96" />
       </div>
     )
   }
 
-  if (!application) {
+  if (!application || !rentalFile) {
     return (
-      <div className="container mx-auto py-6">
-        <Button variant="ghost" onClick={() => router.back()}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Retour
-        </Button>
-        <Card className="mt-6">
-          <CardContent className="flex flex-col items-center justify-center py-10">
-            <h3 className="text-lg font-medium">Candidature introuvable</h3>
-            <p className="text-sm text-muted-foreground mt-1">
-              La candidature demandée n'existe pas ou vous n'avez pas les permissions nécessaires.
+      <div className="space-y-6">
+        <PageHeader title="Erreur" description="Impossible de charger la candidature" />
+        <Card>
+          <CardContent className="p-8 text-center">
+            <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-red-500" />
+            <h3 className="text-lg font-semibold mb-2">Erreur de chargement</h3>
+            <p className="text-muted-foreground mb-4">
+              Impossible de charger les détails de cette candidature.
             </p>
+            <Button onClick={() => router.back()}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Retour
+            </Button>
           </CardContent>
         </Card>
       </div>
     )
   }
 
-  const tenant = application.tenant || {}
-  const property = application.property || {}
-  const mainTenant = rentalFile?.main_tenant || {}
+  const tenant = rentalFile.main_tenant
+  const property = application.property
+  const profession = rentalFile.main_tenant?.main_activity || "Non spécifié"
+  const company = rentalFile.main_tenant?.employer_name || "Non spécifié"
+  const contractType = rentalFile.main_tenant?.employment_contract_type || "Non spécifié"
+  const totalIncome = rentalFile.main_tenant?.income_sources?.work_income?.amount || application.income || 0
+  const rentRatio = property.price ? (totalIncome / property.price).toFixed(1) : "N/A"
+  const hasGuarantor = rentalFile.guarantors && rentalFile.guarantors.length > 0
+  const isComplete = rentalFile.completion_percentage >= 80
+  const completionPercentage = rentalFile.completion_percentage || 0
 
-  // Utiliser les données enrichies
-  const totalIncome = application.income || 0
-  const hasGuarantor = application.has_guarantor || false
-  const profession = application.profession || "Non spécifié"
-  const company = application.company || "Non spécifié"
-  const contractType = application.contract_type || "Non spécifié"
+  const getActionButtons = () => {
+    switch (application.status) {
+      case "analyzing":
+        return (
+          <div className="flex gap-2">
+            <Button onClick={handleAccept} className="bg-green-600 hover:bg-green-700">
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Accepter
+            </Button>
+            <Button onClick={handleRefuse} variant="destructive">
+              <XCircle className="h-4 w-4 mr-2" />
+              Refuser
+            </Button>
+            <Button onClick={handleProposeVisit} variant="outline">
+              <Calendar className="h-4 w-4 mr-2" />
+              Proposer visite
+            </Button>
+          </div>
+        )
+      case "visit_proposed":
+        return (
+          <div className="flex gap-2">
+            <Button onClick={handleAccept} className="bg-green-600 hover:bg-green-700">
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Accepter
+            </Button>
+            <Button onClick={handleRefuse} variant="destructive">
+              <XCircle className="h-4 w-4 mr-2" />
+              Refuser
+            </Button>
+            <Button onClick={handleContact} variant="outline">
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Contacter
+            </Button>
+          </div>
+        )
+      case "accepted":
+        return (
+          <div className="flex gap-2">
+            <Badge className="bg-green-100 text-green-800 border-green-200">
+              <CheckCircle className="h-3 w-3 mr-1" />
+              Candidature acceptée
+            </Badge>
+          </div>
+        )
+      case "rejected":
+        return (
+          <div className="flex gap-2">
+            <Badge variant="destructive">
+              <XCircle className="h-3 w-3 mr-1" />
+              Candidature refusée
+            </Badge>
+          </div>
+        )
+      default:
+        return null
+    }
+  }
 
-  const rentRatio = totalIncome && property.price ? (totalIncome / property.price).toFixed(1) : "N/A"
+  const formatAmount = (amount: number | undefined) => {
+    if (!amount) return "0 €"
+    return new Intl.NumberFormat("fr-FR", {
+      style: "currency",
+      currency: "EUR",
+    }).format(amount)
+  }
 
-  // Statut du dossier basé sur completion_percentage
-  const completionPercentage = application.completion_percentage || 0
-  const isComplete = application.documents_complete || false
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("fr-FR", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    })
+  }
 
   return (
     <>
-      <PageHeader
-        title={`Candidature de ${tenant.first_name} ${tenant.last_name}`}
-        description={`Pour ${property.title}`}
-      >
-        <div className="flex items-center gap-2">
-          {getStatusBadge()}
-          <Button variant="ghost" onClick={() => router.back()}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
+      <div className="space-y-6">
+        {/* En-tête avec badges de feedback */}
+        <div className="flex items-center gap-4 mb-6">
+          <div>
+            <h1 className="text-3xl font-bold">Candidature de {tenant.first_name} {tenant.last_name}</h1>
+            <p className="text-muted-foreground">Bien : {property.title}</p>
+          </div>
+          
+          {/* Badges de feedback des visites */}
+          {application.visits && application.visits.length > 0 && (
+            <div className="flex flex-wrap gap-2 ml-auto">
+              {/* Badge propriétaire */}
+              {application.visits.some((v: any) => v.owner_feedback?.generalImpression === "very_good") && (
+                <Badge className="bg-green-100 text-green-800 border-green-200">
+                  <Star className="h-4 w-4 mr-1" />
+                  Très bon profil
+                </Badge>
+              )}
+              {application.visits.some((v: any) => v.owner_feedback?.generalImpression === "to_review") && (
+                <Badge className="bg-amber-100 text-amber-800 border-amber-200">
+                  <AlertTriangle className="h-4 w-4 mr-1" />
+                  À revoir
+                </Badge>
+              )}
+              {application.visits.some((v: any) => v.owner_feedback?.generalImpression === "not_retained") && (
+                <Badge className="bg-red-100 text-red-800 border-red-200">
+                  <XCircle className="h-4 w-4 mr-1" />
+                  Pas retenu
+                </Badge>
+              )}
+              
+              {/* Badge locataire */}
+              {application.visits.some((v: any) => v.tenant_feedback?.interest === "yes") && (
+                <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+                  <Heart className="h-4 w-4 mr-1" />
+                  Intéressé
+                </Badge>
+              )}
+              {application.visits.some((v: any) => v.tenant_feedback?.interest === "no") && (
+                <Badge className="bg-red-100 text-red-800 border-red-200">
+                  <XCircle className="h-4 w-4 mr-1" />
+                  Pas intéressé
+                </Badge>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Actions principales */}
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => router.back()} size="sm">
+            <ArrowLeft className="h-4 w-4 mr-2" />
             Retour
           </Button>
-        </div>
-      </PageHeader>
-
-      <div className="p-6 space-y-6">
-        {/* Score et actions */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div className="flex items-center gap-4">
-            {scoringResult && (
-              <div className="flex items-center gap-3">
-                <CircularScore score={scoringResult.totalScore} size="lg" />
-                <div>
-                  <h2 className="text-xl font-semibold">Score de compatibilité</h2>
-                  <p className="text-sm text-muted-foreground">Modèle: {scoringResult.model_used}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    {scoringResult.compatible ? (
-                      <Badge variant="outline" className="text-green-600 border-green-600">
-                        <CheckCircle className="h-3 w-3 mr-1" />
-                        Compatible
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-red-600 border-red-600">
-                        <XCircle className="h-3 w-3 mr-1" />
-                        Non compatible
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => router.push("/owner/scoring-preferences-simple")} size="sm">
-              <Settings className="h-4 w-4 mr-2" />
-              Modifier critères
-            </Button>
-            {getActionButtons()}
-          </div>
+          <Button variant="outline" onClick={() => router.push("/owner/scoring-preferences-simple")} size="sm">
+            <Settings className="h-4 w-4 mr-2" />
+            Modifier critères
+          </Button>
+          {getActionButtons()}
         </div>
 
         <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab}>
@@ -735,13 +663,13 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                       <>
                         {rentRatio}x
                         {Number(rentRatio) >= 3 ? (
-                          <Badge className="ml-2 bg-green-100 text-green-800">Excellent</Badge>
+                          <Badge className="ml-2 bg-green-100 text-green-800 hover:bg-green-200">Excellent</Badge>
                         ) : Number(rentRatio) >= 2.5 ? (
-                          <Badge className="ml-2 bg-green-100 text-green-800">Bon</Badge>
+                          <Badge className="ml-2 bg-green-100 text-green-800 hover:bg-green-200">Bon</Badge>
                         ) : Number(rentRatio) >= 2 ? (
-                          <Badge className="ml-2 bg-amber-100 text-amber-800">Acceptable</Badge>
+                          <Badge className="ml-2 bg-amber-100 text-amber-800 hover:bg-amber-200">Acceptable</Badge>
                         ) : (
-                          <Badge className="ml-2 bg-red-100 text-red-800">Insuffisant</Badge>
+                          <Badge className="ml-2 bg-red-100 text-red-800 hover:bg-red-200">Insuffisant</Badge>
                         )}
                       </>
                     ) : (
@@ -761,6 +689,18 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                 </div>
               </CardContent>
             </Card>
+
+            {/* Historique des visites */}
+            {application.visits && application.visits.length > 0 && (
+              <VisitHistorySummary
+                visits={application.visits}
+                onViewVisits={() => setActiveTab("visits")}
+              />
+            )}
+
+            {/* Retour post-visite */}
+            {application.visits && application.visits.length > 0 && (
+              <CandidateFeedbackDisplay visits={application.visits} />
             )}
 
             {/* Situation de location */}
@@ -1159,7 +1099,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
             </Card>
           </TabsContent>
 
-          {/* Visites */}
+          {/* Onglet Visites */}
           <TabsContent value="visits" className="space-y-6">
             <Card>
               <CardHeader>
@@ -1532,38 +1472,4 @@ function flattenDocuments(application: any): any[] {
   }
 
   return docs
-}
-
-const handleVisitUpdate = async (visitId: string, updates: any) => {
-  try {
-    const response = await fetch(`/api/visits/${visitId}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(updates),
-    })
-
-    if (response.ok) {
-      // Mettre à jour la visite localement
-      setApplication(prevApp => ({
-        ...prevApp,
-        visits: prevApp.visits?.map((visit: any) => 
-          visit.id === visitId ? { ...visit, ...updates } : visit
-        ) || []
-      }))
-      
-      toast.success("Visite mise à jour avec succès")
-      
-      // Recharger les détails de l'application si nécessaire
-      if (user) {
-        await loadApplicationDetails(user.id)
-      }
-    } else {
-      toast.error("Erreur lors de la mise à jour")
-    }
-  } catch (error) {
-    console.error("Erreur mise à jour visite:", error)
-    toast.error("Erreur lors de la mise à jour")
-  }
 }
