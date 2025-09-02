@@ -774,7 +774,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                 </div>
               </CardContent>
             </Card>
-            )}
 
             {/* Situation de location */}
             {rentalFile?.rental_situation && (
