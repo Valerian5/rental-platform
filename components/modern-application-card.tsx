@@ -368,6 +368,7 @@ export function ModernApplicationCard({
             )}
             <CircularScore score={calculatedScore} loading={false} showDetails={false} size="sm" />
           </div>
+        </div>
 
         <div className="px-4 pb-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
           <div className="flex items-center gap-1">
@@ -467,4 +468,5 @@ export function ModernApplicationCard({
         </div>
       </CardContent>
     </Card>
-  )
+    )
+    }
