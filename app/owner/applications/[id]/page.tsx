@@ -1351,17 +1351,17 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                                   <span className="text-muted-foreground">Intérêt:</span>
                                   {visit.tenant_feedback.interest === "yes" && (
                                     <Badge className="bg-green-100 text-green-800 border-green-200">
-                                      Oui, souhaite déposer un dossier
+                                      Oui, je suis toujours intéressé(e) !
                                     </Badge>
                                   )}
                                   {visit.tenant_feedback.interest === "unsure" && (
                                     <Badge className="bg-amber-100 text-amber-800 border-amber-200">
-                                      Pas sûr, hésite
+                                      Pas sûr, j'hésite encore...
                                     </Badge>
                                   )}
                                   {visit.tenant_feedback.interest === "no" && (
                                     <Badge className="bg-red-100 text-red-800 border-red-200">
-                                      Non, pas intéressé
+                                      Non, je ne suis plus intéressé(e) !
                                     </Badge>
                                   )}
                                 </div>

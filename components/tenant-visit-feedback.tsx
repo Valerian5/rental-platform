@@ -111,7 +111,7 @@ export function TenantVisitFeedback({ visit, onFeedbackSubmit }: TenantVisitFeed
                     onClick={() => setFeedback({...feedback, interest: "yes"})}
                   >
                     <Heart className="h-4 w-4 mr-2" />
-                    Oui, je souhaite déposer un dossier
+                    Oui, je suis toujours intéressé(e) !
                   </Button>
                   <Button
                     variant={feedback.interest === "unsure" ? "default" : "outline"}
@@ -119,7 +119,7 @@ export function TenantVisitFeedback({ visit, onFeedbackSubmit }: TenantVisitFeed
                     onClick={() => setFeedback({...feedback, interest: "unsure"})}
                   >
                     <AlertTriangle className="h-4 w-4 mr-2" />
-                    Pas sûr, j'hésite
+                    Pas sûr, j'hésite encore...
                   </Button>
                   <Button
                     variant={feedback.interest === "no" ? "default" : "outline"}
@@ -127,7 +127,7 @@ export function TenantVisitFeedback({ visit, onFeedbackSubmit }: TenantVisitFeed
                     onClick={() => setFeedback({...feedback, interest: "no"})}
                   >
                     <XCircle className="h-4 w-4 mr-2" />
-                    Non, pas intéressé
+                    Non, je ne suis plus intéressé(e) !
                   </Button>
                 </div>
                 {getInterestBadge()}

@@ -342,12 +342,12 @@ export function ModernApplicationCard({
                 {application.visits.some((v: any) => v.status === "completed") && (
                   <Badge className="bg-green-100 text-green-800 border-green-200">Visite effectuée</Badge>
                 )}
-                {/* sinon si confirmée => aussi "Visite effectuée" (selon votre règle) */}
+                {/* sinon si confirmée => aussi "Visite effectuée" */}
                 {!application.visits.some((v: any) => v.status === "completed") &&
                   application.visits.some((v: any) => v.status === "confirmed") && (
                   <Badge className="bg-green-100 text-green-800 border-green-200">Visite effectuée</Badge>
                 )}
-                {/* Autres feedbacks proprio en badge synthétique */}
+                {/* Feedback propriétaire */}
                 {application.visits.some((v: any) => v.owner_feedback?.generalImpression === "very_good") && (
                   <Badge className="bg-green-100 text-green-800 border-green-200">Très bon profil</Badge>
                 )}
@@ -357,11 +357,17 @@ export function ModernApplicationCard({
                 {application.visits.some((v: any) => v.owner_feedback?.generalImpression === "not_retained") && (
                   <Badge className="bg-red-100 text-red-800 border-red-200">Pas retenu</Badge>
                 )}
+                {/* Intérêt locataire */}
+                {application.visits.some((v: any) => v.tenant_feedback?.interest === "yes") && (
+                  <Badge className="bg-blue-100 text-blue-800 border-blue-200">Intéressé</Badge>
+                )}
+                {application.visits.some((v: any) => v.tenant_feedback?.interest === "no") && (
+                  <Badge className="bg-red-100 text-red-800 border-red-200">Pas intéressé</Badge>
+                )}
               </>
             )}
             <CircularScore score={calculatedScore} loading={false} showDetails={false} size="sm" />
           </div>
-        </div>
 
         <div className="px-4 pb-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
           <div className="flex items-center gap-1">
@@ -459,45 +465,6 @@ export function ModernApplicationCard({
 
           <div className="flex gap-2">{getActionButtons()}</div>
         </div>
-
-        {/* Badges de feedback des visites */}
-        {application.visits && application.visits.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-3">
-            {/* Badge propriétaire */}
-            {application.visits.some((v: any) => v.owner_feedback?.generalImpression === "very_good") && (
-              <Badge className="bg-green-100 text-green-800 border-green-200 text-xs">
-                <Star className="h-3 w-3 mr-1" />
-                Très bon profil
-              </Badge>
-            )}
-            {application.visits.some((v: any) => v.owner_feedback?.generalImpression === "to_review") && (
-              <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-xs">
-                <AlertTriangle className="h-3 w-3 mr-1" />
-                À revoir
-              </Badge>
-            )}
-            {application.visits.some((v: any) => v.owner_feedback?.generalImpression === "not_retained") && (
-              <Badge className="bg-red-100 text-red-800 border-red-200 text-xs">
-                <XCircle className="h-3 w-3 mr-1" />
-                Pas retenu
-              </Badge>
-            )}
-            
-            {/* Badge locataire */}
-            {application.visits.some((v: any) => v.tenant_feedback?.interest === "yes") && (
-              <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-xs">
-                <Heart className="h-3 w-3 mr-1" />
-                Intéressé
-              </Badge>
-            )}
-            {application.visits.some((v: any) => v.tenant_feedback?.interest === "no") && (
-              <Badge className="bg-red-100 text-red-800 border-red-200 text-xs">
-                <XCircle className="h-3 w-3 mr-1" />
-                Pas intéressé
-              </Badge>
-            )}
-          </div>
-        )}
       </CardContent>
     </Card>
   )
