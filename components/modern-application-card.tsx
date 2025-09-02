@@ -468,4 +468,3 @@ export function ModernApplicationCard({
       </CardContent>
     </Card>
   )
-}
