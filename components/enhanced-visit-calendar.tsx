@@ -5,7 +5,7 @@ import { Calendar } from "@/components/ui/calendar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Clock, MapPin, Building, CheckCircle } from "lucide-react"
+import { Clock, MapPin, Building, CheckCircle, XCircle } from "lucide-react"
 import { toast } from "sonner"
 import { OwnerVisitFeedback } from "@/components/owner-visit-feedback"
 import { TenantVisitFeedback } from "@/components/tenant-visit-feedback"
@@ -43,20 +43,29 @@ export function EnhancedVisitCalendar({ visits, userType, onVisitUpdate }: Props
   const [showOwnerFeedbackFor, setShowOwnerFeedbackFor] = useState<string | null>(null)
   const [showTenantFeedbackFor, setShowTenantFeedbackFor] = useState<string | null>(null)
 
-  // Fonctions utilitaires
-  const getTime = (v: Visit) => v.start_time || v.visit_time || "00:00"
-  const getEndTime = (v: Visit) => v.end_time || null
+  const normalizeTime = (t?: string) => {
+    if (!t) return "00:00"
+    // Accepte "HH:MM" ou "HH:MM:SS"
+    const m = t.match(/^(\d{2}:\d{2})(:\d{2})?$/)
+    return m ? m[1] : t
+  }
+
+  const startTime = (v: Visit) => normalizeTime(v.start_time || v.visit_time)
+  const endTime = (v: Visit) => (v.end_time ? normalizeTime(v.end_time) : null)
 
   const isPastVisit = (v: Visit) => {
-    const dateISO = v.visit_date?.includes("T") ? v.visit_date : `${v.visit_date}T${getTime(v)}:00`
-    const start = new Date(dateISO)
-    const end = (() => {
-      if (v.end_time) return new Date(`${v.visit_date}T${v.end_time}:00`)
-      const e = new Date(start)
-      e.setMinutes(e.getMinutes() + 30)
-      return e
-    })()
-    return end < new Date()
+    // Début
+    const startISO = `${v.visit_date}T${startTime(v)}:00`
+    const start = new Date(startISO)
+    // Fin
+    let end: Date
+    if (endTime(v)) {
+      end = new Date(`${v.visit_date}T${endTime(v)}:00`)
+    } else {
+      end = new Date(start)
+      end.setMinutes(end.getMinutes() + 30)
+    }
+    return end.getTime() < Date.now()
   }
 
   const statusBadge = (status: string) => {
@@ -72,30 +81,45 @@ export function EnhancedVisitCalendar({ visits, userType, onVisitUpdate }: Props
     return <Badge variant={cfg.variant}>{cfg.label}</Badge>
   }
 
-  // Marqueur de visites sur le calendrier
+  // Marqueurs de calendrier
   const hasVisitsOnDate = (date: Date) =>
     visits.some((v) => new Date(v.visit_date).toDateString() === date.toDateString())
 
   const getVisitCountForDate = (date: Date) =>
     visits.filter((v) => new Date(v.visit_date).toDateString() === date.toDateString()).length
 
-  // Liste visible (pas de panneau filtré: requirement “Retirer la vue filtrée au clic d’un jour”)
-  // On garde un clic date uniquement pour mettre en évidence, sans changer la liste.
-  const sortedUpcoming = useMemo(
+  // Liste triée
+  const sortedAll = useMemo(
     () =>
-      [...visits]
-        .filter((v) => {
-          if (v.status === "cancelled") return false
-          return true
-        })
-        .sort((a, b) => {
-          const da = new Date(a.visit_date).getTime()
-          const db = new Date(b.visit_date).getTime()
-          if (da !== db) return da - db
-          return getTime(a).localeCompare(getTime(b))
-        }),
+      [...visits].sort((a, b) => {
+        const da = new Date(a.visit_date).getTime()
+        const db = new Date(b.visit_date).getTime()
+        if (da !== db) return da - db
+        return startTime(a).localeCompare(startTime(b))
+      }),
     [visits],
   )
+
+  const dayMatches = (v: Visit, d: Date) =>
+    new Date(v.visit_date).toDateString() === d.toDateString()
+
+  const visibleVisits = useMemo(() => {
+    if (!selectedDate) return sortedAll
+    return sortedAll.filter((v) => dayMatches(v, selectedDate))
+  }, [sortedAll, selectedDate])
+
+  const handleDaySelect = (d?: Date) => {
+    if (!d) {
+      setSelectedDate(undefined)
+      return
+    }
+    // Toggle sur même jour => affiche tout
+    if (selectedDate && selectedDate.toDateString() === d.toDateString()) {
+      setSelectedDate(undefined)
+    } else {
+      setSelectedDate(d)
+    }
+  }
 
   const handleMarkCompletedAndOpenFeedback = async (v: Visit) => {
     try {
@@ -119,40 +143,48 @@ export function EnhancedVisitCalendar({ visits, userType, onVisitUpdate }: Props
             <Calendar
               mode="single"
               selected={selectedDate}
-              // Ne filtre pas la liste, on garde juste la sélection visuelle
-              onSelect={setSelectedDate}
+              onSelect={handleDaySelect}
               className="rounded-md border"
               hasVisitsOnDate={hasVisitsOnDate}
               getVisitCountForDate={getVisitCountForDate}
             />
+            {selectedDate && (
+              <div className="mt-3">
+                <Button variant="outline" size="sm" onClick={() => setSelectedDate(undefined)}>
+                  Afficher tout
+                </Button>
+              </div>
+            )}
           </div>
 
           <div className="lg:col-span-2">
-            {sortedUpcoming.length === 0 ? (
+            {visibleVisits.length === 0 ? (
               <div className="text-center py-8">
                 <Clock className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <p className="text-muted-foreground">Aucune visite programmée</p>
+                <p className="text-muted-foreground">
+                  {selectedDate ? "Aucun créneau pour ce jour" : "Aucune visite programmée"}
+                </p>
               </div>
             ) : (
               <div className="space-y-3">
-                {sortedUpcoming.map((v) => {
+                {visibleVisits.map((v) => {
                   const dateLabel = new Date(v.visit_date).toLocaleDateString("fr-FR", {
                     weekday: "long",
                     month: "long",
                     day: "numeric",
                     year: "numeric",
                   })
-                  const timeLabel = getEndTime(v) ? `${getTime(v)} - ${getEndTime(v)}` : getTime(v)
+                  const times = endTime(v) ? `${startTime(v)} - ${endTime(v)}` : startTime(v)
                   const past = isPastVisit(v)
                   const canMarkDone = past && (v.status === "scheduled" || v.status === "confirmed")
 
                   return (
                     <div key={v.id} className="p-3 border rounded-lg hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 text-sm">
                             <Clock className="h-4 w-4 text-blue-600" />
-                            <span className="font-medium truncate">{timeLabel}</span>
+                            <span className="font-medium truncate">{times}</span>
                           </div>
                           <div className="text-sm">{dateLabel}</div>
                           <div className="text-sm font-medium truncate mt-1">{v.property.title}</div>
@@ -163,8 +195,10 @@ export function EnhancedVisitCalendar({ visits, userType, onVisitUpdate }: Props
                             </span>
                           </div>
                         </div>
+
                         <div className="flex items-center gap-2 flex-shrink-0">
                           {statusBadge(v.status)}
+
                           {v.application && (
                             <Button variant="outline" size="sm" asChild>
                               <a href={`/owner/applications/${v.application.id}`}>
@@ -173,6 +207,7 @@ export function EnhancedVisitCalendar({ visits, userType, onVisitUpdate }: Props
                               </a>
                             </Button>
                           )}
+
                           {canMarkDone && (
                             <Button size="sm" onClick={() => handleMarkCompletedAndOpenFeedback(v)}>
                               <CheckCircle className="h-4 w-4 mr-2" />
@@ -182,39 +217,43 @@ export function EnhancedVisitCalendar({ visits, userType, onVisitUpdate }: Props
                         </div>
                       </div>
 
-                      {/* Feedback post-visite après passage en terminé */}
-                      {v.status === "completed" && userType === "owner" && (showOwnerFeedbackFor === v.id || v.owner_feedback == null) && (
-                        <div className="mt-3">
-                          <OwnerVisitFeedback
-                            visit={v}
-                            onFeedbackSubmit={async (visitId, feedback) => {
-                              await onVisitUpdate(visitId, { owner_feedback: feedback })
-                              toast.success("Feedback propriétaire enregistré")
-                            }}
-                          />
-                        </div>
-                      )}
+                      {/* Feedback propriétaire */}
+                      {v.status === "completed" &&
+                        userType === "owner" &&
+                        (showOwnerFeedbackFor === v.id || v.owner_feedback == null) && (
+                          <div className="mt-3">
+                            <OwnerVisitFeedback
+                              visit={v}
+                              onFeedbackSubmit={async (visitId, feedback) => {
+                                await onVisitUpdate(visitId, { owner_feedback: feedback })
+                                toast.success("Feedback propriétaire enregistré")
+                              }}
+                            />
+                          </div>
+                        )}
 
-                      {v.status === "completed" && userType === "tenant" && (showTenantFeedbackFor === v.id || v.tenant_feedback == null) && (
-                        <div className="mt-3">
-                          <TenantVisitFeedback
-                            visit={v}
-                            onFeedbackSubmit={async (visitId, feedback) => {
-                              // Enregistrer l'intérêt locataire et feedback
-                              await onVisitUpdate(visitId, {
-                                tenant_feedback: feedback,
-                                tenant_interest:
-                                  feedback.interest === "yes"
-                                    ? "interested"
-                                    : feedback.interest === "no"
-                                    ? "not_interested"
-                                    : null,
-                              })
-                              toast.success("Feedback locataire enregistré")
-                            }}
-                          />
-                        </div>
-                      )}
+                      {/* Feedback locataire */}
+                      {v.status === "completed" &&
+                        userType === "tenant" &&
+                        (showTenantFeedbackFor === v.id || v.tenant_feedback == null) && (
+                          <div className="mt-3">
+                            <TenantVisitFeedback
+                              visit={v}
+                              onFeedbackSubmit={async (visitId, feedback) => {
+                                await onVisitUpdate(visitId, {
+                                  tenant_feedback: feedback,
+                                  tenant_interest:
+                                    feedback.interest === "yes"
+                                      ? "interested"
+                                      : feedback.interest === "no"
+                                      ? "not_interested"
+                                      : null,
+                                })
+                                toast.success("Feedback locataire enregistré")
+                              }}
+                            />
+                          </div>
+                        )}
                     </div>
                   )
                 })}
