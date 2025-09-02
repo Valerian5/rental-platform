@@ -1464,31 +1464,31 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               </Card>
             </div>
           </TabsContent>
-        </Tabs>
 
-        {/* Documents */}
-        <TabsContent value="documents" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Documents fournis
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {user && (
-                <TenantAndGuarantorDocumentsSection
-                  applicationId={application.id}
-                  mainTenant={rentalFile?.main_tenant}
-                  guarantors={rentalFile?.guarantors || []}
-                  userId={user.id}
-                  userName={`${user.first_name} ${user.last_name}`}
-                  rentalFile={rentalFile}
-                />
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+          {/* Documents */}
+          <TabsContent value="documents" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Documents fournis
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {user && (
+                  <TenantAndGuarantorDocumentsSection
+                    applicationId={application.id}
+                    mainTenant={rentalFile?.main_tenant}
+                    guarantors={rentalFile?.guarantors || []}
+                    userId={user.id}
+                    userName={`${user.first_name} ${user.last_name}`}
+                    rentalFile={rentalFile}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Dialogue de proposition de visite */}
