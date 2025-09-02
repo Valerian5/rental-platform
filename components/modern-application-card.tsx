@@ -24,7 +24,7 @@ import {
   Star,
   AlertTriangle,
   MoreVertical,
-  UserCheck, // Ajout de l'icône pour le statut "Locataire"
+  UserCheck,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import {
@@ -37,6 +37,7 @@ import {
 interface ApplicationCardProps {
   application: {
     id: string
+    lease_id?: string // Assurez-vous que cet ID est bien passé dans les props
     tenant: {
       first_name: string
       last_name: string
@@ -74,7 +75,7 @@ interface ApplicationCardProps {
   }
   isSelected?: boolean
   onSelect?: (selected: boolean) => void
-  onAction: (action: string) => void
+  onAction: (action: string, application: ApplicationCardProps["application"]) => void
   scoringPreferences?: any
 }
 
@@ -83,7 +84,6 @@ export function ModernApplicationCard({
   isSelected,
   onSelect,
   onAction,
-  scoringPreferences,
 }: ApplicationCardProps) {
   const [expanded, setExpanded] = useState(false)
   const [calculatedScore, setCalculatedScore] = useState<number>(application.match_score)
@@ -119,77 +119,58 @@ export function ModernApplicationCard({
     }
   }
 
-  const getStatusBadge = () => {
-    switch (application.status) {
-      case "pending":
-        return <Badge variant="outline">En attente</Badge>
-      case "analyzing":
-        return <Badge variant="secondary">En analyse</Badge>
-      case "visit_proposed":
-        return (
-          <Badge variant="secondary" className="bg-purple-100 text-purple-800 hover:bg-purple-200">
-            Visite proposée
-          </Badge>
-        )
-      case "visit_scheduled":
-        return (
-          <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200">
-            Visite planifiée
-          </Badge>
-        )
-      case "accepted":
-      case "approved":
-        return (
-          <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-200">
-            Acceptée
-          </Badge>
-        )
-      case "rejected":
-        return <Badge variant="destructive">Refusée</Badge>
-      case "waiting_tenant_confirmation":
-        return (
-          <Badge variant="outline" className="bg-amber-100 text-amber-800 hover:bg-amber-200">
-            En attente du locataire
-          </Badge>
-        )
-      // NOUVEAUX STATUTS
-      case "confirmed_by_tenant":
-        return (
-          <Badge variant="default" className="bg-teal-100 text-teal-800 hover:bg-teal-200">
-            Confirmé par le locataire
-          </Badge>
-        )
-      case "lease_created":
-        return (
-          <Badge variant="default" className="bg-sky-100 text-sky-800 hover:bg-sky-200">
-            Bail créé
-          </Badge>
-        )
-      case "tenant":
-        return (
-          <Badge variant="default" className="bg-indigo-100 text-indigo-800 hover:bg-indigo-200">
-            <UserCheck className="h-3 w-3 mr-1" />
-            Locataire
-          </Badge>
-        )
-      default:
-        return <Badge variant="outline">Statut inconnu</Badge>
-    }
-  }
-  
   const getPrimaryStatusBadge = () => {
-    const hasCompletedVisit = application.visits?.some(v => v.status === "completed")
+    // Hiérarchie stricte des statuts, du plus avancé au moins avancé
+    const statusPriority = [
+      "tenant",
+      "lease_created",
+      "confirmed_by_tenant",
+      "waiting_tenant_confirmation",
+      "accepted",
+      "approved",
+      "rejected",
+    ]
 
+    if (statusPriority.includes(application.status)) {
+        switch (application.status) {
+            case "tenant":
+                return <Badge variant="default" className="bg-indigo-100 text-indigo-800 hover:bg-indigo-200"><UserCheck className="h-3 w-3 mr-1" />Locataire</Badge>
+            case "lease_created":
+                return <Badge variant="default" className="bg-sky-100 text-sky-800 hover:bg-sky-200">Bail créé</Badge>
+            case "confirmed_by_tenant":
+                return <Badge variant="default" className="bg-teal-100 text-teal-800 hover:bg-teal-200">Confirmé par locataire</Badge>
+            case "waiting_tenant_confirmation":
+                return <Badge variant="outline" className="bg-amber-100 text-amber-800 hover:bg-amber-200">En attente du locataire</Badge>
+            case "accepted":
+            case "approved":
+                return <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-200">Acceptée</Badge>
+            case "rejected":
+                return <Badge variant="destructive">Refusée</Badge>
+        }
+    }
+
+    const hasCompletedVisit = application.visits?.some(v => v.status === "completed")
     if (hasCompletedVisit) {
       return <Badge className="bg-green-100 text-green-800 border-green-200">Visite effectuée</Badge>
     }
-
-    return getStatusBadge()
+    
+    // Statuts restants
+    switch (application.status) {
+        case "visit_scheduled":
+            return <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200">Visite planifiée</Badge>
+        case "visit_proposed":
+            return <Badge variant="secondary" className="bg-purple-100 text-purple-800 hover:bg-purple-200">Visite proposée</Badge>
+        case "analyzing":
+            return <Badge variant="secondary">En analyse</Badge>
+        case "pending":
+            return <Badge variant="outline">En attente</Badge>
+        default:
+            return <Badge variant="outline">Statut inconnu</Badge>
+    }
   }
 
   const getRentalSituationInfo = () => {
-    if (!application.rental_situation) return null
-
+    if (!application.rental_situation) return null;
     switch (application.rental_situation) {
       case "alone":
         return (
@@ -197,113 +178,67 @@ export function ModernApplicationCard({
             <User className="h-3.5 w-3.5 text-slate-500" />
             <span className="text-sm text-slate-600">Seul(e)</span>
           </div>
-        )
+        );
       case "couple":
         return (
           <div className="flex items-center gap-1">
             <Heart className="h-3.5 w-3.5 text-pink-500" />
             <span className="text-sm text-pink-700 font-medium">En couple</span>
           </div>
-        )
+        );
       case "colocation":
         return (
           <div className="flex items-center gap-1">
             <Users className="h-3.5 w-3.5 text-blue-500" />
             <span className="text-sm text-blue-700 font-medium">Colocation</span>
           </div>
-        )
+        );
       default:
-        return null
+        return null;
     }
-  }
+  };
 
   const PrimaryActionButton = () => {
+    const handleAction = (action: string) => onAction(action, application);
+
     switch (application.status) {
       case "analyzing":
-        return (
-          <Button size="sm" variant="default" onClick={() => onAction("propose_visit")}>
-            <Calendar className="h-4 w-4 mr-1" />
-            Proposer visite
-          </Button>
-        )
+        return <Button size="sm" variant="default" onClick={() => handleAction("propose_visit")}><Calendar className="h-4 w-4 mr-1" />Proposer visite</Button>
       case "visit_scheduled":
-        return (
-          <Button size="sm" variant="default" onClick={() => onAction("accept")}>
-            <CheckCircle className="h-4 w-4 mr-1" />
-            Accepter
-          </Button>
-        )
+        return <Button size="sm" variant="default" onClick={() => handleAction("accept")}><CheckCircle className="h-4 w-4 mr-1" />Accepter</Button>
       case "accepted":
       case "approved":
       case "confirmed_by_tenant":
-        return (
-          <Button size="sm" variant="default" onClick={() => onAction("generate_lease")}>
-            <FileText className="h-4 w-4 mr-1" />
-            Générer bail
-          </Button>
-        )
+        return <Button size="sm" variant="default" onClick={() => router.push(`/owner/leases/new?application=${application.id}`)}><FileText className="h-4 w-4 mr-1" />Générer bail</Button>
       case "lease_created":
       case "tenant":
-        return (
-            <Button size="sm" variant="default" onClick={() => router.push(`/owner/leases/TODO-lease-id`)}>
-                <Eye className="h-4 w-4 mr-1" />
-                Voir le bail
-            </Button>
-        )
-      case "rejected":
-      case "pending":
-      case "visit_proposed":
+        return <Button size="sm" variant="default" onClick={() => router.push(`/owner/leases/${application.lease_id}`)}><Eye className="h-4 w-4 mr-1" />Voir le bail</Button>
       case "waiting_tenant_confirmation":
+        return <Button size="sm" variant="outline" disabled><Clock className="h-4 w-4 mr-1" />Attente confirmation</Button>
       default:
-        return (
-          <Button size="sm" variant="default" onClick={() => router.push(`/owner/applications/${application.id}`)}>
-            <Eye className="h-4 w-4 mr-1" />
-            Voir détails
-          </Button>
-        )
+        return <Button size="sm" variant="default" onClick={() => router.push(`/owner/applications/${application.id}`)}><Eye className="h-4 w-4 mr-1" />Voir détails</Button>
     }
   }
 
   const getDropdownActions = () => {
-    const actions = []
+    const handleAction = (action: string) => onAction(action, application);
+    const actions = [];
 
-    if (application.status === "analyzing" || application.status === "visit_scheduled") {
-      actions.push(
-        <DropdownMenuItem key="refuse" onClick={() => onAction("refuse")}>
-          <XCircle className="h-4 w-4 mr-2" />
-          Refuser
-        </DropdownMenuItem>,
-      )
+    if (["analyzing", "visit_scheduled"].includes(application.status)) {
+      actions.push(<DropdownMenuItem key="refuse" onClick={() => handleAction("refuse")}><XCircle className="h-4 w-4 mr-2" />Refuser</DropdownMenuItem>);
     }
 
     if (application.status !== "tenant") {
-      actions.push(
-        <DropdownMenuItem key="contact" onClick={() => onAction("contact")}>
-          <MessageSquare className="h-4 w-4 mr-2" />
-          Contacter
-        </DropdownMenuItem>,
-      )
+      actions.push(<DropdownMenuItem key="contact" onClick={() => handleAction("contact")}><MessageSquare className="h-4 w-4 mr-2" />Contacter</DropdownMenuItem>);
     }
-
-    if (
-      !["pending", "rejected", "accepted", "approved", "lease_created", "tenant"].includes(application.status)
-    ) {
-      actions.push(
-        <DropdownMenuItem key="view_details" onClick={() => router.push(`/owner/applications/${application.id}`)}>
-          <Eye className="h-4 w-4 mr-2" />
-          Voir analyse détaillée
-        </DropdownMenuItem>,
-      )
-    }
-
-    return actions
+    
+    return actions;
   }
 
   return (
     <Card className={`overflow-hidden transition-all ${isSelected ? "border-blue-500 shadow-md" : ""}`}>
       <CardContent className="p-0">
         <div className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-          {/* Top section: Checkbox, Name, Email */}
           <div className="flex items-center gap-3 w-full sm:w-auto">
             {onSelect && (
               <input
@@ -325,11 +260,10 @@ export function ModernApplicationCard({
               <p className="text-sm text-muted-foreground">{application.tenant.email}</p>
             </div>
           </div>
-
-          {/* Right section: Status Badges & Score - Stacks on mobile */}
           <div className="flex flex-wrap gap-2 justify-end sm:justify-start w-full sm:w-auto">
             {getPrimaryStatusBadge()}
-
+            
+            {/* Badges de feedback additionnels */}
             {application.visits?.some((v: any) => v.owner_feedback?.generalImpression === "very_good") && (
               <Badge className="bg-green-100 text-green-800 border-green-200">Très bon profil</Badge>
             )}
@@ -349,8 +283,7 @@ export function ModernApplicationCard({
             <CircularScore score={calculatedScore} loading={false} showDetails={false} size="sm" />
           </div>
         </div>
-
-        {/* Key details - Grid layout, wraps on small screens */}
+        
         <div className="px-4 pb-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm">
           <div className="flex items-center gap-1">
             <Building className="h-3.5 w-3.5 text-muted-foreground" />
@@ -433,25 +366,16 @@ export function ModernApplicationCard({
         )}
 
         <div className="px-4 py-3 border-t flex flex-col sm:flex-row items-center justify-between gap-2">
-          {/* Toggle details button */}
           <Button variant="ghost" size="sm" onClick={() => setExpanded(!expanded)} className="text-muted-foreground w-full sm:w-auto">
             {expanded ? (
-              <>
-                <ChevronUp className="h-4 w-4 mr-1" /> Moins de détails
-              </>
+              <><ChevronUp className="h-4 w-4 mr-1" /> Moins de détails</>
             ) : (
-              <>
-                <ChevronDown className="h-4 w-4 mr-1" /> Plus de détails
-              </>
+              <><ChevronDown className="h-4 w-4 mr-1" /> Plus de détails</>
             )}
           </Button>
 
-          {/* Action buttons - Stack on mobile, inline on larger screens */}
           <div className="flex gap-2 w-full sm:w-auto">
-            {/* Primary Action Button */}
             <PrimaryActionButton />
-
-            {/* Dropdown for other actions */}
             {getDropdownActions().length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
