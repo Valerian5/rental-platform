@@ -10,6 +10,7 @@ import { authService } from "@/lib/auth-service"
 import { visitService } from "@/lib/visit-service"
 import { toast } from "sonner"
 import { CalendarIcon, Clock, CheckCircle, XCircle, Filter, Search, MapPin, User } from "lucide-react"
+import { EnhancedVisitCalendar } from "@/components/enhanced-visit-calendar"
 
 // ====================================
 // Page principale
@@ -328,112 +329,12 @@ export default function VisitsPage() {
         </CardContent>
       </Card>
 
-      {/* Liste des visites */}
-      <div className="space-y-4">
-        {filteredVisits.length === 0 ? (
-          <Card>
-            <CardContent className="p-8 text-center">
-              <CalendarIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="text-lg font-semibold mb-2">Aucune visite</h3>
-              <p className="text-muted-foreground">
-                {visits.length === 0
-                  ? "Aucune visite programmée pour le moment"
-                  : "Aucune visite ne correspond aux filtres sélectionnés"}
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          filteredVisits.map((visit) => (
-            <Card key={visit.id} className="overflow-hidden">
-              <CardContent className="p-0">
-                <div className="flex flex-col md:flex-row">
-                  <div className="w-full md:w-1/3 h-48 md:h-auto">
-                    <img
-                      src={visit.property?.property_images?.[0]?.url || "/placeholder.svg?height=200&width=300"}
-                      alt={visit.property?.title || "Propriété"}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="flex-1 p-6">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <h2 className="text-xl font-semibold">{visit.property?.title || "Propriété"}</h2>
-                        <div className="flex items-center text-muted-foreground mt-1">
-                          <MapPin className="h-4 w-4 mr-1" />
-                          {visit.property?.address || "Adresse non disponible"}
-                        </div>
-                      </div>
-                      <Badge variant={getStatusBadgeVariant(visit.status)}>{getStatusText(visit.status)}</Badge>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      <div className="flex items-start">
-                        <CalendarIcon className="h-5 w-5 mr-2 text-blue-600" />
-                        <div>
-                          <p className="font-medium">
-                            {formatDateTime(visit.visit_date, visit.start_time || visit.visit_time).date}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {formatDateTime(visit.visit_date, visit.start_time || visit.visit_time).time}
-                          </p>
-                        </div>
-                      </div>
-                      {visit.property?.owner && (
-                        <div className="flex items-start">
-                          <User className="h-5 w-5 mr-2 text-blue-600" />
-                          <div>
-                            <p className="font-medium">
-                              {visit.property.owner.first_name} {visit.property.owner.last_name}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              {visit.property.owner.phone || visit.property.owner.email}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {visit.notes && (
-                      <div className="bg-gray-50 p-3 rounded-md mb-4">
-                        <p className="text-sm">{visit.notes}</p>
-                      </div>
-                    )}
-
-                    <div className="flex flex-wrap gap-2 justify-end">
-                      <Button variant="outline" size="sm" asChild>
-                        <a href={`/properties/${visit.property_id}`}>Voir l'annonce</a>
-                      </Button>
-
-                      {visit.status === "proposed" && (
-                        <>
-                          <Button size="sm" onClick={() => handleConfirmVisit(visit.id)}>
-                            Confirmer la visite
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => handleCancelVisit(visit.id)}>
-                            Refuser
-                          </Button>
-                        </>
-                      )}
-
-                      {visit.status === "confirmed" && (
-                        <Button size="sm" variant="destructive" onClick={() => handleCancelVisit(visit.id)}>
-                          Annuler la visite
-                        </Button>
-                      )}
-
-                      {visit.tenant_interest && (
-                        <Badge variant={visit.tenant_interest === "interested" ? "default" : "destructive"}>
-                          {visit.tenant_interest === "interested" ? "Intéressé" : "Pas intéressé"}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
+      {/* Calendrier des visites */}
+      <EnhancedVisitCalendar
+        visits={filteredVisits}
+        userType="tenant"
+        onVisitUpdate={handleVisitUpdate}
+      />
     </div>
   )
 }
