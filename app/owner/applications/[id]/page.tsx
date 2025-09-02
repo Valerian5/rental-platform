@@ -1471,8 +1471,6 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
     />
   )}
 </>
-)
-}
 
 function flattenDocuments(application: any): any[] {
   if (!application) return []
