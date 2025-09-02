@@ -24,6 +24,7 @@ import {
   Star,
   AlertTriangle,
   MoreVertical,
+  UserCheck, // Ajout de l'icône pour le statut "Locataire"
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import {
@@ -118,7 +119,6 @@ export function ModernApplicationCard({
     }
   }
 
-  // Gère les statuts de base de l'application
   const getStatusBadge = () => {
     switch (application.status) {
       case "pending":
@@ -149,15 +149,34 @@ export function ModernApplicationCard({
       case "waiting_tenant_confirmation":
         return (
           <Badge variant="outline" className="bg-amber-100 text-amber-800 hover:bg-amber-200">
-            En attente de confirmation
+            En attente du locataire
+          </Badge>
+        )
+      // NOUVEAUX STATUTS
+      case "confirmed_by_tenant":
+        return (
+          <Badge variant="default" className="bg-teal-100 text-teal-800 hover:bg-teal-200">
+            Confirmé par le locataire
+          </Badge>
+        )
+      case "lease_created":
+        return (
+          <Badge variant="default" className="bg-sky-100 text-sky-800 hover:bg-sky-200">
+            Bail créé
+          </Badge>
+        )
+      case "tenant":
+        return (
+          <Badge variant="default" className="bg-indigo-100 text-indigo-800 hover:bg-indigo-200">
+            <UserCheck className="h-3 w-3 mr-1" />
+            Locataire
           </Badge>
         )
       default:
         return <Badge variant="outline">Statut inconnu</Badge>
     }
   }
-
-  // **NOUVELLE FONCTION** - Détermine le badge de statut principal à afficher
+  
   const getPrimaryStatusBadge = () => {
     const hasCompletedVisit = application.visits?.some(v => v.status === "completed")
 
@@ -165,7 +184,6 @@ export function ModernApplicationCard({
       return <Badge className="bg-green-100 text-green-800 border-green-200">Visite effectuée</Badge>
     }
 
-    // Sinon, on retourne le statut normal de la candidature
     return getStatusBadge()
   }
 
@@ -198,8 +216,6 @@ export function ModernApplicationCard({
         return null
     }
   }
-  
-  // ... (le reste des fonctions getActionButtons, etc. ne change pas)
 
   const PrimaryActionButton = () => {
     switch (application.status) {
@@ -219,11 +235,20 @@ export function ModernApplicationCard({
         )
       case "accepted":
       case "approved":
+      case "confirmed_by_tenant":
         return (
           <Button size="sm" variant="default" onClick={() => onAction("generate_lease")}>
             <FileText className="h-4 w-4 mr-1" />
             Générer bail
           </Button>
+        )
+      case "lease_created":
+      case "tenant":
+        return (
+            <Button size="sm" variant="default" onClick={() => router.push(`/owner/leases/TODO-lease-id`)}>
+                <Eye className="h-4 w-4 mr-1" />
+                Voir le bail
+            </Button>
         )
       case "rejected":
       case "pending":
@@ -242,7 +267,7 @@ export function ModernApplicationCard({
   const getDropdownActions = () => {
     const actions = []
 
-    if (application.status === "analyzing") {
+    if (application.status === "analyzing" || application.status === "visit_scheduled") {
       actions.push(
         <DropdownMenuItem key="refuse" onClick={() => onAction("refuse")}>
           <XCircle className="h-4 w-4 mr-2" />
@@ -250,15 +275,8 @@ export function ModernApplicationCard({
         </DropdownMenuItem>,
       )
     }
-    if (application.status === "visit_scheduled") {
-      actions.push(
-        <DropdownMenuItem key="refuse" onClick={() => onAction("refuse")}>
-          <XCircle className="h-4 w-4 mr-2" />
-          Refuser
-        </DropdownMenuItem>,
-      )
-    }
-    if (application.status !== "accepted" && application.status !== "approved") {
+
+    if (application.status !== "tenant") {
       actions.push(
         <DropdownMenuItem key="contact" onClick={() => onAction("contact")}>
           <MessageSquare className="h-4 w-4 mr-2" />
@@ -268,10 +286,7 @@ export function ModernApplicationCard({
     }
 
     if (
-      application.status !== "pending" &&
-      application.status !== "rejected" &&
-      application.status !== "accepted" &&
-      application.status !== "approved"
+      !["pending", "rejected", "accepted", "approved", "lease_created", "tenant"].includes(application.status)
     ) {
       actions.push(
         <DropdownMenuItem key="view_details" onClick={() => router.push(`/owner/applications/${application.id}`)}>
@@ -283,7 +298,6 @@ export function ModernApplicationCard({
 
     return actions
   }
-
 
   return (
     <Card className={`overflow-hidden transition-all ${isSelected ? "border-blue-500 shadow-md" : ""}`}>
@@ -314,11 +328,8 @@ export function ModernApplicationCard({
 
           {/* Right section: Status Badges & Score - Stacks on mobile */}
           <div className="flex flex-wrap gap-2 justify-end sm:justify-start w-full sm:w-auto">
-            
-            {/* **MODIFICATION** - On appelle la nouvelle fonction ici */}
             {getPrimaryStatusBadge()}
 
-            {/* Badges de feedback (restent inchangés) */}
             {application.visits?.some((v: any) => v.owner_feedback?.generalImpression === "very_good") && (
               <Badge className="bg-green-100 text-green-800 border-green-200">Très bon profil</Badge>
             )}
