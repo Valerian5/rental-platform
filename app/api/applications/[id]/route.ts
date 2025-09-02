@@ -46,8 +46,27 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       if (!rfError && rf) rentalFile = rf
     }
 
-    // 3. Renvoie tout
-    return NextResponse.json({ application: { ...application, rental_file: rentalFile } })
+    // 3. Récupère les visites liées (incluant les feedbacks)
+    let visits = [] as any[]
+    try {
+      const { data: visitsData, error: visitsError } = await supabase
+        .from("visits")
+        .select("*")
+        .eq("tenant_id", application.tenant_id)
+        .eq("property_id", application.property_id)
+        .order("visit_date", { ascending: false })
+
+      if (visitsError) {
+        console.error("❌ Erreur récupération visites pour application:", visitsError)
+      } else if (visitsData) {
+        visits = visitsData
+      }
+    } catch (err) {
+      console.error("❌ Exception récupération visites:", err)
+    }
+
+    // 4. Renvoie tout
+    return NextResponse.json({ application: { ...application, rental_file: rentalFile, visits } })
   } catch (error) {
     console.error("❌ Erreur API applications/[id]:", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
