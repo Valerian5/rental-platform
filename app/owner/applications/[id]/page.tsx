@@ -559,6 +559,40 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
   const completionPercentage = application.completion_percentage || 0
   const isComplete = application.documents_complete || false
 
+  const handleVisitUpdate = async (visitId: string, updates: any) => {
+    try {
+      const response = await fetch(`/api/visits/${visitId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updates),
+      })
+  
+      if (response.ok) {
+        // Mettre à jour la visite localement
+        setApplication(prevApp => ({
+          ...prevApp,
+          visits: prevApp.visits?.map((visit: any) => 
+            visit.id === visitId ? { ...visit, ...updates } : visit
+          ) || []
+        }))
+        
+        toast.success("Visite mise à jour avec succès")
+        
+        // Recharger les détails de l'application si nécessaire
+        if (user) {
+          await loadApplicationDetails(user.id)
+        }
+      } else {
+        toast.error("Erreur lors de la mise à jour")
+      }
+    } catch (error) {
+      console.error("Erreur mise à jour visite:", error)
+      toast.error("Erreur lors de la mise à jour")
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -1483,38 +1517,4 @@ function flattenDocuments(application: any): any[] {
   }
 
   return docs
-}
-
-const handleVisitUpdate = async (visitId: string, updates: any) => {
-  try {
-    const response = await fetch(`/api/visits/${visitId}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(updates),
-    })
-
-    if (response.ok) {
-      // Mettre à jour la visite localement
-      setApplication(prevApp => ({
-        ...prevApp,
-        visits: prevApp.visits?.map((visit: any) => 
-          visit.id === visitId ? { ...visit, ...updates } : visit
-        ) || []
-      }))
-      
-      toast.success("Visite mise à jour avec succès")
-      
-      // Recharger les détails de l'application si nécessaire
-      if (user) {
-        await loadApplicationDetails(user.id)
-      }
-    } else {
-      toast.error("Erreur lors de la mise à jour")
-    }
-  } catch (error) {
-    console.error("Erreur mise à jour visite:", error)
-    toast.error("Erreur lors de la mise à jour")
-  }
 }
