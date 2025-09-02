@@ -568,18 +568,17 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
         },
         body: JSON.stringify(updates),
       })
-  
+
       if (response.ok) {
         // Mettre à jour la visite localement
         setApplication(prevApp => ({
           ...prevApp,
-          visits: prevApp.visits?.map((visit: any) => 
-            visit.id === visitId ? { ...visit, ...updates } : visit
-          ) || []
+          visits:
+            prevApp.visits?.map((visit: any) => (visit.id === visitId ? { ...visit, ...updates } : visit)) || [],
         }))
-        
+
         toast.success("Visite mise à jour avec succès")
-        
+
         // Recharger les détails de l'application si nécessaire
         if (user) {
           await loadApplicationDetails(user.id)
@@ -734,10 +733,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
 
             {/* Historique des visites */}
             {application.visits && application.visits.length > 0 && (
-              <VisitHistorySummary
-                visits={application.visits}
-                onViewVisits={() => setActiveTab("visits")}
-              />
+              <VisitHistorySummary visits={application.visits} onViewVisits={() => setActiveTab("visits")} />
             )}
 
             {/* Retour post-visite */}
@@ -1226,7 +1222,10 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                             <div className="text-sm">
                               <div className="font-medium">
                                 {new Date(visit.visit_date).toLocaleDateString("fr-FR", {
-                                  weekday: "long", year: "numeric", month: "long", day: "numeric",
+                                  weekday: "long",
+                                  year: "numeric",
+                                  month: "long",
+                                  day: "numeric",
                                 })}
                               </div>
                               {(visit.start_time || visit.visit_time) && (
@@ -1236,7 +1235,15 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                                 </div>
                               )}
                             </div>
-                            <Badge variant={visit.status === "completed" ? "outline" : visit.status === "cancelled" ? "destructive" : "default"}>
+                            <Badge
+                              variant={
+                                visit.status === "completed"
+                                  ? "outline"
+                                  : visit.status === "cancelled"
+                                  ? "destructive"
+                                  : "default"
+                              }
+                            >
                               {visit.status === "completed"
                                 ? "Visite effectuée"
                                 : visit.status === "confirmed"
@@ -1260,39 +1267,71 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                               </CardHeader>
                               <CardContent className="space-y-3">
                                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
-                                  <div><span className="text-muted-foreground">Ponctualité</span><div className="font-medium">
-                                    {visit.owner_feedback.punctuality === "early" ? "En avance" :
-                                     visit.owner_feedback.punctuality === "on_time" ? "À l'heure" : "En retard"}
-                                  </div></div>
-                                  <div><span className="text-muted-foreground">Présentation</span><div className="font-medium">
-                                    {visit.owner_feedback.presentation === "well_groomed" ? "Soigné" :
-                                     visit.owner_feedback.presentation === "correct" ? "Correct" : "Négligé"}
-                                  </div></div>
-                                  <div><span className="text-muted-foreground">Comportement</span><div className="font-medium">
-                                    {visit.owner_feedback.behavior === "polite_respectful" ? "Poli et respectueux" :
-                                     visit.owner_feedback.behavior === "correct" ? "Correct" : "Problématique"}
-                                  </div></div>
-                                  <div><span className="text-muted-foreground">Intérêt</span><div className="font-medium">
-                                    {visit.owner_feedback.interest === "very_interested" ? "Très intéressé" :
-                                     visit.owner_feedback.interest === "interested" ? "Intéressé" : "Peu intéressé"}
-                                  </div></div>
+                                  <div>
+                                    <span className="text-muted-foreground">Ponctualité</span>
+                                    <div className="font-medium">
+                                      {visit.owner_feedback.punctuality === "early"
+                                        ? "En avance"
+                                        : visit.owner_feedback.punctuality === "on_time"
+                                        ? "À l'heure"
+                                        : "En retard"}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Présentation</span>
+                                    <div className="font-medium">
+                                      {visit.owner_feedback.presentation === "well_groomed"
+                                        ? "Soigné"
+                                        : visit.owner_feedback.presentation === "correct"
+                                        ? "Correct"
+                                        : "Négligé"}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Comportement</span>
+                                    <div className="font-medium">
+                                      {visit.owner_feedback.behavior === "polite_respectful"
+                                        ? "Poli et respectueux"
+                                        : visit.owner_feedback.behavior === "correct"
+                                        ? "Correct"
+                                        : "Problématique"}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Intérêt</span>
+                                    <div className="font-medium">
+                                      {visit.owner_feedback.interest === "very_interested"
+                                        ? "Très intéressé"
+                                        : visit.owner_feedback.interest === "interested"
+                                        ? "Intéressé"
+                                        : "Peu intéressé"}
+                                    </div>
+                                  </div>
                                   <div>
                                     <span className="text-muted-foreground">Impression</span>
                                     <div className="mt-1">
                                       {visit.owner_feedback.generalImpression === "very_good" && (
-                                        <Badge className="bg-green-100 text-green-800 border-green-200">Très bon profil</Badge>
+                                        <Badge className="bg-green-100 text-green-800 border-green-200">
+                                          Très bon profil
+                                        </Badge>
                                       )}
                                       {visit.owner_feedback.generalImpression === "to_review" && (
-                                        <Badge className="bg-amber-100 text-amber-800 border-amber-200">À revoir</Badge>
+                                        <Badge className="bg-amber-100 text-amber-800 border-amber-200">
+                                          À revoir
+                                        </Badge>
                                       )}
                                       {visit.owner_feedback.generalImpression === "not_retained" && (
-                                        <Badge className="bg-red-100 text-red-800 border-red-200">Pas retenu</Badge>
+                                        <Badge className="bg-red-100 text-red-800 border-red-200">
+                                          Pas retenu
+                                        </Badge>
                                       )}
                                     </div>
                                   </div>
                                 </div>
                                 {visit.owner_feedback.comment && (
-                                  <div className="text-sm bg-gray-50 p-3 rounded-md">{visit.owner_feedback.comment}</div>
+                                  <div className="text-sm bg-gray-50 p-3 rounded-md">
+                                    {visit.owner_feedback.comment}
+                                  </div>
                                 )}
                               </CardContent>
                             </Card>
@@ -1311,13 +1350,19 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                                 <div className="flex items-center gap-2">
                                   <span className="text-muted-foreground">Intérêt:</span>
                                   {visit.tenant_feedback.interest === "yes" && (
-                                    <Badge className="bg-green-100 text-green-800 border-green-200">Oui, souhaite déposer un dossier</Badge>
+                                    <Badge className="bg-green-100 text-green-800 border-green-200">
+                                      Oui, souhaite déposer un dossier
+                                    </Badge>
                                   )}
                                   {visit.tenant_feedback.interest === "unsure" && (
-                                    <Badge className="bg-amber-100 text-amber-800 border-amber-200">Pas sûr, hésite</Badge>
+                                    <Badge className="bg-amber-100 text-amber-800 border-amber-200">
+                                      Pas sûr, hésite
+                                    </Badge>
                                   )}
                                   {visit.tenant_feedback.interest === "no" && (
-                                    <Badge className="bg-red-100 text-red-800 border-red-200">Non, pas intéressé</Badge>
+                                    <Badge className="bg-red-100 text-red-800 border-red-200">
+                                      Non, pas intéressé
+                                    </Badge>
                                   )}
                                 </div>
                                 {visit.tenant_feedback.comment && (
@@ -1346,43 +1391,32 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                                       <span className="text-sm text-red-700">
                                         Candidat non retenu - Recommandé de refuser la candidature
                                       </span>
-                                      <Button 
-                                        size="sm" 
-                                        variant="destructive"
-                                        onClick={() => handleRefuse()}
-                                      >
+                                      <Button size="sm" variant="destructive" onClick={() => handleRefuse()}>
                                         Refuser la candidature
                                       </Button>
                                     </div>
                                   )}
-                                  
-                                  {visit.owner_feedback.generalImpression === "very_good" && 
-                                   visit.tenant_feedback.interest === "yes" && (
-                                    <div className="flex items-center gap-2">
-                                      <CheckCircle className="h-5 w-5 text-green-500" />
-                                      <span className="text-sm text-green-700">
-                                        Excellent profil - Recommandé d'accepter la candidature
-                                      </span>
-                                      <Button 
-                                        size="sm" 
-                                        onClick={() => handleAccept()}
-                                      >
-                                        Accepter la candidature
-                                      </Button>
-                                    </div>
-                                  )}
-                                  
+
+                                  {visit.owner_feedback.generalImpression === "very_good" &&
+                                    visit.tenant_feedback.interest === "yes" && (
+                                      <div className="flex items-center gap-2">
+                                        <CheckCircle className="h-5 w-5 text-green-500" />
+                                        <span className="text-sm text-green-700">
+                                          Excellent profil - Recommandé d'accepter la candidature
+                                        </span>
+                                        <Button size="sm" onClick={() => handleAccept()}>
+                                          Accepter la candidature
+                                        </Button>
+                                      </div>
+                                    )}
+
                                   {visit.owner_feedback.generalImpression === "to_review" && (
                                     <div className="flex items-center gap-2">
                                       <AlertTriangle className="h-5 w-5 text-amber-500" />
                                       <span className="text-sm text-amber-700">
                                         Profil à revoir - Demander plus d'informations
                                       </span>
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline"
-                                        onClick={() => handleContact()}
-                                      >
+                                      <Button size="sm" variant="outline" onClick={() => handleContact()}>
                                         Contacter le candidat
                                       </Button>
                                     </div>
@@ -1391,8 +1425,9 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                               </CardContent>
                             </Card>
                           )}
-                        </div>
-                      ))
+                        </CardContent>
+                      </Card>
+                    ))
                 ) : (
                   <div className="text-muted-foreground">Aucune visite</div>
                 )}
@@ -1409,7 +1444,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                   <p className="text-sm text-muted-foreground">Visites programmées</p>
                 </CardContent>
               </Card>
-              
+
               <Card>
                 <CardContent className="p-4 text-center">
                   <div className="text-2xl font-bold text-green-600">
@@ -1418,7 +1453,7 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                   <p className="text-sm text-muted-foreground">Visites terminées</p>
                 </CardContent>
               </Card>
-              
+
               <Card>
                 <CardContent className="p-4 text-center">
                   <div className="text-2xl font-bold text-purple-600">
@@ -1428,49 +1463,49 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                 </CardContent>
               </Card>
             </div>
-          </CardContent>
-        </Card>
-      </TabsContent>
+          </TabsContent>
+        </Tabs>
 
-      {/* Documents */}
-      <TabsContent value="documents" className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Documents fournis
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {user && (
-              <TenantAndGuarantorDocumentsSection
-                applicationId={application.id}
-                mainTenant={rentalFile?.main_tenant}
-                guarantors={rentalFile?.guarantors || []}
-                userId={user.id}
-                userName={`${user.first_name} ${user.last_name}`}
-                rentalFile={rentalFile}
-              />
-            )}
-          </CardContent>
-        </Card>
-      </TabsContent>
-    </Tabs>
-  </div>
+        {/* Documents */}
+        <TabsContent value="documents" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Documents fournis
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {user && (
+                <TenantAndGuarantorDocumentsSection
+                  applicationId={application.id}
+                  mainTenant={rentalFile?.main_tenant}
+                  guarantors={rentalFile?.guarantors || []}
+                  userId={user.id}
+                  userName={`${user.first_name} ${user.last_name}`}
+                  rentalFile={rentalFile}
+                />
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </div>
 
-  {/* Dialogue de proposition de visite */}
-  {showVisitDialog && currentApplication && (
-    <VisitProposalManager
-      isOpen={showVisitDialog}
-      onClose={() => setShowVisitDialog(false)}
-      propertyId={currentApplication.property_id}
-      propertyTitle={currentApplication.property?.title || ""}
-      applicationId={currentApplication.id}
-      tenantName={`${currentApplication.tenant?.first_name || ""} ${currentApplication.tenant?.last_name || ""}`}
-      onSlotsProposed={handleVisitProposed}
-    />
-  )}
-</>
+      {/* Dialogue de proposition de visite */}
+      {showVisitDialog && currentApplication && (
+        <VisitProposalManager
+          isOpen={showVisitDialog}
+          onClose={() => setShowVisitDialog(false)}
+          propertyId={currentApplication.property_id}
+          propertyTitle={currentApplication.property?.title || ""}
+          applicationId={currentApplication.id}
+          tenantName={`${currentApplication.tenant?.first_name || ""} ${currentApplication.tenant?.last_name || ""}`}
+          onSlotsProposed={handleVisitProposed}
+        />
+      )}
+    </>
+  )
+}
 
 function flattenDocuments(application: any): any[] {
   if (!application) return []
