@@ -23,8 +23,15 @@ import {
   Users,
   Star,
   AlertTriangle,
+  MoreVertical,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 interface ApplicationCardProps {
   application: {
@@ -60,9 +67,9 @@ interface ApplicationCardProps {
     scoring_compatible?: boolean
     scoring_model_used?: string
     rental_situation?: "alone" | "couple" | "colocation"
-    visits?: any[] // Added for visits
-    owner_feedback?: any // Added for owner feedback
-    tenant_feedback?: any // Added for tenant feedback
+    visits?: any[]
+    owner_feedback?: any
+    tenant_feedback?: any
   }
   isSelected?: boolean
   onSelect?: (selected: boolean) => void
@@ -81,7 +88,6 @@ export function ModernApplicationCard({
   const [calculatedScore, setCalculatedScore] = useState<number>(application.match_score)
   const router = useRouter()
 
-  // Utiliser les scores déjà calculés depuis la page parent
   useEffect(() => {
     if (application.match_score !== undefined) {
       setCalculatedScore(application.match_score)
@@ -180,147 +186,105 @@ export function ModernApplicationCard({
     }
   }
 
-  const getActionButtons = () => {
+  const PrimaryActionButton = () => {
     switch (application.status) {
-      case "pending":
-        return (
-          <>
-            <Button size="sm" variant="default" onClick={() => router.push(`/owner/applications/${application.id}`)}>
-              <Eye className="h-4 w-4 mr-1" />
-              Voir analyse
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-          </>
-        )
       case "analyzing":
         return (
-          <>
-            <Button size="sm" variant="default" onClick={() => onAction("propose_visit")}>
-              <Calendar className="h-4 w-4 mr-1" />
-              Proposer visite
-            </Button>
-            <Button size="sm" variant="destructive" onClick={() => onAction("refuse")}>
-              <XCircle className="h-4 w-4 mr-1" />
-              Refuser
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-          </>
-        )
-      case "visit_proposed":
-        return (
-          <>
-            <Button size="sm" variant="outline" disabled>
-              <Clock className="h-4 w-4 mr-1" />
-              En attente
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-          </>
+          <Button size="sm" variant="default" onClick={() => onAction("propose_visit")}>
+            <Calendar className="h-4 w-4 mr-1" />
+            Proposer visite
+          </Button>
         )
       case "visit_scheduled":
         return (
-          <>
-            <Button size="sm" variant="default" onClick={() => onAction("accept")}>
-              <CheckCircle className="h-4 w-4 mr-1" />
-              Accepter
-            </Button>
-            <Button size="sm" variant="destructive" onClick={() => onAction("refuse")}>
-              <XCircle className="h-4 w-4 mr-1" />
-              Refuser
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-          </>
-        )
-      case "waiting_tenant_confirmation":
-        return (
-          <>
-            <Button size="sm" variant="outline" disabled>
-              <Clock className="h-4 w-4 mr-1" />
-              En attente
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-          </>
+          <Button size="sm" variant="default" onClick={() => onAction("accept")}>
+            <CheckCircle className="h-4 w-4 mr-1" />
+            Accepter
+          </Button>
         )
       case "accepted":
       case "approved":
         return (
-          <>
-            <Button size="sm" variant="default" onClick={() => onAction("generate_lease")}>
-              <FileText className="h-4 w-4 mr-1" />
-              Générer bail
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-          </>
+          <Button size="sm" variant="default" onClick={() => onAction("generate_lease")}>
+            <FileText className="h-4 w-4 mr-1" />
+            Générer bail
+          </Button>
         )
       case "rejected":
-        return (
-          <>
-            <Button size="sm" variant="outline" onClick={() => router.push(`/owner/applications/${application.id}`)}>
-              <Eye className="h-4 w-4 mr-1" />
-              Voir détails
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-          </>
-        )
+      case "pending":
+      case "visit_proposed":
+      case "waiting_tenant_confirmation":
       default:
         return (
-          <>
-            <Button size="sm" variant="outline" onClick={() => router.push(`/owner/applications/${application.id}`)}>
-              <Eye className="h-4 w-4 mr-1" />
-              Voir détails
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => onAction("contact")}>
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Contacter
-            </Button>
-          </>
+          <Button size="sm" variant="default" onClick={() => router.push(`/owner/applications/${application.id}`)}>
+            <Eye className="h-4 w-4 mr-1" />
+            Voir détails
+          </Button>
         )
     }
   }
 
-  function computeDisplayStatus(app: any) {
-    const hasCompleted = app.visits?.some((v: any) => v.status === "completed")
-    const hasConfirmed = app.visits?.some((v: any) => v.status === "confirmed")
-    if (hasCompleted || hasConfirmed) return "Visite effectuée"
-    // fallback to your existing status display
-    return mapStatus(app.status)
+  const getDropdownActions = () => {
+    const actions = []
+
+    if (application.status === "analyzing") {
+      actions.push(
+        <DropdownMenuItem key="refuse" onClick={() => onAction("refuse")}>
+          <XCircle className="h-4 w-4 mr-2" />
+          Refuser
+        </DropdownMenuItem>,
+      )
+    }
+    if (application.status === "visit_scheduled") {
+      actions.push(
+        <DropdownMenuItem key="refuse" onClick={() => onAction("refuse")}>
+          <XCircle className="h-4 w-4 mr-2" />
+          Refuser
+        </DropdownMenuItem>,
+      )
+    }
+    if (application.status !== "accepted" && application.status !== "approved") {
+      actions.push(
+        <DropdownMenuItem key="contact" onClick={() => onAction("contact")}>
+          <MessageSquare className="h-4 w-4 mr-2" />
+          Contacter
+        </DropdownMenuItem>,
+      )
+    }
+
+    if (
+      application.status !== "pending" &&
+      application.status !== "rejected" &&
+      application.status !== "accepted" &&
+      application.status !== "approved"
+    ) {
+      actions.push(
+        <DropdownMenuItem key="view_details" onClick={() => router.push(`/owner/applications/${application.id}`)}>
+          <Eye className="h-4 w-4 mr-2" />
+          Voir analyse détaillée
+        </DropdownMenuItem>,
+      )
+    }
+
+    return actions
   }
 
   return (
     <Card className={`overflow-hidden transition-all ${isSelected ? "border-blue-500 shadow-md" : ""}`}>
       <CardContent className="p-0">
-        <div className="p-4 flex justify-between items-start">
-          <div className="flex items-center gap-3">
+        <div className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          {/* Top section: Checkbox, Name, Email */}
+          <div className="flex items-center gap-3 w-full sm:w-auto">
             {onSelect && (
               <input
                 type="checkbox"
                 checked={isSelected}
-                onChange={(e) => onSelect(e.target.checked)}
+                onChange={e => onSelect(e.target.checked)}
                 className="h-4 w-4 rounded border-gray-300"
               />
             )}
             <div>
-              <h3 className="font-medium">
+              <h3 className="font-medium text-base">
                 <Link
                   href={`/owner/applications/${application.id}`}
                   className="hover:text-blue-600 transition-colors underline"
@@ -331,23 +295,20 @@ export function ModernApplicationCard({
               <p className="text-sm text-muted-foreground">{application.tenant.email}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {/* Badge statut existant */}
+
+          {/* Right section: Status Badges & Score - Stacks on mobile */}
+          <div className="flex flex-wrap gap-2 justify-end sm:justify-start w-full sm:w-auto">
             {getStatusBadge()}
 
-            {/* Badge post-visit à côté, en ligne */}
             {application.visits && application.visits.length > 0 && (
               <>
-                {/* Si une visite est completed => Visite effectuée */}
                 {application.visits.some((v: any) => v.status === "completed") && (
                   <Badge className="bg-green-100 text-green-800 border-green-200">Visite effectuée</Badge>
                 )}
-                {/* sinon si confirmée => aussi "Visite effectuée" */}
                 {!application.visits.some((v: any) => v.status === "completed") &&
                   application.visits.some((v: any) => v.status === "confirmed") && (
-                  <Badge className="bg-green-100 text-green-800 border-green-200">Visite effectuée</Badge>
-                )}
-                {/* Feedback propriétaire */}
+                    <Badge className="bg-green-100 text-green-800 border-green-200">Visite effectuée</Badge>
+                  )}
                 {application.visits.some((v: any) => v.owner_feedback?.generalImpression === "very_good") && (
                   <Badge className="bg-green-100 text-green-800 border-green-200">Très bon profil</Badge>
                 )}
@@ -357,7 +318,6 @@ export function ModernApplicationCard({
                 {application.visits.some((v: any) => v.owner_feedback?.generalImpression === "not_retained") && (
                   <Badge className="bg-red-100 text-red-800 border-red-200">Pas retenu</Badge>
                 )}
-                {/* Intérêt locataire */}
                 {application.visits.some((v: any) => v.tenant_feedback?.interest === "yes") && (
                   <Badge className="bg-blue-100 text-blue-800 border-blue-200">Intéressé</Badge>
                 )}
@@ -370,7 +330,8 @@ export function ModernApplicationCard({
           </div>
         </div>
 
-        <div className="px-4 pb-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+        {/* Key details - Grid layout, wraps on small screens */}
+        <div className="px-4 pb-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm">
           <div className="flex items-center gap-1">
             <Building className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="truncate">{application.property.title}</span>
@@ -397,7 +358,7 @@ export function ModernApplicationCard({
 
         {expanded && (
           <div className="px-4 py-2 bg-gray-50 border-t text-sm">
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
               <div>
                 <p className="text-muted-foreground">Revenus</p>
                 <p className="font-medium">{formatAmount(application.income)}</p>
@@ -451,8 +412,9 @@ export function ModernApplicationCard({
           </div>
         )}
 
-        <div className="px-4 py-3 border-t flex items-center justify-between">
-          <Button variant="ghost" size="sm" onClick={() => setExpanded(!expanded)} className="text-muted-foreground">
+        <div className="px-4 py-3 border-t flex flex-col sm:flex-row items-center justify-between gap-2">
+          {/* Toggle details button */}
+          <Button variant="ghost" size="sm" onClick={() => setExpanded(!expanded)} className="text-muted-foreground w-full sm:w-auto">
             {expanded ? (
               <>
                 <ChevronUp className="h-4 w-4 mr-1" /> Moins de détails
@@ -464,9 +426,25 @@ export function ModernApplicationCard({
             )}
           </Button>
 
-          <div className="flex gap-2">{getActionButtons()}</div>
+          {/* Action buttons - Stack on mobile, inline on larger screens */}
+          <div className="flex gap-2 w-full sm:w-auto">
+            {/* Primary Action Button */}
+            <PrimaryActionButton />
+
+            {/* Dropdown for other actions */}
+            {getDropdownActions().length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="flex-shrink-0">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">{getDropdownActions()}</DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>
-    )
-    }
+  )
+}
