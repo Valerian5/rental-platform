@@ -54,17 +54,21 @@ export function EnhancedVisitCalendar({ visits, userType, onVisitUpdate }: Props
   const endTime = (v: Visit) => (v.end_time ? normalizeTime(v.end_time) : null)
 
   const isPastVisit = (v: Visit) => {
-    // Début
+    // Si visit_date contient déjà une heure (ISO), on l'utilise telle quelle
+    if (v.visit_date?.includes("T")) {
+      const start = new Date(v.visit_date)
+      const end = v.end_time
+        ? new Date(`${v.visit_date.split("T")[0]}T${endTime(v)}:00`)
+        : new Date(start.getTime() + 30 * 60 * 1000)
+      return end.getTime() < Date.now()
+    }
+
+    // Sinon on compose avec start_time/visit_time
     const startISO = `${v.visit_date}T${startTime(v)}:00`
     const start = new Date(startISO)
-    // Fin
-    let end: Date
-    if (endTime(v)) {
-      end = new Date(`${v.visit_date}T${endTime(v)}:00`)
-    } else {
-      end = new Date(start)
-      end.setMinutes(end.getMinutes() + 30)
-    }
+    const end = v.end_time
+      ? new Date(`${v.visit_date}T${endTime(v)}:00`)
+      : new Date(start.getTime() + 30 * 60 * 1000)
     return end.getTime() < Date.now()
   }
 

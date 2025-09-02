@@ -19,6 +19,7 @@ import {
   XCircle,
   Filter,
   Search,
+  Building,
 } from "lucide-react"
 
 interface Visit {
@@ -147,27 +148,16 @@ export default function OwnerVisitsPage() {
 
   const handleVisitUpdate = async (visitId: string, updates: any) => {
     try {
-      const response = await fetch(`/api/visits/${visitId}`, {
+      const response = await fetch(`/api/visits`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(updates),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: visitId, ...updates }),
       })
 
       if (response.ok) {
-        // Mettre à jour la visite localement
-        setVisits(prevVisits => 
-          prevVisits.map(visit => 
-            visit.id === visitId ? { ...visit, ...updates } : visit
-          )
-        )
-        setFilteredVisits(prevVisits => 
-          prevVisits.map(visit => 
-            visit.id === visitId ? { ...visit, ...updates } : visit
-          )
-        )
-        
+        const { visit } = await response.json()
+        setVisits(prev => prev.map(v => v.id === visitId ? { ...v, ...visit, ...updates } : v))
+        setFilteredVisits(prev => prev.map(v => v.id === visitId ? { ...v, ...visit, ...updates } : v))
         toast.success("Visite mise à jour avec succès")
       } else {
         toast.error("Erreur lors de la mise à jour")

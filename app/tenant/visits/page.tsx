@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { authService } from "@/lib/auth-service"
 import { visitService } from "@/lib/visit-service"
 import { toast } from "sonner"
-import { CalendarIcon, Clock, CheckCircle, XCircle, Filter, Search, MapPin, User } from "lucide-react"
+import { CalendarIcon, Clock, CheckCircle, XCircle, Filter, Search, MapPin, User, Building } from "lucide-react"
 import { EnhancedVisitCalendar } from "@/components/enhanced-visit-calendar"
 
 // ====================================
@@ -87,20 +87,20 @@ export default function VisitsPage() {
   // ====================================
   const handleVisitUpdate = async (visitId: string, updates: any) => {
     try {
-      await visitService.updateVisitStatus(visitId, updates.status || updates.tenant_interest)
+      const response = await fetch(`/api/visits`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: visitId, ...updates }),
+      })
 
-      setVisits(prevVisits =>
-        prevVisits.map(visit =>
-          visit.id === visitId ? { ...visit, ...updates } : visit
-        )
-      )
-      setFilteredVisits(prevVisits =>
-        prevVisits.map(visit =>
-          visit.id === visitId ? { ...visit, ...updates } : visit
-        )
-      )
-
-      toast.success("Visite mise à jour avec succès")
+      if (response.ok) {
+        const { visit } = await response.json()
+        setVisits(prev => prev.map(v => v.id === visitId ? { ...v, ...visit, ...updates } : v))
+        setFilteredVisits(prev => prev.map(v => v.id === visitId ? { ...v, ...visit, ...updates } : v))
+        toast.success("Visite mise à jour avec succès")
+      } else {
+        toast.error("Erreur lors de la mise à jour")
+      }
     } catch (error) {
       console.error("Erreur mise à jour visite:", error)
       toast.error("Erreur lors de la mise à jour")
