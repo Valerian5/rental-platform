@@ -298,6 +298,14 @@ export function ModernApplicationCard({
     }
   }
 
+  function computeDisplayStatus(app: any) {
+    const hasCompleted = app.visits?.some((v: any) => v.status === "completed")
+    const hasConfirmed = app.visits?.some((v: any) => v.status === "confirmed")
+    if (hasCompleted || hasConfirmed) return "Visite effectuée"
+    // fallback to your existing status display
+    return mapStatus(app.status)
+  }
+
   return (
     <Card className={`overflow-hidden transition-all ${isSelected ? "border-blue-500 shadow-md" : ""}`}>
       <CardContent className="p-0">
@@ -324,7 +332,33 @@ export function ModernApplicationCard({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Badge statut existant */}
             {getStatusBadge()}
+
+            {/* Badge post-visit à côté, en ligne */}
+            {application.visits && application.visits.length > 0 && (
+              <>
+                {/* Si une visite est completed => Visite effectuée */}
+                {application.visits.some((v: any) => v.status === "completed") && (
+                  <Badge className="bg-green-100 text-green-800 border-green-200">Visite effectuée</Badge>
+                )}
+                {/* sinon si confirmée => aussi "Visite effectuée" (selon votre règle) */}
+                {!application.visits.some((v: any) => v.status === "completed") &&
+                  application.visits.some((v: any) => v.status === "confirmed") && (
+                  <Badge className="bg-green-100 text-green-800 border-green-200">Visite effectuée</Badge>
+                )}
+                {/* Autres feedbacks proprio en badge synthétique */}
+                {application.visits.some((v: any) => v.owner_feedback?.generalImpression === "very_good") && (
+                  <Badge className="bg-green-100 text-green-800 border-green-200">Très bon profil</Badge>
+                )}
+                {application.visits.some((v: any) => v.owner_feedback?.generalImpression === "to_review") && (
+                  <Badge className="bg-amber-100 text-amber-800 border-amber-200">À revoir</Badge>
+                )}
+                {application.visits.some((v: any) => v.owner_feedback?.generalImpression === "not_retained") && (
+                  <Badge className="bg-red-100 text-red-800 border-red-200">Pas retenu</Badge>
+                )}
+              </>
+            )}
             <CircularScore score={calculatedScore} loading={false} showDetails={false} size="sm" />
           </div>
         </div>

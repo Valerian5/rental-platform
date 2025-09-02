@@ -1178,178 +1178,118 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Calendar className="h-5 w-5" />
-                  Gestion des visites
+                  Visites et retours
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Section des visites programmées */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Visites programmées</h3>
-                  {application.visits && application.visits.length > 0 ? (
-                    application.visits
-                      .filter((visit: any) => ["scheduled", "confirmed", "proposed"].includes(visit.status))
-                      .map((visit: any) => (
-                        <Card key={visit.id} className="border-l-4 border-l-blue-500">
-                          <CardContent className="p-4">
-                            <div className="flex items-center justify-between mb-3">
-                              <div className="flex items-center gap-2">
-                                <Clock className="h-4 w-4 text-blue-600" />
-                                <span className="font-medium">
-                                  {visit.visit_date && new Date(visit.visit_date).toLocaleDateString("fr-FR", {
-                                    weekday: "long",
-                                    year: "numeric",
-                                    month: "long",
-                                    day: "numeric",
-                                  })}
-                                </span>
+                {application.visits && application.visits.length > 0 ? (
+                  application.visits
+                    .sort((a: any, b: any) => new Date(b.visit_date).getTime() - new Date(a.visit_date).getTime())
+                    .map((visit: any) => (
+                      <Card key={visit.id} className="border-l-4 border-l-blue-500">
+                        <CardContent className="p-4 space-y-4">
+                          {/* En-tête visite */}
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm">
+                              <div className="font-medium">
+                                {new Date(visit.visit_date).toLocaleDateString("fr-FR", {
+                                  weekday: "long", year: "numeric", month: "long", day: "numeric",
+                                })}
                               </div>
-                              <Badge variant="outline">
-                                {visit.status === "scheduled" ? "Programmée" : 
-                                 visit.status === "confirmed" ? "Confirmée" : "Proposée"}
-                              </Badge>
+                              {(visit.start_time || visit.visit_time) && (
+                                <div className="text-muted-foreground">
+                                  {visit.start_time || visit.visit_time}
+                                  {visit.end_time ? ` - ${visit.end_time}` : ""}
+                                </div>
+                              )}
                             </div>
-                            
-                            {visit.visit_time && (
-                              <div className="text-sm text-muted-foreground mb-2">
-                                Horaire : {visit.visit_time}
-                              </div>
-                            )}
-                            
-                            {visit.notes && (
-                              <div className="text-sm text-muted-foreground mb-3">
-                                Notes : {visit.notes}
-                              </div>
-                            )}
-                            
-                            <div className="flex gap-2">
-                              <Button variant="outline" size="sm">
-                                <Calendar className="h-4 w-4 mr-2" />
-                                Modifier la visite
-                              </Button>
-                              <Button variant="outline" size="sm">
-                                <MessageSquare className="h-4 w-4 mr-2" />
-                                Contacter le candidat
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))
-                  ) : (
-                    <div className="text-center py-8">
-                      <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                      <p className="text-muted-foreground">Aucune visite programmée</p>
-                      <Button 
-                        onClick={handleProposeVisit} 
-                        className="mt-2"
-                        disabled={!application || application.status === "rejected"}
-                      >
-                        Proposer une visite
-                      </Button>
-                    </div>
-                  )}
-                </div>
+                            <Badge variant={visit.status === "completed" ? "outline" : visit.status === "cancelled" ? "destructive" : "default"}>
+                              {visit.status === "completed"
+                                ? "Visite effectuée"
+                                : visit.status === "confirmed"
+                                ? "Confirmée"
+                                : visit.status === "scheduled"
+                                ? "Programmée"
+                                : visit.status === "proposed"
+                                ? "Proposée"
+                                : "Annulée"}
+                            </Badge>
+                          </div>
 
-                {/* Section des visites terminées avec feedbacks */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Visites terminées</h3>
-                  {application.visits && application.visits.length > 0 ? (
-                    application.visits
-                      .filter((visit: any) => visit.status === "completed")
-                      .map((visit: any) => (
-                        <div key={visit.id} className="space-y-4">
-                          {/* Affichage du feedback propriétaire */}
+                          {/* Feedback propriétaire */}
                           {visit.owner_feedback && (
                             <Card className="border-l-4 border-l-green-500">
-                              <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                  <MessageSquare className="h-5 w-5 text-green-500" />
+                              <CardHeader className="py-3">
+                                <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+                                  <MessageSquare className="h-4 w-4 md:h-5 md:w-5 text-green-600" />
                                   Feedback propriétaire
                                 </CardTitle>
                               </CardHeader>
-                              <CardContent>
-                                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-3">
+                              <CardContent className="space-y-3">
+                                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+                                  <div><span className="text-muted-foreground">Ponctualité</span><div className="font-medium">
+                                    {visit.owner_feedback.punctuality === "early" ? "En avance" :
+                                     visit.owner_feedback.punctuality === "on_time" ? "À l'heure" : "En retard"}
+                                  </div></div>
+                                  <div><span className="text-muted-foreground">Présentation</span><div className="font-medium">
+                                    {visit.owner_feedback.presentation === "well_groomed" ? "Soigné" :
+                                     visit.owner_feedback.presentation === "correct" ? "Correct" : "Négligé"}
+                                  </div></div>
+                                  <div><span className="text-muted-foreground">Comportement</span><div className="font-medium">
+                                    {visit.owner_feedback.behavior === "polite_respectful" ? "Poli et respectueux" :
+                                     visit.owner_feedback.behavior === "correct" ? "Correct" : "Problématique"}
+                                  </div></div>
+                                  <div><span className="text-muted-foreground">Intérêt</span><div className="font-medium">
+                                    {visit.owner_feedback.interest === "very_interested" ? "Très intéressé" :
+                                     visit.owner_feedback.interest === "interested" ? "Intéressé" : "Peu intéressé"}
+                                  </div></div>
                                   <div>
-                                    <Label className="text-xs text-muted-foreground">Ponctualité</Label>
-                                    <p className="text-sm font-medium">
-                                      {visit.owner_feedback.punctuality === "early" ? "En avance" :
-                                       visit.owner_feedback.punctuality === "on_time" ? "À l'heure" : "En retard"}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <Label className="text-xs text-muted-foreground">Présentation</Label>
-                                    <p className="text-sm font-medium">
-                                      {visit.owner_feedback.presentation === "well_groomed" ? "Soigné" :
-                                       visit.owner_feedback.presentation === "correct" ? "Correct" : "Négligé"}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <Label className="text-xs text-muted-foreground">Comportement</Label>
-                                    <p className="text-sm font-medium">
-                                      {visit.owner_feedback.behavior === "polite_respectful" ? "Poli" :
-                                       visit.owner_feedback.behavior === "correct" ? "Correct" : "Problématique"}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <Label className="text-xs text-muted-foreground">Intérêt</Label>
-                                    <p className="text-sm font-medium">
-                                      {visit.owner_feedback.interest === "very_interested" ? "Très intéressé" :
-                                       visit.owner_feedback.interest === "interested" ? "Intéressé" : "Peu intéressé"}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <Label className="text-xs text-muted-foreground">Impression</Label>
-                                    {visit.owner_feedback.generalImpression === "very_good" && (
-                                      <Badge className="bg-green-100 text-green-800 border-green-200">Très bon profil</Badge>
-                                    )}
-                                    {visit.owner_feedback.generalImpression === "to_review" && (
-                                      <Badge className="bg-amber-100 text-amber-800 border-amber-200">À revoir</Badge>
-                                    )}
-                                    {visit.owner_feedback.generalImpression === "not_retained" && (
-                                      <Badge className="bg-red-100 text-red-800 border-red-200">Pas retenu</Badge>
-                                    )}
+                                    <span className="text-muted-foreground">Impression</span>
+                                    <div className="mt-1">
+                                      {visit.owner_feedback.generalImpression === "very_good" && (
+                                        <Badge className="bg-green-100 text-green-800 border-green-200">Très bon profil</Badge>
+                                      )}
+                                      {visit.owner_feedback.generalImpression === "to_review" && (
+                                        <Badge className="bg-amber-100 text-amber-800 border-amber-200">À revoir</Badge>
+                                      )}
+                                      {visit.owner_feedback.generalImpression === "not_retained" && (
+                                        <Badge className="bg-red-100 text-red-800 border-red-200">Pas retenu</Badge>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                                 {visit.owner_feedback.comment && (
-                                  <div className="bg-gray-50 p-3 rounded-md">
-                                    <p className="text-sm text-gray-700">{visit.owner_feedback.comment}</p>
-                                  </div>
+                                  <div className="text-sm bg-gray-50 p-3 rounded-md">{visit.owner_feedback.comment}</div>
                                 )}
                               </CardContent>
                             </Card>
                           )}
 
-                          {/* Affichage du feedback locataire */}
+                          {/* Feedback locataire */}
                           {visit.tenant_feedback && (
                             <Card className="border-l-4 border-l-blue-500">
-                              <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                  <MessageSquare className="h-5 w-5 text-blue-500" />
+                              <CardHeader className="py-3">
+                                <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+                                  <MessageSquare className="h-4 w-4 md:h-5 md:w-5 text-blue-600" />
                                   Feedback locataire
                                 </CardTitle>
                               </CardHeader>
-                              <CardContent>
-                                <div className="flex items-center justify-between mb-3">
-                                  <span className="text-sm font-medium">Intérêt :</span>
+                              <CardContent className="space-y-2 text-sm">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-muted-foreground">Intérêt:</span>
                                   {visit.tenant_feedback.interest === "yes" && (
-                                    <Badge className="bg-green-100 text-green-800 border-green-200">
-                                      Oui, je souhaite déposer un dossier
-                                    </Badge>
+                                    <Badge className="bg-green-100 text-green-800 border-green-200">Oui, souhaite déposer un dossier</Badge>
                                   )}
                                   {visit.tenant_feedback.interest === "unsure" && (
-                                    <Badge className="bg-amber-100 text-amber-800 border-amber-200">
-                                      Pas sûr, j'hésite
-                                    </Badge>
+                                    <Badge className="bg-amber-100 text-amber-800 border-amber-200">Pas sûr, hésite</Badge>
                                   )}
                                   {visit.tenant_feedback.interest === "no" && (
-                                    <Badge className="bg-red-100 text-red-800 border-red-200">
-                                      Non, pas intéressé
-                                    </Badge>
+                                    <Badge className="bg-red-100 text-red-800 border-red-200">Non, pas intéressé</Badge>
                                   )}
                                 </div>
-                                
                                 {visit.tenant_feedback.comment && (
-                                  <div className="bg-blue-50 p-3 rounded-md">
-                                    <p className="text-sm text-blue-700">{visit.tenant_feedback.comment}</p>
+                                  <div className="text-sm bg-blue-50 p-3 rounded-md text-blue-700">
+                                    {visit.tenant_feedback.comment}
                                   </div>
                                 )}
                               </CardContent>
@@ -1420,86 +1360,85 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
                           )}
                         </div>
                       ))
-                  ) : (
-                    <div className="text-center py-4">
-                      <p className="text-muted-foreground">Aucune visite terminée</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Section des statistiques de visite */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <Card>
-                    <CardContent className="p-4 text-center">
-                      <div className="text-2xl font-bold text-blue-600">
-                        {application.visits?.filter((v: any) => ["scheduled", "confirmed"].includes(v.status)).length || 0}
-                      </div>
-                      <p className="text-sm text-muted-foreground">Visites programmées</p>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card>
-                    <CardContent className="p-4 text-center">
-                      <div className="text-2xl font-bold text-green-600">
-                        {application.visits?.filter((v: any) => v.status === "completed").length || 0}
-                      </div>
-                      <p className="text-sm text-muted-foreground">Visites terminées</p>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card>
-                    <CardContent className="p-4 text-center">
-                      <div className="text-2xl font-bold text-purple-600">
-                        {application.visits?.filter((v: any) => v.tenant_feedback?.interest === "yes").length || 0}
-                      </div>
-                      <p className="text-sm text-muted-foreground">Candidats intéressés</p>
-                    </CardContent>
-                  </Card>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Documents */}
-          <TabsContent value="documents" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Documents fournis
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {user && (
-                  <TenantAndGuarantorDocumentsSection
-                    applicationId={application.id}
-                    mainTenant={rentalFile?.main_tenant}
-                    guarantors={rentalFile?.guarantors || []}
-                    userId={user.id}
-                    userName={`${user.first_name} ${user.last_name}`}
-                    rentalFile={rentalFile}
-                  />
+                ) : (
+                  <div className="text-muted-foreground">Aucune visite</div>
                 )}
               </CardContent>
             </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
 
-      {/* Dialogue de proposition de visite */}
-      {showVisitDialog && currentApplication && (
-        <VisitProposalManager
-          isOpen={showVisitDialog}
-          onClose={() => setShowVisitDialog(false)}
-          propertyId={currentApplication.property_id}
-          propertyTitle={currentApplication.property?.title || ""}
-          applicationId={currentApplication.id}
-          tenantName={`${currentApplication.tenant?.first_name || ""} ${currentApplication.tenant?.last_name || ""}`}
-          onSlotsProposed={handleVisitProposed}
-        />
-      )}
-    </>
-  )
+            {/* Section des statistiques de visite */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card>
+                <CardContent className="p-4 text-center">
+                  <div className="text-2xl font-bold text-blue-600">
+                    {application.visits?.filter((v: any) => ["scheduled", "confirmed"].includes(v.status)).length || 0}
+                  </div>
+                  <p className="text-sm text-muted-foreground">Visites programmées</p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardContent className="p-4 text-center">
+                  <div className="text-2xl font-bold text-green-600">
+                    {application.visits?.filter((v: any) => v.status === "completed").length || 0}
+                  </div>
+                  <p className="text-sm text-muted-foreground">Visites terminées</p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardContent className="p-4 text-center">
+                  <div className="text-2xl font-bold text-purple-600">
+                    {application.visits?.filter((v: any) => v.tenant_feedback?.interest === "yes").length || 0}
+                  </div>
+                  <p className="text-sm text-muted-foreground">Candidats intéressés</p>
+                </CardContent>
+              </Card>
+            </div>
+          </CardContent>
+        </Card>
+      </TabsContent>
+
+      {/* Documents */}
+      <TabsContent value="documents" className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Documents fournis
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {user && (
+              <TenantAndGuarantorDocumentsSection
+                applicationId={application.id}
+                mainTenant={rentalFile?.main_tenant}
+                guarantors={rentalFile?.guarantors || []}
+                userId={user.id}
+                userName={`${user.first_name} ${user.last_name}`}
+                rentalFile={rentalFile}
+              />
+            )}
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </Tabs>
+  </div>
+
+  {/* Dialogue de proposition de visite */}
+  {showVisitDialog && currentApplication && (
+    <VisitProposalManager
+      isOpen={showVisitDialog}
+      onClose={() => setShowVisitDialog(false)}
+      propertyId={currentApplication.property_id}
+      propertyTitle={currentApplication.property?.title || ""}
+      applicationId={currentApplication.id}
+      tenantName={`${currentApplication.tenant?.first_name || ""} ${currentApplication.tenant?.last_name || ""}`}
+      onSlotsProposed={handleVisitProposed}
+    />
+  )}
+</>
+)
 }
 
 function flattenDocuments(application: any): any[] {
