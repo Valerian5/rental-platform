@@ -118,6 +118,7 @@ export function ModernApplicationCard({
     }
   }
 
+  // Gère les statuts de base de l'application
   const getStatusBadge = () => {
     switch (application.status) {
       case "pending":
@@ -156,6 +157,18 @@ export function ModernApplicationCard({
     }
   }
 
+  // **NOUVELLE FONCTION** - Détermine le badge de statut principal à afficher
+  const getPrimaryStatusBadge = () => {
+    const hasCompletedVisit = application.visits?.some(v => v.status === "completed")
+
+    if (hasCompletedVisit) {
+      return <Badge className="bg-green-100 text-green-800 border-green-200">Visite effectuée</Badge>
+    }
+
+    // Sinon, on retourne le statut normal de la candidature
+    return getStatusBadge()
+  }
+
   const getRentalSituationInfo = () => {
     if (!application.rental_situation) return null
 
@@ -185,6 +198,8 @@ export function ModernApplicationCard({
         return null
     }
   }
+  
+  // ... (le reste des fonctions getActionButtons, etc. ne change pas)
 
   const PrimaryActionButton = () => {
     switch (application.status) {
@@ -269,6 +284,7 @@ export function ModernApplicationCard({
     return actions
   }
 
+
   return (
     <Card className={`overflow-hidden transition-all ${isSelected ? "border-blue-500 shadow-md" : ""}`}>
       <CardContent className="p-0">
@@ -298,34 +314,27 @@ export function ModernApplicationCard({
 
           {/* Right section: Status Badges & Score - Stacks on mobile */}
           <div className="flex flex-wrap gap-2 justify-end sm:justify-start w-full sm:w-auto">
-            {getStatusBadge()}
+            
+            {/* **MODIFICATION** - On appelle la nouvelle fonction ici */}
+            {getPrimaryStatusBadge()}
 
-            {application.visits && application.visits.length > 0 && (
-              <>
-                {application.visits.some((v: any) => v.status === "completed") && (
-                  <Badge className="bg-green-100 text-green-800 border-green-200">Visite effectuée</Badge>
-                )}
-                {!application.visits.some((v: any) => v.status === "completed") &&
-                  application.visits.some((v: any) => v.status === "confirmed") && (
-                    <Badge className="bg-green-100 text-green-800 border-green-200">Visite effectuée</Badge>
-                  )}
-                {application.visits.some((v: any) => v.owner_feedback?.generalImpression === "very_good") && (
-                  <Badge className="bg-green-100 text-green-800 border-green-200">Très bon profil</Badge>
-                )}
-                {application.visits.some((v: any) => v.owner_feedback?.generalImpression === "to_review") && (
-                  <Badge className="bg-amber-100 text-amber-800 border-amber-200">À revoir</Badge>
-                )}
-                {application.visits.some((v: any) => v.owner_feedback?.generalImpression === "not_retained") && (
-                  <Badge className="bg-red-100 text-red-800 border-red-200">Pas retenu</Badge>
-                )}
-                {application.visits.some((v: any) => v.tenant_feedback?.interest === "yes") && (
-                  <Badge className="bg-blue-100 text-blue-800 border-blue-200">Intéressé</Badge>
-                )}
-                {application.visits.some((v: any) => v.tenant_feedback?.interest === "no") && (
-                  <Badge className="bg-red-100 text-red-800 border-red-200">Pas intéressé</Badge>
-                )}
-              </>
+            {/* Badges de feedback (restent inchangés) */}
+            {application.visits?.some((v: any) => v.owner_feedback?.generalImpression === "very_good") && (
+              <Badge className="bg-green-100 text-green-800 border-green-200">Très bon profil</Badge>
             )}
+            {application.visits?.some((v: any) => v.owner_feedback?.generalImpression === "to_review") && (
+              <Badge className="bg-amber-100 text-amber-800 border-amber-200">À revoir</Badge>
+            )}
+            {application.visits?.some((v: any) => v.owner_feedback?.generalImpression === "not_retained") && (
+              <Badge className="bg-red-100 text-red-800 border-red-200">Pas retenu</Badge>
+            )}
+            {application.visits?.some((v: any) => v.tenant_feedback?.interest === "yes") && (
+              <Badge className="bg-blue-100 text-blue-800 border-blue-200">Intéressé</Badge>
+            )}
+            {application.visits?.some((v: any) => v.tenant_feedback?.interest === "no") && (
+              <Badge className="bg-red-100 text-red-800 border-red-200">Pas intéressé</Badge>
+            )}
+
             <CircularScore score={calculatedScore} loading={false} showDetails={false} size="sm" />
           </div>
         </div>
