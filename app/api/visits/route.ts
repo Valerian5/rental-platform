@@ -178,6 +178,37 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
+    // NOUVELLE LOGIQUE : Mettre à jour le statut de la candidature si un feedback est ajouté
+    if (data && (updateData.owner_feedback || updateData.tenant_feedback)) {
+      try {
+        // Récupérer l'application associée à cette visite
+        const { data: application, error: appError } = await supabase
+          .from("applications")
+          .select("id, status")
+          .eq("id", data.application_id)
+          .single()
+
+        if (!appError && application && application.status !== "visit_done") {
+          // Mettre à jour le statut de la candidature vers "visit_done"
+          const { error: updateAppError } = await supabase
+            .from("applications")
+            .update({
+              status: "visit_done",
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", data.application_id)
+
+          if (updateAppError) {
+            console.error("❌ Erreur mise à jour statut candidature:", updateAppError)
+          } else {
+            console.log("✅ Statut candidature mis à jour vers 'visit_done' pour l'application:", data.application_id)
+          }
+        }
+      } catch (updateError) {
+        console.error("❌ Erreur lors de la mise à jour du statut de candidature:", updateError)
+      }
+    }
+
     if (data && updateData.status && ["cancelled", "completed"].includes(updateData.status)) {
       try {
         // Get visit details with tenant and property info
