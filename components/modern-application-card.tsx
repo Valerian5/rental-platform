@@ -25,7 +25,8 @@ import {
   AlertTriangle,
   MoreVertical,
   UserCheck,
-  Home, // Ajout de l'icône Home
+  Home,
+  Trash2, // Ajout pour le statut 'withdrawn'
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import {
@@ -164,6 +165,13 @@ export function ModernApplicationCard({
             En attente du locataire
           </Badge>
         )
+       case "confirmed_by_tenant":
+           return (
+            <Badge variant="default" className="bg-teal-100 text-teal-800 hover:bg-teal-200">
+                <UserCheck className="h-3 w-3 mr-1" />
+                Confirmé par locataire
+            </Badge>
+            )
       case "accepted":
       case "approved":
         return (
@@ -199,14 +207,8 @@ export function ModernApplicationCard({
             Bail créé
           </Badge>
         )
-      case "confirmed_by_tenant":
-           return (
-            <Badge variant="default" className="bg-teal-100 text-teal-800 hover:bg-teal-200">
-                Confirmé par locataire
-            </Badge>
-            )
       default:
-        return <Badge variant="outline">Statut inconnu</Badge>
+        return <Badge variant="outline">{application.status}</Badge>
     }
   }
 
@@ -244,18 +246,17 @@ export function ModernApplicationCard({
 
     switch (application.status) {
       case "analyzing":
-      case "visit_done":
         return (
           <Button size="sm" variant="default" onClick={() => handleAction("propose_visit")}>
             <Calendar className="h-4 w-4 mr-1" />
             Proposer visite
           </Button>
         )
-      case "visit_scheduled":
+      case "visit_done":
         return (
           <Button size="sm" variant="default" onClick={() => handleAction("accept")}>
             <CheckCircle className="h-4 w-4 mr-1" />
-            Accepter
+            Accepter le dossier
           </Button>
         )
       case "accepted":
@@ -287,14 +288,14 @@ export function ModernApplicationCard({
         return (
           <Button size="sm" variant="outline" disabled>
             <Clock className="h-4 w-4 mr-1" />
-            Attente confirmation
+            Attente locataire
           </Button>
         )
       default:
         return (
           <Button
             size="sm"
-            variant="default"
+            variant="outline"
             onClick={() => router.push(`/owner/applications/${application.id}`)}
           >
             <Eye className="h-4 w-4 mr-1" />
@@ -360,7 +361,6 @@ export function ModernApplicationCard({
           </div>
           <div className="flex flex-wrap gap-2 justify-end sm:justify-start w-full sm:w-auto">
             {getPrimaryStatusBadge()}
-            {/* Badges de feedback additionnels */}
             {application.visits?.some(
               (v: any) => v.owner_feedback?.generalImpression === "very_good"
             ) && (
@@ -386,7 +386,6 @@ export function ModernApplicationCard({
                 Pas intéressé
               </Badge>
             )}
-
             <CircularScore
               score={calculatedScore}
               loading={false}
@@ -395,7 +394,6 @@ export function ModernApplicationCard({
             />
           </div>
         </div>
-
         <div className="px-4 pb-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm">
           <div className="flex items-center gap-1">
             <Building className="h-3.5 w-3.5 text-muted-foreground" />
@@ -420,7 +418,6 @@ export function ModernApplicationCard({
             </div>
           )}
         </div>
-
         {expanded && (
           <div className="px-4 py-2 bg-gray-50 border-t text-sm">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
@@ -476,7 +473,6 @@ export function ModernApplicationCard({
             </div>
           </div>
         )}
-
         <div className="px-4 py-3 border-t flex flex-col sm:flex-row items-center justify-between gap-2">
           <Button
             variant="ghost"
@@ -494,7 +490,6 @@ export function ModernApplicationCard({
               </>
             )}
           </Button>
-
           <div className="flex gap-2 w-full sm:w-auto">
             <PrimaryActionButton />
             {getDropdownActions().length > 0 && (

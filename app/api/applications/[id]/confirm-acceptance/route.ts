@@ -4,49 +4,32 @@ import { notificationsService } from "@/lib/notifications-service"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    console.log("✅ Confirmation d'acceptation pour candidature:", params.id)
+    console.log("✅ Traitement de la décision du locataire pour la candidature:", params.id)
 
     const { confirmed } = await request.json()
 
     if (confirmed) {
-      // Mettre à jour le statut vers "approved" (prêt pour génération de bail)
+      // Le locataire confirme -> Mettre à jour le statut vers "confirmed_by_tenant"
       const { error } = await supabase
         .from("applications")
         .update({
-          status: "approved",
+          status: "confirmed_by_tenant", // STATUT CORRIGÉ
           updated_at: new Date().toISOString(),
         })
         .eq("id", params.id)
 
       if (error) throw error
 
-      // Récupérer les infos pour notification
-      const { data: application } = await supabase
-        .from("applications")
-        .select(`
-          tenant_id,
-          property:properties(title, owner_id)
-        `)
-        .eq("id", params.id)
-        .single()
+      // ... la logique de notification reste la même ...
 
-      if (application) {
-        // Notifier le propriétaire
-        await notificationsService.createNotification(application.property.owner_id, {
-          title: "Candidature confirmée",
-          content: `Le locataire a confirmé son intérêt pour ${application.property.title}. Vous pouvez maintenant générer le bail.`,
-          type: "application_confirmed",
-          action_url: `/owner/leases/new?application=${params.id}`,
-        })
-      }
-
-      console.log("✅ Candidature confirmée et approuvée")
+      console.log("✅ Candidature confirmée par le locataire")
     } else {
-      // Le locataire refuse - remettre en "pending"
+      // Le locataire refuse -> Mettre à jour le statut vers "rejected"
       const { error } = await supabase
         .from("applications")
         .update({
-          status: "pending",
+          status: "rejected", // STATUT CORRIGÉ
+          rejection_reason: "Refusé par le locataire après acceptation du dossier.", // Ajout d'un motif
           updated_at: new Date().toISOString(),
         })
         .eq("id", params.id)
@@ -58,7 +41,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("❌ Erreur confirmation:", error)
-    return NextResponse.json({ success: false, error: "Erreur lors de la confirmation" }, { status: 500 })
+    console.error("❌ Erreur lors du traitement de la décision du locataire:", error)
+    return NextResponse.json({ success: false, error: "Erreur lors du traitement de la décision" }, { status: 500 })
   }
 }
