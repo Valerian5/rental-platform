@@ -504,3 +504,66 @@ export async function sendAdminInvitationEmail(
     ]),
   )
 }
+
+export async function sendWaitingTenantConfirmationEmailToTenant(
+  tenant: User,
+  property: Property,
+  confirmUrl: string,
+  ownerName?: string,
+  logoUrl?: string,
+) {
+  await sendEmail(
+    tenant,
+    NotificationType.APPLICATION_STATUS_UPDATE,
+    `Confirmez votre candidature pour "${property.title}"`,
+    React.createElement("div", {}, [
+      React.createElement("h2", { key: "t" }, "Votre dossier a été retenu"),
+      React.createElement("p", { key: "p1" }, `Bonjour ${tenant.name},`),
+      React.createElement("p", { key: "p2" }, `Félicitations, votre dossier a été retenu${ownerName ? ` par ${ownerName}` : ""} pour "${property.title}".`),
+      React.createElement("p", { key: "p3" }, "Veuillez confirmer votre choix afin que le propriétaire puisse générer le bail."),
+      React.createElement("a", { key: "cta", href: confirmUrl, style: { background: "#2563eb", color: "#fff", padding: "10px 16px", borderRadius: 6, textDecoration: "none", display: "inline-block", marginTop: 16 } }, "Confirmer maintenant"),
+    ]),
+  )
+}
+
+export async function sendTenantConfirmedApplicationEmailToOwner(
+  owner: User,
+  tenantName: string,
+  property: Property,
+  manageUrl: string,
+  logoUrl?: string,
+) {
+  await sendEmail(
+    owner,
+    NotificationType.APPLICATION_STATUS_UPDATE,
+    `Le locataire a confirmé pour "${property.title}"`,
+    React.createElement("div", {}, [
+      React.createElement("h2", { key: "t" }, "Confirmation du locataire"),
+      React.createElement("p", { key: "p1" }, `Bonjour ${owner.name},`),
+      React.createElement("p", { key: "p2" }, `${tenantName} a confirmé vouloir louer "${property.title}".`),
+      React.createElement("a", { key: "cta", href: manageUrl, style: { background: "#16a34a", color: "#fff", padding: "10px 16px", borderRadius: 6, textDecoration: "none", display: "inline-block", marginTop: 16 } }, "Générer le bail"),
+    ]),
+  )
+}
+
+export async function sendTenantRefusedApplicationEmailToOwner(
+  owner: User,
+  tenantName: string,
+  property: Property,
+  reason: string | undefined,
+  manageUrl: string,
+  logoUrl?: string,
+) {
+  await sendEmail(
+    owner,
+    NotificationType.APPLICATION_STATUS_UPDATE,
+    `Le locataire a refusé pour "${property.title}"`,
+    React.createElement("div", {}, [
+      React.createElement("h2", { key: "t" }, "Refus du locataire"),
+      React.createElement("p", { key: "p1" }, `Bonjour ${owner.name},`),
+      React.createElement("p", { key: "p2" }, `${tenantName} a refusé la location pour "${property.title}".`),
+      reason ? React.createElement("p", { key: "p3" }, `Motif : ${reason}`) : null,
+      React.createElement("a", { key: "cta", href: manageUrl, style: { background: "#6b7280", color: "#fff", padding: "10px 16px", borderRadius: 6, textDecoration: "none", display: "inline-block", marginTop: 16 } }, "Voir la candidature"),
+    ]),
+  )
+}

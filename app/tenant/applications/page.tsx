@@ -35,6 +35,7 @@ import {
   RefreshCw,
   CalendarCheck,
 } from "lucide-react"
+import { TenantApplicationConfirmBanner } from "@/components/tenant-application-confirm-banner"
 
 interface Application {
   id: string
@@ -64,6 +65,12 @@ interface Application {
       url: string
       is_primary: boolean
     }>
+    owner?: {
+      id: string
+      first_name: string
+      last_name: string
+      email: string
+    }
   }
   proposed_visit_slots?: Array<{
     id: string
@@ -364,131 +371,141 @@ export default function TenantApplicationsPage() {
         ) : (
           <div className="space-y-6">
             {applications.map((application) => (
-              <Card key={application.id} className="overflow-hidden">
-                <CardContent className="p-0">
-                  <div className="grid md:grid-cols-4 gap-0">
-                    {/* Image du bien - taille réduite */}
-                    <div className="relative">
-                      <div className="aspect-video md:aspect-[4/3] relative overflow-hidden">
-                        <img
-                          src={getMainImage(application.property) || "/placeholder.svg"}
-                          alt={application.property?.title || "Propriété"}
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute top-2 left-2">{getStatusBadge(application.status)}</div>
+              <div key={application.id} className="space-y-3">
+                {/* ta carte existante, ex ModernApplicationCard */}
+                <TenantApplicationConfirmBanner
+                  applicationId={application.id}
+                  propertyTitle={application.property?.title || "Ce logement"}
+                  ownerName={application.property?.owner
+                    ? `${application.property.owner.first_name} ${application.property.owner.last_name}`
+                    : undefined}
+                />
+                <Card className="overflow-hidden">
+                  <CardContent className="p-0">
+                    <div className="grid md:grid-cols-4 gap-0">
+                      {/* Image du bien - taille réduite */}
+                      <div className="relative">
+                        <div className="aspect-video md:aspect-[4/3] relative overflow-hidden">
+                          <img
+                            src={getMainImage(application.property) || "/placeholder.svg"}
+                            alt={application.property?.title || "Propriété"}
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute top-2 left-2">{getStatusBadge(application.status)}</div>
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Contenu principal - plus d'espace */}
-                    <div className="md:col-span-3 p-6">
-                      <div className="flex flex-col h-full">
-                        {/* En-tête */}
-                        <div className="flex-1">
-                          <div className="flex items-start justify-between mb-4">
-                            <div className="flex-1">
-                              <h3 className="text-xl font-semibold mb-2">
-                                {application.property?.title || "Propriété inconnue"}
-                              </h3>
-                              <div className="flex items-center text-muted-foreground mb-2">
-                                <MapPin className="h-4 w-4 mr-1" />
-                                <span className="text-sm">
-                                  {application.property?.address || "Adresse inconnue"},{" "}
-                                  {application.property?.city || ""} {application.property?.postal_code || ""}
-                                </span>
+                      {/* Contenu principal - plus d'espace */}
+                      <div className="md:col-span-3 p-6">
+                        <div className="flex flex-col h-full">
+                          {/* En-tête */}
+                          <div className="flex-1">
+                            <div className="flex items-start justify-between mb-4">
+                              <div className="flex-1">
+                                <h3 className="text-xl font-semibold mb-2">
+                                  {application.property?.title || "Propriété inconnue"}
+                                </h3>
+                                <div className="flex items-center text-muted-foreground mb-2">
+                                  <MapPin className="h-4 w-4 mr-1" />
+                                  <span className="text-sm">
+                                    {application.property?.address || "Adresse inconnue"},{" "}
+                                    {application.property?.city || ""} {application.property?.postal_code || ""}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
+                                  {application.property?.bedrooms && (
+                                    <div className="flex items-center gap-1">
+                                      <Bed className="h-4 w-4" />
+                                      <span>{application.property.bedrooms} ch.</span>
+                                    </div>
+                                  )}
+                                  {application.property?.bathrooms && (
+                                    <div className="flex items-center gap-1">
+                                      <Bath className="h-4 w-4" />
+                                      <span>{application.property.bathrooms} sdb</span>
+                                    </div>
+                                  )}
+                                  {application.property?.surface && (
+                                    <div className="flex items-center gap-1">
+                                      <Square className="h-4 w-4" />
+                                      <span>{application.property.surface} m²</span>
+                                    </div>
+                                  )}
+                                </div>
+                                <p className="text-2xl font-bold text-green-600">
+                                  {formatAmount(application.property?.price || 0)}
+                                  <span className="text-sm font-normal text-muted-foreground">/mois</span>
+                                </p>
                               </div>
-                              <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
-                                {application.property?.bedrooms && (
-                                  <div className="flex items-center gap-1">
-                                    <Bed className="h-4 w-4" />
-                                    <span>{application.property.bedrooms} ch.</span>
-                                  </div>
-                                )}
-                                {application.property?.bathrooms && (
-                                  <div className="flex items-center gap-1">
-                                    <Bath className="h-4 w-4" />
-                                    <span>{application.property.bathrooms} sdb</span>
-                                  </div>
-                                )}
-                                {application.property?.surface && (
-                                  <div className="flex items-center gap-1">
-                                    <Square className="h-4 w-4" />
-                                    <span>{application.property.surface} m²</span>
-                                  </div>
-                                )}
-                              </div>
-                              <p className="text-2xl font-bold text-green-600">
-                                {formatAmount(application.property?.price || 0)}
-                                <span className="text-sm font-normal text-muted-foreground">/mois</span>
-                              </p>
+                            </div>
+
+                            {/* Message de statut */}
+                            <Alert className="mb-4">
+                              <AlertDescription>{getStatusMessage(application)}</AlertDescription>
+                            </Alert>
+
+                            {/* Bouton pour choisir un créneau de visite */}
+                            {application.status === "visit_proposed" &&
+                              application.proposed_visit_slots &&
+                              application.proposed_visit_slots.length > 0 && (
+                                <div className="mb-4">
+                                  <Button
+                                    onClick={() => handleOpenVisitSlotSelector(application)}
+                                    className="w-full"
+                                    size="lg"
+                                  >
+                                    <Calendar className="h-4 w-4 mr-2" />
+                                    Choisir un créneau de visite
+                                    <Badge variant="secondary" className="ml-2">
+                                      {application.proposed_visit_slots.length} disponible
+                                      {application.proposed_visit_slots.length > 1 ? "s" : ""}
+                                    </Badge>
+                                  </Button>
+                                </div>
+                              )}
+
+                            {/* Informations de candidature */}
+                            <div className="text-sm text-muted-foreground mb-4">
+                              <p>Candidature envoyée le {formatDate(application.created_at)}</p>
+                              {application.updated_at !== application.created_at && (
+                                <p>Dernière mise à jour le {formatDate(application.updated_at)}</p>
+                              )}
                             </div>
                           </div>
 
-                          {/* Message de statut */}
-                          <Alert className="mb-4">
-                            <AlertDescription>{getStatusMessage(application)}</AlertDescription>
-                          </Alert>
+                          {/* Actions */}
+                          <div className="flex items-center justify-between pt-4 border-t">
+                            <Button
+                              variant="outline"
+                              onClick={() => router.push(`/properties/${application.property?.id}`)}
+                            >
+                              <Eye className="h-4 w-4 mr-2" />
+                              Voir le logement
+                            </Button>
 
-                          {/* Bouton pour choisir un créneau de visite */}
-                          {application.status === "visit_proposed" &&
-                            application.proposed_visit_slots &&
-                            application.proposed_visit_slots.length > 0 && (
-                              <div className="mb-4">
-                                <Button
-                                  onClick={() => handleOpenVisitSlotSelector(application)}
-                                  className="w-full"
-                                  size="lg"
-                                >
-                                  <Calendar className="h-4 w-4 mr-2" />
-                                  Choisir un créneau de visite
-                                  <Badge variant="secondary" className="ml-2">
-                                    {application.proposed_visit_slots.length} disponible
-                                    {application.proposed_visit_slots.length > 1 ? "s" : ""}
-                                  </Badge>
-                                </Button>
-                              </div>
-                            )}
-
-                          {/* Informations de candidature */}
-                          <div className="text-sm text-muted-foreground mb-4">
-                            <p>Candidature envoyée le {formatDate(application.created_at)}</p>
-                            {application.updated_at !== application.created_at && (
-                              <p>Dernière mise à jour le {formatDate(application.updated_at)}</p>
+                            {canWithdraw(application.status) && (
+                              <Button
+                                variant="outline"
+                                onClick={() =>
+                                  setWithdrawDialog({
+                                    isOpen: true,
+                                    applicationId: application.id,
+                                    propertyTitle: application.property?.title || "Propriété",
+                                  })
+                                }
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Retirer
+                              </Button>
                             )}
                           </div>
                         </div>
-
-                        {/* Actions */}
-                        <div className="flex items-center justify-between pt-4 border-t">
-                          <Button
-                            variant="outline"
-                            onClick={() => router.push(`/properties/${application.property?.id}`)}
-                          >
-                            <Eye className="h-4 w-4 mr-2" />
-                            Voir le logement
-                          </Button>
-
-                          {canWithdraw(application.status) && (
-                            <Button
-                              variant="outline"
-                              onClick={() =>
-                                setWithdrawDialog({
-                                  isOpen: true,
-                                  applicationId: application.id,
-                                  propertyTitle: application.property?.title || "Propriété",
-                                })
-                              }
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Retirer
-                            </Button>
-                          )}
-                        </div>
                       </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </div>
             ))}
           </div>
         )}

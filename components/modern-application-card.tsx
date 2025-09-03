@@ -262,6 +262,11 @@ export function ModernApplicationCard({
           </div>
           <div className="flex flex-wrap gap-2 justify-end sm:justify-start w-full sm:w-auto">
             {getPrimaryStatusBadge()}
+            {application.status === "waiting_tenant_confirmation" && (
+              <Badge className="bg-amber-100 text-amber-800 border-amber-200">
+                En attente confirmation locataire
+              </Badge>
+            )}
             
             {/* Badges de feedback additionnels */}
             {application.visits?.some((v: any) => v.owner_feedback?.generalImpression === "very_good") && (

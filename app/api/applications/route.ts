@@ -310,3 +310,75 @@ export async function DELETE(request: NextRequest) {
 		return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
 	}
 }
+
+export async function PATCH(request: NextRequest) {
+	try {
+		const body = await request.json()
+		const { id, status, notes } = body as { id: string; status?: string; notes?: string }
+
+		if (!id) return NextResponse.json({ error: "id requis" }, { status: 400 })
+
+		// Récupérer la candidature + tenant + property + owner (avec client normal)
+		const { data: app, error: appErr } = await supabase
+			.from("applications")
+			.select("*, tenant:users!applications_tenant_id_fkey(*), property:properties(*, owner:users(*))")
+			.eq("id", id)
+			.single()
+
+		if (appErr || !app) {
+			console.error("❌ Application introuvable:", appErr)
+			return NextResponse.json({ error: "Application introuvable" }, { status: 404 })
+		}
+
+		let update: any = { updated_at: new Date().toISOString() }
+		let sendTenantWaitingEmail = false
+
+		// Cas demandé: le proprio “accepte” → on bascule en attente confirmation locataire
+		if (status === "accepted") {
+			update.status = "waiting_tenant_confirmation"
+			update.tenant_confirmation_status = "pending"
+			update.tenant_refusal_reason = null
+			update.tenant_confirmed_at = null
+			if (notes) update.notes = notes
+			sendTenantWaitingEmail = true
+		} else if (status) {
+			// Autres updates de statut classiques
+			update.status = status
+			if (notes) update.notes = notes
+		} else if (notes) {
+			update.notes = notes
+		}
+
+		const { data: updated, error: updErr } = await supabase
+			.from("applications")
+			.update(update)
+			.eq("id", id)
+			.select()
+			.single()
+
+		if (updErr) {
+			console.error("❌ Erreur update application:", updErr)
+			return NextResponse.json({ error: updErr.message }, { status: 400 })
+		}
+
+		// Email au locataire pour lui demander de confirmer
+		if (sendTenantWaitingEmail && app.tenant?.email && app.property) {
+			try {
+				const confirmUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/tenant/applications`
+				await sendWaitingTenantConfirmationEmailToTenant(
+					{ id: app.tenant.id, name: `${app.tenant.first_name} ${app.tenant.last_name}`, email: app.tenant.email },
+					{ id: app.property.id, title: app.property.title, address: app.property.address },
+					confirmUrl,
+					app.property.owner ? `${app.property.owner.first_name} ${app.property.owner.last_name}` : undefined,
+				)
+			} catch (e) {
+				console.error("❌ Erreur envoi email attente confirmation locataire:", e)
+			}
+		}
+
+		return NextResponse.json({ application: updated })
+	} catch (error) {
+		console.error("❌ Erreur API applications PATCH:", error)
+		return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+	}
+}

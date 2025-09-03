@@ -600,6 +600,11 @@ export default function ApplicationDetailsPage({ params }: { params: { id: strin
       >
         <div className="flex items-center gap-2">
           {getStatusBadge()}
+          {application.status === "waiting_tenant_confirmation" && (
+            <Badge className="bg-amber-100 text-amber-800 border-amber-200">
+              En attente confirmation locataire
+            </Badge>
+          )}
           <Button variant="ghost" onClick={() => router.back()}>
             <ArrowLeft className="mr-2 h-4 w-4" />
             Retour
