@@ -34,6 +34,7 @@ import {
   AlertTriangle,
   RefreshCw,
   CalendarCheck,
+  Home,
 } from "lucide-react"
 import { TenantApplicationConfirmBanner } from "@/components/tenant-application-confirm-banner"
 
@@ -258,6 +259,20 @@ export default function TenantApplicationsPage() {
             Visite planifiée
           </Badge>
         )
+      case "visit_done":
+        return (
+          <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+            <Home className="h-3 w-3 mr-1" />
+            Visite effectuée
+          </Badge>
+        )
+      case "waiting_tenant_confirmation":
+        return (
+          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+            <Clock className="h-3 w-3 mr-1" />
+            En attente de votre confirmation
+          </Badge>
+        )
       case "accepted":
       case "approved":
         return (
@@ -295,6 +310,10 @@ export default function TenantApplicationsPage() {
         return "Bonne nouvelle ! Le propriétaire vous propose des créneaux de visite. Cliquez sur le bouton ci-dessous pour choisir votre créneau."
       case "visit_scheduled":
         return "Votre visite est confirmée ! Vous recevrez bientôt les détails par email."
+      case "visit_done":
+        return "Vous avez effectué la visite pour ce bien. Le propriétaire va maintenant prendre sa décision finale."
+      case "waiting_tenant_confirmation":
+        return "Félicitations ! Votre candidature a été acceptée par le propriétaire. Vous pouvez maintenant confirmer si vous souhaitez toujours ce logement."
       case "accepted":
       case "approved":
         return "Félicitations ! Votre candidature a été acceptée. Le propriétaire va vous contacter pour finaliser le bail."
@@ -308,7 +327,7 @@ export default function TenantApplicationsPage() {
   }
 
   const canWithdraw = (status: string) => {
-    return ["pending", "analyzing", "visit_proposed", "visit_scheduled"].includes(status)
+    return ["pending", "analyzing", "visit_proposed", "visit_scheduled", "visit_done"].includes(status)
   }
 
   const getMainImage = (property: Application["property"]) => {
@@ -436,6 +455,7 @@ export default function TenantApplicationsPage() {
                               <AlertDescription>{getStatusMessage(application)}</AlertDescription>
                             </Alert>
 
+                            {/* Bannière de confirmation du locataire */}
                             {application.status === "waiting_tenant_confirmation" && (
                               <TenantApplicationConfirmBanner
                                 applicationId={application.id}
