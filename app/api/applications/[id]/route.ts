@@ -185,6 +185,15 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     console.log("🔄 Mise à jour candidature:", applicationId, body)
 
+    // *** DÉBUT DE LA CORRECTION ***
+    // Si le propriétaire accepte, on passe le statut en attente de la confirmation du locataire.
+    const statusToUpdate = body.status
+    if (statusToUpdate === "accepted" || statusToUpdate === "approved") {
+      body.status = "waiting_tenant_confirmation"
+      console.log(`✅ Statut modifié de '${statusToUpdate}' à 'waiting_tenant_confirmation'`)
+    }
+    // *** FIN DE LA CORRECTION ***
+
     // Mettre à jour la candidature
     const { data, error } = await supabase
       .from("applications")
@@ -206,11 +215,12 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     }
 
     // Envoi email au locataire pour les statuts importants
+    // On utilise statusToUpdate pour que l'email corresponde à l'action du propriétaire ("Acceptée")
     if (
-      body.status &&
+      statusToUpdate &&
       data.tenant &&
       data.property &&
-      ["en analyse", "acceptée", "refusée", "withdrawn", "in_review", "accepted", "rejected"].includes(body.status)
+      ["analyzing", "accepted", "rejected", "withdrawn"].includes(statusToUpdate)
     ) {
       try {
         const logoUrl = data.property.owner?.agency?.logo_url ?? undefined
@@ -221,7 +231,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
             email: data.tenant.email,
           },
           data.property,
-          body.status,
+          statusToUpdate, // On envoie bien le statut original de l'action
           logoUrl
         )
       } catch (emailError) {
