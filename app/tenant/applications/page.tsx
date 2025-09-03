@@ -444,6 +444,46 @@ export default function TenantApplicationsPage() {
                               <AlertDescription>{getStatusMessage(application)}</AlertDescription>
                             </Alert>
 
+                            {application.status === "waiting_tenant_confirmation" && (
+                              <div className="mt-4 rounded-md border border-green-200 bg-green-50 p-4">
+                                <p className="font-medium">
+                                  Félicitations, votre dossier a été retenu
+                                  {application.property?.title ? <> pour “{application.property.title}”</> : null}
+                                  {application.property?.owner
+                                    ? <> par {application.property.owner.first_name} {application.property.owner.last_name}</>
+                                    : null}
+                                  .
+                                </p>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                  Veuillez confirmer votre choix pour que le propriétaire puisse créer le bail dès maintenant.
+                                </p>
+
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    className="inline-flex items-center rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
+                                    onClick={async () => {
+                                      try {
+                                        const res = await fetch(`/api/applications/${application.id}/tenant-decision`, {
+                                          method: "POST",
+                                          headers: { "Content-Type": "application/json" },
+                                          body: JSON.stringify({ decision: "accept" }),
+                                        })
+                                        if (!res.ok) throw new Error()
+                                        location.reload()
+                                      } catch {
+                                        // toast si tu utilises sonner
+                                      }
+                                    }}
+                                  >
+                                    Je confirme mon choix
+                                  </button>
+
+                                  <TenantRefuseWithReason applicationId={application.id} />
+                                </div>
+                              </div>
+                            )}
+
                             {/* Bouton pour choisir un créneau de visite */}
                             {application.status === "visit_proposed" &&
                               application.proposed_visit_slots &&
@@ -572,6 +612,73 @@ export default function TenantApplicationsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </>
+  )
+}
+
+function TenantRefuseWithReason({ applicationId }: { applicationId: string }) {
+  const [open, setOpen] = useState(false)
+  const [reason, setReason] = useState("")
+  const [loading, setLoading] = useState(false)
+
+  const submit = async () => {
+    try {
+      setLoading(true)
+      const res = await fetch(`/api/applications/${applicationId}/tenant-decision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision: "refuse", reason }),
+      })
+      if (!res.ok) throw new Error()
+      setOpen(false)
+      location.reload()
+    } catch {
+      // toast si besoin
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        className="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50"
+        onClick={() => setOpen(true)}
+      >
+        Refuser
+      </button>
+
+      {open && (
+        <div className="mt-3 w-full rounded-md border bg-white p-3">
+          <p className="text-sm font-medium">Motif (optionnel)</p>
+          <textarea
+            className="mt-2 w-full rounded-md border p-2 text-sm"
+            rows={2}
+            maxLength={180}
+            placeholder="J'ai eu une autre réponse positive, etc."
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              className="inline-flex items-center rounded-md bg-gray-100 px-3 py-2 text-sm hover:bg-gray-200"
+              onClick={() => setOpen(false)}
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
+              disabled={loading}
+              onClick={submit}
+            >
+              {loading ? "Envoi..." : "Envoyer le refus"}
+            </button>
+          </div>
+        </div>
+      )}
     </>
   )
 }
