@@ -35,6 +35,7 @@ import {
   RefreshCw,
   CalendarCheck,
   Home,
+  UserCheck, // Ajout de l'icône
 } from "lucide-react"
 import { TenantApplicationConfirmBanner } from "@/components/tenant-application-confirm-banner"
 
@@ -273,6 +274,8 @@ export default function TenantApplicationsPage() {
             En attente de votre confirmation
           </Badge>
         )
+      // *** DÉBUT DE LA CORRECTION ***
+      case "confirmed_by_tenant":
       case "accepted":
       case "approved":
         return (
@@ -281,6 +284,7 @@ export default function TenantApplicationsPage() {
             Acceptée
           </Badge>
         )
+      // *** FIN DE LA CORRECTION ***
       case "rejected":
         return (
           <Badge variant="destructive">
@@ -314,9 +318,12 @@ export default function TenantApplicationsPage() {
         return "Vous avez effectué la visite pour ce bien. Le propriétaire va maintenant prendre sa décision finale."
       case "waiting_tenant_confirmation":
         return "Félicitations ! Votre candidature a été acceptée par le propriétaire. Vous pouvez maintenant confirmer si vous souhaitez toujours ce logement."
+      // *** DÉBUT DE LA CORRECTION ***
+      case "confirmed_by_tenant":
       case "accepted":
       case "approved":
-        return "Félicitations ! Votre candidature a été acceptée. Le propriétaire va vous contacter pour finaliser le bail."
+        return "Félicitations ! Vous avez trouvé votre nouveau logement. Le propriétaire va maintenant finaliser le bail. Vous recevrez un email pour signer le document numériquement ou de manière manuscrite."
+      // *** FIN DE LA CORRECTION ***
       case "rejected":
         return "Malheureusement, votre candidature n'a pas été retenue pour ce logement."
       case "withdrawn":
