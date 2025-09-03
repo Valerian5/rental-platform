@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
 import { sendApplicationStatusUpdateEmail } from "@/lib/email-service"
+import { notificationsService } from "@/lib/notifications-service"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -185,14 +186,11 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     console.log("🔄 Mise à jour candidature:", applicationId, body)
 
-    // *** DÉBUT DE LA CORRECTION ***
-    // Si le propriétaire accepte, on passe le statut en attente de la confirmation du locataire.
     const statusToUpdate = body.status
     if (statusToUpdate === "accepted" || statusToUpdate === "approved") {
       body.status = "waiting_tenant_confirmation"
       console.log(`✅ Statut modifié de '${statusToUpdate}' à 'waiting_tenant_confirmation'`)
     }
-    // *** FIN DE LA CORRECTION ***
 
     // Mettre à jour la candidature
     const { data, error } = await supabase
@@ -214,13 +212,50 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
+    // AJOUT DES NOTIFICATIONS SANS TOUCHER AU RESTE
+    if (body.status && data.tenant && data.property) {
+      let notificationTitle = ""
+      let notificationContent = ""
+      let notificationType = "application_update"
+
+      switch (body.status) {
+        case "analyzing":
+          notificationTitle = "Votre dossier est en cours d'analyse"
+          notificationContent = `Bonne nouvelle ! Le propriétaire a commencé à examiner votre candidature pour le bien "${data.property.title}".`
+          break
+        case "waiting_tenant_confirmation":
+          notificationTitle = "Votre dossier a été accepté !"
+          notificationContent = `Félicitations ! Le propriétaire a accepté votre dossier pour "${data.property.title}". Confirmez votre choix dès maintenant.`
+          notificationType = "application_accepted"
+          break
+        case "rejected":
+          notificationTitle = "Votre candidature n'a pas été retenue"
+          notificationContent = `Malheureusement, votre candidature pour le bien "${data.property.title}" a été refusée.`
+          notificationType = "application_rejected"
+          break
+      }
+
+      if (notificationTitle) {
+        try {
+            await notificationsService.createNotification(data.tenant.id, {
+                title: notificationTitle,
+                content: notificationContent,
+                type: notificationType,
+                action_url: `/tenant/applications`,
+            })
+            console.log(`✅ Notification envoyée au locataire pour le statut : ${body.status}`)
+        } catch (notificationError) {
+            console.error("❌ Erreur envoi notification:", notificationError)
+        }
+      }
+    }
+
     // Envoi email au locataire pour les statuts importants
-    // On utilise statusToUpdate pour que l'email corresponde à l'action du propriétaire ("Acceptée")
     if (
-      statusToUpdate &&
+      body.status &&
       data.tenant &&
       data.property &&
-      ["analyzing", "accepted", "rejected", "withdrawn"].includes(statusToUpdate)
+      ["en analyse", "acceptée", "refusée", "withdrawn", "in_review", "accepted", "rejected"].includes(body.status)
     ) {
       try {
         const logoUrl = data.property.owner?.agency?.logo_url ?? undefined
@@ -231,7 +266,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
             email: data.tenant.email,
           },
           data.property,
-          statusToUpdate, // On envoie bien le statut original de l'action
+          body.status,
           logoUrl
         )
       } catch (emailError) {

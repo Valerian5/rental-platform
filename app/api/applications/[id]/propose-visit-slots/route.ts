@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { sendVisitProposalEmail } from "@/lib/email-service"
+import { notificationsService } from "@/lib/notifications-service"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -32,7 +33,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       return NextResponse.json({ error: "Candidature non trouvée" }, { status: 404 })
     }
 
-    // Récupérer le locataire et le bien pour l'email (une seule fois, utilisable dans tous les cas)
+    // Récupérer le locataire, le bien et le propriétaire pour l'email et les notifications
     const { data: tenant } = await supabase
       .from("users")
       .select("id, email, first_name, last_name")
@@ -41,8 +42,14 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
     const { data: property } = await supabase
       .from("properties")
-      .select("id, title, address")
+      .select("id, title, address, owner_id")
       .eq("id", application.property_id)
+      .single()
+
+    const { data: owner } = await supabase
+      .from("users")
+      .select("id, email, first_name, last_name")
+      .eq("id", property?.owner_id)
       .single()
 
     // Cas 1: Réception de slot_ids (IDs de créneaux existants)
@@ -63,9 +70,6 @@ export async function POST(request: Request, { params }: { params: { id: string 
           { status: 400 },
         )
       }
-
-      // Marquer les créneaux comme proposés pour cette candidature
-      // (On pourrait créer une table de liaison application_visit_slots si nécessaire)
 
       // Mettre à jour le statut de la candidature
       const { error: updateError } = await supabase
@@ -99,6 +103,31 @@ export async function POST(request: Request, { params }: { params: { id: string 
           )
         } catch (e) {
           console.error("Erreur envoi email proposition visite:", e)
+        }
+      }
+
+      // NOTIFICATION AU LOCATAIRE
+      if (tenant && property && existingSlots && existingSlots.length > 0) {
+        try {
+          const visitDates = existingSlots
+            .map((slot: any) => new Date(slot.date + "T" + slot.start_time))
+            .map(date => date.toLocaleDateString("fr-FR", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+              hour: "2-digit",
+              minute: "2-digit"
+            }))
+            .join(", ")
+
+          await notificationsService.createNotification(tenant.id, {
+            title: "Nouvelles propositions de visite",
+            content: `Le propriétaire vous propose ${existingSlots.length} créneau${existingSlots.length > 1 ? 'x' : ''} de visite pour ${property.title}: ${visitDates}`,
+            type: "visit_proposed",
+            action_url: `/tenant/applications`,
+          })
+        } catch (e) {
+          console.error("Erreur création notification proposition visite:", e)
         }
       }
 
@@ -160,6 +189,31 @@ export async function POST(request: Request, { params }: { params: { id: string 
           )
         } catch (e) {
           console.error("Erreur envoi email proposition visite:", e)
+        }
+      }
+
+      // NOTIFICATION AU LOCATAIRE
+      if (tenant && property && existingSlots && existingSlots.length > 0) {
+        try {
+          const visitDates = existingSlots
+            .map((slot: any) => new Date(slot.date + "T" + slot.start_time))
+            .map(date => date.toLocaleDateString("fr-FR", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+              hour: "2-digit",
+              minute: "2-digit"
+            }))
+            .join(", ")
+
+          await notificationsService.createNotification(tenant.id, {
+            title: "Nouvelles propositions de visite",
+            content: `Le propriétaire vous propose ${existingSlots.length} créneau${existingSlots.length > 1 ? 'x' : ''} de visite pour ${property.title}: ${visitDates}`,
+            type: "visit_proposed",
+            action_url: `/tenant/applications`,
+          })
+        } catch (e) {
+          console.error("Erreur création notification proposition visite:", e)
         }
       }
 
@@ -256,6 +310,31 @@ export async function POST(request: Request, { params }: { params: { id: string 
           )
         } catch (e) {
           console.error("Erreur envoi email proposition visite:", e)
+        }
+      }
+
+      // NOTIFICATION AU LOCATAIRE
+      if (tenant && property && createdSlots && createdSlots.length > 0) {
+        try {
+          const visitDates = createdSlots
+            .map((slot: any) => new Date(slot.date + "T" + slot.start_time))
+            .map(date => date.toLocaleDateString("fr-FR", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+              hour: "2-digit",
+              minute: "2-digit"
+            }))
+            .join(", ")
+
+          await notificationsService.createNotification(tenant.id, {
+            title: "Nouvelles propositions de visite",
+            content: `Le propriétaire vous propose ${createdSlots.length} créneau${createdSlots.length > 1 ? 'x' : ''} de visite pour ${property.title}: ${visitDates}`,
+            type: "visit_proposed",
+            action_url: `/tenant/applications`,
+          })
+        } catch (e) {
+          console.error("Erreur création notification proposition visite:", e)
         }
       }
 
