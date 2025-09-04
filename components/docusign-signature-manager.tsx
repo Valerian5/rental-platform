@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { FileText, Send, CheckCircle, Clock, ExternalLink, RefreshCw, User, Building } from "lucide-react"
 import { toast } from "sonner"
-import { useSession } from "@/lib/auth"
+import { useSession } from "@/lib/auth-service"
 
 interface DocuSignSignatureManagerProps {
   leaseId: string
