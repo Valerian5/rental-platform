@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { FileText, Download, Upload, CheckCircle, Crown, AlertTriangle, Zap } from "lucide-react"
 import { toast } from "sonner"
 import { DocuSignSignatureManager } from "./docusign-signature-manager"
+import { ManualSignatureManager } from "./manual-signature-manager"
 import { premiumFeaturesService } from "@/lib/premium-features-service"
 
 interface SignatureMethodSelectorProps {
@@ -31,6 +32,10 @@ export function SignatureMethodSelector({
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [selectedMethod, setSelectedMethod] = useState<"electronic" | "manual">("electronic")
+  // Ces états doivent être récupérés depuis l’API ou passés en props :
+  const [ownerSigned, setOwnerSigned] = useState(false)
+  const [tenantSigned, setTenantSigned] = useState(false)
 
   useEffect(() => {
     checkPremiumFeatures()
@@ -144,7 +149,7 @@ export function SignatureMethodSelector({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue={isElectronicEnabled ? "electronic" : "manual"} className="space-y-4">
+        <Tabs value={selectedMethod} onValueChange={setSelectedMethod}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="electronic" disabled={!isElectronicEnabled}>
               <div className="flex items-center gap-2">

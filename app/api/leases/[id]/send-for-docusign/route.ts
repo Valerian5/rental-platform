@@ -6,6 +6,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   try {
     const leaseId = params.id
 
+    // Récupérer le mode de signature depuis le body (par défaut "embedded" pour compatibilité)
+    const { mode = "embedded" } = await request.json().catch(() => ({}))
+
     console.log("📤 [SEND-DOCUSIGN] Envoi du bail pour signature DocuSign:", leaseId)
 
     // Vérifier que le bail existe et a un document généré
@@ -45,7 +48,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       )
     }
 
-    // Envoyer via DocuSign
+    // Envoyer via DocuSign avec le mode choisi
     const result = await docuSignService.sendLeaseForSignature(
       leaseId,
       lease.generated_document,
@@ -53,15 +56,18 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       `${lease.owner.first_name} ${lease.owner.last_name}`,
       lease.tenant.email,
       `${lease.tenant.first_name} ${lease.tenant.last_name}`,
+      mode // <-- ajout du paramètre mode
     )
 
     console.log("✅ [SEND-DOCUSIGN] Bail envoyé via DocuSign")
 
+    // Réponse adaptée selon le mode
     return NextResponse.json({
       success: true,
       message: "Bail envoyé pour signature via DocuSign",
       envelopeId: result.envelopeId,
-      signingUrls: result.signingUrls,
+      signingUrls: "signingUrls" in result ? result.signingUrls : undefined,
+      mode,
     })
   } catch (error) {
     console.error("❌ [SEND-DOCUSIGN] Erreur:", error)
