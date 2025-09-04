@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
 // Assurez-vous que le service d'email est importé correctement
-import { emailService } from "@/lib/email-service" 
+import { emailService } from "@/lib/email-service"
 import { notificationsService } from "@/lib/notifications-service"
 
 export const dynamic = "force-dynamic"
@@ -52,23 +52,65 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     if (decision === "accept") {
-      // Notifier le propriétaire par email et notification in-app
       try {
-        // *** DÉBUT DE LA CORRECTION ***
-        // Appel corrigé en utilisant le service email importé
-        await emailService.sendTenantConfirmedApplicationEmailToOwner(property.owner, tenant, property)
-        // *** FIN DE LA CORRECTION ***
+        // Email au propriétaire
+        await emailService.sendTenantConfirmedApplicationEmailToOwner(
+          {
+            id: property.owner.id,
+            name: `${property.owner.first_name} ${property.owner.last_name}`,
+            email: property.owner.email,
+          },
+          `${tenant.first_name} ${tenant.last_name}`,
+          { id: property.id, title: property.title, address: property.address },
+          `${process.env.NEXT_PUBLIC_SITE_URL}/owner/applications/${applicationId}`,
+        )
 
+        // Notifications classiques
         await notificationsService.createNotification(property.owner.id, {
-          title: "Votre offre a été acceptée !",
-          content: `${tenant.first_name} ${tenant.last_name} a confirmé son intérêt pour votre logement "${property.title}". Vous pouvez maintenant générer le bail.`,
+          title: "Votre offre a été acceptée",
+          content: `${tenant.first_name} ${tenant.last_name} a confirmé pour "${property.title}".`,
           type: "application_confirmed",
-          action_url: `/owner/leases/new?applicationId=${applicationId}`,
+          action_url: `/owner/applications/${applicationId}`,
         })
-        console.log("✅ Notification et email envoyés au propriétaire.")
-      } catch (emailError) {
-        console.error("❌ Erreur lors de l'envoi de l'email de confirmation:", emailError)
-        // Ne pas bloquer la réponse pour une erreur d'email
+        await notificationsService.createNotification(tenant.id, {
+          title: "Confirmation envoyée",
+          content: `Vous avez confirmé votre choix pour "${property.title}". Le propriétaire peut générer le bail.`,
+          type: "application_confirmed",
+          action_url: `/tenant/applications`,
+        })
+      } catch (e) {
+        console.error("❌ Erreur notif/email confirmation:", e)
+      }
+    } else {
+      try {
+        // Email au propriétaire
+        await emailService.sendTenantRefusedApplicationEmailToOwner(
+          {
+            id: property.owner.id,
+            name: `${property.owner.first_name} ${property.owner.last_name}`,
+            email: property.owner.email,
+          },
+          `${tenant.first_name} ${tenant.last_name}`,
+          { id: property.id, title: property.title, address: property.address },
+          reason,
+          `${process.env.NEXT_PUBLIC_SITE_URL}/owner/applications/${applicationId}`,
+        )
+
+        // Notifications classiques
+        await notificationsService.createNotification(property.owner.id, {
+          title: "Le locataire a refusé",
+          content: `${tenant.first_name} ${tenant.last_name} a refusé pour "${property.title}".`,
+          type: "application_refused",
+          action_url: `/owner/applications/${applicationId}`,
+        })
+        await notificationsService.createNotification(tenant.id, {
+          title: "Refus enregistré",
+          content: `Votre refus pour "${property.title}" a bien été transmis au propriétaire.`,
+          type: "application_refused",
+          action_url: `/tenant/applications`,
+        })
+      } catch (e) {
+        console.error("❌ Erreur notif/email refus:", e)
       }
     }
 

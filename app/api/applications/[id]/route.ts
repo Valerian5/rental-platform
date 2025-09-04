@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
 import { sendApplicationStatusUpdateEmail } from "@/lib/email-service"
 import { notificationsService } from "@/lib/notifications-service"
+import { sendWaitingTenantConfirmationEmailToTenant } from "@/lib/email-service"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -271,6 +272,35 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
         )
       } catch (emailError) {
         console.error("❌ Erreur envoi email statut candidature:", emailError)
+      }
+    }
+
+    // Envoi de l'email pour demander la confirmation au locataire si on est passé en waiting_tenant_confirmation
+    if (body.status === "waiting_tenant_confirmation" && data.tenant && data.property) {
+      try {
+        const logoUrl = data.property.owner?.agency?.logo_url ?? undefined
+        const ownerName =
+          data.property.owner ? `${data.property.owner.first_name} ${data.property.owner.last_name}` : undefined
+        const confirmUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/tenant/applications` // vers l’encart de confirmation
+
+        await sendWaitingTenantConfirmationEmailToTenant(
+          {
+            id: data.tenant.id,
+            name: `${data.tenant.first_name} ${data.tenant.last_name}`,
+            email: data.tenant.email,
+          },
+          {
+            id: data.property.id,
+            title: data.property.title,
+            address: data.property.address,
+          },
+          confirmUrl,
+          ownerName,
+          logoUrl
+        )
+        console.log("✅ Email de demande de confirmation envoyé au locataire")
+      } catch (emailError) {
+        console.error("❌ Erreur envoi email demande de confirmation:", emailError)
       }
     }
 
