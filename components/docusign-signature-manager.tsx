@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { FileText, Send, CheckCircle, Clock, ExternalLink, RefreshCw, User, Building } from "lucide-react"
 import { toast } from "sonner"
-import { useSession } from "@/lib/auth-service"
 
 interface DocuSignSignatureManagerProps {
   leaseId: string
@@ -28,20 +27,12 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
   const [signatureStatus, setSignatureStatus] = useState<SignatureStatus | null>(null)
   const [signingUrls, setSigningUrls] = useState<{ owner: string; tenant: string } | null>(null)
 
-  // Récupérer l'utilisateur courant
-  const { user } = useSession()
-
-  // Récupérer le rôle de l'utilisateur (owner ou tenant)
-  const userRole = user?.role
-
   const sendForDocuSignSignature = async () => {
     try {
       setSending(true)
 
       const response = await fetch(`/api/leases/${leaseId}/send-for-docusign`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "embedded" }),
       })
 
       const data = await response.json()
@@ -127,24 +118,6 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
     }
   }, [leaseStatus])
 
-  // Affichage du bouton de signature selon le rôle et l'état
-  const canSign =
-    (userRole === "owner" && !signatureStatus?.ownerSigned) ||
-    (userRole === "tenant" && signatureStatus?.ownerSigned && !signatureStatus?.tenantSigned)
-
-  const signingUrl =
-    userRole === "owner"
-      ? signingUrls?.owner
-      : userRole === "tenant" && signatureStatus?.ownerSigned
-      ? signingUrls?.tenant
-      : undefined
-
-  // Affichage de l'état d'avancement
-  let statusText = ""
-  if (!signatureStatus?.ownerSigned) statusText = "En attente de la signature du propriétaire"
-  else if (!signatureStatus?.tenantSigned) statusText = "En attente de la signature du locataire"
-  else statusText = "Bail signé électroniquement"
-
   if (leaseStatus === "draft" || (leaseStatus !== "sent_for_signature" && !signatureStatus)) {
     return (
       <Card>
@@ -162,21 +135,19 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
             </AlertDescription>
           </Alert>
 
-          {userRole === "owner" && leaseStatus === "draft" && (
-            <Button onClick={sendForDocuSignSignature} disabled={sending} className="w-full">
-              {sending ? (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Envoi en cours...
-                </>
-              ) : (
-                <>
-                  <Send className="h-4 w-4 mr-2" />
-                  Envoyer pour signature DocuSign
-                </>
-              )}
-            </Button>
-          )}
+          <Button onClick={sendForDocuSignSignature} disabled={sending} className="w-full">
+            {sending ? (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                Envoi en cours...
+              </>
+            ) : (
+              <>
+                <Send className="h-4 w-4 mr-2" />
+                Envoyer pour signature DocuSign
+              </>
+            )}
+          </Button>
         </CardContent>
       </Card>
     )
@@ -265,20 +236,6 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
                 </Alert>
               )}
             </>
-          )}
-          {canSign && signingUrl && (
-            <a
-              href={signingUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-primary w-full text-center"
-            >
-              Signer électroniquement le bail
-            </a>
-          )}
-          {/* Optionnel : afficher un message ou un badge si tout est signé */}
-          {signatureStatus?.ownerSigned && signatureStatus?.tenantSigned && (
-            <div className="text-green-600 font-bold">Le bail est signé par les deux parties.</div>
           )}
         </CardContent>
       </Card>
