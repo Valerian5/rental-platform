@@ -1,3 +1,5 @@
+// valerian5/rental-platform/rental-platform-012639695760319103fcddfd013697630f941148/app/api/applications/[id]/choose-visit-slot/route.ts
+
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { sendVisitScheduledEmail } from "@/lib/email-service"
@@ -52,7 +54,41 @@ export async function POST(request: Request, { params }: { params: { id: string 
       return NextResponse.json({ error: "Candidature non trouvée" }, { status: 404 })
     }
 
-    // Vérifier que la candidature est dans le bon statut
+    // MODIFICATION : Gérer le cas où la visite est déjà programmée (idempotence)
+    if (application.status === "visit_scheduled") {
+      console.log("INFO: La visite est déjà programmée. Renvoi de la confirmation pour éviter une erreur.")
+      
+      const { data: existingVisit, error: existingVisitError } = await supabase
+        .from("visits")
+        .select(`
+          id,
+          start_time,
+          end_time,
+          status,
+          property_visit_slots ( date )
+        `)
+        .eq("application_id", applicationId)
+        .single()
+
+      if (existingVisitError || !existingVisit) {
+        console.error("❌ Incohérence: Statut 'visit_scheduled' mais visite non trouvée.", existingVisitError)
+        return NextResponse.json({ error: "Statut de la candidature incohérent." }, { status: 500 })
+      }
+      
+      return NextResponse.json({
+        success: true,
+        message: "Créneau de visite déjà sélectionné avec succès.",
+        visit: {
+          id: existingVisit.id,
+          date: existingVisit.property_visit_slots.date,
+          start_time: existingVisit.start_time,
+          end_time: existingVisit.end_time,
+          status: existingVisit.status,
+        },
+      })
+    }
+    
+    // Vérifier que la candidature est dans le bon statut pour une NOUVELLE réservation
     if (application.status !== "visit_proposed") {
       console.error("❌ Statut candidature invalide:", application.status)
       return NextResponse.json({ error: "Cette candidature ne permet pas de sélectionner un créneau" }, { status: 400 })
@@ -229,24 +265,6 @@ export async function POST(request: Request, { params }: { params: { id: string 
     } catch (e) {
       console.error("❌ Erreur envoi emails confirmation visite:", e)
     }
-
-    // Email au locataire
-    await sendVisitScheduledEmailToTenant(tenantUser, property, new Date(visitDate))
-    // Email au propriétaire
-    await sendVisitScheduledEmailToOwner(property.owner, property, { tenantName: tenantUser.name, visitDate: new Date(visitDate) })
-
-    // Notification classique au locataire
-    await notificationsService.createNotification(tenantUser.id, {
-      title: "Visite confirmée",
-      content: `Votre visite pour "${property.title}" est confirmée le ${new Date(visitDate).toLocaleString("fr-FR")}.`,
-      action_url: `/tenant/visits`
-    })
-    // Notification classique au propriétaire
-    await notificationsService.createNotification(property.owner.id, {
-      title: "Visite confirmée",
-      content: `Une visite est confirmée avec ${tenantUser.name} pour "${property.title}" le ${new Date(visitDate).toLocaleString("fr-FR")}.`,
-      action_url: `/owner/visits`
-    })
 
     return NextResponse.json({
       success: true,
