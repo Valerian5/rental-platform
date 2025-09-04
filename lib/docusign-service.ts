@@ -229,6 +229,9 @@ class DocuSignService {
 
   // --- Business logic ---
   // Parallel signing (routingOrder "1" for both) since order does not matter
+  /**
+   * @param mode "embedded" = signature dans l'app (pas d'email), "remote" = email envoyé par DocuSign
+   */
   async sendLeaseForSignature(
     leaseId: string,
     documentContent: string, // HTML string
@@ -236,8 +239,12 @@ class DocuSignService {
     ownerName: string,
     tenantEmail: string,
     tenantName: string,
-  ): Promise<{ envelopeId: string; signingUrls: { owner: string; tenant: string } }> {
-    console.log("📝 [DOCUSIGN] Envoi du bail pour signature (parallèle):", leaseId)
+    mode: "embedded" | "remote" = "embedded"
+  ): Promise<
+    | { envelopeId: string; signingUrls: { owner: string; tenant: string } }
+    | { envelopeId: string }
+  > {
+    console.log("📝 [DOCUSIGN] Envoi du bail pour signature (parallèle):", leaseId, "mode:", mode)
 
     // HTML -> base64
     const documentBase64 = Buffer.from(documentContent).toString("base64")
@@ -246,9 +253,14 @@ class DocuSignService {
       { documentId: "1", name: `Contrat de bail - ${leaseId}.html`, fileExtension: "html", documentBase64 },
     ]
 
+    // Si mode embedded, on met clientUserId, sinon on ne le met pas (pour que DocuSign envoie l'email)
     const recipients: DocuSignRecipient[] = [
-      { email: ownerEmail, name: ownerName, recipientId: "1", routingOrder: "1", roleName: "Bailleur", clientUserId: ownerEmail },
-      { email: tenantEmail, name: tenantName, recipientId: "2", routingOrder: "1", roleName: "Locataire", clientUserId: tenantEmail },
+      mode === "embedded"
+        ? { email: ownerEmail, name: ownerName, recipientId: "1", routingOrder: "1", roleName: "Bailleur", clientUserId: ownerEmail }
+        : { email: ownerEmail, name: ownerName, recipientId: "1", routingOrder: "1", roleName: "Bailleur" },
+      mode === "embedded"
+        ? { email: tenantEmail, name: tenantName, recipientId: "2", routingOrder: "1", roleName: "Locataire", clientUserId: tenantEmail }
+        : { email: tenantEmail, name: tenantName, recipientId: "2", routingOrder: "1", roleName: "Locataire" },
     ]
 
     const envelope = await this.createEnvelope(
@@ -262,18 +274,23 @@ class DocuSignService {
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || ""
     const returnUrl = `${siteUrl}/leases/${leaseId}?signed=true` // page neutre commune
 
-    const ownerSigningUrl = await this.createEmbeddedSigningView(
-      envelope.envelopeId,
-      ownerEmail,
-      ownerName,
-      returnUrl,
-    )
-    const tenantSigningUrl = await this.createEmbeddedSigningView(
-      envelope.envelopeId,
-      tenantEmail,
-      tenantName,
-      returnUrl,
-    )
+    // Si mode embedded, on génère les URLs de signature, sinon on ne fait rien (DocuSign envoie l'email)
+    let signingUrls = undefined
+    if (mode === "embedded") {
+      const ownerSigningUrl = await this.createEmbeddedSigningView(
+        envelope.envelopeId,
+        ownerEmail,
+        ownerName,
+        returnUrl,
+      )
+      const tenantSigningUrl = await this.createEmbeddedSigningView(
+        envelope.envelopeId,
+        tenantEmail,
+        tenantName,
+        returnUrl,
+      )
+      signingUrls = { owner: ownerSigningUrl, tenant: tenantSigningUrl }
+    }
 
     await supabase
       .from("leases")
@@ -286,7 +303,11 @@ class DocuSignService {
 
     console.log("✅ [DOCUSIGN] Enveloppe créée:", envelope.envelopeId)
 
-    return { envelopeId: envelope.envelopeId, signingUrls: { owner: ownerSigningUrl, tenant: tenantSigningUrl } }
+    if (mode === "embedded") {
+      return { envelopeId: envelope.envelopeId, signingUrls }
+    } else {
+      return { envelopeId: envelope.envelopeId }
+    }
   }
 
   async getTenantSigningUrl(envelopeId: string, leaseId: string, tenantEmail: string, tenantName: string) {

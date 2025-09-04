@@ -227,38 +227,38 @@ export default function VisitsPage() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <div>
+                        <div>
                 <p className="text-sm font-medium text-muted-foreground">Total</p>
                 <p className="text-2xl font-bold">{stats.total}</p>
-              </div>
+                          </div>
               <CalendarIcon className="h-8 w-8 text-muted-foreground flex-shrink-0" />
-            </div>
+                        </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <div>
+                          <div>
                 <p className="text-sm font-medium text-muted-foreground">À venir</p>
                 <p className="text-2xl font-bold text-blue-600">{stats.upcoming}</p>
-              </div>
+                          </div>
               <Clock className="h-8 w-8 text-blue-600 flex-shrink-0" />
-            </div>
+                        </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <div>
+                            <div>
                 <p className="text-sm font-medium text-muted-foreground">Terminées</p>
                 <p className="text-2xl font-bold text-green-600">{stats.completed}</p>
-              </div>
+                            </div>
               <CheckCircle className="h-8 w-8 text-green-600 flex-shrink-0" />
-            </div>
-          </CardContent>
-        </Card>
+                  </div>
+                </CardContent>
+              </Card>
 
         <Card>
           <CardContent className="p-4">
@@ -275,15 +275,15 @@ export default function VisitsPage() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <div>
+                        <div>
                 <p className="text-sm font-medium text-muted-foreground">Pas intéressé</p>
                 <p className="text-2xl font-bold text-red-600">{stats.not_interested}</p>
-              </div>
+                          </div>
               <XCircle className="h-8 w-8 text-red-600 flex-shrink-0" />
-            </div>
+                        </div>
           </CardContent>
         </Card>
-      </div>
+                      </div>
 
       {/* Filtres */}
       <Card className="mb-6">
@@ -297,7 +297,7 @@ export default function VisitsPage() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-8"
               />
-            </div>
+                      </div>
 
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger>
@@ -315,19 +315,19 @@ export default function VisitsPage() {
               </SelectContent>
             </Select>
 
-            <Button
+                              <Button
               variant="outline"
-              onClick={() => {
+                                onClick={() => {
                 setSearchQuery("")
                 setStatusFilter("all")
               }}
               className="w-full sm:w-auto"
             >
               Réinitialiser
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+                                </Button>
+                  </div>
+                </CardContent>
+              </Card>
 
       {/* Calendrier des visites */}
       <EnhancedVisitCalendar
