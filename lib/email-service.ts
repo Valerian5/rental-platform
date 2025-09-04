@@ -567,3 +567,58 @@ export async function sendTenantRefusedApplicationEmailToOwner(
     ]),
   )
 }
+
+export async function sendVisitScheduledEmailToTenant(
+  user: User,
+  property: Property,
+  visitDate: Date,
+  logoUrl?: string,
+) {
+  await sendEmail(
+    user,
+    null,
+    `Votre visite pour "${property.title}" est confirmée`,
+    VisitScheduledEmail({
+      userName: user.name,
+      visitDate: visitDate.toLocaleDateString("fr-FR", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      property,
+      logoUrl,
+    }),
+  )
+}
+
+export async function sendVisitScheduledEmailToOwner(
+  owner: User,
+  property: Property,
+  payload: { tenantName: string; visitDate: Date },
+  logoUrl?: string,
+) {
+  await sendEmail(
+    owner,
+    null,
+    `Visite programmée pour "${property.title}"`,
+    React.createElement("div", {}, [
+      React.createElement("h2", { key: "t" }, "Nouvelle visite programmée"),
+      React.createElement("p", { key: "p1" }, `Bonjour ${owner.name},`),
+      React.createElement(
+        "p",
+        { key: "p2" },
+        `Une visite a été confirmée pour "${property.title}" avec ${payload.tenantName} le ${payload.visitDate.toLocaleDateString("fr-FR", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })}.`,
+      ),
+    ]),
+  )
+}

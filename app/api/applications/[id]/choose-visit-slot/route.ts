@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { sendVisitScheduledEmail } from "@/lib/email-service"
+import { notificationsService } from "@/lib/notifications-service"
+import { sendVisitScheduledEmailToTenant, sendVisitScheduledEmailToOwner } from "@/lib/email-service"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -162,6 +164,71 @@ export async function POST(request: Request, { params }: { params: { id: string 
     }
 
     console.log("✅ Visite programmée avec succès:", visit.id)
+
+    // Récupérer propriété (avec owner) + tenant pour notifications/emails
+    const { data: property } = await supabase
+      .from("properties")
+      .select("id, title, address, city, owner:users!properties_owner_id_fkey(id, first_name, last_name, email)")
+      .eq("id", application.property_id)
+      .single()
+
+    const tenantUser = {
+      id: application.users.id,
+      first_name: application.users.first_name,
+      last_name: application.users.last_name,
+      email: application.users.email,
+    }
+
+    // Notifications classiques (tenant + owner)
+    if (property?.owner) {
+      await notificationsService.notifyVisitScheduled(
+        {
+          id: visit.id,
+          visit_date: visit.visit_date,
+        },
+        { id: property.id, title: property.title },
+        { id: tenantUser.id, first_name: tenantUser.first_name, last_name: tenantUser.last_name, email: tenantUser.email },
+        { id: property.owner.id, first_name: property.owner.first_name, last_name: property.owner.last_name, email: property.owner.email },
+      )
+    }
+
+    // Emails (tenant + owner)
+    try {
+      // tenant
+      await sendVisitScheduledEmailToTenant(
+        {
+          id: tenantUser.id,
+          name: `${tenantUser.first_name} ${tenantUser.last_name}`,
+          email: tenantUser.email,
+        },
+        {
+          id: property.id,
+          title: property.title,
+          address: `${property.address}, ${property.city}`,
+        },
+        new Date(visit.visit_date),
+      )
+
+      // owner
+      await sendVisitScheduledEmailToOwner(
+        {
+          id: property.owner.id,
+          name: `${property.owner.first_name} ${property.owner.last_name}`,
+          email: property.owner.email,
+        },
+        {
+          id: property.id,
+          title: property.title,
+          address: `${property.address}, ${property.city}`,
+        },
+        {
+          tenantName: `${tenantUser.first_name} ${tenantUser.last_name}`,
+          visitDate: new Date(visit.visit_date),
+        },
+      )
+    } catch (e) {
+      console.error("❌ Erreur envoi emails confirmation visite:", e)
+    }
 
     return NextResponse.json({
       success: true,
