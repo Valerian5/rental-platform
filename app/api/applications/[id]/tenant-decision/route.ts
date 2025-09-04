@@ -1,7 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
 // Assurez-vous que le service d'email est importé correctement
-import { emailService } from "@/lib/email-service"
+import { 
+  sendTenantConfirmedApplicationEmailToOwner,
+  sendTenantConfirmedApplicationEmailToTenant,
+  sendTenantRefusedApplicationEmailToOwner,
+  sendTenantRefusedApplicationEmailToTenant
+} from "@/lib/email-service"
 import { notificationsService } from "@/lib/notifications-service"
 
 export const dynamic = "force-dynamic"
@@ -54,7 +59,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     if (decision === "accept") {
       try {
         // Email au propriétaire
-        await emailService.sendTenantConfirmedApplicationEmailToOwner(
+        await sendTenantConfirmedApplicationEmailToOwner(
           {
             id: property.owner.id,
             name: `${property.owner.first_name} ${property.owner.last_name}`,
@@ -65,18 +70,26 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           `${process.env.NEXT_PUBLIC_SITE_URL}/owner/applications/${applicationId}`,
         )
 
+        // Email au locataire
+        await sendTenantConfirmedApplicationEmailToTenant(
+          {
+            id: tenant.id,
+            name: `${tenant.first_name} ${tenant.last_name}`,
+            email: tenant.email,
+          },
+          { id: property.id, title: property.title, address: property.address },
+        )
+
         // Notifications classiques
         await notificationsService.createNotification(property.owner.id, {
-          title: "Votre offre a été acceptée",
-          content: `${tenant.first_name} ${tenant.last_name} a confirmé pour "${property.title}".`,
-          type: "application_confirmed",
-          action_url: `/owner/applications/${applicationId}`,
+          title: "Le locataire a confirmé",
+          content: `${tenant.first_name} ${tenant.last_name} a confirmé vouloir louer "${property.title}". Vous pouvez générer le bail.`,
+          action_url: `/owner/applications/${applicationId}`
         })
         await notificationsService.createNotification(tenant.id, {
-          title: "Confirmation envoyée",
-          content: `Vous avez confirmé votre choix pour "${property.title}". Le propriétaire peut générer le bail.`,
-          type: "application_confirmed",
-          action_url: `/tenant/applications`,
+          title: "Confirmation enregistrée",
+          content: `Votre confirmation pour "${property.title}" a bien été prise en compte.`,
+          action_url: `/tenant/applications`
         })
       } catch (e) {
         console.error("❌ Erreur notif/email confirmation:", e)
@@ -84,7 +97,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     } else {
       try {
         // Email au propriétaire
-        await emailService.sendTenantRefusedApplicationEmailToOwner(
+        await sendTenantRefusedApplicationEmailToOwner(
           {
             id: property.owner.id,
             name: `${property.owner.first_name} ${property.owner.last_name}`,
@@ -96,18 +109,27 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           `${process.env.NEXT_PUBLIC_SITE_URL}/owner/applications/${applicationId}`,
         )
 
+        // Email au locataire
+        await sendTenantRefusedApplicationEmailToTenant(
+          {
+            id: tenant.id,
+            name: `${tenant.first_name} ${tenant.last_name}`,
+            email: tenant.email,
+          },
+          { id: property.id, title: property.title, address: property.address },
+          reason,
+        )
+
         // Notifications classiques
         await notificationsService.createNotification(property.owner.id, {
           title: "Le locataire a refusé",
-          content: `${tenant.first_name} ${tenant.last_name} a refusé pour "${property.title}".`,
-          type: "application_refused",
-          action_url: `/owner/applications/${applicationId}`,
+          content: `${tenant.first_name} ${tenant.last_name} a refusé la location pour "${property.title}".`,
+          action_url: `/owner/applications/${applicationId}`
         })
         await notificationsService.createNotification(tenant.id, {
           title: "Refus enregistré",
-          content: `Votre refus pour "${property.title}" a bien été transmis au propriétaire.`,
-          type: "application_refused",
-          action_url: `/tenant/applications`,
+          content: `Votre refus pour "${property.title}" a bien été pris en compte.`,
+          action_url: `/tenant/applications`
         })
       } catch (e) {
         console.error("❌ Erreur notif/email refus:", e)

@@ -22,6 +22,8 @@ import SavedSearchAlertEmail from "@/components/emails/saved-search-alert-email"
 import NewApplicationNotificationToOwnerEmail from "@/components/emails/new-application-notification-to-owner-email"
 import InviteUserEmail from "@/components/emails/invite-user-email"
 import DocumentReminderEmail from "@/components/emails/document-reminder-email"
+import TenantConfirmedApplicationEmail from "@/components/emails/tenant-confirmed-application-email"
+import TenantRefusedApplicationEmail from "@/components/emails/tenant-refused-application-email"
 
 // --- CONFIG EXPÉDITEUR ---
 const DEFAULT_FROM = "Louer Ici <notifications@louerici.fr>"
@@ -620,5 +622,32 @@ export async function sendVisitScheduledEmailToOwner(
         })}.`,
       ),
     ]),
+  )
+}
+
+export async function sendTenantConfirmedApplicationEmailToTenant(
+  tenant: User,
+  property: Property,
+  logoUrl?: string,
+) {
+  await sendEmail(
+    tenant,
+    NotificationType.APPLICATION_STATUS_UPDATE,
+    `Vous avez confirmé vouloir louer "${property.title}"`,
+    TenantConfirmedApplicationEmail({ tenantName: tenant.name, propertyTitle: property.title })
+  )
+}
+
+export async function sendTenantRefusedApplicationEmailToTenant(
+  tenant: User,
+  property: Property,
+  reason: string | undefined,
+  logoUrl?: string,
+) {
+  await sendEmail(
+    tenant,
+    NotificationType.APPLICATION_STATUS_UPDATE,
+    `Vous avez refusé la location pour "${property.title}"`,
+    TenantRefusedApplicationEmail({ tenantName: tenant.name, propertyTitle: property.title, reason })
   )
 }

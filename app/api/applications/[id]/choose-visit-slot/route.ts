@@ -230,6 +230,24 @@ export async function POST(request: Request, { params }: { params: { id: string 
       console.error("❌ Erreur envoi emails confirmation visite:", e)
     }
 
+    // Email au locataire
+    await sendVisitScheduledEmailToTenant(tenantUser, property, new Date(visitDate))
+    // Email au propriétaire
+    await sendVisitScheduledEmailToOwner(property.owner, property, { tenantName: tenantUser.name, visitDate: new Date(visitDate) })
+
+    // Notification classique au locataire
+    await notificationsService.createNotification(tenantUser.id, {
+      title: "Visite confirmée",
+      content: `Votre visite pour "${property.title}" est confirmée le ${new Date(visitDate).toLocaleString("fr-FR")}.`,
+      action_url: `/tenant/visits`
+    })
+    // Notification classique au propriétaire
+    await notificationsService.createNotification(property.owner.id, {
+      title: "Visite confirmée",
+      content: `Une visite est confirmée avec ${tenantUser.name} pour "${property.title}" le ${new Date(visitDate).toLocaleString("fr-FR")}.`,
+      action_url: `/owner/visits`
+    })
+
     return NextResponse.json({
       success: true,
       message: "Créneau de visite sélectionné avec succès",
