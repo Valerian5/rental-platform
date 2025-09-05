@@ -1,439 +1,344 @@
 "use client"
 
-import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import React, { useState } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import * as z from "zod"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Separator } from "@/components/ui/separator"
-import { FileText, User, MapPin, Euro, Download } from "lucide-react"
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { toast } from "sonner"
+import { Label } from "./ui/label"
+import { RadioGroup, RadioGroupItem } from "./ui/radio-group"
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover"
+import { CalendarIcon } from "lucide-react"
+import { Calendar } from "./ui/calendar"
+import { cn } from "@/lib/utils"
+import { format } from "date-fns"
+import { fr } from "date-fns/locale"
+
+const guarantorSchema = z.object({
+  first_name: z.string().min(1, "Le prénom est requis."),
+  last_name: z.string().min(1, "Le nom est requis."),
+  address: z.string().min(1, "L'adresse est requise."),
+  birth_date: z.date({ required_error: "La date de naissance est requise." }),
+  birth_place: z.string().min(1, "Le lieu de naissance est requis."),
+  bond_type: z.enum(["solidary", "simple"]),
+  duration_type: z.enum(["undetermined", "determined"]),
+  duration_end_date: z.date().optional(),
+})
+
+type GuarantorFormData = z.infer<typeof guarantorSchema>
 
 interface CautionnementGeneratorProps {
   leaseId: string
-  leaseData: {
-    locataire_nom_prenom: string
-    bailleur_nom_prenom: string
-    bailleur_adresse: string
-    adresse_logement: string
-    montant_loyer_mensuel: number
-    date_prise_effet: string
-    duree_contrat: string
-  }
 }
 
-export function CautionnementGenerator({ leaseId, leaseData }: CautionnementGeneratorProps) {
-  const [generating, setGenerating] = useState(false)
-  const [generatedDocument, setGeneratedDocument] = useState<string | null>(null)
-  const [formData, setFormData] = useState({
-    // Informations de la caution
-    prenom: "",
-    nom: "",
-    dateNaissance: "",
-    lieuNaissance: "",
-    adresse: "",
+export default function CautionnementGenerator({
+  leaseId,
+}: CautionnementGeneratorProps) {
+  const [isGenerating, setIsGenerating] = useState(false)
 
-    // Type de cautionnement
-    typeCaution: "solidaire", // 'simple' | 'solidaire'
-    dureeEngagement: "indeterminee", // 'indeterminee' | 'determinee'
-    dureeEngagementPrecision: "",
-
-    // Informations loyer (pré-remplies)
-    montantLoyerLettres: "",
-    dateRevision: "",
-    trimestreIRL: "1er",
-    anneeIRL: new Date().getFullYear().toString(),
-
-    // Montant engagement
-    montantEngagementLettres: "",
-    montantEngagementChiffres: "",
-
-    // Signature
-    lieuSignature: "",
+  const form = useForm<GuarantorFormData>({
+    resolver: zodResolver(guarantorSchema),
+    defaultValues: {
+      first_name: "",
+      last_name: "",
+      address: "",
+      birth_place: "",
+      bond_type: "solidary",
+      duration_type: "undetermined",
+    },
   })
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
-  }
+  const durationType = form.watch("duration_type")
 
-  const convertNumberToWords = (num: number): string => {
-    // Fonction simplifiée pour convertir un nombre en lettres
-    // Dans un vrai projet, utiliser une bibliothèque comme 'number-to-words'
-    const units = ["", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf"]
-    const teens = ["dix", "onze", "douze", "treize", "quatorze", "quinze", "seize", "dix-sept", "dix-huit", "dix-neuf"]
-    const tens = [
-      "",
-      "",
-      "vingt",
-      "trente",
-      "quarante",
-      "cinquante",
-      "soixante",
-      "soixante-dix",
-      "quatre-vingt",
-      "quatre-vingt-dix",
-    ]
-    const hundreds = [
-      "",
-      "cent",
-      "deux cents",
-      "trois cents",
-      "quatre cents",
-      "cinq cents",
-      "six cents",
-      "sept cents",
-      "huit cents",
-      "neuf cents",
-    ]
-
-    if (num === 0) return "zéro"
-    if (num < 10) return units[num]
-    if (num < 20) return teens[num - 10]
-    if (num < 100) {
-      const ten = Math.floor(num / 10)
-      const unit = num % 10
-      return tens[ten] + (unit > 0 ? "-" + units[unit] : "")
-    }
-
-    // Simplification pour les nombres plus grands
-    return num.toString() + " euros"
-  }
-
-  const autoFillAmounts = () => {
-    const monthlyRent = leaseData.montant_loyer_mensuel
-    const yearlyRent = monthlyRent * 12
-    const engagementAmount = yearlyRent * 3 // 3 ans par défaut
-
-    setFormData((prev) => ({
-      ...prev,
-      montantLoyerLettres: convertNumberToWords(monthlyRent),
-      montantEngagementChiffres: engagementAmount.toString(),
-      montantEngagementLettres: convertNumberToWords(engagementAmount),
-    }))
-  }
-
-  const generateCautionnement = async () => {
+  const onSubmit = async (values: GuarantorFormData) => {
+    setIsGenerating(true)
     try {
-      setGenerating(true)
-
-      // Validation des champs obligatoires
-      if (!formData.prenom || !formData.nom || !formData.dateNaissance || !formData.adresse) {
-        toast.error("Veuillez remplir tous les champs obligatoires de la caution")
+      if (
+        values.duration_type === "determined" &&
+        !values.duration_end_date
+      ) {
+        toast.error("Veuillez spécifier une date de fin pour la durée déterminée.")
         return
       }
 
-      const response = await fetch(`/api/leases/${leaseId}/generate-cautionnement`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cautionData: formData }),
-      })
-
-      const result = await response.json()
+      const response = await fetch(
+        `/api/leases/${leaseId}/generate-cautionnement`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ guarantor: values }),
+        },
+      )
 
       if (!response.ok) {
-        throw new Error(result.error || "Erreur lors de la génération")
+        const errorData = await response.json()
+        throw new Error(
+          errorData.error || "Erreur lors de la génération du document.",
+        )
       }
 
-      setGeneratedDocument(result.document)
-      toast.success("Acte de cautionnement généré avec succès")
-    } catch (error) {
-      console.error("Erreur génération cautionnement:", error)
-      toast.error(error instanceof Error ? error.message : "Erreur lors de la génération")
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `acte-de-caution-${leaseId}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+
+      toast.success("L'acte de cautionnement a été généré.")
+    } catch (error: any) {
+      toast.error(error.message)
     } finally {
-      setGenerating(false)
+      setIsGenerating(false)
     }
   }
 
-  const downloadDocument = () => {
-    if (!generatedDocument) return
-
-    const blob = new Blob([generatedDocument], { type: "text/plain;charset=utf-8" })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `acte-cautionnement-${leaseId}.txt`
-    document.body.appendChild(a)
-    a.click()
-    window.URL.revokeObjectURL(url)
-    document.body.removeChild(a)
-  }
-
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Générateur d'acte de cautionnement
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Informations de la caution */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 mb-3">
-              <User className="h-4 w-4" />
-              <h3 className="font-medium">Informations de la caution</h3>
-            </div>
-
+    <Card>
+      <CardHeader>
+        <CardTitle>Générer l'Acte de Cautionnement</CardTitle>
+        <CardDescription>
+          Remplissez les informations de la personne se portant caution pour
+          générer le document PDF.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="prenom">Prénom *</Label>
-                <Input
-                  id="prenom"
-                  value={formData.prenom}
-                  onChange={(e) => handleInputChange("prenom", e.target.value)}
-                  placeholder="Prénom de la caution"
-                />
-              </div>
-              <div>
-                <Label htmlFor="nom">Nom *</Label>
-                <Input
-                  id="nom"
-                  value={formData.nom}
-                  onChange={(e) => handleInputChange("nom", e.target.value)}
-                  placeholder="Nom de la caution"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="dateNaissance">Date de naissance *</Label>
-                <Input
-                  id="dateNaissance"
-                  type="date"
-                  value={formData.dateNaissance}
-                  onChange={(e) => handleInputChange("dateNaissance", e.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="lieuNaissance">Lieu de naissance</Label>
-                <Input
-                  id="lieuNaissance"
-                  value={formData.lieuNaissance}
-                  onChange={(e) => handleInputChange("lieuNaissance", e.target.value)}
-                  placeholder="Ville de naissance"
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="adresse">Adresse complète *</Label>
-              <Textarea
-                id="adresse"
-                value={formData.adresse}
-                onChange={(e) => handleInputChange("adresse", e.target.value)}
-                placeholder="Adresse complète de la caution"
-                rows={2}
+              <FormField
+                control={form.control}
+                name="first_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Prénom de la caution</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Jean" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="last_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nom de la caution</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Dupont" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
             </div>
-          </div>
-
-          <Separator />
-
-          {/* Type de cautionnement */}
-          <div className="space-y-4">
-            <h3 className="font-medium">Type de cautionnement</h3>
-
-            <div>
-              <Label>Type de caution</Label>
-              <RadioGroup
-                value={formData.typeCaution}
-                onValueChange={(value) => handleInputChange("typeCaution", value)}
-                className="mt-2"
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="solidaire" id="solidaire" />
-                  <Label htmlFor="solidaire">
-                    <strong>Caution solidaire</strong> - Le bailleur peut réclamer directement à la caution
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="simple" id="simple" />
-                  <Label htmlFor="simple">
-                    <strong>Caution simple</strong> - Le bailleur doit d'abord réclamer au locataire
-                  </Label>
-                </div>
-              </RadioGroup>
-            </div>
-
-            <div>
-              <Label>Durée de l'engagement</Label>
-              <RadioGroup
-                value={formData.dureeEngagement}
-                onValueChange={(value) => handleInputChange("dureeEngagement", value)}
-                className="mt-2"
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="indeterminee" id="indeterminee" />
-                  <Label htmlFor="indeterminee">Durée indéterminée</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="determinee" id="determinee" />
-                  <Label htmlFor="determinee">Durée déterminée</Label>
-                </div>
-              </RadioGroup>
-
-              {formData.dureeEngagement === "determinee" && (
-                <Input
-                  className="mt-2"
-                  value={formData.dureeEngagementPrecision}
-                  onChange={(e) => handleInputChange("dureeEngagementPrecision", e.target.value)}
-                  placeholder="Ex: Durée du bail et d'un renouvellement"
-                />
+            <FormField
+              control={form.control}
+              name="address"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Adresse complète de la caution</FormLabel>
+                  <FormControl>
+                    <Input placeholder="123 Rue de la Paix, 75001 Paris" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Informations financières */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Euro className="h-4 w-4" />
-              <h3 className="font-medium">Informations financières</h3>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={autoFillAmounts}
-                className="ml-auto bg-transparent"
-              >
-                Remplir automatiquement
-              </Button>
-            </div>
-
-            <div>
-              <Label htmlFor="montantLoyerLettres">Montant du loyer en lettres</Label>
-              <Input
-                id="montantLoyerLettres"
-                value={formData.montantLoyerLettres}
-                onChange={(e) => handleInputChange("montantLoyerLettres", e.target.value)}
-                placeholder="Ex: six cents euros"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <Label htmlFor="dateRevision">Date de révision du loyer</Label>
-                <Input
-                  id="dateRevision"
-                  value={formData.dateRevision}
-                  onChange={(e) => handleInputChange("dateRevision", e.target.value)}
-                  placeholder="Ex: 1er janvier"
-                />
-              </div>
-              <div>
-                <Label htmlFor="trimestreIRL">Trimestre IRL</Label>
-                <Select
-                  value={formData.trimestreIRL}
-                  onValueChange={(value) => handleInputChange("trimestreIRL", value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1er">1er trimestre</SelectItem>
-                    <SelectItem value="2e">2e trimestre</SelectItem>
-                    <SelectItem value="3e">3e trimestre</SelectItem>
-                    <SelectItem value="4e">4e trimestre</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="anneeIRL">Année IRL</Label>
-                <Input
-                  id="anneeIRL"
-                  value={formData.anneeIRL}
-                  onChange={(e) => handleInputChange("anneeIRL", e.target.value)}
-                  placeholder="2024"
-                />
-              </div>
-            </div>
-
+            />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="montantEngagementLettres">Montant engagement en lettres</Label>
-                <Input
-                  id="montantEngagementLettres"
-                  value={formData.montantEngagementLettres}
-                  onChange={(e) => handleInputChange("montantEngagementLettres", e.target.value)}
-                  placeholder="Ex: vingt-deux mille euros"
-                />
-              </div>
-              <div>
-                <Label htmlFor="montantEngagementChiffres">Montant engagement en chiffres</Label>
-                <Input
-                  id="montantEngagementChiffres"
-                  value={formData.montantEngagementChiffres}
-                  onChange={(e) => handleInputChange("montantEngagementChiffres", e.target.value)}
-                  placeholder="22000"
-                />
-              </div>
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Lieu de signature */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 mb-3">
-              <MapPin className="h-4 w-4" />
-              <h3 className="font-medium">Signature</h3>
-            </div>
-
-            <div>
-              <Label htmlFor="lieuSignature">Lieu de signature</Label>
-              <Input
-                id="lieuSignature"
-                value={formData.lieuSignature}
-                onChange={(e) => handleInputChange("lieuSignature", e.target.value)}
-                placeholder="Ex: Paris"
+               <FormField
+                control={form.control}
+                name="birth_date"
+                render={({ field }) => (
+                   <FormItem className="flex flex-col">
+                     <FormLabel>Date de naissance</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                           <FormControl>
+                             <Button
+                              variant={"outline"}
+                              className={cn(
+                                "pl-3 text-left font-normal",
+                                !field.value && "text-muted-foreground",
+                              )}
+                            >
+                               {field.value ? (
+                                format(field.value, "PPP", { locale: fr })
+                              ) : (
+                                <span>Choisir une date</span>
+                              )}
+                               <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                             </Button>
+                           </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                           <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            disabled={(date) =>
+                              date > new Date() || date < new Date("1900-01-01")
+                            }
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                     <FormMessage />
+                   </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="birth_place"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Lieu de naissance</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Paris" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
             </div>
-          </div>
 
-          <div className="flex gap-2">
-            <Button onClick={generateCautionnement} disabled={generating} className="flex-1">
-              {generating ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Génération...
-                </>
-              ) : (
-                <>
-                  <FileText className="h-4 w-4 mr-2" />
-                  Générer l'acte de cautionnement
-                </>
-              )}
-            </Button>
-
-            {generatedDocument && (
-              <Button onClick={downloadDocument} variant="outline">
-                <Download className="h-4 w-4 mr-2" />
-                Télécharger
-              </Button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+               <FormField
+                control={form.control}
+                name="bond_type"
+                render={({ field }) => (
+                  <FormItem className="space-y-3">
+                    <FormLabel>Type de caution</FormLabel>
+                     <FormControl>
+                       <RadioGroup
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                        className="flex flex-col space-y-1"
+                      >
+                         <FormItem className="flex items-center space-x-3 space-y-0">
+                           <FormControl>
+                             <RadioGroupItem value="solidary" />
+                           </FormControl>
+                           <FormLabel className="font-normal">
+                            Solidaire
+                           </FormLabel>
+                         </FormItem>
+                         <FormItem className="flex items-center space-x-3 space-y-0">
+                           <FormControl>
+                             <RadioGroupItem value="simple" />
+                           </FormControl>
+                           <FormLabel className="font-normal">Simple</FormLabel>
+                         </FormItem>
+                       </RadioGroup>
+                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+               <FormField
+                control={form.control}
+                name="duration_type"
+                render={({ field }) => (
+                  <FormItem className="space-y-3">
+                    <FormLabel>Durée de l'engagement</FormLabel>
+                     <FormControl>
+                       <RadioGroup
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                        className="flex flex-col space-y-1"
+                      >
+                         <FormItem className="flex items-center space-x-3 space-y-0">
+                           <FormControl>
+                             <RadioGroupItem value="undetermined" />
+                           </FormControl>
+                           <FormLabel className="font-normal">
+                            Indéterminée
+                           </FormLabel>
+                         </FormItem>
+                         <FormItem className="flex items-center space-x-3 space-y-0">
+                           <FormControl>
+                             <RadioGroupItem value="determined" />
+                           </FormControl>
+                           <FormLabel className="font-normal">
+                            Déterminée
+                           </FormLabel>
+                         </FormItem>
+                       </RadioGroup>
+                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            
+            {durationType === "determined" && (
+                 <FormField
+                control={form.control}
+                name="duration_end_date"
+                render={({ field }) => (
+                   <FormItem className="flex flex-col">
+                     <FormLabel>Date de fin de l'engagement</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                           <FormControl>
+                             <Button
+                              variant={"outline"}
+                              className={cn(
+                                "pl-3 text-left font-normal",
+                                !field.value && "text-muted-foreground",
+                              )}
+                            >
+                               {field.value ? (
+                                format(field.value, "PPP", { locale: fr })
+                              ) : (
+                                <span>Choisir une date de fin</span>
+                              )}
+                               <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                             </Button>
+                           </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                           <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            disabled={(date) => date < new Date()}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                     <FormMessage />
+                   </FormItem>
+                )}
+              />
             )}
-          </div>
-        </CardContent>
-      </Card>
 
-      {/* Aperçu du document généré */}
-      {generatedDocument && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Aperçu de l'acte de cautionnement</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="bg-white border rounded-lg p-6 max-h-96 overflow-y-auto">
-              <pre className="whitespace-pre-wrap text-sm font-mono">{generatedDocument}</pre>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+            <Button type="submit" disabled={isGenerating}>
+              {isGenerating ? "Génération en cours..." : "Générer le PDF"}
+            </Button>
+          </form>
+        </Form>
+      </CardContent>
+    </Card>
   )
 }
