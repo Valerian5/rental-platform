@@ -1,11 +1,18 @@
 "use client"
 
 import React, { useState } from "react"
-import { useForm } from "react-hook-form"
+import { useForm, Controller } from "react-hook-form"
+import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
-import * as z from "zod"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import {
   Form,
   FormControl,
@@ -14,99 +21,86 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import { toast } from "sonner"
-import { Label } from "./ui/label"
-import { RadioGroup, RadioGroupItem } from "./ui/radio-group"
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover"
-import { CalendarIcon } from "lucide-react"
-import { Calendar } from "./ui/calendar"
-import { cn } from "@/lib/utils"
-import { format } from "date-fns"
-import { fr } from "date-fns/locale"
+import { Download, Loader2 } from "lucide-react"
 
+// Schéma de validation pour les informations du garant
 const guarantorSchema = z.object({
-  first_name: z.string().min(1, "Le prénom est requis."),
-  last_name: z.string().min(1, "Le nom est requis."),
+  firstName: z.string().min(1, "Le prénom est requis."),
+  lastName: z.string().min(1, "Le nom est requis."),
   address: z.string().min(1, "L'adresse est requise."),
-  birth_date: z.date({ required_error: "La date de naissance est requise." }),
-  birth_place: z.string().min(1, "Le lieu de naissance est requis."),
-  bond_type: z.enum(["solidary", "simple"]),
-  duration_type: z.enum(["undetermined", "determined"]),
-  duration_end_date: z.date().optional(),
+  birthDate: z.string().min(1, "La date de naissance est requise."),
+  birthPlace: z.string().min(1, "Le lieu de naissance est requis."),
 })
 
 type GuarantorFormData = z.infer<typeof guarantorSchema>
 
 interface CautionnementGeneratorProps {
   leaseId: string
+  leaseData: {
+    locataire_nom_prenom: string
+    bailleur_nom_prenom: string
+    bailleur_adresse: string
+    adresse_logement: string
+    montant_loyer_mensuel: number
+    date_prise_effet: string
+    duree_contrat: number
+  }
 }
 
-export default function CautionnementGenerator({
-  leaseId,
-}: CautionnementGeneratorProps) {
+export function CautionnementGenerator({ leaseId, leaseData }: CautionnementGeneratorProps) {
   const [isGenerating, setIsGenerating] = useState(false)
-
   const form = useForm<GuarantorFormData>({
     resolver: zodResolver(guarantorSchema),
     defaultValues: {
-      first_name: "",
-      last_name: "",
+      firstName: "",
+      lastName: "",
       address: "",
-      birth_place: "",
-      bond_type: "solidary",
-      duration_type: "undetermined",
+      birthDate: "",
+      birthPlace: "",
     },
   })
 
-  const durationType = form.watch("duration_type")
-
-  const onSubmit = async (values: GuarantorFormData) => {
+  const onSubmit = async (data: GuarantorFormData) => {
     setIsGenerating(true)
+    toast.info("Génération de l'acte de cautionnement en cours...")
+    
     try {
-      if (
-        values.duration_type === "determined" &&
-        !values.duration_end_date
-      ) {
-        toast.error("Veuillez spécifier une date de fin pour la durée déterminée.")
-        return
-      }
-
-      const response = await fetch(
-        `/api/leases/${leaseId}/generate-cautionnement`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ guarantor: values }),
-        },
-      )
+      const response = await fetch(`/api/leases/${leaseId}/generate-cautionnement`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          guarantor: {
+            ...data,
+            name: `${data.firstName} ${data.lastName}`,
+          },
+          leaseData: leaseData,
+        }),
+      })
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(
-          errorData.error || "Erreur lors de la génération du document.",
-        )
+        throw new Error(errorData.error || "Une erreur est survenue.")
       }
 
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `acte-de-caution-${leaseId}.pdf`
+      a.download = `acte-de-cautionnement-${leaseId}.pdf`
       document.body.appendChild(a)
       a.click()
       a.remove()
       window.URL.revokeObjectURL(url)
 
-      toast.success("L'acte de cautionnement a été généré.")
-    } catch (error: any) {
-      toast.error(error.message)
+      toast.success("L'acte de cautionnement a été généré avec succès.")
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Erreur lors de la génération du PDF.",
+      )
+      console.error(error)
     } finally {
       setIsGenerating(false)
     }
@@ -115,10 +109,10 @@ export default function CautionnementGenerator({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Générer l'Acte de Cautionnement</CardTitle>
+        <CardTitle>Génération de l'Acte de Cautionnement</CardTitle>
         <CardDescription>
           Remplissez les informations de la personne se portant caution pour
-          générer le document PDF.
+          générer le document PDF conforme au modèle légal.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -127,7 +121,7 @@ export default function CautionnementGenerator({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="first_name"
+                name="firstName"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Prénom de la caution</FormLabel>
@@ -140,7 +134,7 @@ export default function CautionnementGenerator({
               />
               <FormField
                 control={form.control}
-                name="last_name"
+                name="lastName"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Nom de la caution</FormLabel>
@@ -168,48 +162,20 @@ export default function CautionnementGenerator({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                <FormField
                 control={form.control}
-                name="birth_date"
+                name="birthDate"
                 render={({ field }) => (
-                   <FormItem className="flex flex-col">
-                     <FormLabel>Date de naissance</FormLabel>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                           <FormControl>
-                             <Button
-                              variant={"outline"}
-                              className={cn(
-                                "pl-3 text-left font-normal",
-                                !field.value && "text-muted-foreground",
-                              )}
-                            >
-                               {field.value ? (
-                                format(field.value, "PPP", { locale: fr })
-                              ) : (
-                                <span>Choisir une date</span>
-                              )}
-                               <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                             </Button>
-                           </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                           <Calendar
-                            mode="single"
-                            selected={field.value}
-                            onSelect={field.onChange}
-                            disabled={(date) =>
-                              date > new Date() || date < new Date("1900-01-01")
-                            }
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                     <FormMessage />
-                   </FormItem>
+                  <FormItem>
+                    <FormLabel>Date de naissance</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
                 )}
               />
               <FormField
                 control={form.control}
-                name="birth_place"
+                name="birthPlace"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Lieu de naissance</FormLabel>
@@ -222,119 +188,18 @@ export default function CautionnementGenerator({
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-               <FormField
-                control={form.control}
-                name="bond_type"
-                render={({ field }) => (
-                  <FormItem className="space-y-3">
-                    <FormLabel>Type de caution</FormLabel>
-                     <FormControl>
-                       <RadioGroup
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                        className="flex flex-col space-y-1"
-                      >
-                         <FormItem className="flex items-center space-x-3 space-y-0">
-                           <FormControl>
-                             <RadioGroupItem value="solidary" />
-                           </FormControl>
-                           <FormLabel className="font-normal">
-                            Solidaire
-                           </FormLabel>
-                         </FormItem>
-                         <FormItem className="flex items-center space-x-3 space-y-0">
-                           <FormControl>
-                             <RadioGroupItem value="simple" />
-                           </FormControl>
-                           <FormLabel className="font-normal">Simple</FormLabel>
-                         </FormItem>
-                       </RadioGroup>
-                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-               <FormField
-                control={form.control}
-                name="duration_type"
-                render={({ field }) => (
-                  <FormItem className="space-y-3">
-                    <FormLabel>Durée de l'engagement</FormLabel>
-                     <FormControl>
-                       <RadioGroup
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                        className="flex flex-col space-y-1"
-                      >
-                         <FormItem className="flex items-center space-x-3 space-y-0">
-                           <FormControl>
-                             <RadioGroupItem value="undetermined" />
-                           </FormControl>
-                           <FormLabel className="font-normal">
-                            Indéterminée
-                           </FormLabel>
-                         </FormItem>
-                         <FormItem className="flex items-center space-x-3 space-y-0">
-                           <FormControl>
-                             <RadioGroupItem value="determined" />
-                           </FormControl>
-                           <FormLabel className="font-normal">
-                            Déterminée
-                           </FormLabel>
-                         </FormItem>
-                       </RadioGroup>
-                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            
-            {durationType === "determined" && (
-                 <FormField
-                control={form.control}
-                name="duration_end_date"
-                render={({ field }) => (
-                   <FormItem className="flex flex-col">
-                     <FormLabel>Date de fin de l'engagement</FormLabel>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                           <FormControl>
-                             <Button
-                              variant={"outline"}
-                              className={cn(
-                                "pl-3 text-left font-normal",
-                                !field.value && "text-muted-foreground",
-                              )}
-                            >
-                               {field.value ? (
-                                format(field.value, "PPP", { locale: fr })
-                              ) : (
-                                <span>Choisir une date de fin</span>
-                              )}
-                               <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                             </Button>
-                           </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                           <Calendar
-                            mode="single"
-                            selected={field.value}
-                            onSelect={field.onChange}
-                            disabled={(date) => date < new Date()}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                     <FormMessage />
-                   </FormItem>
-                )}
-              />
-            )}
-
             <Button type="submit" disabled={isGenerating}>
-              {isGenerating ? "Génération en cours..." : "Générer le PDF"}
+              {isGenerating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Génération...
+                </>
+              ) : (
+                <>
+                  <Download className="mr-2 h-4 w-4" />
+                  Générer l'Acte de Cautionnement
+                </>
+              )}
             </Button>
           </form>
         </Form>
@@ -342,3 +207,4 @@ export default function CautionnementGenerator({
     </Card>
   )
 }
+
