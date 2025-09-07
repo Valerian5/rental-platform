@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
-// Utilisation de l'importation statique, comme dans la route de génération de bail qui fonctionne.
-import { generatePdfFromHtml } from "@/lib/pdf-generator-final"
+// MODIFICATION: Importation plus robuste du module de génération PDF
+import * as pdfGenerator from "@/lib/pdf-generator-final"
 
 // --- FONCTIONS UTILITAIRES ---
 
@@ -132,8 +132,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
     const htmlContent = fillTemplate(template.content, context)
 
-    // Appel direct de la fonction importée statiquement.
-    const pdfBuffer = await generatePdfFromHtml(htmlContent)
+    // MODIFICATION: Appel via l'objet du module importé
+    const pdfBuffer = await pdfGenerator.generatePdfFromHtml(htmlContent)
 
     return new NextResponse(pdfBuffer, {
       headers: {
