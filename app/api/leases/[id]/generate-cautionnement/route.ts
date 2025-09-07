@@ -2,7 +2,71 @@ import { NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
 // Assurez-vous que ces utilitaires existent et sont correctement importés
 import { generatePdfFromHtml } from "@/lib/pdf-generator-final"
-import { numberToWords } from "@/lib/utils"
+
+// FONCTION UTILITAIRE INTÉGRÉE POUR ÉVITER LES ERREURS D'IMPORT
+function numberToWords(num: number): string {
+  const toWords = (n: number): string => {
+    if (n === 0) return ""
+    const units = ["", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf"]
+    const teens = ["dix", "onze", "douze", "treize", "quatorze", "quinze", "seize", "dix-sept", "dix-huit", "dix-neuf"]
+    const tens = ["", "dix", "vingt", "trente", "quarante", "cinquante", "soixante", "soixante-dix", "quatre-vingt", "quatre-vingt-dix"]
+
+    if (n < 10) return units[n]
+    if (n < 20) return teens[n - 10]
+    if (n < 70) {
+      return tens[Math.floor(n / 10)] + (n % 10 === 1 ? " et un" : n % 10 !== 0 ? "-" + units[n % 10] : "")
+    }
+    if (n < 80) {
+      // 70-79
+      return "soixante-" + (n === 71 ? " et onze" : teens[n - 60])
+    }
+    if (n < 90) {
+      // 80-89
+      return "quatre-vingt" + (n % 10 !== 0 ? "-" + units[n % 10] : "s")
+    }
+    if (n < 100) {
+      // 90-99
+      return "quatre-vingt-" + teens[n - 80]
+    }
+    if (n < 200) {
+      return "cent" + (n % 100 !== 0 ? " " + toWords(n % 100) : "")
+    }
+    if (n < 1000) {
+      return units[Math.floor(n / 100)] + " cent" + (n % 100 !== 0 ? " " + toWords(n % 100) : "s")
+    }
+    if (n === 1000) return "mille"
+    if (n < 2000) {
+      return "mille " + toWords(n % 1000)
+    }
+    if (n < 1000000) {
+      const thousands = toWords(Math.floor(n / 1000))
+      // Gérer l'accord de "mille"
+      return (thousands === "un" ? "" : thousands + " ") + "mille " + toWords(n % 1000)
+    }
+    if (n < 2000000) {
+      return "un million " + toWords(n % 1000000)
+    }
+    if (n < 1000000000) {
+      return toWords(Math.floor(n / 1000000)) + " millions " + toWords(n % 1000000)
+    }
+    return ""
+  }
+
+  if (typeof num !== "number") return ""
+  if (num === 0) return "zéro"
+
+  const integerPart = Math.floor(num)
+  const decimalPart = Math.round((num - integerPart) * 100)
+
+  const integerWords = toWords(integerPart).trim()
+
+  if (decimalPart > 0) {
+    const decimalWords = toWords(decimalPart).trim()
+    return `${integerWords} euros et ${decimalWords} centimes`
+  }
+
+  return `${integerWords} euros`
+}
 
 // Helper pour remplacer les placeholders dans le template
 function fillTemplate(templateContent: string, context: Record<string, any>): string {
@@ -31,15 +95,12 @@ export async function POST(request: Request, { params }: { params: { id: string 
   const leaseId = params.id
 
   try {
-    // CORRECTION : Récupérer 'guarantor' ET 'leaseData' depuis le corps de la requête.
     const { guarantor, leaseData } = await request.json()
 
     if (!guarantor || !leaseData) {
       return NextResponse.json({ error: "Données du garant ou du bail manquantes." }, { status: 400 })
     }
 
-    // 1. Récupérer les données du bail pour validation et informations complémentaires
-    // CORRECTION : Suppression de la sélection de la colonne 'address' qui n'existe pas.
     const { data: lease, error: leaseError } = await supabase
       .from("leases")
       .select(
@@ -58,7 +119,6 @@ export async function POST(request: Request, { params }: { params: { id: string 
       return NextResponse.json({ error: "Bail non trouvé." }, { status: 404 })
     }
 
-    // 2. Récupérer le modèle de caution par défaut
     const { data: template, error: templateError } = await supabase
       .from("surety_bond_templates")
       .select("content")
@@ -72,7 +132,6 @@ export async function POST(request: Request, { params }: { params: { id: string 
       )
     }
 
-    // 3. Préparer le contexte pour le template en utilisant les données déjà fournies par le client
     const rentInWords = numberToWords(lease.rent_amount)
     const chargesInWords = numberToWords(lease.charges_amount || 0)
     const totalRent = (lease.rent_amount || 0) + (lease.charges_amount || 0)
@@ -116,10 +175,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       ville_signature: "____________",
     }
 
-    // 4. Remplir le template avec les données
     const htmlContent = fillTemplate(template.content, context)
-
-    // 5. Générer le PDF
     const pdfBuffer = await generatePdfFromHtml(htmlContent)
 
     return new NextResponse(pdfBuffer, {
