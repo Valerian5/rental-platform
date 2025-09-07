@@ -31,23 +31,23 @@ export async function POST(request: Request, { params }: { params: { id: string 
   const leaseId = params.id
 
   try {
-    const { guarantor } = await request.json()
+    // CORRECTION : Récupérer 'guarantor' ET 'leaseData' depuis le corps de la requête.
+    const { guarantor, leaseData } = await request.json()
 
-    if (!guarantor) {
-      return NextResponse.json({ error: "Données du garant manquantes." }, { status: 400 })
+    if (!guarantor || !leaseData) {
+      return NextResponse.json({ error: "Données du garant ou du bail manquantes." }, { status: 400 })
     }
 
-    // 1. Récupérer les données complètes du bail (REQUÊTE CORRIGÉE)
-    // L'erreur venait d'une jointure ambigüe sur la table 'users'.
-    // J'ai précisé à Supabase comment joindre le locataire (tenant) et le propriétaire (owner).
+    // 1. Récupérer les données du bail pour validation et informations complémentaires
+    // CORRECTION : Suppression de la sélection de la colonne 'address' qui n'existe pas.
     const { data: lease, error: leaseError } = await supabase
       .from("leases")
       .select(
         `
         *, 
-        property:properties(*),
-        tenant:users!leases_tenant_id_fkey(first_name, last_name, address),
-        owner:users!leases_owner_id_fkey(first_name, last_name, address)
+        property:properties(address, city),
+        tenant:users!leases_tenant_id_fkey(first_name, last_name),
+        owner:users!leases_owner_id_fkey(first_name, last_name)
       `,
       )
       .eq("id", leaseId)
@@ -72,18 +72,18 @@ export async function POST(request: Request, { params }: { params: { id: string 
       )
     }
 
-    // 3. Préparer le contexte pour le template
+    // 3. Préparer le contexte pour le template en utilisant les données déjà fournies par le client
     const rentInWords = numberToWords(lease.rent_amount)
     const chargesInWords = numberToWords(lease.charges_amount || 0)
     const totalRent = (lease.rent_amount || 0) + (lease.charges_amount || 0)
 
     const context = {
       bailleur: {
-        nom_prenom: `${lease.owner.first_name} ${lease.owner.last_name}`,
-        adresse: lease.owner.address || "Adresse non renseignée",
+        nom_prenom: leaseData.bailleur_nom_prenom,
+        adresse: leaseData.bailleur_adresse || "Adresse non renseignée",
       },
       locataire: {
-        nom_prenom: `${lease.tenant.first_name} ${lease.tenant.last_name}`,
+        nom_prenom: leaseData.locataire_nom_prenom,
       },
       caution: {
         nom_prenom: `${guarantor.firstName} ${guarantor.lastName}`,
@@ -92,15 +92,15 @@ export async function POST(request: Request, { params }: { params: { id: string 
         lieu_naissance: guarantor.birthPlace,
       },
       logement: {
-        adresse: `${lease.property.address}, ${lease.property.city}`,
+        adresse: leaseData.adresse_logement,
       },
       bail: {
         date_signature: new Date(lease.created_at).toLocaleDateString("fr-FR"),
-        date_prise_effet: new Date(lease.start_date).toLocaleDateString("fr-FR"),
+        date_prise_effet: new Date(leaseData.date_prise_effet).toLocaleDateString("fr-FR"),
       },
       loyer: {
-        montant_chiffres: lease.rent_amount,
-        montant_lettres: rentInWords,
+        montant_chiffres: leaseData.montant_loyer_mensuel,
+        montant_lettres: numberToWords(leaseData.montant_loyer_mensuel),
         charges_chiffres: lease.charges_amount || 0,
         charges_lettres: chargesInWords,
         total_chiffres: totalRent,
@@ -108,7 +108,6 @@ export async function POST(request: Request, { params }: { params: { id: string 
         revision_annuelle_indice: lease.revision_index_reference || "[indice non spécifié]",
       },
       engagement: {
-        // Ces valeurs sont des exemples, à adapter selon la logique de votre application
         duree: "la durée du bail initial et de ses renouvellements successifs",
         montant_max_chiffres: "non applicable",
         montant_max_lettres: "non applicable",
