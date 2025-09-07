@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
-// Utilisation de votre service existant pour la génération de PDF
-import { generatePdfFromHtml } from "@/lib/pdf-generator-final"
+// L'importation statique est supprimée pour utiliser une importation dynamique plus fiable ci-dessous.
+// import { generatePdfFromHtml } from "@/lib/pdf-generator-final"
 
 // --- FONCTIONS UTILITAIRES ---
 
@@ -131,6 +131,11 @@ export async function POST(request: Request, { params }: { params: { id: string 
     }
 
     const htmlContent = fillTemplate(template.content, context)
+
+    // IMPORTATION DYNAMIQUE :
+    // Cette méthode force le chargement du module de génération de PDF et de ses dépendances (Puppeteer)
+    // uniquement au moment de son utilisation, ce qui résout les problèmes de bundling en environnement serverless.
+    const { generatePdfFromHtml } = await import("@/lib/pdf-generator-final")
     const pdfBuffer = await generatePdfFromHtml(htmlContent)
 
     return new NextResponse(pdfBuffer, {
