@@ -1,52 +1,7 @@
 import { NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
-import chromium from "chrome-aws-lambda"
-import puppeteer from "puppeteer-core"
-
-// --- LOGIQUE DE GÉNÉRATION PDF INTÉGRÉE ---
-
-// Utilitaire pour obtenir un navigateur Puppeteer compatible Vercel/local
-async function getBrowser() {
-  try {
-    const executablePath = await chromium.executablePath
-    return puppeteer.launch({
-      args: chromium.args,
-      executablePath,
-      headless: chromium.headless,
-    })
-  } catch (error) {
-    // Si chrome-aws-lambda échoue (souvent en local), on utilise le puppeteer complet
-    console.log("Fallback sur Puppeteer local.")
-    const puppeteerLocal = await import("puppeteer")
-    return puppeteerLocal.launch({
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-      headless: true,
-    })
-  }
-}
-
-// Fonction principale pour générer un PDF à partir de HTML
-async function generatePdfFromHtml(htmlContent: string): Promise<Buffer> {
-  let browser = null
-  try {
-    browser = await getBrowser()
-    const page = await browser.newPage()
-    await page.setContent(htmlContent, { waitUntil: "networkidle0" })
-    const pdfBuffer = await page.pdf({
-      format: "A4",
-      printBackground: true,
-      margin: { top: "20mm", right: "20mm", bottom: "20mm", left: "20mm" },
-    })
-    return pdfBuffer
-  } catch (error) {
-    console.error("Erreur lors de la génération du PDF:", error)
-    throw new Error("Impossible de générer le document PDF.")
-  } finally {
-    if (browser) {
-      await browser.close()
-    }
-  }
-}
+// Utilisation de votre service existant pour la génération de PDF
+import { generatePdfFromHtml } from "@/lib/pdf-generator-final"
 
 // --- FONCTIONS UTILITAIRES ---
 
@@ -66,7 +21,10 @@ function numberToWords(num: number): string {
     if (n < 1000) return units[Math.floor(n / 100)] + " cent" + (n % 100 !== 0 ? " " + toWords(n % 100) : "s")
     if (n === 1000) return "mille"
     if (n < 2000) return "mille " + toWords(n % 1000)
-    if (n < 1000000) { const thousands = toWords(Math.floor(n / 1000)); return (thousands === "un" ? "" : thousands + " ") + "mille " + toWords(n % 1000); }
+    if (n < 1000000) {
+      const thousands = toWords(Math.floor(n / 1000))
+      return (thousands === "un" ? "" : thousands + " ") + "mille " + toWords(n % 1000)
+    }
     if (n < 2000000) return "un million " + toWords(n % 1000000)
     if (n < 1000000000) return toWords(Math.floor(n / 1000000)) + " millions " + toWords(n % 1000000)
     return ""
@@ -76,7 +34,10 @@ function numberToWords(num: number): string {
   const integerPart = Math.floor(num)
   const decimalPart = Math.round((num - integerPart) * 100)
   const integerWords = toWords(integerPart).trim()
-  if (decimalPart > 0) { const decimalWords = toWords(decimalPart).trim(); return `${integerWords} euros et ${decimalWords} centimes`; }
+  if (decimalPart > 0) {
+    const decimalWords = toWords(decimalPart).trim()
+    return `${integerWords} euros et ${decimalWords} centimes`
+  }
   return `${integerWords} euros`
 }
 
@@ -87,8 +48,11 @@ function fillTemplate(templateContent: string, context: Record<string, any>): st
     const keys = placeholder.split(".")
     let value: any = context
     for (const key of keys) {
-      if (value && typeof value === "object" && key in value) { value = value[key]; } 
-      else { return match; }
+      if (value && typeof value === "object" && key in value) {
+        value = value[key]
+      } else {
+        return match
+      }
     }
     return value !== null && value !== undefined ? String(value) : ""
   })
@@ -136,14 +100,14 @@ export async function POST(request: Request, { params }: { params: { id: string 
         nom_prenom: leaseData.bailleur_nom_prenom,
         adresse: leaseData.bailleur_adresse || "Adresse non renseignée",
       },
-      locataire: { nom_prenom: leaseData.locataire_nom_prenom, },
+      locataire: { nom_prenom: leaseData.locataire_nom_prenom },
       caution: {
         nom_prenom: `${guarantor.firstName} ${guarantor.lastName}`,
         adresse: guarantor.address,
         date_naissance: new Date(guarantor.birthDate).toLocaleDateString("fr-FR"),
         lieu_naissance: guarantor.birthPlace,
       },
-      logement: { adresse: leaseData.adresse_logement, },
+      logement: { adresse: leaseData.adresse_logement },
       bail: {
         date_signature: new Date(lease.created_at).toLocaleDateString("fr-FR"),
         date_prise_effet: new Date(leaseData.date_prise_effet).toLocaleDateString("fr-FR"),
