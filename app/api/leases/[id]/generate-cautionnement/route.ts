@@ -1,94 +1,101 @@
 import { NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
-// Assurez-vous que ces utilitaires existent et sont correctement importés
-import { generatePdfFromHtml } from "@/lib/pdf-generator-final"
+import chromium from "chrome-aws-lambda"
+import puppeteer from "puppeteer-core"
 
-// FONCTION UTILITAIRE INTÉGRÉE POUR ÉVITER LES ERREURS D'IMPORT
+// --- LOGIQUE DE GÉNÉRATION PDF INTÉGRÉE ---
+
+// Utilitaire pour obtenir un navigateur Puppeteer compatible Vercel/local
+async function getBrowser() {
+  try {
+    const executablePath = await chromium.executablePath
+    return puppeteer.launch({
+      args: chromium.args,
+      executablePath,
+      headless: chromium.headless,
+    })
+  } catch (error) {
+    // Si chrome-aws-lambda échoue (souvent en local), on utilise le puppeteer complet
+    console.log("Fallback sur Puppeteer local.")
+    const puppeteerLocal = await import("puppeteer")
+    return puppeteerLocal.launch({
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      headless: true,
+    })
+  }
+}
+
+// Fonction principale pour générer un PDF à partir de HTML
+async function generatePdfFromHtml(htmlContent: string): Promise<Buffer> {
+  let browser = null
+  try {
+    browser = await getBrowser()
+    const page = await browser.newPage()
+    await page.setContent(htmlContent, { waitUntil: "networkidle0" })
+    const pdfBuffer = await page.pdf({
+      format: "A4",
+      printBackground: true,
+      margin: { top: "20mm", right: "20mm", bottom: "20mm", left: "20mm" },
+    })
+    return pdfBuffer
+  } catch (error) {
+    console.error("Erreur lors de la génération du PDF:", error)
+    throw new Error("Impossible de générer le document PDF.")
+  } finally {
+    if (browser) {
+      await browser.close()
+    }
+  }
+}
+
+// --- FONCTIONS UTILITAIRES ---
+
 function numberToWords(num: number): string {
   const toWords = (n: number): string => {
     if (n === 0) return ""
     const units = ["", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf"]
     const teens = ["dix", "onze", "douze", "treize", "quatorze", "quinze", "seize", "dix-sept", "dix-huit", "dix-neuf"]
     const tens = ["", "dix", "vingt", "trente", "quarante", "cinquante", "soixante", "soixante-dix", "quatre-vingt", "quatre-vingt-dix"]
-
     if (n < 10) return units[n]
     if (n < 20) return teens[n - 10]
-    if (n < 70) {
-      return tens[Math.floor(n / 10)] + (n % 10 === 1 ? " et un" : n % 10 !== 0 ? "-" + units[n % 10] : "")
-    }
-    if (n < 80) {
-      // 70-79
-      return "soixante-" + (n === 71 ? " et onze" : teens[n - 60])
-    }
-    if (n < 90) {
-      // 80-89
-      return "quatre-vingt" + (n % 10 !== 0 ? "-" + units[n % 10] : "s")
-    }
-    if (n < 100) {
-      // 90-99
-      return "quatre-vingt-" + teens[n - 80]
-    }
-    if (n < 200) {
-      return "cent" + (n % 100 !== 0 ? " " + toWords(n % 100) : "")
-    }
-    if (n < 1000) {
-      return units[Math.floor(n / 100)] + " cent" + (n % 100 !== 0 ? " " + toWords(n % 100) : "s")
-    }
+    if (n < 70) return tens[Math.floor(n / 10)] + (n % 10 === 1 ? " et un" : n % 10 !== 0 ? "-" + units[n % 10] : "")
+    if (n < 80) return "soixante-" + (n === 71 ? " et onze" : teens[n - 60])
+    if (n < 90) return "quatre-vingt" + (n % 10 !== 0 ? "-" + units[n % 10] : "s")
+    if (n < 100) return "quatre-vingt-" + teens[n - 80]
+    if (n < 200) return "cent" + (n % 100 !== 0 ? " " + toWords(n % 100) : "")
+    if (n < 1000) return units[Math.floor(n / 100)] + " cent" + (n % 100 !== 0 ? " " + toWords(n % 100) : "s")
     if (n === 1000) return "mille"
-    if (n < 2000) {
-      return "mille " + toWords(n % 1000)
-    }
-    if (n < 1000000) {
-      const thousands = toWords(Math.floor(n / 1000))
-      // Gérer l'accord de "mille"
-      return (thousands === "un" ? "" : thousands + " ") + "mille " + toWords(n % 1000)
-    }
-    if (n < 2000000) {
-      return "un million " + toWords(n % 1000000)
-    }
-    if (n < 1000000000) {
-      return toWords(Math.floor(n / 1000000)) + " millions " + toWords(n % 1000000)
-    }
+    if (n < 2000) return "mille " + toWords(n % 1000)
+    if (n < 1000000) { const thousands = toWords(Math.floor(n / 1000)); return (thousands === "un" ? "" : thousands + " ") + "mille " + toWords(n % 1000); }
+    if (n < 2000000) return "un million " + toWords(n % 1000000)
+    if (n < 1000000000) return toWords(Math.floor(n / 1000000)) + " millions " + toWords(n % 1000000)
     return ""
   }
-
   if (typeof num !== "number") return ""
   if (num === 0) return "zéro"
-
   const integerPart = Math.floor(num)
   const decimalPart = Math.round((num - integerPart) * 100)
-
   const integerWords = toWords(integerPart).trim()
-
-  if (decimalPart > 0) {
-    const decimalWords = toWords(decimalPart).trim()
-    return `${integerWords} euros et ${decimalWords} centimes`
-  }
-
+  if (decimalPart > 0) { const decimalWords = toWords(decimalPart).trim(); return `${integerWords} euros et ${decimalWords} centimes`; }
   return `${integerWords} euros`
 }
 
-// Helper pour remplacer les placeholders dans le template
 function fillTemplate(templateContent: string, context: Record<string, any>): string {
   let content = templateContent
-  // Regex pour trouver tous les placeholders comme {{objet.propriete}}
   const regex = /{{\s*([\w.]+)\s*}}/g
-
   content = content.replace(regex, (match, placeholder) => {
     const keys = placeholder.split(".")
     let value: any = context
     for (const key of keys) {
-      if (value && typeof value === "object" && key in value) {
-        value = value[key]
-      } else {
-        return match // Laisse le placeholder si la clé n'est pas trouvée
-      }
+      if (value && typeof value === "object" && key in value) { value = value[key]; } 
+      else { return match; }
     }
     return value !== null && value !== undefined ? String(value) : ""
   })
-
   return content
 }
+
+// --- ROUTE HANDLER ---
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const supabase = createServerClient()
@@ -103,14 +110,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
     const { data: lease, error: leaseError } = await supabase
       .from("leases")
-      .select(
-        `
-        *, 
-        property:properties(address, city),
-        tenant:users!leases_tenant_id_fkey(first_name, last_name),
-        owner:users!leases_owner_id_fkey(first_name, last_name)
-      `,
-      )
+      .select(`*, property:properties(address, city), tenant:users!leases_tenant_id_fkey(first_name, last_name), owner:users!leases_owner_id_fkey(first_name, last_name)`)
       .eq("id", leaseId)
       .single()
 
@@ -126,14 +126,9 @@ export async function POST(request: Request, { params }: { params: { id: string 
       .single()
 
     if (templateError || !template) {
-      return NextResponse.json(
-        { error: "Aucun modèle d'acte de cautionnement par défaut trouvé." },
-        { status: 500 },
-      )
+      return NextResponse.json({ error: "Aucun modèle d'acte de cautionnement par défaut trouvé." }, { status: 500 })
     }
 
-    const rentInWords = numberToWords(lease.rent_amount)
-    const chargesInWords = numberToWords(lease.charges_amount || 0)
     const totalRent = (lease.rent_amount || 0) + (lease.charges_amount || 0)
 
     const context = {
@@ -141,18 +136,14 @@ export async function POST(request: Request, { params }: { params: { id: string 
         nom_prenom: leaseData.bailleur_nom_prenom,
         adresse: leaseData.bailleur_adresse || "Adresse non renseignée",
       },
-      locataire: {
-        nom_prenom: leaseData.locataire_nom_prenom,
-      },
+      locataire: { nom_prenom: leaseData.locataire_nom_prenom, },
       caution: {
         nom_prenom: `${guarantor.firstName} ${guarantor.lastName}`,
         adresse: guarantor.address,
         date_naissance: new Date(guarantor.birthDate).toLocaleDateString("fr-FR"),
         lieu_naissance: guarantor.birthPlace,
       },
-      logement: {
-        adresse: leaseData.adresse_logement,
-      },
+      logement: { adresse: leaseData.adresse_logement, },
       bail: {
         date_signature: new Date(lease.created_at).toLocaleDateString("fr-FR"),
         date_prise_effet: new Date(leaseData.date_prise_effet).toLocaleDateString("fr-FR"),
@@ -161,7 +152,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
         montant_chiffres: leaseData.montant_loyer_mensuel,
         montant_lettres: numberToWords(leaseData.montant_loyer_mensuel),
         charges_chiffres: lease.charges_amount || 0,
-        charges_lettres: chargesInWords,
+        charges_lettres: numberToWords(lease.charges_amount || 0),
         total_chiffres: totalRent,
         total_lettres: numberToWords(totalRent),
         revision_annuelle_indice: lease.revision_index_reference || "[indice non spécifié]",
