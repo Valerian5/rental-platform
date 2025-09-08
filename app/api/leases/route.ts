@@ -540,7 +540,10 @@ export async function GET(request: NextRequest) {
       .select(`
         *,
         property:properties(*),
-        tenant:users!leases_tenant_id_fkey(*)
+        tenant:users!leases_tenant_id_fkey(*),
+		    application:applications(
+      *,
+      rental_file:rental_files(*)
       `)
       .eq("owner_id", ownerId)
       .order("created_at", { ascending: false })
