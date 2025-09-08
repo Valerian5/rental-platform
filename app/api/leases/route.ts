@@ -543,7 +543,7 @@ const { data: leases, error } = await supabase
     tenant:users!leases_tenant_id_fkey(*),
     application:applications!leases_application_id_fkey(
       *,
-      rental_file:rental_files(*)
+      rental_file:rental_file_id(*)
     )
   `)
   .eq("owner_id", ownerId)

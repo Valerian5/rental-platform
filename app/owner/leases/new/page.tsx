@@ -489,7 +489,7 @@ const clauseCategories = [
     // Récupère le rental_file
     const property = app?.property ?? null
     const tenant = app?.tenant ?? null
-    const rentalFile = app?.application?.rental_file ?? null
+    const rentalFile = app?.rental_file ?? null
   
     // Compose le tableau de locataires
     const allLocataires = [
