@@ -535,18 +535,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: "owner_id requis" }, { status: 400 })
     }
 
-    const { data: leases, error } = await supabase
-      .from("leases")
-      .select(`
-        *,
-        property:properties(*),
-        tenant:users!leases_tenant_id_fkey(*),
-		    application:applications(
+const { data: leases, error } = await supabase
+  .from("leases")
+  .select(`
+    *,
+    property:properties(*),
+    tenant:users!leases_tenant_id_fkey(*),
+    application:applications(
       *,
       rental_file:rental_files(*)
-      `)
-      .eq("owner_id", ownerId)
-      .order("created_at", { ascending: false })
+    )
+  `)
+  .eq("owner_id", ownerId)
+  .order("created_at", { ascending: false })
 
     if (error) {
       console.error("❌ [LEASES] Erreur récupération:", error)
