@@ -26,6 +26,7 @@ import { LeaseDocumentDisplay } from "@/components/lease-document-display"
 import { PropertyDocumentsUpload } from "@/components/property-documents-upload"
 import { SignatureMethodSelector } from "@/components/signature-method-selector"
 import { CautionnementSection } from "@/components/CautionnementSection"
+import { CautionnementGenerator } from "@/components/cautionnement-generator"
 import { toast } from "sonner"
 
 /** --- Types DocuSign (statut par signataire) --- */
@@ -723,3 +724,4 @@ export default function LeaseDetailPage() {
     </div>
   )
 }
+
