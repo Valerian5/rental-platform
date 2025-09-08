@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
 // MODIFICATION: Importation plus robuste du module de génération PDF
 import * as pdfGenerator from "@/lib/pdf-generator-final"
+import { generatePdfFromHtml } from "@/lib/pdf-utils"; // <-- Utilise la nouvelle fonction
 
 // --- FONCTIONS UTILITAIRES ---
 
@@ -132,8 +133,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
     const htmlContent = fillTemplate(template.content, context)
 
-    // MODIFICATION: Appel via l'objet du module importé
-    const pdfBuffer = await pdfGenerator.generatePdfFromHtml(htmlContent)
+    // Génération du PDF
+    const pdfBuffer = await generatePdfFromHtml(htmlContent);
 
     return new NextResponse(pdfBuffer, {
       headers: {
