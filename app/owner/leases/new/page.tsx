@@ -498,6 +498,10 @@ const clauseCategories = [
       ...(Array.isArray(rentalFile?.cotenants) ? rentalFile.cotenants : [])
     ]
 
+
+    console.log("rentalFile.guarantors =", rentalFile?.guarantors)
+    console.log("isArray =", Array.isArray(rentalFile?.guarantors))
+    
     setFormData((prev) => ({
       ...prev,
       property_id: app.property_id || "",
