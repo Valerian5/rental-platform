@@ -1,46 +1,6 @@
 import { NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
-// MODIFICATION: Importation plus robuste du module de génération PDF
-import * as pdfGenerator from "@/lib/pdf-generator-final"
-import { generatePdfFromHtml } from "@/lib/pdf-utils"; // <-- Utilise la nouvelle fonction
-
-// --- FONCTIONS UTILITAIRES ---
-
-function numberToWords(num: number): string {
-  const toWords = (n: number): string => {
-    if (n === 0) return ""
-    const units = ["", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf"]
-    const teens = ["dix", "onze", "douze", "treize", "quatorze", "quinze", "seize", "dix-sept", "dix-huit", "dix-neuf"]
-    const tens = ["", "dix", "vingt", "trente", "quarante", "cinquante", "soixante", "soixante-dix", "quatre-vingt", "quatre-vingt-dix"]
-    if (n < 10) return units[n]
-    if (n < 20) return teens[n - 10]
-    if (n < 70) return tens[Math.floor(n / 10)] + (n % 10 === 1 ? " et un" : n % 10 !== 0 ? "-" + units[n % 10] : "")
-    if (n < 80) return "soixante-" + (n === 71 ? " et onze" : teens[n - 60])
-    if (n < 90) return "quatre-vingt" + (n % 10 !== 0 ? "-" + units[n % 10] : "s")
-    if (n < 100) return "quatre-vingt-" + teens[n - 80]
-    if (n < 200) return "cent" + (n % 100 !== 0 ? " " + toWords(n % 100) : "")
-    if (n < 1000) return units[Math.floor(n / 100)] + " cent" + (n % 100 !== 0 ? " " + toWords(n % 100) : "s")
-    if (n === 1000) return "mille"
-    if (n < 2000) return "mille " + toWords(n % 1000)
-    if (n < 1000000) {
-      const thousands = toWords(Math.floor(n / 1000))
-      return (thousands === "un" ? "" : thousands + " ") + "mille " + toWords(n % 1000)
-    }
-    if (n < 2000000) return "un million " + toWords(n % 1000000)
-    if (n < 1000000000) return toWords(Math.floor(n / 1000000)) + " millions " + toWords(n % 1000000)
-    return ""
-  }
-  if (typeof num !== "number") return ""
-  if (num === 0) return "zéro"
-  const integerPart = Math.floor(num)
-  const decimalPart = Math.round((num - integerPart) * 100)
-  const integerWords = toWords(integerPart).trim()
-  if (decimalPart > 0) {
-    const decimalWords = toWords(decimalPart).trim()
-    return `${integerWords} euros et ${decimalWords} centimes`
-  }
-  return `${integerWords} euros`
-}
+import { generatePdfFromHtml } from "@/lib/pdf-utils"
 
 function fillTemplate(templateContent: string, context: Record<string, any>): string {
   let content = templateContent
@@ -60,14 +20,52 @@ function fillTemplate(templateContent: string, context: Record<string, any>): st
   return content
 }
 
-// --- ROUTE HANDLER ---
+function buildContext(lease: any, leaseData: any, guarantor: any, options: any) {
+  const totalRent = (lease.rent_amount || 0) + (lease.charges_amount || 0)
+  return {
+    caution: {
+      type: options?.caution_type || "solidaire",
+      duree_type: options?.engagement_type || "indeterminee",
+      duree_precision: options?.engagement_precision || "",
+      nom_prenom: `${guarantor.firstName} ${guarantor.lastName}`,
+      date_naissance: new Date(guarantor.birthDate).toLocaleDateString("fr-FR"),
+      lieu_naissance: guarantor.birthPlace,
+      adresse: guarantor.address,
+    },
+    locataire: {
+      nom_prenom: leaseData?.locataire_nom_prenom || `${lease?.tenant?.first_name || ""} ${lease?.tenant?.last_name || ""}`.trim(),
+    },
+    bailleur: {
+      nom_prenom: leaseData?.bailleur_nom_prenom || `${lease?.owner?.first_name || ""} ${lease?.owner?.last_name || ""}`.trim(),
+      adresse: leaseData?.bailleur_adresse || "Adresse non renseignée",
+    },
+    logement: {
+      adresse: leaseData?.adresse_logement || lease?.property?.address || "",
+      ville: lease?.property?.city || "",
+    },
+    loyer: {
+      montant_lettres: leaseData?.montant_loyer_lettres || "",
+      montant_chiffres: leaseData?.montant_loyer_mensuel || totalRent,
+      periodicite: leaseData?.periodicite || "mois",
+      date_revision: leaseData?.date_revision || "",
+      irl_trimestre: lease?.revision_index_reference || "",
+      irl_annee: leaseData?.irl_annee || "",
+      montant_max_lettres: leaseData?.montant_max_lettres || "",
+      montant_max_chiffres: leaseData?.montant_max_chiffres || "",
+    },
+    date_et_lieu_acte: {
+      date: new Date().toLocaleDateString("fr-FR"),
+      lieu: leaseData?.lieu_signature || "",
+    },
+  }
+}
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const supabase = createServerClient()
   const leaseId = params.id
 
   try {
-    const { guarantor, leaseData } = await request.json()
+    const { guarantor, leaseData, options } = await request.json()
 
     if (!guarantor || !leaseData) {
       return NextResponse.json({ error: "Données du garant ou du bail manquantes." }, { status: 400 })
@@ -90,51 +88,12 @@ export async function POST(request: Request, { params }: { params: { id: string 
       .eq("is_default", true)
       .single()
 
-    if (templateError || !template) {
+    if (templateError || !template?.content) {
       return NextResponse.json({ error: "Aucun modèle d'acte de cautionnement par défaut trouvé." }, { status: 500 })
     }
 
-    const totalRent = (lease.rent_amount || 0) + (lease.charges_amount || 0)
-
-    const context = {
-      bailleur: {
-        nom_prenom: leaseData.bailleur_nom_prenom,
-        adresse: leaseData.bailleur_adresse || "Adresse non renseignée",
-      },
-      locataire: { nom_prenom: leaseData.locataire_nom_prenom },
-      caution: {
-        nom_prenom: `${guarantor.firstName} ${guarantor.lastName}`,
-        adresse: guarantor.address,
-        date_naissance: new Date(guarantor.birthDate).toLocaleDateString("fr-FR"),
-        lieu_naissance: guarantor.birthPlace,
-      },
-      logement: { adresse: leaseData.adresse_logement },
-      bail: {
-        date_signature: new Date(lease.created_at).toLocaleDateString("fr-FR"),
-        date_prise_effet: new Date(leaseData.date_prise_effet).toLocaleDateString("fr-FR"),
-      },
-      loyer: {
-        montant_chiffres: leaseData.montant_loyer_mensuel,
-        montant_lettres: numberToWords(leaseData.montant_loyer_mensuel),
-        charges_chiffres: lease.charges_amount || 0,
-        charges_lettres: numberToWords(lease.charges_amount || 0),
-        total_chiffres: totalRent,
-        total_lettres: numberToWords(totalRent),
-        revision_annuelle_indice: lease.revision_index_reference || "[indice non spécifié]",
-      },
-      engagement: {
-        duree: "la durée du bail initial et de ses renouvellements successifs",
-        montant_max_chiffres: "non applicable",
-        montant_max_lettres: "non applicable",
-      },
-      date_du_jour: new Date().toLocaleDateString("fr-FR"),
-      ville_signature: "____________",
-    }
-
-    const htmlContent = fillTemplate(template.content, context)
-
-    // Génération du PDF
-    const pdfBuffer = await generatePdfFromHtml(htmlContent);
+    const htmlContent = fillTemplate(template.content, buildContext(lease, leaseData, guarantor, options))
+    const pdfBuffer = await generatePdfFromHtml(htmlContent)
 
     return new NextResponse(pdfBuffer, {
       headers: {
@@ -147,4 +106,3 @@ export async function POST(request: Request, { params }: { params: { id: string 
     return NextResponse.json({ error: "Erreur serveur interne." }, { status: 500 })
   }
 }
-
