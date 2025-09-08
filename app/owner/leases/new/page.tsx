@@ -188,16 +188,18 @@ interface LeaseFormData {
   franchise_loyer: string
   clause_libre: string
 
-  // === GARANTS ===
-  garants: Array<{
-    prenom: string
-    nom: string
-    adresse: string
-    date_fin_engagement: Date | null
-    montant_max_engagement: number | string
-    pour_locataire: string
-  }>
-}
+// === GARANTS ===
+garants: Array<{
+  prenom: string
+  nom: string
+  adresse: string
+  email: string
+  date_naissance: Date | null
+  lieu_naissance: string
+  date_fin_engagement: Date | null
+  montant_max_engagement: number | string
+  pour_locataire: string
+}>
 
 export default function NewLeasePageComplete() {
   const router = useRouter()
@@ -518,6 +520,24 @@ const clauseCategories = [
       montant_charges: property?.charges_amount || "0",
       depot_garantie: property?.security_deposit || property?.price || "",
       duree_contrat: property?.furnished ? 12 : 36,
+      garants: Array.isArray(rentalFile?.guarantors)
+      ? rentalFile.guarantors.map((g: any) => {
+          const p = g?.personal_info || {}
+          return {
+            prenom: p.first_name || "",
+            nom: p.last_name || "",
+            adresse: p.address || "",            // NOUVEAU: adresse du garant
+            email: p.email || "",                // NOUVEAU: email du garant
+            date_naissance: p.birth_date ? new Date(p.birth_date) : null,
+            lieu_naissance: p.birth_place || "",
+            date_fin_engagement: null,           // éditable côté owner si besoin
+            montant_max_engagement: "",
+            pour_locataire: allLocataires[0]
+              ? `${allLocataires[0].first_name || ""} ${allLocataires[0].last_name || ""}`.trim()
+              : "",
+          }
+        })
+      : prev.garants,
     }))
 
     if (tenant) {
@@ -613,6 +633,9 @@ const clauseCategories = [
           prenom: "",
           nom: "",
           adresse: "",
+          email: "",
+          date_naissance: null,
+          lieu_naissance: "",
           date_fin_engagement: null,
           montant_max_engagement: "",
           pour_locataire: prev.locataires[0] ? `${prev.locataires[0].prenom} ${prev.locataires[0].nom}` : "",
@@ -1484,6 +1507,86 @@ travaux_entre_locataires: formData.clauses?.travaux_entre_locataires?.enabled ? 
                             </Popover>
                           </div>
                         </div>
+                        {/* Étape 2: Parties */}
+// ... après l’UI des locataires, ajouter:
+<div className="mt-6 space-y-4">
+  <div className="flex items-center justify-between">
+    <h3 className="text-lg font-semibold">
+      {formData.garants.length} Garant(s) disponible(s)
+    </h3>
+    <p className="text-sm text-gray-500">
+      Ces informations seront utilisées pour générer l’acte de cautionnement.
+    </p>
+  </div>
+
+  <div className="space-y-4">
+    {formData.garants.map((g, idx) => (
+      <div key={idx} className="border rounded-md p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        <input
+          className="border rounded-md px-3 py-2"
+          placeholder="Prénom"
+          value={g.prenom}
+          onChange={(e) => updateGarant(idx, "prenom", e.target.value)}
+        />
+        <input
+          className="border rounded-md px-3 py-2"
+          placeholder="Nom"
+          value={g.nom}
+          onChange={(e) => updateGarant(idx, "nom", e.target.value)}
+        />
+        <input
+          type="date"
+          className="border rounded-md px-3 py-2"
+          placeholder="Date de naissance"
+          value={g.date_naissance ? new Date(g.date_naissance).toISOString().slice(0,10) : ""}
+          onChange={(e) => updateGarant(idx, "date_naissance", e.target.value ? new Date(e.target.value) : null)}
+        />
+        <input
+          className="border rounded-md px-3 py-2"
+          placeholder="Lieu de naissance"
+          value={g.lieu_naissance || ""}
+          onChange={(e) => updateGarant(idx, "lieu_naissance", e.target.value)}
+        />
+        <input
+          className="border rounded-md px-3 py-2 col-span-1 lg:col-span-2"
+          placeholder="Adresse"
+          value={g.adresse}
+          onChange={(e) => updateGarant(idx, "adresse", e.target.value)}
+        />
+        <input
+          type="email"
+          className="border rounded-md px-3 py-2"
+          placeholder="Email (signature électronique)"
+          value={g.email || ""}
+          onChange={(e) => updateGarant(idx, "email", e.target.value)}
+        />
+        <div className="flex items-center justify-between col-span-full">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <input
+              className="border rounded-md px-3 py-2"
+              placeholder="Montant max d'engagement (optionnel)"
+              value={g.montant_max_engagement}
+              onChange={(e) => updateGarant(idx, "montant_max_engagement", e.target.value)}
+            />
+            <input
+              className="border rounded-md px-3 py-2"
+              placeholder="Pour le locataire"
+              value={g.pour_locataire}
+              onChange={(e) => updateGarant(idx, "pour_locataire", e.target.value)}
+            />
+          </div>
+          <button type="button" className="text-red-600" onClick={() => removeGarant(idx)}>
+            Supprimer
+          </button>
+        </div>
+      </div>
+    ))}
+
+    <button type="button" className="border rounded-md px-3 py-2" onClick={addGarant}>
+      + Ajouter un garant
+    </button>
+  </div>
+</div>
                       ))}
                     </div>
                   </div>
