@@ -541,13 +541,14 @@ const { data: leases, error } = await supabase
     *,
     property:properties(*),
     tenant:users!leases_tenant_id_fkey(*),
-    application:applications(
+    application:applications!leases_application_id_fkey(
       *,
       rental_file:rental_files(*)
     )
   `)
   .eq("owner_id", ownerId)
   .order("created_at", { ascending: false })
+
 
     if (error) {
       console.error("❌ [LEASES] Erreur récupération:", error)
