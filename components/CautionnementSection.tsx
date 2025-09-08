@@ -1,3 +1,4 @@
+// components/CautionnementSection.tsx
 "use client"
 
 import { useEffect, useRef, useState } from "react"
@@ -31,7 +32,7 @@ export function CautionnementSection({ leaseId, leaseData, defaultGuarantor }: P
   const [options, setOptions] = useState({
     caution_type: "solidaire", // "simple" | "solidaire"
     engagement_type: "indeterminee", // "indeterminee" | "determinee"
-    engagement_precision: "", // texte libre si "determinee"
+    engagement_precision: "",
   })
   const [loading, setLoading] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)

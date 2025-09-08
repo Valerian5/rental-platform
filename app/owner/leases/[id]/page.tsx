@@ -25,7 +25,7 @@ import {
 import { LeaseDocumentDisplay } from "@/components/lease-document-display"
 import { PropertyDocumentsUpload } from "@/components/property-documents-upload"
 import { SignatureMethodSelector } from "@/components/signature-method-selector"
-import { CautionnementGenerator } from "@/components/cautionnement-generator"
+import { CautionnementSection } from "@/components/CautionnementSection"
 import { toast } from "sonner"
 
 /** --- Types DocuSign (statut par signataire) --- */
@@ -688,18 +688,30 @@ export default function LeaseDetailPage() {
           </TabsContent>
 
           <TabsContent value="cautionnement" className="space-y-6">
-            <CautionnementGenerator
-              leaseId={lease.id}
-              leaseData={{
-                locataire_nom_prenom: lease.locataire_nom_prenom,
-                bailleur_nom_prenom: lease.bailleur_nom_prenom,
-                bailleur_adresse: lease.bailleur_adresse || "",
-                adresse_logement: lease.adresse_logement,
-                montant_loyer_mensuel: lease.montant_loyer_mensuel,
-                date_prise_effet: lease.date_prise_effet,
-                duree_contrat: lease.duree_contrat,
-              }}
-            />
+-            <CautionnementGenerator
+-              leaseId={lease.id}
+-              leaseData={{
+-                locataire_nom_prenom: lease.locataire_nom_prenom,
+-                bailleur_nom_prenom: lease.bailleur_nom_prenom,
+-                bailleur_adresse: lease.bailleur_adresse || "",
+-                adresse_logement: lease.adresse_logement,
+-                montant_loyer_mensuel: lease.montant_loyer_mensuel,
+-                date_prise_effet: lease.date_prise_effet,
+-                duree_contrat: lease.duree_contrat,
+-              }}
+-            />
++            <CautionnementSection
++              leaseId={lease.id}
++              leaseData={{
++                locataire_nom_prenom: lease.locataire_nom_prenom,
++                bailleur_nom_prenom: lease.bailleur_nom_prenom,
++                bailleur_adresse: lease.bailleur_adresse || "",
++                adresse_logement: lease.adresse_logement,
++                montant_loyer_mensuel: lease.montant_loyer_mensuel,
++                date_prise_effet: lease.date_prise_effet,
++                duree_contrat: lease.duree_contrat,
++              }}
++            />
           </TabsContent>
 
           <TabsContent value="documents" className="space-y-6">
