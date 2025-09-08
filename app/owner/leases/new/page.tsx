@@ -200,6 +200,7 @@ garants: Array<{
   montant_max_engagement: number | string
   pour_locataire: string
 }>
+}
 
 export default function NewLeasePageComplete() {
   const router = useRouter()
