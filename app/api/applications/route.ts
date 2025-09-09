@@ -168,31 +168,42 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 🔹 Vérifier si un rental_file existe déjà pour ce tenant
-    let rentalFileId: string | null = null
-    if (body.tenant_id) {
-      const { data: rentalFile, error: rentalErr } = await supabase
-        .from("rental_files")
-        .select("id")
-        .eq("tenant_id", body.tenant_id)
-        .maybeSingle()
+		// 🔹 Vérifier si un rental_file existe déjà pour ce tenant
+		let rentalFileId: string | null = null
+		if (body.tenant_id) {
+		  const { data: rentalFile, error: rentalErr } = await supabase
+			.from("rental_files")
+			.select("id")
+			.eq("tenant_id", body.tenant_id)
+			.single() // ✅ garanti unique grâce à la contrainte
 
-      if (rentalErr) {
-        console.error("❌ Erreur récupération rental_file:", rentalErr)
-        return NextResponse.json({ error: "Erreur lors de la récupération du dossier" }, { status: 500 })
-      }
+		  if (rentalErr && rentalErr.code !== "PGRST116") {
+			console.error("❌ Erreur récupération rental_file:", rentalErr)
+			return NextResponse.json({ error: "Erreur lors de la récupération du dossier" }, { status: 500 })
+		  }
 
-      if (rentalFile) {
-        rentalFileId = rentalFile.id
-      }
-    }
+		  if (rentalFile) {
+			rentalFileId = rentalFile.id
+		  }
 
-    // 🔹 On force notre valeur de rental_file_id
-    const { rental_file_id, ...rest } = body
-    const applicationPayload = {
-      ...rest,
-      rental_file_id: rentalFileId,
-    }
+		  console.log("🎯 Rental file trouvé:", rentalFileId)
+		}
+
+		// 🔹 On force notre valeur de rental_file_id
+		const { rental_file_id, ...rest } = body
+		const applicationPayload = {
+		  ...rest,
+		  rental_file_id: rentalFileId,
+		}
+
+		console.log("📦 Payload candidature:", applicationPayload)
+
+		const { data, error } = await supabase
+		  .from("applications")
+		  .insert(applicationPayload)
+		  .select()
+		  .single()
+
 
     const { data, error } = await supabase.from("applications").insert(applicationPayload).select().single()
 
