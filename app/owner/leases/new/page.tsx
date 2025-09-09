@@ -489,14 +489,30 @@ const clauseCategories = [
     // Récupère le rental_file
     const property = app?.property ?? null
     const tenant = app?.tenant ?? null
-    const rentalFile = app?.rental_file ?? null;
-  
+    let rentalFile = app?.rental_file ?? null
+
+    // 🔹 Si rental_file pas dispo via app, le récupérer via applications.rental_file_id
+    if (!rentalFile && app.rental_file_id) {
+      try {
+        console.log("🔄 Récupération rental_file via applications.rental_file_id:", app.rental_file_id)
+        const rentalResponse = await fetch(`/api/rental-files/${app.rental_file_id}`)
+        if (rentalResponse.ok) {
+          const rentalData = await rentalResponse.json()
+          rentalFile = rentalData.rental_file
+          console.log("✅ Rental file récupéré depuis applications.rental_file_id")
+        } else {
+          console.warn("⚠️ Impossible de récupérer le rental_file via rental_file_id")
+        }
+      } catch (error) {
+        console.error("❌ Erreur récupération rental_file:", error)
+      }
+    }
+
     // Compose le tableau de locataires
     const allLocataires = [
       ...(rentalFile?.main_tenant ? [rentalFile.main_tenant] : []),
       ...(Array.isArray(rentalFile?.cotenants) ? rentalFile.cotenants : [])
     ]
-
 
     console.log("rentalFile.guarantors =", rentalFile?.guarantors)
     console.log("isArray =", Array.isArray(rentalFile?.guarantors))
