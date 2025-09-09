@@ -170,29 +170,47 @@ export async function POST(request: NextRequest) {
 			}
 		}
 
-		// 🔹 Récupérer le rental_file_id du locataire s'il existe
+		// 🔹 Récupérer ou créer le rental_file du locataire
 		let rentalFileId: string | null = null
 		if (body.tenant_id) {
-			const { data: rentalFile, error: rentalErr } = await supabase
-				.from("rental_files")
-				.select("id")
-				.eq("tenant_id", body.tenant_id)
-				.single()
+		  const { data: rentalFile, error: rentalErr } = await supabase
+			.from("rental_files")
+			.select("id")
+			.eq("tenant_id", body.tenant_id)
+			.maybeSingle()
 
-			if (rentalErr && rentalErr.code !== "PGRST116") {
-				console.error("❌ Erreur récupération rental_file:", rentalErr)
-				return NextResponse.json({ error: "Erreur lors de la récupération du dossier" }, { status: 500 })
+		  if (rentalErr) {
+			console.error("❌ Erreur récupération rental_file:", rentalErr)
+			return NextResponse.json({ error: "Erreur lors de la récupération du dossier" }, { status: 500 })
+		  }
+
+		  if (rentalFile) {
+			rentalFileId = rentalFile.id
+		  } else {
+			// 📌 Créer un dossier "draft" automatiquement
+			const { data: newRentalFile, error: createErr } = await supabase
+			  .from("rental_files")
+			  .insert({
+				tenant_id: body.tenant_id,
+				main_tenant: {}, // ⚠️ ici tu dois mettre la structure minimale attendue (JSONB obligatoire)
+				status: "draft",
+			  })
+			  .select("id")
+			  .single()
+
+			if (createErr) {
+			  console.error("❌ Erreur création rental_file:", createErr)
+			  return NextResponse.json({ error: "Erreur lors de la création du dossier" }, { status: 500 })
 			}
 
-			if (rentalFile) {
-				rentalFileId = rentalFile.id
-			}
+			rentalFileId = newRentalFile.id
+		  }
 		}
 
 		// 🔹 Ajouter rental_file_id dans la candidature
 		const applicationPayload = {
-			...body,
-			rental_file_id: rentalFileId,
+		  ...body,
+		  rental_file_id: rentalFileId,
 		}
 
 		const { data, error } = await supabase.from("applications").insert(applicationPayload).select().single()
