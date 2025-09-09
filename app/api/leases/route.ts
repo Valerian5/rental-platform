@@ -531,80 +531,77 @@ export async function POST(request: NextRequest) {
 // Renvoie un contexte de création de bail enrichi avec le rental_file (guarantors)
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const ownerId = searchParams.get("owner_id");
+    const { searchParams } = new URL(request.url)
+    const applicationId = searchParams.get("application_id")
+    const ownerId = searchParams.get("owner_id")
 
-    if (!ownerId) {
-      return NextResponse.json(
-        { success: false, error: "owner_id requis" },
-        { status: 400 },
-      );
-    }
+    if (applicationId) {
+      const server = createServerClient()
 
-    // Étape 1 : Récupérer les baux (leases) de base
-    const { data: leases, error: leasesError } = await supabase
-      .from("leases")
-      .select("*")
-      .eq("owner_id", ownerId)
-      .order("created_at", { ascending: false });
+      // 1) Récupérer l'application (incluant rental_file_id)
+      const { data: application, error: appErr } = await server
+        .from("applications")
+        .select("id, tenant_id, property_id, rental_file_id")
+        .eq("id", applicationId)
+        .single()
 
-    if (leasesError) {
-      console.error("❌ [LEASES] Erreur récupération des baux:", leasesError);
-      throw leasesError; // Propage l'erreur pour être capturée par le bloc catch
-    }
+      if (appErr || !application) {
+        return NextResponse.json({ error: "Candidature introuvable" }, { status: 404 })
+      }
 
-    if (!leases || leases.length === 0) {
+      // 2) Récupérer le rental_file via rental_file_id si présent, sinon fallback par tenant_id
+      let rentalFile: any = null
+
+      if (application.rental_file_id) {
+        const { data: rfById, error: rfErr } = await server
+          .from("rental_files")
+          .select("*")
+          .eq("id", application.rental_file_id)
+          .single()
+        if (rfErr) {
+          return NextResponse.json({ error: "Erreur récupération du dossier" }, { status: 500 })
+        }
+        rentalFile = rfById
+      } else {
+        const { data: rfList, error: rfListErr } = await server
+          .from("rental_files")
+          .select("*")
+          .eq("tenant_id", application.tenant_id)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+        if (rfListErr) {
+          return NextResponse.json({ error: "Erreur récupération du dossier" }, { status: 500 })
+        }
+        rentalFile = rfList?.[0] || null
+      }
+
       return NextResponse.json({
-        success: true,
-        leases: [],
-      });
+        application: {
+          id: application.id,
+          tenant_id: application.tenant_id,
+          property_id: application.property_id,
+          rental_file_id: application.rental_file_id || rentalFile?.id || null,
+        },
+        rental_file: rentalFile, // contient guarantors
+      })
+    } else if (ownerId) {
+      const server = createServerClient()
+      const { data: leases, error } = await server
+        .from("leases")
+        .select("*")
+        .eq("owner_id", ownerId)
+        .order("created_at", { ascending: false })
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+      return NextResponse.json({ leases })
+    } else {
+      return NextResponse.json({ error: "application_id ou owner_id requis" }, { status: 400 })
     }
-
-    // Étape 2 : Récupérer les informations liées (propriétés, locataires, etc.)
-    const propertyIds = [...new Set(leases.map((l) => l.property_id).filter(Boolean))];
-    const tenantIds = [...new Set(leases.map((l) => l.tenant_id).filter(Boolean))];
-    const applicationIds = [...new Set(leases.map((l) => l.application_id).filter(Boolean))];
-
-    const [
-      { data: properties, error: propertiesError },
-      { data: tenants, error: tenantsError },
-      { data: applications, error: applicationsError },
-    ] = await Promise.all([
-      supabase.from("properties").select("*").in("id", propertyIds),
-      supabase.from("users").select("*").in("id", tenantIds),
-      supabase.from("applications").select("*, rental_file:rental_files(*)").in("id", applicationIds),
-    ]);
-
-    if (propertiesError || tenantsError || applicationsError) {
-      console.error("❌ [LEASES] Erreur récupération données liées:", {
-        propertiesError,
-        tenantsError,
-        applicationsError,
-      });
-      // Vous pouvez choisir de renvoyer une erreur 500 ici ou les données partielles
-    }
-
-    // Étape 3 : Combiner les données
-    const enrichedLeases = leases.map((lease) => ({
-      ...lease,
-      property: properties?.find((p) => p.id === lease.property_id) || null,
-      tenant: tenants?.find((t) => t.id === lease.tenant_id) || null,
-      application: applications?.find((a) => a.id === lease.application_id) || null,
-    }));
-
-    return NextResponse.json({
-      success: true,
-      leases: enrichedLeases,
-    });
-  } catch (error) {
-    console.error("❌ [LEASES] Erreur inattendue:", error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Erreur lors de la récupération des baux",
-        details: error instanceof Error ? error.message : "Erreur inconnue",
-      },
-      { status: 500 },
-    );
+  } catch (e) {
+    console.error("❌ GET /api/leases erreur:", e)
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }
+
