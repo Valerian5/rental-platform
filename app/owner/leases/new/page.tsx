@@ -465,6 +465,15 @@ const clauseCategories = [
         const applicationResponse = await fetch(`/api/applications/${applicationId}`)
         if (applicationResponse.ok) {
           const applicationData = await applicationResponse.json()
+
+          // 🔹 Récupération robuste du rental_file via application_id
+          const rfCtxRes = await fetch(`/api/leases?application_id=${applicationId}`)
+          if (rfCtxRes.ok) {
+            const rfCtx = await rfCtxRes.json()
+            applicationData.application.rental_file = rfCtx?.rental_file || applicationData.application.rental_file
+            applicationData.application.rental_file_id = rfCtx?.application?.rental_file_id || applicationData.application.rental_file_id
+          }
+
           setApplication(applicationData.application)
           if (applicationData.application) {
             await prefillFormFromApplication(applicationData.application, currentUser)
