@@ -379,6 +379,36 @@ export function ImprovedPersonProfile({
               />
             </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="address">Adresse</Label>
+                <Input
+                  id="address"
+                  value={profile.address || ""}
+                  onChange={(e) => onUpdate({ ...profile, address: e.target.value })}
+                  placeholder="Adresse du garant"
+                />
+              </div>
+              <div>
+                <Label htmlFor="postal_code">Code Postal</Label>
+                <Input
+                  id="postal_code"
+                  value={profile.postal_code || ""}
+                  onChange={(e) => onUpdate({ ...profile, postal_code: e.target.value })}
+                  placeholder="Code postal"
+                />
+              </div>
+              <div>
+                <Label htmlFor="city">Ville</Label>
+                <Input
+                  id="city"
+                  value={profile.city || ""}
+                  onChange={(e) => onUpdate({ ...profile, city: e.target.value })}
+                  placeholder="Ville"
+                />
+              </div>
+            </div>
+
             <IdentityDocumentUpload
               onDocumentValidated={handleIdentityDocumentValidated}
               completedSides={{
