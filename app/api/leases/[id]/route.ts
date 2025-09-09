@@ -1,31 +1,57 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { NextResponse, type NextRequest } from "next/server"
+import { createServerClient } from "@/lib/supabase"
 
+// GET /api/leases/[id]
+// Renvoie un bail + enrichissement rental_file si rental_file_id exposé côté lease
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-  const supabase = createServerClient()
   try {
-    const { data: application, error } = await supabase
-      .from("applications")
-      .select(
-        `
-        *,
-        property:properties(*, owner:users(*)),
-        tenant:users(*),
-        rental_file:rental_file_id(*)
-      `,
-      )
-      .eq("id", params.id)
+    const leaseId = params.id
+    const server = createServerClient()
+
+    // 1) Récupérer le bail
+    const { data: lease, error: leaseErr } = await server
+      .from("leases")
+      .select("*")
+      .eq("id", leaseId)
       .single()
 
-    if (error) {
-      console.error("Erreur récupération application:", error)
-      return NextResponse.json({ success: false, error: "Application non trouvée" }, { status: 404 })
+    if (leaseErr || !lease) {
+      return NextResponse.json({ error: "Bail introuvable" }, { status: 404 })
     }
 
-    return NextResponse.json({ success: true, application })
-  } catch (error) {
-    console.error("Erreur serveur:", error)
-    return NextResponse.json({ success: false, error: "Erreur serveur" }, { status: 500 })
+    // 2) Déterminer un rental_file_id:
+    //    - si stocké sur le bail (ex: colonne rental_file_id), on l'utilise
+    //    - sinon fallback: récupérer l'application la plus récente du couple (tenant_id, property_id)
+    let rentalFileId: string | null = lease.rental_file_id || null
+
+    if (!rentalFileId && lease.tenant_id && lease.property_id) {
+      const { data: appByPair } = await server
+        .from("applications")
+        .select("id, rental_file_id")
+        .eq("tenant_id", lease.tenant_id)
+        .eq("property_id", lease.property_id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+
+      rentalFileId = appByPair?.[0]?.rental_file_id || null
+    }
+
+    // 3) Charger le rental_file (guarantors) si disponible
+    let rentalFile: any = null
+
+    if (rentalFileId) {
+      const { data: rf, error: rfErr } = await server
+        .from("rental_files")
+        .select("*")
+        .eq("id", rentalFileId)
+        .single()
+      if (!rfErr) rentalFile = rf
+    }
+
+    return NextResponse.json({ lease, rental_file: rentalFile })
+  } catch (e) {
+    console.error("❌ GET /api/leases/[id] erreur:", e)
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }
 

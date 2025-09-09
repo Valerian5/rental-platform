@@ -486,10 +486,25 @@ const clauseCategories = [
   }
 
   const prefillFormFromApplication = async (app: any, currentUser: any) => {
-    // Récupère les données de manière fiable
+    // Récupère le rental_file
     const property = app?.property ?? null
     const tenant = app?.tenant ?? null
-    const rentalFile = app?.rental_file ?? null // ✅ Fonctionne maintenant à chaque fois
+    let rentalFile = app?.rental_file ?? null
+
+    // 🔹 Fallback: si rental_file non présent dans app, on l’obtient via applications.rental_file_id
+    if (!rentalFile && app?.rental_file_id) {
+      try {
+        const rfRes = await fetch(`/api/rental-files/${app.rental_file_id}`)
+        if (rfRes.ok) {
+          const rfData = await rfRes.json()
+          rentalFile = rfData?.rental_file || null
+        } else {
+          console.warn("Impossible de récupérer le rental_file via rental_file_id")
+        }
+      } catch (e) {
+        console.error("Erreur récupération rental_file par ID:", e)
+      }
+    }
 
     // Compose le tableau de locataires
     const allLocataires = [
@@ -520,6 +535,7 @@ const clauseCategories = [
       montant_charges: property?.charges_amount || "0",
       depot_garantie: property?.security_deposit || property?.price || "",
       duree_contrat: property?.furnished ? 12 : 36,
+      // 🔹 Préremplissage des garants depuis rental_files.guarantors
       garants: Array.isArray(rentalFile?.guarantors)
         ? rentalFile.guarantors.map((g: any) => {
             const p = g?.personal_info || {}
@@ -540,9 +556,7 @@ const clauseCategories = [
         : prev.garants,
     }))
 
-    if (tenant) {
-      setTenants([tenant])
-    }
+    if (tenant) setTenants([tenant])
   }
 
   const handleInputChange = useCallback(

@@ -1,5 +1,5 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { NextResponse, type NextRequest } from "next/server"
+import { createServerClient } from "@/lib/supabase"
 
 export async function POST(request: NextRequest) {
   try {
@@ -526,55 +526,68 @@ export async function POST(request: NextRequest) {
   }
 }
 
+
+// GET /api/leases?application_id=...
+// Renvoie un contexte de création de bail enrichi avec le rental_file (guarantors)
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const ownerId = searchParams.get("owner_id")
+    const applicationId = searchParams.get("application_id")
 
-    if (!ownerId) {
-      return NextResponse.json({ success: false, error: "owner_id requis" }, { status: 400 })
+    if (!applicationId) {
+      return NextResponse.json({ error: "application_id requis" }, { status: 400 })
     }
 
-const { data: leases, error } = await supabase
-  .from("leases")
-  .select(`
-    *,
-    property:properties(*),
-    tenant:users!leases_tenant_id_fkey(*),
-    application:applications!leases_application_id_fkey(
-      *,
-      rental_file:rental_files (
-        *
-      )
-    )
-  `)
-  .eq("owner_id", ownerId)
-  .order("created_at", { ascending: false });
+    const server = createServerClient()
 
+    // 1) Récupérer l'application (incluant rental_file_id)
+    const { data: application, error: appErr } = await server
+      .from("applications")
+      .select("id, tenant_id, property_id, rental_file_id")
+      .eq("id", applicationId)
+      .single()
 
-    if (error) {
-      console.error("❌ [LEASES] Erreur récupération:", error)
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Erreur lors de la récupération des baux",
-        },
-        { status: 500 },
-      )
+    if (appErr || !application) {
+      return NextResponse.json({ error: "Candidature introuvable" }, { status: 404 })
+    }
+
+    // 2) Récupérer le rental_file via rental_file_id si présent, sinon fallback par tenant_id
+    let rentalFile: any = null
+
+    if (application.rental_file_id) {
+      const { data: rfById, error: rfErr } = await server
+        .from("rental_files")
+        .select("*")
+        .eq("id", application.rental_file_id)
+        .single()
+      if (rfErr) {
+        return NextResponse.json({ error: "Erreur récupération du dossier" }, { status: 500 })
+      }
+      rentalFile = rfById
+    } else {
+      const { data: rfList, error: rfListErr } = await server
+        .from("rental_files")
+        .select("*")
+        .eq("tenant_id", application.tenant_id)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+      if (rfListErr) {
+        return NextResponse.json({ error: "Erreur récupération du dossier" }, { status: 500 })
+      }
+      rentalFile = rfList?.[0] || null
     }
 
     return NextResponse.json({
-      success: true,
-      leases: leases || [],
-    })
-  } catch (error) {
-    console.error("❌ [LEASES] Erreur:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Erreur lors de la récupération des baux",
+      application: {
+        id: application.id,
+        tenant_id: application.tenant_id,
+        property_id: application.property_id,
+        rental_file_id: application.rental_file_id || rentalFile?.id || null,
       },
-      { status: 500 },
-    )
+      rental_file: rentalFile, // contient guarantors
+    })
+  } catch (e) {
+    console.error("❌ GET /api/leases erreur:", e)
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }
