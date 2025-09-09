@@ -58,15 +58,6 @@ export const applicationService = {
           const data = payload.application
           console.log("✅ Candidature créée via API:", data)
 
-      const { data, error } = await supabase.from("applications").insert(applicationData).select().single()
-
-      if (error) {
-        console.error("❌ Erreur création candidature:", error)
-        throw new Error(error.message)
-      }
-
-      console.log("✅ Candidature créée:", data)
-
       // --- ENVOI EMAIL VIA API ROUTE (server-only) ---
       try {
         // Appel à une API route pour gérer l'envoi d'email côté serveur uniquement
