@@ -489,7 +489,7 @@ const clauseCategories = [
     // Récupère le rental_file
     const property = app?.property ?? null
     const tenant = app?.tenant ?? null
-    let rentalFile = app?.rental_file ?? null
+    const rentalFile = app?.rental_file ?? null
 
     // 🔹 Si rental_file pas dispo via app, le récupérer via applications.rental_file_id
     if (!rentalFile && app.rental_file_id) {
