@@ -14,20 +14,17 @@ function fillTemplate(templateContent: string, context: Record<string, any>): st
   })
 }
 
-function buildContext(lease: any, guarantor: any, options: any) {
+function buildContext(lease: any, property: any, tenant: any, owner: any, guarantor: any, options: any) {
   const rentAmount = Number(lease?.rent_amount || 0)
   const rentAmountInWords = rentAmount > 0 ? n2words(rentAmount, { lang: "fr" }) : ""
-
   const durationType = options?.engagement_type === "determinee" ? "déterminée" : "indéterminée"
 
   return {
-    // Champs garant
+    // Garant (formulaire)
     guarantor: {
       first_name: guarantor.firstName || "",
       last_name: guarantor.lastName || "",
-      birth_date: guarantor.birthDate
-        ? new Date(guarantor.birthDate).toLocaleDateString("fr-FR")
-        : "",
+      birth_date: guarantor.birthDate ? new Date(guarantor.birthDate).toLocaleDateString("fr-FR") : "",
       birth_place: guarantor.birthPlace || "",
       address: guarantor.address || "",
     },
@@ -36,64 +33,76 @@ function buildContext(lease: any, guarantor: any, options: any) {
     lease: {
       rent_amount: rentAmount,
       rent_amount_in_words: rentAmountInWords,
-      rent_revision_date: lease?.date_revision || "", // texte dans notre modèle
+      rent_revision_date: lease?.date_revision || "",
       rent_revision_reference: lease?.revision_index_reference || "",
       tenant: {
-        first_name: lease?.tenant?.first_name || "",
-        last_name: lease?.tenant?.last_name || "",
+        first_name: tenant?.first_name || "",
+        last_name: tenant?.last_name || "",
       },
       property: {
-        address: lease?.property?.address || "",
-        zip_code: lease?.property?.zip_code || "",
-        city: lease?.property?.city || "",
+        address: property?.address || "",
+        zip_code: property?.zip_code || "",
+        city: property?.city || "",
         owner: {
-          first_name: lease?.owner?.first_name || "",
-          last_name: lease?.owner?.last_name || "",
-          address: lease?.owner?.address || "",
+          first_name: owner?.first_name || "",
+          last_name: owner?.last_name || "",
+          address: owner?.address || "",
         },
       },
     },
 
-    // Durée d’engagement (à plat)
+    // Durée d’engagement
     duration_type: durationType,
     is_indetermined_duration: durationType === "indéterminée",
     duration_precision: options?.engagement_precision || "",
 
-    // Montant maximum garanti (si non saisi pour l’instant)
-    max_amount_in_words: options?.max_amount
-      ? n2words(Number(options.max_amount) || 0, { lang: "fr" })
-      : "",
+    // Montant max garanti (si saisi côté UI options)
     max_amount: options?.max_amount || "",
+    max_amount_in_words:
+      options?.max_amount ? n2words(Number(options.max_amount) || 0, { lang: "fr" }) : "",
 
     // Divers
     today: new Date().toLocaleDateString("fr-FR"),
   }
 }
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
-  const supabase = createServerClient(request)
+export async function POST(_request: NextRequest, { params }: { params: { id: string } }) {
+  const supabase = createServerClient() // aligné sur les autres routes fonctionnelles
   const leaseId = params.id
 
   try {
-    const { guarantor, leaseData: _unused, options } = await request.json()
+    const { guarantor, leaseData: _unused, options } = await _request.json()
 
-    // Charger le bail + relations attendues par les placeholders
+    // 1) Bail simple (sans jointures)
     const { data: lease, error: leaseError } = await supabase
       .from("leases")
-      .select(`
-        *,
-        property:properties(address, zip_code, city),
-        tenant:users!leases_tenant_id_fkey(first_name, last_name),
-        owner:users!leases_owner_id_fkey(first_name, last_name, address)
-      `)
+      .select("*")
       .eq("id", leaseId)
       .single()
 
     if (leaseError || !lease) {
+      console.error("Lease not found:", leaseError)
       return NextResponse.json({ error: "Bail non trouvé." }, { status: 404 })
     }
 
-    // Récupérer le template par défaut d’acte de cautionnement
+    // 2) Récupérer relations par IDs (robuste aux noms de FKs)
+    const [propRes, tenantRes, ownerRes] = await Promise.all([
+      lease.property_id
+        ? supabase.from("properties").select("id, address, zip_code, city, owner_id").eq("id", lease.property_id).single()
+        : Promise.resolve({ data: null, error: null }),
+      lease.tenant_id
+        ? supabase.from("users").select("id, first_name, last_name").eq("id", lease.tenant_id).single()
+        : Promise.resolve({ data: null, error: null }),
+      lease.owner_id
+        ? supabase.from("users").select("id, first_name, last_name, address").eq("id", lease.owner_id).single()
+        : Promise.resolve({ data: null, error: null }),
+    ])
+
+    const property = propRes.data || null
+    const tenant = tenantRes.data || null
+    const owner = ownerRes.data || null
+
+    // 3) Template par défaut
     const { data: template, error: templateError } = await supabase
       .from("surety_bond_templates")
       .select("*")
@@ -102,11 +111,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .maybeSingle()
 
     if (templateError || !template?.content) {
+      console.error("Surety template not found:", templateError)
       return NextResponse.json({ error: "Modèle d'acte de cautionnement introuvable." }, { status: 404 })
     }
 
-    // Construire le contexte EXACT pour tes placeholders
-    const context = buildContext(lease, guarantor, options || {})
+    // 4) Contexte EXACT pour les placeholders fournis
+    const context = buildContext(lease, property, tenant, owner, guarantor, options || {})
 
     const html = fillTemplate(template.content, context)
     return new NextResponse(html, { headers: { "Content-Type": "text/html; charset=utf-8" } })
