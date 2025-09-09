@@ -486,36 +486,15 @@ const clauseCategories = [
   }
 
   const prefillFormFromApplication = async (app: any, currentUser: any) => {
-    // Récupère le rental_file
-    const property = app?.property ?? null
-    const tenant = app?.tenant ?? null
-    const rentalFile = app?.rental_file ?? null
-
-    // 🔹 Si rental_file pas dispo via app, le récupérer via applications.rental_file_id
-    if (!rentalFile && app.rental_file_id) {
-      try {
-        console.log("🔄 Récupération rental_file via applications.rental_file_id:", app.rental_file_id)
-        const rentalResponse = await fetch(`/api/rental-files/${app.rental_file_id}`)
-        if (rentalResponse.ok) {
-          const rentalData = await rentalResponse.json()
-          rentalFile = rentalData.rental_file
-          console.log("✅ Rental file récupéré depuis applications.rental_file_id")
-        } else {
-          console.warn("⚠️ Impossible de récupérer le rental_file via rental_file_id")
-        }
-      } catch (error) {
-        console.error("❌ Erreur récupération rental_file:", error)
-      }
-    }
-
-    // Compose le tableau de locataires
+    const property = app?.property ?? null;
+    const tenant = app?.tenant ?? null;
+    // ✅ This now works reliably without any fallback.
+    const rentalFile = app?.rental_file ?? null;
+  
     const allLocataires = [
       ...(rentalFile?.main_tenant ? [rentalFile.main_tenant] : []),
       ...(Array.isArray(rentalFile?.cotenants) ? rentalFile.cotenants : [])
-    ]
-
-    console.log("rentalFile.guarantors =", rentalFile?.guarantors)
-    console.log("isArray =", Array.isArray(rentalFile?.guarantors))
+    ];
 
     setFormData((prev) => ({
       ...prev,
@@ -542,28 +521,28 @@ const clauseCategories = [
       duree_contrat: property?.furnished ? 12 : 36,
       garants: Array.isArray(rentalFile?.guarantors)
       ? rentalFile.guarantors.map((g: any) => {
-          const p = g?.personal_info || {}
+          const p = g?.personal_info || {};
           return {
             prenom: p.first_name || "",
             nom: p.last_name || "",
-            adresse: p.address || "",            // NOUVEAU: adresse du garant
-            email: p.email || "",                // NOUVEAU: email du garant
+            adresse: p.address || "",
+            email: p.email || "",
             date_naissance: p.birth_date ? new Date(p.birth_date) : null,
             lieu_naissance: p.birth_place || "",
-            date_fin_engagement: null,           // éditable côté owner si besoin
+            date_fin_engagement: null,
             montant_max_engagement: "",
             pour_locataire: allLocataires[0]
               ? `${allLocataires[0].first_name || ""} ${allLocataires[0].last_name || ""}`.trim()
               : "",
-          }
+          };
         })
       : prev.garants,
-    }))
+    }));
 
     if (tenant) {
-      setTenants([tenant])
+      setTenants([tenant]);
     }
-  }
+  };
 
   const handleInputChange = useCallback(
     (field: keyof LeaseFormData, value: any) => {
