@@ -99,6 +99,31 @@ export function CautionnementSection({ leaseId, leaseData, defaultGuarantor }: P
     }
   }
 
+  useEffect(() => {
+    const preloadGuarantor = async () => {
+      try {
+        const res = await fetch(`/api/leases/${leaseId}`)
+        if (!res.ok) return
+        const data = await res.json()
+        const rf = data?.rental_file
+        const g = Array.isArray(rf?.guarantors) ? rf.guarantors.find((x: any) => x?.personal_info) : null
+        const p = g?.personal_info || null
+        if (!p) return
+
+        // Ne pas écraser si l’utilisateur a déjà saisi
+        setGuarantor(prev => ({
+          firstName: prev.firstName || p.first_name || "",
+          lastName: prev.lastName || p.last_name || "",
+          birthDate: prev.birthDate || p.birth_date || "",
+          birthPlace: prev.birthPlace || p.birth_place || "",
+          address: prev.address || [p.address, p.postal_code, p.city].filter(Boolean).join(", "),
+          email: prev.email || p.email || "",
+        }))
+      } catch {}
+    }
+    preloadGuarantor()
+  }, [leaseId])
+
   const sendToGuarantorForESign = async () => {
     try {
       setLoading(true)
