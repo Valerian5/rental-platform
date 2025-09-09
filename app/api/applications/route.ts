@@ -24,7 +24,8 @@ export async function GET(request: NextRequest) {
             city,
             price,
             property_images(id, url, is_primary)
-          )
+          ),
+          rental_file:rental_files(*)
         `)
 				.eq("tenant_id", tenantId)
 				.order("created_at", { ascending: false })
@@ -98,7 +99,8 @@ export async function GET(request: NextRequest) {
 				.select(`
           *,
           property:properties(*),
-          tenant:users(*)
+          tenant:users(*),
+          rental_file:rental_files(*)
         `)
 				.in("property_id", propertyIds)
 				.order("created_at", { ascending: false })
@@ -108,35 +110,25 @@ export async function GET(request: NextRequest) {
 				return NextResponse.json({ error: error.message }, { status: 500 })
 			}
 
-			// Enrichir avec les visites et dossiers de location pour chaque candidature
+			// Enrichir avec les visites
 			const enrichedApplications = await Promise.all(
 				(applications || []).map(async (app) => {
 					try {
-						// Récupérer les visites
 						const { data: visits } = await supabase
 							.from("visits")
 							.select("*")
 							.eq("tenant_id", app.tenant_id)
 							.eq("property_id", app.property_id)
 
-						// Récupérer le dossier de location
-						const { data: rentalFile } = await supabase
-							.from("rental_files")
-							.select("*")
-							.eq("tenant_id", app.tenant_id)
-							.single()
-
 						return {
 							...app,
 							visits: visits || [],
-							rental_file: rentalFile || null,
 						}
 					} catch (enrichError) {
 						console.error("❌ Erreur enrichissement candidature:", enrichError)
 						return {
 							...app,
 							visits: [],
-							rental_file: null,
 						}
 					}
 				}),
@@ -178,7 +170,32 @@ export async function POST(request: NextRequest) {
 			}
 		}
 
-		const { data, error } = await supabase.from("applications").insert(body).select().single()
+		// 🔹 Récupérer le rental_file_id du locataire s'il existe
+		let rentalFileId: string | null = null
+		if (body.tenant_id) {
+			const { data: rentalFile, error: rentalErr } = await supabase
+				.from("rental_files")
+				.select("id")
+				.eq("tenant_id", body.tenant_id)
+				.single()
+
+			if (rentalErr && rentalErr.code !== "PGRST116") {
+				console.error("❌ Erreur récupération rental_file:", rentalErr)
+				return NextResponse.json({ error: "Erreur lors de la récupération du dossier" }, { status: 500 })
+			}
+
+			if (rentalFile) {
+				rentalFileId = rentalFile.id
+			}
+		}
+
+		// 🔹 Ajouter rental_file_id dans la candidature
+		const applicationPayload = {
+			...body,
+			rental_file_id: rentalFileId,
+		}
+
+		const { data, error } = await supabase.from("applications").insert(applicationPayload).select().single()
 
 		if (error) {
 			console.error("❌ Erreur création candidature:", error)

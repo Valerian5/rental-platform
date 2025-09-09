@@ -543,14 +543,11 @@ const { data: leases, error } = await supabase
     tenant:users!leases_tenant_id_fkey(*),
     application:applications!leases_application_id_fkey(
       *,
-      tenant:users!applications_tenant_id_fkey(
-        *,
-        rental_files(*)
-      )
+      rental_file:rental_files(*)
     )
   `)
   .eq("owner_id", ownerId)
-  .order("created_at", { ascending: false })
+  .order("created_at", { ascending: false });
 
 
     if (error) {
