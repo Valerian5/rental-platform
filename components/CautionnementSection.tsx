@@ -62,9 +62,12 @@ export function CautionnementSection({ leaseId, leaseData, defaultGuarantor }: P
   }
 
   useEffect(() => {
-    refreshPreview()
+    const t = setTimeout(() => {
+      refreshPreview()
+    }, 300)
+    return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [guarantor, options, leaseData])
 
   const downloadPdf = async () => {
     try {

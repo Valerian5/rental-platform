@@ -1661,638 +1661,638 @@ travaux_entre_locataires: formData.clauses?.travaux_entre_locataires?.enabled ? 
                         placeholder="Surface habitable (m²) *"
                       />
 					</div>
-                  </div>
+                    </div>
 
-                  <div className="grid md:grid-cols-3 gap-4">
-                    <div>
-                      <Label htmlFor="performance_dpe">Performance DPE</Label>
-                      <Select
-                        value={formData.performance_dpe}
-                        onValueChange={(value) => handleInputChange("performance_dpe", value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="A">A</SelectItem>
-                          <SelectItem value="B">B</SelectItem>
-                          <SelectItem value="C">C</SelectItem>
-                          <SelectItem value="D">D</SelectItem>
-                          <SelectItem value="E">E</SelectItem>
-                          <SelectItem value="F">F</SelectItem>
-                          <SelectItem value="G">G</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-					<div>
-						<Label htmlFor="periode_construction">Période de construction</Label>
-						<Select
-						  value={formData.periode_construction}
-						  onValueChange={(value) => handleInputChange("periode_construction", value)}
-						>
-						  <SelectTrigger>
-							<SelectValue placeholder="Sélectionner une période" />
-						  </SelectTrigger>
-						  <SelectContent>
-							<SelectItem value="Avant 1949">Avant 1949</SelectItem>
-							<SelectItem value="De 1949 à 1974">De 1949 à 1974</SelectItem>
-							<SelectItem value="De 1975 à 1989">De 1975 à 1989</SelectItem>
-							<SelectItem value="De 1990 à 2005">De 1990 à 2005</SelectItem>
-							<SelectItem value="Depuis 2005">Depuis 2005</SelectItem>
-						  </SelectContent>
-						</Select>
-					  </div>
-					<div>
-                      <Label htmlFor="type_habitat">Type d'habitat</Label>
-                      <Select
-                        value={formData.type_habitat}
-                        onValueChange={(value) => handleInputChange("type_habitat", value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="immeuble_collectif">Immeuble collectif</SelectItem>
-                          <SelectItem value="individuel">Maison individuelle</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="regime_juridique">Régime juridique</Label>
-                      <Select
-                        value={formData.regime_juridique}
-                        onValueChange={(value) => handleInputChange("regime_juridique", value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="copropriete">Copropriété</SelectItem>
-                          <SelectItem value="monopropriete">Monopropriété</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="destination_locaux">Destination des locaux</Label>
-                      <Select
-                        value={formData.destination_locaux}
-                        onValueChange={(value) => handleInputChange("destination_locaux", value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="usage_habitation">Usage d'habitation</SelectItem>
-                          <SelectItem value="usage_mixte">Usage mixte</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="production_chauffage">Production de chauffage</Label>
-                      <Select
-                        value={formData.production_chauffage}
-                        onValueChange={(value) => handleInputChange("production_chauffage", value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="individuel">Individuel</SelectItem>
-                          <SelectItem value="collectif">Collectif</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="production_eau_chaude">Production d'eau chaude</Label>
-                      <Select
-                        value={formData.production_eau_chaude}
-                        onValueChange={(value) => handleInputChange("production_eau_chaude", value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="individuelle">Individuelle</SelectItem>
-                          <SelectItem value="collective">Collective</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label>Autres parties du logement</Label>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
-                      {autresPartiesOptions.map((option) => (
-                        <div key={option.value} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`autres_parties_${option.value}`}
-                            checked={formData.autres_parties_types.includes(option.value)}
-                            onCheckedChange={(checked) =>
-                              handleMultiSelectChange("autres_parties_types", option.value, !!checked)
-                            }
-                          />
-                          <Label htmlFor={`autres_parties_${option.value}`} className="text-sm">
-                            {option.label}
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                    {formData.autres_parties_types.includes("autres") && (
-                      <Input
-                        className="mt-2"
-                        value={formData.autres_parties_autres}
-                        onChange={(e) => handleInputChange("autres_parties_autres", e.target.value)}
-                        placeholder="Précisez les autres parties"
-                      />
-                    )}
-                  </div>
-
-                  <div>
-                    <Label>Équipements du logement</Label>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
-                      {equipementsLogementOptions.map((option) => (
-                        <div key={option.value} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`equipements_logement_${option.value}`}
-                            checked={formData.equipements_logement_types.includes(option.value)}
-                            onCheckedChange={(checked) =>
-                              handleMultiSelectChange("equipements_logement_types", option.value, !!checked)
-                            }
-                          />
-                          <Label htmlFor={`equipements_logement_${option.value}`} className="text-sm">
-                            {option.label}
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                    {formData.equipements_logement_types.includes("autres") && (
-                      <Input
-                        className="mt-2"
-                        value={formData.equipements_logement_autres}
-                        onChange={(e) => handleInputChange("equipements_logement_autres", e.target.value)}
-                        placeholder="Précisez les autres équipements"
-                      />
-                    )}
-                  </div>
-
-                  <div>
-                    <Label>Locaux privatifs accessoires</Label>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
-                      {equipementsPrivatifsOptions.map((option) => (
-                        <div key={option.value} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`locaux_privatifs_${option.value}`}
-                            checked={formData.locaux_privatifs_types.includes(option.value)}
-                            onCheckedChange={(checked) =>
-                              handleMultiSelectChange("locaux_privatifs_types", option.value, !!checked)
-                            }
-                          />
-                          <Label htmlFor={`locaux_privatifs_${option.value}`} className="text-sm">
-                            {option.label}
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="grid md:grid-cols-3 gap-2 mt-2">
-                      {formData.locaux_privatifs_types.includes("cave") && (
-                        <Input
-                          value={formData.cave_numero}
-                          onChange={(e) => handleInputChange("cave_numero", e.target.value)}
-                          placeholder="N° Cave"
-                        />
-                      )}
-                      {formData.locaux_privatifs_types.includes("parking") && (
-                        <Input
-                          value={formData.parking_numero}
-                          onChange={(e) => handleInputChange("parking_numero", e.target.value)}
-                          placeholder="N° Parking"
-                        />
-                      )}
-                      {formData.locaux_privatifs_types.includes("garage") && (
-                        <Input
-                          value={formData.garage_numero}
-                          onChange={(e) => handleInputChange("garage_numero", e.target.value)}
-                          placeholder="N° Garage"
-                        />
-                      )}
-                    </div>
-                    {formData.locaux_privatifs_types.includes("autres") && (
-                      <Input
-                        className="mt-2"
-                        value={formData.locaux_privatifs_autres}
-                        onChange={(e) => handleInputChange("locaux_privatifs_autres", e.target.value)}
-                        placeholder="Précisez les autres locaux privatifs"
-                      />
-                    )}
-                  </div>
-
-                  <div>
-                    <Label>Locaux communs</Label>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
-                      {equipementsCommunsOptions.map((option) => (
-                        <div key={option.value} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`locaux_communs_${option.value}`}
-                            checked={formData.locaux_communs_types.includes(option.value)}
-                            onCheckedChange={(checked) =>
-                              handleMultiSelectChange("locaux_communs_types", option.value, !!checked)
-                            }
-                          />
-                          <Label htmlFor={`locaux_communs_${option.value}`} className="text-sm">
-                            {option.label}
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                    {formData.locaux_communs_types.includes("autres") && (
-                      <Input
-                        className="mt-2"
-                        value={formData.locaux_communs_autres}
-                        onChange={(e) => handleInputChange("locaux_communs_autres", e.target.value)}
-                        placeholder="Précisez les autres locaux communs"
-                      />
-                    )}
-                  </div>
-
-                  <div>
-                    <Label>Équipements technologies</Label>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
-                      {equipementsTechnologiesOptions.map((option) => (
-                        <div key={option.value} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`equipement_technologies_${option.value}`}
-                            checked={formData.equipement_technologies_types.includes(option.value)}
-                            onCheckedChange={(checked) =>
-                              handleMultiSelectChange("equipement_technologies_types", option.value, !!checked)
-                            }
-                          />
-                          <Label htmlFor={`equipement_technologies_${option.value}`} className="text-sm">
-                            {option.label}
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="identifiant_fiscal">Identifiant fiscal du logement</Label>
-                    <Input
-                      id="identifiant_fiscal"
-                      value={formData.identifiant_fiscal}
-                      onChange={(e) => handleInputChange("identifiant_fiscal", e.target.value)}
-                      placeholder="Identifiant fiscal"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Étape 4: Financier */}
-              {currentStep === 4 && (
-                <div className="space-y-6">
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="loyer_mensuel">Loyer mensuel (€) *</Label>
-                      <Input
-                        id="loyer_mensuel"
-                        type="number"
-                        step="0.01"
-                        value={formData.loyer_mensuel}
-                        onChange={(e) => handleInputChange("loyer_mensuel", e.target.value)}
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="depot_garantie">Dépôt de garantie (€) *</Label>
-                      <Input
-                        id="depot_garantie"
-                        type="number"
-                        step="0.01"
-                        value={formData.depot_garantie}
-                        onChange={(e) => handleInputChange("depot_garantie", e.target.value)}
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center space-x-2 mb-4">
-                      <Switch
-                        id="zone_encadree"
-                        checked={formData.zone_encadree}
-                        onCheckedChange={(checked) => handleInputChange("zone_encadree", checked)}
-                      />
-                      <Label htmlFor="zone_encadree">Zone d'encadrement des loyers</Label>
-                    </div>
-                    {formData.zone_encadree && (
-                      <div className="grid md:grid-cols-2 gap-4 p-4 bg-blue-50 rounded-lg">
-                        <div>
-                          <Label htmlFor="loyer_reference">Loyer de référence (€)</Label>
-                          <Input
-                            id="loyer_reference"
-                            type="number"
-                            step="0.01"
-                            value={formData.loyer_reference}
-                            onChange={(e) => handleInputChange("loyer_reference", e.target.value)}
-                            placeholder="0.00"
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="loyer_reference_majore">Loyer de référence majoré (€)</Label>
-                          <Input
-                            id="loyer_reference_majore"
-                            type="number"
-                            step="0.01"
-                            value={formData.loyer_reference_majore}
-                            onChange={(e) => handleInputChange("loyer_reference_majore", e.target.value)}
-                            placeholder="0.00"
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="complement_loyer">Complément de loyer (€)</Label>
-                          <Input
-                            id="complement_loyer"
-                            type="number"
-                            step="0.01"
-                            value={formData.complement_loyer}
-                            onChange={(e) => handleInputChange("complement_loyer", e.target.value)}
-                            placeholder="0.00"
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="complement_loyer_justification">Justification du complément</Label>
-                          <Textarea
-                            id="complement_loyer_justification"
-                            value={formData.complement_loyer_justification}
-                            onChange={(e) => handleInputChange("complement_loyer_justification", e.target.value)}
-                            placeholder="Justification du complément de loyer"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="zone_tendue"
-                      checked={formData.zone_tendue}
-                      onCheckedChange={(checked) => handleInputChange("zone_tendue", checked)}
-                    />
-                    <Label htmlFor="zone_tendue">Le logement est en zone tendue (l'évolution du loyer entre 2 locataires est plafonnée à l'IRL)</Label>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="type_charges">Type de charges</Label>
-                    <Select
-                      value={formData.type_charges}
-                      onValueChange={(value) => handleInputChange("type_charges", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="provisions">Provisions pour charges</SelectItem>
-                        <SelectItem value="periodique">Régularisation périodique</SelectItem>
-                        <SelectItem value="forfait">Forfait de charges</SelectItem>
-                        <SelectItem value="absence">Absence de charges</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="montant_charges">Montant des charges (€)</Label>
-                      <Input
-                        id="montant_charges"
-                        type="number"
-                        step="0.01"
-                        value={formData.montant_charges}
-                        onChange={(e) => handleInputChange("montant_charges", e.target.value)}
-                        placeholder="0.00"
-                      />
-                    </div>
-                    {formData.type_charges === "forfait" && (
+                    <div className="grid md:grid-cols-3 gap-4">
                       <div>
-                        <Label htmlFor="modalite_revision_forfait">Modalité de révision du forfait</Label>
-                        <Input
-                          id="modalite_revision_forfait"
-                          value={formData.modalite_revision_forfait}
-                          onChange={(e) => handleInputChange("modalite_revision_forfait", e.target.value)}
-                          placeholder="Modalité de révision"
-                        />
+                        <Label htmlFor="performance_dpe">Performance DPE</Label>
+                        <Select
+                          value={formData.performance_dpe}
+                          onValueChange={(value) => handleInputChange("performance_dpe", value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="A">A</SelectItem>
+                            <SelectItem value="B">B</SelectItem>
+                            <SelectItem value="C">C</SelectItem>
+                            <SelectItem value="D">D</SelectItem>
+                            <SelectItem value="E">E</SelectItem>
+                            <SelectItem value="F">F</SelectItem>
+                            <SelectItem value="G">G</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
-                    )}
-                  </div>
+					  <div>
+						  <Label htmlFor="periode_construction">Période de construction</Label>
+						  <Select
+							value={formData.periode_construction}
+							onValueChange={(value) => handleInputChange("periode_construction", value)}
+						  >
+							<SelectTrigger>
+							  <SelectValue placeholder="Sélectionner une période" />
+							</SelectTrigger>
+							<SelectContent>
+							  <SelectItem value="Avant 1949">Avant 1949</SelectItem>
+							  <SelectItem value="De 1949 à 1974">De 1949 à 1974</SelectItem>
+							  <SelectItem value="De 1975 à 1989">De 1975 à 1989</SelectItem>
+							  <SelectItem value="De 1990 à 2005">De 1990 à 2005</SelectItem>
+							  <SelectItem value="Depuis 2005">Depuis 2005</SelectItem>
+							</SelectContent>
+						  </Select>
+						</div>
+					  <div>
+                        <Label htmlFor="type_habitat">Type d'habitat</Label>
+                        <Select
+                          value={formData.type_habitat}
+                          onValueChange={(value) => handleInputChange("type_habitat", value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="immeuble_collectif">Immeuble collectif</SelectItem>
+                            <SelectItem value="individuel">Maison individuelle</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="regime_juridique">Régime juridique</Label>
+                        <Select
+                          value={formData.regime_juridique}
+                          onValueChange={(value) => handleInputChange("regime_juridique", value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="copropriete">Copropriété</SelectItem>
+                            <SelectItem value="monopropriete">Monopropriété</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="destination_locaux">Destination des locaux</Label>
+                        <Select
+                          value={formData.destination_locaux}
+                          onValueChange={(value) => handleInputChange("destination_locaux", value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="usage_habitation">Usage d'habitation</SelectItem>
+                            <SelectItem value="usage_mixte">Usage mixte</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="production_chauffage">Production de chauffage</Label>
+                        <Select
+                          value={formData.production_chauffage}
+                          onValueChange={(value) => handleInputChange("production_chauffage", value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="individuel">Individuel</SelectItem>
+                            <SelectItem value="collectif">Collectif</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="production_eau_chaude">Production d'eau chaude</Label>
+                        <Select
+                          value={formData.production_eau_chaude}
+                          onValueChange={(value) => handleInputChange("production_eau_chaude", value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="individuelle">Individuelle</SelectItem>
+                            <SelectItem value="collective">Collective</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
 
-                  {formData.bail_type === "colocation" && (
                     <div>
-                      <div className="flex items-center space-x-2 mb-4">
-                        <Switch
-                          id="assurance_colocataires"
-                          checked={formData.assurance_colocataires}
-                          onCheckedChange={(checked) => handleInputChange("assurance_colocataires", checked)}
-                        />
-                        <Label htmlFor="assurance_colocataires">Assurance pour colocataires</Label>
-                      </div>
-                      {formData.assurance_colocataires && (
-                        <div className="grid md:grid-cols-2 gap-4 p-4 bg-blue-50 rounded-lg">
-                          <div>
-                            <Label htmlFor="assurance_montant">Montant de l'assurance (€)</Label>
-                            <Input
-                              id="assurance_montant"
-                              type="number"
-                              step="0.01"
-                              value={formData.assurance_montant}
-                              onChange={(e) => handleInputChange("assurance_montant", e.target.value)}
-                              placeholder="0.00"
+                      <Label>Autres parties du logement</Label>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
+                        {autresPartiesOptions.map((option) => (
+                          <div key={option.value} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`autres_parties_${option.value}`}
+                              checked={formData.autres_parties_types.includes(option.value)}
+                              onCheckedChange={(checked) =>
+                                handleMultiSelectChange("autres_parties_types", option.value, !!checked)
+                              }
                             />
+                            <Label htmlFor={`autres_parties_${option.value}`} className="text-sm">
+                              {option.label}
+                            </Label>
                           </div>
-                          <div>
-                            <Label htmlFor="assurance_frequence">Fréquence</Label>
-                            <Select
-                              value={formData.assurance_frequence}
-                              onValueChange={(value) => handleInputChange("assurance_frequence", value)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="mensuel">Mensuel</SelectItem>
-                                <SelectItem value="annuel">Annuel</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
+                        ))}
+                      </div>
+                      {formData.autres_parties_types.includes("autres") && (
+                        <Input
+                          className="mt-2"
+                          value={formData.autres_parties_autres}
+                          onChange={(e) => handleInputChange("autres_parties_autres", e.target.value)}
+                          placeholder="Précisez les autres parties"
+                        />
                       )}
                     </div>
-                  )}
 
-                  <div>
-                    <Label htmlFor="trimestre_reference_irl">Trimestre de référence IRL</Label>
-                    <Select
-                      value={formData.trimestre_reference_irl}
-                      onValueChange={(value) => handleInputChange("trimestre_reference_irl", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner un trimestre" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {trimestreIRLOptions.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
+                    <div>
+                      <Label>Équipements du logement</Label>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
+                        {equipementsLogementOptions.map((option) => (
+                          <div key={option.value} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`equipements_logement_${option.value}`}
+                              checked={formData.equipements_logement_types.includes(option.value)}
+                              onCheckedChange={(checked) =>
+                                handleMultiSelectChange("equipements_logement_types", option.value, !!checked)
+                              }
+                            />
+                            <Label htmlFor={`equipements_logement_${option.value}`} className="text-sm">
+                              {option.label}
+                            </Label>
+                          </div>
                         ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="date_revision_loyer">Date de révision du loyer</Label>
-                    <Select
-                      value={formData.date_revision_loyer}
-                      onValueChange={(value) => handleInputChange("date_revision_loyer", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="anniversaire">À l'anniversaire du contrat</SelectItem>
-                        <SelectItem value="premier_mois">Le 1er du mois</SelectItem>
-                        <SelectItem value="autre">Autre date</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {formData.date_revision_loyer === "autre" && (
-                      <Input
-                        className="mt-2"
-                        value={formData.date_revision_personnalisee}
-                        onChange={(e) => handleInputChange("date_revision_personnalisee", e.target.value)}
-                        placeholder="Précisez la date de révision"
-                      />
-                    )}
-                  </div>
-
-                  <div>
-                    <Label htmlFor="ancien_locataire_duree">Durée d'occupation de l'ancien locataire</Label>
-                    <Select
-                      value={formData.ancien_locataire_duree}
-                      onValueChange={(value) => handleInputChange("ancien_locataire_duree", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="moins_18_mois">Moins de 18 mois</SelectItem>
-                        <SelectItem value="plus_18_mois">Plus de 18 mois</SelectItem>
-                        <SelectItem value="premiere_location">Première location</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {formData.ancien_locataire_duree === "moins_18_mois" && (
-                    <div className="grid md:grid-cols-2 gap-4 p-4 bg-yellow-50 rounded-lg">
-                      <div>
-                        <Label htmlFor="dernier_loyer_ancien">Dernier loyer de l'ancien locataire (€)</Label>
+                      </div>
+                      {formData.equipements_logement_types.includes("autres") && (
                         <Input
-                          id="dernier_loyer_ancien"
+                          className="mt-2"
+                          value={formData.equipements_logement_autres}
+                          onChange={(e) => handleInputChange("equipements_logement_autres", e.target.value)}
+                          placeholder="Précisez les autres équipements"
+                        />
+                      )}
+                    </div>
+
+                    <div>
+                      <Label>Locaux privatifs accessoires</Label>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
+                        {equipementsPrivatifsOptions.map((option) => (
+                          <div key={option.value} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`locaux_privatifs_${option.value}`}
+                              checked={formData.locaux_privatifs_types.includes(option.value)}
+                              onCheckedChange={(checked) =>
+                                handleMultiSelectChange("locaux_privatifs_types", option.value, !!checked)
+                              }
+                            />
+                            <Label htmlFor={`locaux_privatifs_${option.value}`} className="text-sm">
+                              {option.label}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="grid md:grid-cols-3 gap-2 mt-2">
+                        {formData.locaux_privatifs_types.includes("cave") && (
+                          <Input
+                            value={formData.cave_numero}
+                            onChange={(e) => handleInputChange("cave_numero", e.target.value)}
+                            placeholder="N° Cave"
+                          />
+                        )}
+                        {formData.locaux_privatifs_types.includes("parking") && (
+                          <Input
+                            value={formData.parking_numero}
+                            onChange={(e) => handleInputChange("parking_numero", e.target.value)}
+                            placeholder="N° Parking"
+                          />
+                        )}
+                        {formData.locaux_privatifs_types.includes("garage") && (
+                          <Input
+                            value={formData.garage_numero}
+                            onChange={(e) => handleInputChange("garage_numero", e.target.value)}
+                            placeholder="N° Garage"
+                          />
+                        )}
+                      </div>
+                      {formData.locaux_privatifs_types.includes("autres") && (
+                        <Input
+                          className="mt-2"
+                          value={formData.locaux_privatifs_autres}
+                          onChange={(e) => handleInputChange("locaux_privatifs_autres", e.target.value)}
+                          placeholder="Précisez les autres locaux privatifs"
+                        />
+                      )}
+                    </div>
+
+                    <div>
+                      <Label>Locaux communs</Label>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
+                        {equipementsCommunsOptions.map((option) => (
+                          <div key={option.value} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`locaux_communs_${option.value}`}
+                              checked={formData.locaux_communs_types.includes(option.value)}
+                              onCheckedChange={(checked) =>
+                                handleMultiSelectChange("locaux_communs_types", option.value, !!checked)
+                              }
+                            />
+                            <Label htmlFor={`locaux_communs_${option.value}`} className="text-sm">
+                              {option.label}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                      {formData.locaux_communs_types.includes("autres") && (
+                        <Input
+                          className="mt-2"
+                          value={formData.locaux_communs_autres}
+                          onChange={(e) => handleInputChange("locaux_communs_autres", e.target.value)}
+                          placeholder="Précisez les autres locaux communs"
+                        />
+                      )}
+                    </div>
+
+                    <div>
+                      <Label>Équipements technologies</Label>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
+                        {equipementsTechnologiesOptions.map((option) => (
+                          <div key={option.value} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`equipement_technologies_${option.value}`}
+                              checked={formData.equipement_technologies_types.includes(option.value)}
+                              onCheckedChange={(checked) =>
+                                handleMultiSelectChange("equipement_technologies_types", option.value, !!checked)
+                              }
+                            />
+                            <Label htmlFor={`equipement_technologies_${option.value}`} className="text-sm">
+                              {option.label}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="identifiant_fiscal">Identifiant fiscal du logement</Label>
+                      <Input
+                        id="identifiant_fiscal"
+                        value={formData.identifiant_fiscal}
+                        onChange={(e) => handleInputChange("identifiant_fiscal", e.target.value)}
+                        placeholder="Identifiant fiscal"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Étape 4: Financier */}
+                {currentStep === 4 && (
+                  <div className="space-y-6">
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="loyer_mensuel">Loyer mensuel (€) *</Label>
+                        <Input
+                          id="loyer_mensuel"
                           type="number"
                           step="0.01"
-                          value={formData.dernier_loyer_ancien}
-                          onChange={(e) => handleInputChange("dernier_loyer_ancien", e.target.value)}
+                          value={formData.loyer_mensuel}
+                          onChange={(e) => handleInputChange("loyer_mensuel", e.target.value)}
                           placeholder="0.00"
                         />
                       </div>
                       <div>
-                        <Label htmlFor="date_dernier_loyer">Date du dernier loyer</Label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className={cn(
-                                "w-full justify-start text-left font-normal",
-                                !formData.date_dernier_loyer && "text-muted-foreground",
-                              )}
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {formData.date_dernier_loyer
-                                ? format(formData.date_dernier_loyer, "dd/MM/yyyy", { locale: fr })
-                                : "Sélectionner une date"}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                            <Calendar
-                              mode="single"
-                              selected={formData.date_dernier_loyer || undefined}
-                              onSelect={(date) => handleInputChange("date_dernier_loyer", date)}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      <div className="md:col-span-2">
-                        <Label htmlFor="date_revision_dernier_loyer">Date de dernière révision du loyer</Label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className={cn(
-                                "w-full justify-start text-left font-normal",
-                                !formData.date_revision_dernier_loyer && "text-muted-foreground",
-                              )}
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {formData.date_revision_dernier_loyer
-                                ? format(formData.date_revision_dernier_loyer, "dd/MM/yyyy", { locale: fr })
-                                : "Sélectionner une date"}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                            <Calendar
-                              mode="single"
-                              selected={formData.date_revision_dernier_loyer || undefined}
-                              onSelect={(date) => handleInputChange("date_revision_dernier_loyer", date)}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
+                        <Label htmlFor="depot_garantie">Dépôt de garantie (€) *</Label>
+                        <Input
+                          id="depot_garantie"
+                          type="number"
+                          step="0.01"
+                          value={formData.depot_garantie}
+                          onChange={(e) => handleInputChange("depot_garantie", e.target.value)}
+                          placeholder="0.00"
+                        />
                       </div>
                     </div>
-                  )}
 
-                  <div>
-                    <Label>Estimation des dépenses d'énergie (€/an)</Label>
-                    <div className="grid md:grid-cols-3 gap-4 mt-2">
+                    <div>
+                      <div className="flex items-center space-x-2 mb-4">
+                        <Switch
+                          id="zone_encadree"
+                          checked={formData.zone_encadree}
+                          onCheckedChange={(checked) => handleInputChange("zone_encadree", checked)}
+                        />
+                        <Label htmlFor="zone_encadree">Zone d'encadrement des loyers</Label>
+                      </div>
+                      {formData.zone_encadree && (
+                        <div className="grid md:grid-cols-2 gap-4 p-4 bg-blue-50 rounded-lg">
+                          <div>
+                            <Label htmlFor="loyer_reference">Loyer de référence (€)</Label>
+                            <Input
+                              id="loyer_reference"
+                              type="number"
+                              step="0.01"
+                              value={formData.loyer_reference}
+                              onChange={(e) => handleInputChange("loyer_reference", e.target.value)}
+                              placeholder="0.00"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="loyer_reference_majore">Loyer de référence majoré (€)</Label>
+                            <Input
+                              id="loyer_reference_majore"
+                              type="number"
+                              step="0.01"
+                              value={formData.loyer_reference_majore}
+                              onChange={(e) => handleInputChange("loyer_reference_majore", e.target.value)}
+                              placeholder="0.00"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="complement_loyer">Complément de loyer (€)</Label>
+                            <Input
+                              id="complement_loyer"
+                              type="number"
+                              step="0.01"
+                              value={formData.complement_loyer}
+                              onChange={(e) => handleInputChange("complement_loyer", e.target.value)}
+                              placeholder="0.00"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="complement_loyer_justification">Justification du complément</Label>
+                            <Textarea
+                              id="complement_loyer_justification"
+                              value={formData.complement_loyer_justification}
+                              onChange={(e) => handleInputChange("complement_loyer_justification", e.target.value)}
+                              placeholder="Justification du complément de loyer"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="zone_tendue"
+                        checked={formData.zone_tendue}
+                        onCheckedChange={(checked) => handleInputChange("zone_tendue", checked)}
+                      />
+                      <Label htmlFor="zone_tendue">Le logement est en zone tendue (l'évolution du loyer entre 2 locataires est plafonnée à l'IRL)</Label>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="type_charges">Type de charges</Label>
+                      <Select
+                        value={formData.type_charges}
+                        onValueChange={(value) => handleInputChange("type_charges", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="provisions">Provisions pour charges</SelectItem>
+                          <SelectItem value="periodique">Régularisation périodique</SelectItem>
+                          <SelectItem value="forfait">Forfait de charges</SelectItem>
+                          <SelectItem value="absence">Absence de charges</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="estimation_depenses_energie_min">Minimum</Label>
+                        <Label htmlFor="montant_charges">Montant des charges (€)</Label>
                         <Input
-                          id="estimation_depenses_energie_min"
+                          id="montant_charges"
                           type="number"
-                          value={formData.estimation_depenses_energie_min}
-                          onChange={(e) => handleInputChange("estimation_depenses_energie_min", e.target.value)}
-                          placeholder="0"
+                          step="0.01"
+                          value={formData.montant_charges}
+                          onChange={(e) => handleInputChange("montant_charges", e.target.value)}
+                          placeholder="0.00"
                         />
                       </div>
+                      {formData.type_charges === "forfait" && (
+                        <div>
+                          <Label htmlFor="modalite_revision_forfait">Modalité de révision du forfait</Label>
+                          <Input
+                            id="modalite_revision_forfait"
+                            value={formData.modalite_revision_forfait}
+                            onChange={(e) => handleInputChange("modalite_revision_forfait", e.target.value)}
+                            placeholder="Modalité de révision"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {formData.bail_type === "colocation" && (
                       <div>
-                        <Label htmlFor="estimation_depenses_energie_max">Maximum</Label>
-                        <Input
-                          id="estimation_depenses_energie_max"
-                          type="number"
-                          value={formData.estimation_depenses_energie_max}
-                          onChange={(e) => handleInputChange("estimation_depenses_energie_max", e.target.value)}
-                          placeholder="0"
-                        />
+                        <div className="flex items-center space-x-2 mb-4">
+                          <Switch
+                            id="assurance_colocataires"
+                            checked={formData.assurance_colocataires}
+                            onCheckedChange={(checked) => handleInputChange("assurance_colocataires", checked)}
+                          />
+                          <Label htmlFor="assurance_colocataires">Assurance pour colocataires</Label>
+                        </div>
+                        {formData.assurance_colocataires && (
+                          <div className="grid md:grid-cols-2 gap-4 p-4 bg-blue-50 rounded-lg">
+                            <div>
+                              <Label htmlFor="assurance_montant">Montant de l'assurance (€)</Label>
+                              <Input
+                                id="assurance_montant"
+                                type="number"
+                                step="0.01"
+                                value={formData.assurance_montant}
+                                onChange={(e) => handleInputChange("assurance_montant", e.target.value)}
+                                placeholder="0.00"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="assurance_frequence">Fréquence</Label>
+                              <Select
+                                value={formData.assurance_frequence}
+                                onValueChange={(value) => handleInputChange("assurance_frequence", value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="mensuel">Mensuel</SelectItem>
+                                  <SelectItem value="annuel">Annuel</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <div>
-                        <Label htmlFor="annee_reference_energie">Année de référence</Label>
+                    )}
+
+                    <div>
+                      <Label htmlFor="trimestre_reference_irl">Trimestre de référence IRL</Label>
+                      <Select
+                        value={formData.trimestre_reference_irl}
+                        onValueChange={(value) => handleInputChange("trimestre_reference_irl", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionner un trimestre" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {trimestreIRLOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="date_revision_loyer">Date de révision du loyer</Label>
+                      <Select
+                        value={formData.date_revision_loyer}
+                        onValueChange={(value) => handleInputChange("date_revision_loyer", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="anniversaire">À l'anniversaire du contrat</SelectItem>
+                          <SelectItem value="premier_mois">Le 1er du mois</SelectItem>
+                          <SelectItem value="autre">Autre date</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {formData.date_revision_loyer === "autre" && (
                         <Input
-                          id="annee_reference_energie"
-                          value={formData.annee_reference_energie}
-                          onChange={(e) => handleInputChange("annee_reference_energie", e.target.value)}
-                          placeholder="2024"
+                          className="mt-2"
+                          value={formData.date_revision_personnalisee}
+                          onChange={(e) => handleInputChange("date_revision_personnalisee", e.target.value)}
+                          placeholder="Précisez la date de révision"
                         />
+                      )}
+                    </div>
+
+                    <div>
+                      <Label htmlFor="ancien_locataire_duree">Durée d'occupation de l'ancien locataire</Label>
+                      <Select
+                        value={formData.ancien_locataire_duree}
+                        onValueChange={(value) => handleInputChange("ancien_locataire_duree", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="moins_18_mois">Moins de 18 mois</SelectItem>
+                          <SelectItem value="plus_18_mois">Plus de 18 mois</SelectItem>
+                          <SelectItem value="premiere_location">Première location</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {formData.ancien_locataire_duree === "moins_18_mois" && (
+                      <div className="grid md:grid-cols-2 gap-4 p-4 bg-yellow-50 rounded-lg">
+                        <div>
+                          <Label htmlFor="dernier_loyer_ancien">Dernier loyer de l'ancien locataire (€)</Label>
+                          <Input
+                            id="dernier_loyer_ancien"
+                            type="number"
+                            step="0.01"
+                            value={formData.dernier_loyer_ancien}
+                            onChange={(e) => handleInputChange("dernier_loyer_ancien", e.target.value)}
+                            placeholder="0.00"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="date_dernier_loyer">Date du dernier loyer</Label>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "w-full justify-start text-left font-normal",
+                                  !formData.date_dernier_loyer && "text-muted-foreground",
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {formData.date_dernier_loyer
+                                  ? format(formData.date_dernier_loyer, "dd/MM/yyyy", { locale: fr })
+                                  : "Sélectionner une date"}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                              <Calendar
+                                mode="single"
+                                selected={formData.date_dernier_loyer || undefined}
+                                onSelect={(date) => handleInputChange("date_dernier_loyer", date)}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                        <div className="md:col-span-2">
+                          <Label htmlFor="date_revision_dernier_loyer">Date de dernière révision du loyer</Label>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "w-full justify-start text-left font-normal",
+                                  !formData.date_revision_dernier_loyer && "text-muted-foreground",
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {formData.date_revision_dernier_loyer
+                                  ? format(formData.date_revision_dernier_loyer, "dd/MM/yyyy", { locale: fr })
+                                  : "Sélectionner une date"}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                              <Calendar
+                                mode="single"
+                                selected={formData.date_revision_dernier_loyer || undefined}
+                                onSelect={(date) => handleInputChange("date_revision_dernier_loyer", date)}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <Label>Estimation des dépenses d'énergie (€/an)</Label>
+                      <div className="grid md:grid-cols-3 gap-4 mt-2">
+                        <div>
+                          <Label htmlFor="estimation_depenses_energie_min">Minimum</Label>
+                          <Input
+                            id="estimation_depenses_energie_min"
+                            type="number"
+                            value={formData.estimation_depenses_energie_min}
+                            onChange={(e) => handleInputChange("estimation_depenses_energie_min", e.target.value)}
+                            placeholder="0"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="estimation_depenses_energie_max">Maximum</Label>
+                          <Input
+                            id="estimation_depenses_energie_max"
+                            type="number"
+                            value={formData.estimation_depenses_energie_max}
+                            onChange={(e) => handleInputChange("estimation_depenses_energie_max", e.target.value)}
+                            placeholder="0"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="annee_reference_energie">Année de référence</Label>
+                          <Input
+                            id="annee_reference_energie"
+                            value={formData.annee_reference_energie}
+                            onChange={(e) => handleInputChange("annee_reference_energie", e.target.value)}
+                            placeholder="2024"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
                 {/* Étape 5: Durée */}
                 {currentStep === 5 && (

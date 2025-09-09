@@ -90,7 +90,8 @@
     "@react-email/render": "^0.0.9",
 	"xml2js": "^0.6.2",
 	"fast-xml-parser": "^5.2.5",
-    "@types/handlebars": "^4.1.0"
+    "@types/handlebars": "^4.1.0",
+	"n2words": "^1.0.0"
   },
   "devDependencies": {
     "@types/node": "^20",
