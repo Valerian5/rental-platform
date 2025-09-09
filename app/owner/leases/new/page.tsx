@@ -486,15 +486,16 @@ const clauseCategories = [
   }
 
   const prefillFormFromApplication = async (app: any, currentUser: any) => {
-    const property = app?.property ?? null;
-    const tenant = app?.tenant ?? null;
-    // ✅ This now works reliably without any fallback.
-    const rentalFile = app?.rental_file ?? null;
-  
+    // Récupère les données de manière fiable
+    const property = app?.property ?? null
+    const tenant = app?.tenant ?? null
+    const rentalFile = app?.rental_file ?? null // ✅ Fonctionne maintenant à chaque fois
+
+    // Compose le tableau de locataires
     const allLocataires = [
       ...(rentalFile?.main_tenant ? [rentalFile.main_tenant] : []),
-      ...(Array.isArray(rentalFile?.cotenants) ? rentalFile.cotenants : [])
-    ];
+      ...(Array.isArray(rentalFile?.cotenants) ? rentalFile.cotenants : []),
+    ]
 
     setFormData((prev) => ({
       ...prev,
@@ -520,29 +521,29 @@ const clauseCategories = [
       depot_garantie: property?.security_deposit || property?.price || "",
       duree_contrat: property?.furnished ? 12 : 36,
       garants: Array.isArray(rentalFile?.guarantors)
-      ? rentalFile.guarantors.map((g: any) => {
-          const p = g?.personal_info || {};
-          return {
-            prenom: p.first_name || "",
-            nom: p.last_name || "",
-            adresse: p.address || "",
-            email: p.email || "",
-            date_naissance: p.birth_date ? new Date(p.birth_date) : null,
-            lieu_naissance: p.birth_place || "",
-            date_fin_engagement: null,
-            montant_max_engagement: "",
-            pour_locataire: allLocataires[0]
-              ? `${allLocataires[0].first_name || ""} ${allLocataires[0].last_name || ""}`.trim()
-              : "",
-          };
-        })
-      : prev.garants,
-    }));
+        ? rentalFile.guarantors.map((g: any) => {
+            const p = g?.personal_info || {}
+            return {
+              prenom: p.first_name || "",
+              nom: p.last_name || "",
+              adresse: p.address || "",
+              email: p.email || "",
+              date_naissance: p.birth_date ? new Date(p.birth_date) : null,
+              lieu_naissance: p.birth_place || "",
+              date_fin_engagement: null,
+              montant_max_engagement: "",
+              pour_locataire: allLocataires[0]
+                ? `${allLocataires[0].first_name || ""} ${allLocataires[0].last_name || ""}`.trim()
+                : "",
+            }
+          })
+        : prev.garants,
+    }))
 
     if (tenant) {
-      setTenants([tenant]);
+      setTenants([tenant])
     }
-  };
+  }
 
   const handleInputChange = useCallback(
     (field: keyof LeaseFormData, value: any) => {

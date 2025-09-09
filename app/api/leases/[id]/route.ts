@@ -2,27 +2,30 @@ import { type NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+  const supabase = createServerClient()
   try {
-    const { data: lease, error } = await supabase
-      .from("leases")
-      .select(`
+    const { data: application, error } = await supabase
+      .from("applications")
+      .select(
+        `
         *,
-        property:properties(*),
-        tenant:users!tenant_id(*),
-        owner:users!owner_id(*)
-      `)
+        property:properties(*, owner:users(*)),
+        tenant:users(*),
+        rental_file:rental_file_id(*)
+      `,
+      )
       .eq("id", params.id)
       .single()
 
-    if (error) throw error
+    if (error) {
+      console.error("Erreur récupération application:", error)
+      return NextResponse.json({ success: false, error: "Application non trouvée" }, { status: 404 })
+    }
 
-    return NextResponse.json({
-      success: true,
-      lease,
-    })
+    return NextResponse.json({ success: true, application })
   } catch (error) {
-    console.error("Erreur récupération bail:", error)
-    return NextResponse.json({ success: false, error: "Bail non trouvé" }, { status: 404 })
+    console.error("Erreur serveur:", error)
+    return NextResponse.json({ success: false, error: "Erreur serveur" }, { status: 500 })
   }
 }
 
