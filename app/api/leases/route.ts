@@ -588,10 +588,14 @@ export async function GET(request: NextRequest) {
       const server = createServerClient()
       const { data: leases, error } = await server
         .from("leases")
-        .select("*")
+        .select(`
+          *,
+          tenant:users!leases_tenant_id_fkey(id, first_name, last_name, email),
+          property:properties(id, title, address)
+        `)
         .eq("owner_id", ownerId)
         .order("created_at", { ascending: false })
-
+    
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 })
       }
