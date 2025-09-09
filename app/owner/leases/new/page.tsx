@@ -194,6 +194,7 @@ garants: Array<{
   nom: string
   adresse: string
   email: string
+  telephone: string
   date_naissance: Date | null
   lieu_naissance: string
   date_fin_engagement: Date | null
@@ -553,8 +554,9 @@ const clauseCategories = [
             return {
               prenom: p.first_name || "",
               nom: p.last_name || "",
-              adresse: p.address || "",
+              adresse: [p.address, p.postal_code, p.city].filter(Boolean).join(", "),
               email: p.email || "",
+              telephone: p.phone || "",
               date_naissance: p.birth_date ? new Date(p.birth_date) : null,
               lieu_naissance: p.birth_place || "",
               date_fin_engagement: null,
@@ -661,6 +663,7 @@ const clauseCategories = [
           nom: "",
           adresse: "",
           email: "",
+          telephone: "",
           date_naissance: null,
           lieu_naissance: "",
           date_fin_engagement: null,

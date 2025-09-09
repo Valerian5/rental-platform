@@ -379,6 +379,29 @@ export function ImprovedPersonProfile({
               />
             </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={profile.email || ""}
+                  onChange={(e) => onUpdate({ ...profile, email: e.target.value })}
+                  placeholder="Adresse email"
+                />
+              </div>
+              <div>
+                <Label htmlFor="phone">Téléphone</Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  value={profile.phone || ""}
+                  onChange={(e) => onUpdate({ ...profile, phone: e.target.value })}
+                  placeholder="Numéro de téléphone"
+                />
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <Label htmlFor="address">Adresse</Label>
