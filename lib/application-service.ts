@@ -44,6 +44,20 @@ export const applicationService = {
         throw new Error("Vous avez déjà postulé pour ce bien")
       }
 
+           // Appeler l'API serveur (gère rental_file_id)
+           const res = await fetch("/api/applications", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(applicationData),
+          })
+          const payload = await res.json()
+          if (!res.ok) {
+            throw new Error(payload.error || "Erreur création candidature")
+          }
+    
+          const data = payload.application
+          console.log("✅ Candidature créée via API:", data)
+
       const { data, error } = await supabase.from("applications").insert(applicationData).select().single()
 
       if (error) {
