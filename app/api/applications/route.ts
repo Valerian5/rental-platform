@@ -150,8 +150,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     console.log("📋 API Applications POST", body)
 
+    // Utiliser le client serveur lié à la requête (respect RLS/session)
+    const server = createServerClient()
+
     if (body.property_id && body.tenant_id) {
-      const { data: existing, error: checkError } = await supabase
+      const { data: existing, error: checkError } = await server
         .from("applications")
         .select("id")
         .eq("property_id", body.property_id)
@@ -168,44 +171,42 @@ export async function POST(request: NextRequest) {
       }
     }
 
-		// 🔹 Vérifier si un rental_file existe déjà pour ce tenant
-		let rentalFileId: string | null = null
-		if (body.tenant_id) {
-		  const { data: rentalFile, error: rentalErr } = await supabase
-			.from("rental_files")
-			.select("id")
-			.eq("tenant_id", body.tenant_id)
-			.single() // ✅ garanti unique grâce à la contrainte
+    // 🔹 Chercher le rental_file le plus récent pour ce tenant
+    let rentalFileId: string | null = null
+    if (body.tenant_id) {
+      const { data: rentalFiles, error: rentalErr } = await server
+        .from("rental_files")
+        .select("id, updated_at")
+        .eq("tenant_id", body.tenant_id)
+        .order("updated_at", { ascending: false })
+        .limit(1)
 
-		  if (rentalErr && rentalErr.code !== "PGRST116") {
-			console.error("❌ Erreur récupération rental_file:", rentalErr)
-			return NextResponse.json({ error: "Erreur lors de la récupération du dossier" }, { status: 500 })
-		  }
+      if (rentalErr) {
+        console.error("❌ Erreur récupération rental_file:", rentalErr)
+        return NextResponse.json({ error: "Erreur lors de la récupération du dossier" }, { status: 500 })
+      }
 
-		  if (rentalFile) {
-			rentalFileId = rentalFile.id
-		  }
+      if (rentalFiles && rentalFiles.length > 0) {
+        rentalFileId = rentalFiles[0].id
+      }
+      console.log("🎯 Rental file trouvé:", rentalFileId)
+    }
 
-		  console.log("🎯 Rental file trouvé:", rentalFileId)
-		}
+    // 🔹 Construire le payload avec rental_file_id déterminé côté serveur
+    const { rental_file_id: _ignored, ...rest } = body
+    const applicationPayload = {
+      ...rest,
+      rental_file_id: rentalFileId,
+    }
 
-		// 🔹 On force notre valeur de rental_file_id
-		const { rental_file_id, ...rest } = body
-		const applicationPayload = {
-		  ...rest,
-		  rental_file_id: rentalFileId,
-		}
+    console.log("📦 Payload candidature:", applicationPayload)
 
-		console.log("📦 Payload candidature:", applicationPayload)
-
-		const { data, error } = await supabase
-		  .from("applications")
-		  .insert(applicationPayload)
-		  .select()
-		  .single()
-
-
-    const { data, error } = await supabase.from("applications").insert(applicationPayload).select().single()
+    // ❗ Supprimer la double insertion; garder un seul insert
+    const { data, error } = await server
+      .from("applications")
+      .insert(applicationPayload)
+      .select()
+      .single()
 
     if (error) {
       console.error("❌ Erreur création candidature:", error)
@@ -213,8 +214,6 @@ export async function POST(request: NextRequest) {
     }
 
     if (data) {
-      const server = createServerClient()
-
       const { data: property } = await server
         .from("properties")
         .select("id, title, address, owner_id")
@@ -240,21 +239,9 @@ export async function POST(request: NextRequest) {
       if (owner?.email && tenant && property) {
         try {
           await sendNewApplicationNotificationToOwner(
-            {
-              id: owner.id,
-              name: `${owner.first_name} ${owner.last_name}`,
-              email: owner.email,
-            },
-            {
-              id: tenant.id,
-              name: `${tenant.first_name} ${tenant.last_name}`,
-              email: tenant.email,
-            },
-            {
-              id: property.id,
-              title: property.title,
-              address: property.address,
-            },
+            { id: owner.id, name: `${owner.first_name} ${owner.last_name}`, email: owner.email },
+            { id: tenant.id, name: `${tenant.first_name} ${tenant.last_name}`, email: tenant.email },
+            { id: property.id, title: property.title, address: property.address },
           )
           console.log("✅ Email nouvelle candidature envoyé au propriétaire:", owner.email)
         } catch (e) {
