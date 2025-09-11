@@ -53,13 +53,30 @@ export function CautionnementSection({ leaseId, leaseData, defaultGuarantor }: P
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Calcul du montant max = loyer * 12 * durée
+  const computedMaxAmount = useMemo(() => {
+    const monthly = Number(leaseData?.montant_loyer_mensuel || leaseData?.monthly_rent || 0)
+    const duree = Number(leaseData?.duree_contrat || 0)
+    if (!monthly || !duree) return 0
+    return monthly * 12 * duree
+  }, [leaseData])
+
+  const maxAmountNumber = useMemo(() => {
+    const manual = Number(options.max_amount || 0)
+    return manual > 0 ? manual : computedMaxAmount
+  }, [options.max_amount, computedMaxAmount])
+
   const refreshPreview = async () => {
     try {
       setLoading(true)
+      const apiOptions = {
+        ...options,
+        max_amount: options.max_amount || String(maxAmountNumber),
+      }
       const res = await fetch(`/api/leases/${leaseId}/cautionnement/preview`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ guarantor, leaseData, options }),
+        body: JSON.stringify({ guarantor, options: apiOptions }),
       })
       if (!res.ok) {
         const e = await res.json().catch(() => ({}))
@@ -83,15 +100,19 @@ export function CautionnementSection({ leaseId, leaseData, defaultGuarantor }: P
     }, 300)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [guarantor, options, leaseData])
+  }, [guarantor, options, leaseData, maxAmountNumber])
 
   const downloadPdf = async () => {
     try {
       setLoading(true)
+      const apiOptions = {
+        ...options,
+        max_amount: options.max_amount || String(maxAmountNumber),
+      }
       const res = await fetch(`/api/leases/${leaseId}/generate-cautionnement`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ guarantor, leaseData, options }),
+        body: JSON.stringify({ guarantor, leaseData, options: apiOptions }),
       })
       if (!res.ok) {
         const e = await res.json().catch(() => ({}))
@@ -143,19 +164,6 @@ export function CautionnementSection({ leaseId, leaseData, defaultGuarantor }: P
     preloadGuarantor()
   }, [leaseId])
 
-  // Calcul du montant max = loyer * 12 * durée
-  const computedMaxAmount = useMemo(() => {
-    const monthly = Number(leaseData?.montant_loyer_mensuel || leaseData?.monthly_rent || 0)
-    const duree = Number(leaseData?.duree_contrat || 0)
-    if (!monthly || !duree) return 0
-    return monthly * 12 * duree
-  }, [leaseData])
-
-  const maxAmountNumber = useMemo(() => {
-    const manual = Number(options.max_amount || 0)
-    return manual > 0 ? manual : computedMaxAmount
-  }, [options.max_amount, computedMaxAmount])
-
   const maxAmountLetters = useMemo(() => {
     return maxAmountNumber > 0 ? n2words(maxAmountNumber, { lang: "fr" }) : ""
   }, [maxAmountNumber])
@@ -163,10 +171,14 @@ export function CautionnementSection({ leaseId, leaseData, defaultGuarantor }: P
   const sendToGuarantorForESign = async () => {
     try {
       setLoading(true)
+      const apiOptions = {
+        ...options,
+        max_amount: options.max_amount || String(maxAmountNumber),
+      }
       const res = await fetch(`/api/leases/${leaseId}/cautionnement/send-for-signature`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ guarantor, leaseData, options }),
+        body: JSON.stringify({ guarantor, leaseData, options: apiOptions }),
       })
       const data = await res.json()
       if (!res.ok || !data.success) throw new Error(data.error || "Erreur envoi signature")

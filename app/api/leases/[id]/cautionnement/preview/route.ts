@@ -41,17 +41,30 @@ function buildContext(lease: any, tenant: any, owner: any, guarantor: any, optio
   const choix = lease?.date_revision_loyer || ""
   const start = lease?.date_prise_effet || lease?.start_date || null
   let rentRevisionDate = ""
+
+  const formatDateDayMonth = (d: string | Date | null) => {
+    if (!d) return ""
+    try {
+      const date = new Date(d)
+      if (isNaN(date.getTime())) return "" // Vérifie si la date est invalide
+      return date.toLocaleDateString("fr-FR", { day: "numeric", month: "long" })
+    } catch {
+      return ""
+    }
+  }
+
   if (choix === "anniversaire") {
-    rentRevisionDate = start ? new Date(start).toLocaleDateString("fr-FR") : ""
+    rentRevisionDate = formatDateDayMonth(start)
   } else if (choix === "1er") {
     const base = start ? new Date(start) : new Date()
     const firstDay = new Date(base.getFullYear(), base.getMonth(), 1)
-    rentRevisionDate = firstDay.toLocaleDateString("fr-FR")
+    rentRevisionDate = formatDateDayMonth(firstDay)
   } else if (choix === "autre") {
     rentRevisionDate = "autre date"
   } else {
-    rentRevisionDate = options?.rent_revision_date || lease?.date_revision || ""
+    rentRevisionDate = formatDateDayMonth(options?.rent_revision_date || lease?.date_revision)
   }
+
 
   // Montant maximum
   const maxAmount = options?.max_amount ? Number(options.max_amount) : 0
