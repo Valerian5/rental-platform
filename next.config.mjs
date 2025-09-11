@@ -1,7 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  reactStrictMode: false,
   experimental: {
-    serverComponentsExternalPackages: ['sharp', 'tesseract.js'],
+    serverComponentsExternalPackages: [
+      'sharp',
+      'tesseract.js',
+      '@react-email/components',
+      '@react-email/render',
+      '@react-email/tailwind',
+      '@sparticuz/chromium'
+    ],
   },
   webpack: (config, { isServer }) => {
     // Configuration pour Tesseract.js
@@ -29,7 +37,20 @@ const nextConfig = {
     return config
   },
   images: {
-    domains: ['blob.vercel-storage.com', 'cdnjs.cloudflare.com'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**.supabase.co',
+      },
+      {
+        protocol: 'https',
+        hostname: 'blob.vercel-storage.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'cdnjs.cloudflare.com',
+      },
+    ],
     unoptimized: true,
   },
   headers: async () => {
@@ -58,3 +79,4 @@ const nextConfig = {
 }
 
 export default nextConfig
+

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
 import puppeteer from "puppeteer-core"
-import chrome from "chrome-aws-lambda"
+import chromium from "@sparticuz/chromium"
 import n2words from "n2words"
 
 // Fonctions utilitaires (alignées avec la prévisualisation)
@@ -130,15 +130,17 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const context = buildContext(lease, tenant, owner, guarantor, options || {})
     const htmlContent = fillTemplate(template.content, context)
     
-    // 3. Génération du PDF avec Puppeteer et Chrome AWS Lambda
+    // 3. Génération du PDF avec Puppeteer et @sparticuz/chromium
     let browser = null
     let pdfBuffer
     try {
       browser = await puppeteer.launch({
-        args: chrome.args,
-        executablePath: await chrome.executablePath,
-        headless: chrome.headless,
-      })
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+      });
       const page = await browser.newPage()
       await page.setContent(htmlContent, { waitUntil: 'networkidle0' })
       pdfBuffer = await page.pdf({ format: 'A4', printBackground: true })
