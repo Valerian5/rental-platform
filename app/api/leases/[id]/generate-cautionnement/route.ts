@@ -1,62 +1,99 @@
 import { NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
-import { generatePdfFromHtml } from "@/lib/pdf-utils"
+import puppeteer from "puppeteer-core"
+import chrome from "chrome-aws-lambda"
+import n2words from "n2words"
 
-function fillTemplate(templateContent: string, context: Record<string, any>): string {
-  let content = templateContent
-  const regex = /{{\s*([\w.]+)\s*}}/g
-  content = content.replace(regex, (match, placeholder) => {
-    const keys = placeholder.split(".")
-    let value: any = context
-    for (const key of keys) {
-      if (value && typeof value === "object" && key in value) {
-        value = value[key]
-      } else {
-        return match
-      }
-    }
-    return value !== null && value !== undefined ? String(value) : ""
-  })
-  return content
+// Fonctions utilitaires (alignées avec la prévisualisation)
+function getByPath(obj: any, path: string) {
+  return path.split(".").reduce((acc: any, key: string) => (acc == null ? undefined : acc[key]), obj)
 }
 
-function buildContext(lease: any, leaseData: any, guarantor: any, options: any) {
-  const totalRent = (lease.rent_amount || 0) + (lease.charges_amount || 0)
+function fillTemplate(templateContent: string, context: Record<string, any>): string {
+  let output = templateContent
+  const ifBlockRegex = /{{#if\s+([\w.]+)}}([\s\S]*?){{\/if}}/g
+  output = output.replace(ifBlockRegex, (_m, condPath, inner) => {
+    const [truthy, falsy] = inner.split(/{{else}}/)
+    const value = getByPath(context, condPath)
+    return value ? (truthy ?? "") : (falsy ?? "")
+  })
+  output = output.replace(/{{\s*([\w.]+)\s*}}/g, (match, placeholder) => {
+    const value = getByPath(context, placeholder)
+    return value !== undefined && value !== null ? String(value) : match
+  })
+  return output
+}
+
+// Fonction pour construire le contexte (alignée avec la prévisualisation)
+function buildContext(lease: any, tenant: any, owner: any, guarantor: any, options: any) {
+  const rentAmount = Number(lease?.monthly_rent || 0)
+  const rentAmountInWords = rentAmount > 0 ? n2words(rentAmount, { lang: "fr" }) : ""
+  const durationType = options?.engagement_type === "determinee" ? "déterminée" : "indéterminée"
+  const isIndet = durationType === "indéterminée"
+  const rentRevisionReference = lease?.trimestre_reference_irl || lease?.date_reference_irl || ""
+  const choix = lease?.date_revision_loyer || ""
+  const start = lease?.date_prise_effet || lease?.start_date || null
+  let rentRevisionDate = ""
+  const formatDateDayMonth = (d: string | Date | null) => {
+    if (!d) return ""
+    try {
+      const date = new Date(d)
+      if (isNaN(date.getTime())) return ""
+      return date.toLocaleDateString("fr-FR", { day: "numeric", month: "long" })
+    } catch { return "" }
+  }
+  if (choix === "anniversaire") rentRevisionDate = formatDateDayMonth(start)
+  else if (choix === "1er") {
+    const base = start ? new Date(start) : new Date()
+    const firstDay = new Date(base.getFullYear(), base.getMonth(), 1)
+    rentRevisionDate = formatDateDayMonth(firstDay)
+  } else if (choix === "autre") rentRevisionDate = "autre date"
+  else rentRevisionDate = formatDateDayMonth(options?.rent_revision_date || lease?.date_revision)
+
+  const maxAmount = options?.max_amount ? Number(options.max_amount) : 0
+  const maxAmountInWords = maxAmount > 0 ? n2words(maxAmount, { lang: "fr" }) : ""
+
+  let finalOwnerFirstName = owner?.first_name || ""
+  let finalOwnerLastName = owner?.last_name || ""
+  if ((!finalOwnerFirstName || !finalOwnerLastName) && lease?.bailleur_nom_prenom) {
+    const parts = lease.bailleur_nom_prenom.split(' ').filter(Boolean)
+    finalOwnerFirstName = parts[0] || ""
+    finalOwnerLastName = parts.slice(1).join(' ') || ""
+  }
+
   return {
-    caution: {
-      type: options?.caution_type || "solidaire",
-      duree_type: options?.engagement_type || "indeterminee",
-      duree_precision: options?.engagement_precision || "",
-      nom_prenom: `${guarantor.firstName} ${guarantor.lastName}`,
-      date_naissance: new Date(guarantor.birthDate).toLocaleDateString("fr-FR"),
-      lieu_naissance: guarantor.birthPlace,
-      adresse: guarantor.address,
+    guarantor: {
+      first_name: guarantor.firstName || "",
+      last_name: guarantor.lastName || "",
+      birth_date: guarantor.birthDate ? new Date(guarantor.birthDate).toLocaleDateString("fr-FR") : "",
+      birth_place: guarantor.birthPlace || "",
+      address: guarantor.address || "",
     },
-    locataire: {
-      nom_prenom: leaseData?.locataire_nom_prenom || `${lease?.tenant?.first_name || ""} ${lease?.tenant?.last_name || ""}`.trim(),
+    lease: {
+      rent_amount: rentAmount,
+      rent_amount_in_words: rentAmountInWords,
+      rent_revision_date: rentRevisionDate,
+      rent_revision_reference: rentRevisionReference,
+      tenant: { first_name: tenant?.first_name || "", last_name: tenant?.last_name || "" },
+      property: {
+        address: lease?.adresse_logement || "",
+        city: lease?.property?.city || lease?.ville || "",
+        owner: {
+          first_name: finalOwnerFirstName,
+          last_name: finalOwnerLastName,
+          address: lease?.adresse_bailleur || owner?.address || "",
+        },
+      },
     },
-    bailleur: {
-      nom_prenom: leaseData?.bailleur_nom_prenom || `${lease?.owner?.first_name || ""} ${lease?.owner?.last_name || ""}`.trim(),
-      adresse: leaseData?.bailleur_adresse || "Adresse non renseignée",
-    },
-    logement: {
-      adresse: leaseData?.adresse_logement || lease?.property?.address || "",
-      ville: lease?.property?.city || "",
-    },
-    loyer: {
-      montant_lettres: leaseData?.montant_loyer_lettres || "",
-      montant_chiffres: leaseData?.montant_loyer_mensuel || totalRent,
-      periodicite: leaseData?.periodicite || "mois",
-      date_revision: leaseData?.date_revision || "",
-      irl_trimestre: lease?.revision_index_reference || "",
-      irl_annee: leaseData?.irl_annee || "",
-      montant_max_lettres: leaseData?.montant_max_lettres || "",
-      montant_max_chiffres: leaseData?.montant_max_chiffres || "",
-    },
-    date_et_lieu_acte: {
-      date: new Date().toLocaleDateString("fr-FR"),
-      lieu: leaseData?.lieu_signature || "",
-    },
+    duration_type: durationType,
+    is_indetermined_duration: isIndet,
+    duration_precision: options?.engagement_precision || "",
+    max_amount_in_words: maxAmountInWords,
+    max_amount: maxAmount ? String(maxAmount) : "",
+    caution_type: options?.caution_type || "solidaire",
+    Caution_type: options?.caution_type || "solidaire",
+    today: new Date().toLocaleDateString("fr-FR"),
+    lieu_signature: options?.lieu_signature || lease?.ville_signature || lease?.property?.city || "",
   }
 }
 
@@ -65,42 +102,60 @@ export async function POST(request: Request, { params }: { params: { id: string 
   const leaseId = params.id
 
   try {
-    const { guarantor, leaseData, options } = await request.json()
+    const { guarantor, options } = await request.json()
 
-    if (!guarantor || !leaseData) {
-      return NextResponse.json({ error: "Données du garant ou du bail manquantes." }, { status: 400 })
+    if (!guarantor) {
+      return NextResponse.json({ error: "Données du garant manquantes." }, { status: 400 })
     }
-
+    
+    // 1. Récupération des données (comme pour la preview)
     const { data: lease, error: leaseError } = await supabase
-      .from("leases")
-      .select(`*, property:properties(address, city), tenant:users!leases_tenant_id_fkey(first_name, last_name), owner:users!leases_owner_id_fkey(first_name, last_name)`)
-      .eq("id", leaseId)
-      .single()
+      .from("leases").select("*, property:properties(city)").eq("id", leaseId).single()
+    if (leaseError || !lease) return NextResponse.json({ error: "Bail non trouvé." }, { status: 404 })
 
-    if (leaseError) {
-      console.error("Erreur récupération du bail:", leaseError)
-      return NextResponse.json({ error: "Bail non trouvé." }, { status: 404 })
-    }
+    const [tenantRes, ownerRes] = await Promise.all([
+      lease.tenant_id ? supabase.from("users").select("id, first_name, last_name").eq("id", lease.tenant_id).single() : Promise.resolve({ data: null }),
+      lease.owner_id ? supabase.from("users").select("id, first_name, last_name, address").eq("id", lease.owner_id).single() : Promise.resolve({ data: null }),
+    ])
+    const tenant = tenantRes?.data || null
+    const owner = ownerRes?.data || null
 
     const { data: template, error: templateError } = await supabase
-      .from("surety_bond_templates")
-      .select("content")
-      .eq("is_default", true)
-      .single()
-
+      .from("surety_bond_templates").select("*").eq("is_default", true).limit(1).maybeSingle()
     if (templateError || !template?.content) {
-      return NextResponse.json({ error: "Aucun modèle d'acte de cautionnement par défaut trouvé." }, { status: 500 })
+      return NextResponse.json({ error: "Modèle d'acte de cautionnement introuvable." }, { status: 404 })
     }
 
-    const htmlContent = fillTemplate(template.content, buildContext(lease, leaseData, guarantor, options))
-    const pdfBuffer = await generatePdfFromHtml(htmlContent)
+    // 2. Construction du contexte et remplissage du template
+    const context = buildContext(lease, tenant, owner, guarantor, options || {})
+    const htmlContent = fillTemplate(template.content, context)
+    
+    // 3. Génération du PDF avec Puppeteer et Chrome AWS Lambda
+    let browser = null
+    let pdfBuffer
+    try {
+      browser = await puppeteer.launch({
+        args: chrome.args,
+        executablePath: await chrome.executablePath,
+        headless: chrome.headless,
+      })
+      const page = await browser.newPage()
+      await page.setContent(htmlContent, { waitUntil: 'networkidle0' })
+      pdfBuffer = await page.pdf({ format: 'A4', printBackground: true })
+    } finally {
+      if (browser !== null) {
+        await browser.close()
+      }
+    }
 
+    // 4. Envoi du PDF
     return new NextResponse(pdfBuffer, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="acte-de-cautionnement-${lease.id}.pdf"`,
       },
     })
+
   } catch (error) {
     console.error("Erreur lors de la génération de l'acte de cautionnement:", error)
     return NextResponse.json({ error: "Erreur serveur interne." }, { status: 500 })
