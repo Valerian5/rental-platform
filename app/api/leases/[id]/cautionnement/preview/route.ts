@@ -65,10 +65,22 @@ function buildContext(lease: any, tenant: any, owner: any, guarantor: any, optio
     rentRevisionDate = formatDateDayMonth(options?.rent_revision_date || lease?.date_revision)
   }
 
-
   // Montant maximum
   const maxAmount = options?.max_amount ? Number(options.max_amount) : 0
   const maxAmountInWords = maxAmount > 0 ? n2words(maxAmount, { lang: "fr" }) : ""
+
+  // Fallback pour le nom du propriétaire
+  const ownerFirstName = owner?.first_name || ""
+  const ownerLastName = owner?.last_name || ""
+  let finalOwnerFirstName = ownerFirstName
+  let finalOwnerLastName = ownerLastName
+
+  if ((!ownerFirstName || !ownerLastName) && lease?.bailleur_nom_prenom) {
+    const parts = lease.bailleur_nom_prenom.split(' ').filter(Boolean)
+    finalOwnerFirstName = parts[0] || ""
+    finalOwnerLastName = parts.slice(1).join(' ') || ""
+  }
+
 
   return {
     // Garant (form)
@@ -91,12 +103,11 @@ function buildContext(lease: any, tenant: any, owner: any, guarantor: any, optio
         last_name: tenant?.last_name || "",
       },
       property: {
-        // Adresse complète déjà formatée (inclut CP et ville); on laisse tel quel
         address: lease?.adresse_logement || "",
+        city: lease?.property?.city || lease?.ville || "",
         owner: {
-          first_name: owner?.first_name || "",
-          last_name: owner?.last_name || "",
-          // Priorité à l'adresse du bailleur stockée sur le bail
+          first_name: finalOwnerFirstName,
+          last_name: finalOwnerLastName,
           address: lease?.bailleur_adresse || owner?.address || "",
         },
       },
@@ -117,7 +128,7 @@ function buildContext(lease: any, tenant: any, owner: any, guarantor: any, optio
 
     // Divers
     today: new Date().toLocaleDateString("fr-FR"),
-    lieu_signature: options?.lieu_signature || lease?.ville_signature || "",
+    lieu_signature: options?.lieu_signature || lease?.ville_signature || lease?.property?.city || "",
   }
 }
 
@@ -128,15 +139,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   try {
     const { guarantor, options } = await request.json()
 
-    // 1) Bail
+    // 1) Bail et propriété liée
     const { data: lease, error: leaseError } = await supabase
       .from("leases")
-      .select("*")
+      .select("*, property:properties(city)")
       .eq("id", leaseId)
       .single()
     if (leaseError || !lease) return NextResponse.json({ error: "Bail non trouvé." }, { status: 404 })
 
-    // 2) Relations minimales par IDs
+    // 2) Relations minimales par IDs (locataire, propriétaire)
     const [tenantRes, ownerRes] = await Promise.all([
       lease.tenant_id
         ? supabase.from("users").select("id, first_name, last_name").eq("id", lease.tenant_id).single()
@@ -167,3 +178,4 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }
+
