@@ -34,8 +34,8 @@ function buildContext(lease: any, tenant: any, owner: any, guarantor: any, optio
   const durationType = options?.engagement_type === "determinee" ? "déterminée" : "indéterminée"
   const isIndet = durationType === "indéterminée"
 
-  // Référence IRL (priorité à date_reference_irl si présente)
-  const rentRevisionReference = lease?.date_reference_irl || lease?.revision_index_reference || ""
+  // Référence IRL (priorité à trimestre_reference_irl)
+  const rentRevisionReference = lease?.trimestre_reference_irl || lease?.date_reference_irl || ""
 
   // Date de révision du loyer selon le choix du propriétaire
   const choix = lease?.date_revision_loyer || ""
@@ -108,7 +108,7 @@ function buildContext(lease: any, tenant: any, owner: any, guarantor: any, optio
         owner: {
           first_name: finalOwnerFirstName,
           last_name: finalOwnerLastName,
-          address: lease?.bailleur_adresse || owner?.address || "",
+          address: lease?.adresse_bailleur || owner?.address || "",
         },
       },
     },
