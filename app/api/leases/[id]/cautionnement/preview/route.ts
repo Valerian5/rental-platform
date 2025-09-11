@@ -2,28 +2,63 @@ import { NextResponse, type NextRequest } from "next/server"
 import { createServerClient } from "@/lib/supabase"
 import n2words from "n2words"
 
+function getByPath(obj: any, path: string) {
+  return path.split(".").reduce((acc: any, key: string) => (acc == null ? undefined : acc[key]), obj)
+}
+
 function fillTemplate(templateContent: string, context: Record<string, any>): string {
-  return templateContent.replace(/{{\s*([\w.]+)\s*}}/g, (match, placeholder) => {
-    const keys = placeholder.split(".")
-    let value: any = context
-    for (const key of keys) {
-      value = value?.[key]
-      if (value === undefined) return match
-    }
-    return value ?? ""
+  let output = templateContent
+
+  // Blocs conditionnels
+  const ifBlockRegex = /{{#if\s+([\w.]+)}}([\s\S]*?){{\/if}}/g
+  output = output.replace(ifBlockRegex, (_m, condPath, inner) => {
+    const [truthy, falsy] = inner.split(/{{else}}/)
+    const value = getByPath(context, condPath)
+    return value ? (truthy ?? "") : (falsy ?? "")
   })
+
+  // Remplacements simples
+  output = output.replace(/{{\s*([\w.]+)\s*}}/g, (match, placeholder) => {
+    const value = getByPath(context, placeholder)
+    return value !== undefined && value !== null ? String(value) : match
+  })
+
+  return output
 }
 
 function buildContext(lease: any, tenant: any, owner: any, guarantor: any, options: any) {
   const rentAmount = Number(lease?.monthly_rent || 0)
   const rentAmountInWords = rentAmount > 0 ? n2words(rentAmount, { lang: "fr" }) : ""
 
+  // Durée
   const durationType = options?.engagement_type === "determinee" ? "déterminée" : "indéterminée"
   const isIndet = durationType === "indéterminée"
-  const durationHint = isIndet ? "(3 ans)" : "" // champ dérivé si le template l’affiche
+
+  // Référence IRL (priorité à date_reference_irl si présente)
+  const rentRevisionReference = lease?.date_reference_irl || lease?.revision_index_reference || ""
+
+  // Date de révision du loyer selon le choix du propriétaire
+  const choix = lease?.date_revision_loyer || ""
+  const start = lease?.date_prise_effet || lease?.start_date || null
+  let rentRevisionDate = ""
+  if (choix === "anniversaire") {
+    rentRevisionDate = start ? new Date(start).toLocaleDateString("fr-FR") : ""
+  } else if (choix === "1er") {
+    const base = start ? new Date(start) : new Date()
+    const firstDay = new Date(base.getFullYear(), base.getMonth(), 1)
+    rentRevisionDate = firstDay.toLocaleDateString("fr-FR")
+  } else if (choix === "autre") {
+    rentRevisionDate = "autre date"
+  } else {
+    rentRevisionDate = options?.rent_revision_date || lease?.date_revision || ""
+  }
+
+  // Montant maximum
+  const maxAmount = options?.max_amount ? Number(options.max_amount) : 0
+  const maxAmountInWords = maxAmount > 0 ? n2words(maxAmount, { lang: "fr" }) : ""
 
   return {
-    // Garant (vient du formulaire, mais on peut le préremplir côté UI)
+    // Garant (form)
     guarantor: {
       first_name: guarantor.firstName || "",
       last_name: guarantor.lastName || "",
@@ -32,41 +67,44 @@ function buildContext(lease: any, tenant: any, owner: any, guarantor: any, optio
       address: guarantor.address || "",
     },
 
-    // Arbre "lease" attendu par le template
+    // Arbre lease attendu par le template
     lease: {
-      rent_amount: rentAmount,                        // {{lease.rent_amount}}
-      rent_amount_in_words: rentAmountInWords,        // {{lease.rent_amount_in_words}}
-      rent_revision_date: lease?.date_revision || "", // texte
-      rent_revision_reference: lease?.revision_index_reference || "",
+      rent_amount: rentAmount,
+      rent_amount_in_words: rentAmountInWords,
+      rent_revision_date: rentRevisionDate,
+      rent_revision_reference: rentRevisionReference,
       tenant: {
         first_name: tenant?.first_name || "",
         last_name: tenant?.last_name || "",
       },
       property: {
-        address: lease?.adresse_logement || "",       // adresse du bail depuis leases
-        zip_code: lease?.code_postal || "",
-        city: lease?.ville || "",
+        // Adresse complète déjà formatée (inclut CP et ville); on laisse tel quel
+        address: lease?.adresse_logement || "",
         owner: {
           first_name: owner?.first_name || "",
           last_name: owner?.last_name || "",
+          // Priorité à l'adresse du bailleur stockée sur le bail
           address: lease?.bailleur_adresse || owner?.address || "",
         },
       },
     },
 
-    // Durée d’engagement
-    duration_type: durationType,                      // {{duration_type}}
-    is_indetermined_duration: isIndet,               // {{is_indetermined_duration}}
-    duration_precision: options?.engagement_precision || "", // {{duration_precision}}
-    duration_hint: durationHint,                      // optionnel si tu l’utilises dans le template
+    // Durée + conditions
+    duration_type: durationType,
+    is_indetermined_duration: isIndet,
+    duration_precision: options?.engagement_precision || "",
 
-    // Montant max garanti (si saisi)
-    max_amount: options?.max_amount || "",
-    max_amount_in_words:
-      options?.max_amount ? n2words(Number(options.max_amount) || 0, { lang: "fr" }) : "",
+    // Montant max
+    max_amount_in_words: maxAmountInWords,
+    max_amount: maxAmount ? String(maxAmount) : "",
+
+    // Type de caution (et alias pour {{Caution_type}})
+    caution_type: options?.caution_type || "solidaire",
+    Caution_type: options?.caution_type || "solidaire",
 
     // Divers
     today: new Date().toLocaleDateString("fr-FR"),
+    lieu_signature: options?.lieu_signature || lease?.ville_signature || "",
   }
 }
 
