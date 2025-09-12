@@ -1,17 +1,15 @@
 import puppeteer from 'puppeteer-core'
 import chromium from '@sparticuz/chromium'
 
-// On spécifie l'URL de la version "packagée" de Chromium qui inclut les bibliothèques partagées nécessaires.
-const chromiumPack = `https://github.com/Sparticuz/chromium/releases/download/v${chromium.revision}/chromium-v${chromium.revision}-pack.tar`
-
 export async function generatePdfFromHtml(htmlContent: string): Promise<Buffer> {
   let browser = null
   try {
+    // Laisser @sparticuz/chromium gérer automatiquement le chemin de l'exécutable.
+    // Il est conçu pour détecter l'environnement (comme Vercel) et utiliser la bonne version de Chromium.
     browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
-      // Utilisation de la version "packagée" pour inclure les dépendances manquantes sur Vercel
-      executablePath: await chromium.executablePath(chromiumPack),
+      executablePath: await chromium.executablePath(),
       headless: chromium.headless,
       ignoreHTTPSErrors: true,
     })
