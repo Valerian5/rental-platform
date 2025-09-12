@@ -4,8 +4,8 @@ import chromium from '@sparticuz/chromium'
 export async function generatePdfFromHtml(htmlContent: string): Promise<Buffer> {
   let browser = null
   try {
-    // Laisser @sparticuz/chromium gérer automatiquement le chemin de l'exécutable.
-    // Il est conçu pour détecter l'environnement (comme Vercel) et utiliser la bonne version de Chromium.
+    // Cette configuration est la plus robuste pour Vercel.
+    // Elle s'assure que la version complète de Chromium avec toutes les dépendances est utilisée.
     browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
