@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
+    // On s'assure que @sparticuz/chromium n'est pas inclus dans le "bundle" du serveur.
     serverComponentsExternalPackages: ['sharp', 'tesseract.js', '@sparticuz/chromium'],
   },
   webpack: (config, { isServer }) => {
