@@ -1,8 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    // On s'assure que @sparticuz/chromium n'est pas inclus dans le "bundle" du serveur.
-    serverComponentsExternalPackages: ['sharp', 'tesseract.js', '@sparticuz/chromium'],
+    // On ajoute 'chrome-aws-lambda' pour s'assurer qu'il n'est pas "bundlé" par le serveur.
+    // C'est la solution standard pour ce type d'erreur sur Vercel.
+    serverComponentsExternalPackages: ['sharp', 'tesseract.js', 'chrome-aws-lambda'],
   },
   webpack: (config, { isServer }) => {
     // Configuration pour Tesseract.js
