@@ -1,9 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    // On ajoute 'chrome-aws-lambda' pour s'assurer qu'il n'est pas "bundlé" par le serveur.
-    // C'est la solution standard pour ce type d'erreur sur Vercel.
-    serverComponentsExternalPackages: ['sharp', 'tesseract.js', 'chrome-aws-lambda'],
+    // On ajoute '@sparticuz/chromium' pour s'assurer qu'il n'est pas "bundlé" par le serveur.
+    // C'est la solution recommandée par Vercel.
+    serverComponentsExternalPackages: ['sharp', 'tesseract.js', '@sparticuz/chromium'],
   },
   webpack: (config, { isServer }) => {
     // Configuration pour Tesseract.js
