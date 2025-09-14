@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
-import { supabaseStorageService } from "@/lib/supabase-storage-service"
+import { SupabaseStorageService } from "@/lib/supabase-storage-service"
 
 // GET /api/admin/etat-des-lieux-templates/[id]
 // Récupère un modèle spécifique
@@ -131,7 +131,11 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       // Supprimer l'ancien fichier
       if (existingTemplate.file_url) {
         try {
-          await supabaseStorageService.deleteFile(existingTemplate.file_url)
+          // Extraire le chemin du fichier de l'URL
+          const url = new URL(existingTemplate.file_url)
+          const pathParts = url.pathname.split('/')
+          const filePath = pathParts.slice(3).join('/') // Enlever /storage/v1/object/public/bucket/
+          await SupabaseStorageService.deleteFile(filePath, "etat-des-lieux-templates")
         } catch (error) {
           console.warn("Impossible de supprimer l'ancien fichier:", error)
         }
@@ -141,16 +145,11 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       const newFileName = `etat-des-lieux-template-${type}-${room_count}pieces-${Date.now()}.pdf`
       const filePath = `admin/etat-des-lieux-templates/${newFileName}`
 
-      const { data: uploadData, error: uploadError } = await supabaseStorageService.uploadFile(
+      const uploadData = await SupabaseStorageService.uploadFile(
         file,
         filePath,
         "etat-des-lieux-templates"
       )
-
-      if (uploadError) {
-        console.error("Erreur upload:", uploadError)
-        return NextResponse.json({ error: "Erreur lors de l'upload du fichier" }, { status: 500 })
-      }
 
       fileUrl = uploadData.url
       fileName = newFileName
@@ -302,7 +301,11 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     // Supprimer le fichier du storage
     if (template.file_url) {
       try {
-        await supabaseStorageService.deleteFile(template.file_url)
+        // Extraire le chemin du fichier de l'URL
+        const url = new URL(template.file_url)
+        const pathParts = url.pathname.split('/')
+        const filePath = pathParts.slice(3).join('/') // Enlever /storage/v1/object/public/bucket/
+        await SupabaseStorageService.deleteFile(filePath, "etat-des-lieux-templates")
       } catch (error) {
         console.warn("Impossible de supprimer le fichier:", error)
       }

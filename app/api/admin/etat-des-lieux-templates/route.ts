@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
-import { supabaseStorageService } from "@/lib/supabase-storage-service"
+import { SupabaseStorageService } from "@/lib/supabase-storage-service"
 
 // GET /api/admin/etat-des-lieux-templates
 // Récupère tous les modèles d'état des lieux
@@ -110,16 +110,11 @@ export async function POST(request: NextRequest) {
     const fileName = `etat-des-lieux-template-${type}-${room_count}pieces-${Date.now()}.pdf`
     const filePath = `admin/etat-des-lieux-templates/${fileName}`
 
-    const { data: uploadData, error: uploadError } = await supabaseStorageService.uploadFile(
+    const uploadData = await SupabaseStorageService.uploadFile(
       file,
       filePath,
       "etat-des-lieux-templates"
     )
-
-    if (uploadError) {
-      console.error("Erreur upload:", uploadError)
-      return NextResponse.json({ error: "Erreur lors de l'upload du fichier" }, { status: 500 })
-    }
 
     // Créer l'entrée en base de données
     const { data: template, error: dbError } = await supabase
