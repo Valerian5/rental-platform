@@ -18,6 +18,7 @@ import {
   Shield,
   Building2,
   BarChart3,
+  Home,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -416,6 +417,14 @@ function AdminContent() {
                 <button>
                   <FileText className="h-4 w-4" />
                   <span>Contenu</span>
+                </button>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={activeTab === "etat-des-lieux"} onClick={() => setActiveTab("etat-des-lieux")}>
+                <button>
+                  <Home className="h-4 w-4" />
+                  <span>Modèles État des Lieux</span>
                 </button>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -1183,6 +1192,16 @@ function AdminContent() {
             <div>
               <h2 className="text-2xl font-bold">Contenu</h2>
               <p>Gestion du contenu du site (articles, pages, etc.)</p>
+            </div>
+          )}
+
+          {activeTab === "etat-des-lieux" && (
+            <div>
+              <iframe
+                src="/admin/etat-des-lieux-templates"
+                className="w-full h-screen border-0"
+                title="Modèles d'État des Lieux"
+              />
             </div>
           )}
 
