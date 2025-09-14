@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
 import { supabaseStorageService } from "@/lib/supabase-storage-service"
+import { verifyAdminAuth } from "@/lib/admin-auth-utils"
 
 // GET /api/admin/etat-des-lieux-templates
 // Récupère tous les modèles d'état des lieux
 export async function GET(request: NextRequest) {
   try {
-    const server = createServerClient()
+    const { error: authError, server } = await verifyAdminAuth()
+    if (authError) return authError
 
     const { data: templates, error } = await server
       .from("etat_des_lieux_templates")
@@ -29,7 +31,8 @@ export async function GET(request: NextRequest) {
 // Crée un nouveau modèle d'état des lieux
 export async function POST(request: NextRequest) {
   try {
-    const server = createServerClient()
+    const { error: authError, server } = await verifyAdminAuth()
+    if (authError) return authError
 
     const formData = await request.formData()
     const name = formData.get("name") as string

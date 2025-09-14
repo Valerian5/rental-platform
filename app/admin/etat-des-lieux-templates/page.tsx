@@ -99,10 +99,12 @@ export default function EtatDesLieuxTemplatesPage() {
   const checkAdminAuth = async () => {
     try {
       const user = await authService.getCurrentUser()
-      if (!user || user.role !== "admin") {
+      if (!user || user.user_type !== "admin") {
+        console.log("❌ Utilisateur non admin:", user?.user_type)
         router.push("/login")
         return
       }
+      console.log("✅ Utilisateur admin confirmé:", user.email)
       setCurrentUser(user)
     } catch (error) {
       console.error("Erreur auth:", error)

@@ -9,6 +9,24 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const templateId = params.id
     const server = createServerClient()
 
+    // Vérifier l'authentification admin
+    const { data: { user }, error: authError } = await server.auth.getUser()
+    
+    if (authError || !user) {
+      return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
+    }
+
+    // Vérifier que l'utilisateur est admin
+    const { data: profile, error: profileError } = await server
+      .from("users")
+      .select("user_type")
+      .eq("id", user.id)
+      .single()
+
+    if (profileError || !profile || profile.user_type !== "admin") {
+      return NextResponse.json({ error: "Accès refusé - Admin requis" }, { status: 403 })
+    }
+
     const { data: template, error } = await server
       .from("etat_des_lieux_templates")
       .select("*")
