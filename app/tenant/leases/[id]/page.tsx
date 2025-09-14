@@ -21,8 +21,10 @@ import {
   Download,
   Eye,
   Paperclip,
+  Home,
 } from "lucide-react"
 import { authService } from "@/lib/auth-service"
+import { TenantEtatDesLieuxSection } from "@/components/TenantEtatDesLieuxSection"
 import { toast } from "sonner"
 
 interface Lease {
@@ -44,6 +46,16 @@ interface Lease {
   owner_signature_date?: string
   created_at: string
   updated_at: string
+  property_id: string
+  property?: {
+    id: string
+    rooms: number
+    bedrooms: number
+    surface: number
+    address: string
+    city: string
+    postal_code: string
+  }
 }
 
 // MODIFIÉ : Interface pour correspondre aux données de la DB + ajout d'un nom lisible
@@ -95,6 +107,16 @@ export default function TenantLeaseDetailPage() {
       }
 
       const data = await response.json()
+      
+      // Si les informations de la propriété ne sont pas incluses, les récupérer
+      if (data.lease && !data.lease.property) {
+        const propertyResponse = await fetch(`/api/properties/${data.lease.property_id}`)
+        if (propertyResponse.ok) {
+          const propertyData = await propertyResponse.json()
+          data.lease.property = propertyData.property
+        }
+      }
+      
       setLease(data.lease)
     } catch (error) {
       console.error("Erreur:", error)
@@ -342,6 +364,7 @@ export default function TenantLeaseDetailPage() {
             <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
             <TabsTrigger value="document">Document</TabsTrigger>
             <TabsTrigger value="annexes">Annexes</TabsTrigger>
+            <TabsTrigger value="etat-des-lieux">État des lieux</TabsTrigger>
             <TabsTrigger value="signature">Signature</TabsTrigger>
           </TabsList>
 
@@ -573,6 +596,20 @@ export default function TenantLeaseDetailPage() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="etat-des-lieux" className="space-y-6">
+            <TenantEtatDesLieuxSection
+              leaseId={lease.id}
+              propertyId={lease.property_id}
+              propertyData={lease.property}
+              leaseData={{
+                locataire_nom_prenom: lease.locataire_nom_prenom,
+                bailleur_nom_prenom: lease.bailleur_nom_prenom,
+                adresse_logement: lease.adresse_logement,
+                date_prise_effet: lease.date_prise_effet,
+              }}
+            />
           </TabsContent>
 
           <TabsContent value="signature" className="space-y-6">
