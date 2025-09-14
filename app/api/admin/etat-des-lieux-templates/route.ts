@@ -1,16 +1,46 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
 import { supabaseStorageService } from "@/lib/supabase-storage-service"
-import { verifyAdminAuth } from "@/lib/admin-auth-utils"
 
 // GET /api/admin/etat-des-lieux-templates
 // Récupère tous les modèles d'état des lieux
 export async function GET(request: NextRequest) {
   try {
-    const { error: authError, server } = await verifyAdminAuth()
-    if (authError) return authError
+    // Vérifier l'authentification admin via l'email
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Token d'authentification manquant" }, { status: 401 })
+    }
 
-    const { data: templates, error } = await server
+    const token = authHeader.split(" ")[1]
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return NextResponse.json({ error: "Configuration Supabase manquante" }, { status: 500 })
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+    // Vérifier le token et récupérer l'utilisateur
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    
+    if (authError || !user) {
+      return NextResponse.json({ error: "Token invalide" }, { status: 401 })
+    }
+
+    // Vérifier que l'utilisateur est admin
+    const { data: profile, error: profileError } = await supabase
+      .from("users")
+      .select("user_type")
+      .eq("id", user.id)
+      .single()
+
+    if (profileError || !profile || profile.user_type !== "admin") {
+      return NextResponse.json({ error: "Accès refusé - Admin requis" }, { status: 403 })
+    }
+
+    const { data: templates, error } = await supabase
       .from("etat_des_lieux_templates")
       .select("*")
       .order("created_at", { ascending: false })
@@ -31,8 +61,39 @@ export async function GET(request: NextRequest) {
 // Crée un nouveau modèle d'état des lieux
 export async function POST(request: NextRequest) {
   try {
-    const { error: authError, server } = await verifyAdminAuth()
-    if (authError) return authError
+    // Vérifier l'authentification admin via l'email
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Token d'authentification manquant" }, { status: 401 })
+    }
+
+    const token = authHeader.split(" ")[1]
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return NextResponse.json({ error: "Configuration Supabase manquante" }, { status: 500 })
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+    // Vérifier le token et récupérer l'utilisateur
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    
+    if (authError || !user) {
+      return NextResponse.json({ error: "Token invalide" }, { status: 401 })
+    }
+
+    // Vérifier que l'utilisateur est admin
+    const { data: profile, error: profileError } = await supabase
+      .from("users")
+      .select("user_type")
+      .eq("id", user.id)
+      .single()
+
+    if (profileError || !profile || profile.user_type !== "admin") {
+      return NextResponse.json({ error: "Accès refusé - Admin requis" }, { status: 403 })
+    }
 
     const formData = await request.formData()
     const name = formData.get("name") as string
@@ -61,7 +122,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Créer l'entrée en base de données
-    const { data: template, error: dbError } = await server
+    const { data: template, error: dbError } = await supabase
       .from("etat_des_lieux_templates")
       .insert({
         name,

@@ -115,16 +115,31 @@ export default function EtatDesLieuxTemplatesPage() {
   const loadTemplates = async () => {
     try {
       setLoading(true)
-      const response = await fetch("/api/admin/etat-des-lieux-templates")
+      
+      // Récupérer le token d'authentification
+      const { data: { session } } = await authService.supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error("Non authentifié")
+      }
+
+      const response = await fetch("/api/admin/etat-des-lieux-templates", {
+        headers: {
+          "Authorization": `Bearer ${session.access_token}`
+        }
+      })
+      
       if (response.ok) {
         const data = await response.json()
         setTemplates(data.templates || [])
+      } else {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Erreur lors du chargement")
       }
     } catch (error) {
       console.error("Erreur chargement templates:", error)
       toast({
         title: "Erreur",
-        description: "Impossible de charger les modèles",
+        description: error instanceof Error ? error.message : "Impossible de charger les modèles",
         variant: "destructive",
       })
     } finally {
@@ -146,6 +161,13 @@ export default function EtatDesLieuxTemplatesPage() {
 
     try {
       setIsUploading(true)
+      
+      // Récupérer le token d'authentification
+      const { data: { session } } = await authService.supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error("Non authentifié")
+      }
+
       const formDataToSend = new FormData()
       formDataToSend.append("name", formData.name)
       formDataToSend.append("type", formData.type)
@@ -155,6 +177,9 @@ export default function EtatDesLieuxTemplatesPage() {
 
       const response = await fetch("/api/admin/etat-des-lieux-templates", {
         method: "POST",
+        headers: {
+          "Authorization": `Bearer ${session.access_token}`
+        },
         body: formDataToSend,
       })
 
@@ -201,6 +226,13 @@ export default function EtatDesLieuxTemplatesPage() {
 
     try {
       setIsUploading(true)
+      
+      // Récupérer le token d'authentification
+      const { data: { session } } = await authService.supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error("Non authentifié")
+      }
+
       const formDataToSend = new FormData()
       formDataToSend.append("name", formData.name)
       formDataToSend.append("type", formData.type)
@@ -212,6 +244,9 @@ export default function EtatDesLieuxTemplatesPage() {
 
       const response = await fetch(`/api/admin/etat-des-lieux-templates/${editingTemplate.id}`, {
         method: "PUT",
+        headers: {
+          "Authorization": `Bearer ${session.access_token}`
+        },
         body: formDataToSend,
       })
 
@@ -244,8 +279,17 @@ export default function EtatDesLieuxTemplatesPage() {
     if (!confirm("Êtes-vous sûr de vouloir supprimer ce modèle ?")) return
 
     try {
+      // Récupérer le token d'authentification
+      const { data: { session } } = await authService.supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error("Non authentifié")
+      }
+
       const response = await fetch(`/api/admin/etat-des-lieux-templates/${templateId}`, {
         method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${session.access_token}`
+        }
       })
 
       if (response.ok) {
@@ -270,9 +314,18 @@ export default function EtatDesLieuxTemplatesPage() {
 
   const toggleActive = async (templateId: string, isActive: boolean) => {
     try {
+      // Récupérer le token d'authentification
+      const { data: { session } } = await authService.supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error("Non authentifié")
+      }
+
       const response = await fetch(`/api/admin/etat-des-lieux-templates/${templateId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`
+        },
         body: JSON.stringify({ is_active: !isActive }),
       })
 

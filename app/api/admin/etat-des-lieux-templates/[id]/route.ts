@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
 import { supabaseStorageService } from "@/lib/supabase-storage-service"
 
 // GET /api/admin/etat-des-lieux-templates/[id]
@@ -7,17 +7,32 @@ import { supabaseStorageService } from "@/lib/supabase-storage-service"
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const templateId = params.id
-    const server = createServerClient()
+    
+    // Vérifier l'authentification admin via le token
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Token d'authentification manquant" }, { status: 401 })
+    }
 
-    // Vérifier l'authentification admin
-    const { data: { user }, error: authError } = await server.auth.getUser()
+    const token = authHeader.split(" ")[1]
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return NextResponse.json({ error: "Configuration Supabase manquante" }, { status: 500 })
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+    // Vérifier le token et récupérer l'utilisateur
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
     
     if (authError || !user) {
-      return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
+      return NextResponse.json({ error: "Token invalide" }, { status: 401 })
     }
 
     // Vérifier que l'utilisateur est admin
-    const { data: profile, error: profileError } = await server
+    const { data: profile, error: profileError } = await supabase
       .from("users")
       .select("user_type")
       .eq("id", user.id)
@@ -27,7 +42,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Accès refusé - Admin requis" }, { status: 403 })
     }
 
-    const { data: template, error } = await server
+    const { data: template, error } = await supabase
       .from("etat_des_lieux_templates")
       .select("*")
       .eq("id", templateId)
@@ -49,7 +64,40 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const templateId = params.id
-    const server = createServerClient()
+    
+    // Vérifier l'authentification admin via le token
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Token d'authentification manquant" }, { status: 401 })
+    }
+
+    const token = authHeader.split(" ")[1]
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return NextResponse.json({ error: "Configuration Supabase manquante" }, { status: 500 })
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+    // Vérifier le token et récupérer l'utilisateur
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    
+    if (authError || !user) {
+      return NextResponse.json({ error: "Token invalide" }, { status: 401 })
+    }
+
+    // Vérifier que l'utilisateur est admin
+    const { data: profile, error: profileError } = await supabase
+      .from("users")
+      .select("user_type")
+      .eq("id", user.id)
+      .single()
+
+    if (profileError || !profile || profile.user_type !== "admin") {
+      return NextResponse.json({ error: "Accès refusé - Admin requis" }, { status: 403 })
+    }
 
     const formData = await request.formData()
     const name = formData.get("name") as string
@@ -63,7 +111,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     }
 
     // Récupérer le modèle existant
-    const { data: existingTemplate, error: fetchError } = await server
+    const { data: existingTemplate, error: fetchError } = await supabase
       .from("etat_des_lieux_templates")
       .select("*")
       .eq("id", templateId)
@@ -111,7 +159,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     }
 
     // Mettre à jour le modèle
-    const { data: template, error: updateError } = await server
+    const { data: template, error: updateError } = await supabase
       .from("etat_des_lieux_templates")
       .update({
         name,
@@ -144,10 +192,44 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const templateId = params.id
-    const server = createServerClient()
+    
+    // Vérifier l'authentification admin via le token
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Token d'authentification manquant" }, { status: 401 })
+    }
+
+    const token = authHeader.split(" ")[1]
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return NextResponse.json({ error: "Configuration Supabase manquante" }, { status: 500 })
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+    // Vérifier le token et récupérer l'utilisateur
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    
+    if (authError || !user) {
+      return NextResponse.json({ error: "Token invalide" }, { status: 401 })
+    }
+
+    // Vérifier que l'utilisateur est admin
+    const { data: profile, error: profileError } = await supabase
+      .from("users")
+      .select("user_type")
+      .eq("id", user.id)
+      .single()
+
+    if (profileError || !profile || profile.user_type !== "admin") {
+      return NextResponse.json({ error: "Accès refusé - Admin requis" }, { status: 403 })
+    }
+
     const body = await request.json()
 
-    const { data: template, error } = await server
+    const { data: template, error } = await supabase
       .from("etat_des_lieux_templates")
       .update(body)
       .eq("id", templateId)
@@ -171,10 +253,43 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const templateId = params.id
-    const server = createServerClient()
+    
+    // Vérifier l'authentification admin via le token
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Token d'authentification manquant" }, { status: 401 })
+    }
+
+    const token = authHeader.split(" ")[1]
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return NextResponse.json({ error: "Configuration Supabase manquante" }, { status: 500 })
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+    // Vérifier le token et récupérer l'utilisateur
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    
+    if (authError || !user) {
+      return NextResponse.json({ error: "Token invalide" }, { status: 401 })
+    }
+
+    // Vérifier que l'utilisateur est admin
+    const { data: profile, error: profileError } = await supabase
+      .from("users")
+      .select("user_type")
+      .eq("id", user.id)
+      .single()
+
+    if (profileError || !profile || profile.user_type !== "admin") {
+      return NextResponse.json({ error: "Accès refusé - Admin requis" }, { status: 403 })
+    }
 
     // Récupérer le modèle pour obtenir l'URL du fichier
-    const { data: template, error: fetchError } = await server
+    const { data: template, error: fetchError } = await supabase
       .from("etat_des_lieux_templates")
       .select("file_url")
       .eq("id", templateId)
@@ -194,7 +309,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     }
 
     // Supprimer l'entrée de la base de données
-    const { error: deleteError } = await server
+    const { error: deleteError } = await supabase
       .from("etat_des_lieux_templates")
       .delete()
       .eq("id", templateId)
