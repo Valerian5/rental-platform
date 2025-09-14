@@ -193,6 +193,8 @@ export function EtatDesLieuxSection({ leaseId, propertyId, propertyData, leaseDa
   })
   const [currentRoomIndex, setCurrentRoomIndex] = useState(0)
 
+  const roomCount = propertyData?.rooms || 1
+
   useEffect(() => {
     loadDocuments()
   }, [leaseId])
@@ -690,34 +692,37 @@ export function EtatDesLieuxSection({ leaseId, propertyId, propertyData, leaseDa
 
                           {/* Éléments de la pièce */}
                           <div className="space-y-4">
-                            {Object.entries(ELEMENT_LABELS).map(([key, label]) => (
-                              <div key={key} className="border rounded-lg p-4">
-                                <div className="flex items-center justify-between mb-2">
-                                  <Label className="font-medium">{label}</Label>
-                                  <Select
-                                    value={rooms[currentRoomIndex].elements[key as keyof typeof rooms[0].elements].state}
-                                    onValueChange={(value) => updateRoomElement(rooms[currentRoomIndex].id, key, value, rooms[currentRoomIndex].elements[key as keyof typeof rooms[0].elements].comment)}
-                                  >
-                                    <SelectTrigger className="w-32">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="absent">Absent</SelectItem>
-                                      <SelectItem value="M">M</SelectItem>
-                                      <SelectItem value="P">P</SelectItem>
-                                      <SelectItem value="B">B</SelectItem>
-                                      <SelectItem value="TB">TB</SelectItem>
-                                    </SelectContent>
-                                  </Select>
+                            {Object.entries(ELEMENT_LABELS).map(([key, label]) => {
+                              const element = rooms[currentRoomIndex].elements[key as keyof typeof rooms[0].elements]
+                              return (
+                                <div key={key} className="border rounded-lg p-4">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <Label className="font-medium">{label}</Label>
+                                    <Select
+                                      value={element.state}
+                                      onValueChange={(value) => updateRoomElement(rooms[currentRoomIndex].id, key, value, element.comment)}
+                                    >
+                                      <SelectTrigger className="w-32">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="absent">Absent</SelectItem>
+                                        <SelectItem value="M">M</SelectItem>
+                                        <SelectItem value="P">P</SelectItem>
+                                        <SelectItem value="B">B</SelectItem>
+                                        <SelectItem value="TB">TB</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <Textarea
+                                    placeholder="Commentaire sur cet élément..."
+                                    value={element.comment}
+                                    onChange={(e) => updateRoomElement(rooms[currentRoomIndex].id, key, element.state, e.target.value)}
+                                    className="mt-2"
+                                  />
                                 </div>
-                                <Textarea
-                                  placeholder="Commentaire sur cet élément..."
-                                  value={rooms[currentRoomIndex].elements[key as keyof typeof rooms[0].elements].comment}
-                                  onChange={(e) => updateRoomElement(rooms[currentRoomIndex].id, key, rooms[currentRoomIndex].elements[key as keyof typeof rooms[0].elements].state, e.target.value)}
-                                  className="mt-2"
-                                />
-                              </div>
-                            ))}
+                              )
+                            })}
                           </div>
 
                           {/* Commentaire sur la pièce */}

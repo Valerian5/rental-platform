@@ -18,6 +18,7 @@ import {
   Shield,
   Building2,
   BarChart3,
+  Database,
   Home,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -420,14 +421,22 @@ function AdminContent() {
                 </button>
               </SidebarMenuButton>
             </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={activeTab === "etat-des-lieux"} onClick={() => setActiveTab("etat-des-lieux")}>
-                <button>
-                  <Home className="h-4 w-4" />
-                  <span>Modèles État des Lieux</span>
-                </button>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={activeTab === "etat-des-lieux"} onClick={() => setActiveTab("etat-des-lieux")}>
+                    <button>
+                      <Home className="h-4 w-4" />
+                      <span>Modèles État des Lieux</span>
+                    </button>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={activeTab === "migrate"} onClick={() => setActiveTab("migrate")}>
+                    <button>
+                      <Database className="h-4 w-4" />
+                      <span>Migration</span>
+                    </button>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={activeTab === "users"} onClick={() => setActiveTab("users")}>
                 <button>
@@ -1201,6 +1210,16 @@ function AdminContent() {
                 src="/admin/etat-des-lieux-templates"
                 className="w-full h-screen border-0"
                 title="Modèles d'État des Lieux"
+              />
+            </div>
+          )}
+
+          {activeTab === "migrate" && (
+            <div>
+              <iframe
+                src="/admin/migrate"
+                className="w-full h-screen border-0"
+                title="Migration de la Base de Données"
               />
             </div>
           )}
