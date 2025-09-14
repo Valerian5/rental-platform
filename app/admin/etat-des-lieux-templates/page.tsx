@@ -117,14 +117,14 @@ export default function EtatDesLieuxTemplatesPage() {
       setLoading(true)
       
       // Récupérer le token d'authentification
-      const { data: { session } } = await authService.supabase.auth.getSession()
-      if (!session?.access_token) {
+      const token = await authService.getAuthToken()
+      if (!token) {
         throw new Error("Non authentifié")
       }
 
       const response = await fetch("/api/admin/etat-des-lieux-templates", {
         headers: {
-          "Authorization": `Bearer ${session.access_token}`
+          "Authorization": `Bearer ${token}`
         }
       })
       
@@ -163,8 +163,8 @@ export default function EtatDesLieuxTemplatesPage() {
       setIsUploading(true)
       
       // Récupérer le token d'authentification
-      const { data: { session } } = await authService.supabase.auth.getSession()
-      if (!session?.access_token) {
+      const token = await authService.getAuthToken()
+      if (!token) {
         throw new Error("Non authentifié")
       }
 
@@ -178,7 +178,7 @@ export default function EtatDesLieuxTemplatesPage() {
       const response = await fetch("/api/admin/etat-des-lieux-templates", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${session.access_token}`
+          "Authorization": `Bearer ${token}`
         },
         body: formDataToSend,
       })
@@ -228,8 +228,8 @@ export default function EtatDesLieuxTemplatesPage() {
       setIsUploading(true)
       
       // Récupérer le token d'authentification
-      const { data: { session } } = await authService.supabase.auth.getSession()
-      if (!session?.access_token) {
+      const token = await authService.getAuthToken()
+      if (!token) {
         throw new Error("Non authentifié")
       }
 
@@ -245,7 +245,7 @@ export default function EtatDesLieuxTemplatesPage() {
       const response = await fetch(`/api/admin/etat-des-lieux-templates/${editingTemplate.id}`, {
         method: "PUT",
         headers: {
-          "Authorization": `Bearer ${session.access_token}`
+          "Authorization": `Bearer ${token}`
         },
         body: formDataToSend,
       })
@@ -280,15 +280,15 @@ export default function EtatDesLieuxTemplatesPage() {
 
     try {
       // Récupérer le token d'authentification
-      const { data: { session } } = await authService.supabase.auth.getSession()
-      if (!session?.access_token) {
+      const token = await authService.getAuthToken()
+      if (!token) {
         throw new Error("Non authentifié")
       }
 
       const response = await fetch(`/api/admin/etat-des-lieux-templates/${templateId}`, {
         method: "DELETE",
         headers: {
-          "Authorization": `Bearer ${session.access_token}`
+          "Authorization": `Bearer ${token}`
         }
       })
 
@@ -315,8 +315,8 @@ export default function EtatDesLieuxTemplatesPage() {
   const toggleActive = async (templateId: string, isActive: boolean) => {
     try {
       // Récupérer le token d'authentification
-      const { data: { session } } = await authService.supabase.auth.getSession()
-      if (!session?.access_token) {
+      const token = await authService.getAuthToken()
+      if (!token) {
         throw new Error("Non authentifié")
       }
 
@@ -324,7 +324,7 @@ export default function EtatDesLieuxTemplatesPage() {
         method: "PATCH",
         headers: { 
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.access_token}`
+          "Authorization": `Bearer ${token}`
         },
         body: JSON.stringify({ is_active: !isActive }),
       })
