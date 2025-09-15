@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { FileText, Shield, Star, Upload, ExternalLink, CheckCircle, AlertCircle, Loader2, RefreshCw } from "lucide-react"
 import { SupabaseFileUpload } from "@/components/supabase-file-upload"
 import { toast } from "sonner"
@@ -333,61 +334,78 @@ function DossierFacileForm({
 }) {
   return (
     <div className="space-y-6">
-      <Alert>
-        <Shield className="h-4 w-4" />
-        <AlertDescription>
-          <strong>Étapes à suivre :</strong>
-          <br />
-          1. Créez votre dossier sur{" "}
-          <a
-            href="https://www.dossierfacile.logement.gouv.fr"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 hover:underline"
-          >
-            DossierFacile.gouv.fr
-          </a>
-          <br />
-          2. Récupérez votre code de vérification
-          <br />
-          3. Saisissez-le ci-dessous pour importer automatiquement vos données
-        </AlertDescription>
-      </Alert>
-
-      <div className="flex justify-center">
-        <Button asChild className="bg-green-600 hover:bg-green-700">
-          <a href="https://www.dossierfacile.logement.gouv.fr" target="_blank" rel="noopener noreferrer">
-            <ExternalLink className="h-4 w-4 mr-2" />
-            Créer mon dossier DossierFacile
-          </a>
-        </Button>
-      </div>
-
-      {/* Connexion DossierFacile Connect */}
+      {/* Lien simple DossierFacile (en attendant les codes API) */}
       <div className="space-y-4">
         <div className="text-center">
-          <h4 className="text-sm font-medium mb-2">Connexion à DossierFacile</h4>
+          <h4 className="text-sm font-medium mb-2">Créer votre dossier DossierFacile</h4>
           <p className="text-xs text-gray-600 mb-4">
-            Connectez-vous à votre compte DossierFacile pour importer automatiquement vos données
+            Créez votre dossier certifié sur la plateforme officielle DossierFacile
           </p>
           
           <Button 
-            onClick={onVerify} 
-            disabled={isVerifying}
+            asChild
             className="bg-green-600 hover:bg-green-700 px-8 py-3"
             size="lg"
           >
-            {isVerifying ? (
-              <Loader2 className="h-5 w-5 animate-spin mr-2" />
-            ) : (
+            <a 
+              href="https://www.dossierfacile.logement.gouv.fr/?mtm_campaign=LOUERICI&mtm_kwd=rental_file_creation"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <Shield className="h-5 w-5 mr-2" />
-            )}
-            Se connecter à DossierFacile
+              Créer mon dossier DossierFacile
+            </a>
           </Button>
           
           <p className="text-xs text-gray-500 mt-2">
             Vous serez redirigé vers la plateforme officielle DossierFacile
           </p>
+        </div>
+
+        {/* Texte obligatoire selon la documentation */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <p className="text-sm text-blue-800 text-center">
+            <strong>DossierFacile est le service numérique de l'État qui permet la constitution d'un dossier de location conforme et sécurisé.</strong>
+          </p>
+          <p className="text-xs text-blue-700 text-center mt-2">
+            Simple d'utilisation, DossierFacile accompagne les candidats locataires dans la création d'un dossier de location numérique, labellisé par l'État. Un outil qui sécurise les informations sensibles des usagers, un tiers de confiance pour tous !
+          </p>
+        </div>
+
+        {/* Section pour saisir le lien partagé */}
+        <div className="space-y-4">
+          <div className="text-center">
+            <h4 className="text-sm font-medium mb-2">Une fois votre dossier créé</h4>
+            <p className="text-xs text-gray-600 mb-4">
+              Après avoir créé et validé votre dossier sur DossierFacile, collez le lien de partage ci-dessous
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="dossierfacile_link">Lien de partage DossierFacile</Label>
+            <Input
+              id="dossierfacile_link"
+              placeholder="https://locataire.dossierfacile.logement.gouv.fr/file/..."
+              value={data.verification_code || ""}
+              onChange={(e) => onUpdate("verification_code", e.target.value)}
+            />
+            <p className="text-xs text-gray-500">
+              Trouvez ce lien dans votre espace DossierFacile > Partager mon dossier
+            </p>
+          </div>
+
+          <Button 
+            onClick={onVerify} 
+            disabled={isVerifying || !data.verification_code}
+            className="w-full bg-blue-600 hover:bg-blue-700"
+          >
+            {isVerifying ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              <CheckCircle className="h-4 w-4 mr-2" />
+            )}
+            Vérifier le lien DossierFacile
+          </Button>
         </div>
 
         {/* Statut de vérification */}
@@ -432,21 +450,105 @@ function DossierFacileForm({
         )}
       </div>
 
-      {/* Upload manuel de PDF (fallback) */}
+      {/* Informations supplémentaires pour le matching score */}
       <div className="border-t pt-6">
-        <h4 className="text-sm font-medium mb-2">Ou importez manuellement votre PDF</h4>
-        <p className="text-xs text-gray-600 mb-2">
-          Si vous préférez, vous pouvez télécharger et importer manuellement votre dossier PDF
+        <h4 className="text-sm font-medium mb-4">Informations pour le calcul du score de compatibilité</h4>
+        <p className="text-xs text-gray-600 mb-4">
+          Ces informations nous permettent de calculer votre score de compatibilité avec les logements
         </p>
-        <SupabaseFileUpload
-          onFilesUploaded={onPdfUpload}
-          maxFiles={1}
-          bucket="documents"
-          folder="dossierfacile"
-          existingFiles={data.pdf_url ? [data.pdf_url] : []}
-          acceptedTypes={["application/pdf"]}
-          showPreview={true}
-        />
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="monthly_income">Revenus mensuels nets (€) *</Label>
+            <Input
+              id="monthly_income"
+              type="number"
+              placeholder="3000"
+              value={data.monthly_income || ""}
+              onChange={(e) => onUpdate("monthly_income", e.target.value)}
+            />
+          </div>
+          
+          <div>
+            <Label htmlFor="profession">Profession</Label>
+            <Input
+              id="profession"
+              placeholder="Développeur web"
+              value={data.profession || ""}
+              onChange={(e) => onUpdate("profession", e.target.value)}
+            />
+          </div>
+          
+          <div>
+            <Label htmlFor="company">Entreprise</Label>
+            <Input
+              id="company"
+              placeholder="Nom de votre employeur"
+              value={data.company || ""}
+              onChange={(e) => onUpdate("company", e.target.value)}
+            />
+          </div>
+          
+          <div>
+            <Label htmlFor="contract_type">Type de contrat</Label>
+            <Select
+              value={data.contract_type || ""}
+              onValueChange={(value) => onUpdate("contract_type", value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Sélectionnez votre type de contrat" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="cdi_confirmed">CDI confirmé</SelectItem>
+                <SelectItem value="cdi_trial">CDI en période d'essai</SelectItem>
+                <SelectItem value="cdd_long">CDD long terme (12+ mois)</SelectItem>
+                <SelectItem value="cdd_short">CDD court terme (&lt;12 mois)</SelectItem>
+                <SelectItem value="freelance">Freelance/Indépendant</SelectItem>
+                <SelectItem value="student">Étudiant</SelectItem>
+                <SelectItem value="unemployed">Sans emploi</SelectItem>
+                <SelectItem value="retired">Retraité</SelectItem>
+                <SelectItem value="civil_servant">Fonctionnaire</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <Label htmlFor="guarantor_type">Type de garant</Label>
+          <Select
+            value={data.guarantor_type || ""}
+            onValueChange={(value) => onUpdate("guarantor_type", value)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Sélectionnez votre type de garant" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Aucun garant</SelectItem>
+              <SelectItem value="physical">Garant physique (personne)</SelectItem>
+              <SelectItem value="visale">VISALE</SelectItem>
+              <SelectItem value="garantme">GarantMe</SelectItem>
+              <SelectItem value="other">Autre organisme</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="mt-4">
+          <Label htmlFor="presentation_message">Message de présentation</Label>
+          <Textarea
+            id="presentation_message"
+            placeholder="Présentez-vous en quelques mots..."
+            value={data.presentation_message || ""}
+            onChange={(e) => onUpdate("presentation_message", e.target.value)}
+            rows={3}
+          />
+        </div>
+
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mt-4">
+          <p className="text-sm text-orange-800">
+            <strong>Important :</strong> Ces informations sont utilisées pour calculer votre score de compatibilité avec les logements. 
+            Plus votre dossier est complet, plus votre score sera élevé.
+          </p>
+        </div>
       </div>
 
       {/* Informations extraites */}
@@ -485,19 +587,21 @@ function DossierFacileForm({
         </div>
       )}
 
-      {/* Formulaire manuel supprimé - DossierFacile Connect gère tout automatiquement */}
-
-      {data.pdf_url && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <div className="flex items-center space-x-2">
-            <CheckCircle className="h-5 w-5 text-green-600" />
-            <span className="font-medium text-green-800">Dossier DossierFacile importé</span>
+      {/* Message d'information sur DossierFacile Connect */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="flex items-start space-x-3">
+          <Shield className="h-5 w-5 text-blue-600 mt-0.5" />
+          <div>
+            <h4 className="font-medium text-blue-800 mb-2">Comment fonctionne DossierFacile Connect ?</h4>
+            <ul className="text-sm text-blue-700 space-y-1">
+              <li>• Vous vous connectez à votre compte DossierFacile existant</li>
+              <li>• Nous importons automatiquement vos données vérifiées</li>
+              <li>• Votre dossier est certifié conforme aux exigences légales</li>
+              <li>• Les propriétaires font davantage confiance aux dossiers certifiés</li>
+            </ul>
           </div>
-          <p className="text-sm text-green-700 mt-1">
-            Votre dossier certifié sera visible par les propriétaires avec un badge spécial.
-          </p>
         </div>
-      )}
+      </div>
     </div>
   )
 }
