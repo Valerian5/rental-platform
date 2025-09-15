@@ -346,15 +346,15 @@ export function EtatDesLieuxSection({ leaseId, propertyId, propertyData, leaseDa
   }
 
   const updateRoomElement = (roomId: string, element: string, state: string, comment: string) => {
-    setRooms(rooms.map(room => 
-      room.id === roomId 
+    setRooms(rooms.map(room =>
+      room.id === roomId
         ? {
-            ...room,
-            elements: {
-              ...room.elements,
-              [element]: { state: state as any, comment }
-            }
+          ...room,
+          elements: {
+            ...room.elements,
+            [element]: { state: state as any, comment }
           }
+        }
         : room
     ))
   }
