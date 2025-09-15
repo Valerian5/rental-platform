@@ -134,19 +134,9 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
       other_type: "",
     },
     meters: {
-      electricity: {
-        number: "",
-        full_hour: "",
-        off_peak: "",
-      },
-      gas: {
-        number: "",
-        reading: "",
-      },
-      water: {
-        number: "",
-        reading: "",
-      },
+      electricity: { number: "", full_hour: "", off_peak: "" },
+      gas: { number: "", reading: "" },
+      water: { number: "", reading: "" },
     },
     keys: {
       entrance: 0,
@@ -177,45 +167,31 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
   }, [])
 
   useEffect(() => {
-    // Pré-remplir les informations générales avec les données du bail
     if (leaseData) {
       setGeneralInfo(prev => ({
         ...prev,
         address: leaseData.adresse_logement,
         owner: {
           ...prev.owner,
-          first_name: leaseData.bailleur_nom_prenom.split(' ')[0] || '',
-          last_name: leaseData.bailleur_nom_prenom.split(' ').slice(1).join(' ') || '',
+          first_name: leaseData.bailleur_nom_prenom.split(" ")[0] || "",
+          last_name: leaseData.bailleur_nom_prenom.split(" ").slice(1).join(" ") || "",
         },
         tenant: {
           ...prev.tenant,
-          first_name: leaseData.locataire_nom_prenom.split(' ')[0] || '',
-          last_name: leaseData.locataire_nom_prenom.split(' ').slice(1).join(' ') || '',
+          first_name: leaseData.locataire_nom_prenom.split(" ")[0] || "",
+          last_name: leaseData.locataire_nom_prenom.split(" ").slice(1).join(" ") || "",
         },
       }))
     }
   }, [leaseData])
 
   const initializeRooms = () => {
-    // Initialiser avec des pièces par défaut
     const defaultRooms: RoomState[] = [
       {
         id: "sejour",
         name: "Séjour",
         type: "main",
-        elements: {
-          sols: { state: "B", comment: "" },
-          murs: { state: "B", comment: "" },
-          plafonds: { state: "B", comment: "" },
-          portes: { state: "B", comment: "" },
-          fenetres: { state: "B", comment: "" },
-          volets: { state: "absent", comment: "" },
-          plinthes: { state: "B", comment: "" },
-          radiateurs: { state: "B", comment: "" },
-          interrupteurs: { state: "B", comment: "" },
-          prises: { state: "B", comment: "" },
-          eclairages: { state: "B", comment: "" },
-        },
+        elements: Object.fromEntries(Object.keys(ELEMENT_LABELS).map(k => [k, { state: "B", comment: "" }])) as any,
         comment: "",
         photos: [],
       },
@@ -223,19 +199,7 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
         id: "cuisine",
         name: "Cuisine",
         type: "water",
-        elements: {
-          sols: { state: "B", comment: "" },
-          murs: { state: "B", comment: "" },
-          plafonds: { state: "B", comment: "" },
-          portes: { state: "B", comment: "" },
-          fenetres: { state: "B", comment: "" },
-          volets: { state: "absent", comment: "" },
-          plinthes: { state: "B", comment: "" },
-          radiateurs: { state: "B", comment: "" },
-          interrupteurs: { state: "B", comment: "" },
-          prises: { state: "B", comment: "" },
-          eclairages: { state: "B", comment: "" },
-        },
+        elements: Object.fromEntries(Object.keys(ELEMENT_LABELS).map(k => [k, { state: "B", comment: "" }])) as any,
         comment: "",
         photos: [],
       },
@@ -243,19 +207,7 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
         id: "salle_bain",
         name: "Salle de bain",
         type: "water",
-        elements: {
-          sols: { state: "B", comment: "" },
-          murs: { state: "B", comment: "" },
-          plafonds: { state: "B", comment: "" },
-          portes: { state: "B", comment: "" },
-          fenetres: { state: "B", comment: "" },
-          volets: { state: "absent", comment: "" },
-          plinthes: { state: "B", comment: "" },
-          radiateurs: { state: "B", comment: "" },
-          interrupteurs: { state: "B", comment: "" },
-          prises: { state: "B", comment: "" },
-          eclairages: { state: "B", comment: "" },
-        },
+        elements: Object.fromEntries(Object.keys(ELEMENT_LABELS).map(k => [k, { state: "B", comment: "" }])) as any,
         comment: "",
         photos: [],
       },
@@ -265,28 +217,14 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
 
   const addRoom = () => {
     if (!newRoom.type || !newRoom.name) return
-
     const newRoomState: RoomState = {
       id: `${newRoom.type}-${Date.now()}`,
       name: newRoom.name,
       type: newRoom.category,
-      elements: {
-        sols: { state: "B", comment: "" },
-        murs: { state: "B", comment: "" },
-        plafonds: { state: "B", comment: "" },
-        portes: { state: "B", comment: "" },
-        fenetres: { state: "B", comment: "" },
-        volets: { state: "absent", comment: "" },
-        plinthes: { state: "B", comment: "" },
-        radiateurs: { state: "B", comment: "" },
-        interrupteurs: { state: "B", comment: "" },
-        prises: { state: "B", comment: "" },
-        eclairages: { state: "B", comment: "" },
-      },
+      elements: Object.fromEntries(Object.keys(ELEMENT_LABELS).map(k => [k, { state: "B", comment: "" }])) as any,
       comment: "",
       photos: [],
     }
-
     setRooms([...rooms, newRoomState])
     setNewRoom({ category: "main", type: "", name: "" })
     setShowAddRoomDialog(false)
@@ -300,15 +238,9 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
   }
 
   const updateRoomElement = (roomId: string, element: string, state: string, comment: string) => {
-    setRooms(rooms.map(room => 
-      room.id === roomId 
-        ? {
-            ...room,
-            elements: {
-              ...room.elements,
-              [element]: { state: state as any, comment }
-            }
-          }
+    setRooms(rooms.map(room =>
+      room.id === roomId
+        ? { ...room, elements: { ...room.elements, [element]: { state: state as any, comment } } }
         : room
     ))
   }
@@ -318,18 +250,9 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
       const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux/digital`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          general_info: generalInfo,
-          rooms: rooms,
-          property_data: propertyData,
-          lease_data: leaseData,
-        }),
+        body: JSON.stringify({ general_info: generalInfo, rooms, property_data: propertyData, lease_data: leaseData }),
       })
-
-      if (!response.ok) {
-        throw new Error("Erreur lors de la sauvegarde")
-      }
-
+      if (!response.ok) throw new Error("Erreur lors de la sauvegarde")
       toast.success("État des lieux numérique sauvegardé")
     } catch (error) {
       console.error("Erreur sauvegarde:", error)
