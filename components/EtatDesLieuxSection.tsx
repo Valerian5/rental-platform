@@ -311,7 +311,6 @@ export function EtatDesLieuxSection({ leaseId, propertyId, propertyData, leaseDa
   const addRoom = () => {
     if (!newRoom.type || !newRoom.name) return
 
-    const roomType = ROOM_CATEGORIES[newRoom.category].find(r => r.value === newRoom.type)
     const newRoomState: RoomState = {
       id: `${newRoom.type}-${Date.now()}`,
       name: newRoom.name,
