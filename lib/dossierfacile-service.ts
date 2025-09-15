@@ -72,29 +72,24 @@ export interface DossierFacileApiResponse {
 }
 
 export const dossierFacileService = {
-  // Créer un nouveau dossier DossierFacile
-  async createDossierFacile(tenantId: string, verificationCode: string): Promise<DossierFacileData> {
-    console.log("📋 DossierFacileService.createDossierFacile", { tenantId, verificationCode })
+  // Créer un nouveau dossier DossierFacile via OAuth2
+  async createDossierFacileFromOAuth(tenantId: string, accessToken: string, refreshToken: string, profileData: any): Promise<DossierFacileData> {
+    console.log("📋 DossierFacileService.createDossierFacileFromOAuth", { tenantId })
 
     try {
-      // 1. Vérifier le code de vérification via l'API DossierFacile
-      const apiResponse = await this.verifyDossierFacileCode(verificationCode)
-      
-      if (!apiResponse.success || !apiResponse.data) {
-        throw new Error(apiResponse.error || "Erreur lors de la vérification du dossier DossierFacile")
-      }
+      // 1. Extraire les données du profil
+      const extractedData = this.extractDossierFacileData(profileData)
 
-      // 2. Extraire les données du dossier
-      const extractedData = this.extractDossierFacileData(apiResponse.data)
-
-      // 3. Sauvegarder en base de données
+      // 2. Sauvegarder en base de données
       const dossierData: Partial<DossierFacileData> = {
         tenant_id: tenantId,
-        dossierfacile_id: apiResponse.data.dossier_id,
-        dossierfacile_verification_code: verificationCode,
+        dossierfacile_id: profileData.id || `df_${Date.now()}`,
+        dossierfacile_verification_code: tenantId, // Utiliser l'ID utilisateur comme référence
         dossierfacile_status: "verified",
         dossierfacile_verified_at: new Date().toISOString(),
         dossierfacile_data: extractedData,
+        access_token: accessToken,
+        refresh_token: refreshToken,
       }
 
       const { data, error } = await supabase
@@ -111,7 +106,7 @@ export const dossierFacileService = {
       console.log("✅ Dossier DossierFacile créé avec succès")
       return data as DossierFacileData
     } catch (error) {
-      console.error("❌ Erreur dans createDossierFacile:", error)
+      console.error("❌ Erreur dans createDossierFacileFromOAuth:", error)
       throw error
     }
   },

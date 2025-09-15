@@ -564,6 +564,68 @@ export function ImprovedPersonProfile({
 
             {profile.main_activity && (
               <div className="space-y-4">
+                {/* Informations professionnelles détaillées */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="contract_type">Type de contrat *</Label>
+                    <Select
+                      value={profile.contract_type || ""}
+                      onValueChange={(value) => onUpdate({ ...profile, contract_type: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionnez votre type de contrat" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cdi_confirmed">CDI confirmé</SelectItem>
+                        <SelectItem value="cdi_trial">CDI en période d'essai</SelectItem>
+                        <SelectItem value="cdd_long">CDD long terme (12+ mois)</SelectItem>
+                        <SelectItem value="cdd_short">CDD court terme (&lt;12 mois)</SelectItem>
+                        <SelectItem value="freelance">Freelance/Indépendant</SelectItem>
+                        <SelectItem value="student">Étudiant</SelectItem>
+                        <SelectItem value="unemployed">Sans emploi</SelectItem>
+                        <SelectItem value="retired">Retraité</SelectItem>
+                        <SelectItem value="civil_servant">Fonctionnaire</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="seniority_months">Ancienneté (mois)</Label>
+                    <Input
+                      id="seniority_months"
+                      type="number"
+                      placeholder="12"
+                      value={profile.seniority_months || ""}
+                      onChange={(e) => onUpdate({ ...profile, seniority_months: parseInt(e.target.value) || 0 })}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Nombre de mois dans votre emploi actuel
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="company_name">Nom de l'entreprise</Label>
+                    <Input
+                      id="company_name"
+                      placeholder="Nom de votre employeur"
+                      value={profile.company_name || ""}
+                      onChange={(e) => onUpdate({ ...profile, company_name: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="job_title">Poste occupé</Label>
+                    <Input
+                      id="job_title"
+                      placeholder="Votre poste/titre"
+                      value={profile.job_title || ""}
+                      onChange={(e) => onUpdate({ ...profile, job_title: e.target.value })}
+                    />
+                  </div>
+                </div>
+
                 <div className="bg-blue-50 p-4 rounded-lg">
                   <h4 className="font-medium text-blue-800 mb-2">
                     Documents requis pour {MAIN_ACTIVITIES.find((a) => a.value === profile.main_activity)?.label} :

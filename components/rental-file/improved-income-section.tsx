@@ -264,6 +264,48 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
 
   const hasAnyIncome = profile.income_sources && Object.keys(profile.income_sources).length > 0
 
+  // Calculer le revenu total mensuel
+  const calculateTotalMonthlyIncome = () => {
+    if (!profile.income_sources) return 0
+    
+    let total = 0
+    
+    // Revenus du travail
+    if (profile.income_sources.work_income?.amount) {
+      total += profile.income_sources.work_income.amount
+    }
+    
+    // Bourse
+    if (profile.income_sources.scholarship?.amount) {
+      total += profile.income_sources.scholarship.amount
+    }
+    
+    // Aides sociales
+    if (profile.income_sources.social_aid) {
+      profile.income_sources.social_aid.forEach((aid: any) => {
+        if (aid.amount) total += aid.amount
+      })
+    }
+    
+    // Retraites/pensions
+    if (profile.income_sources.retirement_pension) {
+      profile.income_sources.retirement_pension.forEach((pension: any) => {
+        if (pension.amount) total += pension.amount
+      })
+    }
+    
+    // Rentes
+    if (profile.income_sources.rent_income) {
+      profile.income_sources.rent_income.forEach((rent: any) => {
+        if (rent.amount) total += rent.amount
+      })
+    }
+    
+    return total
+  }
+
+  const totalMonthlyIncome = calculateTotalMonthlyIncome()
+
   const handlePayslipValidated = (monthKey: string, documentData: any) => {
     const updatedProfile = { ...profile }
     if (!updatedProfile.income_sources.work_income.documents_detailed) {
@@ -295,6 +337,14 @@ export function ImprovedIncomeSection({ profile, onUpdate }: ImprovedIncomeSourc
             <span>Justificatifs de ressources</span>
             {hasAnyIncome && <Badge variant="outline">Configuré</Badge>}
           </div>
+          {totalMonthlyIncome > 0 && (
+            <div className="text-right">
+              <div className="text-sm text-gray-600">Revenus totaux</div>
+              <div className="text-lg font-semibold text-green-600">
+                {totalMonthlyIncome.toLocaleString()}€/mois
+              </div>
+            </div>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">

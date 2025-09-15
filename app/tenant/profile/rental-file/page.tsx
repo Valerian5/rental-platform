@@ -6,7 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
-import { ArrowLeft, ArrowRight, Users, Shield, CheckCircle, Plus, AlertCircle, X, Eye, User, Heart } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ArrowLeft, ArrowRight, Users, Shield, CheckCircle, Plus, AlertCircle, X, Eye, User, Heart, Euro } from "lucide-react"
 import { rentalFileService, RENTAL_SITUATIONS, GUARANTOR_TYPES } from "@/lib/rental-file-service"
 import { authService } from "@/lib/auth-service"
 import { ImprovedPersonProfile } from "@/components/rental-file/improved-person-profile"
@@ -566,14 +569,73 @@ export default function RentalFilePage() {
                   />
 
                   {guarantor.type === "physical" && guarantor.personal_info && (
-                    <ImprovedPersonProfile
-                      profile={guarantor.personal_info}
-                      onUpdate={(updatedProfile) => {
-                        const updatedGuarantor = { ...guarantor, personal_info: updatedProfile }
-                        updateGuarantor(index, updatedGuarantor)
-                      }}
-                      title="Informations du garant"
-                    />
+                    <div className="space-y-6">
+                      <ImprovedPersonProfile
+                        profile={guarantor.personal_info}
+                        onUpdate={(updatedProfile) => {
+                          const updatedGuarantor = { ...guarantor, personal_info: updatedProfile }
+                          updateGuarantor(index, updatedGuarantor)
+                        }}
+                        title="Informations du garant"
+                      />
+                      
+                      {/* Section revenus du garant */}
+                      <Card className="border-orange-200 bg-orange-50/50">
+                        <CardHeader className="pb-4">
+                          <CardTitle className="text-lg flex items-center space-x-2">
+                            <Euro className="h-5 w-5 text-orange-600" />
+                            <span>Revenus du garant</span>
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <Label htmlFor={`guarantor_income_${index}`}>Revenus mensuels nets (€) *</Label>
+                              <Input
+                                id={`guarantor_income_${index}`}
+                                type="number"
+                                placeholder="3000"
+                                value={guarantor.monthly_income || ""}
+                                onChange={(e) => {
+                                  const updatedGuarantor = { ...guarantor, monthly_income: parseFloat(e.target.value) || 0 }
+                                  updateGuarantor(index, updatedGuarantor)
+                                }}
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor={`guarantor_contract_${index}`}>Type de contrat</Label>
+                              <Select
+                                value={guarantor.contract_type || ""}
+                                onValueChange={(value) => {
+                                  const updatedGuarantor = { ...guarantor, contract_type: value }
+                                  updateGuarantor(index, updatedGuarantor)
+                                }}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Sélectionnez le type de contrat" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="cdi_confirmed">CDI confirmé</SelectItem>
+                                  <SelectItem value="cdi_trial">CDI en période d'essai</SelectItem>
+                                  <SelectItem value="cdd_long">CDD long terme (12+ mois)</SelectItem>
+                                  <SelectItem value="cdd_short">CDD court terme (&lt;12 mois)</SelectItem>
+                                  <SelectItem value="freelance">Freelance/Indépendant</SelectItem>
+                                  <SelectItem value="retired">Retraité</SelectItem>
+                                  <SelectItem value="civil_servant">Fonctionnaire</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          
+                          <div className="bg-orange-100 p-3 rounded-lg">
+                            <p className="text-sm text-orange-800">
+                              <strong>Important :</strong> Les revenus du garant sont utilisés pour calculer votre score de compatibilité. 
+                              Un garant avec des revenus élevés améliore vos chances d'obtenir le logement.
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
                   )}
 
                   {guarantor.type === "none" && (

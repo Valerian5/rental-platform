@@ -805,6 +805,118 @@ export const scoringPreferencesService = {
     }
   },
 
+  // Mapper les données enrichies du RentalFile vers le format de scoring
+  mapRentalFileToScoringData(rentalFile: any): any {
+    console.log("🔄 Mapping RentalFile vers données de scoring", rentalFile)
+
+    // Calculer le revenu total du locataire principal
+    const mainTenantIncome = this.calculateTotalIncome(rentalFile.main_tenant?.income_sources || {})
+    
+    // Calculer le revenu total des colocataires
+    let cotenantIncome = 0
+    if (rentalFile.cotenants) {
+      rentalFile.cotenants.forEach((cotenant: any) => {
+        cotenantIncome += this.calculateTotalIncome(cotenant.income_sources || {})
+      })
+    }
+
+    // Calculer le revenu total des garants
+    let guarantorIncome = 0
+    let hasGuarantor = false
+    if (rentalFile.guarantors && rentalFile.guarantors.length > 0) {
+      hasGuarantor = true
+      rentalFile.guarantors.forEach((guarantor: any) => {
+        if (guarantor.type === "physical" && guarantor.personal_info) {
+          guarantorIncome += this.calculateTotalIncome(guarantor.personal_info.income_sources || {})
+        } else if (guarantor.monthly_income) {
+          guarantorIncome += guarantor.monthly_income
+        }
+      })
+    }
+
+    // Calculer le revenu total du foyer
+    const totalHouseholdIncome = mainTenantIncome + cotenantIncome
+
+    const scoringData = {
+      // Revenus
+      income: totalHouseholdIncome,
+      main_tenant_income: mainTenantIncome,
+      cotenant_income: cotenantIncome,
+      guarantor_income: guarantorIncome,
+      has_guarantor: hasGuarantor,
+
+      // Informations professionnelles
+      contract_type: rentalFile.main_tenant?.contract_type || rentalFile.main_tenant?.main_activity,
+      seniority_months: rentalFile.main_tenant?.seniority_months || 0,
+      profession: rentalFile.main_tenant?.profession,
+      company: rentalFile.main_tenant?.company_name || rentalFile.main_tenant?.company,
+      job_title: rentalFile.main_tenant?.job_title,
+
+      // Informations du foyer
+      household_size: 1 + (rentalFile.cotenants?.length || 0),
+      rental_situation: rentalFile.rental_situation,
+
+      // Qualité du dossier
+      completion_percentage: rentalFile.completion_percentage || 0,
+      documents_complete: (rentalFile.completion_percentage || 0) >= 80,
+      has_verified_documents: rentalFile.is_dossierfacile_certified || false,
+      presentation: rentalFile.presentation_message,
+
+      // DossierFacile
+      is_dossierfacile_certified: rentalFile.is_dossierfacile_certified || false,
+      creation_method: rentalFile.creation_method,
+      dossierfacile_status: rentalFile.dossierfacile_status,
+      dossierfacile_data: rentalFile.dossierfacile_data,
+
+      // Métadonnées
+      id: rentalFile.id,
+      tenant_id: rentalFile.tenant_id,
+    }
+
+    console.log("✅ Données de scoring mappées:", scoringData)
+    return scoringData
+  },
+
+  // Calculer le revenu total à partir des sources de revenus
+  calculateTotalIncome(incomeSources: any): number {
+    if (!incomeSources) return 0
+    
+    let total = 0
+    
+    // Revenus du travail
+    if (incomeSources.work_income?.amount) {
+      total += incomeSources.work_income.amount
+    }
+    
+    // Bourse
+    if (incomeSources.scholarship?.amount) {
+      total += incomeSources.scholarship.amount
+    }
+    
+    // Aides sociales
+    if (incomeSources.social_aid) {
+      incomeSources.social_aid.forEach((aid: any) => {
+        if (aid.amount) total += aid.amount
+      })
+    }
+    
+    // Retraites/pensions
+    if (incomeSources.retirement_pension) {
+      incomeSources.retirement_pension.forEach((pension: any) => {
+        if (pension.amount) total += pension.amount
+      })
+    }
+    
+    // Rentes
+    if (incomeSources.rent_income) {
+      incomeSources.rent_income.forEach((rent: any) => {
+        if (rent.amount) total += rent.amount
+      })
+    }
+    
+    return total
+  },
+
   // Invalider le cache
   invalidateCache(ownerId?: string) {
     if (ownerId) {

@@ -63,38 +63,29 @@ export async function GET(request: NextRequest) {
       // 3. Extraire et structurer les données
       const extractedData = dossierFacileService.extractDossierFacileData(profileResponse.data)
 
-      // 4. Sauvegarder en base de données
-      const dossierData = {
-        tenant_id: user.id,
-        dossierfacile_id: profileResponse.data.id || `df_${Date.now()}`,
-        dossierfacile_verification_code: state, // Utiliser le state comme code de référence
-        dossierfacile_status: "verified",
-        dossierfacile_verified_at: new Date().toISOString(),
-        dossierfacile_data: extractedData,
-        access_token: tokens.access_token, // Stocker temporairement pour les mises à jour
-        refresh_token: tokens.refresh_token,
-      }
-
-      // Vérifier si un dossier existe déjà
+      // 4. Vérifier si un dossier existe déjà
       const existingDossier = await dossierFacileService.getDossierFacileByTenant(user.id)
       
       let savedDossier
       if (existingDossier) {
         // Mettre à jour le dossier existant
-        savedDossier = await dossierFacileService.updateDossierFacile(user.id, dossierData)
+        const updateData = {
+          dossierfacile_id: profileResponse.data.id || `df_${Date.now()}`,
+          dossierfacile_status: "verified",
+          dossierfacile_verified_at: new Date().toISOString(),
+          dossierfacile_data: extractedData,
+          access_token: tokens.access_token,
+          refresh_token: tokens.refresh_token,
+        }
+        savedDossier = await dossierFacileService.updateDossierFacile(user.id, updateData)
       } else {
         // Créer un nouveau dossier
-        const { data, error } = await server
-          .from("dossierfacile_dossiers")
-          .insert(dossierData)
-          .select()
-          .single()
-
-        if (error) {
-          console.error("❌ Erreur sauvegarde dossier:", error)
-          throw new Error(error.message)
-        }
-        savedDossier = data
+        savedDossier = await dossierFacileService.createDossierFacileFromOAuth(
+          user.id,
+          tokens.access_token,
+          tokens.refresh_token,
+          profileResponse.data
+        )
       }
 
       console.log("✅ Dossier DossierFacile Connect créé/mis à jour avec succès")
