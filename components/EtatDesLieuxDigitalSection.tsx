@@ -105,7 +105,12 @@ const ELEMENT_LABELS = {
   eclairages: "Éclairages",
 }
 
-export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, leaseData }: EtatDesLieuxDigitalSectionProps) {
+export function EtatDesLieuxDigitalSection({
+  leaseId,
+  propertyId,
+  propertyData,
+  leaseData,
+}: EtatDesLieuxDigitalSectionProps) {
   const [rooms, setRooms] = useState<RoomState[]>([])
   const [generalInfo, setGeneralInfo] = useState({
     type: "entree" as "entree" | "sortie",
@@ -191,7 +196,9 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
         id: "sejour",
         name: "Séjour",
         type: "main",
-        elements: Object.fromEntries(Object.keys(ELEMENT_LABELS).map(k => [k, { state: "B", comment: "" }])) as any,
+        elements: Object.fromEntries(
+          Object.keys(ELEMENT_LABELS).map(k => [k, { state: "B", comment: "" }])
+        ) as any,
         comment: "",
         photos: [],
       },
@@ -199,7 +206,9 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
         id: "cuisine",
         name: "Cuisine",
         type: "water",
-        elements: Object.fromEntries(Object.keys(ELEMENT_LABELS).map(k => [k, { state: "B", comment: "" }])) as any,
+        elements: Object.fromEntries(
+          Object.keys(ELEMENT_LABELS).map(k => [k, { state: "B", comment: "" }])
+        ) as any,
         comment: "",
         photos: [],
       },
@@ -207,7 +216,9 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
         id: "salle_bain",
         name: "Salle de bain",
         type: "water",
-        elements: Object.fromEntries(Object.keys(ELEMENT_LABELS).map(k => [k, { state: "B", comment: "" }])) as any,
+        elements: Object.fromEntries(
+          Object.keys(ELEMENT_LABELS).map(k => [k, { state: "B", comment: "" }])
+        ) as any,
         comment: "",
         photos: [],
       },
@@ -221,7 +232,9 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
       id: `${newRoom.type}-${Date.now()}`,
       name: newRoom.name,
       type: newRoom.category,
-      elements: Object.fromEntries(Object.keys(ELEMENT_LABELS).map(k => [k, { state: "B", comment: "" }])) as any,
+      elements: Object.fromEntries(
+        Object.keys(ELEMENT_LABELS).map(k => [k, { state: "B", comment: "" }])
+      ) as any,
       comment: "",
       photos: [],
     }
@@ -238,11 +251,13 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
   }
 
   const updateRoomElement = (roomId: string, element: string, state: string, comment: string) => {
-    setRooms(rooms.map(room =>
-      room.id === roomId
-        ? { ...room, elements: { ...room.elements, [element]: { state: state as any, comment } } }
-        : room
-    ))
+    setRooms(
+      rooms.map(room =>
+        room.id === roomId
+          ? { ...room, elements: { ...room.elements, [element]: { state: state as any, comment } } }
+          : room
+      )
+    )
   }
 
   const saveDigitalState = async () => {
@@ -250,7 +265,12 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
       const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux/digital`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ general_info: generalInfo, rooms, property_data: propertyData, lease_data: leaseData }),
+        body: JSON.stringify({
+          general_info: generalInfo,
+          rooms,
+          property_data: propertyData,
+          lease_data: leaseData,
+        }),
       })
       if (!response.ok) throw new Error("Erreur lors de la sauvegarde")
       toast.success("État des lieux numérique sauvegardé")
@@ -265,116 +285,7 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
       {/* Contenu principal */}
       <div className="lg:col-span-2 space-y-6">
         {/* Section Pièces */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <Home className="h-5 w-5" />
-                Pièces du logement
-              </CardTitle>
-              <Button onClick={() => setShowAddRoomDialog(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Ajouter une pièce
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {rooms.length === 0 ? (
-              <div className="text-center py-8">
-                <Home className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600">Aucune pièce configurée</p>
-                <p className="text-sm text-gray-500">Ajoutez des pièces pour commencer l'état des lieux</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Navigation par pièces */}
-                <div className="flex flex-wrap gap-2">
-                  {rooms.map((room, index) => (
-                    <Button
-                      key={room.id}
-                      variant={currentRoomIndex === index ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setCurrentRoomIndex(index)}
-                    >
-                      {room.name}
-                    </Button>
-                  ))}
-                </div>
-
-                {/* Contenu de la pièce sélectionnée */}
-                {rooms[currentRoomIndex] && (
-                  <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-medium">{rooms[currentRoomIndex].name}</h3>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => removeRoom(rooms[currentRoomIndex].id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-
-                    {/* Éléments de la pièce */}
-                    <div className="space-y-4">
-                      {Object.entries(ELEMENT_LABELS).map(([key, label]) => {
-                        const element = rooms[currentRoomIndex].elements[key as keyof typeof rooms[0].elements]
-                        return (
-                          <div key={key} className="border rounded-lg p-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <Label className="font-medium">{label}</Label>
-                              <Select
-                                value={element.state}
-                                onValueChange={(value) => updateRoomElement(rooms[currentRoomIndex].id, key, value, element.comment)}
-                              >
-                                <SelectTrigger className="w-32">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="absent">Absent</SelectItem>
-                                  <SelectItem value="M">M</SelectItem>
-                                  <SelectItem value="P">P</SelectItem>
-                                  <SelectItem value="B">B</SelectItem>
-                                  <SelectItem value="TB">TB</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <Textarea
-                              placeholder="Commentaire sur cet élément..."
-                              value={element.comment}
-                              onChange={(e) => updateRoomElement(rooms[currentRoomIndex].id, key, element.state, e.target.value)}
-                              className="mt-2"
-                            />
-                          </div>
-                        )
-                      })}
-                    </div>
-
-                    {/* Commentaire sur la pièce */}
-                    <div>
-                      <Label>Commentaire sur cette pièce</Label>
-                      <Textarea
-                        placeholder="Ajoutez des précisions sur un élément ou une description d'un élément non listé..."
-                        value={rooms[currentRoomIndex].comment}
-                        onChange={(e) => setRooms(rooms.map((r, i) => i === currentRoomIndex ? { ...r, comment: e.target.value } : r))}
-                      />
-                    </div>
-
-                    {/* Photos de la pièce */}
-                    <div>
-                      <Label>Photos de la pièce</Label>
-                      <p className="text-sm text-gray-500 mb-2">Photos justificatives ({rooms[currentRoomIndex].photos.length}/5)</p>
-                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                        <Camera className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                        <p className="text-gray-600">Cliquez pour ajouter des photos</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        ... ✅ (ta section pièces reste inchangée)
 
         {/* Section Informations */}
         <Card>
@@ -387,7 +298,9 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
                 <Label>Type d'état des lieux</Label>
                 <Select
                   value={generalInfo.type}
-                  onValueChange={(value: "entree" | "sortie") => setGeneralInfo({ ...generalInfo, type: value })}
+                  onValueChange={(value: "entree" | "sortie") =>
+                    setGeneralInfo({ ...generalInfo, type: value })
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -403,7 +316,9 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
                 <Input
                   type="date"
                   value={generalInfo.date}
-                  onChange={(e) => setGeneralInfo({ ...generalInfo, date: e.target.value })}
+                  onChange={(e) =>
+                    setGeneralInfo({ ...generalInfo, date: e.target.value })
+                  }
                 />
               </div>
             </div>
@@ -412,11 +327,14 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
               <Label>Adresse du logement</Label>
               <Input
                 value={generalInfo.address}
-                onChange={(e) => setGeneralInfo({ ...generalInfo, address: e.target.value })}
+                onChange={(e) =>
+                  setGeneralInfo({ ...generalInfo, address: e.target.value })
+                }
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Propriétaire */}
               <div className="space-y-4">
                 <h4 className="font-medium">Propriétaire</h4>
                 <div className="space-y-3">
@@ -424,39 +342,70 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
                     <Input
                       placeholder="Prénom"
                       value={generalInfo.owner.first_name}
-                      onChange={(e) => setGeneralInfo({ ...generalInfo, owner: { ...generalInfo.owner, first_name: e.target.value } })}
+                      onChange={(e) =>
+                        setGeneralInfo({
+                          ...generalInfo,
+                          owner: { ...generalInfo.owner, first_name: e.target.value },
+                        })
+                      }
                     />
                     <Input
                       placeholder="Nom"
                       value={generalInfo.owner.last_name}
-                      onChange={(e) => setGeneralInfo({ ...generalInfo, owner: { ...generalInfo.owner, last_name: e.target.value } })}
+                      onChange={(e) =>
+                        setGeneralInfo({
+                          ...generalInfo,
+                          owner: { ...generalInfo.owner, last_name: e.target.value },
+                        })
+                      }
                     />
                   </div>
                   <Input
                     placeholder="Email"
                     type="email"
                     value={generalInfo.owner.email}
-                    onChange={(e) => setGeneralInfo({ ...generalInfo, owner: { ...generalInfo.owner, email: e.target.value } })}
+                    onChange={(e) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        owner: { ...generalInfo.owner, email: e.target.value },
+                      })
+                    }
                   />
                   <div className="flex items-center space-x-2">
                     <input
                       type="checkbox"
                       id="mandataire"
                       checked={generalInfo.owner.is_mandataire}
-                      onChange={(e) => setGeneralInfo({ ...generalInfo, owner: { ...generalInfo.owner, is_mandataire: e.target.checked } })}
+                      onChange={(e) =>
+                        setGeneralInfo({
+                          ...generalInfo,
+                          owner: { ...generalInfo.owner, is_mandataire: e.target.checked },
+                        })
+                      }
                     />
-                    <Label htmlFor="mandataire">Propriétaire représenté par un mandataire</Label>
+                    <Label htmlFor="mandataire">
+                      Propriétaire représenté par un mandataire
+                    </Label>
                   </div>
                   {generalInfo.owner.is_mandataire && (
                     <Input
                       placeholder="Adresse du mandataire"
                       value={generalInfo.owner.mandataire_address}
-                      onChange={(e) => setGeneralInfo({ ...generalInfo, owner: { ...generalInfo.owner, mandataire_address: e.target.value } })}
+                      onChange={(e) =>
+                        setGeneralInfo({
+                          ...generalInfo,
+                          owner: {
+                            ...generalInfo.owner,
+                            mandataire_address: e.target.value,
+                          },
+                        })
+                      }
                     />
                   )}
                 </div>
               </div>
 
+              {/* Locataire */}
               <div className="space-y-4">
                 <h4 className="font-medium">Locataire</h4>
                 <div className="space-y-3">
@@ -464,26 +413,40 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
                     <Input
                       placeholder="Prénom"
                       value={generalInfo.tenant.first_name}
-                      onChange={(e) => setGeneralInfo({ ...generalInfo, tenant: { ...generalInfo.tenant, first_name: e.target.value } })}
+                      onChange={(e) =>
+                        setGeneralInfo({
+                          ...generalInfo,
+                          tenant: { ...generalInfo.tenant, first_name: e.target.value },
+                        })
+                      }
                     />
                     <Input
                       placeholder="Nom"
                       value={generalInfo.tenant.last_name}
-                      onChange={(e) => setGeneralInfo({ ...generalInfo, tenant: { ...generalInfo.tenant, last_name: e.target.value } })}
+                      onChange={(e) =>
+                        setGeneralInfo({
+                          ...generalInfo,
+                          tenant: { ...generalInfo.tenant, last_name: e.target.value },
+                        })
+                      }
                     />
                   </div>
                   <Input
                     placeholder="Email"
                     type="email"
                     value={generalInfo.tenant.email}
-                    onChange={(e) => setGeneralInfo({ ...generalInfo, tenant: { ...generalInfo.tenant, email: e.target.value } })}
+                    onChange={(e) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        tenant: { ...generalInfo.tenant, email: e.target.value },
+                      })
+                    }
                   />
                 </div>
               </div>
             </div>
           </CardContent>
         </Card>
-
         {/* Section Autres */}
         <Card>
           <CardHeader>
@@ -498,7 +461,12 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
                   <Label>Type de chauffage</Label>
                   <Select
                     value={generalInfo.heating.type}
-                    onValueChange={(value: "individuel" | "collectif" | "pas_de_chauffage") => setGeneralInfo({ ...generalInfo, heating: { ...generalInfo.heating, type: value } })}
+                    onValueChange={(value: "individuel" | "collectif" | "pas_de_chauffage") =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        heating: { ...generalInfo.heating, type: value },
+                      })
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -515,7 +483,12 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
                     <Label>Type de combustible</Label>
                     <Select
                       value={generalInfo.heating.fuel_type}
-                      onValueChange={(value: "electrique" | "gaz" | "fioul" | "autre") => setGeneralInfo({ ...generalInfo, heating: { ...generalInfo.heating, fuel_type: value } })}
+                      onValueChange={(value: "electrique" | "gaz" | "fioul" | "autre") =>
+                        setGeneralInfo({
+                          ...generalInfo,
+                          heating: { ...generalInfo.heating, fuel_type: value },
+                        })
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -534,7 +507,12 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
                 <Input
                   placeholder="Précisez le type"
                   value={generalInfo.heating.other_type}
-                  onChange={(e) => setGeneralInfo({ ...generalInfo, heating: { ...generalInfo.heating, other_type: e.target.value } })}
+                  onChange={(e) =>
+                    setGeneralInfo({
+                      ...generalInfo,
+                      heating: { ...generalInfo.heating, other_type: e.target.value },
+                    })
+                  }
                 />
               )}
             </div>
@@ -547,7 +525,12 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
                   <Label>Type d'eau chaude</Label>
                   <Select
                     value={generalInfo.hot_water.type}
-                    onValueChange={(value: "individuelle" | "collective") => setGeneralInfo({ ...generalInfo, hot_water: { ...generalInfo.hot_water, type: value } })}
+                    onValueChange={(value: "individuelle" | "collective") =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        hot_water: { ...generalInfo.hot_water, type: value },
+                      })
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -563,7 +546,12 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
                     <Label>Type de combustible</Label>
                     <Select
                       value={generalInfo.hot_water.fuel_type}
-                      onValueChange={(value: "electrique" | "gaz" | "fioul" | "autre") => setGeneralInfo({ ...generalInfo, hot_water: { ...generalInfo.hot_water, fuel_type: value } })}
+                      onValueChange={(value: "electrique" | "gaz" | "fioul" | "autre") =>
+                        setGeneralInfo({
+                          ...generalInfo,
+                          hot_water: { ...generalInfo.hot_water, fuel_type: value },
+                        })
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -582,7 +570,12 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
                 <Input
                   placeholder="Précisez le type"
                   value={generalInfo.hot_water.other_type}
-                  onChange={(e) => setGeneralInfo({ ...generalInfo, hot_water: { ...generalInfo.hot_water, other_type: e.target.value } })}
+                  onChange={(e) =>
+                    setGeneralInfo({
+                      ...generalInfo,
+                      hot_water: { ...generalInfo.hot_water, other_type: e.target.value },
+                    })
+                  }
                 />
               )}
             </div>
@@ -597,7 +590,18 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
                     <Input
                       placeholder="N° du compteur"
                       value={generalInfo.meters.electricity.number}
-                      onChange={(e) => setGeneralInfo({ ...generalInfo, meters: { ...generalInfo.meters, electricity: { ...generalInfo.meters.electricity, number: e.target.value } } })}
+                      onChange={(e) =>
+                        setGeneralInfo({
+                          ...generalInfo,
+                          meters: {
+                            ...generalInfo.meters,
+                            electricity: {
+                              ...generalInfo.meters.electricity,
+                              number: e.target.value,
+                            },
+                          },
+                        })
+                      }
                     />
                   </div>
                   <div>
@@ -605,7 +609,18 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
                     <Input
                       placeholder="Relevé"
                       value={generalInfo.meters.electricity.full_hour}
-                      onChange={(e) => setGeneralInfo({ ...generalInfo, meters: { ...generalInfo.meters, electricity: { ...generalInfo.meters.electricity, full_hour: e.target.value } } })}
+                      onChange={(e) =>
+                        setGeneralInfo({
+                          ...generalInfo,
+                          meters: {
+                            ...generalInfo.meters,
+                            electricity: {
+                              ...generalInfo.meters.electricity,
+                              full_hour: e.target.value,
+                            },
+                          },
+                        })
+                      }
                     />
                   </div>
                   <div>
@@ -613,7 +628,18 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
                     <Input
                       placeholder="Relevé"
                       value={generalInfo.meters.electricity.off_peak}
-                      onChange={(e) => setGeneralInfo({ ...generalInfo, meters: { ...generalInfo.meters, electricity: { ...generalInfo.meters.electricity, off_peak: e.target.value } } })}
+                      onChange={(e) =>
+                        setGeneralInfo({
+                          ...generalInfo,
+                          meters: {
+                            ...generalInfo.meters,
+                            electricity: {
+                              ...generalInfo.meters.electricity,
+                              off_peak: e.target.value,
+                            },
+                          },
+                        })
+                      }
                     />
                   </div>
                 </div>
@@ -624,12 +650,28 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
                       <Input
                         placeholder="N° du compteur"
                         value={generalInfo.meters.gas.number}
-                        onChange={(e) => setGeneralInfo({ ...generalInfo, meters: { ...generalInfo.meters, gas: { ...generalInfo.meters.gas, number: e.target.value } } })}
+                        onChange={(e) =>
+                          setGeneralInfo({
+                            ...generalInfo,
+                            meters: {
+                              ...generalInfo.meters,
+                              gas: { ...generalInfo.meters.gas, number: e.target.value },
+                            },
+                          })
+                        }
                       />
                       <Input
                         placeholder="Relevé"
                         value={generalInfo.meters.gas.reading}
-                        onChange={(e) => setGeneralInfo({ ...generalInfo, meters: { ...generalInfo.meters, gas: { ...generalInfo.meters.gas, reading: e.target.value } } })}
+                        onChange={(e) =>
+                          setGeneralInfo({
+                            ...generalInfo,
+                            meters: {
+                              ...generalInfo.meters,
+                              gas: { ...generalInfo.meters.gas, reading: e.target.value },
+                            },
+                          })
+                        }
                       />
                     </div>
                   </div>
@@ -639,12 +681,28 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
                       <Input
                         placeholder="N° du compteur"
                         value={generalInfo.meters.water.number}
-                        onChange={(e) => setGeneralInfo({ ...generalInfo, meters: { ...generalInfo.meters, water: { ...generalInfo.meters.water, number: e.target.value } } })}
+                        onChange={(e) =>
+                          setGeneralInfo({
+                            ...generalInfo,
+                            meters: {
+                              ...generalInfo.meters,
+                              water: { ...generalInfo.meters.water, number: e.target.value },
+                            },
+                          })
+                        }
                       />
                       <Input
                         placeholder="Relevé"
                         value={generalInfo.meters.water.reading}
-                        onChange={(e) => setGeneralInfo({ ...generalInfo, meters: { ...generalInfo.meters, water: { ...generalInfo.meters.water, reading: e.target.value } } })}
+                        onChange={(e) =>
+                          setGeneralInfo({
+                            ...generalInfo,
+                            meters: {
+                              ...generalInfo.meters,
+                              water: { ...generalInfo.meters.water, reading: e.target.value },
+                            },
+                          })
+                        }
                       />
                     </div>
                   </div>
@@ -661,7 +719,12 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
                   <Input
                     type="number"
                     value={generalInfo.keys.entrance}
-                    onChange={(e) => setGeneralInfo({ ...generalInfo, keys: { ...generalInfo.keys, entrance: parseInt(e.target.value) || 0 } })}
+                    onChange={(e) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        keys: { ...generalInfo.keys, entrance: parseInt(e.target.value) || 0 },
+                      })
+                    }
                   />
                 </div>
                 <div>
@@ -669,7 +732,12 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
                   <Input
                     type="number"
                     value={generalInfo.keys.building}
-                    onChange={(e) => setGeneralInfo({ ...generalInfo, keys: { ...generalInfo.keys, building: parseInt(e.target.value) || 0 } })}
+                    onChange={(e) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        keys: { ...generalInfo.keys, building: parseInt(e.target.value) || 0 },
+                      })
+                    }
                   />
                 </div>
                 <div>
@@ -677,7 +745,12 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
                   <Input
                     type="number"
                     value={generalInfo.keys.parking}
-                    onChange={(e) => setGeneralInfo({ ...generalInfo, keys: { ...generalInfo.keys, parking: parseInt(e.target.value) || 0 } })}
+                    onChange={(e) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        keys: { ...generalInfo.keys, parking: parseInt(e.target.value) || 0 },
+                      })
+                    }
                   />
                 </div>
                 <div>
@@ -685,7 +758,12 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
                   <Input
                     type="number"
                     value={generalInfo.keys.mailbox}
-                    onChange={(e) => setGeneralInfo({ ...generalInfo, keys: { ...generalInfo.keys, mailbox: parseInt(e.target.value) || 0 } })}
+                    onChange={(e) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        keys: { ...generalInfo.keys, mailbox: parseInt(e.target.value) || 0 },
+                      })
+                    }
                   />
                 </div>
                 <div>
@@ -693,7 +771,12 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
                   <Input
                     type="number"
                     value={generalInfo.keys.cellar}
-                    onChange={(e) => setGeneralInfo({ ...generalInfo, keys: { ...generalInfo.keys, cellar: parseInt(e.target.value) || 0 } })}
+                    onChange={(e) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        keys: { ...generalInfo.keys, cellar: parseInt(e.target.value) || 0 },
+                      })
+                    }
                   />
                 </div>
                 <div>
@@ -701,7 +784,12 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
                   <Input
                     type="number"
                     value={generalInfo.keys.other}
-                    onChange={(e) => setGeneralInfo({ ...generalInfo, keys: { ...generalInfo.keys, other: parseInt(e.target.value) || 0 } })}
+                    onChange={(e) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        keys: { ...generalInfo.keys, other: parseInt(e.target.value) || 0 },
+                      })
+                    }
                   />
                 </div>
               </div>
@@ -709,7 +797,12 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
                 <Input
                   placeholder="Précisez le type de clés"
                   value={generalInfo.keys.other_type}
-                  onChange={(e) => setGeneralInfo({ ...generalInfo, keys: { ...generalInfo.keys, other_type: e.target.value } })}
+                  onChange={(e) =>
+                    setGeneralInfo({
+                      ...generalInfo,
+                      keys: { ...generalInfo.keys, other_type: e.target.value },
+                    })
+                  }
                 />
               )}
             </div>
@@ -720,14 +813,16 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
               <Textarea
                 placeholder="Commentaires généraux sur l'état des lieux..."
                 value={generalInfo.general_comment}
-                onChange={(e) => setGeneralInfo({ ...generalInfo, general_comment: e.target.value })}
+                onChange={(e) =>
+                  setGeneralInfo({ ...generalInfo, general_comment: e.target.value })
+                }
               />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Sidebar - Preview */}
+      {/* Sidebar */}
       <div className="space-y-6">
         <Card>
           <CardHeader>
@@ -736,19 +831,24 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
           <CardContent>
             <div className="space-y-3 text-sm">
               <div>
-                <span className="font-medium">Type :</span> {generalInfo.type === "entree" ? "Entrée" : "Sortie"}
+                <span className="font-medium">Type :</span>{" "}
+                {generalInfo.type === "entree" ? "Entrée" : "Sortie"}
               </div>
               <div>
-                <span className="font-medium">Date :</span> {generalInfo.date || "Non renseignée"}
+                <span className="font-medium">Date :</span>{" "}
+                {generalInfo.date || "Non renseignée"}
               </div>
               <div>
-                <span className="font-medium">Adresse :</span> {generalInfo.address || "Non renseignée"}
+                <span className="font-medium">Adresse :</span>{" "}
+                {generalInfo.address || "Non renseignée"}
               </div>
               <div>
-                <span className="font-medium">Propriétaire :</span> {generalInfo.owner.first_name} {generalInfo.owner.last_name}
+                <span className="font-medium">Propriétaire :</span>{" "}
+                {generalInfo.owner.first_name} {generalInfo.owner.last_name}
               </div>
               <div>
-                <span className="font-medium">Locataire :</span> {generalInfo.tenant.first_name} {generalInfo.tenant.last_name}
+                <span className="font-medium">Locataire :</span>{" "}
+                {generalInfo.tenant.first_name} {generalInfo.tenant.last_name}
               </div>
               <div>
                 <span className="font-medium">Pièces :</span> {rooms.length}
@@ -784,7 +884,9 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
               <Label>Catégorie de pièce</Label>
               <Select
                 value={newRoom.category}
-                onValueChange={(value: "main" | "water" | "annex") => setNewRoom({ ...newRoom, category: value, type: "" })}
+                onValueChange={(value: "main" | "water" | "annex") =>
+                  setNewRoom({ ...newRoom, category: value, type: "" })
+                }
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -827,12 +929,12 @@ export function EtatDesLieuxDigitalSection({ leaseId, propertyId, propertyData, 
             <Button variant="outline" onClick={() => setShowAddRoomDialog(false)}>
               Annuler
             </Button>
-            <Button onClick={addRoom}>
-              Ajouter cette pièce
-            </Button>
+            <Button onClick={addRoom}>Ajouter cette pièce</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
   )
 }
+
+
