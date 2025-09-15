@@ -21,13 +21,14 @@ import {
   Download,
   XCircle,
   Mail,
+  Home,
+  Upload,
 } from "lucide-react"
 import { LeaseDocumentDisplay } from "@/components/lease-document-display"
 import { PropertyDocumentsUpload } from "@/components/property-documents-upload"
 import { SignatureMethodSelector } from "@/components/signature-method-selector"
 import { CautionnementSection } from "@/components/CautionnementSection"
-import { CautionnementGenerator } from "@/components/cautionnement-generator"
-import GuarantorSelector from '@/components/GuarantorSelector';
+import { EtatDesLieuxSection } from "@/components/EtatDesLieuxSection"
 import { toast } from "sonner"
 
 /** --- Types DocuSign (statut par signataire) --- */
@@ -85,6 +86,17 @@ interface Lease {
   /** Optionnels si votre API / DB les expose déjà */
   docusign_envelope_id?: string | null
   bailleur_adresse?: string
+  
+  /** Informations de la propriété */
+  property?: {
+    id: string
+    rooms: number
+    bedrooms: number
+    surface: number
+    address: string
+    city: string
+    postal_code: string
+  }
 }
 
 export default function LeaseDetailPage() {
@@ -113,6 +125,16 @@ export default function LeaseDetailPage() {
       }
 
       const data = await response.json()
+      
+      // Si les informations de la propriété ne sont pas incluses, les récupérer
+      if (data.lease && !data.lease.property) {
+        const propertyResponse = await fetch(`/api/properties/${data.lease.property_id}`)
+        if (propertyResponse.ok) {
+          const propertyData = await propertyResponse.json()
+          data.lease.property = propertyData.property
+        }
+      }
+      
       setLease(data.lease)
     } catch (error) {
       console.error("Erreur:", error)
@@ -121,7 +143,6 @@ export default function LeaseDetailPage() {
       setLoading(false)
     }
   }
-  
 
   /** --- Récupération du statut de signature DocuSign --- */
   const loadSignatureStatus = async (opts?: { silent?: boolean }) => {
@@ -478,6 +499,7 @@ export default function LeaseDetailPage() {
             <TabsTrigger value="document">Document</TabsTrigger>
             <TabsTrigger value="signatures">Signatures</TabsTrigger>
             <TabsTrigger value="cautionnement">Acte de cautionnement</TabsTrigger>
+            <TabsTrigger value="etat-des-lieux">État des lieux</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
           </TabsList>
 
@@ -691,18 +713,6 @@ export default function LeaseDetailPage() {
           </TabsContent>
 
           <TabsContent value="cautionnement" className="space-y-6">
-            <CautionnementGenerator
-              leaseId={lease.id}
-              leaseData={{
-                locataire_nom_prenom: lease.locataire_nom_prenom,
-                bailleur_nom_prenom: lease.bailleur_nom_prenom,
-                bailleur_adresse: lease.bailleur_adresse || "",
-                adresse_logement: lease.adresse_logement,
-                montant_loyer_mensuel: lease.montant_loyer_mensuel,
-                date_prise_effet: lease.date_prise_effet,
-                duree_contrat: lease.duree_contrat,
-              }}
-            />
             <CautionnementSection
               leaseId={lease.id}
               leaseData={{
@@ -717,6 +727,20 @@ export default function LeaseDetailPage() {
             />
           </TabsContent>
 
+          <TabsContent value="etat-des-lieux" className="space-y-6">
+            <EtatDesLieuxSection
+              leaseId={lease.id}
+              propertyId={lease.property_id}
+              propertyData={lease.property}
+              leaseData={{
+                locataire_nom_prenom: lease.locataire_nom_prenom,
+                bailleur_nom_prenom: lease.bailleur_nom_prenom,
+                adresse_logement: lease.adresse_logement,
+                date_prise_effet: lease.date_prise_effet,
+              }}
+            />
+          </TabsContent>
+
           <TabsContent value="documents" className="space-y-6">
             {/* On passe leaseId + propertyId. Le composant gère le bucket (ex: lease-annexes) côté props/implémentation. */}
             <PropertyDocumentsUpload leaseId={lease.id} propertyId={lease.property_id} />
@@ -726,4 +750,3 @@ export default function LeaseDetailPage() {
     </div>
   )
 }
-
