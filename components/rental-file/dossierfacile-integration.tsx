@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { FileText, Shield, Star, Upload, ExternalLink, CheckCircle, AlertCircle } from "lucide-react"
+import { FileText, Shield, Star, Upload, ExternalLink, CheckCircle, AlertCircle, Loader2, RefreshCw } from "lucide-react"
 import { SupabaseFileUpload } from "@/components/supabase-file-upload"
 import { toast } from "sonner"
 
@@ -31,6 +31,49 @@ export function DossierFacileIntegration({ profile, onUpdate }: DossierFacileInt
     guarantor_type: profile.guarantor_type || "",
     presentation_message: profile.presentation_message || "",
   })
+  const [isLoading, setIsLoading] = useState(false)
+  const [isVerifying, setIsVerifying] = useState(false)
+  const [dossierFacileStatus, setDossierFacileStatus] = useState<"none" | "pending" | "verified" | "error">("none")
+  const [dossierFacileInfo, setDossierFacileInfo] = useState<any>(null)
+
+  // Charger les données DossierFacile existantes au montage
+  useEffect(() => {
+    if (profile.creation_method === "dossierfacile" && profile.dossierfacile_verification_code) {
+      loadDossierFacileData()
+    }
+  }, [profile.creation_method])
+
+  const loadDossierFacileData = async () => {
+    setIsLoading(true)
+    try {
+      const response = await fetch(`/api/dossierfacile?tenant_id=${profile.tenant_id || ""}`)
+      const data = await response.json()
+      
+      if (data.success && data.data) {
+        setDossierFacileInfo(data.data)
+        setDossierFacileStatus("verified")
+        
+        // Pré-remplir les données
+        const dfData = data.data.dossierfacile_data
+        if (dfData) {
+          setDossierFacileData({
+            ...dossierFacileData,
+            monthly_income: dfData.professional_info?.monthly_income || "",
+            profession: dfData.professional_info?.profession || "",
+            company: dfData.professional_info?.company || "",
+            contract_type: dfData.professional_info?.contract_type || "",
+          })
+        }
+      } else {
+        setDossierFacileStatus("none")
+      }
+    } catch (error) {
+      console.error("Erreur chargement DossierFacile:", error)
+      setDossierFacileStatus("error")
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const handleMethodSelection = (method: "manual" | "dossierfacile") => {
     setSelectedMethod(method)
@@ -51,6 +94,89 @@ export function DossierFacileIntegration({ profile, onUpdate }: DossierFacileInt
     if (urls.length > 0) {
       handleDossierFacileDataUpdate("pdf_url", urls[0])
       toast.success("Dossier DossierFacile importé avec succès")
+    }
+  }
+
+  const handleVerifyDossierFacile = async () => {
+    if (!dossierFacileData.verification_code) {
+      toast.error("Veuillez saisir votre code de vérification DossierFacile")
+      return
+    }
+
+    setIsVerifying(true)
+    try {
+      const response = await fetch("/api/dossierfacile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenant_id: profile.tenant_id,
+          verification_code: dossierFacileData.verification_code,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setDossierFacileInfo(data.data)
+        setDossierFacileStatus("verified")
+        toast.success("Dossier DossierFacile vérifié avec succès !")
+        
+        // Pré-remplir les données extraites
+        const dfData = data.data.dossierfacile_data
+        if (dfData) {
+          const newData = {
+            ...dossierFacileData,
+            monthly_income: dfData.professional_info?.monthly_income || "",
+            profession: dfData.professional_info?.profession || "",
+            company: dfData.professional_info?.company || "",
+            contract_type: dfData.professional_info?.contract_type || "",
+          }
+          setDossierFacileData(newData)
+          onUpdate({ ...profile, ...newData })
+        }
+      } else {
+        setDossierFacileStatus("error")
+        toast.error(data.error || "Erreur lors de la vérification")
+      }
+    } catch (error) {
+      console.error("Erreur vérification DossierFacile:", error)
+      setDossierFacileStatus("error")
+      toast.error("Erreur lors de la vérification du dossier")
+    } finally {
+      setIsVerifying(false)
+    }
+  }
+
+  const handleConvertToRentalFile = async () => {
+    if (!dossierFacileInfo) {
+      toast.error("Aucun dossier DossierFacile vérifié")
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const response = await fetch("/api/dossierfacile/convert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenant_id: profile.tenant_id,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        toast.success("Dossier converti en RentalFile avec succès !")
+        // Recharger la page pour afficher les nouvelles données
+        window.location.reload()
+      } else {
+        toast.error(data.error || "Erreur lors de la conversion")
+      }
+    } catch (error) {
+      console.error("Erreur conversion:", error)
+      toast.error("Erreur lors de la conversion du dossier")
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -94,6 +220,12 @@ export function DossierFacileIntegration({ profile, onUpdate }: DossierFacileInt
               data={dossierFacileData}
               onUpdate={handleDossierFacileDataUpdate}
               onPdfUpload={handlePdfUpload}
+              onVerify={handleVerifyDossierFacile}
+              onConvert={handleConvertToRentalFile}
+              isLoading={isLoading}
+              isVerifying={isVerifying}
+              dossierFacileStatus={dossierFacileStatus}
+              dossierFacileInfo={dossierFacileInfo}
             />
           ) : (
             <div className="text-center py-4">
@@ -219,10 +351,22 @@ function DossierFacileForm({
   data,
   onUpdate,
   onPdfUpload,
+  onVerify,
+  onConvert,
+  isLoading,
+  isVerifying,
+  dossierFacileStatus,
+  dossierFacileInfo,
 }: {
   data: any
   onUpdate: (field: string, value: string) => void
   onPdfUpload: (urls: string[]) => void
+  onVerify: () => void
+  onConvert: () => void
+  isLoading: boolean
+  isVerifying: boolean
+  dossierFacileStatus: "none" | "pending" | "verified" | "error"
+  dossierFacileInfo: any
 }) {
   return (
     <div className="space-y-6">
@@ -241,9 +385,9 @@ function DossierFacileForm({
             DossierFacile.gouv.fr
           </a>
           <br />
-          2. Téléchargez votre dossier PDF certifié
+          2. Récupérez votre code de vérification
           <br />
-          3. Importez-le ci-dessous et complétez les informations pour le calcul du score
+          3. Saisissez-le ci-dessous pour importer automatiquement vos données
         </AlertDescription>
       </Alert>
 
@@ -256,9 +400,86 @@ function DossierFacileForm({
         </Button>
       </div>
 
-      <div>
-        <Label className="text-sm font-medium">Importer votre dossier PDF certifié *</Label>
-        <p className="text-xs text-gray-600 mb-2">Téléchargez le PDF de votre dossier depuis DossierFacile</p>
+      {/* Code de vérification */}
+      <div className="space-y-4">
+        <div>
+          <Label htmlFor="verification_code" className="text-sm font-medium">
+            Code de vérification DossierFacile *
+          </Label>
+          <p className="text-xs text-gray-600 mb-2">
+            Saisissez le code de vérification fourni par DossierFacile pour importer automatiquement vos données
+          </p>
+          <div className="flex space-x-2">
+            <Input
+              id="verification_code"
+              placeholder="Ex: DF123456789"
+              value={data.verification_code}
+              onChange={(e) => onUpdate("verification_code", e.target.value)}
+              className="flex-1"
+            />
+            <Button 
+              onClick={onVerify} 
+              disabled={!data.verification_code || isVerifying}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {isVerifying ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              Vérifier
+            </Button>
+          </div>
+        </div>
+
+        {/* Statut de vérification */}
+        {dossierFacileStatus === "verified" && dossierFacileInfo && (
+          <Alert className="border-green-200 bg-green-50">
+            <CheckCircle className="h-4 w-4 text-green-600" />
+            <AlertDescription className="text-green-800">
+              <strong>Dossier DossierFacile vérifié !</strong>
+              <br />
+              Votre dossier a été importé avec succès. Vous pouvez maintenant le convertir en RentalFile.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {dossierFacileStatus === "error" && (
+          <Alert className="border-red-200 bg-red-50">
+            <AlertCircle className="h-4 w-4 text-red-600" />
+            <AlertDescription className="text-red-800">
+              <strong>Erreur de vérification</strong>
+              <br />
+              Le code de vérification est invalide ou le dossier n'est pas accessible.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Bouton de conversion */}
+        {dossierFacileStatus === "verified" && (
+          <div className="flex justify-center">
+            <Button 
+              onClick={onConvert} 
+              disabled={isLoading}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <CheckCircle className="h-4 w-4 mr-2" />
+              )}
+              Convertir en RentalFile
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Upload manuel de PDF (fallback) */}
+      <div className="border-t pt-6">
+        <h4 className="text-sm font-medium mb-2">Ou importez manuellement votre PDF</h4>
+        <p className="text-xs text-gray-600 mb-2">
+          Si vous préférez, vous pouvez télécharger et importer manuellement votre dossier PDF
+        </p>
         <SupabaseFileUpload
           onFilesUploaded={onPdfUpload}
           maxFiles={1}
@@ -269,6 +490,42 @@ function DossierFacileForm({
           showPreview={true}
         />
       </div>
+
+      {/* Informations extraites */}
+      {dossierFacileStatus === "verified" && dossierFacileInfo?.dossierfacile_data && (
+        <div className="space-y-4">
+          <h4 className="text-sm font-medium">Informations extraites de votre dossier DossierFacile</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
+            <div>
+              <Label className="text-xs text-gray-600">Profession</Label>
+              <p className="text-sm font-medium">
+                {dossierFacileInfo.dossierfacile_data.professional_info?.profession || "Non renseigné"}
+              </p>
+            </div>
+            <div>
+              <Label className="text-xs text-gray-600">Entreprise</Label>
+              <p className="text-sm font-medium">
+                {dossierFacileInfo.dossierfacile_data.professional_info?.company || "Non renseigné"}
+              </p>
+            </div>
+            <div>
+              <Label className="text-xs text-gray-600">Type de contrat</Label>
+              <p className="text-sm font-medium">
+                {dossierFacileInfo.dossierfacile_data.professional_info?.contract_type || "Non renseigné"}
+              </p>
+            </div>
+            <div>
+              <Label className="text-xs text-gray-600">Revenus mensuels</Label>
+              <p className="text-sm font-medium">
+                {dossierFacileInfo.dossierfacile_data.professional_info?.monthly_income 
+                  ? `${dossierFacileInfo.dossierfacile_data.professional_info.monthly_income}€`
+                  : "Non renseigné"
+                }
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div>
         <Label htmlFor="verification_code">Code de vérification DossierFacile</Label>

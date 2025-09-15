@@ -34,6 +34,11 @@ import { cn } from "@/lib/utils"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
+import React, { useState, useEffect } from 'react';
+import { createLease } from '@/lib/lease-service';
+import { getRentalFiles } from '@/lib/rental-file-service'; // Assurez-vous d'avoir cette fonction
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { toast } from '@/components/ui/use-toast';
 
 interface LeaseClause {
   id: string
@@ -188,21 +193,15 @@ interface LeaseFormData {
   franchise_loyer: string
   clause_libre: string
 
-// === GARANTS ===
-garants: Array<{
-  prenom: string
-  nom: string
-  adresse: string
-  email: string
-  telephone: string
-  date_naissance: Date | null
-  lieu_naissance: string
-  date_fin_engagement: Date | null
-  montant_max_engagement: number | string
-  pour_locataire: string
-  code_postal: string
-  ville: string
-}>
+  // === GARANTS ===
+  garants: Array<{
+    prenom: string
+    nom: string
+    adresse: string
+    date_fin_engagement: Date | null
+    montant_max_engagement: number | string
+    pour_locataire: string
+  }>
 }
 
 export default function NewLeasePageComplete() {
@@ -412,6 +411,9 @@ const clauseCategories = [
     checkAuthAndLoadData()
   }, [applicationId])
 
+
+
+
   const checkAuthAndLoadData = async () => {
     try {
       setLoading(true)
@@ -468,15 +470,6 @@ const clauseCategories = [
         const applicationResponse = await fetch(`/api/applications/${applicationId}`)
         if (applicationResponse.ok) {
           const applicationData = await applicationResponse.json()
-
-          // 🔹 Récupération robuste du rental_file via application_id
-          const rfCtxRes = await fetch(`/api/leases?application_id=${applicationId}`)
-          if (rfCtxRes.ok) {
-            const rfCtx = await rfCtxRes.json()
-            applicationData.application.rental_file = rfCtx?.rental_file || applicationData.application.rental_file
-            applicationData.application.rental_file_id = rfCtx?.application?.rental_file_id || applicationData.application.rental_file_id
-          }
-
           setApplication(applicationData.application)
           if (applicationData.application) {
             await prefillFormFromApplication(applicationData.application, currentUser)
@@ -501,27 +494,13 @@ const clauseCategories = [
     // Récupère le rental_file
     const property = app?.property ?? null
     const tenant = app?.tenant ?? null
-    let rentalFile = app?.rental_file ?? null
+    const rentalFile = app?.rental_file ?? null;
 
-    // 🔹 Fallback: si rental_file non présent dans app, on l'obtient via applications.rental_file_id
-    if (!rentalFile && app?.rental_file_id) {
-      try {
-        const rfRes = await fetch(`/api/rental-files/${app.rental_file_id}`)
-        if (rfRes.ok) {
-          const rfData = await rfRes.json()
-          rentalFile = rfData?.rental_file || null
-        } else {
-          console.warn("Impossible de récupérer le rental_file via rental_file_id")
-        }
-      } catch (e) {
-        console.error("Erreur récupération rental_file par ID:", e)
-      }
-    }
-
+  
     // Compose le tableau de locataires
     const allLocataires = [
       ...(rentalFile?.main_tenant ? [rentalFile.main_tenant] : []),
-      ...(Array.isArray(rentalFile?.cotenants) ? rentalFile.cotenants : []),
+      ...(Array.isArray(rentalFile?.cotenants) ? rentalFile.cotenants : [])
     ]
 
     setFormData((prev) => ({
@@ -547,31 +526,11 @@ const clauseCategories = [
       montant_charges: property?.charges_amount || "0",
       depot_garantie: property?.security_deposit || property?.price || "",
       duree_contrat: property?.furnished ? 12 : 36,
-      // 🔹 Préremplissage des garants depuis rental_files.guarantors
-      garants: Array.isArray(rentalFile?.guarantors)
-        ? rentalFile.guarantors.map((g: any) => {
-            const p = g?.personal_info || {}
-            return {
-              prenom: p.first_name || "",
-              nom: p.last_name || "",
-              adresse: [p.address, p.postal_code, p.city].filter(Boolean).join(", "),
-              email: p.email || "",
-              telephone: p.phone || "",
-              date_naissance: p.birth_date ? new Date(p.birth_date) : null,
-              lieu_naissance: p.birth_place || "",
-              date_fin_engagement: null,
-              montant_max_engagement: "",
-              pour_locataire: allLocataires[0]
-                ? `${allLocataires[0].first_name || ""} ${allLocataires[0].last_name || ""}`.trim()
-                : "",
-              code_postal: p.postal_code || "",
-              ville: p.city || "",
-            }
-          })
-        : prev.garants,
     }))
 
-    if (tenant) setTenants([tenant])
+    if (tenant) {
+      setTenants([tenant])
+    }
   }
 
   const handleInputChange = useCallback(
@@ -662,15 +621,9 @@ const clauseCategories = [
           prenom: "",
           nom: "",
           adresse: "",
-          email: "",
-          telephone: "",
-          date_naissance: null,
-          lieu_naissance: "",
           date_fin_engagement: null,
           montant_max_engagement: "",
           pour_locataire: prev.locataires[0] ? `${prev.locataires[0].prenom} ${prev.locataires[0].nom}` : "",
-          code_postal: "",
-          ville: "",
         },
       ],
     }))
@@ -1540,84 +1493,6 @@ travaux_entre_locataires: formData.clauses?.travaux_entre_locataires?.enabled ? 
                           </div>
                         </div>
                       ))}
-                    <div className="mt-6 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-semibold">
-                          {formData.garants.length} Garant(s) disponible(s)
-                        </h3>
-                        <p className="text-sm text-gray-500">
-                          Ces informations seront utilisées pour générer l'acte de cautionnement.
-                        </p>
-                      </div>
-
-                      <div className="space-y-4">
-                        {formData.garants.map((g, idx) => (
-                          <div key={idx} className="border rounded-md p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                            <input
-                              className="border rounded-md px-3 py-2"
-                              placeholder="Prénom"
-                              value={g.prenom}
-                              onChange={(e) => updateGarant(idx, "prenom", e.target.value)}
-                            />
-                            <input
-                              className="border rounded-md px-3 py-2"
-                              placeholder="Nom"
-                              value={g.nom}
-                              onChange={(e) => updateGarant(idx, "nom", e.target.value)}
-                            />
-                            <input
-                              type="date"
-                              className="border rounded-md px-3 py-2"
-                              placeholder="Date de naissance"
-                              value={g.date_naissance ? new Date(g.date_naissance).toISOString().slice(0,10) : ""}
-                              onChange={(e) => updateGarant(idx, "date_naissance", e.target.value ? new Date(e.target.value) : null)}
-                            />
-                            <input
-                              className="border rounded-md px-3 py-2"
-                              placeholder="Lieu de naissance"
-                              value={g.lieu_naissance || ""}
-                              onChange={(e) => updateGarant(idx, "lieu_naissance", e.target.value)}
-                            />
-                            <input
-                              className="border rounded-md px-3 py-2 col-span-1 lg:col-span-2"
-                              placeholder="Adresse"
-                              value={g.adresse}
-                              onChange={(e) => updateGarant(idx, "adresse", e.target.value)}
-                            />
-                            <input
-                              type="email"
-                              className="border rounded-md px-3 py-2"
-                              placeholder="Email (signature électronique)"
-                              value={g.email || ""}
-                              onChange={(e) => updateGarant(idx, "email", e.target.value)}
-                            />
-                            <div className="flex items-center justify-between col-span-full">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <input
-                                  className="border rounded-md px-3 py-2"
-                                  placeholder="Montant max d'engagement (optionnel)"
-                                  value={g.montant_max_engagement}
-                                  onChange={(e) => updateGarant(idx, "montant_max_engagement", e.target.value)}
-                                />
-                                <input
-                                  className="border rounded-md px-3 py-2"
-                                  placeholder="Pour le locataire"
-                                  value={g.pour_locataire}
-                                  onChange={(e) => updateGarant(idx, "pour_locataire", e.target.value)}
-                                />
-                              </div>
-                              <button type="button" className="text-red-600" onClick={() => removeGarant(idx)}>
-                                Supprimer
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-
-                        <button type="button" className="border rounded-md px-3 py-2" onClick={addGarant}>
-                          + Ajouter un garant
-                        </button>
-                      </div>
-                    </div>
                     </div>
                   </div>
                 )}

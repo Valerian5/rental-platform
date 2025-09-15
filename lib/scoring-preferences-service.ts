@@ -159,6 +159,7 @@ export const scoringPreferencesService = {
     recommendations: string[]
     warnings: string[]
     exclusions: string[]
+    dossierfacile_bonus?: number
   }> {
     try {
       console.log(`🎯 Calcul score pour candidature ${application.id} - Propriétaire: ${ownerId}`)
@@ -215,6 +216,12 @@ export const scoringPreferencesService = {
       const incomeDistribution = this.calculateIncomeDistribution(application, preferences)
       result.breakdown.income_distribution = incomeDistribution
       result.totalScore += incomeDistribution.score
+
+      // 7. Bonus DossierFacile
+      const dossierFacileBonus = this.calculateDossierFacileBonus(application, preferences)
+      result.breakdown.dossierfacile_bonus = dossierFacileBonus
+      result.totalScore += dossierFacileBonus.score
+      result.dossierfacile_bonus = dossierFacileBonus.score
 
       // Vérifier les règles d'exclusion
       const exclusions = this.checkExclusionRules(application, property, preferences)
@@ -300,6 +307,12 @@ export const scoringPreferencesService = {
       const incomeDistribution = this.calculateIncomeDistribution(application, preferences)
       result.breakdown.income_distribution = incomeDistribution
       result.totalScore += incomeDistribution.score
+
+      // 7. Bonus DossierFacile
+      const dossierFacileBonus = this.calculateDossierFacileBonus(application, preferences)
+      result.breakdown.dossierfacile_bonus = dossierFacileBonus
+      result.totalScore += dossierFacileBonus.score
+      result.dossierfacile_bonus = dossierFacileBonus.score
 
       // Vérifier les règles d'exclusion
       const exclusions = this.checkExclusionRules(application, property, preferences)
@@ -745,6 +758,51 @@ export const scoringPreferencesService = {
     }
 
     return warnings
+  },
+
+  // Calculer le bonus DossierFacile
+  calculateDossierFacileBonus(application: any, preferences: any): { score: number; details: any } {
+    const dossierFacileWeight = preferences.criteria?.dossierfacile_bonus?.weight || 10
+    let score = 0
+    const details: any = {}
+
+    // Vérifier si le dossier est certifié DossierFacile
+    if (application.is_dossierfacile_certified || application.creation_method === "dossierfacile") {
+      score = dossierFacileWeight
+      details.has_dossierfacile = true
+      details.bonus_reason = "Dossier certifié DossierFacile"
+      
+      // Bonus supplémentaire si le dossier est vérifié
+      if (application.dossierfacile_status === "verified") {
+        score += 5
+        details.verified = true
+        details.bonus_reason += " (vérifié)"
+      }
+      
+      // Bonus pour la qualité des données extraites
+      if (application.dossierfacile_data?.professional_info?.monthly_income) {
+        score += 2
+        details.has_income_data = true
+      }
+      
+      if (application.dossierfacile_data?.professional_info?.profession) {
+        score += 2
+        details.has_profession_data = true
+      }
+      
+      if (application.dossierfacile_data?.documents?.identity_documents?.length > 0) {
+        score += 1
+        details.has_identity_documents = true
+      }
+    } else {
+      details.has_dossierfacile = false
+      details.bonus_reason = "Dossier manuel"
+    }
+
+    return {
+      score: Math.min(score, dossierFacileWeight + 10), // Plafonner le bonus
+      details,
+    }
   },
 
   // Invalider le cache

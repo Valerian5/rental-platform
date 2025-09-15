@@ -133,6 +133,16 @@ export interface RentalFile {
   completion_percentage?: number
   validation_score?: number
 
+  // DossierFacile integration
+  creation_method?: "manual" | "dossierfacile"
+  is_dossierfacile_certified?: boolean
+  dossierfacile_id?: string
+  dossierfacile_verification_code?: string
+  dossierfacile_pdf_url?: string
+  dossierfacile_status?: "pending" | "verified" | "rejected" | "converted"
+  dossierfacile_verified_at?: string
+  dossierfacile_data?: any
+
   created_at: string
   updated_at: string
 }

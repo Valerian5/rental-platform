@@ -261,7 +261,10 @@ export default function RentalFilePage() {
         </div>
 
         {/* Choix de la méthode de création */}
-        <DossierFacileIntegration profile={rentalFile || {}} onUpdate={handleUpdateData} />
+        <DossierFacileIntegration 
+          profile={{ ...rentalFile, tenant_id: currentUser?.id }} 
+          onUpdate={handleUpdateData} 
+        />
 
         {/* Progression principale avec icônes */}
         <Card>
