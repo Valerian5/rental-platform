@@ -97,52 +97,15 @@ export function DossierFacileIntegration({ profile, onUpdate }: DossierFacileInt
     }
   }
 
-  const handleVerifyDossierFacile = async () => {
-    if (!dossierFacileData.verification_code) {
-      toast.error("Veuillez saisir votre code de vérification DossierFacile")
-      return
-    }
-
+  const handleConnectDossierFacile = async () => {
     setIsVerifying(true)
     try {
-      const response = await fetch("/api/dossierfacile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tenant_id: profile.tenant_id,
-          verification_code: dossierFacileData.verification_code,
-        }),
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        setDossierFacileInfo(data.data)
-        setDossierFacileStatus("verified")
-        toast.success("Dossier DossierFacile vérifié avec succès !")
-        
-        // Pré-remplir les données extraites
-        const dfData = data.data.dossierfacile_data
-        if (dfData) {
-          const newData = {
-            ...dossierFacileData,
-            monthly_income: dfData.professional_info?.monthly_income || "",
-            profession: dfData.professional_info?.profession || "",
-            company: dfData.professional_info?.company || "",
-            contract_type: dfData.professional_info?.contract_type || "",
-          }
-          setDossierFacileData(newData)
-          onUpdate({ ...profile, ...newData })
-        }
-      } else {
-        setDossierFacileStatus("error")
-        toast.error(data.error || "Erreur lors de la vérification")
-      }
+      // Rediriger vers l'API de connexion DossierFacile Connect
+      window.location.href = "/api/dossierfacile/connect"
     } catch (error) {
-      console.error("Erreur vérification DossierFacile:", error)
+      console.error("Erreur connexion DossierFacile:", error)
       setDossierFacileStatus("error")
-      toast.error("Erreur lors de la vérification du dossier")
-    } finally {
+      toast.error("Erreur lors de la connexion à DossierFacile")
       setIsVerifying(false)
     }
   }
@@ -220,7 +183,7 @@ export function DossierFacileIntegration({ profile, onUpdate }: DossierFacileInt
               data={dossierFacileData}
               onUpdate={handleDossierFacileDataUpdate}
               onPdfUpload={handlePdfUpload}
-              onVerify={handleVerifyDossierFacile}
+              onVerify={handleConnectDossierFacile}
               onConvert={handleConvertToRentalFile}
               isLoading={isLoading}
               isVerifying={isVerifying}
@@ -400,36 +363,31 @@ function DossierFacileForm({
         </Button>
       </div>
 
-      {/* Code de vérification */}
+      {/* Connexion DossierFacile Connect */}
       <div className="space-y-4">
-        <div>
-          <Label htmlFor="verification_code" className="text-sm font-medium">
-            Code de vérification DossierFacile *
-          </Label>
-          <p className="text-xs text-gray-600 mb-2">
-            Saisissez le code de vérification fourni par DossierFacile pour importer automatiquement vos données
+        <div className="text-center">
+          <h4 className="text-sm font-medium mb-2">Connexion à DossierFacile</h4>
+          <p className="text-xs text-gray-600 mb-4">
+            Connectez-vous à votre compte DossierFacile pour importer automatiquement vos données
           </p>
-          <div className="flex space-x-2">
-            <Input
-              id="verification_code"
-              placeholder="Ex: DF123456789"
-              value={data.verification_code}
-              onChange={(e) => onUpdate("verification_code", e.target.value)}
-              className="flex-1"
-            />
-            <Button 
-              onClick={onVerify} 
-              disabled={!data.verification_code || isVerifying}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              {isVerifying ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              Vérifier
-            </Button>
-          </div>
+          
+          <Button 
+            onClick={onVerify} 
+            disabled={isVerifying}
+            className="bg-green-600 hover:bg-green-700 px-8 py-3"
+            size="lg"
+          >
+            {isVerifying ? (
+              <Loader2 className="h-5 w-5 animate-spin mr-2" />
+            ) : (
+              <Shield className="h-5 w-5 mr-2" />
+            )}
+            Se connecter à DossierFacile
+          </Button>
+          
+          <p className="text-xs text-gray-500 mt-2">
+            Vous serez redirigé vers la plateforme officielle DossierFacile
+          </p>
         </div>
 
         {/* Statut de vérification */}

@@ -116,36 +116,109 @@ export const dossierFacileService = {
     }
   },
 
-  // Vérifier un code de vérification DossierFacile
-  async verifyDossierFacileCode(verificationCode: string): Promise<DossierFacileApiResponse> {
-    console.log("🔍 Vérification code DossierFacile:", verificationCode)
+  // Obtenir un token d'accès OAuth2 pour DossierFacile Connect
+  async getAccessToken(code: string, redirectUri: string): Promise<{ access_token: string; refresh_token: string }> {
+    console.log("🔑 Obtention du token d'accès DossierFacile Connect")
+
+    const tokenUrl = process.env.NODE_ENV === "production" 
+      ? "https://sso.dossierfacile.fr/auth/realms/dossier-facile/protocol/openid-connect/token"
+      : "https://sso-preprod.dossierfacile.fr/auth/realms/dossier-facile/protocol/openid-connect/token"
 
     try {
-      // Simulation de l'API DossierFacile (à remplacer par la vraie API)
-      // En réalité, il faudrait appeler l'API officielle de DossierFacile
-      const response = await fetch(`${process.env.DOSSIERFACILE_API_URL}/verify`, {
+      const response = await fetch(tokenUrl, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.DOSSIERFACILE_API_KEY}`,
+          "Content-Type": "application/x-www-form-urlencoded",
         },
-        body: JSON.stringify({ verification_code: verificationCode }),
+        body: new URLSearchParams({
+          grant_type: "authorization_code",
+          client_id: process.env.DOSSIERFACILE_CLIENT_ID!,
+          client_secret: process.env.DOSSIERFACILE_CLIENT_SECRET!,
+          code: code,
+          redirect_uri: redirectUri,
+        }),
       })
 
       if (!response.ok) {
-        throw new Error(`Erreur API DossierFacile: ${response.status}`)
+        throw new Error(`Erreur OAuth2 DossierFacile: ${response.status}`)
       }
 
       const data = await response.json()
-      return data
-    } catch (error) {
-      console.error("❌ Erreur vérification DossierFacile:", error)
-      
-      // Fallback pour le développement - simulation de données
-      if (process.env.NODE_ENV === "development") {
-        return this.simulateDossierFacileResponse(verificationCode)
+      return {
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
       }
-      
+    } catch (error) {
+      console.error("❌ Erreur obtention token DossierFacile:", error)
+      throw error
+    }
+  },
+
+  // Récupérer les données du profil via DossierFacile Connect
+  async getTenantProfile(accessToken: string): Promise<DossierFacileApiResponse> {
+    console.log("📋 Récupération du profil DossierFacile Connect")
+
+    const apiUrl = process.env.NODE_ENV === "production"
+      ? "https://api.dossierfacile.fr/dfc/tenant/profile"
+      : "https://api-preprod.dossierfacile.fr/dfc/tenant/profile"
+
+    try {
+      const response = await fetch(apiUrl, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Erreur API DossierFacile Connect: ${response.status}`)
+      }
+
+      const data = await response.json()
+      return {
+        success: true,
+        data: data,
+      }
+    } catch (error) {
+      console.error("❌ Erreur récupération profil DossierFacile:", error)
+      throw error
+    }
+  },
+
+  // Rafraîchir le token d'accès
+  async refreshAccessToken(refreshToken: string): Promise<{ access_token: string; refresh_token: string }> {
+    console.log("🔄 Rafraîchissement du token DossierFacile")
+
+    const tokenUrl = process.env.NODE_ENV === "production" 
+      ? "https://sso.dossierfacile.fr/auth/realms/dossier-facile/protocol/openid-connect/token"
+      : "https://sso-preprod.dossierfacile.fr/auth/realms/dossier-facile/protocol/openid-connect/token"
+
+    try {
+      const response = await fetch(tokenUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          grant_type: "refresh_token",
+          client_id: process.env.DOSSIERFACILE_CLIENT_ID!,
+          client_secret: process.env.DOSSIERFACILE_CLIENT_SECRET!,
+          refresh_token: refreshToken,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Erreur refresh token DossierFacile: ${response.status}`)
+      }
+
+      const data = await response.json()
+      return {
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+      }
+    } catch (error) {
+      console.error("❌ Erreur refresh token DossierFacile:", error)
       throw error
     }
   },

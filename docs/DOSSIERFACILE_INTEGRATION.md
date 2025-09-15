@@ -1,10 +1,12 @@
-# Intégration DossierFacile
+# Intégration DossierFacile Connect
 
 ## Vue d'ensemble
 
-Cette intégration permet aux locataires de choisir entre deux méthodes pour créer leur dossier de location :
+Cette intégration utilise **DossierFacile Connect** pour permettre aux locataires de choisir entre deux méthodes pour créer leur dossier de location :
 1. **Dossier manuel** : Création via l'interface de l'application
-2. **Dossier DossierFacile** : Import automatique depuis la plateforme officielle DossierFacile
+2. **Dossier DossierFacile Connect** : Import automatique via OAuth2 depuis la plateforme officielle DossierFacile
+
+L'intégration suit la [documentation officielle DossierFacile Connect](https://partenaire.dossierfacile.logement.gouv.fr/documentation-technique/dossierfacile-connect).
 
 ## Fonctionnalités
 
@@ -56,12 +58,24 @@ node scripts/run-dossierfacile-migration.js
 
 ### 2. Configuration des variables d'environnement
 
-Ajoutez dans `.env.local` :
+Exécutez le script de configuration :
+
+```bash
+node scripts/setup-dossierfacile-connect.js
+```
+
+Puis mettez à jour `.env.local` avec vos vrais identifiants :
 
 ```env
-# DossierFacile API (à configurer selon la documentation officielle)
-DOSSIERFACILE_API_URL=https://api.dossierfacile.logement.gouv.fr
-DOSSIERFACILE_API_KEY=your_api_key_here
+# DossierFacile Connect OAuth2 (obtenez auprès de DossierFacile)
+DOSSIERFACILE_CLIENT_ID=your_client_id_here
+DOSSIERFACILE_CLIENT_SECRET=your_client_secret_here
+
+# URL de base de votre application
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+
+# Clé API pour les webhooks (optionnel)
+DOSSIERFACILE_WEBHOOK_API_KEY=your_webhook_api_key_here
 ```
 
 ### 3. Test de l'intégration

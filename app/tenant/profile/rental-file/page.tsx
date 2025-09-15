@@ -52,6 +52,21 @@ export default function RentalFilePage() {
     fetchData()
   }, [])
 
+  // Gérer le retour du callback DossierFacile Connect
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const dossierfacileStatus = urlParams.get('dossierfacile')
+    const error = urlParams.get('error')
+
+    if (dossierfacileStatus === 'success') {
+      toast.success("Dossier DossierFacile importé avec succès !")
+      // Recharger les données
+      window.location.reload()
+    } else if (error) {
+      toast.error(`Erreur DossierFacile: ${error}`)
+    }
+  }, [])
+
   const handleUpdateData = async (newData: any) => {
     if (!currentUser) return
 
