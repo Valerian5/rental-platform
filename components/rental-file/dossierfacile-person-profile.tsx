@@ -11,7 +11,6 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { ArrowLeft, ArrowRight, User, Euro, Briefcase, Calendar, Building, MapPin, Phone, Mail, X, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
-import { ImprovedIncomeSection } from "@/components/rental-file/improved-income-section"
 
 interface DossierFacilePersonProfileProps {
   profile: any
@@ -156,10 +155,123 @@ export function DossierFacilePersonProfile({
               <p className="text-sm text-gray-600">Déclarez vos revenus mensuels</p>
             </div>
 
-            <ImprovedIncomeSection
-              profile={profile}
-              onUpdate={onUpdate}
-            />
+            {currentSubStep === 1 && (
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="work_income">Revenus du travail (€/mois) *</Label>
+                  <Input
+                    id="work_income"
+                    type="number"
+                    placeholder="3000"
+                    value={profile.work_income?.amount || ""}
+                    onChange={(e) => handleUpdate("work_income", { 
+                      ...profile.work_income, 
+                      amount: parseFloat(e.target.value) || 0 
+                    })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="scholarship">Bourse (€/mois)</Label>
+                  <Input
+                    id="scholarship"
+                    type="number"
+                    placeholder="500"
+                    value={profile.scholarship?.amount || ""}
+                    onChange={(e) => handleUpdate("scholarship", { 
+                      ...profile.scholarship, 
+                      amount: parseFloat(e.target.value) || 0 
+                    })}
+                  />
+                </div>
+              </div>
+            )}
+
+            {currentSubStep === 2 && (
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="social_aid">Aides sociales (€/mois)</Label>
+                  <Input
+                    id="social_aid"
+                    type="number"
+                    placeholder="400"
+                    value={profile.social_aid?.[0]?.amount || ""}
+                    onChange={(e) => handleUpdate("social_aid", [{ 
+                      type: "RSA", 
+                      amount: parseFloat(e.target.value) || 0 
+                    }])}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="retirement_pension">Retraite/Pension (€/mois)</Label>
+                  <Input
+                    id="retirement_pension"
+                    type="number"
+                    placeholder="1200"
+                    value={profile.retirement_pension?.[0]?.amount || ""}
+                    onChange={(e) => handleUpdate("retirement_pension", [{ 
+                      type: "Retraite", 
+                      amount: parseFloat(e.target.value) || 0 
+                    }])}
+                  />
+                </div>
+              </div>
+            )}
+
+            {currentSubStep === 3 && (
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="rent_income">Rentes (€/mois)</Label>
+                  <Input
+                    id="rent_income"
+                    type="number"
+                    placeholder="800"
+                    value={profile.rent_income?.[0]?.amount || ""}
+                    onChange={(e) => handleUpdate("rent_income", [{ 
+                      type: "Rente", 
+                      amount: parseFloat(e.target.value) || 0 
+                    }])}
+                  />
+                </div>
+              </div>
+            )}
+
+            {currentSubStep === 4 && (
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h4 className="font-medium text-blue-800 mb-2">Récapitulatif des revenus</h4>
+                <div className="space-y-2 text-sm text-blue-700">
+                  <div className="flex justify-between">
+                    <span>Revenus du travail:</span>
+                    <span>{profile.work_income?.amount || 0}€</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Bourse:</span>
+                    <span>{profile.scholarship?.amount || 0}€</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Aides sociales:</span>
+                    <span>{profile.social_aid?.[0]?.amount || 0}€</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Retraite/Pension:</span>
+                    <span>{profile.retirement_pension?.[0]?.amount || 0}€</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Rentes:</span>
+                    <span>{profile.rent_income?.[0]?.amount || 0}€</span>
+                  </div>
+                  <div className="flex justify-between font-medium border-t pt-2">
+                    <span>Total mensuel:</span>
+                    <span>
+                      {(profile.work_income?.amount || 0) + 
+                       (profile.scholarship?.amount || 0) + 
+                       (profile.social_aid?.[0]?.amount || 0) + 
+                       (profile.retirement_pension?.[0]?.amount || 0) + 
+                       (profile.rent_income?.[0]?.amount || 0)}€
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
