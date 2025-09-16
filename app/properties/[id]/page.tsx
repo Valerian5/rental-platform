@@ -145,11 +145,41 @@ export default function PropertyPublicPage() {
       }
 
       try {
-        // Pour l'instant, utiliser la méthode simple pour éviter les problèmes
-        // TODO: Réactiver le service de scoring avancé une fois les problèmes résolus
-        const result = rentalFileService.checkCompatibility(rentalFile, property)
-        console.log("📊 Résultat du scoring simple:", result)
-        setCompatibilityCheck(result)
+        // Utiliser le service de scoring avancé si les préférences du propriétaire sont disponibles
+        if (ownerPreferences) {
+          console.log("📊 Utilisation du service de scoring avancé")
+          console.log("📊 Données du dossier:", rentalFile)
+          console.log("📊 Préférences du propriétaire:", ownerPreferences)
+          
+          // Préparer les données pour le service de scoring avancé
+          const applicationDataForScoring = {
+            income: (rentalFile.monthly_income || 0) + (rentalFile.spouse_income || 0),
+            contract_type: mapActivityToContractType(rentalFile.main_tenant?.main_activity),
+            spouse_income: rentalFile.spouse_income || 0,
+            spouse_contract_type: mapActivityToContractType(rentalFile.spouse_situation),
+            guarantor_income: rentalFile.guarantor_income || 0,
+            guarantor_contract_type: mapActivityToContractType(rentalFile.guarantor_situation),
+            has_guarantor: !!rentalFile.guarantor_name,
+            documents_complete: rentalFile.documents?.length > 0,
+            presentation_message: rentalFile.presentation_message || "",
+            move_in_date: rentalFile.desired_move_date || "",
+            profession: rentalFile.profession || "",
+            company: rentalFile.company || ""
+          }
+          
+          const result = await scoringPreferencesService.calculateScore(
+            applicationDataForScoring,
+            ownerPreferences
+          )
+          console.log("📊 Résultat du scoring avancé:", result)
+          setCompatibilityCheck(result)
+        } else {
+          // Fallback vers la méthode simple
+          console.log("📊 Utilisation du service de scoring simple (pas de préférences)")
+          const result = rentalFileService.checkCompatibility(rentalFile, property)
+          console.log("📊 Résultat du scoring simple:", result)
+          setCompatibilityCheck(result)
+        }
       } catch (error) {
         console.warn("Erreur lors du calcul de compatibilité:", error)
         // Fallback vers la méthode simple
@@ -268,6 +298,26 @@ export default function PropertyPublicPage() {
     
     // Icône par défaut
     return <Check className="h-4 w-4 text-green-600" />
+  }
+
+  // Fonction pour mapper l'activité professionnelle au type de contrat
+  const mapActivityToContractType = (activity: string | undefined): string => {
+    if (!activity) return "cdi"
+    
+    const activityLower = activity.toLowerCase()
+    
+    if (activityLower.includes("cdi") || activityLower.includes("contrat à durée indéterminée")) return "cdi"
+    if (activityLower.includes("cdd") || activityLower.includes("contrat à durée déterminée")) return "cdd"
+    if (activityLower.includes("stage") || activityLower.includes("stagiare")) return "stage"
+    if (activityLower.includes("alternance") || activityLower.includes("apprentissage")) return "alternance"
+    if (activityLower.includes("freelance") || activityLower.includes("indépendant") || activityLower.includes("auto-entrepreneur")) return "freelance"
+    if (activityLower.includes("chômage") || activityLower.includes("demandeur d'emploi")) return "chomage"
+    if (activityLower.includes("retraite") || activityLower.includes("retraité")) return "retraite"
+    if (activityLower.includes("étudiant") || activityLower.includes("etudiant")) return "etudiant"
+    if (activityLower.includes("fonctionnaire") || activityLower.includes("fonction publique")) return "fonctionnaire"
+    
+    // Par défaut, considérer comme CDI
+    return "cdi"
   }
 
 

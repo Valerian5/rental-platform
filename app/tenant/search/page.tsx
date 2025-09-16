@@ -83,7 +83,7 @@ export default function TenantSearchPage() {
 
   const [filters, setFilters] = useState<SearchFilters>({
     city: "",
-    property_type: "",
+    property_type: "all",
     min_price: 0,
     max_price: 3000,
     min_rooms: 1,
@@ -97,7 +97,7 @@ export default function TenantSearchPage() {
     has_security: undefined,
     internet: undefined,
     pets_allowed: undefined,
-    energy_class: "",
+    energy_class: "all",
     min_compatibility_score: 0,
     available_from: "",
     equipment: []
@@ -120,7 +120,7 @@ export default function TenantSearchPage() {
       const searchParams = new URLSearchParams()
 
       Object.entries(filters).forEach(([key, value]) => {
-        if (value !== "" && value !== undefined && value !== null) {
+        if (value !== "" && value !== undefined && value !== null && value !== "all") {
           if (Array.isArray(value)) {
             value.forEach(item => searchParams.append(key, item))
           } else {
@@ -203,7 +203,7 @@ export default function TenantSearchPage() {
     const active: string[] = []
     
     if (filters.city) active.push(`Ville: ${filters.city}`)
-    if (filters.property_type) active.push(`Type: ${filters.property_type}`)
+    if (filters.property_type && filters.property_type !== "all") active.push(`Type: ${filters.property_type}`)
     if (filters.min_price > 0 || filters.max_price < 5000) active.push(`Prix: ${filters.min_price}€ - ${filters.max_price}€`)
     if (filters.min_surface > 0 || filters.max_surface < 300) active.push(`Surface: ${filters.min_surface}m² - ${filters.max_surface}m²`)
     if (filters.furnished) active.push("Meublé")
@@ -213,6 +213,7 @@ export default function TenantSearchPage() {
     if (filters.has_security) active.push("Sécurisé")
     if (filters.internet) active.push("Internet")
     if (filters.pets_allowed) active.push("Animaux acceptés")
+    if (filters.energy_class && filters.energy_class !== "all") active.push(`Classe énergétique: ${filters.energy_class}`)
     if (filters.min_compatibility_score > 0) active.push(`Score min: ${filters.min_compatibility_score}%`)
     
     setActiveFilters(active)
@@ -280,7 +281,7 @@ export default function TenantSearchPage() {
   const resetFilters = () => {
     setFilters({
       city: "",
-      property_type: "",
+      property_type: "all",
       min_price: 0,
       max_price: 3000,
       min_rooms: 1,
@@ -294,7 +295,7 @@ export default function TenantSearchPage() {
       has_security: undefined,
       internet: undefined,
       pets_allowed: undefined,
-      energy_class: "",
+      energy_class: "all",
       min_compatibility_score: 0,
       available_from: "",
       equipment: []
@@ -312,6 +313,8 @@ export default function TenantSearchPage() {
                    filterKey === 'max_surface' ? 300 :
                    filterKey === 'min_compatibility_score' ? 0 :
                    filterKey === 'equipment' ? [] :
+                   filterKey === 'property_type' ? 'all' :
+                   filterKey === 'energy_class' ? 'all' :
                    ""
     }))
   }
@@ -393,7 +396,7 @@ export default function TenantSearchPage() {
                 <SelectValue placeholder="Type de bien" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Tous les types</SelectItem>
+                <SelectItem value="all">Tous les types</SelectItem>
                 <SelectItem value="apartment">Appartement</SelectItem>
                 <SelectItem value="house">Maison</SelectItem>
                 <SelectItem value="studio">Studio</SelectItem>
@@ -514,14 +517,14 @@ export default function TenantSearchPage() {
                   <div className="space-y-2">
                     <Label>Classe énergétique</Label>
                     <Select
-                      value={filters.energy_class || ""}
-                      onValueChange={(value) => setFilters((prev) => ({ ...prev, energy_class: value || "" }))}
+                      value={filters.energy_class}
+                      onValueChange={(value) => setFilters((prev) => ({ ...prev, energy_class: value }))}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Toutes" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Toutes</SelectItem>
+                        <SelectItem value="all">Toutes</SelectItem>
                         <SelectItem value="A">A</SelectItem>
                         <SelectItem value="B">B</SelectItem>
                         <SelectItem value="C">C</SelectItem>
