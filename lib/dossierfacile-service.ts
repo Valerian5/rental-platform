@@ -8,6 +8,9 @@ export interface DossierFacileData {
   dossierfacile_pdf_url?: string
   dossierfacile_status?: "pending" | "verified" | "rejected"
   dossierfacile_verified_at?: string
+  access_token?: string
+  refresh_token?: string
+  token_expires_at?: string
   dossierfacile_data?: {
     // Données extraites du dossier DossierFacile
     personal_info: {
@@ -47,6 +50,31 @@ export interface DossierFacileData {
       housing_documents: string[]
       other_documents: string[]
     }
+    // Nouvelles données avec accès aux pièces justificatives
+    dossier_documents?: Array<{
+      id: string
+      type: string
+      name: string
+      url: string
+      size: number
+      uploaded_at: string
+      verified: boolean
+    }>
+    guarantor_documents?: Array<{
+      id: string
+      type: string
+      name: string
+      url: string
+      guarantor_id: string
+      uploaded_at: string
+      verified: boolean
+    }>
+    dossier_status?: {
+      status: "draft" | "submitted" | "validated" | "rejected" | "pending"
+      validation_date?: string
+      rejection_reason?: string
+      errors?: string[]
+    }
     verification: {
       is_verified: boolean
       verification_date: string
@@ -77,19 +105,27 @@ export const dossierFacileService = {
     console.log("📋 DossierFacileService.createDossierFacileFromOAuth", { tenantId })
 
     try {
-      // 1. Extraire les données du profil
-      const extractedData = this.extractDossierFacileData(profileData)
+      // 1. Récupérer toutes les données complètes du dossier
+      const dossierId = profileData.dossier_id || profileData.id
+      const completeData = await this.getCompleteDossierData(accessToken, dossierId)
 
-      // 2. Sauvegarder en base de données
+      // 2. Extraire et structurer les données
+      const extractedData = this.extractDossierFacileData(completeData)
+
+      // 3. Calculer l'expiration du token (généralement 1 heure)
+      const tokenExpiresAt = new Date(Date.now() + 3600 * 1000).toISOString()
+
+      // 4. Sauvegarder en base de données
       const dossierData: Partial<DossierFacileData> = {
         tenant_id: tenantId,
-        dossierfacile_id: profileData.id || `df_${Date.now()}`,
+        dossierfacile_id: dossierId,
         dossierfacile_verification_code: tenantId, // Utiliser l'ID utilisateur comme référence
-        dossierfacile_status: "verified",
+        dossierfacile_status: completeData.status?.status || "verified",
         dossierfacile_verified_at: new Date().toISOString(),
         dossierfacile_data: extractedData,
         access_token: accessToken,
         refresh_token: refreshToken,
+        token_expires_at: tokenExpiresAt,
       }
 
       const { data, error } = await supabase
@@ -103,7 +139,7 @@ export const dossierFacileService = {
         throw new Error(error.message)
       }
 
-      console.log("✅ Dossier DossierFacile créé avec succès")
+      console.log("✅ Dossier DossierFacile créé avec succès avec accès aux pièces justificatives")
       return data as DossierFacileData
     } catch (error) {
       console.error("❌ Erreur dans createDossierFacileFromOAuth:", error)
@@ -177,6 +213,117 @@ export const dossierFacileService = {
       }
     } catch (error) {
       console.error("❌ Erreur récupération profil DossierFacile:", error)
+      throw error
+    }
+  },
+
+  // Récupérer les pièces justificatives du dossier
+  async getDossierDocuments(accessToken: string, dossierId: string): Promise<any> {
+    console.log("📄 Récupération des pièces justificatives DossierFacile")
+
+    const apiUrl = process.env.NODE_ENV === "production"
+      ? `https://api.dossierfacile.fr/dfc/dossiers/${dossierId}/documents`
+      : `https://api-preprod.dossierfacile.fr/dfc/dossiers/${dossierId}/documents`
+
+    try {
+      const response = await fetch(apiUrl, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Erreur API DossierFacile documents: ${response.status}`)
+      }
+
+      return await response.json()
+    } catch (error) {
+      console.error("❌ Erreur récupération documents DossierFacile:", error)
+      throw error
+    }
+  },
+
+  // Récupérer les pièces du garant
+  async getGuarantorDocuments(accessToken: string, dossierId: string): Promise<any> {
+    console.log("📄 Récupération des pièces du garant DossierFacile")
+
+    const apiUrl = process.env.NODE_ENV === "production"
+      ? `https://api.dossierfacile.fr/dfc/dossiers/${dossierId}/guarantor-documents`
+      : `https://api-preprod.dossierfacile.fr/dfc/dossiers/${dossierId}/guarantor-documents`
+
+    try {
+      const response = await fetch(apiUrl, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Erreur API DossierFacile garant: ${response.status}`)
+      }
+
+      return await response.json()
+    } catch (error) {
+      console.error("❌ Erreur récupération documents garant DossierFacile:", error)
+      throw error
+    }
+  },
+
+  // Récupérer le statut du dossier
+  async getDossierStatus(accessToken: string, dossierId: string): Promise<any> {
+    console.log("📊 Récupération du statut DossierFacile")
+
+    const apiUrl = process.env.NODE_ENV === "production"
+      ? `https://api.dossierfacile.fr/dfc/dossiers/${dossierId}/status`
+      : `https://api-preprod.dossierfacile.fr/dfc/dossiers/${dossierId}/status`
+
+    try {
+      const response = await fetch(apiUrl, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Erreur API DossierFacile statut: ${response.status}`)
+      }
+
+      return await response.json()
+    } catch (error) {
+      console.error("❌ Erreur récupération statut DossierFacile:", error)
+      throw error
+    }
+  },
+
+  // Récupérer toutes les données complètes du dossier (profil + documents + statut)
+  async getCompleteDossierData(accessToken: string, dossierId: string): Promise<any> {
+    console.log("📋 Récupération complète des données DossierFacile")
+
+    try {
+      // Récupérer toutes les données en parallèle
+      const [profile, documents, guarantorDocs, status] = await Promise.all([
+        this.getTenantProfile(accessToken),
+        this.getDossierDocuments(accessToken, dossierId),
+        this.getGuarantorDocuments(accessToken, dossierId),
+        this.getDossierStatus(accessToken, dossierId),
+      ])
+
+      return {
+        profile: profile.data,
+        documents: documents,
+        guarantor_documents: guarantorDocs,
+        status: status,
+        dossier_id: dossierId,
+        retrieved_at: new Date().toISOString(),
+      }
+    } catch (error) {
+      console.error("❌ Erreur récupération complète DossierFacile:", error)
       throw error
     }
   },
@@ -260,45 +407,75 @@ export const dossierFacileService = {
 
   // Extraire et structurer les données DossierFacile
   extractDossierFacileData(apiData: any) {
-    console.log("📊 Extraction des données DossierFacile")
+    console.log("📊 Extraction des données DossierFacile avec accès aux pièces justificatives")
+
+    const profile = apiData.profile || apiData
+    const documents = apiData.documents || []
+    const guarantorDocs = apiData.guarantor_documents || []
+    const status = apiData.status || {}
 
     return {
       personal_info: {
-        first_name: apiData.personal_info?.first_name || "",
-        last_name: apiData.personal_info?.last_name || "",
-        birth_date: apiData.personal_info?.birth_date || "",
-        birth_place: apiData.personal_info?.birth_place || "",
-        nationality: apiData.personal_info?.nationality || "française",
+        first_name: profile.personal_info?.first_name || "",
+        last_name: profile.personal_info?.last_name || "",
+        birth_date: profile.personal_info?.birth_date || "",
+        birth_place: profile.personal_info?.birth_place || "",
+        nationality: profile.personal_info?.nationality || "française",
       },
       professional_info: {
-        profession: apiData.professional_info?.profession || "",
-        company: apiData.professional_info?.company || "",
-        contract_type: apiData.professional_info?.contract_type || "CDI",
-        monthly_income: apiData.professional_info?.monthly_income || 0,
-        activity_documents: apiData.professional_info?.activity_documents || [],
+        profession: profile.professional_info?.profession || "",
+        company: profile.professional_info?.company || "",
+        contract_type: profile.professional_info?.contract_type || "CDI",
+        monthly_income: profile.professional_info?.monthly_income || 0,
+        activity_documents: profile.professional_info?.activity_documents || [],
       },
       housing_info: {
-        current_situation: apiData.housing_info?.current_situation || "locataire",
-        current_address: apiData.housing_info?.current_address || "",
-        current_rent: apiData.housing_info?.current_rent || 0,
-        housing_documents: apiData.housing_info?.housing_documents || [],
+        current_situation: profile.housing_info?.current_situation || "locataire",
+        current_address: profile.housing_info?.current_address || "",
+        current_rent: profile.housing_info?.current_rent || 0,
+        housing_documents: profile.housing_info?.housing_documents || [],
       },
       financial_info: {
-        total_income: apiData.financial_info?.total_income || 0,
-        income_sources: apiData.financial_info?.income_sources || [],
-        tax_documents: apiData.financial_info?.tax_documents || [],
+        total_income: profile.financial_info?.total_income || 0,
+        income_sources: profile.financial_info?.income_sources || [],
+        tax_documents: profile.financial_info?.tax_documents || [],
       },
-      guarantors: apiData.guarantors || [],
+      guarantors: profile.guarantors || [],
       documents: {
-        identity_documents: apiData.documents?.filter((d: any) => d.type === "identity").map((d: any) => d.url) || [],
-        income_documents: apiData.documents?.filter((d: any) => d.type === "income").map((d: any) => d.url) || [],
-        housing_documents: apiData.documents?.filter((d: any) => d.type === "housing").map((d: any) => d.url) || [],
-        other_documents: apiData.documents?.filter((d: any) => !["identity", "income", "housing"].includes(d.type)).map((d: any) => d.url) || [],
+        identity_documents: documents.filter((d: any) => d.type === "identity").map((d: any) => d.url) || [],
+        income_documents: documents.filter((d: any) => d.type === "income").map((d: any) => d.url) || [],
+        housing_documents: documents.filter((d: any) => d.type === "housing").map((d: any) => d.url) || [],
+        other_documents: documents.filter((d: any) => !["identity", "income", "housing"].includes(d.type)).map((d: any) => d.url) || [],
+      },
+      // Nouvelles données avec accès aux pièces justificatives
+      dossier_documents: documents.map((doc: any) => ({
+        id: doc.id || doc.name,
+        type: doc.type,
+        name: doc.name,
+        url: doc.url,
+        size: doc.size || 0,
+        uploaded_at: doc.uploaded_at || new Date().toISOString(),
+        verified: doc.verified || false,
+      })),
+      guarantor_documents: guarantorDocs.map((doc: any) => ({
+        id: doc.id || doc.name,
+        type: doc.type,
+        name: doc.name,
+        url: doc.url,
+        guarantor_id: doc.guarantor_id || "",
+        uploaded_at: doc.uploaded_at || new Date().toISOString(),
+        verified: doc.verified || false,
+      })),
+      dossier_status: {
+        status: status.status || "verified",
+        validation_date: status.validation_date || new Date().toISOString(),
+        rejection_reason: status.rejection_reason || null,
+        errors: status.errors || [],
       },
       verification: {
-        is_verified: apiData.status === "verified",
-        verification_date: new Date().toISOString(),
-        verification_errors: [],
+        is_verified: status.status === "validated" || status.status === "verified",
+        verification_date: status.validation_date || new Date().toISOString(),
+        verification_errors: status.errors || [],
       },
     }
   },
