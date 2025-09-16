@@ -9,8 +9,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { FileText, Shield, Star, Upload, ExternalLink, CheckCircle, AlertCircle, Loader2, RefreshCw } from "lucide-react"
+import { FileText, Shield, Star, Upload, ExternalLink, CheckCircle, AlertCircle, Loader2, RefreshCw, X } from "lucide-react"
 import { SupabaseFileUpload } from "@/components/supabase-file-upload"
+import { DossierFacilePersonProfile } from "@/components/rental-file/dossierfacile-person-profile"
 import { toast } from "sonner"
 
 interface DossierFacileIntegrationProps {
@@ -548,6 +549,85 @@ function DossierFacileForm({
             <strong>Important :</strong> Ces informations sont utilisées pour calculer votre score de compatibilité avec les logements. 
             Plus votre dossier est complet, plus votre score sera élevé.
           </p>
+        </div>
+      </div>
+
+      {/* Section pour les colocataires et garants */}
+      <div className="border-t pt-6">
+        <h4 className="text-sm font-medium mb-4">Informations des colocataires et garants</h4>
+        <p className="text-xs text-gray-600 mb-4">
+          Renseignez les informations des autres personnes du dossier (colocataires, garants)
+        </p>
+
+        {/* Colocataires */}
+        <div className="space-y-4">
+          <h5 className="text-sm font-medium text-gray-700">Colocataires</h5>
+          {(!profile.cotenants || profile.cotenants.length === 0) && (
+            <div className="text-center py-4 text-gray-500">
+              <p className="text-sm">Aucun colocataire ajouté</p>
+              <p className="text-xs">Ajoutez vos colocataires si nécessaire</p>
+            </div>
+          )}
+          
+          {profile.cotenants?.map((cotenant: any, index: number) => (
+            <DossierFacilePersonProfile
+              key={index}
+              profile={cotenant}
+              onUpdate={(updatedProfile) => {
+                const updatedCotenants = [...(profile.cotenants || [])]
+                updatedCotenants[index] = updatedProfile
+                onUpdate({ ...profile, cotenants: updatedCotenants })
+              }}
+              onRemove={() => {
+                const updatedCotenants = profile.cotenants.filter((_: any, i: number) => i !== index)
+                onUpdate({ ...profile, cotenants: updatedCotenants })
+              }}
+              title={`Colocataire ${index + 1}`}
+              canRemove
+            />
+          ))}
+        </div>
+
+        {/* Garants */}
+        <div className="space-y-4">
+          <h5 className="text-sm font-medium text-gray-700">Garants</h5>
+          {(!profile.guarantors || profile.guarantors.length === 0) && (
+            <div className="text-center py-4 text-gray-500">
+              <p className="text-sm">Aucun garant ajouté</p>
+              <p className="text-xs">Ajoutez vos garants si nécessaire</p>
+            </div>
+          )}
+          
+          {profile.guarantors?.map((guarantor: any, index: number) => (
+            <div key={index} className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h6 className="text-sm font-medium text-gray-600">Garant {index + 1}</h6>
+                <Button
+                  onClick={() => {
+                    const updatedGuarantors = profile.guarantors.filter((_: any, i: number) => i !== index)
+                    onUpdate({ ...profile, guarantors: updatedGuarantors })
+                  }}
+                  size="sm"
+                  variant="outline"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              {guarantor.type === "physical" && guarantor.personal_info && (
+                <DossierFacilePersonProfile
+                  profile={guarantor.personal_info}
+                  onUpdate={(updatedProfile) => {
+                    const updatedGuarantor = { ...guarantor, personal_info: updatedProfile }
+                    const updatedGuarantors = [...(profile.guarantors || [])]
+                    updatedGuarantors[index] = updatedGuarantor
+                    onUpdate({ ...profile, guarantors: updatedGuarantors })
+                  }}
+                  title="Informations du garant"
+                />
+              )}
+            </div>
+          ))}
         </div>
       </div>
 
