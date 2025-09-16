@@ -191,6 +191,7 @@ export function DossierFacileIntegration({ profile, onUpdate }: DossierFacileInt
               isVerifying={isVerifying}
               dossierFacileStatus={dossierFacileStatus}
               dossierFacileInfo={dossierFacileInfo}
+              profile={profile}
             />
           ) : (
             <div className="text-center py-4">
@@ -322,6 +323,7 @@ function DossierFacileForm({
   isVerifying,
   dossierFacileStatus,
   dossierFacileInfo,
+  profile,
 }: {
   data: any
   onUpdate: (field: string, value: string) => void
@@ -332,6 +334,7 @@ function DossierFacileForm({
   isVerifying: boolean
   dossierFacileStatus: "none" | "pending" | "verified" | "error"
   dossierFacileInfo: any
+  profile: any
 }) {
   return (
     <div className="space-y-6">
