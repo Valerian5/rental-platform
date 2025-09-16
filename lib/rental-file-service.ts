@@ -341,10 +341,19 @@ export const rentalFileService = {
     const recommendations: string[] = []
     let score = 100
 
-    // Utiliser les revenus du travail du dossier de location complet
-    const workIncome = rentalFileData?.main_tenant?.income_sources?.work_income?.amount || 0
-    const totalIncome = this.calculateTotalIncome(rentalFileData?.main_tenant?.income_sources || {})
+    // Calculer les revenus totaux (locataire principal + conjoint)
+    const mainTenantIncome = this.calculateTotalIncome(rentalFileData?.main_tenant?.income_sources || {})
+    const spouseIncome = rentalFileData?.cotenants?.[0]?.income_sources ? 
+      this.calculateTotalIncome(rentalFileData.cotenants[0].income_sources) : 0
+    const totalIncome = mainTenantIncome + spouseIncome
     const rent = property.price || 0
+
+    console.log("💰 Calcul revenus:", {
+      mainTenantIncome,
+      spouseIncome,
+      totalIncome,
+      rent
+    })
 
     // Détails des vérifications
     const details = {
@@ -411,17 +420,34 @@ export const rentalFileService = {
     }
 
     // 2. Vérification de la situation professionnelle
+    const tenantSituation = rentalFileData?.main_tenant?.main_activity
+    const spouseSituation = rentalFileData?.cotenants?.[0]?.main_activity
+    
+    console.log("💼 Situations professionnelles:", {
+      tenant: tenantSituation,
+      spouse: spouseSituation
+    })
+
     if (property.accepted_professional_situations && property.accepted_professional_situations.length > 0) {
-      const tenantSituation = rentalFileData?.main_tenant?.main_activity
-      if (tenantSituation && property.accepted_professional_situations.includes(tenantSituation)) {
+      // Vérifier si au moins une des situations est acceptée
+      const isTenantAccepted = tenantSituation && property.accepted_professional_situations.includes(tenantSituation)
+      const isSpouseAccepted = spouseSituation && property.accepted_professional_situations.includes(spouseSituation)
+      
+      if (isTenantAccepted || isSpouseAccepted) {
         details.professional_situation_check.passed = true
-        details.professional_situation_check.message = `Situation professionnelle acceptée (${tenantSituation})`
+        details.professional_situation_check.message = `Situation professionnelle acceptée (${isTenantAccepted ? tenantSituation : spouseSituation})`
       } else if (tenantSituation) {
-        score -= 20
-        details.professional_situation_check.message = `Situation professionnelle non préférée (${tenantSituation})`
-        warnings.push(
-          `Votre situation professionnelle (${tenantSituation}) n'est pas dans les préférences du propriétaire`,
-        )
+        // CDI est généralement acceptable même si pas explicitement listé
+        if (tenantSituation === 'cdi' || spouseSituation === 'cdi') {
+          details.professional_situation_check.passed = true
+          details.professional_situation_check.message = `CDI accepté par défaut`
+        } else {
+          score -= 15 // Réduire la pénalité pour les autres situations
+          details.professional_situation_check.message = `Situation professionnelle non préférée (${tenantSituation})`
+          warnings.push(
+            `Votre situation professionnelle (${tenantSituation}) n'est pas dans les préférences du propriétaire`,
+          )
+        }
       } else {
         score -= 15
         details.professional_situation_check.message = "Situation professionnelle non renseignée"
@@ -430,7 +456,10 @@ export const rentalFileService = {
       }
     } else {
       // Vérification basique si pas de critères spécifiques
-      if (rentalFileData?.main_tenant?.profession) {
+      if (tenantSituation === 'cdi' || spouseSituation === 'cdi') {
+        details.professional_situation_check.passed = true
+        details.professional_situation_check.message = `CDI confirmé`
+      } else if (rentalFileData?.main_tenant?.profession) {
         details.professional_situation_check.passed = true
         details.professional_situation_check.message = `Profession renseignée (${rentalFileData.main_tenant.profession})`
       } else {

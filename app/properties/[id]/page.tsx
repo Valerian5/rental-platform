@@ -145,43 +145,11 @@ export default function PropertyPublicPage() {
       }
 
       try {
-        // Si on a les préférences du propriétaire, utiliser le service de scoring avancé
-        if (ownerPreferences && property.owner_id) {
-          const income = applicationData.income ? Number.parseFloat(applicationData.income) : undefined
-          const applicationDataForScoring = {
-            ...rentalFile,
-            income: income || rentalFile.monthly_income,
-            profession: rentalFile.profession,
-            company: rentalFile.company,
-            presentation_message: rentalFile.presentation_message,
-            has_guarantor: rentalFile.has_guarantor,
-            guarantor_income: rentalFile.guarantor_income,
-            professional_situation: rentalFile.professional_situation,
-          }
-
-          const scoreResult = await scoringPreferencesService.calculateScore(
-            applicationDataForScoring,
-            property,
-            property.owner_id
-          )
-
-          setCompatibilityCheck({
-            compatible: scoreResult.compatible,
-            score: scoreResult.totalScore,
-            warnings: scoreResult.warnings,
-            recommendations: scoreResult.recommendations,
-            details: {
-              income_check: { passed: scoreResult.breakdown.income?.compatible || false, message: "" },
-              professional_situation_check: { passed: scoreResult.breakdown.professional_stability?.compatible || false, message: "" },
-              guarantor_check: { passed: scoreResult.breakdown.guarantor?.compatible || false, message: "" },
-              documents_check: { passed: scoreResult.breakdown.file_quality?.compatible || false, message: "" },
-            }
-          })
-        } else {
-          // Méthode simple par défaut
-          const result = rentalFileService.checkCompatibility(rentalFile, property)
-          setCompatibilityCheck(result)
-        }
+        // Pour l'instant, utiliser la méthode simple pour éviter les problèmes
+        // TODO: Réactiver le service de scoring avancé une fois les problèmes résolus
+        const result = rentalFileService.checkCompatibility(rentalFile, property)
+        console.log("📊 Résultat du scoring simple:", result)
+        setCompatibilityCheck(result)
       } catch (error) {
         console.warn("Erreur lors du calcul de compatibilité:", error)
         // Fallback vers la méthode simple
