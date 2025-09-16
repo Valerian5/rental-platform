@@ -285,6 +285,48 @@ export default function RentalFilePage() {
           onUpdate={handleUpdateData} 
         />
 
+        {/* Explicatif sur l'importance des informations pour le scoring */}
+        <Card className="border-l-4 border-l-green-500 bg-gradient-to-r from-green-50 to-emerald-50">
+          <CardContent className="p-6">
+            <div className="flex items-start">
+              <div className="bg-green-100 p-3 rounded-full mr-4">
+                <CheckCircle className="h-6 w-6 text-green-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-green-900 mb-3 text-lg">Pourquoi ces informations sont-elles importantes ?</h3>
+                <p className="text-green-800 mb-4">
+                  Chaque information que vous renseignez contribue à calculer votre <strong>score de compatibilité</strong> avec les logements. 
+                  Plus votre dossier est complet et précis, plus votre score sera élevé et vos chances d'obtenir le logement augmenteront.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-white/60 p-4 rounded-lg border border-green-200">
+                    <h4 className="font-medium text-green-900 mb-2 flex items-center">
+                      <Euro className="h-4 w-4 mr-2" />
+                      Revenus et stabilité
+                    </h4>
+                    <ul className="text-sm text-green-800 space-y-1">
+                      <li>• Revenus élevés = score plus élevé</li>
+                      <li>• CDI confirmé = bonus maximum</li>
+                      <li>• Ancienneté = stabilité professionnelle</li>
+                    </ul>
+                  </div>
+                  <div className="bg-white/60 p-4 rounded-lg border border-green-200">
+                    <h4 className="font-medium text-green-900 mb-2 flex items-center">
+                      <Shield className="h-4 w-4 mr-2" />
+                      Garants et sécurité
+                    </h4>
+                    <ul className="text-sm text-green-800 space-y-1">
+                      <li>• Garant avec revenus élevés = sécurité</li>
+                      <li>• Informations complètes = confiance</li>
+                      <li>• Dossier détaillé = meilleure évaluation</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Progression principale avec icônes */}
         <Card>
           <CardContent className="p-6">
@@ -341,41 +383,46 @@ export default function RentalFilePage() {
         {/* Étape 2: Colocataires */}
         {currentStep === 2 && (
           <div className="space-y-6">
-            <Card>
-              <CardHeader>
+            <Card className="border-l-4 border-l-purple-500 shadow-sm">
+              <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50 border-b border-purple-200">
                 <CardTitle className="flex items-center">
-                  <Users className="h-5 w-5 mr-2" />
-                  Constituez-vous un dossier de location afin d'habiter
+                  <div className="bg-purple-100 p-2 rounded-full mr-3">
+                    <Users className="h-5 w-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <span className="text-lg font-semibold text-purple-900">Constituez-vous un dossier de location</span>
+                    <p className="text-sm text-purple-700">Sélectionnez votre situation d'habitation</p>
+                  </div>
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {RENTAL_SITUATIONS.map((option) => (
                     <div
                       key={option.value}
                       onClick={() => handleUpdateData({ rental_situation: option.value })}
-                      className={`p-4 rounded-lg border-2 cursor-pointer transition-all hover:shadow-md ${
+                      className={`p-6 rounded-lg border-2 cursor-pointer transition-all hover:scale-105 ${
                         rentalFile?.rental_situation === option.value
-                          ? "border-blue-500 bg-blue-50"
-                          : "border-gray-200 hover:border-gray-300"
+                          ? "border-purple-500 bg-purple-50 shadow-md"
+                          : "border-gray-200 hover:border-purple-300 hover:bg-purple-25"
                       }`}
                     >
-                      <div className="flex flex-col items-center text-center space-y-3">
+                      <div className="flex flex-col items-center text-center space-y-4">
                         <div
-                          className={`p-3 rounded-full ${
+                          className={`p-4 rounded-full ${
                             rentalFile?.rental_situation === option.value
-                              ? "bg-blue-100 text-blue-600"
+                              ? "bg-purple-100 text-purple-600"
                               : "bg-gray-100 text-gray-500"
                           }`}
                         >
                           {getSituationIcon(option.value)}
                         </div>
                         <div>
-                          <h3 className="font-medium text-gray-900 mb-1">{option.label}</h3>
+                          <h3 className="font-semibold text-gray-900 mb-2">{option.label}</h3>
                           <p className="text-sm text-gray-600">{option.description}</p>
                         </div>
                         {rentalFile?.rental_situation === option.value && (
-                          <Badge variant="default" className="text-xs">
+                          <Badge className="bg-purple-100 text-purple-800 text-xs">
                             Sélectionné
                           </Badge>
                         )}
@@ -387,14 +434,19 @@ export default function RentalFilePage() {
             </Card>
 
             {/* Message de présentation */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Message de présentation</CardTitle>
-                <CardDescription>
-                  Présentez-vous aux propriétaires pour vous démarquer des autres candidats
-                </CardDescription>
+            <Card className="border-l-4 border-l-pink-500 shadow-sm">
+              <CardHeader className="bg-gradient-to-r from-pink-50 to-rose-50 border-b border-pink-200">
+                <CardTitle className="flex items-center">
+                  <div className="bg-pink-100 p-2 rounded-full mr-3">
+                    <Heart className="h-5 w-5 text-pink-600" />
+                  </div>
+                  <div>
+                    <span className="text-lg font-semibold text-pink-900">Message de présentation</span>
+                    <p className="text-sm text-pink-700">Présentez-vous aux propriétaires pour vous démarquer</p>
+                  </div>
+                </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="p-6 space-y-4">
                 <div className="space-y-2">
                   <Textarea
                     id="presentation_message"
@@ -428,24 +480,42 @@ export default function RentalFilePage() {
 
             {(rentalFile?.rental_situation === "colocation" || rentalFile?.rental_situation === "couple") && (
               <div className="space-y-6">
-                <Card>
-                  <CardHeader>
+                <Card className="border-l-4 border-l-orange-500 shadow-sm">
+                  <CardHeader className="bg-gradient-to-r from-orange-50 to-amber-50 border-b border-orange-200">
                     <CardTitle className="flex items-center justify-between">
-                      <span>
-                        {rentalFile?.rental_situation === "couple" ? "Votre conjoint(e)" : "Vos colocataires"}
-                      </span>
-                      <Button onClick={addCotenant} size="sm">
+                      <div className="flex items-center">
+                        <div className="bg-orange-100 p-2 rounded-full mr-3">
+                          <Users className="h-5 w-5 text-orange-600" />
+                        </div>
+                        <div>
+                          <span className="text-lg font-semibold text-orange-900">
+                            {rentalFile?.rental_situation === "couple" ? "Votre conjoint(e)" : "Vos colocataires"}
+                          </span>
+                          <p className="text-sm text-orange-700">
+                            {rentalFile?.rental_situation === "couple" 
+                              ? "Ajoutez les informations de votre conjoint(e)" 
+                              : "Ajoutez les informations de vos colocataires"}
+                          </p>
+                        </div>
+                      </div>
+                      <Button onClick={addCotenant} size="sm" className="bg-orange-600 hover:bg-orange-700 text-white">
                         <Plus className="h-4 w-4 mr-2" />
                         Ajouter
                       </Button>
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="p-6">
                     {(!rentalFile?.cotenants || rentalFile.cotenants.length === 0) && (
                       <div className="text-center py-8 text-gray-500">
-                        <Users className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                        <p>Aucun {rentalFile?.rental_situation === "couple" ? "conjoint(e)" : "colocataire"} ajouté</p>
-                        <p className="text-sm">Cliquez sur "Ajouter" pour commencer</p>
+                        <div className="bg-orange-100 p-4 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                          <Users className="h-8 w-8 text-orange-400" />
+                        </div>
+                        <p className="text-lg font-medium text-gray-700 mb-2">
+                          Aucun {rentalFile?.rental_situation === "couple" ? "conjoint(e)" : "colocataire"} ajouté
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          Cliquez sur "Ajouter" pour commencer à renseigner les informations
+                        </p>
                       </div>
                     )}
                   </CardContent>
