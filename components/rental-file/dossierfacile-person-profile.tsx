@@ -9,8 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { ArrowLeft, ArrowRight, User, Euro, Briefcase, Calendar, Building, MapPin, Phone, Mail, X } from "lucide-react"
+import { ArrowLeft, ArrowRight, User, Euro, Briefcase, Calendar, Building, MapPin, Phone, Mail, X, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
+import { ImprovedIncomeSection } from "@/components/rental-file/improved-income-section"
 
 interface DossierFacilePersonProfileProps {
   profile: any
@@ -30,7 +31,7 @@ export function DossierFacilePersonProfile({
   const [currentStep, setCurrentStep] = useState(1)
   const [currentSubStep, setCurrentSubStep] = useState(1)
 
-  const totalSteps = 4
+  const totalSteps = 3
   const totalSubSteps = 4
 
   const handleNext = () => {
@@ -55,24 +56,13 @@ export function DossierFacilePersonProfile({
     onUpdate({ ...profile, [field]: value })
   }
 
-  const handleSubStepUpdate = (field: string, value: any) => {
-    const updatedProfile = { ...profile }
-    if (!updatedProfile[field]) {
-      updatedProfile[field] = {}
-    }
-    updatedProfile[field] = { ...updatedProfile[field], [field]: value }
-    onUpdate(updatedProfile)
-  }
-
   const getStepIcon = (step: number) => {
     switch (step) {
       case 1:
-        return <User className="h-4 w-4" />
-      case 2:
         return <Euro className="h-4 w-4" />
-      case 3:
+      case 2:
         return <Briefcase className="h-4 w-4" />
-      case 4:
+      case 3:
         return <MapPin className="h-4 w-4" />
       default:
         return <User className="h-4 w-4" />
@@ -82,12 +72,10 @@ export function DossierFacilePersonProfile({
   const getStepTitle = (step: number) => {
     switch (step) {
       case 1:
-        return "Informations personnelles"
-      case 2:
         return "Revenus"
-      case 3:
+      case 2:
         return "Activité professionnelle"
-      case 4:
+      case 3:
         return "Adresse"
       default:
         return "Étape"
@@ -97,12 +85,10 @@ export function DossierFacilePersonProfile({
   const getSubStepTitle = (step: number, subStep: number) => {
     switch (step) {
       case 1:
-        return "Identité"
-      case 2:
         return "Revenus du travail"
-      case 3:
+      case 2:
         return "Informations professionnelles"
-      case 4:
+      case 3:
         return "Adresse actuelle"
       default:
         return "Sous-étape"
@@ -110,18 +96,9 @@ export function DossierFacilePersonProfile({
   }
 
   const calculateProgress = () => {
-    const totalFields = 20 // Nombre total de champs à remplir
+    const totalFields = 15
     let filledFields = 0
 
-    // Vérifier les champs remplis
-    if (profile.first_name) filledFields++
-    if (profile.last_name) filledFields++
-    if (profile.email) filledFields++
-    if (profile.phone) filledFields++
-    if (profile.birth_date) filledFields++
-    if (profile.birth_place) filledFields++
-    if (profile.nationality) filledFields++
-    if (profile.marital_status) filledFields++
     if (profile.work_income?.amount) filledFields++
     if (profile.scholarship?.amount) filledFields++
     if (profile.social_aid?.length > 0) filledFields++
@@ -134,6 +111,9 @@ export function DossierFacilePersonProfile({
     if (profile.job_title) filledFields++
     if (profile.current_address?.street) filledFields++
     if (profile.current_address?.city) filledFields++
+    if (profile.current_address?.postal_code) filledFields++
+    if (profile.current_address?.country) filledFields++
+    if (profile.current_address?.rent_amount) filledFields++
 
     return Math.round((filledFields / totalFields) * 100)
   }
@@ -168,242 +148,26 @@ export function DossierFacilePersonProfile({
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Étape 1: Informations personnelles */}
+        {/* Étape 1: Revenus */}
         {currentStep === 1 && (
           <div className="space-y-6">
             <div className="text-center">
               <h3 className="text-lg font-medium mb-2">{getSubStepTitle(1, currentSubStep)}</h3>
-              <p className="text-sm text-gray-600">Renseignez vos informations personnelles</p>
+              <p className="text-sm text-gray-600">Déclarez vos revenus mensuels</p>
             </div>
 
-            {currentSubStep === 1 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="first_name">Prénom *</Label>
-                  <Input
-                    id="first_name"
-                    placeholder="Jean"
-                    value={profile.first_name || ""}
-                    onChange={(e) => handleUpdate("first_name", e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="last_name">Nom *</Label>
-                  <Input
-                    id="last_name"
-                    placeholder="Dupont"
-                    value={profile.last_name || ""}
-                    onChange={(e) => handleUpdate("last_name", e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="email">Email *</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="jean.dupont@email.com"
-                    value={profile.email || ""}
-                    onChange={(e) => handleUpdate("email", e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="phone">Téléphone *</Label>
-                  <Input
-                    id="phone"
-                    placeholder="06 12 34 56 78"
-                    value={profile.phone || ""}
-                    onChange={(e) => handleUpdate("phone", e.target.value)}
-                  />
-                </div>
-              </div>
-            )}
-
-            {currentSubStep === 2 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="birth_date">Date de naissance *</Label>
-                  <Input
-                    id="birth_date"
-                    type="date"
-                    value={profile.birth_date || ""}
-                    onChange={(e) => handleUpdate("birth_date", e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="birth_place">Lieu de naissance *</Label>
-                  <Input
-                    id="birth_place"
-                    placeholder="Paris"
-                    value={profile.birth_place || ""}
-                    onChange={(e) => handleUpdate("birth_place", e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="nationality">Nationalité *</Label>
-                  <Input
-                    id="nationality"
-                    placeholder="Française"
-                    value={profile.nationality || ""}
-                    onChange={(e) => handleUpdate("nationality", e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="marital_status">Situation familiale</Label>
-                  <Select
-                    value={profile.marital_status || ""}
-                    onValueChange={(value) => handleUpdate("marital_status", value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionnez votre situation" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="single">Célibataire</SelectItem>
-                      <SelectItem value="married">Marié(e)</SelectItem>
-                      <SelectItem value="divorced">Divorcé(e)</SelectItem>
-                      <SelectItem value="widowed">Veuf/Veuve</SelectItem>
-                      <SelectItem value="pacs">PACS</SelectItem>
-                      <SelectItem value="concubinage">Concubinage</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            )}
+            <ImprovedIncomeSection
+              profile={profile}
+              onUpdate={onUpdate}
+            />
           </div>
         )}
 
-        {/* Étape 2: Revenus */}
+        {/* Étape 2: Activité professionnelle */}
         {currentStep === 2 && (
           <div className="space-y-6">
             <div className="text-center">
               <h3 className="text-lg font-medium mb-2">{getSubStepTitle(2, currentSubStep)}</h3>
-              <p className="text-sm text-gray-600">Déclarez vos revenus mensuels</p>
-            </div>
-
-            {currentSubStep === 1 && (
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="work_income">Revenus du travail (€/mois) *</Label>
-                  <Input
-                    id="work_income"
-                    type="number"
-                    placeholder="3000"
-                    value={profile.work_income?.amount || ""}
-                    onChange={(e) => handleUpdate("work_income", { 
-                      ...profile.work_income, 
-                      amount: parseFloat(e.target.value) || 0 
-                    })}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="scholarship">Bourse (€/mois)</Label>
-                  <Input
-                    id="scholarship"
-                    type="number"
-                    placeholder="500"
-                    value={profile.scholarship?.amount || ""}
-                    onChange={(e) => handleUpdate("scholarship", { 
-                      ...profile.scholarship, 
-                      amount: parseFloat(e.target.value) || 0 
-                    })}
-                  />
-                </div>
-              </div>
-            )}
-
-            {currentSubStep === 2 && (
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="social_aid">Aides sociales (€/mois)</Label>
-                  <Input
-                    id="social_aid"
-                    type="number"
-                    placeholder="400"
-                    value={profile.social_aid?.[0]?.amount || ""}
-                    onChange={(e) => handleUpdate("social_aid", [{ 
-                      type: "RSA", 
-                      amount: parseFloat(e.target.value) || 0 
-                    }])}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="retirement_pension">Retraite/Pension (€/mois)</Label>
-                  <Input
-                    id="retirement_pension"
-                    type="number"
-                    placeholder="1200"
-                    value={profile.retirement_pension?.[0]?.amount || ""}
-                    onChange={(e) => handleUpdate("retirement_pension", [{ 
-                      type: "Retraite", 
-                      amount: parseFloat(e.target.value) || 0 
-                    }])}
-                  />
-                </div>
-              </div>
-            )}
-
-            {currentSubStep === 3 && (
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="rent_income">Rentes (€/mois)</Label>
-                  <Input
-                    id="rent_income"
-                    type="number"
-                    placeholder="800"
-                    value={profile.rent_income?.[0]?.amount || ""}
-                    onChange={(e) => handleUpdate("rent_income", [{ 
-                      type: "Rente", 
-                      amount: parseFloat(e.target.value) || 0 
-                    }])}
-                  />
-                </div>
-              </div>
-            )}
-
-            {currentSubStep === 4 && (
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <h4 className="font-medium text-blue-800 mb-2">Récapitulatif des revenus</h4>
-                <div className="space-y-2 text-sm text-blue-700">
-                  <div className="flex justify-between">
-                    <span>Revenus du travail:</span>
-                    <span>{profile.work_income?.amount || 0}€</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Bourse:</span>
-                    <span>{profile.scholarship?.amount || 0}€</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Aides sociales:</span>
-                    <span>{profile.social_aid?.[0]?.amount || 0}€</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Retraite/Pension:</span>
-                    <span>{profile.retirement_pension?.[0]?.amount || 0}€</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Rentes:</span>
-                    <span>{profile.rent_income?.[0]?.amount || 0}€</span>
-                  </div>
-                  <div className="flex justify-between font-medium border-t pt-2">
-                    <span>Total mensuel:</span>
-                    <span>
-                      {(profile.work_income?.amount || 0) + 
-                       (profile.scholarship?.amount || 0) + 
-                       (profile.social_aid?.[0]?.amount || 0) + 
-                       (profile.retirement_pension?.[0]?.amount || 0) + 
-                       (profile.rent_income?.[0]?.amount || 0)}€
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Étape 3: Activité professionnelle */}
-        {currentStep === 3 && (
-          <div className="space-y-6">
-            <div className="text-center">
-              <h3 className="text-lg font-medium mb-2">{getSubStepTitle(3, currentSubStep)}</h3>
               <p className="text-sm text-gray-600">Renseignez votre activité professionnelle</p>
             </div>
 
@@ -528,11 +292,11 @@ export function DossierFacilePersonProfile({
           </div>
         )}
 
-        {/* Étape 4: Adresse */}
-        {currentStep === 4 && (
+        {/* Étape 3: Adresse */}
+        {currentStep === 3 && (
           <div className="space-y-6">
             <div className="text-center">
-              <h3 className="text-lg font-medium mb-2">{getSubStepTitle(4, currentSubStep)}</h3>
+              <h3 className="text-lg font-medium mb-2">{getSubStepTitle(3, currentSubStep)}</h3>
               <p className="text-sm text-gray-600">Renseignez votre adresse actuelle</p>
             </div>
 
