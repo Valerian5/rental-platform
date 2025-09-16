@@ -35,6 +35,28 @@ import {
   CableCarIcon as Elevator,
   LockIcon as Security,
   DogIcon as Pet,
+  Shower,
+  Utensils,
+  Tv,
+  AirVent,
+  Snowflake,
+  Flame,
+  Waves,
+  TreePine,
+  Dumbbell,
+  Gamepad2,
+  Coffee,
+  Sofa,
+  Lamp,
+  Shield,
+  Key,
+  Camera,
+  Bell,
+  Users,
+  Clock,
+  MapPin as Location,
+  Star,
+  Check,
 } from "lucide-react"
 import Link from "next/link"
 import { propertyService } from "@/lib/property-service"
@@ -42,6 +64,7 @@ import { applicationService } from "@/lib/application-service"
 import { authService } from "@/lib/auth-service"
 import { toast } from "sonner"
 import { rentalFileService } from "@/lib/rental-file-service"
+import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
 
 export default function PropertyPublicPage() {
   const router = useRouter()
@@ -49,6 +72,8 @@ export default function PropertyPublicPage() {
   const [property, setProperty] = useState<any>(null)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [rentalFile, setRentalFile] = useState<any>(null)
+  const [ownerPreferences, setOwnerPreferences] = useState<any>(null)
+  const [compatibilityCheck, setCompatibilityCheck] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
@@ -88,6 +113,16 @@ export default function PropertyPublicPage() {
           setRentalFile(fileData)
         }
 
+        // Récupérer les préférences du propriétaire pour le calcul de compatibilité
+        if (propertyData.owner_id) {
+          try {
+            const preferences = await scoringPreferencesService.getOwnerPreferences(propertyData.owner_id)
+            setOwnerPreferences(preferences)
+          } catch (error) {
+            console.warn("Impossible de récupérer les préférences du propriétaire:", error)
+          }
+        }
+
         console.log("✅ Données chargées")
       } catch (error: any) {
         console.error("❌ Erreur lors du chargement:", error)
@@ -100,6 +135,63 @@ export default function PropertyPublicPage() {
 
     fetchData()
   }, [params.id])
+
+  // Calculer la compatibilité quand les données changent
+  useEffect(() => {
+    const calculateCompatibility = async () => {
+      if (!rentalFile || !property) {
+        setCompatibilityCheck(null)
+        return
+      }
+
+      try {
+        // Si on a les préférences du propriétaire, utiliser le service de scoring avancé
+        if (ownerPreferences && property.owner_id) {
+          const income = applicationData.income ? Number.parseFloat(applicationData.income) : undefined
+          const applicationDataForScoring = {
+            ...rentalFile,
+            income: income || rentalFile.monthly_income,
+            profession: rentalFile.profession,
+            company: rentalFile.company,
+            presentation_message: rentalFile.presentation_message,
+            has_guarantor: rentalFile.has_guarantor,
+            guarantor_income: rentalFile.guarantor_income,
+            professional_situation: rentalFile.professional_situation,
+          }
+
+          const scoreResult = await scoringPreferencesService.calculateScore(
+            applicationDataForScoring,
+            property,
+            property.owner_id
+          )
+
+          setCompatibilityCheck({
+            compatible: scoreResult.compatible,
+            score: scoreResult.totalScore,
+            warnings: scoreResult.warnings,
+            recommendations: scoreResult.recommendations,
+            details: {
+              income_check: { passed: scoreResult.breakdown.income?.compatible || false, message: "" },
+              professional_situation_check: { passed: scoreResult.breakdown.professional_stability?.compatible || false, message: "" },
+              guarantor_check: { passed: scoreResult.breakdown.guarantor?.compatible || false, message: "" },
+              documents_check: { passed: scoreResult.breakdown.file_quality?.compatible || false, message: "" },
+            }
+          })
+        } else {
+          // Méthode simple par défaut
+          const result = rentalFileService.checkCompatibility(rentalFile, property)
+          setCompatibilityCheck(result)
+        }
+      } catch (error) {
+        console.warn("Erreur lors du calcul de compatibilité:", error)
+        // Fallback vers la méthode simple
+        const result = rentalFileService.checkCompatibility(rentalFile, property)
+        setCompatibilityCheck(result)
+      }
+    }
+
+    calculateCompatibility()
+  }, [rentalFile, property, ownerPreferences, applicationData.income])
 
   const nextImage = () => {
     if (property?.property_images?.length > 0) {
@@ -174,14 +266,42 @@ export default function PropertyPublicPage() {
     toast.info("Fonctionnalité favoris en cours de développement")
   }
 
-  const getCompatibilityCheck = () => {
-    if (!rentalFile || !property) return null
-
-    const income = applicationData.income ? Number.parseFloat(applicationData.income) : undefined
-    return rentalFileService.checkCompatibility(rentalFile, property, income)
+  // Fonction pour obtenir l'icône appropriée pour chaque équipement
+  const getEquipmentIcon = (equipment: string) => {
+    const equipmentLower = equipment.toLowerCase()
+    
+    if (equipmentLower.includes('wifi') || equipmentLower.includes('internet')) return <Wifi className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('parking') || equipmentLower.includes('garage')) return <Car className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('balcon') || equipmentLower.includes('terrasse')) return <Balcony className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('ascenseur') || equipmentLower.includes('elevator')) return <Elevator className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('sécur') || equipmentLower.includes('alarme')) return <Security className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('animaux') || equipmentLower.includes('pet')) return <Pet className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('cuisine') || equipmentLower.includes('kitchen')) return <Utensils className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('salle de bain') || equipmentLower.includes('bathroom')) return <Bath className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('douche') || equipmentLower.includes('shower')) return <Shower className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('télévision') || equipmentLower.includes('tv')) return <Tv className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('climatisation') || equipmentLower.includes('air')) return <AirVent className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('chauffage') || equipmentLower.includes('heating')) return <Flame className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('piscine') || equipmentLower.includes('pool')) return <Waves className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('jardin') || equipmentLower.includes('garden')) return <TreePine className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('salle de sport') || equipmentLower.includes('gym')) return <Dumbbell className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('jeux') || equipmentLower.includes('game')) return <Gamepad2 className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('café') || equipmentLower.includes('coffee')) return <Coffee className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('meublé') || equipmentLower.includes('furnished')) return <Sofa className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('éclairage') || equipmentLower.includes('light')) return <Lamp className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('sécurité') || equipmentLower.includes('security')) return <Shield className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('clé') || equipmentLower.includes('key')) return <Key className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('caméra') || equipmentLower.includes('camera')) return <Camera className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('interphone') || equipmentLower.includes('intercom')) return <Bell className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('colocation') || equipmentLower.includes('roommate')) return <Users className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('horloge') || equipmentLower.includes('clock')) return <Clock className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('localisation') || equipmentLower.includes('location')) return <Location className="h-4 w-4 text-green-600" />
+    if (equipmentLower.includes('étoile') || equipmentLower.includes('star')) return <Star className="h-4 w-4 text-green-600" />
+    
+    // Icône par défaut
+    return <Check className="h-4 w-4 text-green-600" />
   }
 
-  const compatibilityCheck = getCompatibilityCheck()
 
   // États de chargement et d'erreur
   if (isLoading) {
@@ -224,7 +344,7 @@ export default function PropertyPublicPage() {
       <div className="bg-white shadow-sm">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <Link href="/" className="text-blue-600 hover:underline flex items-center">
+            <Link href="/properties" className="text-blue-600 hover:underline flex items-center">
               <ArrowLeft className="h-4 w-4 mr-1" />
               Retour aux annonces
             </Link>
@@ -464,11 +584,12 @@ export default function PropertyPublicPage() {
                   {property.equipment && Array.isArray(property.equipment) && property.equipment.length > 0 && (
                     <div className="mt-4">
                       <h4 className="font-medium mb-2">Équipements supplémentaires</h4>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {property.equipment.map((item: string, index: number) => (
-                          <Badge key={index} variant="secondary">
-                            {item}
-                          </Badge>
+                          <div key={index} className="flex items-center space-x-2">
+                            {getEquipmentIcon(item)}
+                            <span className="text-sm">{item}</span>
+                          </div>
                         ))}
                       </div>
                     </div>
@@ -535,46 +656,90 @@ export default function PropertyPublicPage() {
             </Card>
 
             {/* Vérification du dossier pour les locataires connectés */}
-            {currentUser && currentUser.user_type === "tenant" && compatibilityCheck && (
+            {currentUser && currentUser.user_type === "tenant" ? (
+              compatibilityCheck ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      {compatibilityCheck.compatible ? (
+                        <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
+                      ) : (
+                        <AlertTriangle className="h-5 w-5 text-orange-600 mr-2" />
+                      )}
+                      Compatibilité de votre dossier
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Score de compatibilité</span>
+                        <Badge variant={compatibilityCheck.score >= 70 ? "default" : "secondary"}>
+                          {compatibilityCheck.score}%
+                        </Badge>
+                      </div>
+
+                      {compatibilityCheck.warnings.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium text-gray-700">Points d'attention :</p>
+                          <ul className="text-sm text-gray-600 space-y-1">
+                            {compatibilityCheck.warnings.map((warning, index) => (
+                              <li key={index} className="flex items-start">
+                                <span className="text-orange-500 mr-2">•</span>
+                                {warning}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {!compatibilityCheck.compatible && (
+                        <p className="text-sm text-orange-600">
+                          Votre dossier présente quelques points à améliorer, mais vous pouvez tout de même postuler.
+                        </p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <AlertTriangle className="h-5 w-5 text-orange-600 mr-2" />
+                      Compatibilité de votre dossier
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-center space-y-3">
+                      <p className="text-sm text-gray-600">
+                        Créez votre dossier de location pour voir votre score de compatibilité avec ce logement.
+                      </p>
+                      <Button asChild className="w-full">
+                        <Link href="/tenant/profile/rental-file">
+                          Créer mon dossier
+                        </Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            ) : (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center">
-                    {compatibilityCheck.compatible ? (
-                      <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
-                    ) : (
-                      <AlertTriangle className="h-5 w-5 text-orange-600 mr-2" />
-                    )}
+                    <AlertTriangle className="h-5 w-5 text-orange-600 mr-2" />
                     Compatibilité de votre dossier
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Score de compatibilité</span>
-                      <Badge variant={compatibilityCheck.score >= 70 ? "default" : "secondary"}>
-                        {compatibilityCheck.score}%
-                      </Badge>
-                    </div>
-
-                    {compatibilityCheck.warnings.length > 0 && (
-                      <div className="space-y-2">
-                        <p className="text-sm font-medium text-gray-700">Points d'attention :</p>
-                        <ul className="text-sm text-gray-600 space-y-1">
-                          {compatibilityCheck.warnings.map((warning, index) => (
-                            <li key={index} className="flex items-start">
-                              <span className="text-orange-500 mr-2">•</span>
-                              {warning}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {!compatibilityCheck.compatible && (
-                      <p className="text-sm text-orange-600">
-                        Votre dossier présente quelques points à améliorer, mais vous pouvez tout de même postuler.
-                      </p>
-                    )}
+                  <div className="text-center space-y-3">
+                    <p className="text-sm text-gray-600">
+                      Connectez-vous en tant que locataire pour voir votre score de compatibilité avec ce logement.
+                    </p>
+                    <Button asChild className="w-full">
+                      <Link href={`/login?redirect=/properties/${params.id}`}>
+                        Se connecter
+                      </Link>
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -614,7 +779,7 @@ export default function PropertyPublicPage() {
 
       {/* Dialog de candidature */}
       <Dialog open={showApplicationDialog} onOpenChange={setShowApplicationDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Envoyer votre candidature</DialogTitle>
             <DialogDescription>
