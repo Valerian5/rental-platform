@@ -17,6 +17,7 @@ import { RentalFileViewer } from "@/components/rental-file/rental-file-viewer"
 import { toast } from "sonner"
 import Link from "next/link"
 import { DossierFacileIntegration } from "@/components/rental-file/dossierfacile-integration"
+import { DossierFacilePersonProfile } from "@/components/rental-file/dossierfacile-person-profile"
 import { CompletionDiagnosticTooltip } from "@/components/rental-file/completion-diagnostic-tooltip"
 import { GuarantorUploadSection } from "@/components/rental-file/guarantor-upload-section"
 
@@ -314,11 +315,19 @@ export default function RentalFilePage() {
         {/* Étape 1: Locataire principal avec structure complète */}
         {currentStep === 1 && (
           <div className="space-y-6">
-            <ImprovedPersonProfile
-              profile={rentalFile?.main_tenant || {}}
-              onUpdate={updateMainTenant}
-              title="Locataire principal"
-            />
+            {rentalFile?.creation_method === "dossierfacile" ? (
+              <DossierFacilePersonProfile
+                profile={rentalFile?.main_tenant || {}}
+                onUpdate={updateMainTenant}
+                title="Locataire principal"
+              />
+            ) : (
+              <ImprovedPersonProfile
+                profile={rentalFile?.main_tenant || {}}
+                onUpdate={updateMainTenant}
+                title="Locataire principal"
+              />
+            )}
 
             <div className="flex justify-end">
               <Button onClick={nextStep}>
@@ -443,14 +452,25 @@ export default function RentalFilePage() {
                 </Card>
 
                 {rentalFile?.cotenants?.map((cotenant: any, index: number) => (
-                  <ImprovedPersonProfile
-                    key={index}
-                    profile={cotenant}
-                    onUpdate={(updatedProfile) => updateCotenant(index, updatedProfile)}
-                    onRemove={() => removeCotenant(index)}
-                    title={`${rentalFile?.rental_situation === "couple" ? "Conjoint(e)" : `Colocataire ${index + 1}`}`}
-                    canRemove
-                  />
+                  rentalFile?.creation_method === "dossierfacile" ? (
+                    <DossierFacilePersonProfile
+                      key={index}
+                      profile={cotenant}
+                      onUpdate={(updatedProfile) => updateCotenant(index, updatedProfile)}
+                      onRemove={() => removeCotenant(index)}
+                      title={`${rentalFile?.rental_situation === "couple" ? "Conjoint(e)" : `Colocataire ${index + 1}`}`}
+                      canRemove
+                    />
+                  ) : (
+                    <ImprovedPersonProfile
+                      key={index}
+                      profile={cotenant}
+                      onUpdate={(updatedProfile) => updateCotenant(index, updatedProfile)}
+                      onRemove={() => removeCotenant(index)}
+                      title={`${rentalFile?.rental_situation === "couple" ? "Conjoint(e)" : `Colocataire ${index + 1}`}`}
+                      canRemove
+                    />
+                  )
                 ))}
               </div>
             )}
@@ -570,14 +590,25 @@ export default function RentalFilePage() {
 
                   {guarantor.type === "physical" && guarantor.personal_info && (
                     <div className="space-y-6">
-                      <ImprovedPersonProfile
-                        profile={guarantor.personal_info}
-                        onUpdate={(updatedProfile) => {
-                          const updatedGuarantor = { ...guarantor, personal_info: updatedProfile }
-                          updateGuarantor(index, updatedGuarantor)
-                        }}
-                        title="Informations du garant"
-                      />
+                      {rentalFile?.creation_method === "dossierfacile" ? (
+                        <DossierFacilePersonProfile
+                          profile={guarantor.personal_info}
+                          onUpdate={(updatedProfile) => {
+                            const updatedGuarantor = { ...guarantor, personal_info: updatedProfile }
+                            updateGuarantor(index, updatedGuarantor)
+                          }}
+                          title="Informations du garant"
+                        />
+                      ) : (
+                        <ImprovedPersonProfile
+                          profile={guarantor.personal_info}
+                          onUpdate={(updatedProfile) => {
+                            const updatedGuarantor = { ...guarantor, personal_info: updatedProfile }
+                            updateGuarantor(index, updatedGuarantor)
+                          }}
+                          title="Informations du garant"
+                        />
+                      )}
                       
                       {/* Section revenus du garant */}
                       <Card className="border-orange-200 bg-orange-50/50">

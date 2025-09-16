@@ -1059,6 +1059,8 @@ export const rentalFileService = {
       status: "draft",
       completion_percentage: 0,
       validation_score: 0,
+      creation_method: "manual",
+      is_dossierfacile_certified: false,
     }
 
     return this.updateRentalFile(tenantId, initialData)
