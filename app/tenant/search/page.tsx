@@ -197,20 +197,8 @@ export default function TenantSearchPage() {
           if (user && user.user_type === "tenant") {
             const rentalFile = await rentalFileService.getRentalFile(user.id)
             if (rentalFile) {
-              applicationData = {
-                income: (rentalFile.monthly_income || 0) + (rentalFile.spouse_income || 0),
-                contract_type: mapActivityToContractType(rentalFile.main_tenant?.main_activity),
-                spouse_income: rentalFile.spouse_income || 0,
-                spouse_contract_type: mapActivityToContractType(rentalFile.spouse_situation),
-                guarantor_income: rentalFile.guarantor_income || 0,
-                guarantor_contract_type: mapActivityToContractType(rentalFile.guarantor_situation),
-                has_guarantor: !!rentalFile.guarantor_name,
-                documents_complete: rentalFile.documents?.length > 0,
-                presentation_message: rentalFile.presentation_message || "",
-                move_in_date: rentalFile.desired_move_date || "",
-                profession: rentalFile.profession || "",
-                company: rentalFile.company || ""
-              }
+              // Utiliser la fonction de mapping spécialisée du service de scoring
+              applicationData = scoringPreferencesService.mapRentalFileToScoringData(rentalFile)
             }
           }
         } catch (error) {
@@ -392,25 +380,6 @@ export default function TenantSearchPage() {
     return "text-red-600 bg-red-50"
   }
 
-  // Fonction pour mapper l'activité professionnelle au type de contrat
-  const mapActivityToContractType = (activity: string | undefined): string => {
-    if (!activity) return "cdi"
-    
-    const activityLower = activity.toLowerCase()
-    
-    if (activityLower.includes("cdi") || activityLower.includes("contrat à durée indéterminée")) return "cdi"
-    if (activityLower.includes("cdd") || activityLower.includes("contrat à durée déterminée")) return "cdd"
-    if (activityLower.includes("stage") || activityLower.includes("stagiare")) return "stage"
-    if (activityLower.includes("alternance") || activityLower.includes("apprentissage")) return "alternance"
-    if (activityLower.includes("freelance") || activityLower.includes("indépendant") || activityLower.includes("auto-entrepreneur")) return "freelance"
-    if (activityLower.includes("chômage") || activityLower.includes("demandeur d'emploi")) return "chomage"
-    if (activityLower.includes("retraite") || activityLower.includes("retraité")) return "retraite"
-    if (activityLower.includes("étudiant") || activityLower.includes("etudiant")) return "etudiant"
-    if (activityLower.includes("fonctionnaire") || activityLower.includes("fonction publique")) return "fonctionnaire"
-    
-    // Par défaut, considérer comme CDI
-    return "cdi"
-  }
 
   return (
     <div className="container mx-auto py-6">
