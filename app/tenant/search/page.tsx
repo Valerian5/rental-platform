@@ -16,6 +16,7 @@ import { Separator } from "@/components/ui/separator"
 import { Checkbox } from "@/components/ui/checkbox"
 import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
 import { rentalFileService } from "@/lib/rental-file-service"
+import { applicationEnrichmentService } from "@/lib/application-enrichment-service"
 import Link from "next/link"
 import { toast } from "sonner"
 
@@ -197,8 +198,25 @@ export default function TenantSearchPage() {
           if (user && user.user_type === "tenant") {
             const rentalFile = await rentalFileService.getRentalFile(user.id)
             if (rentalFile) {
-              // Utiliser la fonction de mapping spécialisée du service de scoring
-              applicationData = scoringPreferencesService.mapRentalFileToScoringData(rentalFile)
+              // Créer une candidature fictive pour utiliser le même enrichissement que côté propriétaire
+              const mockApplication = {
+                id: "mock-" + Date.now(),
+                property_id: property.id,
+                tenant_id: user.id,
+                message: rentalFile.presentation_message || "",
+                income: 0, // Sera enrichi
+                profession: "",
+                company: "",
+                contract_type: "",
+                has_guarantor: false,
+                guarantor_income: 0,
+                documents_complete: false,
+                move_in_date: rentalFile.desired_move_date || "",
+                presentation: rentalFile.presentation_message || "",
+              }
+              
+              // Enrichir la candidature avec les données du RentalFile (même logique que côté propriétaire)
+              applicationData = await applicationEnrichmentService.enrichApplication(mockApplication, rentalFile)
             }
           }
         } catch (error) {

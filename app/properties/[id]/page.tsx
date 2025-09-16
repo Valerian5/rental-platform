@@ -65,6 +65,7 @@ import { authService } from "@/lib/auth-service"
 import { toast } from "sonner"
 import { rentalFileService } from "@/lib/rental-file-service"
 import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
+import { applicationEnrichmentService } from "@/lib/application-enrichment-service"
 
 export default function PropertyPublicPage() {
   const router = useRouter()
@@ -151,11 +152,29 @@ export default function PropertyPublicPage() {
           console.log("📊 Données du dossier:", rentalFile)
           console.log("📊 Préférences du propriétaire:", ownerPreferences)
           
-          // Utiliser la fonction de mapping spécialisée du service de scoring
-          const applicationDataForScoring = scoringPreferencesService.mapRentalFileToScoringData(rentalFile)
+          // Créer une candidature fictive pour utiliser le même enrichissement que côté propriétaire
+          const mockApplication = {
+            id: "mock-" + Date.now(),
+            property_id: property.id,
+            tenant_id: currentUser.id,
+            message: rentalFile.presentation_message || "",
+            income: 0, // Sera enrichi
+            profession: "",
+            company: "",
+            contract_type: "",
+            has_guarantor: false,
+            guarantor_income: 0,
+            documents_complete: false,
+            move_in_date: rentalFile.desired_move_date || "",
+            presentation: rentalFile.presentation_message || "",
+          }
+          
+          // Enrichir la candidature avec les données du RentalFile (même logique que côté propriétaire)
+          const enrichedApplication = await applicationEnrichmentService.enrichApplication(mockApplication, rentalFile)
+          console.log("📊 Candidature enrichie:", enrichedApplication)
           
           const result = await scoringPreferencesService.calculateScore(
-            applicationDataForScoring,
+            enrichedApplication,
             property,
             property.owner_id,
             true
