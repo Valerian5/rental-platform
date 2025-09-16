@@ -661,8 +661,8 @@ export default function PropertyPublicPage() {
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-gray-600">Score de compatibilité</span>
-                        <Badge variant={compatibilityCheck.score >= 70 ? "default" : "secondary"}>
-                          {compatibilityCheck.score}%
+                        <Badge variant={(compatibilityCheck.totalScore || compatibilityCheck.score) >= 70 ? "default" : "secondary"}>
+                          {compatibilityCheck.totalScore || compatibilityCheck.score}%
                         </Badge>
                       </div>
 
@@ -793,7 +793,7 @@ export default function PropertyPublicPage() {
                       compatibilityCheck.compatible ? "text-green-800" : "text-orange-800"
                     }`}
                   >
-                    Score de compatibilité : {compatibilityCheck.score}%
+                    Score de compatibilité : {compatibilityCheck.totalScore || compatibilityCheck.score}%
                   </p>
 
                   {compatibilityCheck.warnings.length > 0 && (

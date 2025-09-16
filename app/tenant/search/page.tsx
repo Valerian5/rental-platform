@@ -212,7 +212,7 @@ export default function TenantSearchPage() {
           true
         )
         
-        return result.totalScore
+        return Math.min(result.totalScore, 100) // S'assurer que le score ne dépasse pas 100%
       }
     } catch (error) {
       console.warn("Erreur calcul score avancé pour propriété:", property.id, error)

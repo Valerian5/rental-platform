@@ -233,6 +233,9 @@ export const scoringPreferencesService = {
         result.compatible = false
         result.warnings.push("Profil professionnel exclu")
       } else {
+        // Plafonner le score à 100 maximum
+        result.totalScore = Math.min(result.totalScore, 100)
+        
         // Déterminer la compatibilité
         result.compatible = exclusions.length === 0 && result.totalScore >= 60
       }
