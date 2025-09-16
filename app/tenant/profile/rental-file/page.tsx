@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, ArrowRight, Users, Shield, CheckCircle, Plus, AlertCircle, X, Eye, User, Heart, Euro } from "lucide-react"
+import { ArrowLeft, ArrowRight, Users, Shield, CheckCircle, Plus, AlertCircle, AlertTriangle, X, Eye, User, Heart, Euro } from "lucide-react"
 import { rentalFileService, RENTAL_SITUATIONS, GUARANTOR_TYPES } from "@/lib/rental-file-service"
 import { authService } from "@/lib/auth-service"
 import { ImprovedPersonProfile } from "@/components/rental-file/improved-person-profile"
@@ -505,15 +505,28 @@ export default function RentalFilePage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-lg border border-blue-200">
                   <div className="flex items-start">
-                    <AlertCircle className="h-5 w-5 text-blue-600 mr-2 mt-0.5" />
-                    <div className="text-sm">
-                      <p className="font-medium text-blue-800 mb-1">Pourquoi ajouter un garant ?</p>
-                      <p className="text-blue-700">
-                        Un garant renforce votre dossier et rassure les propriétaires. Il s'engage à payer le loyer si
-                        vous ne pouvez pas le faire.
+                    <div className="bg-blue-100 p-2 rounded-full mr-4">
+                      <AlertCircle className="h-6 w-6 text-blue-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-blue-900 mb-2 text-lg">Pourquoi ajouter un garant ?</h3>
+                      <p className="text-blue-800 mb-3">
+                        Un garant renforce considérablement votre dossier et rassure les propriétaires. Il s'engage à payer le loyer si vous ne pouvez pas le faire.
                       </p>
+                      <div className="bg-white/60 p-4 rounded-lg border border-blue-200">
+                        <h4 className="font-medium text-blue-900 mb-2 flex items-center">
+                          <Euro className="h-4 w-4 mr-2" />
+                          Impact sur votre score de compatibilité
+                        </h4>
+                        <ul className="text-sm text-blue-800 space-y-1">
+                          <li>• <strong>Revenus du garant :</strong> Plus ils sont élevés, plus votre score augmente</li>
+                          <li>• <strong>Type de contrat :</strong> CDI confirmé = bonus maximum</li>
+                          <li>• <strong>Ancienneté :</strong> Stabilité professionnelle = confiance accrue</li>
+                          <li>• <strong>Informations complètes :</strong> Dossier détaillé = meilleure évaluation</li>
+                        </ul>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -529,18 +542,30 @@ export default function RentalFilePage() {
             </Card>
 
             {rentalFile?.guarantors?.map((guarantor: any, index: number) => (
-              <Card key={index}>
-                <CardHeader>
+              <Card key={index} className="border-l-4 border-l-blue-500 shadow-sm hover:shadow-md transition-shadow">
+                <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-200">
                   <CardTitle className="flex items-center justify-between">
-                    <span>Garant {index + 1}</span>
-                    <Button onClick={() => removeGuarantor(index)} size="sm" variant="outline">
-                      <X className="h-4 w-4" />
+                    <div className="flex items-center space-x-3">
+                      <div className="bg-blue-100 p-2 rounded-full">
+                        <Shield className="h-5 w-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <span className="text-lg font-semibold text-blue-900">Garant {index + 1}</span>
+                        <p className="text-sm text-blue-700">Informations du garant</p>
+                      </div>
+                    </div>
+                    <Button onClick={() => removeGuarantor(index)} size="sm" variant="outline" className="border-red-200 text-red-600 hover:bg-red-50">
+                      <X className="h-4 w-4 mr-1" />
+                      Supprimer
                     </Button>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div>
-                    <h3 className="font-medium text-gray-900 mb-4">Type de garant</h3>
+                  <div className="bg-gray-50 p-6 rounded-lg">
+                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
+                      <Shield className="h-5 w-5 mr-2 text-blue-600" />
+                      Type de garant
+                    </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                       {GUARANTOR_TYPES.map((type) => (
                         <div
@@ -552,10 +577,10 @@ export default function RentalFilePage() {
                             }
                             updateGuarantor(index, updatedGuarantor)
                           }}
-                          className={`p-4 rounded-lg border-2 cursor-pointer transition-all hover:shadow-md ${
+                          className={`p-4 rounded-lg border-2 cursor-pointer transition-all hover:scale-105 ${
                             guarantor.type === type.value
-                              ? "border-blue-500 bg-blue-50"
-                              : "border-gray-200 hover:border-gray-300"
+                              ? "border-blue-500 bg-blue-50 shadow-md"
+                              : "border-gray-200 hover:border-blue-300 hover:bg-blue-25"
                           }`}
                         >
                           <div className="flex flex-col items-center text-center space-y-3">
@@ -573,7 +598,7 @@ export default function RentalFilePage() {
                               <p className="text-xs text-gray-600">{type.description}</p>
                             </div>
                             {guarantor.type === type.value && (
-                              <Badge variant="default" className="text-xs">
+                              <Badge className="bg-blue-100 text-blue-800 text-xs">
                                 Sélectionné
                               </Badge>
                             )}
@@ -609,72 +634,27 @@ export default function RentalFilePage() {
                           title="Informations du garant"
                         />
                       )}
-                      
-                      {/* Section revenus du garant */}
-                      <Card className="border-orange-200 bg-orange-50/50">
-                        <CardHeader className="pb-4">
-                          <CardTitle className="text-lg flex items-center space-x-2">
-                            <Euro className="h-5 w-5 text-orange-600" />
-                            <span>Revenus du garant</span>
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                              <Label htmlFor={`guarantor_income_${index}`}>Revenus mensuels nets (€) *</Label>
-                              <Input
-                                id={`guarantor_income_${index}`}
-                                type="number"
-                                placeholder="3000"
-                                value={guarantor.monthly_income || ""}
-                                onChange={(e) => {
-                                  const updatedGuarantor = { ...guarantor, monthly_income: parseFloat(e.target.value) || 0 }
-                                  updateGuarantor(index, updatedGuarantor)
-                                }}
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor={`guarantor_contract_${index}`}>Type de contrat</Label>
-                              <Select
-                                value={guarantor.contract_type || ""}
-                                onValueChange={(value) => {
-                                  const updatedGuarantor = { ...guarantor, contract_type: value }
-                                  updateGuarantor(index, updatedGuarantor)
-                                }}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Sélectionnez le type de contrat" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="cdi_confirmed">CDI confirmé</SelectItem>
-                                  <SelectItem value="cdi_trial">CDI en période d'essai</SelectItem>
-                                  <SelectItem value="cdd_long">CDD long terme (12+ mois)</SelectItem>
-                                  <SelectItem value="cdd_short">CDD court terme (&lt;12 mois)</SelectItem>
-                                  <SelectItem value="freelance">Freelance/Indépendant</SelectItem>
-                                  <SelectItem value="retired">Retraité</SelectItem>
-                                  <SelectItem value="civil_servant">Fonctionnaire</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-                          
-                          <div className="bg-orange-100 p-3 rounded-lg">
-                            <p className="text-sm text-orange-800">
-                              <strong>Important :</strong> Les revenus du garant sont utilisés pour calculer votre score de compatibilité. 
-                              Un garant avec des revenus élevés améliore vos chances d'obtenir le logement.
-                            </p>
-                          </div>
-                        </CardContent>
-                      </Card>
                     </div>
                   )}
 
                   {guarantor.type === "none" && (
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <p className="text-sm text-gray-700">
-                        Vous avez choisi de ne pas ajouter de garant. Cela peut réduire vos chances d'obtenir un
-                        logement.
-                      </p>
+                    <div className="bg-gradient-to-r from-orange-50 to-red-50 p-6 rounded-lg border border-orange-200">
+                      <div className="flex items-start">
+                        <div className="bg-orange-100 p-2 rounded-full mr-4">
+                          <AlertTriangle className="h-5 w-5 text-orange-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-orange-900 mb-2">Aucun garant sélectionné</h4>
+                          <p className="text-orange-800 mb-3">
+                            Vous avez choisi de ne pas ajouter de garant. Cela peut réduire vos chances d'obtenir un logement.
+                          </p>
+                          <div className="bg-white/60 p-3 rounded-lg border border-orange-200">
+                            <p className="text-sm text-orange-700">
+                              <strong>Conseil :</strong> Un garant renforce considérablement votre dossier et améliore votre score de compatibilité.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </CardContent>
