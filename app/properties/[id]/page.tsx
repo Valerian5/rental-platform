@@ -169,7 +169,9 @@ export default function PropertyPublicPage() {
           
           const result = await scoringPreferencesService.calculateScore(
             applicationDataForScoring,
-            ownerPreferences
+            property,
+            property.owner_id,
+            true
           )
           console.log("📊 Résultat du scoring avancé:", result)
           setCompatibilityCheck(result)
