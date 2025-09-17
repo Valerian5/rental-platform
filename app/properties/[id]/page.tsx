@@ -17,47 +17,96 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
+  // Navigation et interface
   ArrowLeft,
   MapPin,
-  Home,
-  Bed,
-  Bath,
-  Square,
   Phone,
   Mail,
   Heart,
   Send,
-  AlertTriangle,
   CheckCircle,
-  Wifi,
-  Car,
-  Building as Balcony,      // Corrected: BuildingIcon -> Building
-  CableCar as Elevator,    // Corrected: CableCarIcon -> CableCar
-  Lock as Security,          // Corrected: LockIcon -> Lock
-  Dog as Pet,                // Corrected: DogIcon -> Dog
-  Droplets as Shower,    // Shower n'existe pas, utiliser Droplets
+  
+  // Équipements sanitaires
+  Droplets as Shower,
+  ShowerHead,
+  Bath,
+  Toilet,
+  Soap,
+  
+  // Équipements cuisine
   Utensils,
+  Refrigerator,
+  Microwave,
+  Coffee,
+  Wine,
+  ChefHat,
+  Cookie,
+  
+  // Équipements électroniques
   Tv,
-  Wind as AirVent,       // AirVent n'existe pas, utiliser Wind
+  Radio,
+  Headphones,
+  Smartphone,
+  Laptop,
+  Monitor,
+  Printer,
+  Router,
+  Wifi,
+  
+  // Équipements climatisation/chauffage
+  Wind as AirVent,
   Snowflake,
   Flame,
+  Thermometer,
+  Sun,
+  CloudRain,
+  
+  // Équipements extérieurs
   Waves,
   TreePine,
+  Mountain,
+  Car,
+  Bike,
+  Plane,
+  Ship,
+  
+  // Équipements sport/loisirs
   Dumbbell,
   Gamepad2,
-  ShowerHead,
-  Coffee,
+  Book,
+  Music,
+  Palette,
+  Camera,
+  Video,
+  
+  // Équipements meubles
   Sofa,
+  Bed,
+  Chair,
+  Table,
   Lamp,
+  Couch,
+  Armchair,
+  
+  // Équipements sécurité
   Shield,
   Key,
-  Camera,
+  Lock,
   Bell,
+  Eye,
+  AlertTriangle,
+  
+  // Équipements divers
   Users,
   Clock,
   MapPin as Location,
   Star,
   Check,
+  Building as Balcony,
+  CableCar as Elevator,
+  Dog as Pet,
+  Home,
+  Square,
 } from "lucide-react"
 import Link from "next/link"
 import { propertyService } from "@/lib/property-service"
@@ -284,33 +333,91 @@ export default function PropertyPublicPage() {
     const equipmentLower = equipment.toLowerCase()
     
     try {
+      // Internet et connectivité
       if (equipmentLower.includes('wifi') || equipmentLower.includes('internet')) return <Wifi className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('routeur') || equipmentLower.includes('router')) return <Router className="h-4 w-4 text-green-600" />
+      
+      // Parking et transport
       if (equipmentLower.includes('parking') || equipmentLower.includes('garage')) return <Car className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('vélo') || equipmentLower.includes('bike')) return <Bike className="h-4 w-4 text-green-600" />
+      
+      // Extérieur et espaces
       if (equipmentLower.includes('balcon') || equipmentLower.includes('terrasse')) return <Balcony className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('jardin') || equipmentLower.includes('garden')) return <TreePine className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('piscine') || equipmentLower.includes('pool')) return <Waves className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('montagne') || equipmentLower.includes('mountain')) return <Mountain className="h-4 w-4 text-green-600" />
+      
+      // Ascenseurs et accès
       if (equipmentLower.includes('ascenseur') || equipmentLower.includes('elevator')) return <Elevator className="h-4 w-4 text-green-600" />
-      if (equipmentLower.includes('sécur') || equipmentLower.includes('alarme')) return <Security className="h-4 w-4 text-green-600" />
-      if (equipmentLower.includes('animaux') || equipmentLower.includes('pet')) return <Pet className="h-4 w-4 text-green-600" />
+      
+      // Sécurité et accès
+      if (equipmentLower.includes('sécur') || equipmentLower.includes('alarme') || equipmentLower.includes('security')) return <Shield className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('clé') || equipmentLower.includes('key')) return <Key className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('serrure') || equipmentLower.includes('lock')) return <Lock className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('interphone') || equipmentLower.includes('intercom')) return <Bell className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('caméra') || equipmentLower.includes('camera')) return <Camera className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('surveillance') || equipmentLower.includes('surveillance')) return <Eye className="h-4 w-4 text-green-600" />
+      
+      // Animaux
+      if (equipmentLower.includes('animaux') || equipmentLower.includes('pet') || equipmentLower.includes('chien') || equipmentLower.includes('chat')) return <Pet className="h-4 w-4 text-green-600" />
+      
+      // Cuisine et électroménager
       if (equipmentLower.includes('cuisine') || equipmentLower.includes('kitchen')) return <Utensils className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('réfrigérateur') || equipmentLower.includes('frigo') || equipmentLower.includes('refrigerator')) return <Refrigerator className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('micro-ondes') || equipmentLower.includes('microwave')) return <Microwave className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('café') || equipmentLower.includes('coffee')) return <Coffee className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('vin') || equipmentLower.includes('wine')) return <Wine className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('chef') || equipmentLower.includes('cook')) return <ChefHat className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('biscuit') || equipmentLower.includes('cookie')) return <Cookie className="h-4 w-4 text-green-600" />
+      
+      // Sanitaires
       if (equipmentLower.includes('salle de bain') || equipmentLower.includes('bathroom')) return <Bath className="h-4 w-4 text-green-600" />
       if (equipmentLower.includes('douche') || equipmentLower.includes('shower')) return <ShowerHead className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('toilettes') || equipmentLower.includes('wc') || equipmentLower.includes('toilet')) return <Toilet className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('savon') || equipmentLower.includes('soap')) return <Soap className="h-4 w-4 text-green-600" />
+      
+      // Électronique et divertissement
       if (equipmentLower.includes('télévision') || equipmentLower.includes('tv')) return <Tv className="h-4 w-4 text-green-600" />
-      if (equipmentLower.includes('climatisation') || equipmentLower.includes('air')) return <AirVent className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('radio') || equipmentLower.includes('radio')) return <Radio className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('casque') || equipmentLower.includes('headphones')) return <Headphones className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('téléphone') || equipmentLower.includes('smartphone')) return <Smartphone className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('ordinateur') || equipmentLower.includes('laptop')) return <Laptop className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('moniteur') || equipmentLower.includes('monitor')) return <Monitor className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('imprimante') || equipmentLower.includes('printer')) return <Printer className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('vidéo') || equipmentLower.includes('video')) return <Video className="h-4 w-4 text-green-600" />
+      
+      // Climatisation et chauffage
+      if (equipmentLower.includes('climatisation') || equipmentLower.includes('air') || equipmentLower.includes('ventilation')) return <AirVent className="h-4 w-4 text-green-600" />
       if (equipmentLower.includes('chauffage') || equipmentLower.includes('heating')) return <Flame className="h-4 w-4 text-green-600" />
-      if (equipmentLower.includes('piscine') || equipmentLower.includes('pool')) return <Waves className="h-4 w-4 text-green-600" />
-      if (equipmentLower.includes('jardin') || equipmentLower.includes('garden')) return <TreePine className="h-4 w-4 text-green-600" />
-      if (equipmentLower.includes('salle de sport') || equipmentLower.includes('gym')) return <Dumbbell className="h-4 w-4 text-green-600" />
-      if (equipmentLower.includes('jeux') || equipmentLower.includes('game')) return <Gamepad2 className="h-4 w-4 text-green-600" />
-      if (equipmentLower.includes('café') || equipmentLower.includes('coffee')) return <Coffee className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('thermomètre') || equipmentLower.includes('thermometer')) return <Thermometer className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('soleil') || equipmentLower.includes('sun')) return <Sun className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('pluie') || equipmentLower.includes('rain')) return <CloudRain className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('neige') || equipmentLower.includes('snow')) return <Snowflake className="h-4 w-4 text-green-600" />
+      
+      // Sport et loisirs
+      if (equipmentLower.includes('salle de sport') || equipmentLower.includes('gym') || equipmentLower.includes('fitness')) return <Dumbbell className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('jeux') || equipmentLower.includes('game') || equipmentLower.includes('gaming')) return <Gamepad2 className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('livre') || equipmentLower.includes('book')) return <Book className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('musique') || equipmentLower.includes('music')) return <Music className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('peinture') || equipmentLower.includes('art') || equipmentLower.includes('palette')) return <Palette className="h-4 w-4 text-green-600" />
+      
+      // Meubles et décoration
       if (equipmentLower.includes('meublé') || equipmentLower.includes('furnished')) return <Sofa className="h-4 w-4 text-green-600" />
-      if (equipmentLower.includes('éclairage') || equipmentLower.includes('light')) return <Lamp className="h-4 w-4 text-green-600" />
-      if (equipmentLower.includes('sécurité') || equipmentLower.includes('security')) return <Shield className="h-4 w-4 text-green-600" />
-      if (equipmentLower.includes('clé') || equipmentLower.includes('key')) return <Key className="h-4 w-4 text-green-600" />
-      if (equipmentLower.includes('caméra') || equipmentLower.includes('camera')) return <Camera className="h-4 w-4 text-green-600" />
-      if (equipmentLower.includes('interphone') || equipmentLower.includes('intercom')) return <Bell className="h-4 w-4 text-green-600" />
-      if (equipmentLower.includes('colocation') || equipmentLower.includes('roommate')) return <Users className="h-4 w-4 text-green-600" />
-      if (equipmentLower.includes('horloge') || equipmentLower.includes('clock')) return <Clock className="h-4 w-4 text-green-600" />
-      if (equipmentLower.includes('localisation') || equipmentLower.includes('location')) return <Location className="h-4 w-4 text-green-600" />
-      if (equipmentLower.includes('étoile') || equipmentLower.includes('star')) return <Star className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('canapé') || equipmentLower.includes('sofa') || equipmentLower.includes('couch')) return <Couch className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('lit') || equipmentLower.includes('bed')) return <Bed className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('chaise') || equipmentLower.includes('chair')) return <Chair className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('table') || equipmentLower.includes('table')) return <Table className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('fauteuil') || equipmentLower.includes('armchair')) return <Armchair className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('éclairage') || equipmentLower.includes('light') || equipmentLower.includes('lampe')) return <Lamp className="h-4 w-4 text-green-600" />
+      
+      // Colocation et partage
+      if (equipmentLower.includes('colocation') || equipmentLower.includes('roommate') || equipmentLower.includes('partage')) return <Users className="h-4 w-4 text-green-600" />
+      
+      // Temps et localisation
+      if (equipmentLower.includes('horloge') || equipmentLower.includes('clock') || equipmentLower.includes('temps')) return <Clock className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('localisation') || equipmentLower.includes('location') || equipmentLower.includes('adresse')) return <Location className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('étoile') || equipmentLower.includes('star') || equipmentLower.includes('favori')) return <Star className="h-4 w-4 text-green-600" />
+      
     } catch (error) {
       console.error('Erreur lors du rendu de l\'icône pour l\'équipement:', equipment, error)
       return <Check className="h-4 w-4 text-green-600" />
@@ -669,7 +776,7 @@ export default function PropertyPublicPage() {
                     )}
                     {property.has_security && (
                       <div className="flex items-center space-x-2">
-                        <Security className="h-4 w-4 text-green-600" />
+                        <Shield className="h-4 w-4 text-green-600" />
                         <span className="text-sm">Sécurisé</span>
                       </div>
                     )}
