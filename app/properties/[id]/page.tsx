@@ -275,6 +275,11 @@ export default function PropertyPublicPage() {
 
   // Fonction pour obtenir l'icône appropriée pour chaque équipement
   const getEquipmentIcon = useCallback((equipment: string) => {
+    // Vérification de sécurité
+    if (!equipment || typeof equipment !== 'string') {
+      return <Check className="h-4 w-4 text-green-600" />
+    }
+    
     const equipmentLower = equipment.toLowerCase()
     
     if (equipmentLower.includes('wifi') || equipmentLower.includes('internet')) return <Wifi className="h-4 w-4 text-green-600" />
@@ -344,8 +349,25 @@ export default function PropertyPublicPage() {
     )
   }
 
-  const currentImage = property.property_images?.[currentImageIndex]
-  const hasImages = property.property_images && property.property_images.length > 0
+  // Vérification de sécurité pour éviter les erreurs React #130
+  if (!property || typeof property !== 'object') {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="container mx-auto py-8">
+          <div className="text-center space-y-4">
+            <div className="text-red-600 text-lg font-medium">Données de propriété invalides</div>
+            <Button onClick={() => router.push("/")} variant="outline">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Retour à l'accueil
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const currentImage = property?.property_images?.[currentImageIndex] || null
+  const hasImages = property?.property_images && Array.isArray(property.property_images) && property.property_images.length > 0
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -499,14 +521,14 @@ export default function PropertyPublicPage() {
                     <Square className="h-5 w-5 text-gray-500" />
                     <div>
                       <p className="text-sm text-gray-500">Surface</p>
-                      <p className="font-semibold">{property.surface} m²</p>
+                      <p className="font-semibold">{property?.surface || 'N/A'} m²</p>
                     </div>
                   </div>
                   <div className="flex items-center space-x-3">
                     <Home className="h-5 w-5 text-gray-500" />
                     <div>
                       <p className="text-sm text-gray-500">Pièces</p>
-                      <p className="font-semibold">{property.rooms}</p>
+                      <p className="font-semibold">{property?.rooms || 'N/A'}</p>
                     </div>
                   </div>
                   <div className="flex items-center space-x-3">
@@ -659,16 +681,18 @@ export default function PropertyPublicPage() {
                     )}
                   </div>
 
-                  {property.equipment && Array.isArray(property.equipment) && property.equipment.length > 0 && (
+                  {property?.equipment && Array.isArray(property.equipment) && property.equipment.length > 0 && (
                     <div className="mt-4">
                       <h4 className="font-medium mb-2">Équipements supplémentaires</h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {property.equipment.map((item: string, index: number) => (
-                          <div key={index} className="flex items-center space-x-2">
-                            {getEquipmentIcon(item) || <Check className="h-4 w-4 text-green-600" />}
-                            <span className="text-sm">{item}</span>
-                          </div>
-                        ))}
+                        {property.equipment
+                          .filter((item: any) => item && typeof item === 'string' && item.trim().length > 0)
+                          .map((item: string, index: number) => (
+                            <div key={`equipment-${index}`} className="flex items-center space-x-2">
+                              {getEquipmentIcon(item) || <Check className="h-4 w-4 text-green-600" />}
+                              <span className="text-sm">{item}</span>
+                            </div>
+                          ))}
                       </div>
                     </div>
                   )}
@@ -756,12 +780,12 @@ export default function PropertyPublicPage() {
                         </Badge>
                       </div>
 
-                      {compatibilityCheck.warnings.length > 0 && (
+                      {compatibilityCheck?.warnings && Array.isArray(compatibilityCheck.warnings) && compatibilityCheck.warnings.length > 0 && (
                         <div className="space-y-2">
                           <p className="text-sm font-medium text-gray-700">Points d'attention :</p>
                           <ul className="text-sm text-gray-600 space-y-1">
-                            {compatibilityCheck.warnings.map((warning, index) => (
-                              <li key={index} className="flex items-start">
+                            {compatibilityCheck.warnings.map((warning: string, index: number) => (
+                              <li key={`warning-${index}`} className="flex items-start">
                                 <span className="text-orange-500 mr-2">•</span>
                                 {warning}
                               </li>
@@ -886,23 +910,23 @@ export default function PropertyPublicPage() {
                     Score de compatibilité : {compatibilityCheck.totalScore || compatibilityCheck.score}%
                   </p>
 
-                  {compatibilityCheck.warnings.length > 0 && (
+                  {compatibilityCheck?.warnings && Array.isArray(compatibilityCheck.warnings) && compatibilityCheck.warnings.length > 0 && (
                     <div className="mb-2">
                       <p className="font-medium text-orange-800">Points d'attention :</p>
                       <ul className="text-orange-700 space-y-1">
-                        {compatibilityCheck.warnings.map((warning, index) => (
-                          <li key={index}>• {warning}</li>
+                        {compatibilityCheck.warnings.map((warning: string, index: number) => (
+                          <li key={`warning-sidebar-${index}`}>• {warning}</li>
                         ))}
                       </ul>
                     </div>
                   )}
 
-                  {compatibilityCheck.recommendations.length > 0 && (
+                  {compatibilityCheck?.recommendations && Array.isArray(compatibilityCheck.recommendations) && compatibilityCheck.recommendations.length > 0 && (
                     <div>
                       <p className="font-medium text-blue-800">Recommandations :</p>
                       <ul className="text-blue-700 space-y-1">
-                        {compatibilityCheck.recommendations.map((rec, index) => (
-                          <li key={index}>• {rec}</li>
+                        {compatibilityCheck.recommendations.map((rec: string, index: number) => (
+                          <li key={`rec-${index}`}>• {rec}</li>
                         ))}
                       </ul>
                     </div>
