@@ -16,7 +16,8 @@ ADD COLUMN IF NOT EXISTS rent_supplement numeric(10, 2) NULL,
 ADD COLUMN IF NOT EXISTS agency_fees_tenant numeric(10, 2) NULL,
 ADD COLUMN IF NOT EXISTS inventory_fees_tenant numeric(10, 2) NULL,
 ADD COLUMN IF NOT EXISTS colocation_possible boolean NULL DEFAULT false,
-ADD COLUMN IF NOT EXISTS max_colocation_occupants integer NULL;
+ADD COLUMN IF NOT EXISTS max_colocation_occupants integer NULL,
+ADD COLUMN IF NOT EXISTS hide_owner_contact boolean NULL DEFAULT false;
 
 -- Commenter les colonnes pour la documentation
 COMMENT ON COLUMN public.properties.hot_water_production IS 'Mode de production d''eau chaude (individuel/collectif + type)';
@@ -33,6 +34,7 @@ COMMENT ON COLUMN public.properties.agency_fees_tenant IS 'Frais d''agence pour 
 COMMENT ON COLUMN public.properties.inventory_fees_tenant IS 'Frais d''état des lieux pour le locataire en €';
 COMMENT ON COLUMN public.properties.colocation_possible IS 'Indique si la colocation est possible dans ce logement';
 COMMENT ON COLUMN public.properties.max_colocation_occupants IS 'Nombre maximum d''occupants en cas de colocation';
+COMMENT ON COLUMN public.properties.hide_owner_contact IS 'Indique si les coordonnées du propriétaire doivent être masquées sur la page publique';
 
 -- Vérifier que les colonnes ont été ajoutées
 SELECT column_name, data_type, is_nullable, column_default
@@ -53,6 +55,7 @@ AND column_name IN (
   'agency_fees_tenant',
   'inventory_fees_tenant',
   'colocation_possible',
-  'max_colocation_occupants'
+  'max_colocation_occupants',
+  'hide_owner_contact'
 )
 ORDER BY column_name;

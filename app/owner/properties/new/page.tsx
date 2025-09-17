@@ -30,6 +30,7 @@ interface PropertyFormData {
   latitude: number | null
   longitude: number | null
   hide_exact_address: boolean
+  hide_owner_contact: boolean
 
   // Caractéristiques du bien
   surface: number
@@ -143,6 +144,7 @@ export default function NewPropertyPage() {
     latitude: null,
     longitude: null,
     hide_exact_address: false,
+    hide_owner_contact: false,
     surface: 0,
     construction_year: null,
     price: 0,
@@ -491,6 +493,20 @@ export default function NewPropertyPage() {
                       />
                       <Label htmlFor="hide_exact_address">Masquer l'adresse exacte sur l'annonce publique</Label>
                     </div>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="hide_owner_contact"
+                        checked={formData.hide_owner_contact}
+                        onCheckedChange={(checked) => handleInputChange("hide_owner_contact", checked as boolean)}
+                      />
+                      <Label htmlFor="hide_owner_contact">Masquer mes coordonnées sur l'annonce publique</Label>
+                    </div>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Si activé, seuls les boutons "Contacter le propriétaire" et "Envoyer mon dossier" seront visibles
+                    </p>
                   </div>
                 </div>
               </div>

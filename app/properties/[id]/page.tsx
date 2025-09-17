@@ -832,7 +832,7 @@ export default function PropertyPublicPage() {
                 <CardTitle>Contact</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {property.owner && (
+                {property.owner && !property.hide_owner_contact && (
                   <div className="space-y-3">
                     <div>
                       <p className="font-semibold text-gray-900">
@@ -854,6 +854,15 @@ export default function PropertyPublicPage() {
                         <span className="text-sm">{property.owner.email}</span>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {property.hide_owner_contact && (
+                  <div className="text-center py-4">
+                    <p className="text-sm text-gray-600 mb-4">
+                      Les coordonnées du propriétaire sont masquées. 
+                      Utilisez les boutons ci-dessous pour le contacter.
+                    </p>
                   </div>
                 )}
 

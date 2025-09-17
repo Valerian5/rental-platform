@@ -40,6 +40,7 @@ export interface Property {
   inventory_fees_tenant?: number
   colocation_possible?: boolean
   max_colocation_occupants?: number
+  hide_owner_contact?: boolean
   has_parking: boolean
   has_balcony: boolean
   has_elevator: boolean
