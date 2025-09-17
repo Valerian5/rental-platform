@@ -65,6 +65,16 @@ export default function EditPropertyPage() {
     maximum_lease_duration: "",
     utilities_included: false,
     furnished_details: "",
+    // Nouveaux champs financiers
+    rent_control_zone: false,
+    reference_rent: null as number | null,
+    reference_rent_increased: null as number | null,
+    rent_supplement: null as number | null,
+    agency_fees_tenant: null as number | null,
+    inventory_fees_tenant: null as number | null,
+    // Nouveaux champs colocation
+    colocation_possible: false,
+    max_colocation_occupants: null as number | null,
     // Équipements (stockés dans l'array equipment)
     equipment: [] as string[],
   })
@@ -471,26 +481,53 @@ export default function EditPropertyPage() {
             <CardTitle>Type de location</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="furnished"
-                checked={formData.furnished}
-                onCheckedChange={(checked) => handleInputChange("furnished", checked as boolean)}
-              />
-              <div>
-                <Label htmlFor="furnished">Logement meublé</Label>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Pour être considéré comme meublé, un bien doit comporter au minimum cette liste de meubles :{' '}
-                  <a 
-                    href="https://www.service-public.fr/particuliers/vosdroits/F34769" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline"
-                  >
-                    Voir la liste officielle
-                  </a>
-                </p>
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="furnished"
+                  checked={formData.furnished}
+                  onCheckedChange={(checked) => handleInputChange("furnished", checked as boolean)}
+                />
+                <div>
+                  <Label htmlFor="furnished">Logement meublé</Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Pour être considéré comme meublé, un bien doit comporter au minimum cette liste de meubles :{' '}
+                    <a 
+                      href="https://www.service-public.fr/particuliers/vosdroits/F34769" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline"
+                    >
+                      Voir la liste officielle
+                    </a>
+                  </p>
+                </div>
               </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="colocation_possible"
+                  checked={formData.colocation_possible}
+                  onCheckedChange={(checked) => handleInputChange("colocation_possible", checked as boolean)}
+                />
+                <div>
+                  <Label htmlFor="colocation_possible">Colocation possible</Label>
+                </div>
+              </div>
+
+              {formData.colocation_possible && (
+                <div className="ml-6">
+                  <Label htmlFor="max_colocation_occupants">Nombre de personnes maximum</Label>
+                  <Input
+                    id="max_colocation_occupants"
+                    type="number"
+                    min="2"
+                    value={formData.max_colocation_occupants || ""}
+                    onChange={(e) => handleInputChange("max_colocation_occupants", e.target.value ? Number(e.target.value) : null)}
+                    placeholder="3"
+                  />
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -613,6 +650,88 @@ export default function EditPropertyPage() {
                   onChange={(e) => handleInputChange("deposit", Number(e.target.value))}
                   placeholder="800"
                 />
+              </div>
+            </div>
+
+            {/* Zone soumise à l'encadrement des loyers */}
+            <div className="mt-6">
+              <h4 className="font-medium mb-4">Encadrement des loyers</h4>
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="rent_control_zone"
+                    checked={formData.rent_control_zone}
+                    onCheckedChange={(checked) => handleInputChange("rent_control_zone", checked as boolean)}
+                  />
+                  <Label htmlFor="rent_control_zone">Zone soumise à l'encadrement des loyers</Label>
+                </div>
+
+                {formData.rent_control_zone && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-6">
+                    <div>
+                      <Label htmlFor="reference_rent">Loyer de référence (€/m²)</Label>
+                      <Input
+                        id="reference_rent"
+                        type="number"
+                        step="0.01"
+                        value={formData.reference_rent || ""}
+                        onChange={(e) => handleInputChange("reference_rent", e.target.value ? Number(e.target.value) : null)}
+                        placeholder="15.50"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="reference_rent_increased">Loyer de référence majoré (€/m²)</Label>
+                      <Input
+                        id="reference_rent_increased"
+                        type="number"
+                        step="0.01"
+                        value={formData.reference_rent_increased || ""}
+                        onChange={(e) => handleInputChange("reference_rent_increased", e.target.value ? Number(e.target.value) : null)}
+                        placeholder="18.50"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Autres frais */}
+            <div className="mt-6">
+              <h4 className="font-medium mb-4">Autres frais</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <Label htmlFor="rent_supplement">Complément de loyer (€)</Label>
+                  <Input
+                    id="rent_supplement"
+                    type="number"
+                    value={formData.rent_supplement || ""}
+                    onChange={(e) => handleInputChange("rent_supplement", e.target.value ? Number(e.target.value) : null)}
+                    placeholder="50"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="agency_fees_tenant">Frais d'agence pour le locataire (€)</Label>
+                  <Input
+                    id="agency_fees_tenant"
+                    type="number"
+                    value={formData.agency_fees_tenant || ""}
+                    onChange={(e) => handleInputChange("agency_fees_tenant", e.target.value ? Number(e.target.value) : null)}
+                    placeholder="200"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="inventory_fees_tenant">Frais état des lieux pour le locataire (€)</Label>
+                  <Input
+                    id="inventory_fees_tenant"
+                    type="number"
+                    value={formData.inventory_fees_tenant || ""}
+                    onChange={(e) => handleInputChange("inventory_fees_tenant", e.target.value ? Number(e.target.value) : null)}
+                    placeholder="150"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Dans le cadre si le propriétaire passe par un prestataire pour réaliser l'état des lieux
+                  </p>
+                </div>
               </div>
             </div>
           </CardContent>
