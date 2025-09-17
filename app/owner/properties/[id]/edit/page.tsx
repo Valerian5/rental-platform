@@ -210,35 +210,53 @@ export default function EditPropertyPage() {
 
     try {
       const updateData = {
-        ...formData,
+        // Champs de base
+        title: formData.title,
+        description: formData.description,
+        address: formData.address,
+        city: formData.city,
+        postal_code: formData.postal_code,
+        latitude: formData.latitude,
+        longitude: formData.longitude,
         price: Number.parseFloat(formData.price),
         surface: Number.parseInt(formData.surface),
         rooms: Number.parseInt(formData.rooms),
         bedrooms: formData.bedrooms ? Number.parseInt(formData.bedrooms) : null,
         bathrooms: formData.bathrooms ? Number.parseInt(formData.bathrooms) : null,
+        property_type: formData.property_type,
+        furnished: formData.furnished,
+        available: formData.available,
+        
+        // Champs techniques
         floor: formData.floor ? Number.parseInt(formData.floor) : null,
         total_floors: formData.total_floors ? Number.parseInt(formData.total_floors) : null,
+        construction_year: formData.construction_year ? Number.parseInt(formData.construction_year) : null,
+        energy_class: formData.energy_class || null,
+        ges_class: formData.ges_class || null,
+        heating_type: formData.heating_type || null,
+        hot_water_production: formData.hot_water_production || null,
+        heating_mode: formData.heating_mode || null,
+        orientation: formData.orientation || null,
         wc_count: Number.parseInt(formData.wc_count.toString()),
-        // Correction des noms de colonnes
+        wc_separate: formData.wc_separate,
+        wheelchair_accessible: formData.wheelchair_accessible,
+        availability_date: formData.availability_date || null,
+        
+        // Champs financiers (noms corrects de la table)
         charges_amount: formData.charges ? Number.parseFloat(formData.charges) : null,
         security_deposit: formData.deposit ? Number.parseFloat(formData.deposit) : null,
-        minimum_lease_duration: formData.minimum_lease_duration
-          ? Number.parseInt(formData.minimum_lease_duration)
-          : null,
-        maximum_lease_duration: formData.maximum_lease_duration
-          ? Number.parseInt(formData.maximum_lease_duration)
-          : null,
-        // Nouveaux champs financiers
         rent_control_zone: formData.rent_control_zone,
         reference_rent: formData.reference_rent,
         reference_rent_increased: formData.reference_rent_increased,
         rent_supplement: formData.rent_supplement,
         agency_fees_tenant: formData.agency_fees_tenant,
         inventory_fees_tenant: formData.inventory_fees_tenant,
-        // Nouveaux champs colocation
+        
+        // Champs colocation
         colocation_possible: formData.colocation_possible,
         max_colocation_occupants: formData.max_colocation_occupants,
-        // Supprimer les champs qui ne sont pas dans la table
+        
+        // Équipements
         equipment: formData.equipment,
       }
 
@@ -563,32 +581,32 @@ export default function EditPropertyPage() {
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="balcony"
-                  checked={formData.equipment.includes("Balcon")}
-                  onCheckedChange={(checked) => handleEquipmentChange("Balcon", checked as boolean)}
+                  checked={formData.equipment.includes("balcon")}
+                  onCheckedChange={(checked) => handleEquipmentChange("balcon", checked as boolean)}
                 />
                 <Label htmlFor="balcony">Balcon</Label>
               </div>
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="terrace"
-                  checked={formData.equipment.includes("Terrasse")}
-                  onCheckedChange={(checked) => handleEquipmentChange("Terrasse", checked as boolean)}
+                  checked={formData.equipment.includes("terrasse")}
+                  onCheckedChange={(checked) => handleEquipmentChange("terrasse", checked as boolean)}
                 />
                 <Label htmlFor="terrace">Terrasse</Label>
               </div>
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="garden"
-                  checked={formData.equipment.includes("Jardin")}
-                  onCheckedChange={(checked) => handleEquipmentChange("Jardin", checked as boolean)}
+                  checked={formData.equipment.includes("jardin")}
+                  onCheckedChange={(checked) => handleEquipmentChange("jardin", checked as boolean)}
                 />
                 <Label htmlFor="garden">Jardin</Label>
               </div>
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="loggia"
-                  checked={formData.equipment.includes("Loggia")}
-                  onCheckedChange={(checked) => handleEquipmentChange("Loggia", checked as boolean)}
+                  checked={formData.equipment.includes("loggia")}
+                  onCheckedChange={(checked) => handleEquipmentChange("loggia", checked as boolean)}
                 />
                 <Label htmlFor="loggia">Loggia</Label>
               </div>
@@ -604,31 +622,31 @@ export default function EditPropertyPage() {
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
-                "Cuisine équipée",
-                "Baignoire",
-                "Douche",
-                "Lave-linge",
-                "Sèche-linge",
-                "Réfrigérateur",
-                "Four",
-                "Micro-ondes",
-                "Climatisation",
-                "Cheminée",
-                "Parking",
-                "Cave",
-                "Ascenseur",
-                "Interphone",
-                "Digicode",
-                "Internet",
-                "Accessible fauteuils roulants"
+                { key: "cuisine_equipee", label: "Cuisine équipée" },
+                { key: "baignoire", label: "Baignoire" },
+                { key: "douche", label: "Douche" },
+                { key: "lave_linge", label: "Lave-linge" },
+                { key: "seche_linge", label: "Sèche-linge" },
+                { key: "refrigerateur", label: "Réfrigérateur" },
+                { key: "four", label: "Four" },
+                { key: "micro_ondes", label: "Micro-ondes" },
+                { key: "climatisation", label: "Climatisation" },
+                { key: "cheminee", label: "Cheminée" },
+                { key: "parking", label: "Parking" },
+                { key: "cave", label: "Cave" },
+                { key: "ascenseur", label: "Ascenseur" },
+                { key: "interphone", label: "Interphone" },
+                { key: "digicode", label: "Digicode" },
+                { key: "internet", label: "Internet" },
+                { key: "accessible_fauteuils_roulants", label: "Accessible fauteuils roulants" }
               ].map((equipment) => (
-                <div key={equipment} className="flex items-center space-x-2">
+                <div key={equipment.key} className="flex items-center space-x-2">
                   <Checkbox
-                    id={equipment.toLowerCase().replace(/\s+/g, '_')}
-                    checked={formData.equipment.includes(equipment)}
-                    onCheckedChange={(checked) => handleEquipmentChange(equipment, checked as boolean)}
+                    id={equipment.key}
+                    checked={formData.equipment.includes(equipment.key)}
+                    onCheckedChange={(checked) => handleEquipmentChange(equipment.key, checked as boolean)}
                   />
-                  <Label htmlFor={equipment.toLowerCase().replace(/\s+/g, '_')}>{equipment}</Label>
+                  <Label htmlFor={equipment.key}>{equipment.label}</Label>
                 </div>
               ))}
             </div>
