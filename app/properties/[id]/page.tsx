@@ -67,6 +67,42 @@ import { rentalFileService } from "@/lib/rental-file-service"
 import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
 import { applicationEnrichmentService } from "@/lib/application-enrichment-service"
 
+// Fonction pour obtenir l'icône appropriée pour chaque équipement
+const getEquipmentIcon = (equipment: string) => {
+  const equipmentLower = equipment.toLowerCase()
+  
+  if (equipmentLower.includes('wifi') || equipmentLower.includes('internet')) return <Wifi className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('parking') || equipmentLower.includes('garage')) return <Car className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('balcon') || equipmentLower.includes('terrasse')) return <Balcony className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('ascenseur') || equipmentLower.includes('elevator')) return <Elevator className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('sécur') || equipmentLower.includes('alarme')) return <Security className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('animaux') || equipmentLower.includes('pet')) return <Pet className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('cuisine') || equipmentLower.includes('kitchen')) return <Utensils className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('salle de bain') || equipmentLower.includes('bathroom')) return <Bath className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('douche') || equipmentLower.includes('shower')) return <Shower className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('télévision') || equipmentLower.includes('tv')) return <Tv className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('climatisation') || equipmentLower.includes('air')) return <AirVent className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('chauffage') || equipmentLower.includes('heating')) return <Flame className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('piscine') || equipmentLower.includes('pool')) return <Waves className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('jardin') || equipmentLower.includes('garden')) return <TreePine className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('salle de sport') || equipmentLower.includes('gym')) return <Dumbbell className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('jeux') || equipmentLower.includes('game')) return <Gamepad2 className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('café') || equipmentLower.includes('coffee')) return <Coffee className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('meublé') || equipmentLower.includes('furnished')) return <Sofa className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('éclairage') || equipmentLower.includes('light')) return <Lamp className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('sécurité') || equipmentLower.includes('security')) return <Shield className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('clé') || equipmentLower.includes('key')) return <Key className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('caméra') || equipmentLower.includes('camera')) return <Camera className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('interphone') || equipmentLower.includes('intercom')) return <Bell className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('colocation') || equipmentLower.includes('roommate')) return <Users className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('horloge') || equipmentLower.includes('clock')) return <Clock className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('localisation') || equipmentLower.includes('location')) return <Location className="h-4 w-4 text-green-600" />
+  if (equipmentLower.includes('étoile') || equipmentLower.includes('star')) return <Star className="h-4 w-4 text-green-600" />
+  
+  // Icône par défaut
+  return <Check className="h-4 w-4 text-green-600" />
+}
+
 export default function PropertyPublicPage() {
   const router = useRouter()
   const params = useParams()
@@ -272,41 +308,6 @@ export default function PropertyPublicPage() {
     toast.info("Fonctionnalité favoris en cours de développement")
   }
 
-  // Fonction pour obtenir l'icône appropriée pour chaque équipement
-  const getEquipmentIcon = (equipment: string) => {
-    const equipmentLower = equipment.toLowerCase()
-    
-    if (equipmentLower.includes('wifi') || equipmentLower.includes('internet')) return <Wifi className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('parking') || equipmentLower.includes('garage')) return <Car className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('balcon') || equipmentLower.includes('terrasse')) return <Balcony className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('ascenseur') || equipmentLower.includes('elevator')) return <Elevator className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('sécur') || equipmentLower.includes('alarme')) return <Security className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('animaux') || equipmentLower.includes('pet')) return <Pet className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('cuisine') || equipmentLower.includes('kitchen')) return <Utensils className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('salle de bain') || equipmentLower.includes('bathroom')) return <Bath className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('douche') || equipmentLower.includes('shower')) return <Shower className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('télévision') || equipmentLower.includes('tv')) return <Tv className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('climatisation') || equipmentLower.includes('air')) return <AirVent className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('chauffage') || equipmentLower.includes('heating')) return <Flame className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('piscine') || equipmentLower.includes('pool')) return <Waves className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('jardin') || equipmentLower.includes('garden')) return <TreePine className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('salle de sport') || equipmentLower.includes('gym')) return <Dumbbell className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('jeux') || equipmentLower.includes('game')) return <Gamepad2 className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('café') || equipmentLower.includes('coffee')) return <Coffee className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('meublé') || equipmentLower.includes('furnished')) return <Sofa className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('éclairage') || equipmentLower.includes('light')) return <Lamp className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('sécurité') || equipmentLower.includes('security')) return <Shield className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('clé') || equipmentLower.includes('key')) return <Key className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('caméra') || equipmentLower.includes('camera')) return <Camera className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('interphone') || equipmentLower.includes('intercom')) return <Bell className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('colocation') || equipmentLower.includes('roommate')) return <Users className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('horloge') || equipmentLower.includes('clock')) return <Clock className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('localisation') || equipmentLower.includes('location')) return <Location className="h-4 w-4 text-green-600" />
-    if (equipmentLower.includes('étoile') || equipmentLower.includes('star')) return <Star className="h-4 w-4 text-green-600" />
-    
-    // Icône par défaut
-    return <Check className="h-4 w-4 text-green-600" />
-  }
 
 
 
