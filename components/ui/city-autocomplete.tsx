@@ -13,13 +13,14 @@ import { Slider } from "@/components/ui/slider"
 type City = FrenchCity
 
 interface CityAutocompleteProps {
-  value: string
-  onChange: (value: string) => void
+  value: string | string[]
+  onChange: (value: string | string[]) => void
   placeholder?: string
   className?: string
   showRadius?: boolean
   onRadiusChange?: (radius: number) => void
   radius?: number
+  multiple?: boolean
 }
 
 export function CityAutocomplete({ 
@@ -29,14 +30,19 @@ export function CityAutocomplete({
   className,
   showRadius = false,
   onRadiusChange,
-  radius = 10
+  radius = 10,
+  multiple = false
 }: CityAutocompleteProps) {
   const [open, setOpen] = useState(false)
   const [cities, setCities] = useState<City[]>([])
   const [loading, setLoading] = useState(false)
-  const [searchTerm, setSearchTerm] = useState(value)
+  const [searchTerm, setSearchTerm] = useState("")
   const [hasSearched, setHasSearched] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  
+  // Gérer les valeurs multiples ou simples
+  const currentValues = Array.isArray(value) ? value : (value ? [value] : [])
+  const displayValue = multiple ? currentValues.join(", ") : (Array.isArray(value) ? value[0] || "" : value)
 
   // Fonction pour rechercher les villes
   const searchCities = async (query: string) => {
@@ -73,38 +79,91 @@ export function CityAutocomplete({
     const timeoutId = setTimeout(() => {
       if (searchTerm && searchTerm.length >= 2) {
         searchCities(searchTerm)
+      } else if (searchTerm.length === 0) {
+        setCities([])
+        setHasSearched(false)
       }
     }, 200)
 
     return () => clearTimeout(timeoutId)
   }, [searchTerm])
+  
+  // Ouvrir le popover quand on commence à taper
+  useEffect(() => {
+    if (searchTerm && searchTerm.length >= 2) {
+      setOpen(true)
+    }
+  }, [searchTerm])
 
   const handleSelect = (city: City) => {
     const cityValue = `${city.nom} (${city.codePostal})`
-    setSearchTerm(cityValue)
-    onChange(cityValue)
+    
+    if (multiple) {
+      // Mode multiple : ajouter à la liste
+      const newValues = [...currentValues, cityValue]
+      onChange(newValues)
+    } else {
+      // Mode simple : remplacer
+      onChange(cityValue)
+    }
+    
+    setSearchTerm("")
     setOpen(false)
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value
     setSearchTerm(newValue)
-    onChange(newValue)
+    
+    // En mode simple, mettre à jour la valeur
+    if (!multiple) {
+      onChange(newValue)
+    }
+  }
+  
+  const removeCity = (cityToRemove: string) => {
+    if (multiple) {
+      const newValues = currentValues.filter(city => city !== cityToRemove)
+      onChange(newValues)
+    }
   }
 
   return (
     <div className="space-y-2">
+      {/* Affichage des villes sélectionnées en mode multiple */}
+      {multiple && currentValues.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {currentValues.map((city, index) => (
+            <div
+              key={index}
+              className="flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-1 rounded-md text-sm"
+            >
+              <MapPin className="h-3 w-3" />
+              <span>{city}</span>
+              <button
+                type="button"
+                onClick={() => removeCity(city)}
+                className="ml-1 hover:bg-blue-200 rounded-full p-0.5"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <div className="relative">
             <MapPin className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               ref={inputRef}
-              value={searchTerm}
+              value={multiple ? searchTerm : displayValue}
               onChange={handleInputChange}
               onFocus={() => setOpen(true)}
+              onClick={() => setOpen(true)}
               placeholder={placeholder}
-              className={cn("pl-8", className)}
+              className={cn("pl-8 cursor-pointer", className)}
             />
           </div>
         </PopoverTrigger>
@@ -147,7 +206,7 @@ export function CityAutocomplete({
                           </div>
                         </div>
                       </div>
-                      <Check className={cn("h-4 w-4", searchTerm === `${city.nom} (${city.codePostal})` ? "opacity-100" : "opacity-0")} />
+                      <Check className={cn("h-4 w-4", currentValues.includes(`${city.nom} (${city.codePostal})`) ? "opacity-100" : "opacity-0")} />
                     </CommandItem>
                   ))}
                 </CommandGroup>

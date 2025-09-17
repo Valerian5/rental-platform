@@ -108,13 +108,14 @@ export default function TenantSearchPage() {
   })
   
   const [searchRadius, setSearchRadius] = useState(10) // Rayon de recherche en km
+  const [selectedCities, setSelectedCities] = useState<string[]>([]) // Villes sélectionnées
 
   const [activeFilters, setActiveFilters] = useState<string[]>([])
   const [sortBy, setSortBy] = useState<"price" | "surface" | "compatibility" | "date">("date")
 
   useEffect(() => {
     searchProperties()
-  }, [currentPage])
+  }, [currentPage, selectedCities, searchRadius])
 
   useEffect(() => {
     loadUserFavorites()
@@ -124,6 +125,16 @@ export default function TenantSearchPage() {
     try {
       setLoading(true)
       const searchParams = new URLSearchParams()
+
+      // Ajouter les villes sélectionnées
+      if (selectedCities.length > 0) {
+        selectedCities.forEach(city => searchParams.append("city", city))
+      }
+      
+      // Ajouter le rayon de recherche
+      if (searchRadius > 0) {
+        searchParams.append("radius", searchRadius.toString())
+      }
 
       Object.entries(filters).forEach(([key, value]) => {
         if (value !== "" && value !== undefined && value !== null && value !== "all") {
@@ -458,12 +469,13 @@ export default function TenantSearchPage() {
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1">
               <CityAutocomplete
-                value={filters.city}
-                onChange={(value) => setFilters((prev) => ({ ...prev, city: value }))}
-                placeholder="Rechercher une ville..."
+                value={selectedCities}
+                onChange={setSelectedCities}
+                placeholder="Rechercher une ou plusieurs villes..."
                 showRadius={true}
                 radius={searchRadius}
                 onRadiusChange={setSearchRadius}
+                multiple={true}
               />
             </div>
             <Select

@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
 
     // Récupérer les paramètres de recherche
     const filters = {
-      city: searchParams.get("city") || "",
+      city: searchParams.getAll("city") || [], // Support pour plusieurs villes
       property_type: searchParams.get("property_type") || "",
       min_price: searchParams.get("min_price") ? Number.parseInt(searchParams.get("min_price")!) : undefined,
       max_price: searchParams.get("max_price") ? Number.parseInt(searchParams.get("max_price")!) : undefined,
@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
       min_compatibility_score: searchParams.get("min_compatibility_score") ? Number.parseInt(searchParams.get("min_compatibility_score")!) : undefined,
       available_from: searchParams.get("available_from") || "",
       equipment: searchParams.getAll("equipment") || [],
+      radius: searchParams.get("radius") ? Number.parseInt(searchParams.get("radius")!) : undefined,
     }
 
     // Pagination et tri
