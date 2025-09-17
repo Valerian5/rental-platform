@@ -106,6 +106,8 @@ export default function TenantSearchPage() {
     available_from: "",
     equipment: []
   })
+  
+  const [searchRadius, setSearchRadius] = useState(10) // Rayon de recherche en km
 
   const [activeFilters, setActiveFilters] = useState<string[]>([])
   const [sortBy, setSortBy] = useState<"price" | "surface" | "compatibility" | "date">("date")
@@ -459,6 +461,9 @@ export default function TenantSearchPage() {
                 value={filters.city}
                 onChange={(value) => setFilters((prev) => ({ ...prev, city: value }))}
                 placeholder="Rechercher une ville..."
+                showRadius={true}
+                radius={searchRadius}
+                onRadiusChange={setSearchRadius}
               />
             </div>
             <Select
