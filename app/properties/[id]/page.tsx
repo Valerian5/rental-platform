@@ -589,7 +589,10 @@ export default function PropertyPublicPage() {
                 <div className="flex items-center text-gray-600 mb-4">
                   <MapPin className="h-5 w-5 mr-2" />
                   <span>
-                    {property.address}, {property.city} {property.postal_code}
+                    {property.hide_exact_address 
+                      ? `${property.city} ${property.postal_code}` 
+                      : `${property.address}, ${property.city} ${property.postal_code}`
+                    }
                   </span>
                 </div>
                 <div className="text-3xl font-bold text-blue-600">
