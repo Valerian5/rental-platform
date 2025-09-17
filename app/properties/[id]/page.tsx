@@ -201,13 +201,13 @@ export default function PropertyPublicPage() {
 
   const nextImage = () => {
     if (property?.property_images?.length > 0) {
-      setCurrentImageIndex((prev) => (prev + 1) % property.property_images.length)
+      setCurrentImageIndex((prev: number) => (prev + 1) % property.property_images.length)
     }
   }
 
   const prevImage = () => {
     if (property?.property_images?.length > 0) {
-      setCurrentImageIndex((prev) => (prev - 1 + property.property_images.length) % property.property_images.length)
+      setCurrentImageIndex((prev: number) => (prev - 1 + property.property_images.length) % property.property_images.length)
     }
   }
 
@@ -382,7 +382,7 @@ export default function PropertyPublicPage() {
                       src={currentImage?.url || "/placeholder.svg"}
                       alt={`Photo ${currentImageIndex + 1} de ${property.title}`}
                       className="w-full h-full object-cover"
-                      onError={(e) => {
+                      onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
                         const target = e.target as HTMLImageElement
                         target.src = `/placeholder.svg?height=400&width=600&text=Image non disponible`
                       }}
@@ -433,7 +433,7 @@ export default function PropertyPublicPage() {
                           src={image.url || "/placeholder.svg"}
                           alt={`Miniature ${index + 1}`}
                           className="w-full h-full object-cover"
-                          onError={(e) => {
+                          onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
                             const target = e.target as HTMLImageElement
                             target.src = `/placeholder.svg?height=80&width=80&text=${index + 1}`
                           }}
@@ -555,7 +555,7 @@ export default function PropertyPublicPage() {
                         <div>
                           <p className="text-sm text-gray-500">Eau chaude</p>
                           <p className="font-semibold text-sm">
-                            {property.hot_water_production.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                            {property.hot_water_production.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
                           </p>
                         </div>
                       </div>
@@ -567,7 +567,7 @@ export default function PropertyPublicPage() {
                         <div>
                           <p className="text-sm text-gray-500">Chauffage</p>
                           <p className="font-semibold text-sm">
-                            {property.heating_mode.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                            {property.heating_mode.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
                           </p>
                         </div>
                       </div>
@@ -917,7 +917,7 @@ export default function PropertyPublicPage() {
                 id="message"
                 placeholder="Présentez-vous et expliquez pourquoi ce logement vous intéresse..."
                 value={applicationData.message}
-                onChange={(e) => setApplicationData({ ...applicationData, message: e.target.value })}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setApplicationData({ ...applicationData, message: e.target.value })}
                 rows={3}
               />
             </div>
@@ -930,7 +930,7 @@ export default function PropertyPublicPage() {
                   type="number"
                   placeholder="3000"
                   value={applicationData.income}
-                  onChange={(e) => setApplicationData({ ...applicationData, income: e.target.value })}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setApplicationData({ ...applicationData, income: e.target.value })}
                 />
               </div>
               <div>
@@ -939,7 +939,7 @@ export default function PropertyPublicPage() {
                   id="profession"
                   placeholder="Ingénieur"
                   value={applicationData.profession}
-                  onChange={(e) => setApplicationData({ ...applicationData, profession: e.target.value })}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setApplicationData({ ...applicationData, profession: e.target.value })}
                 />
               </div>
             </div>
@@ -950,7 +950,7 @@ export default function PropertyPublicPage() {
                 id="company"
                 placeholder="Nom de l'entreprise"
                 value={applicationData.company}
-                onChange={(e) => setApplicationData({ ...applicationData, company: e.target.value })}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setApplicationData({ ...applicationData, company: e.target.value })}
               />
             </div>
 
@@ -960,7 +960,7 @@ export default function PropertyPublicPage() {
                 id="move_in_date"
                 type="date"
                 value={applicationData.move_in_date}
-                onChange={(e) => setApplicationData({ ...applicationData, move_in_date: e.target.value })}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setApplicationData({ ...applicationData, move_in_date: e.target.value })}
               />
             </div>
           </div>

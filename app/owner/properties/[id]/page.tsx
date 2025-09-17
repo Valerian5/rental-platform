@@ -206,6 +206,8 @@ export default function PropertyDetailPage() {
 
   // Composant de gestion des visites - SIMPLIFIÉ
   const VisitManagement = () => {
+    if (!property) return null
+    
     if (!slotsLoaded) {
       return (
         <div className="flex items-center justify-center py-12">
@@ -306,9 +308,10 @@ export default function PropertyDetailPage() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Contenu principal */}
-            <div className="lg:col-span-2 space-y-6">
+          {property && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Contenu principal */}
+              <div className="lg:col-span-2 space-y-6">
               {/* Caractéristiques principales */}
               <Card>
                 <CardHeader>
@@ -702,30 +705,33 @@ export default function PropertyDetailPage() {
               </Card>
             </div>
           </div>
+          )}
         </TabsContent>
 
         <TabsContent value="visits">
-          <VisitManagement />
+          {property && <VisitManagement />}
         </TabsContent>
 
         <TabsContent value="applications">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Candidatures reçues</CardTitle>
-                <Button variant="outline" size="sm" asChild>
-                  <Link href={`/owner/applications?propertyId=${property.id}`}>Voir toutes les candidatures</Link>
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <ApplicationsList propertyId={property.id} />
-            </CardContent>
-          </Card>
+          {property && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Candidatures reçues</CardTitle>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/owner/applications?propertyId=${property.id}`}>Voir toutes les candidatures</Link>
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <ApplicationsList propertyId={property.id} />
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="documents">
-          <PropertyDocumentsManager propertyId={property.id} />
+          {property && <PropertyDocumentsManager propertyId={property.id} />}
         </TabsContent>
       </Tabs>
     </div>
