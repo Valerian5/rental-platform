@@ -31,10 +31,10 @@ import {
   CheckCircle,
   Wifi,
   Car,
-  BuildingIcon as Balcony,
-  CableCarIcon as Elevator,
-  LockIcon as Security,
-  DogIcon as Pet,
+  Building as Balcony,      // Corrected: BuildingIcon -> Building
+  CableCar as Elevator,    // Corrected: CableCarIcon -> CableCar
+  Lock as Security,          // Corrected: LockIcon -> Lock
+  Dog as Pet,                // Corrected: DogIcon -> Dog
   Shower,
   Utensils,
   Tv,
