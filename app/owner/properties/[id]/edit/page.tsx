@@ -77,7 +77,8 @@ export default function EditPropertyPage() {
     max_colocation_occupants: null as number | null,
     // Équipements (stockés dans l'array equipment)
     equipment: [] as string[],
-    // Masquage des coordonnées
+    // Masquage des informations
+    hide_exact_address: false,
     hide_owner_contact: false,
   })
 
@@ -98,7 +99,8 @@ export default function EditPropertyPage() {
           address: propertyData.address || "",
           city: propertyData.city || "",
           postal_code: propertyData.postal_code || "",
-          hide_owner_contact: propertyData.hide_owner_contact || false,
+          hide_exact_address: propertyData.hide_exact_address || false,
+        hide_owner_contact: propertyData.hide_owner_contact || false,
           furnished: propertyData.furnished || false,
           available: propertyData.available !== false,
           // Nouveaux champs
@@ -221,6 +223,7 @@ export default function EditPropertyPage() {
         postal_code: formData.postal_code,
         latitude: formData.latitude,
         longitude: formData.longitude,
+        hide_exact_address: formData.hide_exact_address,
         hide_owner_contact: formData.hide_owner_contact,
         price: Number.parseFloat(formData.price),
         surface: Number.parseInt(formData.surface),
@@ -360,6 +363,20 @@ export default function EditPropertyPage() {
                 onChange={handleCityChange}
                 placeholder="Rechercher une ville..."
               />
+            </div>
+
+            <div className="md:col-span-2">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="hide_exact_address"
+                  checked={formData.hide_exact_address}
+                  onCheckedChange={(checked) => handleInputChange("hide_exact_address", checked as boolean)}
+                />
+                <Label htmlFor="hide_exact_address">Masquer l'adresse exacte sur l'annonce publique</Label>
+              </div>
+              <p className="text-sm text-gray-500 mt-1">
+                Si activé, seule la ville et le code postal seront affichés (ex: "Paris 75001" au lieu de "123 rue de la Paix, Paris 75001")
+              </p>
             </div>
 
             <div className="md:col-span-2">
