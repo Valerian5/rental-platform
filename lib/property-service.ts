@@ -15,12 +15,31 @@ export interface Property {
   bedrooms: number
   bathrooms: number
   floor?: number
+  total_floors?: number
+  latitude?: number
+  longitude?: number
   property_type: string
   furnished: boolean
   available: boolean
   available_from?: string
   energy_class?: string
   ges_class?: string
+  heating_type?: string
+  hot_water_production?: string
+  heating_mode?: string
+  orientation?: string
+  wc_count?: number
+  wc_separate?: boolean
+  wheelchair_accessible?: boolean
+  availability_date?: string
+  rent_control_zone?: boolean
+  reference_rent?: number
+  reference_rent_increased?: number
+  rent_supplement?: number
+  agency_fees_tenant?: number
+  inventory_fees_tenant?: number
+  colocation_possible?: boolean
+  max_colocation_occupants?: number
   has_parking: boolean
   has_balcony: boolean
   has_elevator: boolean

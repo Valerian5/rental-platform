@@ -115,13 +115,23 @@ export default function EditPropertyPage() {
           internet: propertyData.internet || false,
           pets_allowed: propertyData.pets_allowed || false,
           smoking_allowed: propertyData.smoking_allowed || false,
-          charges: propertyData.charges?.toString() || "",
-          deposit: propertyData.deposit?.toString() || "",
+          charges: propertyData.charges_amount?.toString() || "",
+          deposit: propertyData.security_deposit?.toString() || "",
           availability_date: propertyData.availability_date || "",
           minimum_lease_duration: propertyData.minimum_lease_duration?.toString() || "",
           maximum_lease_duration: propertyData.maximum_lease_duration?.toString() || "",
           utilities_included: propertyData.utilities_included || false,
           furnished_details: propertyData.furnished_details || "",
+          // Nouveaux champs financiers
+          rent_control_zone: propertyData.rent_control_zone || false,
+          reference_rent: propertyData.reference_rent || null,
+          reference_rent_increased: propertyData.reference_rent_increased || null,
+          rent_supplement: propertyData.rent_supplement || null,
+          agency_fees_tenant: propertyData.agency_fees_tenant || null,
+          inventory_fees_tenant: propertyData.inventory_fees_tenant || null,
+          // Nouveaux champs colocation
+          colocation_possible: propertyData.colocation_possible || false,
+          max_colocation_occupants: propertyData.max_colocation_occupants || null,
           // Équipements depuis l'array equipment
           equipment: propertyData.equipment || [],
         })
@@ -209,14 +219,25 @@ export default function EditPropertyPage() {
         floor: formData.floor ? Number.parseInt(formData.floor) : null,
         total_floors: formData.total_floors ? Number.parseInt(formData.total_floors) : null,
         wc_count: Number.parseInt(formData.wc_count.toString()),
-        charges: formData.charges ? Number.parseFloat(formData.charges) : null,
-        deposit: formData.deposit ? Number.parseFloat(formData.deposit) : null,
+        // Correction des noms de colonnes
+        charges_amount: formData.charges ? Number.parseFloat(formData.charges) : null,
+        security_deposit: formData.deposit ? Number.parseFloat(formData.deposit) : null,
         minimum_lease_duration: formData.minimum_lease_duration
           ? Number.parseInt(formData.minimum_lease_duration)
           : null,
         maximum_lease_duration: formData.maximum_lease_duration
           ? Number.parseInt(formData.maximum_lease_duration)
           : null,
+        // Nouveaux champs financiers
+        rent_control_zone: formData.rent_control_zone,
+        reference_rent: formData.reference_rent,
+        reference_rent_increased: formData.reference_rent_increased,
+        rent_supplement: formData.rent_supplement,
+        agency_fees_tenant: formData.agency_fees_tenant,
+        inventory_fees_tenant: formData.inventory_fees_tenant,
+        // Nouveaux champs colocation
+        colocation_possible: formData.colocation_possible,
+        max_colocation_occupants: formData.max_colocation_occupants,
         // Supprimer les champs qui ne sont pas dans la table
         equipment: formData.equipment,
       }
