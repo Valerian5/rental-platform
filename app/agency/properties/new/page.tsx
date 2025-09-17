@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Progress } from "@/components/ui/progress"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { CityAutocomplete } from "@/components/ui/city-autocomplete"
 import { ArrowLeft, ArrowRight, Home, Upload } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
@@ -59,6 +61,14 @@ export default function NewAgencyPropertyPage() {
     bathrooms: 0,
     floor: null,
     total_floors: null,
+    latitude: null as number | null,
+    longitude: null as number | null,
+    hot_water_production: "",
+    heating_mode: "",
+    orientation: "",
+    wc_count: 1,
+    wc_separate: false,
+    wheelchair_accessible: false,
     // Champs spécifiques agence
     agency_reference: "",
     owner_id: "", // Propriétaire mandant
@@ -98,6 +108,47 @@ export default function NewAgencyPropertyPage() {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
+  const handleCityChange = (value: string) => {
+    const match = value.match(/^(.+?)\s*\((\d{5})\)$/)
+    if (match) {
+      const [, cityName, postalCode] = match
+      setFormData((prev) => ({
+        ...prev,
+        city: cityName,
+        postal_code: postalCode,
+      }))
+      // Déclencher le géocodage
+      geocodeCity(cityName, postalCode)
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        city: value,
+        postal_code: "",
+      }))
+    }
+  }
+
+  const geocodeCity = async (city: string, postalCode: string) => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+          `${city}, ${postalCode}, France`
+        )}&limit=1`
+      )
+      const data = await response.json()
+      if (data && data.length > 0) {
+        const { lat, lon } = data[0]
+        setFormData((prev) => ({
+          ...prev,
+          latitude: parseFloat(lat),
+          longitude: parseFloat(lon),
+        }))
+      }
+    } catch (error) {
+      console.error("Erreur géocodage:", error)
+    }
+  }
+
   const validateStep = (step: number): boolean => {
     switch (step) {
       case 1:
@@ -113,8 +164,10 @@ export default function NewAgencyPropertyPage() {
       case 2:
         return uploadedImages.length > 0
       case 3:
-        return visitSlots.length > 0
+        return true // Les caractéristiques détaillées sont optionnelles
       case 4:
+        return visitSlots.length > 0
+      case 5:
         return true // Documents optionnels
       default:
         return true
@@ -209,12 +262,12 @@ export default function NewAgencyPropertyPage() {
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Ajouter un bien</h1>
             <p className="text-gray-600 mt-2">
-              Étape {currentStep} sur 5 - {agency.name}
+              Étape {currentStep} sur 6 - {agency.name}
             </p>
           </div>
           <div className="text-right">
-            <Progress value={(currentStep / 5) * 100} className="w-32 mb-2" />
-            <p className="text-sm text-gray-500">{Math.round((currentStep / 5) * 100)}% complété</p>
+            <Progress value={(currentStep / 6) * 100} className="w-32 mb-2" />
+            <p className="text-sm text-gray-500">{Math.round((currentStep / 6) * 100)}% complété</p>
           </div>
         </div>
       </div>
@@ -290,7 +343,125 @@ export default function NewAgencyPropertyPage() {
                     />
                   </div>
 
-                  {/* ... Autres champs réutilisés du formulaire propriétaire ... */}
+                  <div className="md:col-span-2">
+                    <Label htmlFor="address">Adresse *</Label>
+                    <Input
+                      id="address"
+                      value={formData.address}
+                      onChange={(e) => handleInputChange("address", e.target.value)}
+                      placeholder="123 rue de la Paix"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="city">Ville et code postal *</Label>
+                    <CityAutocomplete
+                      value={`${formData.city} (${formData.postal_code})`}
+                      onChange={handleCityChange}
+                      placeholder="Rechercher une ville..."
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="surface">Surface (m²) *</Label>
+                      <Input
+                        id="surface"
+                        type="number"
+                        value={formData.surface}
+                        onChange={(e) => handleInputChange("surface", Number.parseInt(e.target.value))}
+                        placeholder="50"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="price">Loyer (€) *</Label>
+                      <Input
+                        id="price"
+                        type="number"
+                        value={formData.price}
+                        onChange={(e) => handleInputChange("price", Number.parseFloat(e.target.value))}
+                        placeholder="800"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="rooms">Pièces *</Label>
+                      <Input
+                        id="rooms"
+                        type="number"
+                        value={formData.rooms}
+                        onChange={(e) => handleInputChange("rooms", Number.parseInt(e.target.value))}
+                        placeholder="3"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="bedrooms">Chambres</Label>
+                      <Input
+                        id="bedrooms"
+                        type="number"
+                        value={formData.bedrooms}
+                        onChange={(e) => handleInputChange("bedrooms", Number.parseInt(e.target.value))}
+                        placeholder="2"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="bathrooms">Salles de bain</Label>
+                      <Input
+                        id="bathrooms"
+                        type="number"
+                        value={formData.bathrooms}
+                        onChange={(e) => handleInputChange("bathrooms", Number.parseInt(e.target.value))}
+                        placeholder="1"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="floor">Étage</Label>
+                      <Input
+                        id="floor"
+                        type="number"
+                        value={formData.floor || ""}
+                        onChange={(e) => handleInputChange("floor", e.target.value ? Number.parseInt(e.target.value) : null)}
+                        placeholder="2"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="total_floors">Étages total</Label>
+                      <Input
+                        id="total_floors"
+                        type="number"
+                        value={formData.total_floors || ""}
+                        onChange={(e) => handleInputChange("total_floors", e.target.value ? Number.parseInt(e.target.value) : null)}
+                        placeholder="5"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="furnished"
+                      checked={formData.furnished}
+                      onCheckedChange={(checked) => handleInputChange("furnished", checked)}
+                    />
+                    <div>
+                      <Label htmlFor="furnished">Logement meublé</Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Pour être considéré comme meublé, un bien doit comporter au minimum cette liste de meubles :{' '}
+                        <a 
+                          href="https://www.service-public.fr/particuliers/vosdroits/F34769" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          Voir la liste officielle
+                        </a>
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -318,6 +489,121 @@ export default function NewAgencyPropertyPage() {
           </Card>
         )}
 
+        {currentStep === 3 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Caractéristiques détaillées</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="hot_water_production">Production eau chaude</Label>
+                  <Select
+                    value={formData.hot_water_production}
+                    onValueChange={(value) => handleInputChange("hot_water_production", value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionner" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="individual_electric">Individuel - Électrique</SelectItem>
+                      <SelectItem value="individual_oil">Individuel - Fioul</SelectItem>
+                      <SelectItem value="individual_gas">Individuel - Gaz</SelectItem>
+                      <SelectItem value="individual_solar">Individuel - Solaire</SelectItem>
+                      <SelectItem value="individual_other">Individuel - Autre</SelectItem>
+                      <SelectItem value="collective_electric">Collectif - Électrique</SelectItem>
+                      <SelectItem value="collective_oil">Collectif - Fioul</SelectItem>
+                      <SelectItem value="collective_gas">Collectif - Gaz</SelectItem>
+                      <SelectItem value="collective_solar">Collectif - Solaire</SelectItem>
+                      <SelectItem value="collective_other">Collectif - Autre</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="heating_mode">Mode de chauffage</Label>
+                  <Select
+                    value={formData.heating_mode}
+                    onValueChange={(value) => handleInputChange("heating_mode", value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionner" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="individual_electric">Individuel - Électrique</SelectItem>
+                      <SelectItem value="individual_oil">Individuel - Fioul</SelectItem>
+                      <SelectItem value="individual_gas">Individuel - Gaz</SelectItem>
+                      <SelectItem value="individual_solar">Individuel - Solaire</SelectItem>
+                      <SelectItem value="individual_other">Individuel - Autre</SelectItem>
+                      <SelectItem value="collective_electric">Collectif - Électrique</SelectItem>
+                      <SelectItem value="collective_oil">Collectif - Fioul</SelectItem>
+                      <SelectItem value="collective_gas">Collectif - Gaz</SelectItem>
+                      <SelectItem value="collective_solar">Collectif - Solaire</SelectItem>
+                      <SelectItem value="collective_other">Collectif - Autre</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="orientation">Exposition</Label>
+                  <Select
+                    value={formData.orientation}
+                    onValueChange={(value) => handleInputChange("orientation", value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionner" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="north">Nord</SelectItem>
+                      <SelectItem value="south">Sud</SelectItem>
+                      <SelectItem value="east">Est</SelectItem>
+                      <SelectItem value="west">Ouest</SelectItem>
+                      <SelectItem value="northeast">Nord-Est</SelectItem>
+                      <SelectItem value="northwest">Nord-Ouest</SelectItem>
+                      <SelectItem value="southeast">Sud-Est</SelectItem>
+                      <SelectItem value="southwest">Sud-Ouest</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="wc_count">Nombre de WC</Label>
+                  <Input
+                    id="wc_count"
+                    type="number"
+                    min="0"
+                    value={formData.wc_count}
+                    onChange={(e) => handleInputChange("wc_count", Number(e.target.value))}
+                    placeholder="1"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="wc_separate"
+                    checked={formData.wc_separate}
+                    onCheckedChange={(checked) => handleInputChange("wc_separate", checked as boolean)}
+                  />
+                  <Label htmlFor="wc_separate">WC séparé</Label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="wheelchair_accessible"
+                    checked={formData.wheelchair_accessible}
+                    onCheckedChange={(checked) => handleInputChange("wheelchair_accessible", checked as boolean)}
+                  />
+                  <Label htmlFor="wheelchair_accessible">Accessible fauteuils roulants</Label>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* ... Autres étapes ... */}
       </div>
 
@@ -329,7 +615,7 @@ export default function NewAgencyPropertyPage() {
         </Button>
 
         <div className="flex gap-2">
-          {currentStep < 5 ? (
+          {currentStep < 6 ? (
             <Button onClick={nextStep} disabled={!validateStep(currentStep)}>
               Suivant
               <ArrowRight className="h-4 w-4 ml-2" />

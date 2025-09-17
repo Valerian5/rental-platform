@@ -471,7 +471,14 @@ export default function PropertyPublicPage() {
                   {property.property_type === "studio" && "Studio"}
                   {property.property_type === "loft" && "Loft"}
                 </Badge>
-                {property.furnished && <Badge variant="outline">Meublé</Badge>}
+                {property.furnished && (
+                  <div className="flex items-center space-x-2">
+                    <Badge variant="outline">Meublé</Badge>
+                    <span className="text-xs text-gray-500">
+                      (conforme à la liste officielle)
+                    </span>
+                  </div>
+                )}
                 {property.floor && <Badge variant="outline">{property.floor}e étage</Badge>}
               </div>
             </div>
@@ -513,6 +520,68 @@ export default function PropertyPublicPage() {
                       <p className="text-sm text-gray-500">Salles de bain</p>
                       <p className="font-semibold">{property.bathrooms || "Non spécifié"}</p>
                     </div>
+                  </div>
+                </div>
+
+                {/* Nouveaux champs */}
+                <div className="mt-6 pt-6 border-t">
+                  <h4 className="font-medium mb-3">Détails supplémentaires</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {property.wc_count && (
+                      <div className="flex items-center space-x-3">
+                        <Bath className="h-5 w-5 text-gray-500" />
+                        <div>
+                          <p className="text-sm text-gray-500">WC</p>
+                          <p className="font-semibold">
+                            {property.wc_count} {property.wc_separate ? "(séparé)" : ""}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {property.orientation && (
+                      <div className="flex items-center space-x-3">
+                        <MapPin className="h-5 w-5 text-gray-500" />
+                        <div>
+                          <p className="text-sm text-gray-500">Exposition</p>
+                          <p className="font-semibold capitalize">{property.orientation}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {property.hot_water_production && (
+                      <div className="flex items-center space-x-3">
+                        <Waves className="h-5 w-5 text-gray-500" />
+                        <div>
+                          <p className="text-sm text-gray-500">Eau chaude</p>
+                          <p className="font-semibold text-sm">
+                            {property.hot_water_production.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {property.heating_mode && (
+                      <div className="flex items-center space-x-3">
+                        <Flame className="h-5 w-5 text-gray-500" />
+                        <div>
+                          <p className="text-sm text-gray-500">Chauffage</p>
+                          <p className="font-semibold text-sm">
+                            {property.heating_mode.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {property.wheelchair_accessible && (
+                      <div className="flex items-center space-x-3">
+                        <div className="h-5 w-5 text-gray-500">♿</div>
+                        <div>
+                          <p className="text-sm text-gray-500">Accessibilité</p>
+                          <p className="font-semibold">Accessible PMR</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 

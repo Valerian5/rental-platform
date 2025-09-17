@@ -80,6 +80,12 @@ interface PropertyFormData {
   energy_class: string
   ges_class: string
   heating_type: string
+  hot_water_production: string
+  heating_mode: string
+  orientation: string
+  wc_count: number
+  wc_separate: boolean
+  wheelchair_accessible: boolean
 
   // Champ technique
   owner_id: string
@@ -163,6 +169,12 @@ export default function NewPropertyPage() {
     energy_class: "",
     ges_class: "",
     heating_type: "",
+    hot_water_production: "",
+    heating_mode: "",
+    orientation: "",
+    wc_count: 1,
+    wc_separate: false,
+    wheelchair_accessible: false,
     owner_id: "",
   })
 
@@ -568,7 +580,20 @@ export default function NewPropertyPage() {
                       checked={formData.furnished}
                       onCheckedChange={(checked) => handleInputChange("furnished", checked as boolean)}
                     />
-                    <Label htmlFor="furnished">Logement meublé</Label>
+                    <div>
+                      <Label htmlFor="furnished">Logement meublé</Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Pour être considéré comme meublé, un bien doit comporter au minimum cette liste de meubles :{' '}
+                        <a 
+                          href="https://www.service-public.fr/particuliers/vosdroits/F34769" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          Voir la liste officielle
+                        </a>
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -872,6 +897,113 @@ export default function NewPropertyPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+                </div>
+
+                {/* Nouveaux champs */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="hot_water_production">Production eau chaude</Label>
+                    <Select
+                      value={formData.hot_water_production}
+                      onValueChange={(value) => handleInputChange("hot_water_production", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionner" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="individual_electric">Individuel - Électrique</SelectItem>
+                        <SelectItem value="individual_oil">Individuel - Fioul</SelectItem>
+                        <SelectItem value="individual_gas">Individuel - Gaz</SelectItem>
+                        <SelectItem value="individual_solar">Individuel - Solaire</SelectItem>
+                        <SelectItem value="individual_other">Individuel - Autre</SelectItem>
+                        <SelectItem value="collective_electric">Collectif - Électrique</SelectItem>
+                        <SelectItem value="collective_oil">Collectif - Fioul</SelectItem>
+                        <SelectItem value="collective_gas">Collectif - Gaz</SelectItem>
+                        <SelectItem value="collective_solar">Collectif - Solaire</SelectItem>
+                        <SelectItem value="collective_other">Collectif - Autre</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="heating_mode">Mode de chauffage</Label>
+                    <Select
+                      value={formData.heating_mode}
+                      onValueChange={(value) => handleInputChange("heating_mode", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionner" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="individual_electric">Individuel - Électrique</SelectItem>
+                        <SelectItem value="individual_oil">Individuel - Fioul</SelectItem>
+                        <SelectItem value="individual_gas">Individuel - Gaz</SelectItem>
+                        <SelectItem value="individual_solar">Individuel - Solaire</SelectItem>
+                        <SelectItem value="individual_other">Individuel - Autre</SelectItem>
+                        <SelectItem value="collective_electric">Collectif - Électrique</SelectItem>
+                        <SelectItem value="collective_oil">Collectif - Fioul</SelectItem>
+                        <SelectItem value="collective_gas">Collectif - Gaz</SelectItem>
+                        <SelectItem value="collective_solar">Collectif - Solaire</SelectItem>
+                        <SelectItem value="collective_other">Collectif - Autre</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="orientation">Exposition</Label>
+                    <Select
+                      value={formData.orientation}
+                      onValueChange={(value) => handleInputChange("orientation", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionner" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="north">Nord</SelectItem>
+                        <SelectItem value="south">Sud</SelectItem>
+                        <SelectItem value="east">Est</SelectItem>
+                        <SelectItem value="west">Ouest</SelectItem>
+                        <SelectItem value="northeast">Nord-Est</SelectItem>
+                        <SelectItem value="northwest">Nord-Ouest</SelectItem>
+                        <SelectItem value="southeast">Sud-Est</SelectItem>
+                        <SelectItem value="southwest">Sud-Ouest</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="wc_count">Nombre de WC</Label>
+                    <Input
+                      id="wc_count"
+                      type="number"
+                      min="0"
+                      value={formData.wc_count}
+                      onChange={(e) => handleInputChange("wc_count", Number(e.target.value))}
+                      placeholder="1"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="wc_separate"
+                      checked={formData.wc_separate}
+                      onCheckedChange={(checked) => handleInputChange("wc_separate", checked as boolean)}
+                    />
+                    <Label htmlFor="wc_separate">WC séparé</Label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="wheelchair_accessible"
+                      checked={formData.wheelchair_accessible}
+                      onCheckedChange={(checked) => handleInputChange("wheelchair_accessible", checked as boolean)}
+                    />
+                    <Label htmlFor="wheelchair_accessible">Accessible fauteuils roulants</Label>
                   </div>
                 </div>
               </div>

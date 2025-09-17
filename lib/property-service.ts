@@ -1,4 +1,5 @@
 import { supabase } from "./supabase"
+import { findCitiesInRadius, calculateDistance } from "./french-cities"
 
 export interface Property {
   id: string
@@ -104,8 +105,59 @@ export const propertyService = {
         `)
 
       // Appliquer les filtres
-      if (filters.city) {
+      if (filters.city && Array.isArray(filters.city) && filters.city.length > 0) {
+        // Si plusieurs villes sont sélectionnées
+        const cityConditions = filters.city.map(city => {
+          const match = city.match(/^(.+?)\s*\((\d{5})\)$/)
+          if (match) {
+            const [, cityName, postalCode] = match
+            return { city: cityName, postal_code: postalCode }
+          }
+          return { city: city }
+        })
+        
+        // Construire la condition OR pour les villes
+        const cityOrConditions = cityConditions.map(condition => 
+          `(city.ilike.%${condition.city}%${condition.postal_code ? `,postal_code.eq.${condition.postal_code}` : ''})`
+        ).join(',')
+        
+        query = query.or(cityOrConditions)
+      } else if (filters.city && typeof filters.city === 'string') {
+        // Filtre simple par ville
         query = query.ilike("city", `%${filters.city}%`)
+      }
+
+      // Gérer le rayon de recherche si spécifié
+      if (filters.radius && filters.city && Array.isArray(filters.city) && filters.city.length > 0) {
+        // Pour chaque ville sélectionnée, trouver les villes dans le rayon
+        const allCitiesInRadius = new Set<string>()
+        
+        for (const city of filters.city) {
+          const match = city.match(/^(.+?)\s*\((\d{5})\)$/)
+          if (match) {
+            const [, cityName, postalCode] = match
+            // Trouver la ville dans notre base de données
+            const cityData = findCitiesInRadius(
+              { nom: cityName, codePostal: postalCode, latitude: 0, longitude: 0 },
+              filters.radius
+            )
+            cityData.forEach(c => allCitiesInRadius.add(`${c.nom} (${c.codePostal})`))
+          }
+        }
+        
+        // Appliquer le filtre sur toutes les villes trouvées
+        if (allCitiesInRadius.size > 0) {
+          const radiusConditions = Array.from(allCitiesInRadius).map(city => {
+            const match = city.match(/^(.+?)\s*\((\d{5})\)$/)
+            if (match) {
+              const [, cityName, postalCode] = match
+              return `(city.ilike.%${cityName}%,postal_code.eq.${postalCode})`
+            }
+            return `city.ilike.%${city}%`
+          }).join(',')
+          
+          query = query.or(radiusConditions)
+        }
       }
 
       if (filters.property_type && filters.property_type !== "all") {

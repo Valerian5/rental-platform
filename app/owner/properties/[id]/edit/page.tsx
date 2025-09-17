@@ -11,6 +11,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
+import { CityAutocomplete } from "@/components/ui/city-autocomplete"
 import { ArrowLeft, Save, Upload, X } from "lucide-react"
 import Link from "next/link"
 import { propertyService } from "@/lib/property-service"
@@ -42,15 +44,17 @@ export default function EditPropertyPage() {
     // Nouveaux champs ajoutés
     floor: "",
     total_floors: "",
-    elevator: false,
-    balcony: false,
-    terrace: false,
-    garden: false,
-    parking: false,
-    garage: false,
-    cellar: false,
+    latitude: null as number | null,
+    longitude: null as number | null,
     heating_type: "",
     energy_class: "",
+    ges_class: "",
+    hot_water_production: "",
+    heating_mode: "",
+    orientation: "",
+    wc_count: 1,
+    wc_separate: false,
+    wheelchair_accessible: false,
     internet: false,
     pets_allowed: false,
     smoking_allowed: false,
@@ -61,6 +65,8 @@ export default function EditPropertyPage() {
     maximum_lease_duration: "",
     utilities_included: false,
     furnished_details: "",
+    // Équipements (stockés dans l'array equipment)
+    equipment: [] as string[],
   })
 
   useEffect(() => {
@@ -103,15 +109,17 @@ export default function EditPropertyPage() {
           // Nouveaux champs
           floor: propertyData.floor?.toString() || "",
           total_floors: propertyData.total_floors?.toString() || "",
-          elevator: propertyData.elevator || false,
-          balcony: propertyData.balcony || false,
-          terrace: propertyData.terrace || false,
-          garden: propertyData.garden || false,
-          parking: propertyData.parking || false,
-          garage: propertyData.garage || false,
-          cellar: propertyData.cellar || false,
+          latitude: propertyData.latitude || null,
+          longitude: propertyData.longitude || null,
           heating_type: propertyData.heating_type || "",
           energy_class: propertyData.energy_class || "",
+          ges_class: propertyData.ges_class || "",
+          hot_water_production: propertyData.hot_water_production || "",
+          heating_mode: propertyData.heating_mode || "",
+          orientation: propertyData.orientation || "",
+          wc_count: propertyData.wc_count || 1,
+          wc_separate: propertyData.wc_separate || false,
+          wheelchair_accessible: propertyData.wheelchair_accessible || false,
           internet: propertyData.internet || false,
           pets_allowed: propertyData.pets_allowed || false,
           smoking_allowed: propertyData.smoking_allowed || false,
@@ -122,6 +130,8 @@ export default function EditPropertyPage() {
           maximum_lease_duration: propertyData.maximum_lease_duration?.toString() || "",
           utilities_included: propertyData.utilities_included || false,
           furnished_details: propertyData.furnished_details || "",
+          // Équipements depuis l'array equipment
+          equipment: propertyData.equipment || [],
         })
       } catch (error: any) {
         console.error("Erreur lors du chargement:", error)
@@ -142,6 +152,54 @@ export default function EditPropertyPage() {
     }))
   }
 
+  const handleEquipmentChange = (equipment: string, checked: boolean) => {
+    setFormData((prev) => ({
+      ...prev,
+      equipment: checked
+        ? [...prev.equipment, equipment]
+        : prev.equipment.filter((item) => item !== equipment),
+    }))
+  }
+
+  const handleCityChange = (value: string) => {
+    const match = value.match(/^(.+?)\s*\((\d{5})\)$/)
+    if (match) {
+      const [, cityName, postalCode] = match
+      setFormData((prev) => ({
+        ...prev,
+        city: cityName,
+        postal_code: postalCode,
+      }))
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        city: value,
+        postal_code: "",
+      }))
+    }
+  }
+
+  const geocodeCity = async (city: string, postalCode: string) => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+          `${city}, ${postalCode}, France`
+        )}&limit=1`
+      )
+      const data = await response.json()
+      if (data && data.length > 0) {
+        const { lat, lon } = data[0]
+        setFormData((prev) => ({
+          ...prev,
+          latitude: parseFloat(lat),
+          longitude: parseFloat(lon),
+        }))
+      }
+    } catch (error) {
+      console.error("Erreur géocodage:", error)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!property) return
@@ -158,6 +216,7 @@ export default function EditPropertyPage() {
         bathrooms: formData.bathrooms ? Number.parseInt(formData.bathrooms) : null,
         floor: formData.floor ? Number.parseInt(formData.floor) : null,
         total_floors: formData.total_floors ? Number.parseInt(formData.total_floors) : null,
+        wc_count: Number.parseInt(formData.wc_count.toString()),
         charges: formData.charges ? Number.parseFloat(formData.charges) : null,
         deposit: formData.deposit ? Number.parseFloat(formData.deposit) : null,
         minimum_lease_duration: formData.minimum_lease_duration
@@ -166,6 +225,8 @@ export default function EditPropertyPage() {
         maximum_lease_duration: formData.maximum_lease_duration
           ? Number.parseInt(formData.maximum_lease_duration)
           : null,
+        // Supprimer les champs qui ne sont pas dans la table
+        equipment: formData.equipment,
       }
 
       await propertyService.updateProperty(property.id, updateData)
@@ -446,68 +507,35 @@ export default function EditPropertyPage() {
                 <Label htmlFor="furnished">Meublé</Label>
               </div>
 
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="elevator"
-                  checked={formData.elevator}
-                  onCheckedChange={(checked) => handleInputChange("elevator", checked)}
-                />
-                <Label htmlFor="elevator">Ascenseur</Label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="balcony"
-                  checked={formData.balcony}
-                  onCheckedChange={(checked) => handleInputChange("balcony", checked)}
-                />
-                <Label htmlFor="balcony">Balcon</Label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="terrace"
-                  checked={formData.terrace}
-                  onCheckedChange={(checked) => handleInputChange("terrace", checked)}
-                />
-                <Label htmlFor="terrace">Terrasse</Label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="garden"
-                  checked={formData.garden}
-                  onCheckedChange={(checked) => handleInputChange("garden", checked)}
-                />
-                <Label htmlFor="garden">Jardin</Label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="parking"
-                  checked={formData.parking}
-                  onCheckedChange={(checked) => handleInputChange("parking", checked)}
-                />
-                <Label htmlFor="parking">Parking</Label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="garage"
-                  checked={formData.garage}
-                  onCheckedChange={(checked) => handleInputChange("garage", checked)}
-                />
-                <Label htmlFor="garage">Garage</Label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="cellar"
-                  checked={formData.cellar}
-                  onCheckedChange={(checked) => handleInputChange("cellar", checked)}
-                />
-                <Label htmlFor="cellar">Cave</Label>
-              </div>
+              {[
+                "Ascenseur",
+                "Balcon", 
+                "Terrasse",
+                "Jardin",
+                "Parking",
+                "Garage",
+                "Cave",
+                "Interphone",
+                "Digicode",
+                "Internet",
+                "Climatisation",
+                "Cheminée",
+                "Lave-linge",
+                "Lave-vaisselle",
+                "Réfrigérateur",
+                "Four",
+                "Micro-ondes",
+                "Animaux acceptés"
+              ].map((equipment) => (
+                <div key={equipment} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={equipment.toLowerCase().replace(/\s+/g, '_')}
+                    checked={formData.equipment.includes(equipment)}
+                    onCheckedChange={(checked) => handleEquipmentChange(equipment, checked as boolean)}
+                  />
+                  <Label htmlFor={equipment.toLowerCase().replace(/\s+/g, '_')}>{equipment}</Label>
+                </div>
+              ))}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -581,27 +609,126 @@ export default function EditPropertyPage() {
               />
             </div>
 
+            <div>
+              <Label htmlFor="city">Ville et code postal *</Label>
+              <CityAutocomplete
+                value={`${formData.city} (${formData.postal_code})`}
+                onChange={handleCityChange}
+                placeholder="Rechercher une ville..."
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Caractéristiques détaillées */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Caractéristiques détaillées</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="city">Ville *</Label>
-                <Input
-                  id="city"
-                  value={formData.city}
-                  onChange={(e) => handleInputChange("city", e.target.value)}
-                  placeholder="Paris"
-                  required
-                />
+                <Label htmlFor="hot_water_production">Production eau chaude</Label>
+                <Select
+                  value={formData.hot_water_production}
+                  onValueChange={(value) => handleInputChange("hot_water_production", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="individual_electric">Individuel - Électrique</SelectItem>
+                    <SelectItem value="individual_oil">Individuel - Fioul</SelectItem>
+                    <SelectItem value="individual_gas">Individuel - Gaz</SelectItem>
+                    <SelectItem value="individual_solar">Individuel - Solaire</SelectItem>
+                    <SelectItem value="individual_other">Individuel - Autre</SelectItem>
+                    <SelectItem value="collective_electric">Collectif - Électrique</SelectItem>
+                    <SelectItem value="collective_oil">Collectif - Fioul</SelectItem>
+                    <SelectItem value="collective_gas">Collectif - Gaz</SelectItem>
+                    <SelectItem value="collective_solar">Collectif - Solaire</SelectItem>
+                    <SelectItem value="collective_other">Collectif - Autre</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>
-                <Label htmlFor="postal_code">Code postal *</Label>
+                <Label htmlFor="heating_mode">Mode de chauffage</Label>
+                <Select
+                  value={formData.heating_mode}
+                  onValueChange={(value) => handleInputChange("heating_mode", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="individual_electric">Individuel - Électrique</SelectItem>
+                    <SelectItem value="individual_oil">Individuel - Fioul</SelectItem>
+                    <SelectItem value="individual_gas">Individuel - Gaz</SelectItem>
+                    <SelectItem value="individual_solar">Individuel - Solaire</SelectItem>
+                    <SelectItem value="individual_other">Individuel - Autre</SelectItem>
+                    <SelectItem value="collective_electric">Collectif - Électrique</SelectItem>
+                    <SelectItem value="collective_oil">Collectif - Fioul</SelectItem>
+                    <SelectItem value="collective_gas">Collectif - Gaz</SelectItem>
+                    <SelectItem value="collective_solar">Collectif - Solaire</SelectItem>
+                    <SelectItem value="collective_other">Collectif - Autre</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="orientation">Exposition</Label>
+                <Select
+                  value={formData.orientation}
+                  onValueChange={(value) => handleInputChange("orientation", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="north">Nord</SelectItem>
+                    <SelectItem value="south">Sud</SelectItem>
+                    <SelectItem value="east">Est</SelectItem>
+                    <SelectItem value="west">Ouest</SelectItem>
+                    <SelectItem value="northeast">Nord-Est</SelectItem>
+                    <SelectItem value="northwest">Nord-Ouest</SelectItem>
+                    <SelectItem value="southeast">Sud-Est</SelectItem>
+                    <SelectItem value="southwest">Sud-Ouest</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="wc_count">Nombre de WC</Label>
                 <Input
-                  id="postal_code"
-                  value={formData.postal_code}
-                  onChange={(e) => handleInputChange("postal_code", e.target.value)}
-                  placeholder="75001"
-                  required
+                  id="wc_count"
+                  type="number"
+                  min="0"
+                  value={formData.wc_count}
+                  onChange={(e) => handleInputChange("wc_count", Number(e.target.value))}
+                  placeholder="1"
                 />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="wc_separate"
+                  checked={formData.wc_separate}
+                  onCheckedChange={(checked) => handleInputChange("wc_separate", checked as boolean)}
+                />
+                <Label htmlFor="wc_separate">WC séparé</Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="wheelchair_accessible"
+                  checked={formData.wheelchair_accessible}
+                  onCheckedChange={(checked) => handleInputChange("wheelchair_accessible", checked as boolean)}
+                />
+                <Label htmlFor="wheelchair_accessible">Accessible fauteuils roulants</Label>
               </div>
             </div>
           </CardContent>
