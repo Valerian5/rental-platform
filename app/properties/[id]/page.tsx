@@ -45,6 +45,7 @@ import {
   TreePine,
   Dumbbell,
   Gamepad2,
+  ShowerHead,
   Coffee,
   Sofa,
   Lamp,
@@ -291,7 +292,7 @@ export default function PropertyPublicPage() {
       if (equipmentLower.includes('animaux') || equipmentLower.includes('pet')) return <Pet className="h-4 w-4 text-green-600" />
       if (equipmentLower.includes('cuisine') || equipmentLower.includes('kitchen')) return <Utensils className="h-4 w-4 text-green-600" />
       if (equipmentLower.includes('salle de bain') || equipmentLower.includes('bathroom')) return <Bath className="h-4 w-4 text-green-600" />
-      if (equipmentLower.includes('douche') || equipmentLower.includes('shower')) return <Shower className="h-4 w-4 text-green-600" />
+      if (equipmentLower.includes('douche') || equipmentLower.includes('shower')) return <ShowerHead className="h-4 w-4 text-green-600" />
       if (equipmentLower.includes('télévision') || equipmentLower.includes('tv')) return <Tv className="h-4 w-4 text-green-600" />
       if (equipmentLower.includes('climatisation') || equipmentLower.includes('air')) return <AirVent className="h-4 w-4 text-green-600" />
       if (equipmentLower.includes('chauffage') || equipmentLower.includes('heating')) return <Flame className="h-4 w-4 text-green-600" />
