@@ -154,14 +154,19 @@ export function CityAutocomplete({
       
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <div className="relative">
-            <MapPin className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <div 
+            className="relative cursor-pointer"
+            onClick={() => {
+              setOpen(true)
+              inputRef.current?.focus()
+            }}
+          >
+            <MapPin className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
             <Input
               ref={inputRef}
               value={multiple ? searchTerm : displayValue}
               onChange={handleInputChange}
               onFocus={() => setOpen(true)}
-              onClick={() => setOpen(true)}
               placeholder={placeholder}
               className={cn("pl-8 cursor-pointer", className)}
             />

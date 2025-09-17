@@ -17,6 +17,7 @@ import { propertyService } from "@/lib/property-service"
 import { authService } from "@/lib/auth-service"
 import { FileUpload } from "@/components/file-upload"
 import { VisitScheduler } from "@/components/visit-scheduler"
+import { CityAutocomplete } from "@/components/ui/city-autocomplete"
 import { toast } from "sonner"
 
 interface PropertyFormData {
@@ -26,6 +27,8 @@ interface PropertyFormData {
   address: string
   city: string
   postal_code: string
+  latitude: number | null
+  longitude: number | null
   hide_exact_address: boolean
 
   // Caractéristiques du bien
@@ -119,6 +122,8 @@ export default function NewPropertyPage() {
     address: "",
     city: "",
     postal_code: "",
+    latitude: null,
+    longitude: null,
     hide_exact_address: false,
     surface: 0,
     construction_year: null,
@@ -183,6 +188,49 @@ export default function NewPropertyPage() {
 
   const handleInputChange = (field: keyof PropertyFormData, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleCityChange = (cityValue: string) => {
+    // Extraire le nom de la ville et le code postal du format "Ville (CodePostal)"
+    const match = cityValue.match(/^(.+?)\s*\((\d{5})\)$/)
+    if (match) {
+      const [, cityName, postalCode] = match
+      setFormData(prev => ({
+        ...prev,
+        city: cityName,
+        postal_code: postalCode
+      }))
+      
+      // Géocoder pour obtenir les coordonnées GPS
+      geocodeCity(cityName, postalCode)
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        city: cityValue,
+        postal_code: ""
+      }))
+    }
+  }
+
+  const geocodeCity = async (city: string, postalCode: string) => {
+    try {
+      // Utiliser l'API de géocodage (ex: OpenStreetMap Nominatim)
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(`${postalCode} ${city}, France`)}&limit=1`
+      )
+      const data = await response.json()
+      
+      if (data && data.length > 0) {
+        const { lat, lon } = data[0]
+        setFormData(prev => ({
+          ...prev,
+          latitude: parseFloat(lat),
+          longitude: parseFloat(lon)
+        }))
+      }
+    } catch (error) {
+      console.error("Erreur géocodage:", error)
+    }
   }
 
   const handleFilesUploaded = (urls: string[] | undefined) => {
@@ -388,23 +436,12 @@ export default function NewPropertyPage() {
                     />
                   </div>
 
-                  <div>
+                  <div className="md:col-span-2">
                     <Label htmlFor="city">Ville *</Label>
-                    <Input
-                      id="city"
-                      value={formData.city}
-                      onChange={(e) => handleInputChange("city", e.target.value)}
-                      placeholder="Lyon"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="postal_code">Code postal *</Label>
-                    <Input
-                      id="postal_code"
-                      value={formData.postal_code}
-                      onChange={(e) => handleInputChange("postal_code", e.target.value)}
-                      placeholder="69001"
+                    <CityAutocomplete
+                      value={`${formData.city} (${formData.postal_code})`}
+                      onChange={handleCityChange}
+                      placeholder="Rechercher une ville..."
                     />
                   </div>
 
