@@ -302,6 +302,27 @@ export const propertyService = {
         exterior_type: exteriorType,
         equipment: equipment, // Tableau d'équipements
 
+        // Nouveaux champs ajoutés
+        floor: propertyData.floor || null,
+        total_floors: propertyData.total_floors || null,
+        latitude: propertyData.latitude || null,
+        longitude: propertyData.longitude || null,
+        hot_water_production: propertyData.hot_water_production || null,
+        heating_mode: propertyData.heating_mode || null,
+        orientation: propertyData.orientation || null,
+        wc_count: propertyData.wc_count || 1,
+        wc_separate: propertyData.wc_separate || false,
+        wheelchair_accessible: propertyData.wheelchair_accessible || false,
+        availability_date: propertyData.availability_date || null,
+        rent_control_zone: propertyData.rent_control_zone || false,
+        reference_rent: propertyData.reference_rent || null,
+        reference_rent_increased: propertyData.reference_rent_increased || null,
+        rent_supplement: propertyData.rent_supplement || null,
+        agency_fees_tenant: propertyData.agency_fees_tenant || null,
+        inventory_fees_tenant: propertyData.inventory_fees_tenant || null,
+        colocation_possible: propertyData.colocation_possible || false,
+        max_colocation_occupants: propertyData.max_colocation_occupants || null,
+
         // Dates
         move_in_date: propertyData.availability_date || null,
 
