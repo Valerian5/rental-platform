@@ -317,51 +317,170 @@ export default function PropertyDetailPage() {
                     Caractéristiques
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="flex items-center space-x-2">
-                      <Square className="h-4 w-4 text-gray-500" />
-                      <div>
-                        <p className="text-sm text-gray-500">Surface</p>
-                        <p className="font-medium">{property.surface} m²</p>
+                <CardContent className="space-y-6">
+                  {/* Caractéristiques de base */}
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-3">Caractéristiques de base</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="flex items-center space-x-2">
+                        <Square className="h-4 w-4 text-gray-500" />
+                        <div>
+                          <p className="text-sm text-gray-500">Surface</p>
+                          <p className="font-medium">{property.surface} m²</p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Home className="h-4 w-4 text-gray-500" />
-                      <div>
-                        <p className="text-sm text-gray-500">Pièces</p>
-                        <p className="font-medium">{property.rooms}</p>
+                      <div className="flex items-center space-x-2">
+                        <Home className="h-4 w-4 text-gray-500" />
+                        <div>
+                          <p className="text-sm text-gray-500">Pièces</p>
+                          <p className="font-medium">{property.rooms}</p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Bed className="h-4 w-4 text-gray-500" />
-                      <div>
-                        <p className="text-sm text-gray-500">Chambres</p>
-                        <p className="font-medium">{property.bedrooms || "Non spécifié"}</p>
+                      <div className="flex items-center space-x-2">
+                        <Bed className="h-4 w-4 text-gray-500" />
+                        <div>
+                          <p className="text-sm text-gray-500">Chambres</p>
+                          <p className="font-medium">{property.bedrooms || "Non spécifié"}</p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Bath className="h-4 w-4 text-gray-500" />
-                      <div>
-                        <p className="text-sm text-gray-500">Salles de bain</p>
-                        <p className="font-medium">{property.bathrooms || "Non spécifié"}</p>
+                      <div className="flex items-center space-x-2">
+                        <Bath className="h-4 w-4 text-gray-500" />
+                        <div>
+                          <p className="text-sm text-gray-500">Salles de bain</p>
+                          <p className="font-medium">{property.bathrooms || "Non spécifié"}</p>
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="mt-6 grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-gray-500">Type</p>
-                      <p className="font-medium">
-                        {property.property_type === "apartment" && "Appartement"}
-                        {property.property_type === "house" && "Maison"}
-                        {property.property_type === "studio" && "Studio"}
-                        {property.property_type === "loft" && "Loft"}
-                      </p>
+                  {/* Caractéristiques détaillées */}
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-3">Caractéristiques détaillées</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-500">Type de bien</p>
+                        <p className="font-medium">
+                          {property.property_type === "apartment" && "Appartement"}
+                          {property.property_type === "house" && "Maison"}
+                          {property.property_type === "studio" && "Studio"}
+                          {property.property_type === "loft" && "Loft"}
+                          {property.property_type === "duplex" && "Duplex"}
+                          {property.property_type === "townhouse" && "Maison de ville"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Étage</p>
+                        <p className="font-medium">{property.floor || "Non spécifié"}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Nombre d'étages</p>
+                        <p className="font-medium">{property.total_floors || "Non spécifié"}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Année de construction</p>
+                        <p className="font-medium">{property.construction_year || "Non spécifié"}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Exposition</p>
+                        <p className="font-medium">
+                          {property.orientation === "north" && "Nord"}
+                          {property.orientation === "south" && "Sud"}
+                          {property.orientation === "east" && "Est"}
+                          {property.orientation === "west" && "Ouest"}
+                          {property.orientation === "northeast" && "Nord-Est"}
+                          {property.orientation === "northwest" && "Nord-Ouest"}
+                          {property.orientation === "southeast" && "Sud-Est"}
+                          {property.orientation === "southwest" && "Sud-Ouest"}
+                          {!property.orientation && "Non spécifié"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Meublé</p>
+                        <p className="font-medium">{property.furnished ? "Oui" : "Non"}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-500">Meublé</p>
-                      <p className="font-medium">{property.furnished ? "Oui" : "Non"}</p>
+                  </div>
+
+                  {/* Sanitaires */}
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-3">Sanitaires</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-500">Nombre de WC</p>
+                        <p className="font-medium">{property.wc_count || "Non spécifié"}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">WC séparé</p>
+                        <p className="font-medium">{property.wc_separate ? "Oui" : "Non"}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Accessible fauteuils roulants</p>
+                        <p className="font-medium">{property.wheelchair_accessible ? "Oui" : "Non"}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Énergie et chauffage */}
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-3">Énergie et chauffage</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-500">Classe énergétique</p>
+                        <p className="font-medium">{property.energy_class || "Non spécifié"}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Classe GES</p>
+                        <p className="font-medium">{property.ges_class || "Non spécifié"}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Production eau chaude</p>
+                        <p className="font-medium">
+                          {property.hot_water_production === "individual_electric" && "Individuel - Électrique"}
+                          {property.hot_water_production === "individual_oil" && "Individuel - Fioul"}
+                          {property.hot_water_production === "individual_gas" && "Individuel - Gaz"}
+                          {property.hot_water_production === "individual_solar" && "Individuel - Solaire"}
+                          {property.hot_water_production === "individual_other" && "Individuel - Autre"}
+                          {property.hot_water_production === "collective_electric" && "Collectif - Électrique"}
+                          {property.hot_water_production === "collective_oil" && "Collectif - Fioul"}
+                          {property.hot_water_production === "collective_gas" && "Collectif - Gaz"}
+                          {property.hot_water_production === "collective_solar" && "Collectif - Solaire"}
+                          {property.hot_water_production === "collective_other" && "Collectif - Autre"}
+                          {!property.hot_water_production && "Non spécifié"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Mode de chauffage</p>
+                        <p className="font-medium">
+                          {property.heating_mode === "individual_electric" && "Individuel - Électrique"}
+                          {property.heating_mode === "individual_oil" && "Individuel - Fioul"}
+                          {property.heating_mode === "individual_gas" && "Individuel - Gaz"}
+                          {property.heating_mode === "individual_solar" && "Individuel - Solaire"}
+                          {property.heating_mode === "individual_other" && "Individuel - Autre"}
+                          {property.heating_mode === "collective_electric" && "Collectif - Électrique"}
+                          {property.heating_mode === "collective_oil" && "Collectif - Fioul"}
+                          {property.heating_mode === "collective_gas" && "Collectif - Gaz"}
+                          {property.heating_mode === "collective_solar" && "Collectif - Solaire"}
+                          {property.heating_mode === "collective_other" && "Collectif - Autre"}
+                          {!property.heating_mode && "Non spécifié"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Type de location */}
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-3">Type de location</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-500">Colocation possible</p>
+                        <p className="font-medium">{property.colocation_possible ? "Oui" : "Non"}</p>
+                      </div>
+                      {property.colocation_possible && (
+                        <div>
+                          <p className="text-sm text-gray-500">Nombre max d'occupants</p>
+                          <p className="font-medium">{property.max_colocation_occupants || "Non spécifié"}</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </CardContent>

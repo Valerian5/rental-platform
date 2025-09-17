@@ -122,6 +122,7 @@ export const propertyService = {
           owner:users!owner_id (id, first_name, last_name, email, phone),
           property_images (id, url, is_primary)
         `)
+        .eq("available", true) // Filtrer uniquement les propriétés disponibles
 
       // Appliquer les filtres
       if (filters.city && Array.isArray(filters.city) && filters.city.length > 0) {
@@ -211,8 +212,11 @@ export const propertyService = {
         query = query.eq("furnished", true)
       }
 
-      // Compter le total
-      const { count, error: countError } = await supabase.from("properties").select("*", { count: "exact", head: true })
+      // Compter le total (avec le même filtre available)
+      const { count, error: countError } = await supabase
+        .from("properties")
+        .select("*", { count: "exact", head: true })
+        .eq("available", true)
 
       if (countError) {
         console.error("❌ Erreur comptage propriétés:", countError)
