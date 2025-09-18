@@ -134,19 +134,58 @@ export async function POST(request: Request, { params }: { params: { id: string 
     let browser = null
     let pdfBuffer
     try {
-      browser = await puppeteer.launch({
-        args: chromium.args,
+      console.log("🚀 Launching browser...")
+      
+      // Configuration pour Vercel
+      const launchOptions = {
+        args: [
+          ...chromium.args,
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-accelerated-2d-canvas',
+          '--no-first-run',
+          '--no-zygote',
+          '--single-process',
+          '--disable-gpu'
+        ],
         defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,
         ignoreHTTPSErrors: true,
-      });
+      }
+      
+      console.log("🔧 Launch options:", launchOptions)
+      
+      browser = await puppeteer.launch(launchOptions)
+      console.log("✅ Browser launched successfully")
+      
       const page = await browser.newPage()
+      console.log("📄 New page created")
+      
       await page.setContent(htmlContent, { waitUntil: 'networkidle0' })
-      pdfBuffer = await page.pdf({ format: 'A4', printBackground: true })
+      console.log("📝 Content set, generating PDF...")
+      
+      pdfBuffer = await page.pdf({ 
+        format: 'A4', 
+        printBackground: true,
+        margin: {
+          top: '1cm',
+          right: '1cm',
+          bottom: '1cm',
+          left: '1cm'
+        }
+      })
+      console.log("✅ PDF generated successfully")
+      
+    } catch (error) {
+      console.error("❌ Browser/PDF generation error:", error)
+      throw error
     } finally {
       if (browser !== null) {
+        console.log("🔒 Closing browser...")
         await browser.close()
+        console.log("✅ Browser closed")
       }
     }
 
