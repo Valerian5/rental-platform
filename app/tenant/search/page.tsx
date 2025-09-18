@@ -19,6 +19,7 @@ import { rentalFileService } from "@/lib/rental-file-service"
 import { applicationEnrichmentService } from "@/lib/application-enrichment-service"
 import Link from "next/link"
 import { toast } from "sonner"
+import { useFavorites } from "@/hooks/use-favorites"
 
 interface Property {
   id: string
@@ -79,7 +80,7 @@ interface SearchFilters {
 export default function TenantSearchPage() {
   const [properties, setProperties] = useState<Property[]>([])
   const [loading, setLoading] = useState(false)
-  const [favorites, setFavorites] = useState<Set<string>>(new Set())
+  const { favorites, toggleFavorite, isFavorite } = useFavorites()
   const [showFilters, setShowFilters] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
@@ -116,10 +117,6 @@ export default function TenantSearchPage() {
   useEffect(() => {
     searchProperties()
   }, [currentPage, selectedCities, searchRadius])
-
-  useEffect(() => {
-    loadUserFavorites()
-  }, [])
 
   const searchProperties = async () => {
     try {
@@ -304,51 +301,13 @@ export default function TenantSearchPage() {
     setActiveFilters(active)
   }
 
-  const loadUserFavorites = async () => {
+  const handleToggleFavorite = async (propertyId: string) => {
     try {
-      // Récupérer l'utilisateur connecté depuis le localStorage ou context
-      const user = JSON.parse(localStorage.getItem("user") || "{}")
-      if (!user.id) return
-
-      const { apiRequest } = await import("@/lib/api-client")
-      const data = await apiRequest("/api/favorites")
-      const favoriteIds = new Set(data.data.map((f: any) => f.property_id))
-      setFavorites(favoriteIds)
-    } catch (error) {
-      console.error("Erreur chargement favoris:", error)
-    }
-  }
-
-  const toggleFavorite = async (propertyId: string) => {
-    try {
-      const user = JSON.parse(localStorage.getItem("user") || "{}")
-      if (!user.id) {
-        toast.error("Vous devez être connecté pour ajouter des favoris")
-        return
-      }
-
-      const { apiRequest } = await import("@/lib/api-client")
-      const data = await apiRequest("/api/favorites/toggle", {
-        method: "POST",
-        body: JSON.stringify({
-          property_id: propertyId,
-        }),
-      })
-
-      const newFavorites = new Set(favorites)
-
-      if (data.isFavorite) {
-        newFavorites.add(propertyId)
-        toast.success("Ajouté aux favoris")
-      } else {
-        newFavorites.delete(propertyId)
-        toast.success("Retiré des favoris")
-      }
-
-      setFavorites(newFavorites)
-    } catch (error) {
+      const isFav = await toggleFavorite(propertyId)
+      toast.success(isFav ? "Ajouté aux favoris" : "Retiré des favoris")
+    } catch (error: any) {
       console.error("Erreur toggle favori:", error)
-      toast.error("Erreur lors de la modification des favoris")
+      toast.error(error.message || "Erreur lors de la modification des favoris")
     }
   }
 
@@ -786,7 +745,7 @@ export default function TenantSearchPage() {
                           ? "bg-red-500 text-white hover:bg-red-600"
                           : "bg-white/80 text-gray-600 hover:bg-white"
                       }`}
-                      onClick={() => toggleFavorite(property.id)}
+                      onClick={() => handleToggleFavorite(property.id)}
                     >
                       <Heart className={`h-4 w-4 ${isFavorite ? "fill-current" : ""}`} />
                     </Button>

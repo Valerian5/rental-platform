@@ -101,26 +101,52 @@ export const favoritesService = {
     console.log("📋 FavoritesService.getUserFavorites", userId)
 
     try {
-      const { data, error } = await supabase
+      // D'abord récupérer les favoris
+      const { data: favorites, error: favoritesError } = await supabase
         .from("favorites")
-        .select(`
-          *,
-          property:properties(
-            *,
-            property_images(id, url, is_primary),
-            owner:users!properties_owner_id_fkey(first_name, last_name, phone)
-          )
-        `)
+        .select("*")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
 
-      if (error) {
-        console.error("❌ Erreur récupération favoris:", error)
-        throw new Error(error.message)
+      if (favoritesError) {
+        console.error("❌ Erreur récupération favoris:", favoritesError)
+        throw new Error(favoritesError.message)
       }
 
-      console.log("✅ Favoris récupérés:", data?.length || 0)
-      return data || []
+      if (!favorites || favorites.length === 0) {
+        console.log("✅ Aucun favori trouvé")
+        return []
+      }
+
+      // Récupérer les IDs des propriétés
+      const propertyIds = favorites.map(fav => fav.property_id)
+
+      // Récupérer les propriétés avec leurs images et propriétaires
+      const { data: properties, error: propertiesError } = await supabase
+        .from("properties")
+        .select(`
+          *,
+          property_images(id, url, is_primary),
+          owner:users!properties_owner_id_fkey(first_name, last_name, phone)
+        `)
+        .in("id", propertyIds)
+
+      if (propertiesError) {
+        console.error("❌ Erreur récupération propriétés:", propertiesError)
+        throw new Error(propertiesError.message)
+      }
+
+      // Combiner les données
+      const result = favorites.map(favorite => {
+        const property = properties?.find(p => p.id === favorite.property_id)
+        return {
+          ...favorite,
+          property: property || null
+        }
+      }).filter(item => item.property !== null) // Filtrer les propriétés supprimées
+
+      console.log("✅ Favoris récupérés:", result.length)
+      return result as FavoriteProperty[]
     } catch (error) {
       console.error("❌ Erreur dans getUserFavorites:", error)
       throw error
