@@ -90,6 +90,30 @@ const ELEMENT_LABELS = {
   eclairages: "Éclairages",
 }
 
+const STATE_LABELS = {
+  absent: "Absent",
+  M: "Mauvais état",
+  P: "État passable", 
+  B: "Bon état",
+  TB: "Très bon état",
+}
+
+const getStateBadge = (state: string) => {
+  const colors = {
+    absent: "bg-gray-100 text-gray-800",
+    M: "bg-red-100 text-red-800",
+    P: "bg-orange-100 text-orange-800", 
+    B: "bg-green-100 text-green-800",
+    TB: "bg-blue-100 text-blue-800",
+  }
+  
+  return (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${colors[state as keyof typeof colors] || colors.absent}`}>
+      {STATE_LABELS[state as keyof typeof STATE_LABELS] || state}
+    </span>
+  )
+}
+
 export function EtatDesLieuxDigitalSection({
   leaseId,
   propertyId,
@@ -151,6 +175,7 @@ export function EtatDesLieuxDigitalSection({
   const [currentRoomIndex, setCurrentRoomIndex] = useState(0)
 
   useEffect(() => {
+    loadDigitalState()
     if (rooms.length === 0) {
       initializeRooms()
     }
@@ -235,6 +260,71 @@ export function EtatDesLieuxDigitalSection({
     setShowAddRoomDialog(false)
   }
 
+  const handlePhotoUpload = async (roomId: string, files: FileList) => {
+    try {
+      const roomIndex = rooms.findIndex(room => room.id === roomId)
+      if (roomIndex === -1) return
+
+      const currentRoom = rooms[roomIndex]
+      if (currentRoom.photos.length + files.length > 5) {
+        toast.error("Maximum 5 photos par pièce")
+        return
+      }
+
+      const formData = new FormData()
+      formData.append('roomId', roomId)
+      Array.from(files).forEach((file, index) => {
+        formData.append(`photos`, file)
+      })
+
+      const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux/photos`, {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!response.ok) throw new Error("Erreur lors de l'upload")
+
+      const result = await response.json()
+      
+      // Mettre à jour les photos de la pièce
+      setRooms(rooms.map(room => 
+        room.id === roomId 
+          ? { ...room, photos: [...room.photos, ...result.photoUrls] }
+          : room
+      ))
+
+      toast.success(`${files.length} photo(s) ajoutée(s)`)
+    } catch (error) {
+      console.error("Erreur upload photos:", error)
+      toast.error("Erreur lors de l'upload des photos")
+    }
+  }
+
+  const removePhoto = (roomId: string, photoIndex: number) => {
+    setRooms(rooms.map(room => 
+      room.id === roomId 
+        ? { ...room, photos: room.photos.filter((_, index) => index !== photoIndex) }
+        : room
+    ))
+  }
+
+  const loadDigitalState = async () => {
+    try {
+      const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux/digital`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.general_info) {
+          setGeneralInfo(data.general_info)
+        }
+        if (data.rooms && data.rooms.length > 0) {
+          setRooms(data.rooms)
+        }
+      }
+    } catch (error) {
+      console.error("Erreur chargement:", error)
+    }
+  }
+
   const saveDigitalState = async () => {
     try {
       const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux/digital`, {
@@ -261,6 +351,419 @@ export function EtatDesLieuxDigitalSection({
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Contenu principal */}
       <div className="lg:col-span-2 space-y-6">
+        {/* Section Informations */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Informations générales</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>Type d'état des lieux</Label>
+                <Select
+                  value={generalInfo.type}
+                  onValueChange={(value: "entree" | "sortie") =>
+                    setGeneralInfo({ ...generalInfo, type: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="entree">Entrée</SelectItem>
+                    <SelectItem value="sortie">Sortie</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Date</Label>
+                <Input
+                  type="date"
+                  value={generalInfo.date}
+                  onChange={(e) =>
+                    setGeneralInfo({ ...generalInfo, date: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Adresse du logement</Label>
+              <Input
+                value={generalInfo.address}
+                onChange={(e) =>
+                  setGeneralInfo({ ...generalInfo, address: e.target.value })
+                }
+              />
+            </div>
+
+            {/* Informations bailleur */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Bailleur</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Prénom</Label>
+                  <Input
+                    value={generalInfo.owner.first_name}
+                    onChange={(e) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        owner: { ...generalInfo.owner, first_name: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Nom</Label>
+                  <Input
+                    value={generalInfo.owner.last_name}
+                    onChange={(e) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        owner: { ...generalInfo.owner, last_name: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+              </div>
+              <div>
+                <Label>Email</Label>
+                <Input
+                  type="email"
+                  value={generalInfo.owner.email}
+                  onChange={(e) =>
+                    setGeneralInfo({
+                      ...generalInfo,
+                      owner: { ...generalInfo.owner, email: e.target.value },
+                    })
+                  }
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="mandataire"
+                  checked={generalInfo.owner.is_mandataire}
+                  onChange={(e) =>
+                    setGeneralInfo({
+                      ...generalInfo,
+                      owner: { ...generalInfo.owner, is_mandataire: e.target.checked },
+                    })
+                  }
+                />
+                <Label htmlFor="mandataire">
+                  Le bailleur est représenté par un mandataire
+                </Label>
+              </div>
+              {generalInfo.owner.is_mandataire && (
+                <div>
+                  <Label>Adresse du mandataire</Label>
+                  <Textarea
+                    value={generalInfo.owner.mandataire_address}
+                    onChange={(e) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        owner: {
+                          ...generalInfo.owner,
+                          mandataire_address: e.target.value,
+                        },
+                      })
+                    }
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Informations locataire */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Locataire</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Prénom</Label>
+                  <Input
+                    value={generalInfo.tenant.first_name}
+                    onChange={(e) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        tenant: { ...generalInfo.tenant, first_name: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Nom</Label>
+                  <Input
+                    value={generalInfo.tenant.last_name}
+                    onChange={(e) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        tenant: { ...generalInfo.tenant, last_name: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+              </div>
+              <div>
+                <Label>Email</Label>
+                <Input
+                  type="email"
+                  value={generalInfo.tenant.email}
+                  onChange={(e) =>
+                    setGeneralInfo({
+                      ...generalInfo,
+                      tenant: { ...generalInfo.tenant, email: e.target.value },
+                    })
+                  }
+                />
+              </div>
+            </div>
+
+            {/* Équipements de chauffage */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Équipements de chauffage</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Type de chauffage</Label>
+                  <Select
+                    value={generalInfo.heating.type}
+                    onValueChange={(value) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        heating: { ...generalInfo.heating, type: value },
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="individuel">Individuel</SelectItem>
+                      <SelectItem value="collectif">Collectif</SelectItem>
+                      <SelectItem value="autre">Autre</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Type de combustible</Label>
+                  <Select
+                    value={generalInfo.heating.fuel_type}
+                    onValueChange={(value) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        heating: { ...generalInfo.heating, fuel_type: value },
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="gaz">Gaz</SelectItem>
+                      <SelectItem value="electricite">Électricité</SelectItem>
+                      <SelectItem value="fioul">Fioul</SelectItem>
+                      <SelectItem value="autre">Autre</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {generalInfo.heating.type === "autre" && (
+                <div>
+                  <Label>Précisez le type de chauffage</Label>
+                  <Input
+                    value={generalInfo.heating.other_type}
+                    onChange={(e) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        heating: { ...generalInfo.heating, other_type: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Équipements d'eau chaude */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Équipements d'eau chaude</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Type d'eau chaude</Label>
+                  <Select
+                    value={generalInfo.hot_water.type}
+                    onValueChange={(value) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        hot_water: { ...generalInfo.hot_water, type: value },
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="individuel">Individuel</SelectItem>
+                      <SelectItem value="collectif">Collectif</SelectItem>
+                      <SelectItem value="autre">Autre</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Type de combustible</Label>
+                  <Select
+                    value={generalInfo.hot_water.fuel_type}
+                    onValueChange={(value) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        hot_water: { ...generalInfo.hot_water, fuel_type: value },
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="gaz">Gaz</SelectItem>
+                      <SelectItem value="electricite">Électricité</SelectItem>
+                      <SelectItem value="fioul">Fioul</SelectItem>
+                      <SelectItem value="autre">Autre</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {generalInfo.hot_water.type === "autre" && (
+                <div>
+                  <Label>Précisez le type d'eau chaude</Label>
+                  <Input
+                    value={generalInfo.hot_water.other_type}
+                    onChange={(e) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        hot_water: { ...generalInfo.hot_water, other_type: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Clés remises */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Clés remises</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div>
+                  <Label>Entrée</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={generalInfo.keys.entrance}
+                    onChange={(e) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        keys: { ...generalInfo.keys, entrance: parseInt(e.target.value) || 0 },
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Immeuble</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={generalInfo.keys.building}
+                    onChange={(e) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        keys: { ...generalInfo.keys, building: parseInt(e.target.value) || 0 },
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Parking</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={generalInfo.keys.parking}
+                    onChange={(e) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        keys: { ...generalInfo.keys, parking: parseInt(e.target.value) || 0 },
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Boîte aux lettres</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={generalInfo.keys.mailbox}
+                    onChange={(e) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        keys: { ...generalInfo.keys, mailbox: parseInt(e.target.value) || 0 },
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Cave</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={generalInfo.keys.cellar}
+                    onChange={(e) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        keys: { ...generalInfo.keys, cellar: parseInt(e.target.value) || 0 },
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Autre</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={generalInfo.keys.other}
+                    onChange={(e) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        keys: { ...generalInfo.keys, other: parseInt(e.target.value) || 0 },
+                      })
+                    }
+                  />
+                </div>
+              </div>
+              {generalInfo.keys.other > 0 && (
+                <div>
+                  <Label>Précisez le type d'autre clé</Label>
+                  <Input
+                    value={generalInfo.keys.other_type}
+                    onChange={(e) =>
+                      setGeneralInfo({
+                        ...generalInfo,
+                        keys: { ...generalInfo.keys, other_type: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Commentaire général */}
+            <div>
+              <Label>Commentaire général</Label>
+              <Textarea
+                placeholder="Commentaires généraux sur l'état des lieux..."
+                value={generalInfo.general_comment}
+                onChange={(e) =>
+                  setGeneralInfo({ ...generalInfo, general_comment: e.target.value })
+                }
+              />
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Section Pièces */}
         <Card>
           <CardHeader>
@@ -273,6 +776,16 @@ export function EtatDesLieuxDigitalSection({
                 <Plus className="h-4 w-4 mr-2" />
                 Ajouter une pièce
               </Button>
+            </div>
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+              <p className="text-sm text-blue-800 font-medium mb-2">Notez l'état de chaque élément de cette pièce :</p>
+              <div className="flex flex-wrap gap-4 text-xs text-blue-700">
+                <span><strong>Absent</strong> - Élément absent</span>
+                <span><strong>M</strong> - Mauvais état</span>
+                <span><strong>P</strong> - État passable</span>
+                <span><strong>B</strong> - Bon état</span>
+                <span><strong>TB</strong> - Très bon état</span>
+              </div>
             </div>
           </CardHeader>
 
@@ -392,10 +905,51 @@ export function EtatDesLieuxDigitalSection({
                       <p className="text-sm text-gray-500 mb-2">
                         Photos justificatives ({rooms[currentRoomIndex].photos.length}/5)
                       </p>
-                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                        <Camera className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                        <p className="text-gray-600">Cliquez pour ajouter des photos</p>
+                      
+                      {/* Zone d'upload */}
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*"
+                          onChange={(e) => {
+                            if (e.target.files) {
+                              handlePhotoUpload(rooms[currentRoomIndex].id, e.target.files)
+                            }
+                          }}
+                          className="hidden"
+                          id={`photo-upload-${rooms[currentRoomIndex].id}`}
+                        />
+                        <label 
+                          htmlFor={`photo-upload-${rooms[currentRoomIndex].id}`}
+                          className="cursor-pointer block"
+                        >
+                          <Camera className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                          <p className="text-gray-600">Cliquez pour ajouter des photos</p>
+                          <p className="text-xs text-gray-500 mt-1">JPG, PNG, WEBP (max 5MB)</p>
+                        </label>
                       </div>
+
+                      {/* Affichage des photos */}
+                      {rooms[currentRoomIndex].photos.length > 0 && (
+                        <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4">
+                          {rooms[currentRoomIndex].photos.map((photo, index) => (
+                            <div key={index} className="relative group">
+                              <img
+                                src={photo}
+                                alt={`Photo ${index + 1}`}
+                                className="w-full h-32 object-cover rounded-lg border"
+                              />
+                              <button
+                                onClick={() => removePhoto(rooms[currentRoomIndex].id, index)}
+                                className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -404,166 +958,6 @@ export function EtatDesLieuxDigitalSection({
           </CardContent>
         </Card>
 
-        {/* Section Informations */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Informations générales</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label>Type d'état des lieux</Label>
-                <Select
-                  value={generalInfo.type}
-                  onValueChange={(value: "entree" | "sortie") =>
-                    setGeneralInfo({ ...generalInfo, type: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="entree">Entrée</SelectItem>
-                    <SelectItem value="sortie">Sortie</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Date d'entrée</Label>
-                <Input
-                  type="date"
-                  value={generalInfo.date}
-                  onChange={(e) =>
-                    setGeneralInfo({ ...generalInfo, date: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label>Adresse du logement</Label>
-              <Input
-                value={generalInfo.address}
-                onChange={(e) =>
-                  setGeneralInfo({ ...generalInfo, address: e.target.value })
-                }
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Propriétaire */}
-              <div className="space-y-4">
-                <h4 className="font-medium">Propriétaire</h4>
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      placeholder="Prénom"
-                      value={generalInfo.owner.first_name}
-                      onChange={(e) =>
-                        setGeneralInfo({
-                          ...generalInfo,
-                          owner: { ...generalInfo.owner, first_name: e.target.value },
-                        })
-                      }
-                    />
-                    <Input
-                      placeholder="Nom"
-                      value={generalInfo.owner.last_name}
-                      onChange={(e) =>
-                        setGeneralInfo({
-                          ...generalInfo,
-                          owner: { ...generalInfo.owner, last_name: e.target.value },
-                        })
-                      }
-                    />
-                  </div>
-                  <Input
-                    placeholder="Email"
-                    type="email"
-                    value={generalInfo.owner.email}
-                    onChange={(e) =>
-                      setGeneralInfo({
-                        ...generalInfo,
-                        owner: { ...generalInfo.owner, email: e.target.value },
-                      })
-                    }
-                  />
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id="mandataire"
-                      checked={generalInfo.owner.is_mandataire}
-                      onChange={(e) =>
-                        setGeneralInfo({
-                          ...generalInfo,
-                          owner: { ...generalInfo.owner, is_mandataire: e.target.checked },
-                        })
-                      }
-                    />
-                    <Label htmlFor="mandataire">
-                      Propriétaire représenté par un mandataire
-                    </Label>
-                  </div>
-                  {generalInfo.owner.is_mandataire && (
-                    <Input
-                      placeholder="Adresse du mandataire"
-                      value={generalInfo.owner.mandataire_address}
-                      onChange={(e) =>
-                        setGeneralInfo({
-                          ...generalInfo,
-                          owner: {
-                            ...generalInfo.owner,
-                            mandataire_address: e.target.value,
-                          },
-                        })
-                      }
-                    />
-                  )}
-                </div>
-              </div>
-
-              {/* Locataire */}
-              <div className="space-y-4">
-                <h4 className="font-medium">Locataire</h4>
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      placeholder="Prénom"
-                      value={generalInfo.tenant.first_name}
-                      onChange={(e) =>
-                        setGeneralInfo({
-                          ...generalInfo,
-                          tenant: { ...generalInfo.tenant, first_name: e.target.value },
-                        })
-                      }
-                    />
-                    <Input
-                      placeholder="Nom"
-                      value={generalInfo.tenant.last_name}
-                      onChange={(e) =>
-                        setGeneralInfo({
-                          ...generalInfo,
-                          tenant: { ...generalInfo.tenant, last_name: e.target.value },
-                        })
-                      }
-                    />
-                  </div>
-                  <Input
-                    placeholder="Email"
-                    type="email"
-                    value={generalInfo.tenant.email}
-                    onChange={(e) =>
-                      setGeneralInfo({
-                        ...generalInfo,
-                        tenant: { ...generalInfo.tenant, email: e.target.value },
-                      })
-                    }
-                  />
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
         {/* Section Autres */}
         <Card>
           <CardHeader>
@@ -946,30 +1340,120 @@ export function EtatDesLieuxDigitalSection({
             <CardTitle className="text-sm">Aperçu de l'état des lieux</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3 text-sm">
-              <div>
-                <span className="font-medium">Type :</span>{" "}
-                {generalInfo.type === "entree" ? "Entrée" : "Sortie"}
+            <div className="space-y-4">
+              {/* Informations générales */}
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="font-medium">Type :</span>
+                  <span className="text-gray-600">
+                    {generalInfo.type === "entree" ? "Entrée" : "Sortie"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Date :</span>
+                  <span className="text-gray-600">
+                    {generalInfo.date || "Non renseignée"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Adresse :</span>
+                  <span className="text-gray-600 text-right">
+                    {generalInfo.address || "Non renseignée"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Propriétaire :</span>
+                  <span className="text-gray-600">
+                    {generalInfo.owner.first_name} {generalInfo.owner.last_name}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Locataire :</span>
+                  <span className="text-gray-600">
+                    {generalInfo.tenant.first_name} {generalInfo.tenant.last_name}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Pièces :</span>
+                  <span className="text-gray-600">{rooms.length}</span>
+                </div>
               </div>
-              <div>
-                <span className="font-medium">Date :</span>{" "}
-                {generalInfo.date || "Non renseignée"}
-              </div>
-              <div>
-                <span className="font-medium">Adresse :</span>{" "}
-                {generalInfo.address || "Non renseignée"}
-              </div>
-              <div>
-                <span className="font-medium">Propriétaire :</span>{" "}
-                {generalInfo.owner.first_name} {generalInfo.owner.last_name}
-              </div>
-              <div>
-                <span className="font-medium">Locataire :</span>{" "}
-                {generalInfo.tenant.first_name} {generalInfo.tenant.last_name}
-              </div>
-              <div>
-                <span className="font-medium">Pièces :</span> {rooms.length}
-              </div>
+
+              {/* Détail des pièces */}
+              {rooms.length > 0 && (
+                <div className="space-y-4">
+                  <div className="border-t pt-4">
+                    <h4 className="font-medium text-sm mb-3">Détail des pièces</h4>
+                    <div className="space-y-3">
+                      {rooms.map((room, index) => (
+                        <div key={room.id} className="border rounded-lg p-3">
+                          <h5 className="font-medium text-sm mb-2">{room.name}</h5>
+                          
+                          {/* Tableau des éléments */}
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="border-b">
+                                  <th className="text-left py-1">Élément</th>
+                                  <th className="text-left py-1">Commentaire</th>
+                                  <th className="text-center py-1">État</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {Object.entries(ELEMENT_LABELS).map(([key, label]) => {
+                                  const element = room.elements[key as keyof typeof room.elements]
+                                  return (
+                                    <tr key={key} className="border-b">
+                                      <td className="py-1 pr-2">{label}</td>
+                                      <td className="py-1 pr-2 text-gray-600">
+                                        {element.comment || "-"}
+                                      </td>
+                                      <td className="py-1 text-center">
+                                        {getStateBadge(element.state)}
+                                      </td>
+                                    </tr>
+                                  )
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {/* Commentaire de la pièce */}
+                          {room.comment && (
+                            <div className="mt-2 p-2 bg-gray-50 rounded text-xs">
+                              <strong>Commentaire :</strong> {room.comment}
+                            </div>
+                          )}
+
+                          {/* Photos de la pièce */}
+                          {room.photos.length > 0 && (
+                            <div className="mt-2">
+                              <div className="text-xs font-medium text-gray-600 mb-1">
+                                Photos ({room.photos.length})
+                              </div>
+                              <div className="grid grid-cols-3 gap-1">
+                                {room.photos.slice(0, 3).map((photo, photoIndex) => (
+                                  <img
+                                    key={photoIndex}
+                                    src={photo}
+                                    alt={`Photo ${photoIndex + 1}`}
+                                    className="w-full h-16 object-cover rounded border"
+                                  />
+                                ))}
+                                {room.photos.length > 3 && (
+                                  <div className="w-full h-16 bg-gray-100 rounded border flex items-center justify-center text-xs text-gray-500">
+                                    +{room.photos.length - 3}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
