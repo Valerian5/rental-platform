@@ -472,16 +472,15 @@ export function EtatDesLieuxDigitalSection({
 
   const getCanvasCoordinates = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>, canvas: HTMLCanvasElement) => {
     const rect = canvas.getBoundingClientRect()
-    const scaleX = canvas.width / rect.width
-    const scaleY = canvas.height / rect.height
     
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
     
-    return {
-      x: (clientX - rect.left) * scaleX,
-      y: (clientY - rect.top) * scaleY
-    }
+    // Calculer les coordonnées relatives au canvas (en pixels CSS)
+    const x = clientX - rect.left
+    const y = clientY - rect.top
+    
+    return { x, y }
   }
 
   const startSignature = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>, type: 'owner' | 'tenant') => {
@@ -538,17 +537,8 @@ export function EtatDesLieuxDigitalSection({
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // Sauvegarder les transformations
-    ctx.save()
-    
-    // Réinitialiser les transformations
-    ctx.setTransform(1, 0, 0, 1, 0, 0)
-    
     // Effacer le canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height)
-    
-    // Restaurer les transformations
-    ctx.restore()
     
     if (type === 'owner') {
       setOwnerSignature('')
@@ -613,13 +603,12 @@ export function EtatDesLieuxDigitalSection({
       const ctx = canvas.getContext('2d')
       if (!ctx) return
 
-      // Définir la taille du canvas
+      // Définir la taille du canvas en pixels CSS
       const rect = canvas.getBoundingClientRect()
-      canvas.width = rect.width * window.devicePixelRatio
-      canvas.height = rect.height * window.devicePixelRatio
+      canvas.width = rect.width
+      canvas.height = rect.height
 
-      // Ajuster le contexte pour la haute résolution
-      ctx.scale(window.devicePixelRatio, window.devicePixelRatio)
+      // Configuration du contexte
       ctx.lineWidth = 2
       ctx.lineCap = 'round'
       ctx.lineJoin = 'round'
