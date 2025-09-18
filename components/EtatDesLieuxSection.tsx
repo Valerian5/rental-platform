@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Label } from "@/components/ui/label"
@@ -34,7 +34,27 @@ interface EtatDesLieuxSectionProps {
 
 export function EtatDesLieuxSection({ leaseId, propertyId, propertyData, leaseData }: EtatDesLieuxSectionProps) {
   const [digitalMode, setDigitalMode] = useState(false)
+  const [hasExistingDigitalData, setHasExistingDigitalData] = useState(false)
   const roomCount = propertyData?.rooms || 1
+
+  // Vérifier s'il y a des données existantes au chargement
+  useEffect(() => {
+    const checkExistingData = async () => {
+      try {
+        const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux/digital`)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.general_info || (data.rooms && data.rooms.length > 0)) {
+            setHasExistingDigitalData(true)
+            setDigitalMode(true) // Afficher directement le mode digital
+          }
+        }
+      } catch (error) {
+        console.error("Erreur vérification données existantes:", error)
+      }
+    }
+    checkExistingData()
+  }, [leaseId])
 
   return (
     <div className="space-y-6">
@@ -88,7 +108,10 @@ export function EtatDesLieuxSection({ leaseId, propertyId, propertyData, leaseDa
                 Interface complète pour créer des états des lieux détaillés
               </p>
               <button
-                onClick={() => setDigitalMode(true)}
+                onClick={() => {
+                  setDigitalMode(true)
+                  setHasExistingDigitalData(true)
+                }}
                 className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
               >
                 <Plus className="h-4 w-4 mr-2" />

@@ -174,6 +174,7 @@ export function EtatDesLieuxDigitalSection({
   })
   const [currentRoomIndex, setCurrentRoomIndex] = useState(0)
   const [hasLoadedData, setHasLoadedData] = useState(false)
+  const [hasExistingData, setHasExistingData] = useState(false)
 
   const initializeRooms = () => {
     setRooms([
@@ -288,18 +289,27 @@ export function EtatDesLieuxDigitalSection({
       const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux/digital`)
       if (response.ok) {
         const data = await response.json()
-        if (data.general_info) {
-          setGeneralInfo(data.general_info)
-        }
-        if (data.rooms && data.rooms.length > 0) {
-          setRooms(data.rooms)
+        if (data.general_info || (data.rooms && data.rooms.length > 0)) {
+          // Il y a des données existantes
+          setHasExistingData(true)
+          if (data.general_info) {
+            setGeneralInfo(data.general_info)
+          }
+          if (data.rooms && data.rooms.length > 0) {
+            setRooms(data.rooms)
+          }
+        } else {
+          // Pas de données existantes
+          setHasExistingData(false)
         }
         setHasLoadedData(true)
       } else {
+        setHasExistingData(false)
         setHasLoadedData(true)
       }
     } catch (error) {
       console.error("Erreur chargement:", error)
+      setHasExistingData(false)
       setHasLoadedData(true)
     }
   }
@@ -331,10 +341,10 @@ export function EtatDesLieuxDigitalSection({
   }, [])
 
   useEffect(() => {
-    if (hasLoadedData && rooms.length === 0) {
+    if (hasLoadedData && !hasExistingData && rooms.length === 0) {
       initializeRooms()
     }
-  }, [hasLoadedData])
+  }, [hasLoadedData, hasExistingData])
 
   useEffect(() => {
     if (leaseData) {
