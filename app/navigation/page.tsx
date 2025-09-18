@@ -2,6 +2,7 @@ import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Home, Building, UserCheck, Phone, User, Settings, MessageSquare, BarChart3, Heart } from "lucide-react"
+import { FavoritesTest } from "@/components/favorites-test"
 
 export default function NavigationPage() {
   return (
@@ -175,6 +176,19 @@ export default function NavigationPage() {
                   <Link href="/tenant/favorites">Favoris locataire</Link>
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Test API Favoris */}
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Heart className="h-5 w-5 text-blue-600" />
+                Test API Favoris
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FavoritesTest />
             </CardContent>
           </Card>
         </div>

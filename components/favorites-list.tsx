@@ -63,14 +63,9 @@ export function FavoritesList({ userId, onRemove }: FavoritesListProps) {
       setIsLoading(true)
       setError(null)
       
-      const response = await fetch("/api/favorites")
-      if (response.ok) {
-        const data = await response.json()
-        setFavorites(data.data || [])
-      } else {
-        const errorData = await response.json()
-        setError(errorData.message || "Erreur lors du chargement des favoris")
-      }
+      const { apiRequest } = await import("@/lib/api-client")
+      const data = await apiRequest("/api/favorites")
+      setFavorites(data.data || [])
     } catch (error) {
       console.error("Erreur lors du chargement des favoris:", error)
       setError("Erreur de connexion")
@@ -81,18 +76,14 @@ export function FavoritesList({ userId, onRemove }: FavoritesListProps) {
 
   const handleRemoveFavorite = async (propertyId: string) => {
     try {
-      const response = await fetch(`/api/favorites?property_id=${propertyId}`, {
+      const { apiRequest } = await import("@/lib/api-client")
+      await apiRequest(`/api/favorites?property_id=${propertyId}`, {
         method: "DELETE",
       })
 
-      if (response.ok) {
-        setFavorites(prev => prev.filter(fav => fav.property_id !== propertyId))
-        onRemove?.(propertyId)
-        toast.success("Retiré des favoris")
-      } else {
-        const errorData = await response.json()
-        toast.error(errorData.message || "Erreur lors de la suppression")
-      }
+      setFavorites(prev => prev.filter(fav => fav.property_id !== propertyId))
+      onRemove?.(propertyId)
+      toast.success("Retiré des favoris")
     } catch (error) {
       console.error("Erreur lors de la suppression des favoris:", error)
       toast.error("Erreur de connexion")

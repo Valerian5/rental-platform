@@ -36,11 +36,9 @@ export function FavoriteButton({
 
   const checkFavoriteStatus = async () => {
     try {
-      const response = await fetch(`/api/favorites/check?property_id=${propertyId}`)
-      if (response.ok) {
-        const data = await response.json()
-        setIsFavorite(data.isFavorite)
-      }
+      const { apiRequest } = await import("@/lib/api-client")
+      const data = await apiRequest(`/api/favorites/check?property_id=${propertyId}`)
+      setIsFavorite(data.isFavorite)
     } catch (error) {
       console.error("Erreur lors de la vérification des favoris:", error)
     }
@@ -54,28 +52,20 @@ export function FavoriteButton({
 
     setIsLoading(true)
     try {
-      const response = await fetch("/api/favorites/toggle", {
+      const { apiRequest } = await import("@/lib/api-client")
+      const data = await apiRequest("/api/favorites/toggle", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({ property_id: propertyId }),
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        setIsFavorite(data.isFavorite)
-        onToggle?.(data.isFavorite)
-        
-        toast.success(
-          data.isFavorite 
-            ? "Ajouté aux favoris" 
-            : "Retiré des favoris"
-        )
-      } else {
-        const errorData = await response.json()
-        toast.error(errorData.message || "Erreur lors de la mise à jour des favoris")
-      }
+      setIsFavorite(data.isFavorite)
+      onToggle?.(data.isFavorite)
+      
+      toast.success(
+        data.isFavorite 
+          ? "Ajouté aux favoris" 
+          : "Retiré des favoris"
+      )
     } catch (error) {
       console.error("Erreur lors du toggle des favoris:", error)
       toast.error("Erreur de connexion")

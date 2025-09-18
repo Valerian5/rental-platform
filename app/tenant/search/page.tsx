@@ -310,12 +310,10 @@ export default function TenantSearchPage() {
       const user = JSON.parse(localStorage.getItem("user") || "{}")
       if (!user.id) return
 
-      const response = await fetch("/api/favorites")
-      if (response.ok) {
-        const data = await response.json()
-        const favoriteIds = new Set(data.data.map((f: any) => f.property_id))
-        setFavorites(favoriteIds)
-      }
+      const { apiRequest } = await import("@/lib/api-client")
+      const data = await apiRequest("/api/favorites")
+      const favoriteIds = new Set(data.data.map((f: any) => f.property_id))
+      setFavorites(favoriteIds)
     } catch (error) {
       console.error("Erreur chargement favoris:", error)
     }
@@ -329,28 +327,25 @@ export default function TenantSearchPage() {
         return
       }
 
-      const response = await fetch("/api/favorites/toggle", {
+      const { apiRequest } = await import("@/lib/api-client")
+      const data = await apiRequest("/api/favorites/toggle", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           property_id: propertyId,
         }),
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        const newFavorites = new Set(favorites)
+      const newFavorites = new Set(favorites)
 
-        if (data.isFavorite) {
-          newFavorites.add(propertyId)
-          toast.success("Ajouté aux favoris")
-        } else {
-          newFavorites.delete(propertyId)
-          toast.success("Retiré des favoris")
-        }
-
-        setFavorites(newFavorites)
+      if (data.isFavorite) {
+        newFavorites.add(propertyId)
+        toast.success("Ajouté aux favoris")
+      } else {
+        newFavorites.delete(propertyId)
+        toast.success("Retiré des favoris")
       }
+
+      setFavorites(newFavorites)
     } catch (error) {
       console.error("Erreur toggle favori:", error)
       toast.error("Erreur lors de la modification des favoris")
