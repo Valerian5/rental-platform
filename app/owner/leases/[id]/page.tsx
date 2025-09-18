@@ -260,6 +260,26 @@ export default function LeaseDetailPage() {
     }
   }
 
+  const downloadLeaseDocument = async () => {
+    try {
+      const response = await fetch(`/api/leases/${leaseId}/download-document`)
+      if (!response.ok) throw new Error("Erreur téléchargement")
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `bail-${leaseId}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error) {
+      console.error("Erreur téléchargement:", error)
+      toast.error("Erreur lors du téléchargement")
+    }
+  }
+
   useEffect(() => {
     if (leaseId) {
       // Charge le bail et le statut DocuSign (sans polling pour éviter trop d'appels)
@@ -484,7 +504,7 @@ export default function LeaseDetailPage() {
               )}
 
               {lease.generated_document && (
-                <Button variant="outline">
+                <Button variant="outline" onClick={downloadLeaseDocument}>
                   <Download className="h-4 w-4 mr-2" />
                   Télécharger
                 </Button>
