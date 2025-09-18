@@ -1,5 +1,3 @@
-"use client"
-
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -7,21 +5,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {
-  Home,
-  Camera,
-  CheckCircle,
-  Plus,
-  Trash2,
-} from "lucide-react"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { Home, Camera, CheckCircle, Plus, Trash2 } from "lucide-react"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { toast } from "sonner"
 
 interface PropertyData {
@@ -173,7 +158,7 @@ export function EtatDesLieuxDigitalSection({
 
   useEffect(() => {
     if (leaseData) {
-      setGeneralInfo(prev => ({
+      setGeneralInfo((prev) => ({
         ...prev,
         address: leaseData.adresse_logement,
         owner: {
@@ -191,39 +176,46 @@ export function EtatDesLieuxDigitalSection({
   }, [leaseData])
 
   const initializeRooms = () => {
-    const defaultRooms: RoomState[] = [
+    setRooms([
       {
         id: "sejour",
         name: "Séjour",
         type: "main",
         elements: Object.fromEntries(
-          Object.keys(ELEMENT_LABELS).map(k => [k, { state: "B", comment: "" }])
-        ) as any,
+          Object.keys(ELEMENT_LABELS).map((k) => [k, { state: "B", comment: "" }])
+        ) as RoomState["elements"],
         comment: "",
         photos: [],
       },
-      {
-        id: "cuisine",
-        name: "Cuisine",
-        type: "water",
-        elements: Object.fromEntries(
-          Object.keys(ELEMENT_LABELS).map(k => [k, { state: "B", comment: "" }])
-        ) as any,
-        comment: "",
-        photos: [],
-      },
-      {
-        id: "salle_bain",
-        name: "Salle de bain",
-        type: "water",
-        elements: Object.fromEntries(
-          Object.keys(ELEMENT_LABELS).map(k => [k, { state: "B", comment: "" }])
-        ) as any,
-        comment: "",
-        photos: [],
-      },
-    ]
-    setRooms(defaultRooms)
+    ])
+  }
+
+  const removeRoom = (roomId: string) => {
+    setRooms(rooms.filter((room) => room.id !== roomId))
+    if (currentRoomIndex >= rooms.length - 1) {
+      setCurrentRoomIndex(Math.max(0, rooms.length - 2))
+    }
+  }
+
+  const updateRoomElement = (
+    roomId: string,
+    element: string,
+    state: string,
+    comment: string
+  ) => {
+    setRooms(
+      rooms.map((room) =>
+        room.id === roomId
+          ? {
+              ...room,
+              elements: {
+                ...room.elements,
+                [element]: { state: state as any, comment },
+              },
+            }
+          : room
+      )
+    )
   }
 
   const addRoom = () => {
@@ -233,31 +225,14 @@ export function EtatDesLieuxDigitalSection({
       name: newRoom.name,
       type: newRoom.category,
       elements: Object.fromEntries(
-        Object.keys(ELEMENT_LABELS).map(k => [k, { state: "B", comment: "" }])
-      ) as any,
+        Object.keys(ELEMENT_LABELS).map((k) => [k, { state: "B", comment: "" }])
+      ) as RoomState["elements"],
       comment: "",
       photos: [],
     }
     setRooms([...rooms, newRoomState])
     setNewRoom({ category: "main", type: "", name: "" })
     setShowAddRoomDialog(false)
-  }
-
-  const removeRoom = (roomId: string) => {
-    setRooms(rooms.filter(room => room.id !== roomId))
-    if (currentRoomIndex >= rooms.length - 1) {
-      setCurrentRoomIndex(Math.max(0, rooms.length - 2))
-    }
-  }
-
-  const updateRoomElement = (roomId: string, element: string, state: string, comment: string) => {
-    setRooms(
-      rooms.map(room =>
-        room.id === roomId
-          ? { ...room, elements: { ...room.elements, [element]: { state: state as any, comment } } }
-          : room
-      )
-    )
   }
 
   const saveDigitalState = async () => {
@@ -267,12 +242,14 @@ export function EtatDesLieuxDigitalSection({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           general_info: generalInfo,
-          rooms,
+          rooms: rooms,
           property_data: propertyData,
           lease_data: leaseData,
         }),
       })
+
       if (!response.ok) throw new Error("Erreur lors de la sauvegarde")
+
       toast.success("État des lieux numérique sauvegardé")
     } catch (error) {
       console.error("Erreur sauvegarde:", error)
