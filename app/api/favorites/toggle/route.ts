@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase-server-utils"
+import { getCurrentUserFromRequest } from "@/lib/auth-token-service"
 import { favoritesService } from "@/lib/favorites-service"
 
 // POST /api/favorites/toggle - Toggle favori (ajouter ou retirer)
@@ -15,12 +15,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const server = createServerClient()
-    
     // Vérifier que l'utilisateur est authentifié
-    const { data: { user }, error: authError } = await server.auth.getUser()
-    
-    if (authError || !user) {
+    const user = await getCurrentUserFromRequest(request)
+    if (!user) {
       return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
     }
 
