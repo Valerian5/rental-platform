@@ -38,17 +38,72 @@ interface RoomState {
   name: string
   type: "main" | "water" | "annex"
   elements: {
-    sols: { state: "absent" | "M" | "P" | "B" | "TB"; comment: string }
-    murs: { state: "absent" | "M" | "P" | "B" | "TB"; comment: string }
-    plafonds: { state: "absent" | "M" | "P" | "B" | "TB"; comment: string }
-    portes: { state: "absent" | "M" | "P" | "B" | "TB"; comment: string }
-    fenetres: { state: "absent" | "M" | "P" | "B" | "TB"; comment: string }
-    volets: { state: "absent" | "M" | "P" | "B" | "TB"; comment: string }
-    plinthes: { state: "absent" | "M" | "P" | "B" | "TB"; comment: string }
-    radiateurs: { state: "absent" | "M" | "P" | "B" | "TB"; comment: string }
-    interrupteurs: { state: "absent" | "M" | "P" | "B" | "TB"; comment: string }
-    prises: { state: "absent" | "M" | "P" | "B" | "TB"; comment: string }
-    eclairages: { state: "absent" | "M" | "P" | "B" | "TB"; comment: string }
+    sols: { 
+      state: "absent" | "M" | "P" | "B" | "TB"; 
+      comment: string;
+      state_entree?: "absent" | "M" | "P" | "B" | "TB";
+      state_sortie?: "absent" | "M" | "P" | "B" | "TB";
+    }
+    murs: { 
+      state: "absent" | "M" | "P" | "B" | "TB"; 
+      comment: string;
+      state_entree?: "absent" | "M" | "P" | "B" | "TB";
+      state_sortie?: "absent" | "M" | "P" | "B" | "TB";
+    }
+    plafonds: { 
+      state: "absent" | "M" | "P" | "B" | "TB"; 
+      comment: string;
+      state_entree?: "absent" | "M" | "P" | "B" | "TB";
+      state_sortie?: "absent" | "M" | "P" | "B" | "TB";
+    }
+    portes: { 
+      state: "absent" | "M" | "P" | "B" | "TB"; 
+      comment: string;
+      state_entree?: "absent" | "M" | "P" | "B" | "TB";
+      state_sortie?: "absent" | "M" | "P" | "B" | "TB";
+    }
+    fenetres: { 
+      state: "absent" | "M" | "P" | "B" | "TB"; 
+      comment: string;
+      state_entree?: "absent" | "M" | "P" | "B" | "TB";
+      state_sortie?: "absent" | "M" | "P" | "B" | "TB";
+    }
+    volets: { 
+      state: "absent" | "M" | "P" | "B" | "TB"; 
+      comment: string;
+      state_entree?: "absent" | "M" | "P" | "B" | "TB";
+      state_sortie?: "absent" | "M" | "P" | "B" | "TB";
+    }
+    plinthes: { 
+      state: "absent" | "M" | "P" | "B" | "TB"; 
+      comment: string;
+      state_entree?: "absent" | "M" | "P" | "B" | "TB";
+      state_sortie?: "absent" | "M" | "P" | "B" | "TB";
+    }
+    radiateurs: { 
+      state: "absent" | "M" | "P" | "B" | "TB"; 
+      comment: string;
+      state_entree?: "absent" | "M" | "P" | "B" | "TB";
+      state_sortie?: "absent" | "M" | "P" | "B" | "TB";
+    }
+    interrupteurs: { 
+      state: "absent" | "M" | "P" | "B" | "TB"; 
+      comment: string;
+      state_entree?: "absent" | "M" | "P" | "B" | "TB";
+      state_sortie?: "absent" | "M" | "P" | "B" | "TB";
+    }
+    prises: { 
+      state: "absent" | "M" | "P" | "B" | "TB"; 
+      comment: string;
+      state_entree?: "absent" | "M" | "P" | "B" | "TB";
+      state_sortie?: "absent" | "M" | "P" | "B" | "TB";
+    }
+    eclairages: { 
+      state: "absent" | "M" | "P" | "B" | "TB"; 
+      comment: string;
+      state_entree?: "absent" | "M" | "P" | "B" | "TB";
+      state_sortie?: "absent" | "M" | "P" | "B" | "TB";
+    }
   }
   comment: string
   photos: string[]
@@ -187,7 +242,12 @@ export function EtatDesLieuxDigitalSection({
         name: "Séjour",
         type: "main",
         elements: Object.fromEntries(
-          Object.keys(ELEMENT_LABELS).map((k) => [k, { state: "absent", comment: "" }])
+          Object.keys(ELEMENT_LABELS).map((k) => [k, { 
+            state: "absent", 
+            comment: "",
+            state_entree: undefined,
+            state_sortie: undefined
+          }])
         ) as RoomState["elements"],
         comment: "",
         photos: [],
@@ -230,7 +290,12 @@ export function EtatDesLieuxDigitalSection({
       name: newRoom.name,
       type: newRoom.category,
       elements: Object.fromEntries(
-        Object.keys(ELEMENT_LABELS).map((k) => [k, { state: "absent", comment: "" }])
+        Object.keys(ELEMENT_LABELS).map((k) => [k, { 
+          state: "absent", 
+          comment: "",
+          state_entree: undefined,
+          state_sortie: undefined
+        }])
       ) as RoomState["elements"],
       comment: "",
       photos: [],
@@ -303,11 +368,14 @@ export function EtatDesLieuxDigitalSection({
             setRooms(data.rooms)
           }
         } else {
-          // Pas de données existantes
+          // Pas de données existantes - vérifier s'il y a un état d'entrée
+          await loadEntryStateIfNeeded()
           setHasExistingData(false)
         }
         setHasLoadedData(true)
       } else {
+        // Pas de données existantes - vérifier s'il y a un état d'entrée
+        await loadEntryStateIfNeeded()
         setHasExistingData(false)
         setHasLoadedData(true)
       }
@@ -315,6 +383,43 @@ export function EtatDesLieuxDigitalSection({
       console.error("Erreur chargement:", error)
       setHasExistingData(false)
       setHasLoadedData(true)
+    }
+  }
+
+  const loadEntryStateIfNeeded = async () => {
+    // Si c'est un état de sortie, charger les données d'entrée
+    if (generalInfo.type === "sortie") {
+      try {
+        const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux/entry`)
+        if (response.ok) {
+          const entryData = await response.json()
+          if (entryData.rooms && entryData.rooms.length > 0) {
+            // Copier les états d'entrée dans les nouvelles pièces
+            setRooms(prevRooms => 
+              prevRooms.map(room => {
+                const entryRoom = entryData.rooms.find((r: any) => r.name === room.name)
+                if (entryRoom) {
+                  return {
+                    ...room,
+                    elements: Object.fromEntries(
+                      Object.keys(room.elements).map(key => [
+                        key,
+                        {
+                          ...room.elements[key as keyof typeof room.elements],
+                          state_entree: entryRoom.elements[key]?.state
+                        }
+                      ])
+                    ) as RoomState["elements"]
+                  }
+                }
+                return room
+              })
+            )
+          }
+        }
+      } catch (error) {
+        console.error("Erreur chargement état d'entrée:", error)
+      }
     }
   }
 
@@ -437,6 +542,13 @@ export function EtatDesLieuxDigitalSection({
       initializeRooms()
     }
   }, [hasLoadedData, hasExistingData])
+
+  // Charger les données d'entrée quand on passe en mode sortie
+  useEffect(() => {
+    if (generalInfo.type === "sortie" && rooms.length > 0) {
+      loadEntryStateIfNeeded()
+    }
+  }, [generalInfo.type])
 
   useEffect(() => {
     if (leaseData) {
@@ -1414,7 +1526,8 @@ export function EtatDesLieuxDigitalSection({
                                 <tr className="border-b">
                                   <th className="text-left py-1">Élément</th>
                                   <th className="text-left py-1">Commentaire</th>
-                                  <th className="text-center py-1">État</th>
+                                  <th className="text-center py-1">État Entrée</th>
+                                  <th className="text-center py-1">État Sortie</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -1427,7 +1540,10 @@ export function EtatDesLieuxDigitalSection({
                                         {element.comment || "-"}
                                       </td>
                                       <td className="py-1 text-center">
-                                        {getStateBadge(element.state)}
+                                        {element.state_entree ? getStateBadge(element.state_entree) : "-"}
+                                      </td>
+                                      <td className="py-1 text-center">
+                                        {element.state_sortie ? getStateBadge(element.state_sortie) : "-"}
                                       </td>
                                     </tr>
                                   )
@@ -1625,7 +1741,8 @@ export function EtatDesLieuxDigitalSection({
                             <tr className="border-b">
                               <th className="text-left py-1">Élément</th>
                               <th className="text-left py-1">Commentaire</th>
-                              <th className="text-center py-1">État</th>
+                              <th className="text-center py-1">État Entrée</th>
+                              <th className="text-center py-1">État Sortie</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1638,7 +1755,10 @@ export function EtatDesLieuxDigitalSection({
                                     {element.comment || "-"}
                                   </td>
                                   <td className="py-1 text-center">
-                                    {getStateBadge(element.state)}
+                                    {element.state_entree ? getStateBadge(element.state_entree) : "-"}
+                                  </td>
+                                  <td className="py-1 text-center">
+                                    {element.state_sortie ? getStateBadge(element.state_sortie) : "-"}
                                   </td>
                                 </tr>
                               )
