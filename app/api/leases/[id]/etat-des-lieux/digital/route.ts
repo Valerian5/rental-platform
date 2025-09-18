@@ -1,6 +1,37 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
 
+// GET /api/leases/[id]/etat-des-lieux/digital
+// Récupère un état des lieux numérique
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const leaseId = params.id
+    const server = createServerClient()
+
+    // Récupérer l'état des lieux numérique
+    const { data: document, error } = await server
+      .from("etat_des_lieux_documents")
+      .select("*")
+      .eq("lease_id", leaseId)
+      .eq("type", "entree")
+      .single()
+
+    if (error && error.code !== 'PGRST116') {
+      console.error("Erreur récupération numérique:", error)
+      return NextResponse.json({ error: "Erreur lors de la récupération" }, { status: 500 })
+    }
+
+    if (!document) {
+      return NextResponse.json({ general_info: null, rooms: [] })
+    }
+
+    return NextResponse.json(document.digital_data || { general_info: null, rooms: [] })
+  } catch (error) {
+    console.error("Erreur GET digital etat-des-lieux:", error)
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+  }
+}
+
 // POST /api/leases/[id]/etat-des-lieux/digital
 // Sauvegarde un état des lieux numérique
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {

@@ -176,10 +176,13 @@ export function EtatDesLieuxDigitalSection({
 
   useEffect(() => {
     loadDigitalState()
-    if (rooms.length === 0) {
+  }, [])
+
+  useEffect(() => {
+    if (hasLoadedData && rooms.length === 0) {
       initializeRooms()
     }
-  }, [])
+  }, [hasLoadedData])
 
   useEffect(() => {
     if (leaseData) {
@@ -308,6 +311,8 @@ export function EtatDesLieuxDigitalSection({
     ))
   }
 
+  const [hasLoadedData, setHasLoadedData] = useState(false)
+
   const loadDigitalState = async () => {
     try {
       const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux/digital`)
@@ -319,9 +324,13 @@ export function EtatDesLieuxDigitalSection({
         if (data.rooms && data.rooms.length > 0) {
           setRooms(data.rooms)
         }
+        setHasLoadedData(true)
+      } else {
+        setHasLoadedData(true)
       }
     } catch (error) {
       console.error("Erreur chargement:", error)
+      setHasLoadedData(true)
     }
   }
 
@@ -517,250 +526,6 @@ export function EtatDesLieuxDigitalSection({
               </div>
             </div>
 
-            {/* Équipements de chauffage */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium">Équipements de chauffage</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label>Type de chauffage</Label>
-                  <Select
-                    value={generalInfo.heating.type}
-                    onValueChange={(value) =>
-                      setGeneralInfo({
-                        ...generalInfo,
-                        heating: { ...generalInfo.heating, type: value },
-                      })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="individuel">Individuel</SelectItem>
-                      <SelectItem value="collectif">Collectif</SelectItem>
-                      <SelectItem value="autre">Autre</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Type de combustible</Label>
-                  <Select
-                    value={generalInfo.heating.fuel_type}
-                    onValueChange={(value) =>
-                      setGeneralInfo({
-                        ...generalInfo,
-                        heating: { ...generalInfo.heating, fuel_type: value },
-                      })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="gaz">Gaz</SelectItem>
-                      <SelectItem value="electricite">Électricité</SelectItem>
-                      <SelectItem value="fioul">Fioul</SelectItem>
-                      <SelectItem value="autre">Autre</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              {generalInfo.heating.type === "autre" && (
-                <div>
-                  <Label>Précisez le type de chauffage</Label>
-                  <Input
-                    value={generalInfo.heating.other_type}
-                    onChange={(e) =>
-                      setGeneralInfo({
-                        ...generalInfo,
-                        heating: { ...generalInfo.heating, other_type: e.target.value },
-                      })
-                    }
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Équipements d'eau chaude */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium">Équipements d'eau chaude</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label>Type d'eau chaude</Label>
-                  <Select
-                    value={generalInfo.hot_water.type}
-                    onValueChange={(value) =>
-                      setGeneralInfo({
-                        ...generalInfo,
-                        hot_water: { ...generalInfo.hot_water, type: value },
-                      })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="individuel">Individuel</SelectItem>
-                      <SelectItem value="collectif">Collectif</SelectItem>
-                      <SelectItem value="autre">Autre</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Type de combustible</Label>
-                  <Select
-                    value={generalInfo.hot_water.fuel_type}
-                    onValueChange={(value) =>
-                      setGeneralInfo({
-                        ...generalInfo,
-                        hot_water: { ...generalInfo.hot_water, fuel_type: value },
-                      })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="gaz">Gaz</SelectItem>
-                      <SelectItem value="electricite">Électricité</SelectItem>
-                      <SelectItem value="fioul">Fioul</SelectItem>
-                      <SelectItem value="autre">Autre</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              {generalInfo.hot_water.type === "autre" && (
-                <div>
-                  <Label>Précisez le type d'eau chaude</Label>
-                  <Input
-                    value={generalInfo.hot_water.other_type}
-                    onChange={(e) =>
-                      setGeneralInfo({
-                        ...generalInfo,
-                        hot_water: { ...generalInfo.hot_water, other_type: e.target.value },
-                      })
-                    }
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Clés remises */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium">Clés remises</h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div>
-                  <Label>Entrée</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={generalInfo.keys.entrance}
-                    onChange={(e) =>
-                      setGeneralInfo({
-                        ...generalInfo,
-                        keys: { ...generalInfo.keys, entrance: parseInt(e.target.value) || 0 },
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <Label>Immeuble</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={generalInfo.keys.building}
-                    onChange={(e) =>
-                      setGeneralInfo({
-                        ...generalInfo,
-                        keys: { ...generalInfo.keys, building: parseInt(e.target.value) || 0 },
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <Label>Parking</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={generalInfo.keys.parking}
-                    onChange={(e) =>
-                      setGeneralInfo({
-                        ...generalInfo,
-                        keys: { ...generalInfo.keys, parking: parseInt(e.target.value) || 0 },
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <Label>Boîte aux lettres</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={generalInfo.keys.mailbox}
-                    onChange={(e) =>
-                      setGeneralInfo({
-                        ...generalInfo,
-                        keys: { ...generalInfo.keys, mailbox: parseInt(e.target.value) || 0 },
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <Label>Cave</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={generalInfo.keys.cellar}
-                    onChange={(e) =>
-                      setGeneralInfo({
-                        ...generalInfo,
-                        keys: { ...generalInfo.keys, cellar: parseInt(e.target.value) || 0 },
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <Label>Autre</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={generalInfo.keys.other}
-                    onChange={(e) =>
-                      setGeneralInfo({
-                        ...generalInfo,
-                        keys: { ...generalInfo.keys, other: parseInt(e.target.value) || 0 },
-                      })
-                    }
-                  />
-                </div>
-              </div>
-              {generalInfo.keys.other > 0 && (
-                <div>
-                  <Label>Précisez le type d'autre clé</Label>
-                  <Input
-                    value={generalInfo.keys.other_type}
-                    onChange={(e) =>
-                      setGeneralInfo({
-                        ...generalInfo,
-                        keys: { ...generalInfo.keys, other_type: e.target.value },
-                      })
-                    }
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Commentaire général */}
-            <div>
-              <Label>Commentaire général</Label>
-              <Textarea
-                placeholder="Commentaires généraux sur l'état des lieux..."
-                value={generalInfo.general_comment}
-                onChange={(e) =>
-                  setGeneralInfo({ ...generalInfo, general_comment: e.target.value })
-                }
-              />
-            </div>
           </CardContent>
         </Card>
 
