@@ -20,6 +20,8 @@ import { applicationEnrichmentService } from "@/lib/application-enrichment-servi
 import Link from "next/link"
 import { toast } from "sonner"
 import { useFavorites } from "@/hooks/use-favorites"
+import { useApplicationStatus } from "@/hooks/use-application-status"
+import { ApplicationStatusBadge } from "@/components/application-badge"
 
 interface Property {
   id: string
@@ -81,6 +83,7 @@ export default function TenantSearchPage() {
   const [properties, setProperties] = useState<Property[]>([])
   const [loading, setLoading] = useState(false)
   const { favorites, toggleFavorite, isFavorite } = useFavorites()
+  const { checkMultipleApplications, hasApplied, getStatus } = useApplicationStatus()
   const [showFilters, setShowFilters] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
@@ -167,6 +170,13 @@ export default function TenantSearchPage() {
         setProperties(propertiesWithScore)
         setTotal(data.total)
         setTotalPages(data.totalPages)
+        
+        // Charger les statuts des candidatures pour les propriétés trouvées
+        const user = JSON.parse(localStorage.getItem("user") || "{}")
+        if (user.id && propertiesWithScore.length > 0) {
+          const propertyIds = propertiesWithScore.map(p => p.id)
+          await checkMultipleApplications(propertyIds, user.id)
+        }
         
         // Mettre à jour les filtres actifs
         updateActiveFilters()
@@ -755,6 +765,13 @@ export default function TenantSearchPage() {
                       {property.property_type === "studio" && "Studio"}
                       {property.property_type === "loft" && "Loft"}
                     </Badge>
+                    <div className="absolute bottom-2 right-2">
+                      <ApplicationStatusBadge
+                        hasApplied={hasApplied(property.id)}
+                        status={getStatus(property.id)}
+                        className="text-xs"
+                      />
+                    </div>
                   </div>
 
                   <CardHeader className="pb-2">

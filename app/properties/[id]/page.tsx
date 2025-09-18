@@ -17,6 +17,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { FavoriteButton } from "@/components/favorite-button"
+import { ApplicationStatusBadge } from "@/components/application-badge"
+import { useApplicationStatus } from "@/hooks/use-application-status"
 import {
   // Navigation et interface
   ArrowLeft,
@@ -127,6 +129,7 @@ export default function PropertyPublicPage() {
   const [rentalFile, setRentalFile] = useState<any>(null)
   const [ownerPreferences, setOwnerPreferences] = useState<any>(null)
   const [compatibilityCheck, setCompatibilityCheck] = useState<any>(null)
+  const { checkApplicationStatus, hasApplied, getStatus } = useApplicationStatus()
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
@@ -164,6 +167,9 @@ export default function PropertyPublicPage() {
         if (user && user.user_type === "tenant") {
           const fileData = await rentalFileService.getRentalFile(user.id)
           setRentalFile(fileData)
+          
+          // Vérifier le statut de candidature pour cette propriété
+          await checkApplicationStatus(params.id as string, user.id)
         }
 
         // Récupérer les préférences du propriétaire pour le calcul de compatibilité
@@ -871,6 +877,16 @@ export default function PropertyPublicPage() {
                       Les coordonnées du propriétaire sont masquées. 
                       Utilisez les boutons ci-dessous pour le contacter.
                     </p>
+                  </div>
+                )}
+
+                {/* Badge de statut de candidature */}
+                {currentUser && currentUser.user_type === "tenant" && (
+                  <div className="mb-4 flex justify-center">
+                    <ApplicationStatusBadge
+                      hasApplied={hasApplied(property.id)}
+                      status={getStatus(property.id)}
+                    />
                   </div>
                 )}
 

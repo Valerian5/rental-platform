@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Home, Building, UserCheck, Phone, User, Settings, MessageSquare, BarChart3, Heart } from "lucide-react"
 import { FavoritesTest } from "@/components/favorites-test"
+import { ApplicationStatusTest } from "@/components/application-status-test"
 
 export default function NavigationPage() {
   return (
@@ -179,18 +180,31 @@ export default function NavigationPage() {
             </CardContent>
           </Card>
 
-          {/* Test API Favoris */}
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Heart className="h-5 w-5 text-blue-600" />
-                Test API Favoris
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <FavoritesTest />
-            </CardContent>
-          </Card>
+    {/* Test API Favoris */}
+    <Card className="hover:shadow-lg transition-shadow">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Heart className="h-5 w-5 text-blue-600" />
+          Test API Favoris
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <FavoritesTest />
+      </CardContent>
+    </Card>
+
+    {/* Test Badge Candidature */}
+    <Card className="hover:shadow-lg transition-shadow">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <UserCheck className="h-5 w-5 text-green-600" />
+          Test Badge Candidature
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ApplicationStatusTest />
+      </CardContent>
+    </Card>
         </div>
 
         <div className="mt-8 text-center">
