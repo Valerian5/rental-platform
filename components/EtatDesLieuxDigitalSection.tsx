@@ -173,35 +173,7 @@ export function EtatDesLieuxDigitalSection({
     name: "",
   })
   const [currentRoomIndex, setCurrentRoomIndex] = useState(0)
-
-  useEffect(() => {
-    loadDigitalState()
-  }, [])
-
-  useEffect(() => {
-    if (hasLoadedData && rooms.length === 0) {
-      initializeRooms()
-    }
-  }, [hasLoadedData])
-
-  useEffect(() => {
-    if (leaseData) {
-      setGeneralInfo((prev) => ({
-        ...prev,
-        address: leaseData.adresse_logement,
-        owner: {
-          ...prev.owner,
-          first_name: leaseData.bailleur_nom_prenom.split(" ")[0] || "",
-          last_name: leaseData.bailleur_nom_prenom.split(" ").slice(1).join(" ") || "",
-        },
-        tenant: {
-          ...prev.tenant,
-          first_name: leaseData.locataire_nom_prenom.split(" ")[0] || "",
-          last_name: leaseData.locataire_nom_prenom.split(" ").slice(1).join(" ") || "",
-        },
-      }))
-    }
-  }, [leaseData])
+  const [hasLoadedData, setHasLoadedData] = useState(false)
 
   const initializeRooms = () => {
     setRooms([
@@ -311,8 +283,6 @@ export function EtatDesLieuxDigitalSection({
     ))
   }
 
-  const [hasLoadedData, setHasLoadedData] = useState(false)
-
   const loadDigitalState = async () => {
     try {
       const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux/digital`)
@@ -355,6 +325,35 @@ export function EtatDesLieuxDigitalSection({
       toast.error("Erreur lors de la sauvegarde")
     }
   }
+
+  useEffect(() => {
+    loadDigitalState()
+  }, [])
+
+  useEffect(() => {
+    if (hasLoadedData && rooms.length === 0) {
+      initializeRooms()
+    }
+  }, [hasLoadedData])
+
+  useEffect(() => {
+    if (leaseData) {
+      setGeneralInfo((prev) => ({
+        ...prev,
+        address: leaseData.adresse_logement,
+        owner: {
+          ...prev.owner,
+          first_name: leaseData.bailleur_nom_prenom.split(" ")[0] || "",
+          last_name: leaseData.bailleur_nom_prenom.split(" ").slice(1).join(" ") || "",
+        },
+        tenant: {
+          ...prev.tenant,
+          first_name: leaseData.locataire_nom_prenom.split(" ")[0] || "",
+          last_name: leaseData.locataire_nom_prenom.split(" ").slice(1).join(" ") || "",
+        },
+      }))
+    }
+  }, [leaseData])
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
