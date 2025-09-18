@@ -310,10 +310,10 @@ export default function TenantSearchPage() {
       const user = JSON.parse(localStorage.getItem("user") || "{}")
       if (!user.id) return
 
-      const response = await fetch(`/api/favorites?user_id=${user.id}`)
+      const response = await fetch("/api/favorites")
       if (response.ok) {
         const data = await response.json()
-        const favoriteIds = new Set(data.favorites.map((f: any) => f.property_id))
+        const favoriteIds = new Set(data.data.map((f: any) => f.property_id))
         setFavorites(favoriteIds)
       }
     } catch (error) {
@@ -329,11 +329,10 @@ export default function TenantSearchPage() {
         return
       }
 
-      const response = await fetch("/api/favorites", {
+      const response = await fetch("/api/favorites/toggle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          user_id: user.id,
           property_id: propertyId,
         }),
       })

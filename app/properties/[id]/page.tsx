@@ -16,6 +16,8 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { FavoriteButton } from "@/components/favorite-button"
+import { authService } from "@/lib/auth-service"
 import {
   // Navigation et interface
   ArrowLeft,
@@ -319,8 +321,9 @@ export default function PropertyPublicPage() {
     }
   }
 
-  const handleFavorite = () => {
-    toast.info("Fonctionnalité favoris en cours de développement")
+  const handleFavoriteToggle = (propertyId: string, isFavorite: boolean) => {
+    // Callback optionnel pour gérer les changements d'état
+    console.log(`Propriété ${propertyId} ${isFavorite ? 'ajoutée aux' : 'retirée des'} favoris`)
   }
 
   // Fonction pour obtenir l'icône appropriée pour chaque équipement
@@ -493,10 +496,13 @@ export default function PropertyPublicPage() {
               Retour aux annonces
             </Link>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={handleFavorite}>
-                <Heart className="h-4 w-4 mr-2" />
-                Favoris
-              </Button>
+              <FavoriteButton
+                propertyId={property.id}
+                userId={currentUser?.id}
+                size="sm"
+                variant="outline"
+                onToggle={handleFavoriteToggle}
+              />
               <Button size="sm" onClick={handleSendApplication}>
                 <Send className="h-4 w-4 mr-2" />
                 Envoyer mon dossier

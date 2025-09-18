@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Home, Building, UserCheck, Phone, User, Settings, MessageSquare, BarChart3 } from "lucide-react"
+import { Home, Building, UserCheck, Phone, User, Settings, MessageSquare, BarChart3, Heart } from "lucide-react"
 
 export default function NavigationPage() {
   return (
@@ -154,6 +154,27 @@ export default function NavigationPage() {
               <Button asChild className="w-full">
                 <Link href="/contact">Voir la page</Link>
               </Button>
+            </CardContent>
+          </Card>
+
+          {/* Favoris */}
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Heart className="h-5 w-5 text-red-600" />
+                Favoris
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600 mb-4">Gestion des biens favoris pour les locataires</p>
+              <div className="space-y-2">
+                <Button asChild className="w-full">
+                  <Link href="/favorites">Favoris publics</Link>
+                </Button>
+                <Button asChild variant="outline" className="w-full">
+                  <Link href="/tenant/favorites">Favoris locataire</Link>
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>

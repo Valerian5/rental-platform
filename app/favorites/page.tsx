@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/page-header"
 import { authService } from "@/lib/auth-service"
 import { Skeleton } from "@/components/ui/skeleton"
 
-export default function TenantFavoritesPage() {
+export default function FavoritesPage() {
   const router = useRouter()
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
