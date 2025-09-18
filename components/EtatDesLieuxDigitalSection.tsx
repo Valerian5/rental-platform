@@ -355,11 +355,12 @@ export function EtatDesLieuxDigitalSection({
 
   const loadDigitalState = async () => {
     try {
-      const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux/digital`)
+      // Essayer de charger l'état d'entrée d'abord
+      const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux/digital?type=entree`)
       if (response.ok) {
         const data = await response.json()
         if (data.general_info || (data.rooms && data.rooms.length > 0)) {
-          // Il y a des données existantes
+          // Il y a des données d'entrée
           setHasExistingData(true)
           if (data.general_info) {
             setGeneralInfo(data.general_info)
@@ -368,14 +369,14 @@ export function EtatDesLieuxDigitalSection({
             setRooms(data.rooms)
           }
         } else {
-          // Pas de données existantes - vérifier s'il y a un état d'entrée
-          await loadEntryStateIfNeeded()
+          // Pas de données d'entrée - vérifier s'il y a un état de sortie
+          await loadExitStateIfNeeded()
           setHasExistingData(false)
         }
         setHasLoadedData(true)
       } else {
-        // Pas de données existantes - vérifier s'il y a un état d'entrée
-        await loadEntryStateIfNeeded()
+        // Pas de données d'entrée - vérifier s'il y a un état de sortie
+        await loadExitStateIfNeeded()
         setHasExistingData(false)
         setHasLoadedData(true)
       }
@@ -383,6 +384,27 @@ export function EtatDesLieuxDigitalSection({
       console.error("Erreur chargement:", error)
       setHasExistingData(false)
       setHasLoadedData(true)
+    }
+  }
+
+  const loadExitStateIfNeeded = async () => {
+    try {
+      const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux/digital?type=sortie`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.general_info || (data.rooms && data.rooms.length > 0)) {
+          // Il y a des données de sortie
+          setHasExistingData(true)
+          if (data.general_info) {
+            setGeneralInfo(data.general_info)
+          }
+          if (data.rooms && data.rooms.length > 0) {
+            setRooms(data.rooms)
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Erreur chargement état de sortie:", error)
     }
   }
 
@@ -1540,10 +1562,16 @@ export function EtatDesLieuxDigitalSection({
                                         {element.comment || "-"}
                                       </td>
                                       <td className="py-1 text-center">
-                                        {element.state_entree ? getStateBadge(element.state_entree) : "-"}
+                                        {generalInfo.type === "entree" 
+                                          ? getStateBadge(element.state)
+                                          : (element.state_entree ? getStateBadge(element.state_entree) : "-")
+                                        }
                                       </td>
                                       <td className="py-1 text-center">
-                                        {element.state_sortie ? getStateBadge(element.state_sortie) : "-"}
+                                        {generalInfo.type === "sortie" 
+                                          ? getStateBadge(element.state)
+                                          : (element.state_sortie ? getStateBadge(element.state_sortie) : "-")
+                                        }
                                       </td>
                                     </tr>
                                   )
@@ -1755,10 +1783,16 @@ export function EtatDesLieuxDigitalSection({
                                     {element.comment || "-"}
                                   </td>
                                   <td className="py-1 text-center">
-                                    {element.state_entree ? getStateBadge(element.state_entree) : "-"}
+                                    {generalInfo.type === "entree" 
+                                      ? getStateBadge(element.state)
+                                      : (element.state_entree ? getStateBadge(element.state_entree) : "-")
+                                    }
                                   </td>
                                   <td className="py-1 text-center">
-                                    {element.state_sortie ? getStateBadge(element.state_sortie) : "-"}
+                                    {generalInfo.type === "sortie" 
+                                      ? getStateBadge(element.state)
+                                      : (element.state_sortie ? getStateBadge(element.state_sortie) : "-")
+                                    }
                                   </td>
                                 </tr>
                               )

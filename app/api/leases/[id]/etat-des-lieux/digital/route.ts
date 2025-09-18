@@ -6,6 +6,8 @@ import { createServerClient } from "@/lib/supabase"
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const leaseId = params.id
+    const { searchParams } = new URL(request.url)
+    const type = searchParams.get('type') || 'entree'
     const server = createServerClient()
 
     // Récupérer l'état des lieux numérique
@@ -13,7 +15,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       .from("etat_des_lieux_documents")
       .select("*")
       .eq("lease_id", leaseId)
-      .eq("type", "entree")
+      .eq("type", type)
       .single()
 
     if (error && error.code !== 'PGRST116') {
@@ -66,7 +68,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .upsert({
         lease_id: leaseId,
         property_id: lease.property_id,
-        type: "entree", // Par défaut, on peut le modifier selon le contexte
+        type: general_info.type || "entree",
         status: "draft",
         digital_data: digitalData,
       })
