@@ -468,7 +468,12 @@ export function EtatDesLieuxDigitalSection({
   }
 
   // Fonctions pour la signature
+  const [isDrawing, setIsDrawing] = useState(false)
+
   const startSignature = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>, type: 'owner' | 'tenant') => {
+    e.preventDefault()
+    setIsDrawing(true)
+    
     const canvas = e.currentTarget
     const ctx = canvas.getContext('2d')
     if (!ctx) return
@@ -481,10 +486,14 @@ export function EtatDesLieuxDigitalSection({
     ctx.moveTo(x, y)
     ctx.lineWidth = 2
     ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
     ctx.strokeStyle = '#000000'
   }
 
   const drawSignature = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>, type: 'owner' | 'tenant') => {
+    if (!isDrawing) return
+    
+    e.preventDefault()
     const canvas = e.currentTarget
     const ctx = canvas.getContext('2d')
     if (!ctx) return
@@ -498,6 +507,9 @@ export function EtatDesLieuxDigitalSection({
   }
 
   const endSignature = (type: 'owner' | 'tenant') => {
+    if (!isDrawing) return
+    
+    setIsDrawing(false)
     const canvas = document.getElementById(`${type}-signature`) as HTMLCanvasElement
     if (!canvas) return
 
@@ -1334,7 +1346,7 @@ export function EtatDesLieuxDigitalSection({
       </div>
 
       {/* Sidebar */}
-      <div className="space-y-6 sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
+      <div className="space-y-6 sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto z-10">
         <Card>
           <CardHeader>
             <CardTitle className="text-sm">Aperçu de l'état des lieux</CardTitle>
@@ -1588,11 +1600,11 @@ export function EtatDesLieuxDigitalSection({
                           )}
 
                           {/* Photos de la pièce */}
-                          {room.photos.length > 0 && (
-                            <div className="mt-2">
-                              <div className="text-xs font-medium text-gray-600 mb-1">
-                                Photos ({room.photos.length})
-                              </div>
+                          <div className="mt-2">
+                            <div className="text-xs font-medium text-gray-600 mb-1">
+                              Photos ({room.photos.length})
+                            </div>
+                            {room.photos.length > 0 ? (
                               <div className="grid grid-cols-3 gap-1">
                                 {room.photos.slice(0, 3).map((photo, photoIndex) => (
                                   <img
@@ -1600,6 +1612,10 @@ export function EtatDesLieuxDigitalSection({
                                     src={photo}
                                     alt={`Photo ${photoIndex + 1}`}
                                     className="w-full h-16 object-cover rounded border"
+                                    onError={(e) => {
+                                      console.error("Erreur chargement photo:", photo)
+                                      e.currentTarget.style.display = 'none'
+                                    }}
                                   />
                                 ))}
                                 {room.photos.length > 3 && (
@@ -1608,8 +1624,10 @@ export function EtatDesLieuxDigitalSection({
                                   </div>
                                 )}
                               </div>
-                            </div>
-                          )}
+                            ) : (
+                              <div className="text-xs text-gray-400 italic">Aucune photo</div>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1844,6 +1862,7 @@ export function EtatDesLieuxDigitalSection({
                     onMouseDown={(e) => startSignature(e, 'owner')}
                     onMouseMove={(e) => drawSignature(e, 'owner')}
                     onMouseUp={() => endSignature('owner')}
+                    onMouseLeave={() => endSignature('owner')}
                     onTouchStart={(e) => startSignature(e, 'owner')}
                     onTouchMove={(e) => drawSignature(e, 'owner')}
                     onTouchEnd={() => endSignature('owner')}
@@ -1873,6 +1892,7 @@ export function EtatDesLieuxDigitalSection({
                     onMouseDown={(e) => startSignature(e, 'tenant')}
                     onMouseMove={(e) => drawSignature(e, 'tenant')}
                     onMouseUp={() => endSignature('tenant')}
+                    onMouseLeave={() => endSignature('tenant')}
                     onTouchStart={(e) => startSignature(e, 'tenant')}
                     onTouchMove={(e) => drawSignature(e, 'tenant')}
                     onTouchEnd={() => endSignature('tenant')}
