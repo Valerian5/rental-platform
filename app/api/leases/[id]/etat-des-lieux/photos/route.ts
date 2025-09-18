@@ -22,7 +22,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const fileName = `${leaseId}/${roomId}/${Date.now()}-${photo.name}`
       
       const { data, error } = await server.storage
-        .from('etat-des-lieux-photos')
+        .from('documents')
         .upload(fileName, photo, {
           cacheControl: '3600',
           upsert: false
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
       // Récupérer l'URL publique
       const { data: { publicUrl } } = server.storage
-        .from('etat-des-lieux-photos')
+        .from('documents')
         .getPublicUrl(fileName)
 
       photoUrls.push(publicUrl)
