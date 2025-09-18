@@ -91,11 +91,18 @@ export const applicationStatusService = {
       "rejected": "Refusée",
       "withdrawn": "Retirée",
       "under_review": "En cours d'évaluation",
+      "analyzing": "En analyse",
+      "confirmed_by_tenant": "Confirmée par le locataire",
       "visit_scheduled": "Visite programmée",
+      "visit_proposed": "Visite proposée",
       "visit_completed": "Visite effectuée",
+      "visit_done": "Visite effectuée",
+      "waiting_tenant_confirmation": "En attente de confirmation",
       "offer_made": "Offre faite",
       "offer_accepted": "Offre acceptée",
-      "offer_rejected": "Offre refusée"
+      "offer_rejected": "Offre refusée",
+      "lease_created": "Bail créé",
+      "lease_signed": "Bail signé"
     }
 
     return statusMap[status] || status
@@ -109,11 +116,18 @@ export const applicationStatusService = {
       "rejected": "bg-red-100 text-red-800",
       "withdrawn": "bg-gray-100 text-gray-800",
       "under_review": "bg-blue-100 text-blue-800",
+      "analyzing": "bg-blue-100 text-blue-800",
+      "confirmed_by_tenant": "bg-green-100 text-green-800",
       "visit_scheduled": "bg-purple-100 text-purple-800",
+      "visit_proposed": "bg-purple-100 text-purple-800",
       "visit_completed": "bg-indigo-100 text-indigo-800",
+      "visit_done": "bg-indigo-100 text-indigo-800",
+      "waiting_tenant_confirmation": "bg-yellow-100 text-yellow-800",
       "offer_made": "bg-orange-100 text-orange-800",
       "offer_accepted": "bg-green-100 text-green-800",
-      "offer_rejected": "bg-red-100 text-red-800"
+      "offer_rejected": "bg-red-100 text-red-800",
+      "lease_created": "bg-green-100 text-green-800",
+      "lease_signed": "bg-emerald-100 text-emerald-800"
     }
 
     return colorMap[status] || "bg-gray-100 text-gray-800"

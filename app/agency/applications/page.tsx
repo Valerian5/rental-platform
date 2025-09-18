@@ -15,28 +15,7 @@ import Link from "next/link"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 
-// RÉUTILISE les types et constantes des candidatures propriétaire
-const statusLabels = {
-  pending: "En attente",
-  analyzing: "En cours d'analyse",
-  visit_proposed: "Visite proposée",
-  visit_scheduled: "Visite programmée",
-  visit_completed: "Visite effectuée",
-  accepted: "Acceptée",
-  rejected: "Refusée",
-  lease_signed: "Bail signé",
-}
-
-const statusColors = {
-  pending: "bg-yellow-100 text-yellow-800",
-  analyzing: "bg-blue-100 text-blue-800",
-  visit_proposed: "bg-purple-100 text-purple-800",
-  visit_scheduled: "bg-indigo-100 text-indigo-800",
-  visit_completed: "bg-green-100 text-green-800",
-  accepted: "bg-green-100 text-green-800",
-  rejected: "bg-red-100 text-red-800",
-  lease_signed: "bg-emerald-100 text-emerald-800",
-}
+import { applicationStatusService } from "@/lib/application-status-service"
 
 export default function AgencyApplicationsPage() {
   const [applications, setApplications] = useState<any[]>([])
@@ -196,7 +175,16 @@ export default function AgencyApplicationsPage() {
         <Tabs defaultValue="all" value={filter} onValueChange={setFilter}>
           <TabsList>
             <TabsTrigger value="all">Toutes ({applications.length})</TabsTrigger>
-            {Object.entries(statusLabels).map(([status, label]) => {
+            {Object.entries({
+              pending: "En attente",
+              analyzing: "En cours d'analyse", 
+              visit_proposed: "Visite proposée",
+              visit_scheduled: "Visite programmée",
+              visit_completed: "Visite effectuée",
+              accepted: "Acceptée",
+              rejected: "Refusée",
+              lease_signed: "Bail signé",
+            }).map(([status, label]) => {
               const count = applications.filter((app) => app.status === status).length
               if (count === 0) return null
               return (
@@ -217,7 +205,7 @@ export default function AgencyApplicationsPage() {
             <h3 className="text-lg font-medium text-gray-900 mb-2">
               {filter === "all"
                 ? "Aucune candidature"
-                : `Aucune candidature ${statusLabels[filter as keyof typeof statusLabels]?.toLowerCase()}`}
+                : `Aucune candidature ${applicationStatusService.getStatusText(filter).toLowerCase()}`}
             </h3>
             <p className="text-gray-600 text-sm mb-6">
               {filter === "all"
@@ -259,10 +247,10 @@ export default function AgencyApplicationsPage() {
                       <div className="flex items-center space-x-2 mt-1">
                         <Badge
                           className={
-                            statusColors[application.status as keyof typeof statusColors] || "bg-gray-100 text-gray-800"
+                            applicationStatusService.getStatusColor(application.status)
                           }
                         >
-                          {statusLabels[application.status as keyof typeof statusLabels] || application.status}
+                          {applicationStatusService.getStatusText(application.status)}
                         </Badge>
                         {application.matching_score && (
                           <Badge className="bg-blue-100 text-blue-800">

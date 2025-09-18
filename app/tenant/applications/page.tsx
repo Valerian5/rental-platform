@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
+import { ApplicationStatusBadge } from "@/components/application-badge"
 import { TenantVisitSlotSelector } from "@/components/tenant-visit-slot-selector"
 import {
   ArrowLeft,
@@ -231,77 +232,7 @@ export default function TenantApplicationsPage() {
   }
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "pending":
-        return (
-          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-            <Clock className="h-3 w-3 mr-1" />
-            En attente
-          </Badge>
-        )
-      case "analyzing":
-        return (
-          <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
-            <RefreshCw className="h-3 w-3 mr-1" />
-            En analyse
-          </Badge>
-        )
-      case "visit_proposed":
-        return (
-          <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
-            <Calendar className="h-3 w-3 mr-1" />
-            Visite proposée
-          </Badge>
-        )
-      case "visit_scheduled":
-        return (
-          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-            <CalendarCheck className="h-3 w-3 mr-1" />
-            Visite planifiée
-          </Badge>
-        )
-      case "visit_done":
-        return (
-          <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
-            <Home className="h-3 w-3 mr-1" />
-            Visite effectuée
-          </Badge>
-        )
-      case "waiting_tenant_confirmation":
-        return (
-          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-            <Clock className="h-3 w-3 mr-1" />
-            En attente de votre confirmation
-          </Badge>
-        )
-      // *** DÉBUT DE LA CORRECTION ***
-      case "confirmed_by_tenant":
-      case "accepted":
-      case "approved":
-        return (
-          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-            <CheckCircle className="h-3 w-3 mr-1" />
-            Acceptée
-          </Badge>
-        )
-      // *** FIN DE LA CORRECTION ***
-      case "rejected":
-        return (
-          <Badge variant="destructive">
-            <AlertTriangle className="h-3 w-3 mr-1" />
-            Refusée
-          </Badge>
-        )
-      case "withdrawn":
-        return (
-          <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
-            <Trash2 className="h-3 w-3 mr-1" />
-            Retirée
-          </Badge>
-        )
-      default:
-        return <Badge variant="outline">Statut inconnu</Badge>
-    }
+    return <ApplicationStatusBadge hasApplied={true} status={status} />
   }
 
   const getStatusMessage = (application: Application) => {

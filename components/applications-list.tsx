@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { ApplicationStatusBadge } from "@/components/application-badge"
 import { Button } from "@/components/ui/button"
 import { Eye, User, Calendar, Star } from "lucide-react"
 import Link from "next/link"
@@ -76,18 +77,7 @@ export function ApplicationsList({ propertyId }: ApplicationsListProps) {
   }
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "pending":
-        return <Badge variant="secondary">En attente</Badge>
-      case "accepted":
-        return <Badge variant="default">Acceptée</Badge>
-      case "rejected":
-        return <Badge variant="destructive">Refusée</Badge>
-      case "visit_scheduled":
-        return <Badge variant="outline">Visite programmée</Badge>
-      default:
-        return <Badge variant="secondary">{status}</Badge>
-    }
+    return <ApplicationStatusBadge hasApplied={true} status={status} />
   }
 
   return (

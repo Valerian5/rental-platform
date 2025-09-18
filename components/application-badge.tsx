@@ -23,16 +23,28 @@ export function ApplicationBadge({ status, className = "" }: ApplicationBadgePro
         return <AlertCircle className="h-3 w-3" />
       case "under_review":
         return <FileText className="h-3 w-3" />
+      case "analyzing":
+        return <FileText className="h-3 w-3" />
+      case "confirmed_by_tenant":
+        return <CheckCircle className="h-3 w-3" />
       case "visit_scheduled":
         return <Calendar className="h-3 w-3" />
+      case "visit_proposed":
+        return <Calendar className="h-3 w-3" />
       case "visit_completed":
+      case "visit_done":
         return <Eye className="h-3 w-3" />
+      case "waiting_tenant_confirmation":
+        return <Clock className="h-3 w-3" />
       case "offer_made":
         return <Handshake className="h-3 w-3" />
       case "offer_accepted":
         return <ThumbsUp className="h-3 w-3" />
       case "offer_rejected":
         return <ThumbsDown className="h-3 w-3" />
+      case "lease_created":
+      case "lease_signed":
+        return <CheckCircle className="h-3 w-3" />
       default:
         return <Clock className="h-3 w-3" />
     }
