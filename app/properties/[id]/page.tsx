@@ -17,7 +17,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { FavoriteButton } from "@/components/favorite-button"
-import { authService } from "@/lib/auth-service"
 import {
   // Navigation et interface
   ArrowLeft,
