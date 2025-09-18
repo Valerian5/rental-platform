@@ -284,7 +284,7 @@ export function EtatDesLieuxDigitalSection({
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Contenu principal */}
       <div className="lg:col-span-2 space-y-6">
-        {/* Section Pièces */}
+       {/* Section Pièces */}
 <Card>
   <CardHeader>
     <div className="flex items-center justify-between">
@@ -359,7 +359,7 @@ export function EtatDesLieuxDigitalSection({
                           updateRoomElement(
                             rooms[currentRoomIndex].id,
                             key,
-                            value,
+                            value as "absent" | "M" | "P" | "B" | "TB",
                             element.comment
                           )
                         }
@@ -416,14 +416,11 @@ export function EtatDesLieuxDigitalSection({
             <div>
               <Label>Photos de la pièce</Label>
               <p className="text-sm text-gray-500 mb-2">
-                Photos justificatives (
-                {rooms[currentRoomIndex].photos.length}/5)
+                Photos justificatives ({rooms[currentRoomIndex].photos.length}/5)
               </p>
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
                 <Camera className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                <p className="text-gray-600">
-                  Cliquez pour ajouter des photos
-                </p>
+                <p className="text-gray-600">Cliquez pour ajouter des photos</p>
               </div>
             </div>
           </div>
