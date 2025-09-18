@@ -109,13 +109,11 @@ export function SignatureMethodSelector({
 
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `bail-${leaseId}.pdf`
-      document.body.appendChild(a)
-      a.click()
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `bail-${leaseId}.pdf`
+      link.click()
       window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
     } catch (error) {
       console.error("Erreur téléchargement:", error)
       toast.error("Erreur lors du téléchargement")
