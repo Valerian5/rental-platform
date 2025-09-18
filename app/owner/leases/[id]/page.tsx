@@ -25,7 +25,7 @@ import {
   Upload,
 } from "lucide-react"
 import { LeaseDocumentDisplay } from "@/components/lease-document-display"
-import { PropertyDocumentsUpload } from "@/components/property-documents-upload"
+import { PropertyDocumentsManager } from "@/components/property-documents-manager"
 import { SignatureMethodSelector } from "@/components/signature-method-selector"
 import { CautionnementSection } from "@/components/CautionnementSection"
 import { EtatDesLieuxSection } from "@/components/EtatDesLieuxSection"
@@ -742,8 +742,8 @@ export default function LeaseDetailPage() {
           </TabsContent>
 
           <TabsContent value="documents" className="space-y-6">
-            {/* On passe leaseId + propertyId. Le composant gère le bucket (ex: lease-annexes) côté props/implémentation. */}
-            <PropertyDocumentsUpload leaseId={lease.id} propertyId={lease.property_id} />
+            {/* Utilise le même composant que la page properties pour la cohérence */}
+            {lease && <PropertyDocumentsManager propertyId={lease.property_id} />}
           </TabsContent>
         </Tabs>
       </div>
