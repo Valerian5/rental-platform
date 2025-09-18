@@ -470,6 +470,20 @@ export function EtatDesLieuxDigitalSection({
   // Fonctions pour la signature
   const [isDrawing, setIsDrawing] = useState(false)
 
+  const getCanvasCoordinates = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>, canvas: HTMLCanvasElement) => {
+    const rect = canvas.getBoundingClientRect()
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+    
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY
+    }
+  }
+
   const startSignature = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>, type: 'owner' | 'tenant') => {
     e.preventDefault()
     setIsDrawing(true)
@@ -478,9 +492,7 @@ export function EtatDesLieuxDigitalSection({
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const rect = canvas.getBoundingClientRect()
-    const x = 'touches' in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left
-    const y = 'touches' in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top
+    const { x, y } = getCanvasCoordinates(e, canvas)
 
     ctx.beginPath()
     ctx.moveTo(x, y)
@@ -498,9 +510,7 @@ export function EtatDesLieuxDigitalSection({
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const rect = canvas.getBoundingClientRect()
-    const x = 'touches' in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left
-    const y = 'touches' in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top
+    const { x, y } = getCanvasCoordinates(e, canvas)
 
     ctx.lineTo(x, y)
     ctx.stroke()
@@ -528,7 +538,17 @@ export function EtatDesLieuxDigitalSection({
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
+    // Sauvegarder les transformations
+    ctx.save()
+    
+    // Réinitialiser les transformations
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    
+    // Effacer le canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height)
+    
+    // Restaurer les transformations
+    ctx.restore()
     
     if (type === 'owner') {
       setOwnerSignature('')
@@ -583,6 +603,37 @@ export function EtatDesLieuxDigitalSection({
       loadEntryStateIfNeeded()
     }
   }, [generalInfo.type])
+
+  // Initialiser la taille des canvas de signature
+  useEffect(() => {
+    const initCanvas = (canvasId: string) => {
+      const canvas = document.getElementById(canvasId) as HTMLCanvasElement
+      if (!canvas) return
+
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+
+      // Définir la taille du canvas
+      const rect = canvas.getBoundingClientRect()
+      canvas.width = rect.width * window.devicePixelRatio
+      canvas.height = rect.height * window.devicePixelRatio
+
+      // Ajuster le contexte pour la haute résolution
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio)
+      ctx.lineWidth = 2
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+      ctx.strokeStyle = '#000000'
+    }
+
+    if (showValidation) {
+      // Attendre que les canvas soient rendus
+      setTimeout(() => {
+        initCanvas('owner-signature')
+        initCanvas('tenant-signature')
+      }, 100)
+    }
+  }, [showValidation])
 
   useEffect(() => {
     if (leaseData) {
