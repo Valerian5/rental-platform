@@ -1251,9 +1251,10 @@ export function EtatDesLieuxDigitalSection({
                   <h4 className="font-medium text-sm mb-3">Autres informations</h4>
                   
                   {/* Chauffage */}
-                  <div className="space-y-2 text-xs">
+                  <div className="space-y-2 text-xs mb-3">
+                    <div className="font-medium text-gray-700">Chauffage</div>
                     <div className="flex justify-between">
-                      <span className="font-medium">Chauffage :</span>
+                      <span>Type de chauffage :</span>
                       <span className="text-gray-600">
                         {generalInfo.heating.type === "individuel" ? "Individuel" : 
                          generalInfo.heating.type === "collectif" ? "Collectif" : 
@@ -1263,7 +1264,7 @@ export function EtatDesLieuxDigitalSection({
                     </div>
                     {generalInfo.heating.type === "individuel" && (
                       <div className="flex justify-between">
-                        <span className="font-medium">Combustible :</span>
+                        <span>Type de combustible :</span>
                         <span className="text-gray-600">
                           {generalInfo.heating.fuel_type === "electrique" ? "Électrique" :
                            generalInfo.heating.fuel_type === "gaz" ? "Gaz" :
@@ -1276,19 +1277,19 @@ export function EtatDesLieuxDigitalSection({
                   </div>
 
                   {/* Eau chaude */}
-                  <div className="space-y-2 text-xs">
+                  <div className="space-y-2 text-xs mb-3">
+                    <div className="font-medium text-gray-700">Eau chaude</div>
                     <div className="flex justify-between">
-                      <span className="font-medium">Eau chaude :</span>
+                      <span>Type d'eau chaude :</span>
                       <span className="text-gray-600">
-                        {generalInfo.hot_water.type === "individuel" ? "Individuel" : 
-                         generalInfo.hot_water.type === "collectif" ? "Collectif" : 
-                         generalInfo.hot_water.type === "pas_de_chauffage" ? "Pas de chauffage" : 
+                        {generalInfo.hot_water.type === "individuelle" ? "Individuelle" : 
+                         generalInfo.hot_water.type === "collective" ? "Collective" : 
                          "Non renseigné"}
                       </span>
                     </div>
-                    {generalInfo.hot_water.type === "individuel" && (
+                    {generalInfo.hot_water.type === "individuelle" && (
                       <div className="flex justify-between">
-                        <span className="font-medium">Combustible :</span>
+                        <span>Type de combustible :</span>
                         <span className="text-gray-600">
                           {generalInfo.hot_water.fuel_type === "electrique" ? "Électrique" :
                            generalInfo.hot_water.fuel_type === "gaz" ? "Gaz" :
@@ -1300,32 +1301,80 @@ export function EtatDesLieuxDigitalSection({
                     )}
                   </div>
 
+                  {/* Compteurs */}
+                  <div className="space-y-2 text-xs mb-3">
+                    <div className="font-medium text-gray-700">Compteurs</div>
+                    
+                    {/* Compteur électrique */}
+                    <div className="space-y-1">
+                      <div className="font-medium text-gray-600">Compteur électrique</div>
+                      <div className="flex justify-between">
+                        <span>N° du compteur :</span>
+                        <span className="text-gray-600">{generalInfo.meters.electricity.number || "Non renseigné"}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Relevé heure pleine :</span>
+                        <span className="text-gray-600">{generalInfo.meters.electricity.full_hour || "Non renseigné"}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Relevé heure creuse :</span>
+                        <span className="text-gray-600">{generalInfo.meters.electricity.off_peak || "Non renseigné"}</span>
+                      </div>
+                    </div>
+
+                    {/* Compteur gaz */}
+                    <div className="space-y-1">
+                      <div className="font-medium text-gray-600">Compteur gaz</div>
+                      <div className="flex justify-between">
+                        <span>N° du compteur :</span>
+                        <span className="text-gray-600">{generalInfo.meters.gas.number || "Non renseigné"}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Relevé :</span>
+                        <span className="text-gray-600">{generalInfo.meters.gas.reading || "Non renseigné"}</span>
+                      </div>
+                    </div>
+
+                    {/* Compteur eau */}
+                    <div className="space-y-1">
+                      <div className="font-medium text-gray-600">Compteur eau</div>
+                      <div className="flex justify-between">
+                        <span>N° du compteur :</span>
+                        <span className="text-gray-600">{generalInfo.meters.water.number || "Non renseigné"}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Relevé :</span>
+                        <span className="text-gray-600">{generalInfo.meters.water.reading || "Non renseigné"}</span>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Clés */}
-                  <div className="space-y-2 text-xs">
-                    <div className="font-medium mb-1">Clés remises :</div>
+                  <div className="space-y-2 text-xs mb-3">
+                    <div className="font-medium text-gray-700">Clés</div>
                     <div className="grid grid-cols-2 gap-2">
                       <div className="flex justify-between">
-                        <span>Entrée :</span>
+                        <span>Clés d'entrée :</span>
                         <span className="text-gray-600">{generalInfo.keys.entrance}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Immeuble :</span>
+                        <span>Clés immeuble/portail :</span>
                         <span className="text-gray-600">{generalInfo.keys.building}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Parking :</span>
+                        <span>Clés parking :</span>
                         <span className="text-gray-600">{generalInfo.keys.parking}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Boîte aux lettres :</span>
+                        <span>Clés boîte aux lettres :</span>
                         <span className="text-gray-600">{generalInfo.keys.mailbox}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Cave :</span>
+                        <span>Clés cave :</span>
                         <span className="text-gray-600">{generalInfo.keys.cellar}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Autre :</span>
+                        <span>Autre type de clés :</span>
                         <span className="text-gray-600">{generalInfo.keys.other}</span>
                       </div>
                     </div>
@@ -1339,7 +1388,7 @@ export function EtatDesLieuxDigitalSection({
                   {/* Commentaire général */}
                   {generalInfo.general_comment && (
                     <div className="space-y-2 text-xs">
-                      <div className="font-medium">Commentaire général :</div>
+                      <div className="font-medium text-gray-700">Commentaire général</div>
                       <div className="p-2 bg-gray-50 rounded text-gray-600">
                         {generalInfo.general_comment}
                       </div>
