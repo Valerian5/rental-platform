@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Home, Camera, CheckCircle, Plus, Trash2 } from "lucide-react"
+import { Home, Camera, CheckCircle, Plus, Trash2, FileCheck } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { toast } from "sonner"
 
@@ -175,6 +175,10 @@ export function EtatDesLieuxDigitalSection({
   const [currentRoomIndex, setCurrentRoomIndex] = useState(0)
   const [hasLoadedData, setHasLoadedData] = useState(false)
   const [hasExistingData, setHasExistingData] = useState(false)
+  const [showValidation, setShowValidation] = useState(false)
+  const [ownerSignature, setOwnerSignature] = useState("")
+  const [tenantSignature, setTenantSignature] = useState("")
+  const [isValidated, setIsValidated] = useState(false)
 
   const initializeRooms = () => {
     setRooms([
@@ -183,7 +187,7 @@ export function EtatDesLieuxDigitalSection({
         name: "Séjour",
         type: "main",
         elements: Object.fromEntries(
-          Object.keys(ELEMENT_LABELS).map((k) => [k, { state: "B", comment: "" }])
+          Object.keys(ELEMENT_LABELS).map((k) => [k, { state: "absent", comment: "" }])
         ) as RoomState["elements"],
         comment: "",
         photos: [],
@@ -226,7 +230,7 @@ export function EtatDesLieuxDigitalSection({
       name: newRoom.name,
       type: newRoom.category,
       elements: Object.fromEntries(
-        Object.keys(ELEMENT_LABELS).map((k) => [k, { state: "B", comment: "" }])
+        Object.keys(ELEMENT_LABELS).map((k) => [k, { state: "absent", comment: "" }])
       ) as RoomState["elements"],
       comment: "",
       photos: [],
@@ -333,6 +337,94 @@ export function EtatDesLieuxDigitalSection({
     } catch (error) {
       console.error("Erreur sauvegarde:", error)
       toast.error("Erreur lors de la sauvegarde")
+    }
+  }
+
+  // Fonctions pour la signature
+  const startSignature = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>, type: 'owner' | 'tenant') => {
+    const canvas = e.currentTarget
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const rect = canvas.getBoundingClientRect()
+    const x = 'touches' in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left
+    const y = 'touches' in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top
+
+    ctx.beginPath()
+    ctx.moveTo(x, y)
+    ctx.lineWidth = 2
+    ctx.lineCap = 'round'
+    ctx.strokeStyle = '#000000'
+  }
+
+  const drawSignature = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>, type: 'owner' | 'tenant') => {
+    const canvas = e.currentTarget
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const rect = canvas.getBoundingClientRect()
+    const x = 'touches' in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left
+    const y = 'touches' in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top
+
+    ctx.lineTo(x, y)
+    ctx.stroke()
+  }
+
+  const endSignature = (type: 'owner' | 'tenant') => {
+    const canvas = document.getElementById(`${type}-signature`) as HTMLCanvasElement
+    if (!canvas) return
+
+    const signatureData = canvas.toDataURL()
+    if (type === 'owner') {
+      setOwnerSignature(signatureData)
+    } else {
+      setTenantSignature(signatureData)
+    }
+  }
+
+  const clearSignature = (type: 'owner' | 'tenant') => {
+    const canvas = document.getElementById(`${type}-signature`) as HTMLCanvasElement
+    if (!canvas) return
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    
+    if (type === 'owner') {
+      setOwnerSignature('')
+    } else {
+      setTenantSignature('')
+    }
+  }
+
+  const validateAndSign = async () => {
+    try {
+      // Sauvegarder avec les signatures
+      const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux/digital`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          general_info: generalInfo,
+          rooms: rooms,
+          property_data: propertyData,
+          lease_data: leaseData,
+          owner_signature: ownerSignature,
+          tenant_signature: tenantSignature,
+          validated: true,
+        }),
+      })
+
+      if (response.ok) {
+        setIsValidated(true)
+        setShowValidation(false)
+        toast.success("État des lieux validé et signé avec succès")
+      } else {
+        toast.error("Erreur lors de la validation")
+      }
+    } catch (error) {
+      console.error("Erreur validation:", error)
+      toast.error("Erreur lors de la validation")
     }
   }
 
@@ -538,19 +630,19 @@ export function EtatDesLieuxDigitalSection({
           </CardContent>
         </Card>
 
-        {/* Section Pièces */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <Home className="h-5 w-5" />
-                Pièces du logement
-              </CardTitle>
-              <Button onClick={() => setShowAddRoomDialog(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Ajouter une pièce
-              </Button>
-            </div>
+       {/* Section Pièces */}
+<Card>
+  <CardHeader>
+    <div className="flex items-center justify-between">
+      <CardTitle className="flex items-center gap-2">
+        <Home className="h-5 w-5" />
+        Pièces du logement
+      </CardTitle>
+      <Button onClick={() => setShowAddRoomDialog(true)}>
+        <Plus className="h-4 w-4 mr-2" />
+        Ajouter une pièce
+      </Button>
+    </div>
             <div className="mt-4 p-3 bg-blue-50 rounded-lg">
               <p className="text-sm text-blue-800 font-medium mb-2">Notez l'état de chaque élément de cette pièce :</p>
               <div className="flex flex-wrap gap-4 text-xs text-blue-700">
@@ -561,124 +653,124 @@ export function EtatDesLieuxDigitalSection({
                 <span><strong>TB</strong> - Très bon état</span>
               </div>
             </div>
-          </CardHeader>
+  </CardHeader>
 
-          <CardContent>
-            {rooms.length === 0 ? (
-              <div className="text-center py-8">
-                <Home className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600">Aucune pièce configurée</p>
-                <p className="text-sm text-gray-500">
-                  Ajoutez des pièces pour commencer l'état des lieux
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Navigation par pièces */}
-                <div className="flex flex-wrap gap-2">
-                  {rooms.map((room, index) => (
-                    <Button
-                      key={room.id}
-                      variant={currentRoomIndex === index ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setCurrentRoomIndex(index)}
-                    >
-                      {room.name}
-                    </Button>
-                  ))}
-                </div>
+  <CardContent>
+    {rooms.length === 0 ? (
+      <div className="text-center py-8">
+        <Home className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+        <p className="text-gray-600">Aucune pièce configurée</p>
+        <p className="text-sm text-gray-500">
+          Ajoutez des pièces pour commencer l'état des lieux
+        </p>
+      </div>
+    ) : (
+      <div className="space-y-4">
+        {/* Navigation par pièces */}
+        <div className="flex flex-wrap gap-2">
+          {rooms.map((room, index) => (
+            <Button
+              key={room.id}
+              variant={currentRoomIndex === index ? "default" : "outline"}
+              size="sm"
+              onClick={() => setCurrentRoomIndex(index)}
+            >
+              {room.name}
+            </Button>
+          ))}
+        </div>
 
-                {/* Contenu de la pièce sélectionnée */}
-                {rooms[currentRoomIndex] && (
-                  <div className="space-y-6">
-                    {/* En-tête pièce */}
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-medium">
-                        {rooms[currentRoomIndex].name}
-                      </h3>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => removeRoom(rooms[currentRoomIndex].id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+        {/* Contenu de la pièce sélectionnée */}
+        {rooms[currentRoomIndex] && (
+          <div className="space-y-6">
+            {/* En-tête pièce */}
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-medium">
+                {rooms[currentRoomIndex].name}
+              </h3>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => removeRoom(rooms[currentRoomIndex].id)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
 
-                    {/* Éléments de la pièce */}
-                    <div className="space-y-4">
-                      {Object.entries(ELEMENT_LABELS).map(([key, label]) => {
+            {/* Éléments de la pièce */}
+            <div className="space-y-4">
+              {Object.entries(ELEMENT_LABELS).map(([key, label]) => {
                         const element = rooms[currentRoomIndex].elements[key as keyof RoomState['elements']]
 
-                        return (
-                          <div key={key} className="border rounded-lg p-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <Label className="font-medium">{label}</Label>
-                              <Select
-                                value={element.state}
-                                onValueChange={(value) =>
-                                  updateRoomElement(
-                                    rooms[currentRoomIndex].id,
-                                    key,
-                                    value as "absent" | "M" | "P" | "B" | "TB",
-                                    element.comment
-                                  )
-                                }
-                              >
-                                <SelectTrigger className="w-32">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="absent">Absent</SelectItem>
-                                  <SelectItem value="M">M</SelectItem>
-                                  <SelectItem value="P">P</SelectItem>
-                                  <SelectItem value="B">B</SelectItem>
-                                  <SelectItem value="TB">TB</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <Textarea
-                              placeholder="Commentaire sur cet élément..."
-                              value={element.comment}
-                              onChange={(e) =>
-                                updateRoomElement(
-                                  rooms[currentRoomIndex].id,
-                                  key,
-                                  element.state,
-                                  e.target.value
-                                )
-                              }
-                              className="mt-2"
-                            />
-                          </div>
-                        )
-                      })}
-                    </div>
-
-                    {/* Commentaire sur la pièce */}
-                    <div>
-                      <Label>Commentaire sur cette pièce</Label>
-                      <Textarea
-                        placeholder="Ajoutez des précisions sur un élément ou une description d'un élément non listé..."
-                        value={rooms[currentRoomIndex].comment}
-                        onChange={(e) =>
-                          setRooms(
-                            rooms.map((r, i) =>
-                              i === currentRoomIndex
-                                ? { ...r, comment: e.target.value }
-                                : r
-                            )
+                return (
+                  <div key={key} className="border rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="font-medium">{label}</Label>
+                      <Select
+                        value={element.state}
+                        onValueChange={(value) =>
+                          updateRoomElement(
+                            rooms[currentRoomIndex].id,
+                            key,
+                            value as "absent" | "M" | "P" | "B" | "TB",
+                            element.comment
                           )
                         }
-                      />
+                      >
+                        <SelectTrigger className="w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="absent">Absent</SelectItem>
+                          <SelectItem value="M">M</SelectItem>
+                          <SelectItem value="P">P</SelectItem>
+                          <SelectItem value="B">B</SelectItem>
+                          <SelectItem value="TB">TB</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
+                    <Textarea
+                      placeholder="Commentaire sur cet élément..."
+                      value={element.comment}
+                      onChange={(e) =>
+                        updateRoomElement(
+                          rooms[currentRoomIndex].id,
+                          key,
+                          element.state,
+                          e.target.value
+                        )
+                      }
+                      className="mt-2"
+                    />
+                  </div>
+                )
+              })}
+            </div>
 
-                    {/* Photos de la pièce */}
-                    <div>
-                      <Label>Photos de la pièce</Label>
-                      <p className="text-sm text-gray-500 mb-2">
-                        Photos justificatives ({rooms[currentRoomIndex].photos.length}/5)
-                      </p>
+            {/* Commentaire sur la pièce */}
+            <div>
+              <Label>Commentaire sur cette pièce</Label>
+              <Textarea
+                placeholder="Ajoutez des précisions sur un élément ou une description d'un élément non listé..."
+                value={rooms[currentRoomIndex].comment}
+                onChange={(e) =>
+                  setRooms(
+                    rooms.map((r, i) =>
+                      i === currentRoomIndex
+                        ? { ...r, comment: e.target.value }
+                        : r
+                    )
+                  )
+                }
+              />
+            </div>
+
+            {/* Photos de la pièce */}
+            <div>
+              <Label>Photos de la pièce</Label>
+              <p className="text-sm text-gray-500 mb-2">
+                Photos justificatives ({rooms[currentRoomIndex].photos.length}/5)
+              </p>
                       
                       {/* Zone d'upload */}
                       <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
@@ -702,7 +794,7 @@ export function EtatDesLieuxDigitalSection({
                           <p className="text-gray-600">Cliquez pour ajouter des photos</p>
                           <p className="text-xs text-gray-500 mt-1">JPG, PNG, WEBP (max 5MB)</p>
                         </label>
-                      </div>
+            </div>
 
                       {/* Affichage des photos */}
                       {rooms[currentRoomIndex].photos.length > 0 && (
@@ -720,14 +812,14 @@ export function EtatDesLieuxDigitalSection({
                               >
                                 <Trash2 className="h-4 w-4" />
                               </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
                   </div>
-                )}
+                          ))}
+                  </div>
+                  )}
+                </div>
               </div>
+                )}
+                  </div>
             )}
           </CardContent>
         </Card>
@@ -1108,7 +1200,7 @@ export function EtatDesLieuxDigitalSection({
       </div>
 
       {/* Sidebar */}
-      <div className="space-y-6">
+      <div className="space-y-6 sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
         <Card>
           <CardHeader>
             <CardTitle className="text-sm">Aperçu de l'état des lieux</CardTitle>
@@ -1120,36 +1212,139 @@ export function EtatDesLieuxDigitalSection({
                 <div className="flex justify-between">
                   <span className="font-medium">Type :</span>
                   <span className="text-gray-600">
-                    {generalInfo.type === "entree" ? "Entrée" : "Sortie"}
+                {generalInfo.type === "entree" ? "Entrée" : "Sortie"}
                   </span>
-                </div>
+              </div>
                 <div className="flex justify-between">
                   <span className="font-medium">Date :</span>
                   <span className="text-gray-600">
-                    {generalInfo.date || "Non renseignée"}
+                {generalInfo.date || "Non renseignée"}
                   </span>
-                </div>
+              </div>
                 <div className="flex justify-between">
                   <span className="font-medium">Adresse :</span>
                   <span className="text-gray-600 text-right">
-                    {generalInfo.address || "Non renseignée"}
+                {generalInfo.address || "Non renseignée"}
                   </span>
-                </div>
+              </div>
                 <div className="flex justify-between">
                   <span className="font-medium">Propriétaire :</span>
                   <span className="text-gray-600">
-                    {generalInfo.owner.first_name} {generalInfo.owner.last_name}
+                {generalInfo.owner.first_name} {generalInfo.owner.last_name}
                   </span>
-                </div>
+              </div>
                 <div className="flex justify-between">
                   <span className="font-medium">Locataire :</span>
                   <span className="text-gray-600">
-                    {generalInfo.tenant.first_name} {generalInfo.tenant.last_name}
+                {generalInfo.tenant.first_name} {generalInfo.tenant.last_name}
                   </span>
-                </div>
+              </div>
                 <div className="flex justify-between">
                   <span className="font-medium">Pièces :</span>
                   <span className="text-gray-600">{rooms.length}</span>
+              </div>
+              </div>
+
+              {/* Autres informations */}
+              <div className="space-y-4">
+                <div className="border-t pt-4">
+                  <h4 className="font-medium text-sm mb-3">Autres informations</h4>
+                  
+                  {/* Chauffage */}
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="font-medium">Chauffage :</span>
+                      <span className="text-gray-600">
+                        {generalInfo.heating.type === "individuel" ? "Individuel" : 
+                         generalInfo.heating.type === "collectif" ? "Collectif" : 
+                         generalInfo.heating.type === "pas_de_chauffage" ? "Pas de chauffage" : 
+                         "Non renseigné"}
+                      </span>
+                    </div>
+                    {generalInfo.heating.type === "individuel" && (
+                      <div className="flex justify-between">
+                        <span className="font-medium">Combustible :</span>
+                        <span className="text-gray-600">
+                          {generalInfo.heating.fuel_type === "electrique" ? "Électrique" :
+                           generalInfo.heating.fuel_type === "gaz" ? "Gaz" :
+                           generalInfo.heating.fuel_type === "fioul" ? "Fioul" :
+                           generalInfo.heating.fuel_type === "autre" ? generalInfo.heating.other_type || "Autre" :
+                           "Non renseigné"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Eau chaude */}
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="font-medium">Eau chaude :</span>
+                      <span className="text-gray-600">
+                        {generalInfo.hot_water.type === "individuel" ? "Individuel" : 
+                         generalInfo.hot_water.type === "collectif" ? "Collectif" : 
+                         generalInfo.hot_water.type === "pas_de_chauffage" ? "Pas de chauffage" : 
+                         "Non renseigné"}
+                      </span>
+                    </div>
+                    {generalInfo.hot_water.type === "individuel" && (
+                      <div className="flex justify-between">
+                        <span className="font-medium">Combustible :</span>
+                        <span className="text-gray-600">
+                          {generalInfo.hot_water.fuel_type === "electrique" ? "Électrique" :
+                           generalInfo.hot_water.fuel_type === "gaz" ? "Gaz" :
+                           generalInfo.hot_water.fuel_type === "fioul" ? "Fioul" :
+                           generalInfo.hot_water.fuel_type === "autre" ? generalInfo.hot_water.other_type || "Autre" :
+                           "Non renseigné"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Clés */}
+                  <div className="space-y-2 text-xs">
+                    <div className="font-medium mb-1">Clés remises :</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex justify-between">
+                        <span>Entrée :</span>
+                        <span className="text-gray-600">{generalInfo.keys.entrance}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Immeuble :</span>
+                        <span className="text-gray-600">{generalInfo.keys.building}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Parking :</span>
+                        <span className="text-gray-600">{generalInfo.keys.parking}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Boîte aux lettres :</span>
+                        <span className="text-gray-600">{generalInfo.keys.mailbox}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Cave :</span>
+                        <span className="text-gray-600">{generalInfo.keys.cellar}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Autre :</span>
+                        <span className="text-gray-600">{generalInfo.keys.other}</span>
+                      </div>
+                    </div>
+                    {generalInfo.keys.other > 0 && generalInfo.keys.other_type && (
+                      <div className="text-xs text-gray-600 mt-1">
+                        Type d'autre clé : {generalInfo.keys.other_type}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Commentaire général */}
+                  {generalInfo.general_comment && (
+                    <div className="space-y-2 text-xs">
+                      <div className="font-medium">Commentaire général :</div>
+                      <div className="p-2 bg-gray-50 rounded text-gray-600">
+                        {generalInfo.general_comment}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1241,6 +1436,14 @@ export function EtatDesLieuxDigitalSection({
               <CheckCircle className="h-4 w-4 mr-2" />
               Sauvegarder
             </Button>
+            <Button 
+              onClick={() => setShowValidation(true)} 
+              className="w-full"
+              variant="outline"
+            >
+              <FileCheck className="h-4 w-4 mr-2" />
+              Valider et signer
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -1305,6 +1508,199 @@ export function EtatDesLieuxDigitalSection({
               Annuler
             </Button>
             <Button onClick={addRoom}>Ajouter cette pièce</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de validation et signature */}
+      <Dialog open={showValidation} onOpenChange={setShowValidation}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Validation et signature de l'état des lieux</DialogTitle>
+            <DialogDescription>
+              Veuillez relire l'état des lieux et apposer vos signatures
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {/* Aperçu complet */}
+            <div className="border rounded-lg p-4 bg-gray-50">
+              <h3 className="font-medium mb-4">Aperçu de l'état des lieux</h3>
+              
+              {/* Informations générales */}
+              <div className="space-y-2 text-sm mb-4">
+                <div className="flex justify-between">
+                  <span className="font-medium">Type :</span>
+                  <span className="text-gray-600">
+                    {generalInfo.type === "entree" ? "Entrée" : "Sortie"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Date :</span>
+                  <span className="text-gray-600">
+                    {generalInfo.date || "Non renseignée"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Adresse :</span>
+                  <span className="text-gray-600 text-right">
+                    {generalInfo.address || "Non renseignée"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Propriétaire :</span>
+                  <span className="text-gray-600">
+                    {generalInfo.owner.first_name} {generalInfo.owner.last_name}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Locataire :</span>
+                  <span className="text-gray-600">
+                    {generalInfo.tenant.first_name} {generalInfo.tenant.last_name}
+                  </span>
+                </div>
+              </div>
+
+              {/* Détail des pièces */}
+              {rooms.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm">Détail des pièces</h4>
+                  {rooms.map((room, index) => (
+                    <div key={room.id} className="border rounded p-3 bg-white">
+                      <h5 className="font-medium text-sm mb-2">{room.name}</h5>
+                      
+                      {/* Tableau des éléments */}
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="border-b">
+                              <th className="text-left py-1">Élément</th>
+                              <th className="text-left py-1">Commentaire</th>
+                              <th className="text-center py-1">État</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Object.entries(ELEMENT_LABELS).map(([key, label]) => {
+                              const element = room.elements[key as keyof typeof room.elements]
+                              return (
+                                <tr key={key} className="border-b">
+                                  <td className="py-1 pr-2">{label}</td>
+                                  <td className="py-1 pr-2 text-gray-600">
+                                    {element.comment || "-"}
+                                  </td>
+                                  <td className="py-1 text-center">
+                                    {getStateBadge(element.state)}
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Photos de la pièce */}
+                      {room.photos.length > 0 && (
+                        <div className="mt-2">
+                          <div className="text-xs font-medium text-gray-600 mb-1">
+                            Photos ({room.photos.length})
+                          </div>
+                          <div className="grid grid-cols-3 gap-1">
+                            {room.photos.slice(0, 3).map((photo, photoIndex) => (
+                              <img
+                                key={photoIndex}
+                                src={photo}
+                                alt={`Photo ${photoIndex + 1}`}
+                                className="w-full h-16 object-cover rounded border"
+                              />
+                            ))}
+                            {room.photos.length > 3 && (
+                              <div className="w-full h-16 bg-gray-100 rounded border flex items-center justify-center text-xs text-gray-500">
+                                +{room.photos.length - 3}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Signatures */}
+            <div className="space-y-4">
+              <h3 className="font-medium">Signatures</h3>
+              
+              {/* Signature propriétaire */}
+              <div className="space-y-2">
+                <Label>Signature du propriétaire ({generalInfo.owner.first_name} {generalInfo.owner.last_name})</Label>
+                <div className="border rounded-lg p-4 bg-white">
+                  <canvas
+                    id="owner-signature"
+                    className="border border-gray-300 rounded w-full h-32 cursor-crosshair"
+                    onMouseDown={(e) => startSignature(e, 'owner')}
+                    onMouseMove={(e) => drawSignature(e, 'owner')}
+                    onMouseUp={() => endSignature('owner')}
+                    onTouchStart={(e) => startSignature(e, 'owner')}
+                    onTouchMove={(e) => drawSignature(e, 'owner')}
+                    onTouchEnd={() => endSignature('owner')}
+                  />
+                  <div className="mt-2 flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => clearSignature('owner')}
+                    >
+                      Effacer
+                    </Button>
+                    <span className="text-xs text-gray-500 self-center">
+                      Signez avec votre souris ou votre doigt
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Signature locataire */}
+              <div className="space-y-2">
+                <Label>Signature du locataire ({generalInfo.tenant.first_name} {generalInfo.tenant.last_name})</Label>
+                <div className="border rounded-lg p-4 bg-white">
+                  <canvas
+                    id="tenant-signature"
+                    className="border border-gray-300 rounded w-full h-32 cursor-crosshair"
+                    onMouseDown={(e) => startSignature(e, 'tenant')}
+                    onMouseMove={(e) => drawSignature(e, 'tenant')}
+                    onMouseUp={() => endSignature('tenant')}
+                    onTouchStart={(e) => startSignature(e, 'tenant')}
+                    onTouchMove={(e) => drawSignature(e, 'tenant')}
+                    onTouchEnd={() => endSignature('tenant')}
+                  />
+                  <div className="mt-2 flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => clearSignature('tenant')}
+                    >
+                      Effacer
+                    </Button>
+                    <span className="text-xs text-gray-500 self-center">
+                      Signez avec votre souris ou votre doigt
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowValidation(false)}>
+              Annuler
+            </Button>
+            <Button 
+              onClick={validateAndSign}
+              disabled={!ownerSignature || !tenantSignature}
+            >
+              Valider et finaliser
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
