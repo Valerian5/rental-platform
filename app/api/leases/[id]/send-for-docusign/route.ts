@@ -35,7 +35,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       )
     }
 
-    if (lease.status !== "draft") {
+    if (lease.status !== "draft" && lease.status !== "sent_to_tenant") {
       return NextResponse.json(
         {
           success: false,

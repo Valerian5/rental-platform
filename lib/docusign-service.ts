@@ -279,7 +279,7 @@ class DocuSignService {
       .from("leases")
       .update({
         docusign_envelope_id: envelope.envelopeId,
-        status: "sent_for_signature",
+        status: "sent_to_tenant",
         updated_at: new Date().toISOString(),
       })
       .eq("id", leaseId)

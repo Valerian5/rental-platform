@@ -117,7 +117,7 @@ export default function TenantLeasesPage() {
   )
   const pendingLeases = leases.filter(
     (lease) =>
-      (lease.status === "sent_to_tenant" || lease.status === "sent_for_signature") &&
+      lease.status === "sent_to_tenant" &&
       !lease.signed_by_tenant
   )
   const draftLeases = leases.filter((lease) => lease.status === "draft")

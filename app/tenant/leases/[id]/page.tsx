@@ -253,7 +253,7 @@ export default function TenantLeaseDetailPage() {
 
   const getStatusInfo = (status: string) => {
     switch (status) {
-      case "sent_for_signature":
+      case "sent_to_tenant":
         return {
           badge: (
             <Badge className="bg-blue-600">

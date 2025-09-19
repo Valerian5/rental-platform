@@ -55,7 +55,7 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
 
       setSigningUrls(data.signingUrls)
       toast.success("Bail envoyé pour signature via DocuSign")
-      onStatusChange?.("sent_for_signature")
+      onStatusChange?.("sent_to_tenant")
 
       // Commencer à vérifier le statut
       checkSignatureStatus()
@@ -128,7 +128,7 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
   }
 
   useEffect(() => {
-    if (leaseStatus === "sent_for_signature") {
+    if (leaseStatus === "sent_to_tenant") {
       checkSignatureStatus()
 
       // Vérifier le statut toutes les 30 secondes
@@ -137,7 +137,7 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
     }
   }, [leaseStatus])
 
-  if (leaseStatus === "draft" || (leaseStatus !== "sent_for_signature" && !signatureStatus)) {
+  if (leaseStatus === "draft" || (leaseStatus !== "sent_to_tenant" && !signatureStatus)) {
     return (
       <Card>
         <CardHeader>
@@ -172,7 +172,7 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
     )
   }
 
-  if (leaseStatus === "sent_for_signature" || signatureStatus) {
+  if (leaseStatus === "sent_to_tenant" || signatureStatus) {
     return (
       <Card>
         <CardHeader>
