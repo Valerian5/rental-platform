@@ -34,6 +34,27 @@ export function SignatureMethodSelector({
     checkPremiumFeatures()
   }, [])
 
+  // Charger la méthode de signature depuis le statut du bail
+  useEffect(() => {
+    const loadSignatureMethod = async () => {
+      if (leaseStatus === "sent_to_tenant" || leaseStatus === "signed_by_tenant") {
+        try {
+          const response = await fetch(`/api/leases/${leaseId}/signature-status`)
+          if (response.ok) {
+            const data = await response.json()
+            if (data.lease.signature_method) {
+              setSelectedSignatureMethod(data.lease.signature_method)
+            }
+          }
+        } catch (error) {
+          console.error("Erreur chargement méthode signature:", error)
+        }
+      }
+    }
+    
+    loadSignatureMethod()
+  }, [leaseStatus, leaseId])
+
   const checkPremiumFeatures = async () => {
     try {
       const enabled = await premiumFeaturesService.isElectronicSignatureEnabled()
@@ -190,10 +211,11 @@ export function SignatureMethodSelector({
       toast.success("Processus de signature initié !")
       
       // Stocker la méthode choisie
-      setSelectedSignatureMethod(signatureMethod)
+      setSelectedSignatureMethod(data.signatureMethod || signatureMethod)
       
+      // Forcer le passage en mode signature même si le statut reste draft
       if (onStatusChange) {
-        onStatusChange(data.status || "sent_to_tenant")
+        onStatusChange("sent_to_tenant")
       }
     } catch (error) {
       console.error("Erreur initiation signature:", error)
@@ -216,6 +238,15 @@ export function SignatureMethodSelector({
 
   // Déterminer l'état actuel et les actions possibles
   const getCurrentState = () => {
+    // Si une méthode de signature est sélectionnée, passer en mode signature
+    if (selectedSignatureMethod) {
+      return {
+        showInitiation: false,
+        showSignature: true,
+        showStatus: false,
+      }
+    }
+
     switch (leaseStatus) {
       case "draft":
         return {

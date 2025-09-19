@@ -219,6 +219,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       success: true,
       status: newStatus,
       message: "Action effectuée avec succès",
+      signatureMethod: signatureMethod, // Retourner la méthode choisie
     })
   } catch (error) {
     console.error("❌ [SIGNATURE-WORKFLOW] Erreur:", error)
