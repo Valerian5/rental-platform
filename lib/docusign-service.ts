@@ -256,7 +256,7 @@ class DocuSignService {
 
     const recipients: DocuSignRecipient[] = [
       { email: ownerEmail, name: ownerName, recipientId: "1", routingOrder: "1", roleName: "Bailleur", clientUserId: ownerEmail },
-      { email: tenantEmail, name: tenantName, recipientId: "2", routingOrder: "2", roleName: "Locataire", clientUserId: tenantEmail },
+      { email: tenantEmail, name: tenantName, recipientId: "2", routingOrder: "1", roleName: "Locataire", clientUserId: tenantEmail },
     ]
 
     console.log("📦 [DOCUSIGN] Création de l'enveloppe...")

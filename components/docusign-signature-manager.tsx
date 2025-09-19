@@ -26,6 +26,7 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
   const [sending, setSending] = useState(false)
   const [signatureStatus, setSignatureStatus] = useState<SignatureStatus | null>(null)
   const [signingUrls, setSigningUrls] = useState<{ owner: string; tenant: string } | null>(null)
+  const [hasDocuSignEnvelope, setHasDocuSignEnvelope] = useState(false)
 
   const sendForDocuSignSignature = async () => {
     try {
@@ -54,6 +55,7 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
       }
 
       setSigningUrls(data.signingUrls)
+      setHasDocuSignEnvelope(true)
       toast.success("Bail envoyé pour signature via DocuSign")
       onStatusChange?.("sent_to_tenant")
 
@@ -75,6 +77,10 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
       const data = await response.json()
 
       if (response.ok) {
+        // Vérifier si l'enveloppe DocuSign existe
+        const hasEnvelope = !!data.lease.docusign_envelope_id
+        setHasDocuSignEnvelope(hasEnvelope)
+
         // Adapter les données au format attendu
         const signatureStatus = {
           status: data.lease.status,
@@ -128,16 +134,17 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
   }
 
   useEffect(() => {
-    if (leaseStatus === "sent_to_tenant") {
-      checkSignatureStatus()
+    // Vérifier le statut au chargement
+    checkSignatureStatus()
 
+    if (leaseStatus === "sent_to_tenant" || hasDocuSignEnvelope) {
       // Vérifier le statut toutes les 30 secondes
       const interval = setInterval(checkSignatureStatus, 30000)
       return () => clearInterval(interval)
     }
-  }, [leaseStatus])
+  }, [leaseStatus, hasDocuSignEnvelope])
 
-  if (leaseStatus === "draft" || (leaseStatus !== "sent_to_tenant" && !signatureStatus)) {
+  if (leaseStatus === "draft" || (!hasDocuSignEnvelope && !signatureStatus)) {
     return (
       <Card>
         <CardHeader>
