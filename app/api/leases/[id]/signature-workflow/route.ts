@@ -214,6 +214,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     console.log("✅ [SIGNATURE-WORKFLOW] Action terminée, nouveau statut:", newStatus)
+    console.log("✅ [SIGNATURE-WORKFLOW] Méthode de signature:", signatureMethod)
 
     return NextResponse.json({
       success: true,

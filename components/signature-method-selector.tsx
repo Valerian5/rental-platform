@@ -208,10 +208,13 @@ export function SignatureMethodSelector({
       }
 
       const data = await response.json()
+      console.log("🔍 [SIGNATURE-METHOD-SELECTOR] Réponse API:", data)
       toast.success("Processus de signature initié !")
       
       // Stocker la méthode choisie
-      setSelectedSignatureMethod(data.signatureMethod || signatureMethod)
+      const methodToSet = data.signatureMethod || signatureMethod
+      console.log("🔍 [SIGNATURE-METHOD-SELECTOR] Méthode à définir:", methodToSet)
+      setSelectedSignatureMethod(methodToSet)
       
       // Forcer le passage en mode signature même si le statut reste draft
       if (onStatusChange) {
@@ -282,6 +285,16 @@ export function SignatureMethodSelector({
   }
 
   const currentState = getCurrentState()
+
+  // Debug
+  console.log("🔍 [SIGNATURE-METHOD-SELECTOR] Debug:", {
+    leaseStatus,
+    selectedSignatureMethod,
+    currentState,
+    showInitiation: currentState.showInitiation,
+    showSignature: currentState.showSignature,
+    showStatus: currentState.showStatus
+  })
 
   return (
     <Card>
