@@ -1,8 +1,11 @@
-export const dynamic = "force-dynamic"
+"use client"
+
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   FileText,
   Calculator,
@@ -13,366 +16,388 @@ import {
   Euro,
   Calendar,
   Receipt,
+  RefreshCw,
+  Plus,
 } from "lucide-react"
 
-import { createServerClient } from "@/lib/supabase"
+import { FiscalSummaryCard } from "@/components/fiscal/FiscalSummaryCard"
+import { FiscalSimulationCard } from "@/components/fiscal/FiscalSimulationCard"
+import { ExpenseBreakdownCard } from "@/components/fiscal/ExpenseBreakdownCard"
+import { AddExpenseDialog } from "@/components/fiscal/AddExpenseDialog"
+import { FiscalCalculation, Expense } from "@/lib/fiscal-calculator"
+import { toast } from "sonner"
 
-async function getFiscalData() {
-  try {
-    const supabase = createServerClient()
+export default function FiscalPage() {
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
+  const [availableYears, setAvailableYears] = useState<number[]>([])
+  const [fiscalCalculation, setFiscalCalculation] = useState<FiscalCalculation | null>(null)
+  const [expenses, setExpenses] = useState<Expense[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
-    // Récupérer les régularisations de charges
-    const { data: regularizations } = await supabase
-      .from("charge_regularizations")
-      .select(`
-        *,
-        lease:leases(
-          property:properties(title, address),
-          tenant:users!leases_tenant_id_fkey(first_name, last_name)
-        )
-      `)
-      .order("year", { ascending: false })
+  useEffect(() => {
+    loadFiscalData()
+  }, [currentYear])
 
-    // Récupérer les revenus locatifs par année
-    const { data: receipts } = await supabase
-      .from("rent_receipts")
-      .select(`
-        year,
-        total_amount,
-        lease:leases(property:properties(title))
-      `)
-      .eq("status", "paid")
+  const loadFiscalData = async () => {
+    try {
+      setIsLoading(true)
+      
+      // Charger les années disponibles
+      const yearsResponse = await fetch(`/api/fiscal?action=years`)
+      const yearsData = await yearsResponse.json()
+      if (yearsData.success) {
+        setAvailableYears(yearsData.data)
+      }
 
-    // Calculer les statistiques fiscales
-    const currentYear = new Date().getFullYear()
-    const currentYearReceipts = receipts?.filter((r) => r.year === currentYear) || []
-    const previousYearReceipts = receipts?.filter((r) => r.year === currentYear - 1) || []
+      // Charger les données fiscales
+      const fiscalResponse = await fetch(`/api/fiscal?year=${currentYear}`)
+      const fiscalData = await fiscalResponse.json()
+      
+      if (fiscalData.success) {
+        setFiscalCalculation(fiscalData.data)
+      } else {
+        toast.error("Erreur lors du chargement des données fiscales")
+      }
 
-    const stats = {
-      currentYearRevenue: currentYearReceipts.reduce((sum, r) => sum + r.total_amount, 0),
-      previousYearRevenue: previousYearReceipts.reduce((sum, r) => sum + r.total_amount, 0),
-      totalRegularizations: regularizations?.length || 0,
-      pendingRegularizations: regularizations?.filter((r) => r.status === "calculated").length || 0,
-    }
+      // Charger les dépenses
+      const expensesResponse = await fetch(`/api/expenses?year=${currentYear}`)
+      const expensesData = await expensesResponse.json()
+      
+      if (expensesData.success) {
+        setExpenses(expensesData.expenses || [])
+      } else {
+        console.error("Erreur chargement dépenses:", expensesData.error)
+        setExpenses([])
+      }
 
-    return {
-      regularizations: regularizations || [],
-      receipts: receipts || [],
-      stats,
-    }
-  } catch (error) {
-    console.error("Error fetching fiscal data:", error)
-    return {
-      regularizations: [],
-      receipts: [],
-      stats: {
-        currentYearRevenue: 0,
-        previousYearRevenue: 0,
-        totalRegularizations: 0,
-        pendingRegularizations: 0,
-      },
+    } catch (error) {
+      console.error("Erreur chargement données fiscales:", error)
+      toast.error("Erreur lors du chargement")
+    } finally {
+      setIsLoading(false)
     }
   }
-}
 
-function RegularizationCard({ regularization }: { regularization: any }) {
-  const isRefund = regularization.type === "refund"
-  const isAdditional = regularization.type === "additional"
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    await loadFiscalData()
+    setIsRefreshing(false)
+    toast.success("Données mises à jour")
+  }
 
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-lg">{regularization.lease?.property?.title}</CardTitle>
-            <CardDescription>{regularization.lease?.property?.address}</CardDescription>
-          </div>
-          <Badge variant={regularization.status === "paid" ? "default" : "secondary"}>
-            {regularization.status === "paid"
-              ? "Réglée"
-              : regularization.status === "calculated"
-                ? "Calculée"
-                : "En attente"}
-          </Badge>
+  const handleExportCSV = async () => {
+    try {
+      const response = await fetch("/api/fiscal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "export-csv", year: currentYear })
+      })
+
+      if (response.ok) {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = `declaration-fiscale-${currentYear}.csv`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+        toast.success("Export CSV généré")
+      } else {
+        toast.error("Erreur lors de l'export")
+      }
+    } catch (error) {
+      console.error("Erreur export CSV:", error)
+      toast.error("Erreur lors de l'export")
+    }
+  }
+
+  const handleExportPDF = async () => {
+    try {
+      const response = await fetch("/api/fiscal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "export-pdf", year: currentYear })
+      })
+
+      if (response.ok) {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = `declaration-fiscale-${currentYear}.pdf`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+        toast.success("Export PDF généré")
+      } else {
+        toast.error("Erreur lors de l'export PDF")
+      }
+    } catch (error) {
+      console.error("Erreur export PDF:", error)
+      toast.error("Erreur lors de l'export PDF")
+    }
+  }
+
+  const handleGenerateForm = async (formType: "2044" | "2042-C-PRO") => {
+    try {
+      const response = await fetch("/api/fiscal/forms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ formType, year: currentYear })
+      })
+
+      if (response.ok) {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = `formulaire-${formType}-${currentYear}.pdf`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+        toast.success(`Formulaire ${formType} généré`)
+      } else {
+        toast.error("Erreur lors de la génération du formulaire")
+      }
+    } catch (error) {
+      console.error("Erreur génération formulaire:", error)
+      toast.error("Erreur lors de la génération du formulaire")
+    }
+  }
+
+  const handleAddExpense = () => {
+    // Le composant AddExpenseDialog gère l'ajout
+  }
+
+  const handleViewExpense = (expenseId: string) => {
+    toast.info(`Visualisation de la dépense ${expenseId} en cours de développement`)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold">Déclaration fiscale</h1>
+          <p className="text-muted-foreground">Calculs fiscaux et génération de documents</p>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p className="text-sm text-muted-foreground">Locataire</p>
-            <p className="font-medium">
-              {regularization.lease?.tenant?.first_name} {regularization.lease?.tenant?.last_name}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Année</p>
-            <p className="font-medium">{regularization.year}</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
+        <div className="flex items-center justify-center py-12">
           <div className="text-center">
-            <p className="text-sm text-muted-foreground">Charges payées</p>
-            <p className="text-lg font-bold">{regularization.total_charges_paid}€</p>
-          </div>
-          <div className="text-center">
-            <p className="text-sm text-muted-foreground">Charges réelles</p>
-            <p className="text-lg font-bold">{regularization.actual_charges}€</p>
-          </div>
-          <div className="text-center">
-            {isRefund ? (
-              <TrendingDown className="h-5 w-5 mx-auto text-green-600 mb-1" />
-            ) : (
-              <TrendingUp className="h-5 w-5 mx-auto text-red-600 mb-1" />
-            )}
-            <p className="text-sm text-muted-foreground">{isRefund ? "Remboursement" : "Complément"}</p>
-            <p className={`text-lg font-bold ${isRefund ? "text-green-600" : "text-red-600"}`}>
-              {isRefund ? "-" : "+"}
-              {Math.abs(regularization.difference).toFixed(2)}€
-            </p>
+            <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <p>Chargement des données fiscales...</p>
           </div>
         </div>
-
-        <div className="flex items-center justify-between pt-2">
-          <div className="flex items-center gap-2">
-            <Receipt className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Régularisation {regularization.year}</span>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm">
-              <FileText className="h-4 w-4 mr-1" />
-              Décompte
-            </Button>
-            {regularization.status === "calculated" && (
-              <Button size="sm">{isRefund ? "Rembourser" : "Facturer"}</Button>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-function FiscalSummaryCard({ year, revenue }: { year: number; revenue: number }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Calendar className="h-5 w-5" />
-          Revenus {year}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="text-center">
-          <p className="text-3xl font-bold text-green-600">{revenue.toFixed(2)}€</p>
-          <p className="text-sm text-muted-foreground">Revenus locatifs déclarés</p>
-        </div>
-        <div className="flex gap-2 mt-4">
-          <Button variant="outline" className="flex-1">
-            <Download className="h-4 w-4 mr-2" />
-            Export fiscal
-          </Button>
-          <Button variant="outline" className="flex-1">
-            <FileText className="h-4 w-4 mr-2" />
-            Déclaration
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-export default async function FiscalPage() {
-  const { regularizations, receipts, stats } = await getFiscalData()
-  const currentYear = new Date().getFullYear()
-
-  // Grouper les revenus par année
-  const revenueByYear = receipts.reduce(
-    (acc, receipt) => {
-      acc[receipt.year] = (acc[receipt.year] || 0) + receipt.total_amount
-      return acc
-    },
-    {} as Record<number, number>,
-  )
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Gestion fiscale</h1>
-        <p className="text-muted-foreground">Régularisations de charges et déclarations fiscales</p>
+      {/* En-tête */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Déclaration fiscale</h1>
+          <p className="text-muted-foreground">Calculs fiscaux et génération de documents</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <Select value={currentYear.toString()} onValueChange={(value) => setCurrentYear(parseInt(value))}>
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {availableYears.map(year => (
+                <SelectItem key={year} value={year.toString()}>
+                  {year}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+            Actualiser
+          </Button>
+        </div>
       </div>
 
-      {/* Statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-2">
-              <Euro className="h-5 w-5 text-green-600" />
-              <div>
-                <p className="text-2xl font-bold">{stats.currentYearRevenue.toFixed(0)}€</p>
-                <p className="text-sm text-muted-foreground">Revenus {currentYear}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-blue-600" />
-              <div>
-                <p className="text-2xl font-bold">
-                  {stats.previousYearRevenue > 0
-                    ? (
-                        ((stats.currentYearRevenue - stats.previousYearRevenue) / stats.previousYearRevenue) *
-                        100
-                      ).toFixed(1)
-                    : "0"}
-                  %
-                </p>
-                <p className="text-sm text-muted-foreground">Évolution</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-2">
-              <Receipt className="h-5 w-5 text-purple-600" />
-              <div>
-                <p className="text-2xl font-bold">{stats.totalRegularizations}</p>
-                <p className="text-sm text-muted-foreground">Régularisations</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-orange-600" />
-              <div>
-                <p className="text-2xl font-bold">{stats.pendingRegularizations}</p>
-                <p className="text-sm text-muted-foreground">En attente</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Tabs defaultValue="regularizations" className="space-y-4">
+      {/* Contenu principal */}
+      <Tabs defaultValue="summary" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="regularizations">Régularisations</TabsTrigger>
-          <TabsTrigger value="revenue">Revenus fiscaux</TabsTrigger>
-          <TabsTrigger value="declarations">Déclarations</TabsTrigger>
-          <TabsTrigger value="tools">Outils</TabsTrigger>
+          <TabsTrigger value="summary">Résumé fiscal</TabsTrigger>
+          <TabsTrigger value="simulations">Simulations</TabsTrigger>
+          <TabsTrigger value="expenses">Dépenses</TabsTrigger>
+          <TabsTrigger value="documents">Documents</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="regularizations" className="space-y-4">
-          <div className="grid gap-4">
-            {regularizations.map((regularization) => (
-              <RegularizationCard key={regularization.id} regularization={regularization} />
-            ))}
-            {regularizations.length === 0 && (
-              <Card>
-                <CardContent className="text-center py-8">
-                  <Receipt className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">Aucune régularisation</h3>
-                  <p className="text-muted-foreground">Les régularisations de charges apparaîtront ici</p>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="revenue" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Object.entries(revenueByYear)
-              .sort(([a], [b]) => Number(b) - Number(a))
-              .map(([year, revenue]) => (
-                <FiscalSummaryCard key={year} year={Number(year)} revenue={revenue} />
-              ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="declarations" className="space-y-4">
-          <div className="grid gap-4">
+        {/* Résumé fiscal */}
+        <TabsContent value="summary" className="space-y-6">
+          {fiscalCalculation ? (
+            <FiscalSummaryCard
+              year={currentYear}
+              totalRentCollected={fiscalCalculation.totalRentCollected}
+              totalRecoverableCharges={fiscalCalculation.totalRecoverableCharges}
+              totalDeductibleExpenses={fiscalCalculation.totalDeductibleExpenses}
+              onGenerateDocuments={() => {}}
+              onViewDetails={() => {}}
+            />
+          ) : (
             <Card>
-              <CardHeader>
-                <CardTitle>Déclaration des revenus fonciers</CardTitle>
-                <CardDescription>Préparez votre déclaration fiscale avec les données de l'année</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-4 bg-green-50 rounded-lg">
-                    <h4 className="font-semibold text-green-900 mb-2">📊 Revenus bruts</h4>
-                    <p className="text-2xl font-bold text-green-700">{stats.currentYearRevenue.toFixed(2)}€</p>
-                    <p className="text-sm text-green-600">Année {currentYear}</p>
-                  </div>
-
-                  <div className="p-4 bg-blue-50 rounded-lg">
-                    <h4 className="font-semibold text-blue-900 mb-2">📋 Documents</h4>
-                    <div className="space-y-2">
-                      <Button variant="outline" size="sm" className="w-full justify-start">
-                        <Download className="h-4 w-4 mr-2" />
-                        Export revenus {currentYear}
-                      </Button>
-                      <Button variant="outline" size="sm" className="w-full justify-start">
-                        <FileText className="h-4 w-4 mr-2" />
-                        Formulaire 2044
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+              <CardContent className="text-center py-12">
+                <AlertTriangle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Aucune donnée fiscale</h3>
+                <p className="text-muted-foreground">
+                  Aucune donnée fiscale trouvée pour l'année {currentYear}
+                </p>
               </CardContent>
             </Card>
-          </div>
+          )}
         </TabsContent>
 
-        <TabsContent value="tools" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Simulations fiscales */}
+        <TabsContent value="simulations" className="space-y-6">
+          {fiscalCalculation ? (
+            <FiscalSimulationCard
+              calculation={fiscalCalculation}
+              onGenerateForm={handleGenerateForm}
+              onExportData={(format) => format === "csv" ? handleExportCSV() : handleExportPDF()}
+            />
+          ) : (
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calculator className="h-5 w-5" />
-                  Calculateur de régularisation
-                </CardTitle>
-                <CardDescription>Calculez automatiquement les régularisations de charges</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button className="w-full">
-                  <Calculator className="h-4 w-4 mr-2" />
-                  Lancer le calcul
-                </Button>
+              <CardContent className="text-center py-12">
+                <Calculator className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Aucune simulation disponible</h3>
+                <p className="text-muted-foreground">
+                  Les simulations fiscales nécessitent des données de revenus
+                </p>
               </CardContent>
             </Card>
+          )}
+        </TabsContent>
 
+        {/* Dépenses */}
+        <TabsContent value="expenses" className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold">Dépenses {currentYear}</h2>
+              <p className="text-muted-foreground">Gérez vos dépenses déductibles et non déductibles</p>
+            </div>
+            <AddExpenseDialog onExpenseAdded={loadFiscalData} />
+          </div>
+          <ExpenseBreakdownCard
+            expenses={expenses}
+            year={currentYear}
+            onAddExpense={handleAddExpense}
+            onViewExpense={handleViewExpense}
+          />
+        </TabsContent>
+
+        {/* Documents */}
+        <TabsContent value="documents" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="h-5 w-5" />
-                  Générateur de documents
+                  Export des données
                 </CardTitle>
-                <CardDescription>Générez vos documents fiscaux automatiquement</CardDescription>
+                <CardDescription>
+                  Téléchargez vos données fiscales dans différents formats
+                </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Button variant="outline" className="w-full justify-start">
-                    Décompte de charges
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start"
+                    onClick={handleExportCSV}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Export CSV - Données complètes
                   </Button>
-                  <Button variant="outline" className="w-full justify-start">
-                    Attestation fiscale
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start"
+                    onClick={handleExportPDF}
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    Export PDF - Récapitulatif
                   </Button>
-                  <Button variant="outline" className="w-full justify-start">
-                    Récapitulatif annuel
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calculator className="h-5 w-5" />
+                  Formulaires fiscaux
+                </CardTitle>
+                <CardDescription>
+                  Générez les formulaires préremplis pour votre déclaration
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start"
+                    onClick={() => handleGenerateForm("2044")}
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    Formulaire 2044 - Revenus fonciers
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start"
+                    onClick={() => handleGenerateForm("2042-C-PRO")}
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    Formulaire 2042-C-PRO - BIC/LMNP
                   </Button>
                 </div>
               </CardContent>
             </Card>
           </div>
+
+          {/* Outils supplémentaires */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calculator className="h-5 w-5" />
+                Outils de calcul
+              </CardTitle>
+              <CardDescription>
+                Calculateurs et outils pour optimiser votre fiscalité
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Button variant="outline" className="h-20 flex-col">
+                  <Calculator className="h-6 w-6 mb-2" />
+                  Calculateur de régularisation
+                </Button>
+                <Button variant="outline" className="h-20 flex-col">
+                  <TrendingUp className="h-6 w-6 mb-2" />
+                  Optimisation fiscale
+                </Button>
+                <Button variant="outline" className="h-20 flex-col">
+                  <Receipt className="h-6 w-6 mb-2" />
+                  Récapitulatif annuel
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
   )
 }
+
