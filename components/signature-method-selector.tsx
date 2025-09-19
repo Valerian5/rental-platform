@@ -196,16 +196,13 @@ export function SignatureMethodSelector({
           showSignature: false,
           showStatus: false,
         }
-      case "ready_for_signature":
+      case "sent_to_tenant":
         return {
           showInitiation: false,
           showSignature: true,
           showStatus: false,
         }
-      case "owner_signed_electronically":
-      case "owner_signed_manually":
-      case "tenant_signed_electronically":
-      case "tenant_signed_manually":
+      case "signed_by_tenant":
         return {
           showInitiation: false,
           showSignature: true,

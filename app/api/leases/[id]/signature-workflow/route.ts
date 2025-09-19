@@ -40,7 +40,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           return NextResponse.json({ error: "Seul le propriétaire peut initier la signature" }, { status: 403 })
         }
 
-        newStatus = "ready_for_signature"
+        newStatus = "sent_to_tenant"
         updateData = {
           status: newStatus,
           signature_method: signatureMethod,
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             signed_by_owner: true,
             owner_signature_date: new Date().toISOString(),
             owner_signature: signatureData || "Signature électronique",
-            status: lease.signed_by_tenant ? "active" : "owner_signed_electronically",
+            status: lease.signed_by_tenant ? "active" : "signed_by_tenant",
             updated_at: new Date().toISOString(),
           }
           newStatus = updateData.status
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             signed_by_tenant: true,
             tenant_signature_date: new Date().toISOString(),
             tenant_signature: signatureData || "Signature électronique",
-            status: lease.signed_by_owner ? "active" : "tenant_signed_electronically",
+            status: lease.signed_by_owner ? "active" : "signed_by_tenant",
             updated_at: new Date().toISOString(),
           }
           newStatus = updateData.status
@@ -133,7 +133,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             signed_by_owner: true,
             owner_signature_date: new Date().toISOString(),
             owner_signature: "Signature manuelle",
-            status: lease.signed_by_tenant ? "active" : "owner_signed_manually",
+            status: lease.signed_by_tenant ? "active" : "signed_by_tenant",
             updated_at: new Date().toISOString(),
           }
           newStatus = updateData.status
@@ -160,7 +160,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             signed_by_tenant: true,
             tenant_signature_date: new Date().toISOString(),
             tenant_signature: "Signature manuelle",
-            status: lease.signed_by_owner ? "active" : "tenant_signed_manually",
+            status: lease.signed_by_owner ? "active" : "signed_by_tenant",
             updated_at: new Date().toISOString(),
           }
           newStatus = updateData.status
