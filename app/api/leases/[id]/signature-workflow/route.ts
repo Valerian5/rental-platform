@@ -189,6 +189,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     // Mettre à jour le bail
+    console.log("🔍 [SIGNATURE-WORKFLOW] Données à mettre à jour:", updateData)
     const { error: updateError } = await server
       .from("leases")
       .update(updateData)
@@ -198,6 +199,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       console.error("❌ [SIGNATURE-WORKFLOW] Erreur mise à jour:", updateError)
       return NextResponse.json({ error: "Erreur lors de la mise à jour" }, { status: 500 })
     }
+
+    console.log("✅ [SIGNATURE-WORKFLOW] Mise à jour réussie")
 
     // Si le bail est entièrement signé, notifier les deux parties
     if (newStatus === "active") {
