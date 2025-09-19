@@ -219,10 +219,8 @@ export function SignatureMethodSelector({
       console.log("🔍 [SIGNATURE-METHOD-SELECTOR] Méthode à définir:", methodToSet)
       setSelectedSignatureMethod(methodToSet)
       
-      // Forcer le passage en mode signature même si le statut reste draft
-      if (onStatusChange) {
-        onStatusChange("sent_to_tenant")
-      }
+      // Ne pas changer le statut lors de l'initiation
+      // Le statut ne changera que lors de la signature effective
     } catch (error) {
       console.error("Erreur initiation signature:", error)
       toast.error(error instanceof Error ? error.message : "Erreur lors de l'initiation")
@@ -371,7 +369,12 @@ export function SignatureMethodSelector({
                     <strong>Signature électronique</strong> - Le processus de signature électronique a été initié
                   </AlertDescription>
                 </Alert>
-                <DocuSignSignatureManager leaseId={leaseId} leaseStatus={leaseStatus} onStatusChange={onStatusChange} />
+                <div className="p-4 border rounded-lg bg-gray-50">
+                  <p className="text-sm text-gray-600 mb-4">
+                    <strong>Debug:</strong> selectedSignatureMethod = {selectedSignatureMethod}, leaseStatus = {leaseStatus}
+                  </p>
+                  <DocuSignSignatureManager leaseId={leaseId} leaseStatus={leaseStatus} onStatusChange={onStatusChange} />
+                </div>
               </div>
             )}
 
