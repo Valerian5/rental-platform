@@ -118,14 +118,41 @@ export function CautionnementSection({ leaseId, leaseData, defaultGuarantor }: P
         const e = await res.json().catch(() => ({}))
         throw new Error(e.error || "Erreur PDF")
       }
-      const blob = await res.blob()
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement("a")
-      link.href = url
-      link.download = `acte-de-cautionnement-${leaseId}.pdf`
-      link.click()
-      window.URL.revokeObjectURL(url)
-      toast.success("PDF téléchargé")
+      
+      const htmlContent = await res.text()
+      
+      // Ouvrir dans une nouvelle fenêtre pour impression PDF
+      const printWindow = window.open('', '_blank')
+      if (!printWindow) {
+        throw new Error('Impossible d\'ouvrir une nouvelle fenêtre')
+      }
+
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Acte de cautionnement ${leaseId.slice(0, 8)}</title>
+          <style>
+            @media print {
+              @page { size: A4; margin: 1cm; }
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+            }
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px; }
+          </style>
+        </head>
+        <body>${htmlContent}</body>
+        </html>
+      `)
+
+      printWindow.document.close()
+      
+      // Attendre le chargement et déclencher l'impression
+      setTimeout(() => {
+        printWindow.print()
+        printWindow.addEventListener('afterprint', () => printWindow.close())
+      }, 1000)
+      
+      toast.success("PDF prêt pour impression")
     } catch (e: any) {
       console.error(e)
       toast.error(e.message || "Erreur téléchargement PDF")

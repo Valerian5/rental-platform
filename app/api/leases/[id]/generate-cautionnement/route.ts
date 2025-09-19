@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
-import puppeteer from "puppeteer-core"
-import chromium from "@sparticuz/chromium"
 import n2words from "n2words"
 
 // Fonctions utilitaires (alignées avec la prévisualisation)
@@ -130,70 +128,14 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const context = buildContext(lease, tenant, owner, guarantor, options || {})
     const htmlContent = fillTemplate(template.content, context)
     
-    // 3. Génération du PDF avec Puppeteer et @sparticuz/chromium
-    let browser = null
-    let pdfBuffer
-    try {
-      console.log("🚀 Launching browser...")
-      
-      // Configuration pour Vercel
-      const launchOptions = {
-        args: [
-          ...chromium.args,
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--single-process',
-          '--disable-gpu'
-        ],
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-        ignoreHTTPSErrors: true,
-      }
-      
-      console.log("🔧 Launch options:", launchOptions)
-      
-      browser = await puppeteer.launch(launchOptions)
-      console.log("✅ Browser launched successfully")
-      
-      const page = await browser.newPage()
-      console.log("📄 New page created")
-      
-      await page.setContent(htmlContent, { waitUntil: 'networkidle0' })
-      console.log("📝 Content set, generating PDF...")
-      
-      pdfBuffer = await page.pdf({ 
-        format: 'A4', 
-        printBackground: true,
-        margin: {
-          top: '1cm',
-          right: '1cm',
-          bottom: '1cm',
-          left: '1cm'
-        }
-      })
-      console.log("✅ PDF generated successfully")
-      
-    } catch (error) {
-      console.error("❌ Browser/PDF generation error:", error)
-      throw error
-    } finally {
-      if (browser !== null) {
-        console.log("🔒 Closing browser...")
-        await browser.close()
-        console.log("✅ Browser closed")
-      }
-    }
+    // 3. Retourner le HTML pour génération PDF côté client
+    console.log("✅ Successfully generated HTML")
 
-    // 4. Envoi du PDF
-    return new NextResponse(pdfBuffer, {
+    // 4. Envoi du HTML
+    return new NextResponse(htmlContent, {
       headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="acte-de-cautionnement-${lease.id}.pdf"`,
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-cache",
       },
     })
 

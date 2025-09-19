@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
-import puppeteer from "puppeteer-core"
-import chromium from "@sparticuz/chromium"
 
 export async function GET(
   request: NextRequest,
@@ -53,59 +51,12 @@ export async function GET(
     console.log("📝 Generating lease HTML...")
     const htmlContent = generateLeaseHTML(fullLease)
 
-    // Générer le PDF avec Puppeteer
-    console.log("🔄 Generating PDF...")
-    let browser = null
-    let pdfBuffer
-    try {
-      browser = await puppeteer.launch({
-        args: [
-          ...chromium.args,
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--single-process',
-          '--disable-gpu'
-        ],
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-        ignoreHTTPSErrors: true,
-      })
-      
-      const page = await browser.newPage()
-      await page.setContent(htmlContent, { waitUntil: 'networkidle0' })
-      
-      pdfBuffer = await page.pdf({ 
-        format: 'A4', 
-        printBackground: true,
-        margin: {
-          top: '1cm',
-          right: '1cm',
-          bottom: '1cm',
-          left: '1cm'
-        }
-      })
-      
-    } catch (error) {
-      console.error("❌ PDF generation error:", error)
-      throw error
-    } finally {
-      if (browser !== null) {
-        await browser.close()
-      }
-    }
+    console.log("✅ Successfully generated HTML")
 
-    console.log("✅ Successfully generated PDF")
-
-    // Retourner le PDF
-    return new NextResponse(pdfBuffer, {
+    // Retourner le HTML pour génération PDF côté client
+    return new NextResponse(htmlContent, {
       headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="bail-${leaseId}.pdf"`,
+        "Content-Type": "text/html; charset=utf-8",
         "Cache-Control": "no-cache",
       },
     })
