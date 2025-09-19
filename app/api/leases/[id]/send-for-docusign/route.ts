@@ -66,6 +66,31 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     console.log("✅ [SEND-DOCUSIGN] Résultat DocuSign:", result)
 
+    // Mettre à jour le statut du bail
+    const { error: updateError } = await supabase
+      .from("leases")
+      .update({
+        status: "sent_to_tenant",
+        docusign_envelope_id: result.envelopeId,
+        docusign_status: "sent",
+        sent_to_tenant_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", leaseId)
+
+    if (updateError) {
+      console.error("❌ [SEND-DOCUSIGN] Erreur mise à jour statut:", updateError)
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Erreur lors de la mise à jour du statut",
+        },
+        { status: 500 },
+      )
+    }
+
+    console.log("✅ [SEND-DOCUSIGN] Statut mis à jour vers sent_to_tenant")
+
     return NextResponse.json({
       success: true,
       message: "Bail envoyé pour signature via DocuSign",

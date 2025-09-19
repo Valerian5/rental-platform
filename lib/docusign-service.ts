@@ -256,7 +256,7 @@ class DocuSignService {
 
     const recipients: DocuSignRecipient[] = [
       { email: ownerEmail, name: ownerName, recipientId: "1", routingOrder: "1", roleName: "Bailleur", clientUserId: ownerEmail },
-      { email: tenantEmail, name: tenantName, recipientId: "2", routingOrder: "1", roleName: "Locataire", clientUserId: tenantEmail },
+      { email: tenantEmail, name: tenantName, recipientId: "2", routingOrder: "2", roleName: "Locataire", clientUserId: tenantEmail },
     ]
 
     console.log("📦 [DOCUSIGN] Création de l'enveloppe...")
@@ -335,19 +335,42 @@ class DocuSignService {
       if (signer.roleName === "Locataire" && signer.status === "completed") tenantSigned = true
     })
 
-    if (envelope.status === "completed") {
-      completedDocument = await this.downloadCompletedDocument(lease.docusign_envelope_id)
+    // Mettre à jour le statut selon l'état des signatures
+    let newStatus = lease.status
+    if (ownerSigned && !tenantSigned) {
+      newStatus = "signed_by_owner"
+    } else if (ownerSigned && tenantSigned) {
+      newStatus = "active"
+    }
+
+    // Mettre à jour la base de données si nécessaire
+    if (ownerSigned || tenantSigned || envelope.status === "completed") {
+      const updateData: any = {
+        signed_by_owner: ownerSigned,
+        signed_by_tenant: tenantSigned,
+        updated_at: new Date().toISOString(),
+      }
+
+      if (ownerSigned) {
+        updateData.owner_signature_date = new Date().toISOString()
+      }
+      if (tenantSigned) {
+        updateData.tenant_signature_date = new Date().toISOString()
+      }
+      if (newStatus !== lease.status) {
+        updateData.status = newStatus
+      }
+
       await supabase
         .from("leases")
-        .update({
-          status: "active",
-          signed_by_owner: ownerSigned,
-          signed_by_tenant: tenantSigned,
-          owner_signature_date: ownerSigned ? new Date().toISOString() : null,
-          tenant_signature_date: tenantSigned ? new Date().toISOString() : null,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq("id", leaseId)
+
+      console.log("✅ [DOCUSIGN] Statut mis à jour:", { newStatus, ownerSigned, tenantSigned })
+    }
+
+    if (envelope.status === "completed") {
+      completedDocument = await this.downloadCompletedDocument(lease.docusign_envelope_id)
     }
 
     return { status: envelope.status, ownerSigned, tenantSigned, completedDocument }
