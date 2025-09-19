@@ -27,6 +27,9 @@ import TenantRefusedApplicationEmail from "@/components/emails/tenant-refused-ap
 import WaitingTenantConfirmationEmail from "@/components/emails/waiting-tenant-confirmation-email"
 import TenantConfirmedApplicationToOwnerEmail from "@/components/emails/tenant-confirmed-application-to-owner-email"
 import TenantRefusedApplicationToOwnerEmail from "@/components/emails/tenant-refused-application-to-owner-email"
+import SignatureRequiredEmail from "@/components/emails/signature-required-email"
+import SignatureCompletedEmail from "@/components/emails/signature-completed-email"
+import LeaseFullySignedEmail from "@/components/emails/lease-fully-signed-email"
 
 
 // --- CONFIG EXPÉDITEUR ---
@@ -655,5 +658,70 @@ export async function sendTenantRefusedApplicationEmailToTenant(
     NotificationType.APPLICATION_STATUS_UPDATE,
     `Vous avez refusé la location pour "${property.title}"`,
     TenantRefusedApplicationEmail({ tenantName: tenant.name, propertyTitle: property.title, reason })
+  )
+}
+
+// Emails pour le workflow de signatures
+export async function sendSignatureRequiredEmail(
+  user: User,
+  property: Property,
+  signatureMethod: "electronic" | "manual_physical" | "manual_remote",
+  leaseUrl: string,
+  logoUrl?: string,
+) {
+  await sendEmail(
+    user,
+    NotificationType.LEASE_STATUS_UPDATE,
+    `Signature de bail requise pour "${property.title}"`,
+    SignatureRequiredEmail({
+      userName: user.name,
+      propertyTitle: property.title,
+      propertyAddress: property.address,
+      signatureMethod,
+      leaseUrl,
+      logoUrl,
+    })
+  )
+}
+
+export async function sendSignatureCompletedEmail(
+  user: User,
+  property: Property,
+  signerType: "owner" | "tenant",
+  leaseUrl: string,
+  logoUrl?: string,
+) {
+  await sendEmail(
+    user,
+    NotificationType.LEASE_STATUS_UPDATE,
+    `Signature reçue pour "${property.title}"`,
+    SignatureCompletedEmail({
+      userName: user.name,
+      propertyTitle: property.title,
+      propertyAddress: property.address,
+      signerType,
+      leaseUrl,
+      logoUrl,
+    })
+  )
+}
+
+export async function sendLeaseFullySignedEmail(
+  user: User,
+  property: Property,
+  leaseUrl: string,
+  logoUrl?: string,
+) {
+  await sendEmail(
+    user,
+    NotificationType.LEASE_STATUS_UPDATE,
+    `Bail entièrement signé pour "${property.title}"`,
+    LeaseFullySignedEmail({
+      userName: user.name,
+      propertyTitle: property.title,
+      propertyAddress: property.address,
+      leaseUrl,
+      logoUrl,
+    })
   )
 }

@@ -39,18 +39,6 @@ export function LeaseDocumentDisplay({ document, leaseId, generatedAt }: LeaseDo
               h2 { font-size: 20px; }
               h3 { font-size: 16px; }
               p { margin-bottom: 10px; }
-              .signature-section {
-                margin-top: 40px;
-                display: flex;
-                justify-content: space-between;
-              }
-              .signature-box {
-                border: 1px solid #ccc;
-                padding: 20px;
-                width: 200px;
-                height: 100px;
-                text-align: center;
-              }
               @media print {
                 body { margin: 0; }
                 .no-print { display: none; }
@@ -59,16 +47,6 @@ export function LeaseDocumentDisplay({ document, leaseId, generatedAt }: LeaseDo
           </head>
           <body>
             ${document}
-            <div class="signature-section">
-              <div class="signature-box">
-                <p><strong>Signature du bailleur</strong></p>
-                <p>Date et lieu :</p>
-              </div>
-              <div class="signature-box">
-                <p><strong>Signature du locataire</strong></p>
-                <p>Date et lieu :</p>
-              </div>
-            </div>
           </body>
         </html>
       `)
@@ -79,44 +57,25 @@ export function LeaseDocumentDisplay({ document, leaseId, generatedAt }: LeaseDo
 
   const handleDownloadPDF = async () => {
     try {
-      const response = await fetch(`/api/leases/${leaseId}/download-document`)
-      if (!response.ok) throw new Error("Erreur téléchargement")
+      const response = await fetch(`/api/leases/${leaseId}/generate-pdf`, {
+        method: "POST",
+      })
 
-      const htmlContent = await response.text()
-      
-      // Ouvrir dans une nouvelle fenêtre pour impression PDF
-      const printWindow = window.open('', '_blank')
-      if (!printWindow) {
-        throw new Error('Impossible d\'ouvrir une nouvelle fenêtre')
+      if (response.ok) {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = `contrat-bail-${leaseId}.pdf`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+      } else {
+        throw new Error("Erreur lors de la génération du PDF")
       }
-
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Bail ${leaseId.slice(0, 8)}</title>
-          <style>
-            @media print {
-              @page { size: A4; margin: 1cm; }
-              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-            }
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px; }
-          </style>
-        </head>
-        <body>${htmlContent}</body>
-        </html>
-      `)
-
-      printWindow.document.close()
-      
-      // Attendre le chargement et déclencher l'impression
-      setTimeout(() => {
-        printWindow.print()
-        printWindow.addEventListener('afterprint', () => printWindow.close())
-      }, 1000)
-
     } catch (error) {
-      console.error("Erreur téléchargement:", error)
+      console.error("Erreur PDF:", error)
       // Fallback vers l'impression
       handlePrint()
     }

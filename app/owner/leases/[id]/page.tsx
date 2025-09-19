@@ -26,7 +26,7 @@ import {
 } from "lucide-react"
 import { LeaseDocumentDisplay } from "@/components/lease-document-display"
 import { PropertyDocumentsManager } from "@/components/property-documents-manager"
-import { SignatureMethodSelector } from "@/components/signature-method-selector"
+import { UnifiedSignatureManager, SignatureStatusDisplay } from "@/components/unified-signature-manager"
 import { CautionnementSection } from "@/components/CautionnementSection"
 import { EtatDesLieuxSection } from "@/components/EtatDesLieuxSection"
 import { toast } from "sonner"
@@ -767,7 +767,17 @@ export default function LeaseDetailPage() {
               </Card>
             )}
 
-            {/* Section Signatures */}
+          {/* Section Signatures */}
+          {lease.status === "active" && lease.signed_by_owner && lease.signed_by_tenant ? (
+            <SignatureStatusDisplay
+              leaseId={lease.id}
+              ownerSigned={lease.signed_by_owner}
+              tenantSigned={lease.signed_by_tenant}
+              ownerSignatureDate={lease.owner_signature_date}
+              tenantSignatureDate={lease.tenant_signature_date}
+              signedDocument={lease.signed_document}
+            />
+          ) : (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -776,7 +786,7 @@ export default function LeaseDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <SignatureMethodSelector
+                <UnifiedSignatureManager
                   leaseId={lease.id}
                   leaseStatus={lease.status}
                   userType="owner"
@@ -787,41 +797,7 @@ export default function LeaseDetailPage() {
                 />
               </CardContent>
             </Card>
-
-            {/* Section Document signé */}
-            {lease.signed_document && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                    Document signé
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <FileText className="h-8 w-8 text-green-600" />
-                        <div>
-                          <p className="font-medium text-green-800">Bail signé</p>
-                          <p className="text-sm text-green-600">
-                            Signé le {lease.signed_at ? new Date(lease.signed_at).toLocaleDateString('fr-FR') : 'Date inconnue'}
-                          </p>
-                        </div>
-                      </div>
-                      <Button 
-                        onClick={() => downloadSignedDocument()}
-                        variant="outline"
-                        className="border-green-600 text-green-600 hover:bg-green-50"
-                      >
-                        <Download className="h-4 w-4 mr-2" />
-                        Télécharger
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+          )}
           </TabsContent>
 
 

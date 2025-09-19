@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
-import { SignatureMethodSelector } from "@/components/signature-method-selector"
+import { UnifiedSignatureManager, SignatureStatusDisplay } from "@/components/unified-signature-manager"
 import {
   FileText,
   Calendar,
@@ -613,14 +613,25 @@ export default function TenantLeaseDetailPage() {
           </TabsContent>
 
           <TabsContent value="signature" className="space-y-6">
-            <SignatureMethodSelector
-              leaseId={leaseId}
-              leaseStatus={lease.status}
-              userType="tenant"
-              onStatusChange={(newStatus) => {
-                setLease((prev) => (prev ? { ...prev, status: newStatus } : null))
-              }}
-            />
+            {lease.status === "active" && lease.signed_by_owner && lease.signed_by_tenant ? (
+              <SignatureStatusDisplay
+                leaseId={leaseId}
+                ownerSigned={lease.signed_by_owner}
+                tenantSigned={lease.signed_by_tenant}
+                ownerSignatureDate={lease.owner_signature_date}
+                tenantSignatureDate={lease.tenant_signature_date}
+                signedDocument={lease.signed_document}
+              />
+            ) : (
+              <UnifiedSignatureManager
+                leaseId={leaseId}
+                leaseStatus={lease.status}
+                userType="tenant"
+                onStatusChange={(newStatus) => {
+                  setLease((prev) => (prev ? { ...prev, status: newStatus } : null))
+                }}
+              />
+            )}
           </TabsContent>
         </Tabs>
       </div>

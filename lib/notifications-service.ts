@@ -689,4 +689,89 @@ export const notificationsService = {
       })
     }
   },
+
+  // Notifications pour le nouveau workflow de signatures
+  async notifySignatureRequired(
+    leaseId: string,
+    userType: "owner" | "tenant",
+    signatureMethod: "electronic" | "manual_physical" | "manual_remote",
+    leaseData: any,
+    propertyData: any
+  ) {
+    console.log("🔔 Notification signature requise", { userType, signatureMethod })
+
+    const isOwner = userType === "owner"
+    const actionUrl = isOwner ? `/owner/leases/${leaseId}` : `/tenant/leases/${leaseId}`
+    
+    let title = ""
+    let content = ""
+    
+    if (isOwner) {
+      title = "Signature du bail requise"
+      content = `Votre bail pour ${propertyData.title || propertyData.address} est prêt à être signé`
+    } else {
+      title = "Bail à signer"
+      content = `Le propriétaire vous a envoyé un bail à signer pour ${propertyData.title || propertyData.address}`
+    }
+
+    await this.createNotification(leaseData[isOwner ? "owner_id" : "tenant_id"], {
+      title,
+      content,
+      type: "signature_required",
+      action_url: actionUrl,
+    })
+  },
+
+  async notifySignatureCompleted(
+    leaseId: string,
+    userType: "owner" | "tenant",
+    leaseData: any,
+    propertyData: any
+  ) {
+    console.log("🔔 Notification signature complétée", { userType })
+
+    const isOwner = userType === "owner"
+    const otherPartyId = isOwner ? leaseData.tenant_id : leaseData.owner_id
+    const otherPartyType = isOwner ? "tenant" : "owner"
+    const actionUrl = isOwner ? `/owner/leases/${leaseId}` : `/tenant/leases/${leaseId}`
+    
+    // Notifier l'autre partie
+    await this.createNotification(otherPartyId, {
+      title: "Signature reçue",
+      content: `Le ${otherPartyType === "owner" ? "propriétaire" : "locataire"} a signé le bail pour ${propertyData.title || propertyData.address}`,
+      type: "signature_received",
+      action_url: actionUrl,
+    })
+  },
+
+  async notifyFullySigned(
+    leaseId: string,
+    leaseData: any,
+    propertyData: any
+  ) {
+    console.log("🔔 Notification bail entièrement signé")
+
+    const notifications = [
+      {
+        userId: leaseData.owner_id,
+        notificationData: {
+          title: "Bail signé par les deux parties",
+          content: `Votre bail pour ${propertyData.title || propertyData.address} a été signé par toutes les parties`,
+          type: "lease_fully_signed",
+          action_url: `/owner/leases/${leaseId}`,
+        },
+      },
+      {
+        userId: leaseData.tenant_id,
+        notificationData: {
+          title: "Bail signé par les deux parties",
+          content: `Votre bail pour ${propertyData.title || propertyData.address} a été signé par toutes les parties`,
+          type: "lease_fully_signed",
+          action_url: `/tenant/leases/${leaseId}`,
+        },
+      },
+    ]
+
+    await this.sendBulkNotifications(notifications)
+  },
 }
