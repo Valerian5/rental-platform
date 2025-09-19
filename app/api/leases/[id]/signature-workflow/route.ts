@@ -40,9 +40,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           return NextResponse.json({ error: "Seul le propriétaire peut initier la signature" }, { status: 403 })
         }
 
-        newStatus = "sent_to_tenant"
+        // Ne pas changer le statut ici, laisser DocuSign le faire
         updateData = {
-          status: newStatus,
           signature_method: signatureMethod,
           updated_at: new Date().toISOString(),
         }

@@ -239,8 +239,16 @@ class DocuSignService {
   ): Promise<{ envelopeId: string; signingUrls: { owner: string; tenant: string } }> {
     console.log("📝 [DOCUSIGN] Envoi du bail pour signature (parallèle):", leaseId)
 
-    // HTML -> base64
-    const documentBase64 = Buffer.from(documentContent).toString("base64")
+    try {
+      // Vérifier l'authentification
+      const token = await this.getAccessToken()
+      console.log("🔑 [DOCUSIGN] Token obtenu:", token ? "✅" : "❌")
+      console.log("🔑 [DOCUSIGN] AccountId:", this.accountId)
+      console.log("🔑 [DOCUSIGN] BaseApiUrl:", this.baseApiUrl)
+
+      // HTML -> base64
+      const documentBase64 = Buffer.from(documentContent).toString("base64")
+      console.log("📄 [DOCUSIGN] Document base64 length:", documentBase64.length)
 
     const documents: DocuSignDocument[] = [
       { documentId: "1", name: `Contrat de bail - ${leaseId}.html`, fileExtension: "html", documentBase64 },
@@ -251,6 +259,7 @@ class DocuSignService {
       { email: tenantEmail, name: tenantName, recipientId: "2", routingOrder: "1", roleName: "Locataire", clientUserId: tenantEmail },
     ]
 
+    console.log("📦 [DOCUSIGN] Création de l'enveloppe...")
     const envelope = await this.createEnvelope(
       documents,
       recipients,
@@ -258,6 +267,7 @@ class DocuSignService {
       "Veuillez signer ce contrat de bail en cliquant sur le lien ci-dessous.",
       "sent",
     )
+    console.log("📦 [DOCUSIGN] Enveloppe créée:", envelope.envelopeId)
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || ""
     const returnUrl = `${siteUrl}/leases/${leaseId}?signed=true` // page neutre commune
@@ -287,6 +297,10 @@ class DocuSignService {
     console.log("✅ [DOCUSIGN] Enveloppe créée:", envelope.envelopeId)
 
     return { envelopeId: envelope.envelopeId, signingUrls: { owner: ownerSigningUrl, tenant: tenantSigningUrl } }
+    } catch (error) {
+      console.error("❌ [DOCUSIGN] Erreur lors de l'envoi:", error)
+      throw error
+    }
   }
 
   async getTenantSigningUrl(envelopeId: string, leaseId: string, tenantEmail: string, tenantName: string) {

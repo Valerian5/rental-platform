@@ -46,6 +46,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     // Envoyer via DocuSign
+    console.log("📤 [SEND-DOCUSIGN] Données du bail:", {
+      leaseId,
+      ownerEmail: lease.owner.email,
+      ownerName: `${lease.owner.first_name} ${lease.owner.last_name}`,
+      tenantEmail: lease.tenant.email,
+      tenantName: `${lease.tenant.first_name} ${lease.tenant.last_name}`,
+      hasDocument: !!lease.generated_document
+    })
+
     const result = await docuSignService.sendLeaseForSignature(
       leaseId,
       lease.generated_document,
@@ -55,7 +64,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       `${lease.tenant.first_name} ${lease.tenant.last_name}`,
     )
 
-    console.log("✅ [SEND-DOCUSIGN] Bail envoyé via DocuSign")
+    console.log("✅ [SEND-DOCUSIGN] Résultat DocuSign:", result)
 
     return NextResponse.json({
       success: true,
