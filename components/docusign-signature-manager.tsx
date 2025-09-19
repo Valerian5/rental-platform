@@ -76,9 +76,12 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
       const response = await fetch(`/api/leases/${leaseId}/signature-status`)
       const data = await response.json()
 
+      console.log("🔍 [DOCUSIGN-MANAGER] checkSignatureStatus response:", data)
+
       if (response.ok) {
         // Vérifier si l'enveloppe DocuSign existe
         const hasEnvelope = !!data.lease.docusign_envelope_id
+        console.log("🔍 [DOCUSIGN-MANAGER] hasEnvelope:", hasEnvelope, "docusign_envelope_id:", data.lease.docusign_envelope_id)
         setHasDocuSignEnvelope(hasEnvelope)
 
         // Adapter les données au format attendu
@@ -88,6 +91,7 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
           tenantSigned: data.lease.signed_by_tenant,
         }
 
+        console.log("🔍 [DOCUSIGN-MANAGER] signatureStatus:", signatureStatus)
         setSignatureStatus(signatureStatus)
 
         if (signatureStatus.status === "active") {
@@ -139,17 +143,18 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
   }, []) // Seulement au montage du composant
 
   useEffect(() => {
-    if (leaseStatus === "sent_to_tenant" || hasDocuSignEnvelope) {
+    if (leaseStatus === "sent_to_tenant") {
       // Vérifier le statut toutes les 30 secondes
       const interval = setInterval(checkSignatureStatus, 30000)
       return () => clearInterval(interval)
     }
-  }, [leaseStatus, hasDocuSignEnvelope])
+  }, [leaseStatus])
 
-  // Ne pas afficher le bouton d'envoi si :
-  // 1. Le statut n'est pas "draft" 
-  // 2. OU si une enveloppe DocuSign existe déjà
-  if (leaseStatus !== "draft" || hasDocuSignEnvelope) {
+  // Ne pas afficher le bouton d'envoi si le statut n'est pas "draft"
+  // (le statut "sent_to_tenant" indique qu'une enveloppe DocuSign existe)
+  console.log("🔍 [DOCUSIGN-MANAGER] leaseStatus:", leaseStatus, "hasDocuSignEnvelope:", hasDocuSignEnvelope)
+  
+  if (leaseStatus !== "draft") {
     // Afficher le statut de signature
     return (
       <Card>
