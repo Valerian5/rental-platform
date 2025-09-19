@@ -31,6 +31,13 @@ export async function GET(
       return NextResponse.json({ error: "Bail non trouvé" }, { status: 404 })
     }
 
+    console.log("🔍 [SIGNATURE-STATUS] Données bail:", {
+      id: lease.id,
+      status: lease.status,
+      signature_method: lease.signature_method,
+      docusign_envelope_id: lease.docusign_envelope_id
+    })
+
     return NextResponse.json({
       success: true,
       lease: {

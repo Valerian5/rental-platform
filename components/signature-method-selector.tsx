@@ -42,7 +42,9 @@ export function SignatureMethodSelector({
           const response = await fetch(`/api/leases/${leaseId}/signature-status`)
           if (response.ok) {
             const data = await response.json()
+            console.log("🔍 [SIGNATURE-METHOD-SELECTOR] API signature-status:", data)
             if (data.lease.signature_method) {
+              console.log("🔍 [SIGNATURE-METHOD-SELECTOR] Méthode depuis API:", data.lease.signature_method)
               setSelectedSignatureMethod(data.lease.signature_method)
             }
           }
