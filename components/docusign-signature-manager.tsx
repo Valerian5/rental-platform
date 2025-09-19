@@ -136,7 +136,9 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
   useEffect(() => {
     // Vérifier le statut au chargement
     checkSignatureStatus()
+  }, []) // Seulement au montage du composant
 
+  useEffect(() => {
     if (leaseStatus === "sent_to_tenant" || hasDocuSignEnvelope) {
       // Vérifier le statut toutes les 30 secondes
       const interval = setInterval(checkSignatureStatus, 30000)
@@ -144,8 +146,75 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
     }
   }, [leaseStatus, hasDocuSignEnvelope])
 
-  if (leaseStatus === "draft" || (!hasDocuSignEnvelope && !signatureStatus)) {
+  // Ne pas afficher le bouton d'envoi si :
+  // 1. Le statut n'est pas "draft" 
+  // 2. OU si une enveloppe DocuSign existe déjà
+  if (leaseStatus !== "draft" || hasDocuSignEnvelope) {
+    // Afficher le statut de signature
     return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            Signature électronique DocuSign
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {loading ? (
+            <div className="flex items-center justify-center py-4">
+              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              <span>Vérification du statut...</span>
+            </div>
+          ) : signatureStatus ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Statut de l'enveloppe :</span>
+                {getStatusBadge(signatureStatus.status)}
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${signatureStatus.ownerSigned ? "bg-green-500" : "bg-gray-300"}`} />
+                  <span className="text-sm">Propriétaire {signatureStatus.ownerSigned ? "signé" : "non signé"}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${signatureStatus.tenantSigned ? "bg-green-500" : "bg-gray-300"}`} />
+                  <span className="text-sm">Locataire {signatureStatus.tenantSigned ? "signé" : "non signé"}</span>
+                </div>
+              </div>
+
+              {signingUrls && (
+                <div className="space-y-2">
+                  <Button 
+                    onClick={() => window.open(signingUrls.owner, "_blank")} 
+                    className="w-full"
+                    disabled={signatureStatus.ownerSigned}
+                  >
+                    {signatureStatus.ownerSigned ? "Propriétaire a signé" : "Signer en tant que propriétaire"}
+                  </Button>
+                  <Button 
+                    onClick={() => window.open(signingUrls.tenant, "_blank")} 
+                    variant="outline" 
+                    className="w-full"
+                    disabled={signatureStatus.tenantSigned}
+                  >
+                    {signatureStatus.tenantSigned ? "Locataire a signé" : "Signer en tant que locataire"}
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-4">
+              <span className="text-sm text-gray-500">Chargement du statut de signature...</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // Afficher le bouton d'envoi seulement si le statut est "draft" et qu'aucune enveloppe n'existe
+  return (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
