@@ -154,104 +154,6 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Signature électronique DocuSign
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {loading ? (
-            <div className="flex items-center justify-center py-4">
-              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              <span>Vérification du statut...</span>
-            </div>
-          ) : signatureStatus ? (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Statut de l'enveloppe :</span>
-                {getStatusBadge(signatureStatus.status)}
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${signatureStatus.ownerSigned ? "bg-green-500" : "bg-gray-300"}`} />
-                  <span className="text-sm">Propriétaire {signatureStatus.ownerSigned ? "signé" : "non signé"}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${signatureStatus.tenantSigned ? "bg-green-500" : "bg-gray-300"}`} />
-                  <span className="text-sm">Locataire {signatureStatus.tenantSigned ? "signé" : "non signé"}</span>
-                </div>
-              </div>
-
-              {signingUrls && (
-                <div className="space-y-2">
-                  <Button 
-                    onClick={() => window.open(signingUrls.owner, "_blank")} 
-                    className="w-full"
-                    disabled={signatureStatus.ownerSigned}
-                  >
-                    {signatureStatus.ownerSigned ? "Propriétaire a signé" : "Signer en tant que propriétaire"}
-                  </Button>
-                  <Button 
-                    onClick={() => window.open(signingUrls.tenant, "_blank")} 
-                    variant="outline" 
-                    className="w-full"
-                    disabled={signatureStatus.tenantSigned}
-                  >
-                    {signatureStatus.tenantSigned ? "Locataire a signé" : "Signer en tant que locataire"}
-                  </Button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="text-center py-4">
-              <span className="text-sm text-gray-500">Chargement du statut de signature...</span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    )
-  }
-
-  // Afficher le bouton d'envoi seulement si le statut est "draft" et qu'aucune enveloppe n'existe
-  return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Signature électronique DocuSign
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Alert>
-            <FileText className="h-4 w-4" />
-            <AlertDescription>
-              Envoyez ce bail pour signature électronique via DocuSign pour une expérience professionnelle et sécurisée.
-            </AlertDescription>
-          </Alert>
-
-          <Button onClick={sendForDocuSignSignature} disabled={sending} className="w-full">
-            {sending ? (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                Envoi en cours...
-              </>
-            ) : (
-              <>
-                <Send className="h-4 w-4 mr-2" />
-                Envoyer pour signature DocuSign
-              </>
-            )}
-          </Button>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  if (leaseStatus === "sent_to_tenant" || signatureStatus) {
-    return (
-      <Card>
-        <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" />
@@ -263,7 +165,12 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {signatureStatus && (
+          {loading ? (
+            <div className="flex items-center justify-center py-4">
+              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              <span>Vérification du statut...</span>
+            </div>
+          ) : signatureStatus ? (
             <>
               <div className="flex items-center justify-between">
                 <span className="font-medium">Statut de l'enveloppe:</span>
@@ -331,11 +238,47 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
                 </Alert>
               )}
             </>
+          ) : (
+            <div className="text-center py-4">
+              <span className="text-sm text-gray-500">Chargement du statut de signature...</span>
+            </div>
           )}
         </CardContent>
       </Card>
     )
   }
 
-  return null
+  // Afficher le bouton d'envoi seulement si le statut est "draft" et qu'aucune enveloppe n'existe
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <FileText className="h-5 w-5" />
+          Signature électronique DocuSign
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <Alert>
+          <FileText className="h-4 w-4" />
+          <AlertDescription>
+            Envoyez ce bail pour signature électronique via DocuSign pour une expérience professionnelle et sécurisée.
+          </AlertDescription>
+        </Alert>
+
+        <Button onClick={sendForDocuSignSignature} disabled={sending} className="w-full">
+          {sending ? (
+            <>
+              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              Envoi en cours...
+            </>
+          ) : (
+            <>
+              <Send className="h-4 w-4 mr-2" />
+              Envoyer pour signature DocuSign
+            </>
+          )}
+        </Button>
+      </CardContent>
+    </Card>
+  )
 }
