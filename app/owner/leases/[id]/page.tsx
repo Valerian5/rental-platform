@@ -304,6 +304,30 @@ export default function LeaseDetailPage() {
     }
   }
 
+  const downloadSignedDocument = async () => {
+    try {
+      if (!lease?.signed_document) {
+        toast.error("Aucun document signé disponible")
+        return
+      }
+
+      // Télécharger le document signé depuis Supabase Storage
+      const response = await fetch(`/api/leases/${leaseId}/download-signed-document`)
+      if (!response.ok) throw new Error("Erreur téléchargement")
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `bail-signe-${leaseId}.pdf`
+      link.click()
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error("Erreur téléchargement document signé:", error)
+      toast.error("Erreur lors du téléchargement du document signé")
+    }
+  }
+
   useEffect(() => {
     if (leaseId) {
       // Charge le bail et le statut DocuSign (sans polling pour éviter trop d'appels)
@@ -763,6 +787,41 @@ export default function LeaseDetailPage() {
                 />
               </CardContent>
             </Card>
+
+            {/* Section Document signé */}
+            {lease.signed_document && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                    Document signé
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-8 w-8 text-green-600" />
+                        <div>
+                          <p className="font-medium text-green-800">Bail signé</p>
+                          <p className="text-sm text-green-600">
+                            Signé le {lease.signed_at ? new Date(lease.signed_at).toLocaleDateString('fr-FR') : 'Date inconnue'}
+                          </p>
+                        </div>
+                      </div>
+                      <Button 
+                        onClick={() => downloadSignedDocument()}
+                        variant="outline"
+                        className="border-green-600 text-green-600 hover:bg-green-50"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Télécharger
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
 
