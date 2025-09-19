@@ -105,15 +105,39 @@ export function TenantSignatureMethodSelector({
       })
 
       if (response.ok) {
-        const blob = await response.blob()
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement("a")
-        a.href = url
-        a.download = `contrat-bail-${leaseId}.pdf`
-        document.body.appendChild(a)
-        a.click()
-        window.URL.revokeObjectURL(url)
-        document.body.removeChild(a)
+        const htmlContent = await response.text()
+        
+        // Ouvrir dans une nouvelle fenêtre pour impression PDF
+        const printWindow = window.open('', '_blank')
+        if (!printWindow) {
+          throw new Error('Impossible d\'ouvrir une nouvelle fenêtre')
+        }
+
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Bail ${leaseId.slice(0, 8)}</title>
+            <style>
+              @media print {
+                @page { size: A4; margin: 1cm; }
+                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+              }
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px; }
+            </style>
+          </head>
+          <body>${htmlContent}</body>
+          </html>
+        `)
+
+        printWindow.document.close()
+        
+        // Attendre le chargement et déclencher l'impression
+        setTimeout(() => {
+          printWindow.print()
+          printWindow.addEventListener('afterprint', () => printWindow.close())
+        }, 1000)
+
       } else {
         throw new Error("Erreur lors de la génération du PDF")
       }

@@ -31,6 +31,18 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
     try {
       setSending(true)
 
+      // D'abord vérifier si le bail a déjà été envoyé
+      const statusResponse = await fetch(`/api/leases/${leaseId}/signature-status`)
+      if (statusResponse.ok) {
+        const statusData = await statusResponse.json()
+        if (statusData.lease.docusign_envelope_id) {
+          toast.info("Le bail a déjà été envoyé pour signature DocuSign")
+          // Récupérer les URLs de signature existantes
+          checkSignatureStatus()
+          return
+        }
+      }
+
       const response = await fetch(`/api/leases/${leaseId}/send-for-docusign`, {
         method: "POST",
       })
@@ -59,13 +71,20 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
     try {
       setLoading(true)
 
-      const response = await fetch(`/api/leases/${leaseId}/docusign-status`)
+      const response = await fetch(`/api/leases/${leaseId}/signature-status`)
       const data = await response.json()
 
       if (response.ok) {
-        setSignatureStatus(data)
+        // Adapter les données au format attendu
+        const signatureStatus = {
+          status: data.lease.status,
+          ownerSigned: data.lease.signed_by_owner,
+          tenantSigned: data.lease.signed_by_tenant,
+        }
 
-        if (data.status === "completed") {
+        setSignatureStatus(signatureStatus)
+
+        if (signatureStatus.status === "active") {
           toast.success("Toutes les signatures ont été collectées !")
           onStatusChange?.("active")
         }
