@@ -26,7 +26,7 @@ import {
 } from "lucide-react"
 import { LeaseDocumentDisplay } from "@/components/lease-document-display"
 import { PropertyDocumentsManager } from "@/components/property-documents-manager"
-import { UnifiedSignatureManager, SignatureStatusDisplay } from "@/components/unified-signature-manager"
+import { SignatureMethodSelector } from "@/components/signature-method-selector"
 import { CautionnementSection } from "@/components/CautionnementSection"
 import { EtatDesLieuxSection } from "@/components/EtatDesLieuxSection"
 import { toast } from "sonner"
@@ -768,36 +768,24 @@ export default function LeaseDetailPage() {
             )}
 
           {/* Section Signatures */}
-          {lease.status === "active" && lease.signed_by_owner && lease.signed_by_tenant ? (
-            <SignatureStatusDisplay
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Signatures
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SignatureMethodSelector
               leaseId={lease.id}
-              ownerSigned={lease.signed_by_owner}
-              tenantSigned={lease.signed_by_tenant}
-              ownerSignatureDate={lease.owner_signature_date}
-              tenantSignatureDate={lease.tenant_signature_date}
-              signedDocument={lease.signed_document}
+              leaseStatus={lease.status}
+              userType="owner"
+              onStatusChange={(newStatus) => {
+                setLease((prev) => (prev ? { ...prev, status: newStatus } : null))
+              }}
             />
-          ) : (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Signatures
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <UnifiedSignatureManager
-                  leaseId={lease.id}
-                  leaseStatus={lease.status}
-                  userType="owner"
-                  onStatusChange={(newStatus) => {
-                    setLease((prev) => (prev ? { ...prev, status: newStatus } : null))
-                    loadSignatureStatus({ silent: true })
-                  }}
-                />
-              </CardContent>
-            </Card>
-          )}
+          </CardContent>
+        </Card>
           </TabsContent>
 
 
