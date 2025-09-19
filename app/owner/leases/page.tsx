@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/page-header"
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
 import { authService } from "@/lib/auth-service"
 import { supabase } from "@/lib/supabase"
+import { Lease as LeaseType, LEASE_STATUS_CONFIG, leaseStatusUtils } from "@/lib/lease-types"
 
 // Fonction formatCurrency définie localement
 const formatCurrency = (amount: number): string => {

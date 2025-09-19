@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { authService } from "@/lib/auth-service"
 import { toast } from "sonner"
+import { Lease as LeaseType, LEASE_STATUS_CONFIG, leaseStatusUtils } from "@/lib/lease-types"
 
 interface Lease {
   id: string
@@ -77,16 +78,18 @@ export default function TenantLeasesPage() {
   }, [])
 
   const getStatusBadge = (lease: Lease) => {
+    const config = LEASE_STATUS_CONFIG[lease.status as keyof typeof LEASE_STATUS_CONFIG]
+    
+    if (!config) {
+      return <Badge variant="outline">{lease.status}</Badge>
+    }
+
+    // Vérifier si le bail est entièrement signé
     if (lease.signed_by_tenant && lease.signed_by_owner) {
       return <Badge className="bg-green-600">Signé</Badge>
     }
-    if (lease.status === "sent_to_tenant") {
-      return <Badge className="bg-blue-600">À signer</Badge>
-    }
-    if (lease.status === "draft") {
-      return <Badge variant="secondary">Brouillon</Badge>
-    }
-    return <Badge variant="outline">{lease.status}</Badge>
+
+    return <Badge className={config.color}>{config.label}</Badge>
   }
 
   const getStatusIcon = (lease: Lease) => {

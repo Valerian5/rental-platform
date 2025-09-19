@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 import { SignatureMethodSelector } from "@/components/signature-method-selector"
+import { Lease as LeaseType, LeaseStatus, LEASE_STATUS_CONFIG, leaseStatusUtils } from "@/lib/lease-types"
 import {
   FileText,
   Calendar,
@@ -22,6 +23,7 @@ import {
   Eye,
   Paperclip,
   Home,
+  RefreshCw,
 } from "lucide-react"
 import { authService } from "@/lib/auth-service"
 import { TenantEtatDesLieuxSection } from "@/components/TenantEtatDesLieuxSection"
@@ -252,45 +254,54 @@ export default function TenantLeaseDetailPage() {
   }
 
   const getStatusInfo = (status: string) => {
-    switch (status) {
-      case "sent_to_tenant":
-        return {
-          badge: (
-            <Badge className="bg-blue-600">
-              <AlertCircle className="h-3 w-3 mr-1" />À signer
-            </Badge>
-          ),
-          description: "Ce bail est prêt à être signé",
-          color: "blue",
-        }
-      case "signed_by_tenant":
-        return {
-          badge: (
-            <Badge className="bg-orange-600">
-              <Clock className="h-3 w-3 mr-1" />
-              En attente propriétaire
-            </Badge>
-          ),
-          description: "Vous avez signé, en attente de la signature du propriétaire",
-          color: "orange",
-        }
-      case "active":
-        return {
-          badge: (
-            <Badge className="bg-green-600">
-              <CheckCircle className="h-3 w-3 mr-1" />
-              Actif
-            </Badge>
-          ),
-          description: "Bail signé par les deux parties et actif",
-          color: "green",
-        }
-      default:
-        return {
-          badge: <Badge variant="outline">{status}</Badge>,
-          description: "",
-          color: "gray",
-        }
+    const config = LEASE_STATUS_CONFIG[status as keyof typeof LEASE_STATUS_CONFIG]
+    
+    if (!config) {
+      return {
+        badge: <Badge variant="outline">{status}</Badge>,
+        description: "Statut inconnu",
+        color: "gray",
+      }
+    }
+
+    // Mapping des icônes selon le statut (vue locataire)
+    const getIcon = (status: string) => {
+      switch (status) {
+        case "draft": return <Clock className="h-3 w-3 mr-1" />
+        case "sent_to_tenant": return <AlertCircle className="h-3 w-3 mr-1" />
+        case "signed_by_tenant": return <Clock className="h-3 w-3 mr-1" />
+        case "signed_by_owner": return <AlertCircle className="h-3 w-3 mr-1" />
+        case "active": return <CheckCircle className="h-3 w-3 mr-1" />
+        case "expired": return <XCircle className="h-3 w-3 mr-1" />
+        case "terminated": return <XCircle className="h-3 w-3 mr-1" />
+        case "renewed": return <RefreshCw className="h-3 w-3 mr-1" />
+        default: return null
+      }
+    }
+
+    // Messages personnalisés pour le locataire
+    const getDescription = (status: string) => {
+      switch (status) {
+        case "sent_to_tenant": return "Ce bail est prêt à être signé"
+        case "signed_by_tenant": return "Vous avez signé, en attente de la signature du propriétaire"
+        case "signed_by_owner": return "Le propriétaire a signé, votre signature est requise"
+        case "active": return "Bail signé par les deux parties et actif"
+        default: return config.description
+      }
+    }
+
+    return {
+      badge: (
+        <Badge className={config.color}>
+          {getIcon(status)}
+          {config.label}
+        </Badge>
+      ),
+      description: getDescription(status),
+      color: config.color.includes("green") ? "green" : 
+             config.color.includes("blue") ? "blue" : 
+             config.color.includes("orange") ? "orange" : 
+             config.color.includes("red") ? "red" : "gray",
     }
   }
 

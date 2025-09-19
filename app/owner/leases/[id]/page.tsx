@@ -23,6 +23,7 @@ import {
   Mail,
   Home,
   Upload,
+  RefreshCw,
 } from "lucide-react"
 import { LeaseDocumentDisplay } from "@/components/lease-document-display"
 import { PropertyDocumentsManager } from "@/components/property-documents-manager"
@@ -30,6 +31,7 @@ import { SignatureMethodSelector } from "@/components/signature-method-selector"
 import { CautionnementSection } from "@/components/CautionnementSection"
 import { EtatDesLieuxSection } from "@/components/EtatDesLieuxSection"
 import { toast } from "sonner"
+import { Lease as LeaseType, LeaseStatus, LEASE_STATUS_CONFIG, leaseStatusUtils } from "@/lib/lease-types"
 
 /** --- Types DocuSign (statut par signataire) --- */
 type RecipientStatus =
@@ -423,57 +425,43 @@ export default function LeaseDetailPage() {
   }
 
   const getStatusInfo = (status: string) => {
-    switch (status) {
-      case "draft":
+    const config = LEASE_STATUS_CONFIG[status as keyof typeof LEASE_STATUS_CONFIG]
+    
+    if (!config) {
         return {
-          badge: (
-            <Badge variant="outline" className="bg-gray-50">
-              <Clock className="h-3 w-3 mr-1" />
-              Brouillon
-            </Badge>
-          ),
-          description: "Le bail est en cours de préparation",
+        badge: <Badge variant="outline">{status}</Badge>,
+        description: "Statut inconnu",
           color: "gray",
         }
-      case "sent_to_tenant":
+    }
+
+    // Mapping des icônes selon le statut
+    const getIcon = (status: string) => {
+      switch (status) {
+        case "draft": return <Clock className="h-3 w-3 mr-1" />
+        case "sent_to_tenant": return <Send className="h-3 w-3 mr-1" />
+        case "signed_by_tenant": return <AlertCircle className="h-3 w-3 mr-1" />
+        case "signed_by_owner": return <AlertCircle className="h-3 w-3 mr-1" />
+        case "active": return <CheckCircle className="h-3 w-3 mr-1" />
+        case "expired": return <XCircle className="h-3 w-3 mr-1" />
+        case "terminated": return <XCircle className="h-3 w-3 mr-1" />
+        case "renewed": return <RefreshCw className="h-3 w-3 mr-1" />
+        default: return null
+      }
+    }
+
         return {
           badge: (
-            <Badge className="bg-blue-600">
-              <Send className="h-3 w-3 mr-1" />
-              Envoyé au locataire
+        <Badge className={config.color}>
+          {getIcon(status)}
+          {config.label}
             </Badge>
           ),
-          description: "En attente de signature du locataire",
-          color: "blue",
-        }
-      case "signed_by_tenant":
-        return {
-          badge: (
-            <Badge className="bg-orange-600">
-              <AlertCircle className="h-3 w-3 mr-1" />
-              En attente de votre signature
-            </Badge>
-          ),
-          description: "Le locataire a signé, votre signature est requise",
-          color: "orange",
-        }
-      case "active":
-        return {
-          badge: (
-            <Badge className="bg-green-600">
-              <CheckCircle className="h-3 w-3 mr-1" />
-              Actif
-            </Badge>
-          ),
-          description: "Bail signé par les deux parties",
-          color: "green",
-        }
-      default:
-        return {
-          badge: <Badge variant="outline">{status}</Badge>,
-          description: "",
-          color: "gray",
-        }
+      description: config.description,
+      color: config.color.includes("green") ? "green" : 
+             config.color.includes("blue") ? "blue" : 
+             config.color.includes("orange") ? "orange" : 
+             config.color.includes("red") ? "red" : "gray",
     }
   }
 
