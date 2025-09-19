@@ -540,8 +540,7 @@ export default function LeaseDetailPage() {
         <Tabs defaultValue="overview" className="space-y-6">
           <TabsList className="bg-white">
             <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
-            <TabsTrigger value="document">Document</TabsTrigger>
-            <TabsTrigger value="signatures">Signatures</TabsTrigger>
+            <TabsTrigger value="bail">Bail</TabsTrigger>
             <TabsTrigger value="cautionnement">Acte de cautionnement</TabsTrigger>
             <TabsTrigger value="etat-des-lieux">État des lieux</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
@@ -702,7 +701,8 @@ export default function LeaseDetailPage() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="document" className="space-y-6">
+          <TabsContent value="bail" className="space-y-6">
+            {/* Section Document du bail */}
             {lease.generated_document ? (
               <LeaseDocumentDisplay
                 document={lease.generated_document}
@@ -742,19 +742,29 @@ export default function LeaseDetailPage() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Section Signatures */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Signatures
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <SignatureMethodSelector
+                  leaseId={lease.id}
+                  leaseStatus={lease.status}
+                  userType="owner"
+                  onStatusChange={(newStatus) => {
+                    setLease((prev) => (prev ? { ...prev, status: newStatus } : null))
+                    loadSignatureStatus({ silent: true })
+                  }}
+                />
+              </CardContent>
+            </Card>
           </TabsContent>
 
-          <TabsContent value="signatures" className="space-y-6">
-            <SignatureMethodSelector
-              leaseId={lease.id}
-              leaseStatus={lease.status}
-              userType="owner"
-              onStatusChange={(newStatus) => {
-                setLease((prev) => (prev ? { ...prev, status: newStatus } : null))
-                loadSignatureStatus({ silent: true })
-              }}
-            />
-          </TabsContent>
 
           <TabsContent value="cautionnement" className="space-y-6">
             <CautionnementSection
