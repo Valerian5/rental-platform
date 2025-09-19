@@ -43,7 +43,8 @@ export function SignatureMethodSelector({
           if (response.ok) {
             const data = await response.json()
             console.log("🔍 [SIGNATURE-METHOD-SELECTOR] API signature-status:", data)
-            if (data.lease.signature_method) {
+            if (data.lease.signature_method && !selectedSignatureMethod) {
+              // Ne définir la méthode que si elle n'est pas déjà définie localement
               console.log("🔍 [SIGNATURE-METHOD-SELECTOR] Méthode depuis API:", data.lease.signature_method)
               setSelectedSignatureMethod(data.lease.signature_method)
             }
