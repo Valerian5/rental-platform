@@ -3,7 +3,7 @@ const nextConfig = {
   experimental: {
     // On ajoute '@sparticuz/chromium' pour s'assurer qu'il n'est pas "bundlé" par le serveur.
     // C'est la solution recommandée par Vercel.
-    serverComponentsExternalPackages: ['sharp', 'tesseract.js', '@sparticuz/chromium'],
+    serverComponentsExternalPackages: ['sharp', 'tesseract.js', '@sparticuz/chromium', 'puppeteer-core"],
   },
   webpack: (config, { isServer }) => {
     // Configuration pour Tesseract.js
