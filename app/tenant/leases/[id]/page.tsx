@@ -362,10 +362,9 @@ export default function TenantLeaseDetailPage() {
         <Tabs defaultValue="overview" className="space-y-6">
           <TabsList className="bg-white">
             <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
-            <TabsTrigger value="document">Document</TabsTrigger>
+            <TabsTrigger value="document">Bail</TabsTrigger>
             <TabsTrigger value="annexes">Annexes</TabsTrigger>
             <TabsTrigger value="etat-des-lieux">État des lieux</TabsTrigger>
-            <TabsTrigger value="signature">Signature</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
@@ -548,6 +547,39 @@ export default function TenantLeaseDetailPage() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Section Signature */}
+            {lease.generated_document && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    Signature du bail
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {lease.status === "active" && lease.signed_by_owner && lease.signed_by_tenant ? (
+                    <SignatureStatusDisplay
+                      leaseId={leaseId}
+                      ownerSigned={lease.signed_by_owner}
+                      tenantSigned={lease.signed_by_tenant}
+                      ownerSignatureDate={lease.owner_signature_date}
+                      tenantSignatureDate={lease.tenant_signature_date}
+                      signedDocument={lease.signed_document}
+                    />
+                  ) : (
+                    <UnifiedSignatureManager
+                      leaseId={leaseId}
+                      leaseStatus={lease.status}
+                      userType="tenant"
+                      onStatusChange={(newStatus) => {
+                        setLease((prev) => (prev ? { ...prev, status: newStatus } : null))
+                      }}
+                    />
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="annexes" className="space-y-6">
@@ -612,27 +644,6 @@ export default function TenantLeaseDetailPage() {
             />
           </TabsContent>
 
-          <TabsContent value="signature" className="space-y-6">
-            {lease.status === "active" && lease.signed_by_owner && lease.signed_by_tenant ? (
-              <SignatureStatusDisplay
-                leaseId={leaseId}
-                ownerSigned={lease.signed_by_owner}
-                tenantSigned={lease.signed_by_tenant}
-                ownerSignatureDate={lease.owner_signature_date}
-                tenantSignatureDate={lease.tenant_signature_date}
-                signedDocument={lease.signed_document}
-              />
-            ) : (
-              <UnifiedSignatureManager
-                leaseId={leaseId}
-                leaseStatus={lease.status}
-                userType="tenant"
-                onStatusChange={(newStatus) => {
-                  setLease((prev) => (prev ? { ...prev, status: newStatus } : null))
-                }}
-              />
-            )}
-          </TabsContent>
         </Tabs>
       </div>
     </div>

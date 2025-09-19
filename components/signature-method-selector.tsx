@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { FileText, Download, Upload, CheckCircle, Crown, AlertTriangle, Zap } from "lucide-react"
+import { FileText, Download, Upload, CheckCircle, Clock, AlertCircle, Zap, Crown, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
 import { DocuSignSignatureManager } from "./docusign-signature-manager"
 import { premiumFeaturesService } from "@/lib/premium-features-service"
@@ -29,6 +28,7 @@ export function SignatureMethodSelector({
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [selectedSignatureMethod, setSelectedSignatureMethod] = useState<"electronic" | "manual_physical" | "manual_remote" | null>(null)
 
   useEffect(() => {
     checkPremiumFeatures()
@@ -165,8 +165,11 @@ export function SignatureMethodSelector({
       const data = await response.json()
       toast.success("Processus de signature initié !")
       
+      // Stocker la méthode choisie
+      setSelectedSignatureMethod(signatureMethod)
+      
       if (onStatusChange) {
-        onStatusChange(data.status || "ready_for_signature")
+        onStatusChange(data.status || "sent_to_tenant")
       }
     } catch (error) {
       console.error("Erreur initiation signature:", error)
@@ -287,119 +290,169 @@ export function SignatureMethodSelector({
         )}
 
         {currentState.showSignature && (
-          <Tabs defaultValue={isElectronicEnabled ? "electronic" : "manual"} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="electronic" disabled={!isElectronicEnabled}>
-              <div className="flex items-center gap-2">
-                <Zap className="h-4 w-4" />
-                Signature électronique
-                {isElectronicEnabled && <Crown className="h-3 w-3 text-yellow-500" />}
-              </div>
-            </TabsTrigger>
-            <TabsTrigger value="manual">
-              <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                Signature manuelle
-              </div>
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="electronic" className="space-y-4">
-            {isElectronicEnabled ? (
+          <div className="space-y-4">
+            {/* Affichage selon la méthode choisie */}
+            {selectedSignatureMethod === "electronic" && (
               <div className="space-y-4">
                 <Alert className="bg-blue-50 border-blue-200">
-                  <Crown className="h-4 w-4 text-blue-600" />
+                  <Zap className="h-4 w-4 text-blue-600" />
                   <AlertDescription className="text-blue-800">
-                    <strong>Fonctionnalité Premium</strong> - Signature électronique sécurisée via DocuSign
+                    <strong>Signature électronique</strong> - Le processus de signature électronique a été initié
                   </AlertDescription>
                 </Alert>
-
                 <DocuSignSignatureManager leaseId={leaseId} leaseStatus={leaseStatus} onStatusChange={onStatusChange} />
               </div>
-            ) : (
-              <Alert className="bg-orange-50 border-orange-200">
-                <Crown className="h-4 w-4 text-orange-600" />
-                <AlertDescription className="text-orange-800">
-                  <strong>Fonctionnalité Premium</strong> - La signature électronique n'est pas activée. Contactez votre
-                  administrateur pour activer cette fonctionnalité.
-                </AlertDescription>
-              </Alert>
             )}
-          </TabsContent>
 
-          <TabsContent value="manual" className="space-y-4">
-            <Alert>
-              <FileText className="h-4 w-4" />
-              <AlertDescription>
-                Téléchargez le document, imprimez-le, signez-le et uploadez la version signée.
-              </AlertDescription>
-            </Alert>
-
-            <div className="space-y-4">
-              <div className="p-4 border rounded-lg bg-gray-50">
-                <h4 className="font-medium mb-2">1. Télécharger le document</h4>
-                <p className="text-sm text-gray-600 mb-3">
-                  Téléchargez le bail au format PDF pour l'imprimer et le signer.
-                </p>
-                <Button onClick={downloadDocument} variant="outline" className="w-full bg-transparent">
-                  <Download className="h-4 w-4 mr-2" />
-                  Télécharger le bail (PDF)
-                </Button>
-              </div>
-
-              <div className="p-4 border rounded-lg">
-                <h4 className="font-medium mb-2">2. Uploader le document signé</h4>
-                <p className="text-sm text-gray-600 mb-3">
-                  Une fois signé, scannez ou photographiez le document et uploadez-le ici.
-                </p>
-
-                <div className="space-y-3">
-                  <div>
-                    <Label htmlFor="signed-document-upload">Document signé (PDF uniquement)</Label>
-                    <Input
-                      id="signed-document-upload"
-                      type="file"
-                      accept=".pdf"
-                      onChange={handleFileSelect}
-                      className="mt-1"
-                    />
+            {selectedSignatureMethod === "manual_physical" && (
+              <div className="space-y-4">
+                <Alert className="bg-green-50 border-green-200">
+                  <FileText className="h-4 w-4 text-green-600" />
+                  <AlertDescription className="text-green-800">
+                    <strong>Signature physique</strong> - Téléchargez le document et signez-le lors de la remise des clés
+                  </AlertDescription>
+                </Alert>
+                
+                <div className="space-y-4">
+                  <div className="p-4 border rounded-lg bg-gray-50">
+                    <h4 className="font-medium mb-2">1. Télécharger le document</h4>
+                    <p className="text-sm text-gray-600 mb-3">
+                      Téléchargez le bail au format PDF pour l'imprimer et le signer lors de la remise des clés.
+                    </p>
+                    <Button onClick={downloadDocument} variant="outline" className="w-full bg-transparent">
+                      <Download className="h-4 w-4 mr-2" />
+                      Télécharger le bail (PDF)
+                    </Button>
                   </div>
 
-                  {selectedFile && (
-                    <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded">
-                      <CheckCircle className="h-4 w-4 text-green-600" />
-                      <span className="text-sm text-green-800">
-                        {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
-                      </span>
-                    </div>
-                  )}
+                  <div className="p-4 border rounded-lg">
+                    <h4 className="font-medium mb-2">2. Uploader le document signé</h4>
+                    <p className="text-sm text-gray-600 mb-3">
+                      Une fois signé lors de la remise des clés, scannez ou photographiez le document et uploadez-le ici.
+                    </p>
 
-                  <Button onClick={handleUploadSignedDocument} disabled={!selectedFile || uploading} className="w-full">
-                    {uploading ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Upload en cours...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="h-4 w-4 mr-2" />
-                        Uploader le document signé
-                      </>
-                    )}
-                  </Button>
+                    <div className="space-y-3">
+                      <div>
+                        <Label htmlFor="signed-document-upload">Document signé (PDF uniquement)</Label>
+                        <Input
+                          id="signed-document-upload"
+                          type="file"
+                          accept=".pdf"
+                          onChange={handleFileSelect}
+                          className="mt-1"
+                        />
+                      </div>
+
+                      {selectedFile && (
+                        <div className="p-3 bg-blue-50 rounded-lg">
+                          <p className="text-sm text-blue-800">
+                            <strong>Fichier sélectionné :</strong> {selectedFile.name}
+                          </p>
+                        </div>
+                      )}
+
+                      <Button 
+                        onClick={handleUploadSignedDocument} 
+                        disabled={!selectedFile || uploading}
+                        className="w-full"
+                      >
+                        {uploading ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Upload en cours...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="h-4 w-4 mr-2" />
+                            Uploader le document signé
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
+            )}
 
-              <Alert className="bg-yellow-50 border-yellow-200">
-                <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                <AlertDescription className="text-yellow-800">
-                  <strong>Important :</strong> Assurez-vous que le document est clairement lisible et que toutes les
-                  signatures sont visibles.
-                </AlertDescription>
-              </Alert>
-            </div>
-          </TabsContent>
-        </Tabs>
+            {selectedSignatureMethod === "manual_remote" && (
+              <div className="space-y-4">
+                <Alert className="bg-orange-50 border-orange-200">
+                  <FileText className="h-4 w-4 text-orange-600" />
+                  <AlertDescription className="text-orange-800">
+                    <strong>Signature à distance</strong> - Téléchargez le document, signez-le et uploadez-le
+                  </AlertDescription>
+                </Alert>
+                
+                <div className="space-y-4">
+                  <div className="p-4 border rounded-lg bg-gray-50">
+                    <h4 className="font-medium mb-2">1. Télécharger le document</h4>
+                    <p className="text-sm text-gray-600 mb-3">
+                      Téléchargez le bail au format PDF pour l'imprimer et le signer.
+                    </p>
+                    <Button onClick={downloadDocument} variant="outline" className="w-full bg-transparent">
+                      <Download className="h-4 w-4 mr-2" />
+                      Télécharger le bail (PDF)
+                    </Button>
+                  </div>
+
+                  <div className="p-4 border rounded-lg">
+                    <h4 className="font-medium mb-2">2. Uploader le document signé</h4>
+                    <p className="text-sm text-gray-600 mb-3">
+                      Une fois signé, scannez ou photographiez le document et uploadez-le ici.
+                    </p>
+
+                    <div className="space-y-3">
+                      <div>
+                        <Label htmlFor="signed-document-upload">Document signé (PDF uniquement)</Label>
+                        <Input
+                          id="signed-document-upload"
+                          type="file"
+                          accept=".pdf"
+                          onChange={handleFileSelect}
+                          className="mt-1"
+                        />
+                      </div>
+
+                      {selectedFile && (
+                        <div className="p-3 bg-blue-50 rounded-lg">
+                          <p className="text-sm text-blue-800">
+                            <strong>Fichier sélectionné :</strong> {selectedFile.name}
+                          </p>
+                        </div>
+                      )}
+
+                      <Button 
+                        onClick={handleUploadSignedDocument} 
+                        disabled={!selectedFile || uploading}
+                        className="w-full"
+                      >
+                        {uploading ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Upload en cours...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="h-4 w-4 mr-2" />
+                            Uploader le document signé
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Fallback si aucune méthode n'est sélectionnée */}
+            {!selectedSignatureMethod && (
+              <div className="text-center py-8">
+                <AlertTriangle className="h-16 w-16 mx-auto mb-4 text-orange-500" />
+                <h3 className="text-lg font-semibold text-orange-800 mb-2">Méthode de signature non sélectionnée</h3>
+                <p className="text-gray-600">Veuillez choisir une méthode de signature ci-dessus.</p>
+              </div>
+            )}
+          </div>
         )}
 
         {currentState.showStatus && (

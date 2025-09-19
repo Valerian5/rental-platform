@@ -1,14 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import React, { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { FileText, Download, Upload, CheckCircle, Clock, AlertCircle, Zap, Crown } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { FileText, Download, Upload, CheckCircle, Clock, AlertCircle, Zap, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
-import { premiumFeaturesService } from "@/lib/premium-features-service"
 
 interface TenantSignatureMethodSelectorProps {
   leaseId: string
@@ -21,25 +20,8 @@ export function TenantSignatureMethodSelector({
   leaseStatus,
   onStatusChange,
 }: TenantSignatureMethodSelectorProps) {
-  const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [isElectronicEnabled, setIsElectronicEnabled] = useState(false)
-
-  useEffect(() => {
-    checkPremiumFeatures()
-  }, [])
-
-  const checkPremiumFeatures = async () => {
-    try {
-      const enabled = await premiumFeaturesService.isElectronicSignatureEnabled()
-      setIsElectronicEnabled(enabled)
-    } catch (error) {
-      console.error("Erreur vérification premium features:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -172,19 +154,6 @@ export function TenantSignatureMethodSelector({
     }
   }
 
-  if (loading) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-center">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-            <span className="ml-2">Chargement...</span>
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
-
   // Déterminer l'état actuel et les actions possibles
   const getCurrentState = () => {
     switch (leaseStatus) {
@@ -199,18 +168,18 @@ export function TenantSignatureMethodSelector({
       case "signed_by_tenant":
         return {
           title: "En attente du propriétaire",
-          description: "Vous avez signé, en attente de la signature du propriétaire",
+          description: "Vous avez signé le bail, en attente de la signature du propriétaire",
           canSignElectronically: false,
           canSignManually: false,
-          showDownload: false,
+          showDownload: true,
         }
       case "active":
         return {
           title: "Bail signé",
-          description: "Le bail a été signé par les deux parties",
+          description: "Le bail a été signé par toutes les parties",
           canSignElectronically: false,
           canSignManually: false,
-          showDownload: false,
+          showDownload: true,
         }
       default:
         return {
@@ -235,83 +204,73 @@ export function TenantSignatureMethodSelector({
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {/* État actuel */}
-          <Alert>
+          <Alert className={leaseStatus === "sent_to_tenant" ? "bg-blue-50 border-blue-200" : "bg-gray-50 border-gray-200"}>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              <strong>{currentState.title}</strong><br />
-              {currentState.description}
+              <strong>{currentState.title}</strong> - {currentState.description}
             </AlertDescription>
           </Alert>
 
-          {/* Actions disponibles */}
-          {currentState.canSignElectronically || currentState.canSignManually ? (
-            <Tabs defaultValue={isElectronicEnabled ? "electronic" : "manual"} className="space-y-4">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="electronic" disabled={!isElectronicEnabled || !currentState.canSignElectronically}>
-                  <div className="flex items-center gap-2">
-                    <Zap className="h-4 w-4" />
-                    Signature électronique
-                    {isElectronicEnabled && <Crown className="h-3 w-3 text-yellow-500" />}
-                  </div>
-                </TabsTrigger>
-                <TabsTrigger value="manual" disabled={!currentState.canSignManually}>
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    Signature manuelle
-                  </div>
-                </TabsTrigger>
-              </TabsList>
+          {currentState.showDownload && (
+            <div className="p-4 border rounded-lg bg-gray-50">
+              <h4 className="font-medium mb-2">Télécharger le document</h4>
+              <p className="text-sm text-gray-600 mb-3">
+                Téléchargez le bail au format PDF pour le consulter.
+              </p>
+              <Button onClick={downloadDocument} variant="outline" className="w-full bg-transparent">
+                <Download className="h-4 w-4 mr-2" />
+                Télécharger le bail (PDF)
+              </Button>
+            </div>
+          )}
 
-              <TabsContent value="electronic" className="space-y-4">
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <h3 className="font-semibold text-blue-800 mb-2">Signature électronique</h3>
-                  <p className="text-blue-700 text-sm mb-4">
-                    Signez le bail directement en ligne. Cette méthode est plus rapide et sécurisée.
+          {leaseStatus === "sent_to_tenant" && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Signature électronique */}
+                <div className="p-4 border rounded-lg">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Zap className="h-5 w-5 text-blue-600" />
+                    <h4 className="font-medium">Signature électronique</h4>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-3">
+                    Signez le bail directement en ligne de manière sécurisée.
                   </p>
-                  <div className="flex gap-2">
-                    <Button onClick={signElectronically} className="bg-blue-600 hover:bg-blue-700">
-                      <Zap className="h-4 w-4 mr-2" />
-                      Signer électroniquement
-                    </Button>
-                  </div>
+                  <Button onClick={signElectronically} className="w-full">
+                    <Zap className="h-4 w-4 mr-2" />
+                    Signer électroniquement
+                  </Button>
                 </div>
-              </TabsContent>
 
-              <TabsContent value="manual" className="space-y-4">
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <h3 className="font-semibold text-gray-800 mb-2">Signature manuelle</h3>
-                  <p className="text-gray-700 text-sm mb-4">
-                    Téléchargez le document, signez-le physiquement, puis uploadez-le.
+                {/* Signature manuelle */}
+                <div className="p-4 border rounded-lg">
+                  <div className="flex items-center gap-2 mb-3">
+                    <FileText className="h-5 w-5 text-green-600" />
+                    <h4 className="font-medium">Signature manuelle</h4>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-3">
+                    Téléchargez, imprimez, signez et uploadez le document.
                   </p>
                   
-                  <div className="space-y-4">
-                    {/* Téléchargement */}
+                  <div className="space-y-3">
                     <div>
-                      <Button onClick={downloadDocument} variant="outline" className="w-full">
-                        <Download className="h-4 w-4 mr-2" />
-                        Télécharger le document à signer
-                      </Button>
-                    </div>
-
-                    {/* Upload */}
-                    <div>
-                      <label htmlFor="signed-document-upload" className="block text-sm font-medium text-gray-700 mb-2">
-                        Document signé
-                      </label>
-                      <input
+                      <Label htmlFor="signed-document-upload">Document signé (PDF uniquement)</Label>
+                      <Input
                         id="signed-document-upload"
                         type="file"
                         accept=".pdf"
                         onChange={handleFileSelect}
-                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                        className="mt-1"
                       />
-                      {selectedFile && (
-                        <p className="text-sm text-gray-600 mt-1">
-                          Fichier sélectionné : {selectedFile.name}
-                        </p>
-                      )}
                     </div>
+
+                    {selectedFile && (
+                      <div className="p-3 bg-blue-50 rounded-lg">
+                        <p className="text-sm text-blue-800">
+                          <strong>Fichier sélectionné :</strong> {selectedFile.name}
+                        </p>
+                      </div>
+                    )}
 
                     <Button 
                       onClick={handleUploadSignedDocument} 
@@ -332,19 +291,27 @@ export function TenantSignatureMethodSelector({
                     </Button>
                   </div>
                 </div>
-              </TabsContent>
-            </Tabs>
-          ) : currentState.showDownload ? (
-            <div className="text-center">
-              <Button onClick={downloadDocument} variant="outline">
-                <Download className="h-4 w-4 mr-2" />
-                Télécharger le document
-              </Button>
+              </div>
             </div>
-          ) : (
-            <div className="text-center text-gray-500">
-              <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-500" />
-              <p>Le bail est déjà signé par les deux parties</p>
+          )}
+
+          {leaseStatus === "signed_by_tenant" && (
+            <div className="text-center py-6">
+              <Clock className="h-12 w-12 mx-auto mb-3 text-orange-500" />
+              <h3 className="text-lg font-semibold text-orange-800 mb-2">En attente du propriétaire</h3>
+              <p className="text-gray-600">
+                Vous avez signé le bail. Le propriétaire doit maintenant le signer pour finaliser le processus.
+              </p>
+            </div>
+          )}
+
+          {leaseStatus === "active" && (
+            <div className="text-center py-6">
+              <CheckCircle className="h-12 w-12 mx-auto mb-3 text-green-500" />
+              <h3 className="text-lg font-semibold text-green-800 mb-2">Bail entièrement signé</h3>
+              <p className="text-gray-600">
+                Le bail a été signé par toutes les parties et est maintenant actif.
+              </p>
             </div>
           )}
         </div>
