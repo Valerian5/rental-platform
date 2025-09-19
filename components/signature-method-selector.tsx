@@ -1,8 +1,6 @@
 "use client"
 
-import type React from "react"
-
-import { useState, useEffect } from "react"
+import React, { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -72,23 +70,41 @@ export function SignatureMethodSelector({
     try {
       setUploading(true)
 
+      // D'abord uploader le fichier
       const formData = new FormData()
       formData.append("document", selectedFile)
       formData.append("signerType", userType)
 
-      const response = await fetch(`/api/leases/${leaseId}/upload-signed-document`, {
+      const uploadResponse = await fetch(`/api/leases/${leaseId}/upload-signed-document`, {
         method: "POST",
         body: formData,
       })
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || "Erreur lors de l'upload")
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json()
+        throw new Error(errorData.error || "Erreur lors de l'upload")
       }
 
+      // Ensuite notifier le workflow de signature
+      const workflowResponse = await fetch(`/api/leases/${leaseId}/signature-workflow`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "upload_manual_signature",
+          userType: userType,
+        }),
+      })
+
+      if (!workflowResponse.ok) {
+        const errorData = await workflowResponse.json()
+        throw new Error(errorData.error || "Erreur lors de la signature")
+      }
+
+      const data = await workflowResponse.json()
       toast.success("Document signé uploadé avec succès")
-      onStatusChange?.(result.leaseStatus)
+      onStatusChange?.(data.status)
       setSelectedFile(null)
 
       // Reset file input
@@ -127,6 +143,37 @@ export function SignatureMethodSelector({
     }
   }
 
+  const initiateSignature = async (signatureMethod: "electronic" | "manual_physical" | "manual_remote") => {
+    try {
+      const response = await fetch(`/api/leases/${leaseId}/signature-workflow`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "initiate_signature",
+          userType: "owner",
+          signatureMethod: signatureMethod,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Erreur lors de l'initiation")
+      }
+
+      const data = await response.json()
+      toast.success("Processus de signature initié !")
+      
+      if (onStatusChange) {
+        onStatusChange(data.status || "ready_for_signature")
+      }
+    } catch (error) {
+      console.error("Erreur initiation signature:", error)
+      toast.error(error instanceof Error ? error.message : "Erreur lors de l'initiation")
+    }
+  }
+
   if (loading) {
     return (
       <Card>
@@ -140,6 +187,47 @@ export function SignatureMethodSelector({
     )
   }
 
+  // Déterminer l'état actuel et les actions possibles
+  const getCurrentState = () => {
+    switch (leaseStatus) {
+      case "draft":
+        return {
+          showInitiation: true,
+          showSignature: false,
+          showStatus: false,
+        }
+      case "ready_for_signature":
+        return {
+          showInitiation: false,
+          showSignature: true,
+          showStatus: false,
+        }
+      case "owner_signed_electronically":
+      case "owner_signed_manually":
+      case "tenant_signed_electronically":
+      case "tenant_signed_manually":
+        return {
+          showInitiation: false,
+          showSignature: true,
+          showStatus: false,
+        }
+      case "active":
+        return {
+          showInitiation: false,
+          showSignature: false,
+          showStatus: true,
+        }
+      default:
+        return {
+          showInitiation: true,
+          showSignature: false,
+          showStatus: false,
+        }
+    }
+  }
+
+  const currentState = getCurrentState()
+
   return (
     <Card>
       <CardHeader>
@@ -149,7 +237,60 @@ export function SignatureMethodSelector({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue={isElectronicEnabled ? "electronic" : "manual"} className="space-y-4">
+        {currentState.showInitiation && (
+          <div className="space-y-4">
+            <Alert>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Le bail est prêt à être signé. Choisissez la méthode de signature.
+              </AlertDescription>
+            </Alert>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-4 border rounded-lg text-center">
+                <Zap className="h-8 w-8 mx-auto mb-2 text-blue-600" />
+                <h3 className="font-medium mb-2">Signature électronique</h3>
+                <p className="text-sm text-gray-600 mb-3">Signez en ligne via DocuSign</p>
+                <Button 
+                  onClick={() => initiateSignature("electronic")} 
+                  disabled={!isElectronicEnabled}
+                  className="w-full"
+                >
+                  {isElectronicEnabled ? "Initier" : "Non disponible"}
+                </Button>
+              </div>
+              
+              <div className="p-4 border rounded-lg text-center">
+                <FileText className="h-8 w-8 mx-auto mb-2 text-green-600" />
+                <h3 className="font-medium mb-2">Signature physique</h3>
+                <p className="text-sm text-gray-600 mb-3">Lors de la remise des clés</p>
+                <Button 
+                  onClick={() => initiateSignature("manual_physical")} 
+                  variant="outline"
+                  className="w-full"
+                >
+                  Initier
+                </Button>
+              </div>
+              
+              <div className="p-4 border rounded-lg text-center">
+                <FileText className="h-8 w-8 mx-auto mb-2 text-orange-600" />
+                <h3 className="font-medium mb-2">Signature à distance</h3>
+                <p className="text-sm text-gray-600 mb-3">Téléchargement et upload</p>
+                <Button 
+                  onClick={() => initiateSignature("manual_remote")} 
+                  variant="outline"
+                  className="w-full"
+                >
+                  Initier
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {currentState.showSignature && (
+          <Tabs defaultValue={isElectronicEnabled ? "electronic" : "manual"} className="space-y-4">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="electronic" disabled={!isElectronicEnabled}>
               <div className="flex items-center gap-2">
@@ -262,6 +403,15 @@ export function SignatureMethodSelector({
             </div>
           </TabsContent>
         </Tabs>
+        )}
+
+        {currentState.showStatus && (
+          <div className="text-center py-8">
+            <CheckCircle className="h-16 w-16 mx-auto mb-4 text-green-600" />
+            <h3 className="text-lg font-semibold text-green-800 mb-2">Bail entièrement signé</h3>
+            <p className="text-gray-600">Le bail a été signé par toutes les parties et est maintenant actif.</p>
+          </div>
+        )}
       </CardContent>
     </Card>
   )

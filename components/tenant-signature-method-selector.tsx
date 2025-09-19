@@ -68,22 +68,40 @@ export function TenantSignatureMethodSelector({
       const formData = new FormData()
       formData.append("file", selectedFile)
 
-      const response = await fetch(`/api/leases/${leaseId}/upload-signed-document`, {
+      // D'abord uploader le fichier
+      const uploadResponse = await fetch(`/api/leases/${leaseId}/upload-signed-document`, {
         method: "POST",
         body: formData,
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json()
         throw new Error(errorData.error || "Erreur lors de l'upload")
       }
 
-      const data = await response.json()
+      // Ensuite notifier le workflow de signature
+      const workflowResponse = await fetch(`/api/leases/${leaseId}/signature-workflow`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "upload_manual_signature",
+          userType: "tenant",
+        }),
+      })
+
+      if (!workflowResponse.ok) {
+        const errorData = await workflowResponse.json()
+        throw new Error(errorData.error || "Erreur lors de la signature")
+      }
+
+      const data = await workflowResponse.json()
       toast.success("Document signé uploadé avec succès !")
       
       // Mettre à jour le statut
       if (onStatusChange) {
-        onStatusChange("signed_by_tenant")
+        onStatusChange(data.status || "signed_by_tenant")
       }
       
       setSelectedFile(null)
@@ -125,14 +143,15 @@ export function TenantSignatureMethodSelector({
 
   const signElectronically = async () => {
     try {
-      const response = await fetch(`/api/leases/${leaseId}/sign-tenant`, {
+      const response = await fetch(`/api/leases/${leaseId}/signature-workflow`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          tenantId: "current-user", // Sera récupéré côté serveur
-          signature: "Signature électronique",
+          action: "sign_electronically",
+          userType: "tenant",
+          signatureData: "Signature électronique",
         }),
       })
 
