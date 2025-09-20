@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Plus, Calculator, AlertCircle, CheckCircle } from "lucide-react"
+import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
 
 interface AddExpenseDialogProps {
@@ -67,9 +68,19 @@ export function AddExpenseDialog({ propertyId, leaseId, onExpenseAdded }: AddExp
     try {
       setIsLoading(true)
 
+      // Récupérer le token d'authentification
+      const { data: sessionData } = await supabase.auth.getSession()
+      if (!sessionData.session?.access_token) {
+        toast.error("Session expirée, veuillez vous reconnecter")
+        return
+      }
+
       const response = await fetch("/api/expenses", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${sessionData.session.access_token}`
+        },
         body: JSON.stringify(formData)
       })
 

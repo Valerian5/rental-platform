@@ -25,6 +25,7 @@ import { FiscalSimulationCard } from "@/components/fiscal/FiscalSimulationCard"
 import { ExpenseBreakdownCard } from "@/components/fiscal/ExpenseBreakdownCard"
 import { AddExpenseDialog } from "@/components/fiscal/AddExpenseDialog"
 import { FiscalCalculation, Expense } from "@/lib/fiscal-calculator"
+import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
 
 export default function FiscalPage() {
@@ -43,15 +44,27 @@ export default function FiscalPage() {
     try {
       setIsLoading(true)
       
+      // Récupérer le token d'authentification
+      const { data: sessionData } = await supabase.auth.getSession()
+      if (!sessionData.session?.access_token) {
+        toast.error("Session expirée, veuillez vous reconnecter")
+        return
+      }
+
+      const headers = {
+        'Authorization': `Bearer ${sessionData.session.access_token}`,
+        'Content-Type': 'application/json'
+      }
+      
       // Charger les années disponibles
-      const yearsResponse = await fetch(`/api/fiscal?action=years`)
+      const yearsResponse = await fetch(`/api/fiscal?action=years`, { headers })
       const yearsData = await yearsResponse.json()
       if (yearsData.success) {
         setAvailableYears(yearsData.data)
       }
 
       // Charger les données fiscales
-      const fiscalResponse = await fetch(`/api/fiscal?year=${currentYear}`)
+      const fiscalResponse = await fetch(`/api/fiscal?year=${currentYear}`, { headers })
       const fiscalData = await fiscalResponse.json()
       
       if (fiscalData.success) {
@@ -61,7 +74,7 @@ export default function FiscalPage() {
       }
 
       // Charger les dépenses
-      const expensesResponse = await fetch(`/api/expenses?year=${currentYear}`)
+      const expensesResponse = await fetch(`/api/expenses?year=${currentYear}`, { headers })
       const expensesData = await expensesResponse.json()
       
       if (expensesData.success) {
@@ -88,9 +101,19 @@ export default function FiscalPage() {
 
   const handleExportCSV = async () => {
     try {
+      // Récupérer le token d'authentification
+      const { data: sessionData } = await supabase.auth.getSession()
+      if (!sessionData.session?.access_token) {
+        toast.error("Session expirée, veuillez vous reconnecter")
+        return
+      }
+
       const response = await fetch("/api/fiscal", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${sessionData.session.access_token}`
+        },
         body: JSON.stringify({ action: "export-csv", year: currentYear })
       })
 
@@ -116,9 +139,19 @@ export default function FiscalPage() {
 
   const handleExportPDF = async () => {
     try {
+      // Récupérer le token d'authentification
+      const { data: sessionData } = await supabase.auth.getSession()
+      if (!sessionData.session?.access_token) {
+        toast.error("Session expirée, veuillez vous reconnecter")
+        return
+      }
+
       const response = await fetch("/api/fiscal", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${sessionData.session.access_token}`
+        },
         body: JSON.stringify({ action: "export-pdf", year: currentYear })
       })
 
@@ -135,8 +168,8 @@ export default function FiscalPage() {
         toast.success("Export PDF généré")
       } else {
         toast.error("Erreur lors de l'export PDF")
-      }
-    } catch (error) {
+    }
+  } catch (error) {
       console.error("Erreur export PDF:", error)
       toast.error("Erreur lors de l'export PDF")
     }
@@ -144,9 +177,19 @@ export default function FiscalPage() {
 
   const handleGenerateForm = async (formType: "2044" | "2042-C-PRO") => {
     try {
+      // Récupérer le token d'authentification
+      const { data: sessionData } = await supabase.auth.getSession()
+      if (!sessionData.session?.access_token) {
+        toast.error("Session expirée, veuillez vous reconnecter")
+        return
+      }
+
       const response = await fetch("/api/fiscal/forms", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${sessionData.session.access_token}`
+        },
         body: JSON.stringify({ formType, year: currentYear })
       })
 
@@ -179,9 +222,9 @@ export default function FiscalPage() {
   }
 
   if (isLoading) {
-    return (
+  return (
       <div className="space-y-6">
-        <div>
+          <div>
           <h1 className="text-3xl font-bold">Déclaration fiscale</h1>
           <p className="text-muted-foreground">Calculs fiscaux et génération de documents</p>
         </div>
@@ -190,10 +233,10 @@ export default function FiscalPage() {
             <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4" />
             <p>Chargement des données fiscales...</p>
           </div>
+          </div>
         </div>
-      </div>
-    )
-  }
+  )
+}
 
   return (
     <div className="space-y-6">
@@ -249,16 +292,16 @@ export default function FiscalPage() {
               onViewDetails={() => {}}
             />
           ) : (
-            <Card>
+              <Card>
               <CardContent className="text-center py-12">
                 <AlertTriangle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <h3 className="text-lg font-semibold mb-2">Aucune donnée fiscale</h3>
                 <p className="text-muted-foreground">
                   Aucune donnée fiscale trouvée pour l'année {currentYear}
                 </p>
-              </CardContent>
-            </Card>
-          )}
+                </CardContent>
+              </Card>
+            )}
         </TabsContent>
 
         {/* Simulations fiscales */}
@@ -329,7 +372,7 @@ export default function FiscalPage() {
                   >
                     <FileText className="h-4 w-4 mr-2" />
                     Export PDF - Récapitulatif
-                  </Button>
+                </Button>
                 </div>
               </CardContent>
             </Card>

@@ -1,16 +1,25 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase-server-client"
+import { createServerClient } from "@/lib/supabase"
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = createServerClient(request)
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    // Récupérer le token d'authentification depuis les headers
+    const authHeader = request.headers.get('authorization')
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ success: false, error: "Token d'authentification manquant" }, { status: 401 })
+    }
+
+    const token = authHeader.split(' ')[1]
+    
+    // Créer un client Supabase avec le token
+    const supabase = createServerClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
 
     if (authError || !user) {
-      return NextResponse.json({ success: false, error: "Non authentifié" }, { status: 401 })
+      return NextResponse.json({ success: false, error: "Token invalide" }, { status: 401 })
     }
 
     const { data: expense, error } = await supabase
@@ -48,11 +57,20 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = createServerClient(request)
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    // Récupérer le token d'authentification depuis les headers
+    const authHeader = request.headers.get('authorization')
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ success: false, error: "Token d'authentification manquant" }, { status: 401 })
+    }
+
+    const token = authHeader.split(' ')[1]
+    
+    // Créer un client Supabase avec le token
+    const supabase = createServerClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
 
     if (authError || !user) {
-      return NextResponse.json({ success: false, error: "Non authentifié" }, { status: 401 })
+      return NextResponse.json({ success: false, error: "Token invalide" }, { status: 401 })
     }
 
     const body = await request.json()
@@ -120,11 +138,20 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = createServerClient(request)
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    // Récupérer le token d'authentification depuis les headers
+    const authHeader = request.headers.get('authorization')
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ success: false, error: "Token d'authentification manquant" }, { status: 401 })
+    }
+
+    const token = authHeader.split(' ')[1]
+    
+    // Créer un client Supabase avec le token
+    const supabase = createServerClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
 
     if (authError || !user) {
-      return NextResponse.json({ success: false, error: "Non authentifié" }, { status: 401 })
+      return NextResponse.json({ success: false, error: "Token invalide" }, { status: 401 })
     }
 
     const { error } = await supabase
