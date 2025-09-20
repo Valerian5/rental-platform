@@ -12,7 +12,7 @@ export class FiscalService {
         .from("leases")
         .select(`
           id,
-          type,
+          lease_type,
           monthly_rent,
           charges,
           property:properties(
@@ -66,7 +66,7 @@ export class FiscalService {
       // Transformer les données
       const leaseData: LeaseData[] = (leases || []).map(lease => ({
         id: lease.id,
-        type: lease.type as "unfurnished" | "furnished",
+        type: lease.lease_type as "unfurnished" | "furnished",
         monthly_rent: lease.monthly_rent || 0,
         charges: lease.charges || 0,
         property_title: lease.property?.title || "Bien sans titre",
