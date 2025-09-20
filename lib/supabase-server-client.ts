@@ -1,9 +1,9 @@
-import { createServerClient } from "@supabase/ssr"
+import { createServerClient as createSupabaseServerClient } from "@supabase/ssr"
 import type { NextRequest } from "next/server"
 
 // Pour les API Routes uniquement
-export function createApiSupabaseClient(request: NextRequest) {
-  return createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+export function createServerClient(request: NextRequest) {
+  return createSupabaseServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
     cookies: {
       get(name: string) {
         return request.cookies.get(name)?.value
@@ -18,9 +18,14 @@ export function createApiSupabaseClient(request: NextRequest) {
   })
 }
 
+// Alias pour compatibilité
+export function createApiSupabaseClient(request: NextRequest) {
+  return createServerClient(request)
+}
+
 // Client avec service role pour les opérations admin
 export function createServiceSupabaseClient() {
-  return createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+  return createSupabaseServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
     cookies: {
       get() {
         return undefined
