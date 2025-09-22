@@ -27,6 +27,7 @@ import {
   Mail,
   Phone,
   AlertTriangle,
+  Plus,
   RefreshCw
 } from "lucide-react"
 import { paymentService } from "@/lib/payment-service"
