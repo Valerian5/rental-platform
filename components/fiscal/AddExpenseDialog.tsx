@@ -16,6 +16,7 @@ import { toast } from "sonner"
 interface AddExpenseDialogProps {
   propertyId?: string
   leaseId?: string
+  properties?: Array<{ id: string; title: string; address: string }>
   onExpenseAdded?: () => void
 }
 
@@ -40,7 +41,7 @@ const expenseCategories = [
 ]
 
 export const AddExpenseDialog = forwardRef<AddExpenseDialogRef, AddExpenseDialogProps>(
-  ({ propertyId, leaseId, onExpenseAdded }, ref) => {
+  ({ propertyId, leaseId, properties = [], onExpenseAdded }, ref) => {
   const [open, setOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [formData, setFormData] = useState({
@@ -67,6 +68,7 @@ export const AddExpenseDialog = forwardRef<AddExpenseDialogRef, AddExpenseDialog
     
     // Vérifier les champs obligatoires
     const requiredFields = {
+      property_id: formData.property_id,
       type: formData.type,
       category: formData.category,
       amount: formData.amount,
@@ -82,10 +84,7 @@ export const AddExpenseDialog = forwardRef<AddExpenseDialogRef, AddExpenseDialog
       return
     }
     
-    // Si property_id n'est pas fourni, on peut l'ignorer pour l'instant
-    if (!formData.property_id) {
-      console.warn("Aucun property_id fourni, la dépense sera ajoutée sans propriété spécifique")
-    }
+    // property_id est maintenant obligatoire
 
     if (parseFloat(formData.amount) <= 0) {
       toast.error("Le montant doit être positif")
@@ -159,6 +158,26 @@ export const AddExpenseDialog = forwardRef<AddExpenseDialogRef, AddExpenseDialog
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Sélection de propriété */}
+          <div className="space-y-2">
+            <Label htmlFor="property_id">Logement *</Label>
+            <Select value={formData.property_id} onValueChange={(value) => handleInputChange("property_id", value)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Sélectionner un logement" />
+              </SelectTrigger>
+              <SelectContent>
+                {properties.map(property => (
+                  <SelectItem key={property.id} value={property.id}>
+                    <div>
+                      <div className="font-medium">{property.title}</div>
+                      <div className="text-sm text-muted-foreground">{property.address}</div>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Type de dépense */}
             <div className="space-y-2">

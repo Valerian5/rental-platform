@@ -23,10 +23,11 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const year = parseInt(searchParams.get("year") || new Date().getFullYear().toString())
     const action = searchParams.get("action") || "calculate"
+    const propertyId = searchParams.get("property_id")
 
     if (action === "calculate") {
       // Calculer les données fiscales
-      const calculation = await FiscalService.calculateFiscalData(user.id, year)
+      const calculation = await FiscalService.calculateFiscalData(user.id, year, propertyId)
       return NextResponse.json({ success: true, data: calculation })
     }
 

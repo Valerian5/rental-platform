@@ -5,10 +5,10 @@ export class FiscalService {
   /**
    * Récupère toutes les données fiscales pour une année donnée
    */
-  static async getFiscalData(ownerId: string, year: number): Promise<FiscalData> {
+  static async getFiscalData(ownerId: string, year: number, propertyId?: string): Promise<FiscalData> {
     try {
       // 1. Récupérer les baux du propriétaire
-      const { data: leases, error: leasesError } = await supabase
+      let leasesQuery = supabase
         .from("leases")
         .select(`
           id,
@@ -22,6 +22,13 @@ export class FiscalService {
         `)
         .eq("owner_id", ownerId)
         .in("status", ["active", "signed"])
+
+      // Filtrer par propriété si spécifiée
+      if (propertyId) {
+        leasesQuery = leasesQuery.eq("property_id", propertyId)
+      }
+
+      const { data: leases, error: leasesError } = await leasesQuery
 
       if (leasesError) throw leasesError
 
@@ -44,7 +51,7 @@ export class FiscalService {
       if (receiptsError) throw receiptsError
 
       // 3. Récupérer les dépenses pour l'année
-      const { data: expenses, error: expensesError } = await supabase
+      let expensesQuery = supabase
         .from("expenses")
         .select(`
           id,
@@ -60,6 +67,13 @@ export class FiscalService {
         .eq("owner_id", ownerId)
         .gte("date", `${year}-01-01`)
         .lte("date", `${year}-12-31`)
+
+      // Filtrer par propriété si spécifiée
+      if (propertyId) {
+        expensesQuery = expensesQuery.eq("property_id", propertyId)
+      }
+
+      const { data: expenses, error: expensesError } = await expensesQuery
 
       if (expensesError) throw expensesError
 
@@ -111,8 +125,8 @@ export class FiscalService {
   /**
    * Calcule les données fiscales pour une année
    */
-  static async calculateFiscalData(ownerId: string, year: number) {
-    const fiscalData = await this.getFiscalData(ownerId, year)
+  static async calculateFiscalData(ownerId: string, year: number, propertyId?: string) {
+    const fiscalData = await this.getFiscalData(ownerId, year, propertyId)
     return FiscalCalculator.calculateFiscalData(fiscalData)
   }
 
@@ -121,18 +135,28 @@ export class FiscalService {
    */
   static async getAvailableYears(ownerId: string): Promise<number[]> {
     try {
-      const { data: receipts, error } = await supabase
+      // D'abord récupérer les IDs des baux du propriétaire
+      const { data: leases, error: leasesError } = await supabase
+        .from("leases")
+        .select("id")
+        .eq("owner_id", ownerId)
+
+      if (leasesError) throw leasesError
+
+      if (!leases || leases.length === 0) {
+        return []
+      }
+
+      const leaseIds = leases.map(l => l.id)
+
+      // Ensuite récupérer les années des quittances
+      const { data: receipts, error: receiptsError } = await supabase
         .from("rent_receipts")
         .select("year")
         .eq("status", "paid")
-        .in("lease_id", 
-          supabase
-            .from("leases")
-            .select("id")
-            .eq("owner_id", ownerId)
-        )
+        .in("lease_id", leaseIds)
 
-      if (error) throw error
+      if (receiptsError) throw receiptsError
 
       const years = [...new Set(receipts?.map(r => r.year) || [])]
       return years.sort((a, b) => b - a) // Plus récent en premier

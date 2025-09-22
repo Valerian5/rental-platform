@@ -30,16 +30,18 @@ import { toast } from "sonner"
 
 export default function FiscalPage() {
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string>("all")
   const [availableYears, setAvailableYears] = useState<number[]>([])
   const [fiscalCalculation, setFiscalCalculation] = useState<FiscalCalculation | null>(null)
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [properties, setProperties] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const addExpenseDialogRef = useRef<AddExpenseDialogRef>(null)
 
   useEffect(() => {
     loadFiscalData()
-  }, [currentYear])
+  }, [currentYear, selectedPropertyId])
 
   const loadFiscalData = async () => {
     try {
@@ -57,6 +59,13 @@ export default function FiscalPage() {
         'Content-Type': 'application/json'
       }
       
+      // Charger les propriétés du propriétaire
+      const propertiesResponse = await fetch(`/api/properties`, { headers })
+      const propertiesData = await propertiesResponse.json()
+      if (propertiesData.success) {
+        setProperties(propertiesData.properties || [])
+      }
+      
       // Charger les années disponibles
       const yearsResponse = await fetch(`/api/fiscal?action=years`, { headers })
       const yearsData = await yearsResponse.json()
@@ -65,7 +74,7 @@ export default function FiscalPage() {
       }
 
       // Charger les données fiscales
-      const fiscalResponse = await fetch(`/api/fiscal?year=${currentYear}`, { headers })
+      const fiscalResponse = await fetch(`/api/fiscal?year=${currentYear}${selectedPropertyId !== "all" ? `&property_id=${selectedPropertyId}` : ""}`, { headers })
       const fiscalData = await fiscalResponse.json()
       
       if (fiscalData.success) {
@@ -75,7 +84,7 @@ export default function FiscalPage() {
       }
 
       // Charger les dépenses
-      const expensesResponse = await fetch(`/api/expenses?year=${currentYear}`, { headers })
+      const expensesResponse = await fetch(`/api/expenses?year=${currentYear}${selectedPropertyId !== "all" ? `&property_id=${selectedPropertyId}` : ""}`, { headers })
       const expensesData = await expensesResponse.json()
       
       if (expensesData.success) {
@@ -247,29 +256,42 @@ export default function FiscalPage() {
           <h1 className="text-3xl font-bold">Déclaration fiscale</h1>
           <p className="text-muted-foreground">Calculs fiscaux et génération de documents</p>
         </div>
-        <div className="flex items-center gap-4">
-          <Select value={currentYear.toString()} onValueChange={(value) => setCurrentYear(parseInt(value))}>
-            <SelectTrigger className="w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {availableYears.map(year => (
-                <SelectItem key={year} value={year.toString()}>
-                  {year}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Actualiser
-          </Button>
-        </div>
+              <div className="flex items-center gap-4">
+                <Select value={selectedPropertyId} onValueChange={setSelectedPropertyId}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Sélectionner un logement" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous les logements</SelectItem>
+                    {properties.map(property => (
+                      <SelectItem key={property.id} value={property.id}>
+                        {property.title} - {property.address}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={currentYear.toString()} onValueChange={(value) => setCurrentYear(parseInt(value))}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableYears.map(year => (
+                      <SelectItem key={year} value={year.toString()}>
+                        {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  Actualiser
+                </Button>
+              </div>
       </div>
 
       {/* Contenu principal */}
@@ -333,7 +355,12 @@ export default function FiscalPage() {
               <h2 className="text-2xl font-bold">Dépenses {currentYear}</h2>
               <p className="text-muted-foreground">Gérez vos dépenses déductibles et non déductibles</p>
             </div>
-            <AddExpenseDialog ref={addExpenseDialogRef} onExpenseAdded={loadFiscalData} />
+            <AddExpenseDialog 
+              ref={addExpenseDialogRef} 
+              properties={properties}
+              propertyId={selectedPropertyId !== "all" ? selectedPropertyId : undefined}
+              onExpenseAdded={loadFiscalData} 
+            />
           </div>
           <ExpenseBreakdownCard
             expenses={expenses}
