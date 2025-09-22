@@ -385,36 +385,6 @@ export function PaymentManagement({ ownerId, selectedLeaseId }: PaymentManagemen
         </CardContent>
       </Card>
 
-      {/* Dialog de validation */}
-      <Dialog open={showValidationDialog} onOpenChange={setShowValidationDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Valider le paiement</DialogTitle>
-            <DialogDescription>
-              Marquer le paiement de {selectedPayment?.month_name} comme payé ou impayé
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <p><strong>Montant:</strong> {selectedPayment?.amount_due?.toLocaleString() || '0'} €</p>
-              <p><strong>Échéance:</strong> {selectedPayment && new Date(selectedPayment.due_date).toLocaleDateString("fr-FR")}</p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => handleValidatePayment(selectedPayment!.id, 'unpaid')}
-            >
-              Non reçu
-            </Button>
-            <Button
-              onClick={() => handleValidatePayment(selectedPayment!.id, 'paid')}
-            >
-              Paiement reçu
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Dialog de rappel */}
       <Dialog open={showReminderDialog} onOpenChange={setShowReminderDialog}>

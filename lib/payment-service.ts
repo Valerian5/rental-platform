@@ -179,7 +179,7 @@ class PaymentService {
           .rpc('mark_payment_as_paid', {
             payment_id_param: input.payment_id,
             payment_date_param: input.payment_date || new Date().toISOString(),
-            payment_method: input.payment_method || 'virement'
+            payment_method_param: input.payment_method || 'virement'
           })
 
         if (error) {
@@ -187,7 +187,7 @@ class PaymentService {
           throw new Error('Erreur lors de la validation du paiement')
         }
 
-        result = data?.[0]
+        result = data
       } else {
         // Marquer comme impayé
         const { data, error } = await supabase
@@ -201,7 +201,7 @@ class PaymentService {
           throw new Error('Erreur lors de la validation du paiement')
         }
 
-        result = data?.[0]
+        result = data
       }
 
       // Récupérer l'historique complet
