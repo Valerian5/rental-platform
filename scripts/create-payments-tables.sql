@@ -1,7 +1,7 @@
 -- Script SQL pour créer les tables de gestion des paiements
 -- Ce script crée les tables nécessaires pour le module de gestion des paiements
 
--- 1. Table des paiements
+-- 1. Table des paiements (sans référence à receipts pour l'instant)
 CREATE TABLE IF NOT EXISTS public.payments (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   lease_id uuid NOT NULL,
@@ -21,8 +21,7 @@ CREATE TABLE IF NOT EXISTS public.payments (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT payments_pkey PRIMARY KEY (id),
-  CONSTRAINT payments_lease_id_fkey FOREIGN KEY (lease_id) REFERENCES leases (id) ON DELETE CASCADE,
-  CONSTRAINT payments_receipt_id_fkey FOREIGN KEY (receipt_id) REFERENCES receipts (id) ON DELETE SET NULL
+  CONSTRAINT payments_lease_id_fkey FOREIGN KEY (lease_id) REFERENCES leases (id) ON DELETE CASCADE
 );
 
 -- 2. Table des quittances
@@ -47,6 +46,11 @@ CREATE TABLE IF NOT EXISTS public.receipts (
   CONSTRAINT receipts_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES payments (id) ON DELETE CASCADE,
   CONSTRAINT receipts_lease_id_fkey FOREIGN KEY (lease_id) REFERENCES leases (id) ON DELETE CASCADE
 );
+
+-- 3. Ajouter la contrainte de clé étrangère pour receipt_id après création de la table receipts
+ALTER TABLE public.payments 
+ADD CONSTRAINT payments_receipt_id_fkey 
+FOREIGN KEY (receipt_id) REFERENCES receipts (id) ON DELETE SET NULL;
 
 -- 3. Table des rappels
 CREATE TABLE IF NOT EXISTS public.reminders (
