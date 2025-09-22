@@ -24,6 +24,8 @@ import { FiscalSummaryCard } from "@/components/fiscal/FiscalSummaryCard"
 import { FiscalSimulationCard } from "@/components/fiscal/FiscalSimulationCard"
 import { ExpenseBreakdownCard } from "@/components/fiscal/ExpenseBreakdownCard"
 import { AddExpenseDialog, AddExpenseDialogRef } from "@/components/fiscal/AddExpenseDialog"
+import { EditExpenseDialog, EditExpenseDialogRef } from "@/components/fiscal/EditExpenseDialog"
+import { AddReceiptDialog, AddReceiptDialogRef } from "@/components/fiscal/AddReceiptDialog"
 import { FiscalCalculation, Expense } from "@/lib/fiscal-calculator"
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
@@ -38,6 +40,8 @@ export default function FiscalPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const addExpenseDialogRef = useRef<AddExpenseDialogRef>(null)
+  const editExpenseDialogRef = useRef<EditExpenseDialogRef>(null)
+  const addReceiptDialogRef = useRef<AddReceiptDialogRef>(null)
 
   useEffect(() => {
     loadFiscalData()
@@ -231,6 +235,14 @@ export default function FiscalPage() {
     toast.info(`Visualisation de la dépense ${expenseId} en cours de développement`)
   }
 
+  const handleEditExpense = (expenseId: string) => {
+    editExpenseDialogRef.current?.openDialog(expenseId)
+  }
+
+  const handleAddReceipt = (expenseId: string) => {
+    addReceiptDialogRef.current?.openDialog(expenseId)
+  }
+
   if (isLoading) {
   return (
       <div className="space-y-6">
@@ -272,7 +284,7 @@ export default function FiscalPage() {
                 </Select>
                 <Select value={currentYear.toString()} onValueChange={(value) => setCurrentYear(parseInt(value))}>
                   <SelectTrigger className="w-32">
-                    <SelectValue />
+                    <SelectValue placeholder="Année" />
                   </SelectTrigger>
                   <SelectContent>
                     {availableYears.map(year => (
@@ -361,12 +373,23 @@ export default function FiscalPage() {
               propertyId={selectedPropertyId !== "all" ? selectedPropertyId : undefined}
               onExpenseAdded={loadFiscalData} 
             />
+            <EditExpenseDialog 
+              ref={editExpenseDialogRef} 
+              properties={properties}
+              onExpenseUpdated={loadFiscalData} 
+            />
+            <AddReceiptDialog 
+              ref={addReceiptDialogRef} 
+              onReceiptAdded={loadFiscalData} 
+            />
           </div>
           <ExpenseBreakdownCard
             expenses={expenses}
             year={currentYear}
             onAddExpense={handleAddExpense}
             onViewExpense={handleViewExpense}
+            onEditExpense={handleEditExpense}
+            onAddReceipt={handleAddReceipt}
             addExpenseDialogRef={addExpenseDialogRef}
           />
         </TabsContent>

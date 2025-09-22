@@ -13,7 +13,10 @@ import {
   Settings, 
   AlertTriangle,
   Plus,
-  Eye
+  Eye,
+  Edit,
+  Upload,
+  FileText
 } from "lucide-react"
 import { Expense } from "@/lib/fiscal-calculator"
 
@@ -22,6 +25,8 @@ interface ExpenseBreakdownCardProps {
   year: number
   onAddExpense?: () => void
   onViewExpense?: (expenseId: string) => void
+  onEditExpense?: (expenseId: string) => void
+  onAddReceipt?: (expenseId: string) => void
   addExpenseDialogRef?: React.RefObject<{ openDialog: () => void }>
 }
 
@@ -60,6 +65,8 @@ export function ExpenseBreakdownCard({
   year, 
   onAddExpense, 
   onViewExpense,
+  onEditExpense,
+  onAddReceipt,
   addExpenseDialogRef
 }: ExpenseBreakdownCardProps) {
   const yearExpenses = expenses.filter(expense => {
@@ -187,47 +194,77 @@ export function ExpenseBreakdownCard({
                     </span>
                   </div>
                   
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Description</TableHead>
-                        <TableHead>Montant</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {categoryExpenses.map((expense) => (
-                        <TableRow key={expense.id}>
-                          <TableCell className="font-medium">
-                            {formatDate(expense.date)}
-                          </TableCell>
-                          <TableCell>
-                            <div>
-                              <p className="font-medium">{expense.description}</p>
-                              <p className="text-sm text-muted-foreground">
-                                {expense.type === "incident" && "Incident locataire"}
-                                {expense.type === "maintenance" && "Travaux propriétaire"}
-                                {expense.type === "annual_charge" && "Charge annuelle"}
-                              </p>
-                            </div>
-                          </TableCell>
-                          <TableCell className="font-semibold">
-                            {expense.amount.toLocaleString('fr-FR')} €
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => onViewExpense?.(expense.id)}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Date</TableHead>
+                                <TableHead>Description</TableHead>
+                                <TableHead>Propriété</TableHead>
+                                <TableHead>Montant</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {categoryExpenses.map((expense) => (
+                                <TableRow key={expense.id}>
+                                  <TableCell className="font-medium">
+                                    {formatDate(expense.date)}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div>
+                                      <p className="font-medium">{expense.description}</p>
+                                      <p className="text-sm text-muted-foreground">
+                                        {expense.type === "incident" && "Incident locataire"}
+                                        {expense.type === "maintenance" && "Travaux propriétaire"}
+                                        {expense.type === "annual_charge" && "Charge annuelle"}
+                                      </p>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="text-sm">
+                                      <p className="font-medium">{(expense as any).property?.title || "Propriété inconnue"}</p>
+                                      <p className="text-muted-foreground">{(expense as any).property?.address || ""}</p>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="font-semibold">
+                                    {expense.amount.toLocaleString('fr-FR')} €
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <div className="flex items-center justify-end gap-1">
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm"
+                                        onClick={() => onViewExpense?.(expense.id)}
+                                        title="Voir les détails"
+                                      >
+                                        <Eye className="h-4 w-4" />
+                                      </Button>
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm"
+                                        onClick={() => onEditExpense?.(expense.id)}
+                                        title="Modifier"
+                                      >
+                                        <Edit className="h-4 w-4" />
+                                      </Button>
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm"
+                                        onClick={() => onAddReceipt?.(expense.id)}
+                                        title="Ajouter un justificatif"
+                                      >
+                                        {(expense as any).receipt_url ? (
+                                          <FileText className="h-4 w-4 text-green-600" />
+                                        ) : (
+                                          <Upload className="h-4 w-4" />
+                                        )}
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
                 </div>
               )
             })}
