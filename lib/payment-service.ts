@@ -31,6 +31,7 @@ class PaymentService {
         .from('payments')
         .select(`
           *,
+          receipt_id,
           leases!inner(
             id,
             owner_id,

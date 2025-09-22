@@ -98,18 +98,17 @@ export function PaymentManagement({ ownerId, selectedLeaseId }: PaymentManagemen
     }
   }
 
-  const handleDownloadReceipt = async (paymentId: string) => {
+  const handleDownloadReceipt = async (payment: Payment) => {
     try {
-      const blob = await paymentService.downloadReceipt(paymentId)
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `quittance_${paymentId}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
+      if (!payment.receipt_id) {
+        toast.error("Aucune quittance générée pour ce paiement")
+        return
+      }
+      
+      await paymentService.downloadReceipt(payment.receipt_id)
+      toast.success("Quittance téléchargée avec succès")
     } catch (error) {
+      console.error('Erreur téléchargement quittance:', error)
       toast.error("Erreur lors du téléchargement de la quittance")
     }
   }
@@ -366,11 +365,11 @@ export function PaymentManagement({ ownerId, selectedLeaseId }: PaymentManagemen
                         </Button>
                       )}
 
-                      {payment.status === 'paid' && (
+                      {payment.status === 'paid' && payment.receipt_id && (
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleDownloadReceipt(payment.id)}
+                          onClick={() => handleDownloadReceipt(payment)}
                         >
                           <Download className="h-4 w-4 mr-1" />
                           Quittance

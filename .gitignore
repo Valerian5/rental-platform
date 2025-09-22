@@ -31,3 +31,5 @@ scripts/create-receipt-generation-function.sql
 scripts/install-pdf-dependencies.sh
 scripts/test-pdf-generation.sql
 scripts/test-receipt-generation.sql
+scripts/debug-receipt-issue.sql
+scripts/test-complete-receipt-flow.sql
