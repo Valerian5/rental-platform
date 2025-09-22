@@ -31,6 +31,8 @@ import {
 } from "lucide-react"
 import { paymentService } from "@/lib/payment-service"
 import { Payment, PaymentStats, PaymentHistory } from "@/lib/payment-models"
+import { PaymentValidationDialog } from "./PaymentValidationDialog"
+import { PaymentDetails } from "./PaymentDetails"
 import { toast } from "sonner"
 
 interface PaymentManagementProps {
@@ -128,6 +130,28 @@ export function PaymentManagement({ ownerId, selectedLeaseId }: PaymentManagemen
     }
   }
 
+  const handleValidatePayment = (payment: Payment) => {
+    setSelectedPayment(payment)
+    setShowValidationDialog(true)
+  }
+
+  const handlePaymentValidation = () => {
+    loadPayments()
+    loadStats()
+  }
+
+  const handleGenerateMonthlyPayments = async () => {
+    try {
+      await paymentService.generateMonthlyPayments()
+      toast.success("Paiements mensuels générés avec succès")
+      loadPayments()
+      loadStats()
+    } catch (error) {
+      console.error('Erreur génération paiements:', error)
+      toast.error("Erreur lors de la génération des paiements")
+    }
+  }
+
   const filteredPayments = payments.filter(payment => {
     const matchesStatus = filters.status === "all" || payment.status === filters.status
     const matchesSearch = filters.search === "" || 
@@ -221,6 +245,14 @@ export function PaymentManagement({ ownerId, selectedLeaseId }: PaymentManagemen
           </Card>
         </div>
       )}
+
+      {/* Boutons d'action */}
+      <div className="flex gap-4 mb-6">
+        <Button onClick={handleGenerateMonthlyPayments}>
+          <Plus className="h-4 w-4 mr-2" />
+          Générer paiements mensuels
+        </Button>
+      </div>
 
       {/* Filtres */}
       <Card>
@@ -436,6 +468,15 @@ export function PaymentManagement({ ownerId, selectedLeaseId }: PaymentManagemen
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+
+      {/* Dialog de validation de paiement */}
+      <PaymentValidationDialog
+        payment={selectedPayment}
+        isOpen={showValidationDialog}
+        onClose={() => setShowValidationDialog(false)}
+        onValidation={handlePaymentValidation}
+      />
     </div>
   )
 }
