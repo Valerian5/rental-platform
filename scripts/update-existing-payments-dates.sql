@@ -28,7 +28,7 @@ SELECT
     p.due_date,
     EXTRACT(DAY FROM p.due_date) as payment_day,
     l.jour_paiement_loyer as lease_payment_day,
-    prop.property_address
+    prop.address as property_address
 FROM payments p
 JOIN leases l ON p.lease_id = l.id
 LEFT JOIN properties prop ON l.property_id = prop.id

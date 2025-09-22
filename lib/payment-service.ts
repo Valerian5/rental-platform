@@ -248,14 +248,14 @@ class PaymentService {
   }
 
   // Générer les paiements mensuels pour tous les baux actifs
-  async generateMonthlyPayments(): Promise<Payment[]> {
+  async generateMonthlyPayments(): Promise<{ count: number, payments: Payment[] }> {
     try {
       // Générer le mois actuel au format "2025-03"
       const now = new Date()
       const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
       // Utiliser la fonction SQL pour générer les paiements
-      const { data: payments, error } = await supabase
+      const { data: count, error } = await supabase
         .rpc('generate_monthly_payments', { target_month: currentMonth })
 
       if (error) {
@@ -263,7 +263,40 @@ class PaymentService {
         throw new Error('Erreur lors de la génération des paiements mensuels')
       }
 
-      return payments || []
+      // Récupérer les paiements générés pour ce mois
+      const { data: payments, error: paymentsError } = await supabase
+        .from('payments')
+        .select(`
+          *,
+          lease:leases!payments_lease_id_fkey(
+            id,
+            monthly_rent,
+            charges,
+            property:properties!leases_property_id_fkey(
+              id,
+              address,
+              title
+            ),
+            tenant:users!leases_tenant_id_fkey(
+              id,
+              first_name,
+              last_name,
+              email
+            )
+          )
+        `)
+        .eq('month', currentMonth)
+        .order('due_date', { ascending: true })
+
+      if (paymentsError) {
+        console.error('Erreur récupération paiements générés:', paymentsError)
+        throw new Error('Erreur lors de la récupération des paiements générés')
+      }
+
+      return {
+        count: count || 0,
+        payments: payments || []
+      }
     } catch (error) {
       console.error('Erreur generateMonthlyPayments:', error)
       throw error

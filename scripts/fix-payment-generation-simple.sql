@@ -1,33 +1,27 @@
--- Script pour corriger la génération des paiements avec la date du bail
+-- Script simplifié pour corriger la génération des paiements
 -- À exécuter dans Supabase SQL Editor
 
 -- 1. Supprimer la fonction existante
 DROP FUNCTION IF EXISTS generate_monthly_payments(character varying);
 
--- 2. Créer la nouvelle fonction qui utilise jour_paiement_loyer
+-- 2. Créer une fonction simplifiée qui retourne juste le nombre de paiements créés
 CREATE OR REPLACE FUNCTION generate_monthly_payments(target_month VARCHAR(7))
-RETURNS TABLE(
-    id UUID,
-    lease_id UUID,
-    amount_due NUMERIC(10,2),
-    due_date TIMESTAMP WITH TIME ZONE,
-    status VARCHAR(20)
-) AS $$
+RETURNS INTEGER AS $$
 DECLARE
     current_year INTEGER;
     current_month INTEGER;
     month_names TEXT[] := ARRAY['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 
                                'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
     month_name TEXT;
-    payment_record RECORD;
+    payments_created INTEGER := 0;
 BEGIN
     -- Extraire l'année et le mois de la chaîne target_month (format: "2025-03")
     current_year := CAST(SPLIT_PART(target_month, '-', 1) AS INTEGER);
     current_month := CAST(SPLIT_PART(target_month, '-', 2) AS INTEGER);
     month_name := month_names[current_month];
     
-    -- Insérer les paiements pour le mois cible et retourner les résultats
-    FOR payment_record IN
+    -- Insérer les paiements pour le mois cible
+    WITH inserted_payments AS (
         INSERT INTO payments (
             lease_id, 
             month, 
@@ -66,30 +60,29 @@ BEGIN
             WHERE p.lease_id = l.id 
             AND p.month = target_month
         )
-        RETURNING payments.id, payments.lease_id, payments.amount_due, payments.due_date, payments.status
-    LOOP
-        id := payment_record.id;
-        lease_id := payment_record.lease_id;
-        amount_due := payment_record.amount_due;
-        due_date := payment_record.due_date;
-        status := payment_record.status;
-        RETURN NEXT;
-    END LOOP;
+        RETURNING id
+    )
+    SELECT COUNT(*) INTO payments_created FROM inserted_payments;
+    
+    RETURN payments_created;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 3. Tester la fonction avec un mois spécifique
--- SELECT * FROM generate_monthly_payments('2025-01');
+-- 3. Tester la fonction
+SELECT generate_monthly_payments('2025-01') as paiements_crees;
 
--- 4. Vérifier les baux et leurs jours de paiement
+-- 4. Vérifier les paiements créés
 SELECT 
-    l.id,
-    l.monthly_rent,
-    l.charges,
+    p.id,
+    p.month,
+    p.month_name,
+    p.amount_due,
+    p.due_date,
+    p.status,
     l.jour_paiement_loyer,
-    l.status,
-    p.address as property_address
-FROM leases l
-LEFT JOIN properties p ON l.property_id = p.id
-WHERE l.status = 'active'
-ORDER BY l.created_at DESC;
+    prop.address as property_address
+FROM payments p
+JOIN leases l ON p.lease_id = l.id
+LEFT JOIN properties prop ON l.property_id = prop.id
+WHERE p.month = '2025-01'
+ORDER BY p.due_date ASC;

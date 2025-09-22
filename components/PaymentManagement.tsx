@@ -126,8 +126,8 @@ export function PaymentManagement({ ownerId, selectedLeaseId }: PaymentManagemen
 
   const handleGenerateMonthlyPayments = async () => {
     try {
-      const generatedPayments = await paymentService.generateMonthlyPayments()
-      toast.success(`Paiements mensuels générés avec succès (${generatedPayments.length} paiements créés)`)
+      const result = await paymentService.generateMonthlyPayments()
+      toast.success(`Paiements mensuels générés avec succès (${result.count} paiements créés)`)
       
       // Recharger les données
       await loadPayments()

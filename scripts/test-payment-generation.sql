@@ -5,10 +5,10 @@
 SELECT 
     l.id as lease_id,
     l.monthly_rent,
-    l.monthly_charges,
+    l.charges,
     l.jour_paiement_loyer,
     l.status,
-    p.property_address,
+    p.address as property_address,
     u.first_name as tenant_name
 FROM leases l
 LEFT JOIN properties p ON l.property_id = p.id
@@ -34,7 +34,7 @@ SELECT
     p.status,
     p.reference,
     l.jour_paiement_loyer,
-    prop.property_address
+    prop.address as property_address
 FROM payments p
 JOIN leases l ON p.lease_id = l.id
 LEFT JOIN properties prop ON l.property_id = prop.id
