@@ -488,33 +488,35 @@ class PaymentService {
   // Télécharger une quittance PDF
   async downloadReceipt(receiptId: string): Promise<void> {
     try {
-      // Récupérer les données de la quittance
-      const { data: receipt, error } = await supabase
-        .from('receipts')
-        .select(`
-          *,
-          payment:payments!receipts_payment_id_fkey(
-            *,
-            lease:leases!payments_lease_id_fkey(
-              *,
-              property:properties!leases_property_id_fkey(*),
-              tenant:users!leases_tenant_id_fkey(*)
-            )
-          )
-        `)
-        .eq('id', receiptId)
-        .single()
-
-      if (error) {
-        console.error('Erreur récupération quittance:', error)
-        throw new Error('Erreur lors de la récupération de la quittance')
+      // Récupérer le token d'authentification
+      const { data: sessionData } = await supabase.auth.getSession()
+      if (!sessionData.session?.access_token) {
+        throw new Error('Session expirée, veuillez vous reconnecter')
       }
 
-      // Importer le générateur PDF dynamiquement
-      const { PDFGenerator } = await import('./pdf-generator')
-      
-      // Générer et télécharger le PDF
-      PDFGenerator.downloadReceipt(receipt)
+      // Appeler l'API route pour générer le PDF
+      const response = await fetch(`/api/receipts/${receiptId}/download`, {
+        method: 'GET',
+        headers: { 
+          "Authorization": `Bearer ${sessionData.session.access_token}`
+        }
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Erreur lors de la génération de la quittance')
+      }
+
+      // Télécharger le PDF
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `quittance_${receiptId}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
     } catch (error) {
       console.error('Erreur downloadReceipt:', error)
       throw error

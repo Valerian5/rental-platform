@@ -30,3 +30,4 @@ scripts/check-receipts-table-structure.sql
 scripts/create-receipt-generation-function.sql
 scripts/install-pdf-dependencies.sh
 scripts/test-pdf-generation.sql
+scripts/test-receipt-generation.sql
