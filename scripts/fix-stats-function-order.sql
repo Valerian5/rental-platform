@@ -1,4 +1,4 @@
--- Script de correction pour la fonction de statistiques
+-- Script pour corriger l'ordre des paramètres de la fonction de statistiques
 -- À exécuter dans Supabase SQL Editor
 
 -- Supprimer la fonction existante

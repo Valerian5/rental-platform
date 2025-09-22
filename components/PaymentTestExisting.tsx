@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { CheckCircle, XCircle, RefreshCw, Database, Euro, FileText } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { paymentService } from "@/lib/payment-service"
 import { toast } from "sonner"
 
 export function PaymentTestExisting() {
@@ -161,18 +162,10 @@ export function PaymentTestExisting() {
           .single()
 
         if (owner) {
-          const { data: stats, error: statsError } = await supabase
-            .rpc('get_owner_payment_stats', { 
-              owner_id: owner.id,
-              start_date: '2025-01-01',
-              end_date: '2025-12-31'
-            })
+          // Utiliser le service de paiements au lieu de l'appel direct
+          const stats = await paymentService.getPaymentStats(owner.id, 'month')
 
-          if (statsError) {
-            tests[7] = { test: "Fonction de statistiques", status: "error", message: `Erreur: ${statsError.message}` }
-          } else {
-            tests[7] = { test: "Fonction de statistiques", status: "success", message: `Statistiques OK (${stats?.[0]?.total_received || 0}€ reçus)` }
-          }
+          tests[7] = { test: "Fonction de statistiques", status: "success", message: `Statistiques OK (${stats?.total_received || 0}€ reçus)` }
         } else {
           tests[7] = { test: "Fonction de statistiques", status: "error", message: "Aucun propriétaire trouvé" }
         }

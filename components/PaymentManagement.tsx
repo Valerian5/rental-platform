@@ -126,10 +126,12 @@ export function PaymentManagement({ ownerId, selectedLeaseId }: PaymentManagemen
 
   const handleGenerateMonthlyPayments = async () => {
     try {
-      await paymentService.generateMonthlyPayments()
-      toast.success("Paiements mensuels générés avec succès")
-      loadPayments()
-      loadStats()
+      const generatedPayments = await paymentService.generateMonthlyPayments()
+      toast.success(`Paiements mensuels générés avec succès (${generatedPayments.length} paiements créés)`)
+      
+      // Recharger les données
+      await loadPayments()
+      await loadStats()
     } catch (error) {
       console.error('Erreur génération paiements:', error)
       toast.error("Erreur lors de la génération des paiements")
