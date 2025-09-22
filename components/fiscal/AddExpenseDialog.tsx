@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, forwardRef, useImperativeHandle } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -19,6 +19,10 @@ interface AddExpenseDialogProps {
   onExpenseAdded?: () => void
 }
 
+export interface AddExpenseDialogRef {
+  openDialog: () => void
+}
+
 const expenseTypes = [
   { value: "incident", label: "Incident locataire", description: "Dépense causée par le locataire" },
   { value: "maintenance", label: "Travaux propriétaire", description: "Travaux d'entretien ou de réparation" },
@@ -35,7 +39,8 @@ const expenseCategories = [
   { value: "improvement", label: "Améliorations", deductible: false, color: "bg-yellow-100 text-yellow-800" }
 ]
 
-export function AddExpenseDialog({ propertyId, leaseId, onExpenseAdded }: AddExpenseDialogProps) {
+export const AddExpenseDialog = forwardRef<AddExpenseDialogRef, AddExpenseDialogProps>(
+  ({ propertyId, leaseId, onExpenseAdded }, ref) => {
   const [open, setOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [formData, setFormData] = useState({
@@ -52,12 +57,34 @@ export function AddExpenseDialog({ propertyId, leaseId, onExpenseAdded }: AddExp
   const selectedCategory = expenseCategories.find(cat => cat.value === formData.category)
   const isDeductible = selectedCategory?.deductible ?? true
 
+  // Exposer la méthode openDialog via la ref
+  useImperativeHandle(ref, () => ({
+    openDialog: () => setOpen(true)
+  }))
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!formData.property_id || !formData.type || !formData.category || !formData.amount || !formData.description) {
-      toast.error("Veuillez remplir tous les champs obligatoires")
+    // Vérifier les champs obligatoires
+    const requiredFields = {
+      type: formData.type,
+      category: formData.category,
+      amount: formData.amount,
+      description: formData.description
+    }
+    
+    const missingFields = Object.entries(requiredFields)
+      .filter(([key, value]) => !value || value.trim() === "")
+      .map(([key]) => key)
+    
+    if (missingFields.length > 0) {
+      toast.error(`Veuillez remplir les champs obligatoires : ${missingFields.join(", ")}`)
       return
+    }
+    
+    // Si property_id n'est pas fourni, on peut l'ignorer pour l'instant
+    if (!formData.property_id) {
+      console.warn("Aucun property_id fourni, la dépense sera ajoutée sans propriété spécifique")
     }
 
     if (parseFloat(formData.amount) <= 0) {
@@ -287,4 +314,4 @@ export function AddExpenseDialog({ propertyId, leaseId, onExpenseAdded }: AddExp
       </DialogContent>
     </Dialog>
   )
-}
+})

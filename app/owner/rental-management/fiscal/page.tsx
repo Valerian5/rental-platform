@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -23,7 +23,7 @@ import {
 import { FiscalSummaryCard } from "@/components/fiscal/FiscalSummaryCard"
 import { FiscalSimulationCard } from "@/components/fiscal/FiscalSimulationCard"
 import { ExpenseBreakdownCard } from "@/components/fiscal/ExpenseBreakdownCard"
-import { AddExpenseDialog } from "@/components/fiscal/AddExpenseDialog"
+import { AddExpenseDialog, AddExpenseDialogRef } from "@/components/fiscal/AddExpenseDialog"
 import { FiscalCalculation, Expense } from "@/lib/fiscal-calculator"
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
@@ -35,6 +35,7 @@ export default function FiscalPage() {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const addExpenseDialogRef = useRef<AddExpenseDialogRef>(null)
 
   useEffect(() => {
     loadFiscalData()
@@ -214,7 +215,7 @@ export default function FiscalPage() {
   }
 
   const handleAddExpense = () => {
-    // Le composant AddExpenseDialog gère l'ajout
+    addExpenseDialogRef.current?.openDialog()
   }
 
   const handleViewExpense = (expenseId: string) => {
@@ -332,13 +333,14 @@ export default function FiscalPage() {
               <h2 className="text-2xl font-bold">Dépenses {currentYear}</h2>
               <p className="text-muted-foreground">Gérez vos dépenses déductibles et non déductibles</p>
             </div>
-            <AddExpenseDialog onExpenseAdded={loadFiscalData} />
+            <AddExpenseDialog ref={addExpenseDialogRef} onExpenseAdded={loadFiscalData} />
           </div>
           <ExpenseBreakdownCard
             expenses={expenses}
             year={currentYear}
             onAddExpense={handleAddExpense}
             onViewExpense={handleViewExpense}
+            addExpenseDialogRef={addExpenseDialogRef}
           />
         </TabsContent>
 

@@ -22,6 +22,7 @@ interface ExpenseBreakdownCardProps {
   year: number
   onAddExpense?: () => void
   onViewExpense?: (expenseId: string) => void
+  addExpenseDialogRef?: React.RefObject<{ openDialog: () => void }>
 }
 
 const categoryIcons = {
@@ -58,7 +59,8 @@ export function ExpenseBreakdownCard({
   expenses, 
   year, 
   onAddExpense, 
-  onViewExpense 
+  onViewExpense,
+  addExpenseDialogRef
 }: ExpenseBreakdownCardProps) {
   const yearExpenses = expenses.filter(expense => {
     const expenseYear = new Date(expense.date).getFullYear()
@@ -153,7 +155,10 @@ export function ExpenseBreakdownCard({
               <CardTitle>Détail par catégorie</CardTitle>
               <CardDescription>Dépenses déductibles uniquement</CardDescription>
             </div>
-            <Button onClick={onAddExpense} size="sm">
+            <Button 
+              onClick={() => addExpenseDialogRef?.current?.openDialog() || onAddExpense?.()} 
+              size="sm"
+            >
               <Plus className="h-4 w-4 mr-2" />
               Ajouter
             </Button>
@@ -234,7 +239,9 @@ export function ExpenseBreakdownCard({
                 <p className="text-muted-foreground mb-4">
                   Ajoutez vos dépenses pour optimiser votre déclaration fiscale
                 </p>
-                <Button onClick={onAddExpense}>
+                <Button 
+                  onClick={() => addExpenseDialogRef?.current?.openDialog() || onAddExpense?.()}
+                >
                   <Plus className="h-4 w-4 mr-2" />
                   Ajouter une dépense
                 </Button>
