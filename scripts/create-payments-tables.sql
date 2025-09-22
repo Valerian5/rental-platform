@@ -123,7 +123,7 @@ CREATE POLICY "Propriétaires peuvent gérer leurs paiements" ON public.payments
     EXISTS (
       SELECT 1 FROM leases 
       WHERE leases.id = payments.lease_id 
-      AND leases.bailleur_id = auth.uid()
+      AND leases.owner_id = auth.uid()
     )
   );
 
@@ -132,7 +132,7 @@ CREATE POLICY "Locataires peuvent voir leurs paiements" ON public.payments
     EXISTS (
       SELECT 1 FROM leases 
       WHERE leases.id = payments.lease_id 
-      AND leases.locataire_id = auth.uid()
+      AND leases.tenant_id = auth.uid()
     )
   );
 
@@ -142,7 +142,7 @@ CREATE POLICY "Propriétaires peuvent gérer leurs quittances" ON public.receipt
     EXISTS (
       SELECT 1 FROM leases 
       WHERE leases.id = receipts.lease_id 
-      AND leases.bailleur_id = auth.uid()
+      AND leases.owner_id = auth.uid()
     )
   );
 
@@ -151,7 +151,7 @@ CREATE POLICY "Locataires peuvent voir leurs quittances" ON public.receipts
     EXISTS (
       SELECT 1 FROM leases 
       WHERE leases.id = receipts.lease_id 
-      AND leases.locataire_id = auth.uid()
+      AND leases.tenant_id = auth.uid()
     )
   );
 
@@ -161,7 +161,7 @@ CREATE POLICY "Propriétaires peuvent gérer leurs rappels" ON public.reminders
     EXISTS (
       SELECT 1 FROM leases 
       WHERE leases.id = reminders.lease_id 
-      AND leases.bailleur_id = auth.uid()
+      AND leases.owner_id = auth.uid()
     )
   );
 
@@ -170,7 +170,7 @@ CREATE POLICY "Locataires peuvent voir leurs rappels" ON public.reminders
     EXISTS (
       SELECT 1 FROM leases 
       WHERE leases.id = reminders.lease_id 
-      AND leases.locataire_id = auth.uid()
+      AND leases.tenant_id = auth.uid()
     )
   );
 
@@ -180,7 +180,7 @@ CREATE POLICY "Propriétaires peuvent gérer leur configuration de paiements" ON
     EXISTS (
       SELECT 1 FROM leases 
       WHERE leases.id = lease_payment_configs.lease_id 
-      AND leases.bailleur_id = auth.uid()
+      AND leases.owner_id = auth.uid()
     )
   );
 
@@ -189,7 +189,7 @@ CREATE POLICY "Locataires peuvent voir leur configuration de paiements" ON publi
     EXISTS (
       SELECT 1 FROM leases 
       WHERE leases.id = lease_payment_configs.lease_id 
-      AND leases.locataire_id = auth.uid()
+      AND leases.tenant_id = auth.uid()
     )
   );
 

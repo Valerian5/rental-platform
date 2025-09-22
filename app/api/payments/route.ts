@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
         *,
         leases!inner(
           id,
-          bailleur_id,
+          owner_id,
           property:properties(
             id,
             title,
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
           )
         )
       `)
-      .eq('leases.bailleur_id', ownerId)
+      .eq('leases.owner_id', ownerId)
       .order('due_date', { ascending: false })
 
     if (error) {

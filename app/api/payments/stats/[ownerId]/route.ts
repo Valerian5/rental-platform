@@ -45,9 +45,9 @@ export async function GET(
         status,
         payment_date,
         due_date,
-        leases!inner(bailleur_id)
+        leases!inner(owner_id)
       `)
-      .eq('leases.bailleur_id', params.ownerId)
+      .eq('leases.owner_id', params.ownerId)
       .gte('created_at', startDate.toISOString())
       .lte('created_at', endDate.toISOString())
 
