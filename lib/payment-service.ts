@@ -103,9 +103,65 @@ class PaymentService {
   // Récupérer l'historique complet d'un paiement
   async getPaymentHistory(paymentId: string): Promise<PaymentHistory> {
     try {
-      const response = await fetch(`${this.baseUrl}/payments/${paymentId}/history`)
-      if (!response.ok) throw new Error('Erreur lors de la récupération de l\'historique')
-      return await response.json()
+      // Utiliser directement Supabase côté client
+      const { data: payment, error: paymentError } = await supabase
+        .from('payments')
+        .select(`
+          *,
+          leases!inner(
+            id,
+            owner_id,
+            property:properties(
+              id,
+              title,
+              address
+            ),
+            tenant:users!leases_tenant_id_fkey(
+              id,
+              first_name,
+              last_name,
+              email
+            )
+          )
+        `)
+        .eq('id', paymentId)
+        .single()
+
+      if (paymentError) {
+        console.error('Erreur récupération paiement:', paymentError)
+        throw new Error('Erreur lors de la récupération du paiement')
+      }
+
+      // Récupérer les rappels
+      const { data: reminders, error: remindersError } = await supabase
+        .from('reminders')
+        .select('*')
+        .eq('payment_id', paymentId)
+        .order('created_at', { ascending: false })
+
+      if (remindersError) {
+        console.error('Erreur récupération rappels:', remindersError)
+      }
+
+      // Récupérer la quittance
+      let receipt = null
+      if (payment.receipt_id) {
+        const { data: receiptData, error: receiptError } = await supabase
+          .from('receipts')
+          .select('*')
+          .eq('id', payment.receipt_id)
+          .single()
+
+        if (!receiptError) {
+          receipt = receiptData
+        }
+      }
+
+      return {
+        payment,
+        receipt,
+        reminders: reminders || []
+      }
     } catch (error) {
       console.error('Erreur getPaymentHistory:', error)
       throw error
@@ -115,13 +171,48 @@ class PaymentService {
   // Valider un paiement (marquer comme payé ou impayé)
   async validatePayment(input: PaymentValidationInput): Promise<PaymentValidationOutput> {
     try {
-      const response = await fetch(`${this.baseUrl}/payments/${input.payment_id}/validate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input)
-      })
-      if (!response.ok) throw new Error('Erreur lors de la validation du paiement')
-      return await response.json()
+      let result
+      
+      if (input.status === 'paid') {
+        // Marquer comme payé
+        const { data, error } = await supabase
+          .rpc('mark_payment_as_paid', {
+            payment_id_param: input.payment_id,
+            payment_date_param: input.payment_date || new Date().toISOString(),
+            payment_method: input.payment_method || 'virement'
+          })
+
+        if (error) {
+          console.error('Erreur marquage payé:', error)
+          throw new Error('Erreur lors de la validation du paiement')
+        }
+
+        result = data?.[0]
+      } else {
+        // Marquer comme impayé
+        const { data, error } = await supabase
+          .rpc('mark_payment_as_unpaid', {
+            payment_id_param: input.payment_id,
+            notes_param: input.notes
+          })
+
+        if (error) {
+          console.error('Erreur marquage impayé:', error)
+          throw new Error('Erreur lors de la validation du paiement')
+        }
+
+        result = data?.[0]
+      }
+
+      // Récupérer l'historique complet
+      const history = await this.getPaymentHistory(input.payment_id)
+
+      return {
+        payment: history.payment,
+        receipt: history.receipt,
+        notification_sent: false, // TODO: Implémenter les notifications
+        history
+      }
     } catch (error) {
       console.error('Erreur validatePayment:', error)
       throw error
@@ -131,13 +222,25 @@ class PaymentService {
   // Envoyer un rappel pour un paiement
   async sendReminder(input: ReminderInput): Promise<ReminderOutput> {
     try {
-      const response = await fetch(`${this.baseUrl}/payments/${input.payment_id}/reminder`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input)
-      })
-      if (!response.ok) throw new Error('Erreur lors de l\'envoi du rappel')
-      return await response.json()
+      const { data, error } = await supabase
+        .rpc('create_payment_reminder', {
+          payment_id_param: input.payment_id,
+          reminder_type: input.reminder_type,
+          custom_message: input.custom_message
+        })
+
+      if (error) {
+        console.error('Erreur création rappel:', error)
+        throw new Error('Erreur lors de l\'envoi du rappel')
+      }
+
+      const reminder = data?.[0]
+
+      return {
+        reminder,
+        email_sent: false, // TODO: Implémenter l'envoi d'email
+        notification_sent: false // TODO: Implémenter les notifications
+      }
     } catch (error) {
       console.error('Erreur sendReminder:', error)
       throw error
@@ -336,9 +439,32 @@ class PaymentService {
   // Télécharger une quittance PDF
   async downloadReceipt(receiptId: string): Promise<Blob> {
     try {
-      const response = await fetch(`${this.baseUrl}/receipts/${receiptId}/download`)
-      if (!response.ok) throw new Error('Erreur lors du téléchargement de la quittance')
-      return await response.blob()
+      // Récupérer les données de la quittance
+      const { data: receipt, error } = await supabase
+        .from('receipts')
+        .select(`
+          *,
+          payment:payments(
+            *,
+            leases!inner(
+              *,
+              property:properties(*),
+              tenant:users!leases_tenant_id_fkey(*)
+            )
+          )
+        `)
+        .eq('id', receiptId)
+        .single()
+
+      if (error) {
+        console.error('Erreur récupération quittance:', error)
+        throw new Error('Erreur lors de la récupération de la quittance')
+      }
+
+      // TODO: Implémenter la génération PDF réelle
+      // Pour l'instant, retourner un blob vide
+      const pdfContent = `Quittance ${receipt.reference}\nMontant: ${receipt.total_amount}€`
+      return new Blob([pdfContent], { type: 'application/pdf' })
     } catch (error) {
       console.error('Erreur downloadReceipt:', error)
       throw error
@@ -348,10 +474,18 @@ class PaymentService {
   // Marquer une quittance comme envoyée au locataire
   async markReceiptAsSent(receiptId: string): Promise<void> {
     try {
-      const response = await fetch(`${this.baseUrl}/receipts/${receiptId}/mark-sent`, {
-        method: 'POST'
-      })
-      if (!response.ok) throw new Error('Erreur lors de la mise à jour de la quittance')
+      const { error } = await supabase
+        .from('receipts')
+        .update({ 
+          sent_to_tenant: true,
+          sent_at: new Date().toISOString()
+        })
+        .eq('id', receiptId)
+
+      if (error) {
+        console.error('Erreur mise à jour quittance:', error)
+        throw new Error('Erreur lors de la mise à jour de la quittance')
+      }
     } catch (error) {
       console.error('Erreur markReceiptAsSent:', error)
       throw error
@@ -361,9 +495,36 @@ class PaymentService {
   // Récupérer la configuration de paiement d'un bail
   async getLeasePaymentConfig(leaseId: string): Promise<LeasePaymentConfig> {
     try {
-      const response = await fetch(`${this.baseUrl}/payments/config/${leaseId}`)
-      if (!response.ok) throw new Error('Erreur lors de la récupération de la configuration')
-      return await response.json()
+      // Récupérer les informations du bail
+      const { data: lease, error } = await supabase
+        .from('leases')
+        .select(`
+          id,
+          property_id,
+          tenant_id,
+          monthly_rent,
+          charges
+        `)
+        .eq('id', leaseId)
+        .single()
+
+      if (error) {
+        console.error('Erreur récupération bail:', error)
+        throw new Error('Erreur lors de la récupération de la configuration')
+      }
+
+      return {
+        lease_id: lease.id,
+        property_id: lease.property_id,
+        tenant_id: lease.tenant_id,
+        monthly_rent: lease.monthly_rent,
+        monthly_charges: lease.charges || 0,
+        payment_day: 1,
+        payment_method: 'virement',
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
     } catch (error) {
       console.error('Erreur getLeasePaymentConfig:', error)
       throw error
@@ -373,13 +534,23 @@ class PaymentService {
   // Mettre à jour la configuration de paiement d'un bail
   async updateLeasePaymentConfig(leaseId: string, config: Partial<LeasePaymentConfig>): Promise<LeasePaymentConfig> {
     try {
-      const response = await fetch(`${this.baseUrl}/payments/config/${leaseId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config)
-      })
-      if (!response.ok) throw new Error('Erreur lors de la mise à jour de la configuration')
-      return await response.json()
+      // Mettre à jour le bail
+      const { error } = await supabase
+        .from('leases')
+        .update({
+          monthly_rent: config.monthly_rent,
+          charges: config.monthly_charges,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', leaseId)
+
+      if (error) {
+        console.error('Erreur mise à jour bail:', error)
+        throw new Error('Erreur lors de la mise à jour de la configuration')
+      }
+
+      // Retourner la configuration mise à jour
+      return await this.getLeasePaymentConfig(leaseId)
     } catch (error) {
       console.error('Erreur updateLeasePaymentConfig:', error)
       throw error
