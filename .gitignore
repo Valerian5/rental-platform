@@ -33,3 +33,6 @@ scripts/test-pdf-generation.sql
 scripts/test-receipt-generation.sql
 scripts/debug-receipt-issue.sql
 scripts/test-complete-receipt-flow.sql
+scripts/check-receipt-function.sql
+scripts/ensure-receipt-function-exists.sql
+scripts/generate-missing-receipts.sql

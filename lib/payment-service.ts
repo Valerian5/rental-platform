@@ -192,6 +192,7 @@ class PaymentService {
 
         // Générer la quittance automatiquement
         try {
+          console.log('Génération de quittance pour le paiement:', input.payment_id)
           const { data: receipt, error: receiptError } = await supabase
             .rpc('generate_receipt_for_payment', {
               payment_id_param: input.payment_id
@@ -200,6 +201,8 @@ class PaymentService {
           if (receiptError) {
             console.error('Erreur génération quittance:', receiptError)
             // Ne pas faire échouer la validation si la quittance échoue
+          } else {
+            console.log('Quittance générée avec succès:', receipt)
           }
         } catch (receiptError) {
           console.error('Erreur génération quittance:', receiptError)
