@@ -81,23 +81,6 @@ export function PaymentManagement({ ownerId, selectedLeaseId }: PaymentManagemen
     }
   }
 
-  const handleValidatePayment = async (paymentId: string, status: 'paid' | 'unpaid') => {
-    try {
-      const result = await paymentService.validatePayment({
-        payment_id: paymentId,
-        status,
-        payment_date: status === 'paid' ? new Date().toISOString() : undefined
-      })
-      
-      toast.success(`Paiement marqué comme ${status === 'paid' ? 'payé' : 'impayé'}`)
-      setShowValidationDialog(false)
-      setSelectedPayment(null)
-      await loadPayments()
-      await loadStats()
-    } catch (error) {
-      toast.error("Erreur lors de la validation du paiement")
-    }
-  }
 
   const handleSendReminder = async (paymentId: string, reminderType: 'first' | 'second' | 'final') => {
     try {
