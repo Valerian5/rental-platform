@@ -20,6 +20,12 @@ class PaymentService {
   // Récupérer tous les paiements d'un propriétaire
   async getOwnerPayments(ownerId: string): Promise<Payment[]> {
     try {
+      // Vérifier que ownerId est une chaîne UUID valide
+      if (!ownerId || typeof ownerId !== 'string') {
+        console.error('ownerId invalide:', ownerId)
+        throw new Error('ID propriétaire invalide')
+      }
+
       // Utiliser directement Supabase côté client
       const { data: payments, error } = await supabase
         .from('payments')
@@ -164,6 +170,12 @@ class PaymentService {
   // Récupérer les statistiques des paiements
   async getPaymentStats(ownerId: string, period?: string): Promise<PaymentStats> {
     try {
+      // Vérifier que ownerId est une chaîne UUID valide
+      if (!ownerId || typeof ownerId !== 'string') {
+        console.error('ownerId invalide:', ownerId)
+        throw new Error('ID propriétaire invalide')
+      }
+
       // Calculer les dates selon la période
       const now = new Date()
       let startDate: Date

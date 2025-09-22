@@ -2,6 +2,7 @@
 
 import { PaymentTestComponent } from "@/components/PaymentTestComponent"
 import { SupabaseTestComponent } from "@/components/SupabaseTestComponent"
+import { PaymentTestExisting } from "@/components/PaymentTestExisting"
 
 export default function TestPaymentsPage() {
   return (
@@ -14,6 +15,8 @@ export default function TestPaymentsPage() {
       </div>
       
       <SupabaseTestComponent />
+      
+      <PaymentTestExisting />
       <PaymentTestComponent />
     </div>
   )
