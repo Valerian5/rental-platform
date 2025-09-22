@@ -180,7 +180,7 @@ export function PaymentManagement({ ownerId, selectedLeaseId }: PaymentManagemen
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-2xl font-bold text-green-600">{stats.total_received.toLocaleString()} €</p>
+                  <p className="text-2xl font-bold text-green-600">{stats.total_received?.toLocaleString() || '0'} €</p>
                   <p className="text-sm text-muted-foreground">Reçu ce mois</p>
                 </div>
                 <div className="flex items-center text-green-500">
@@ -195,7 +195,7 @@ export function PaymentManagement({ ownerId, selectedLeaseId }: PaymentManagemen
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-2xl font-bold text-orange-600">{stats.total_pending.toLocaleString()} €</p>
+                  <p className="text-2xl font-bold text-orange-600">{stats.total_pending?.toLocaleString() || '0'} €</p>
                   <p className="text-sm text-muted-foreground">En attente</p>
                 </div>
                 <Clock className="h-8 w-8 text-orange-500" />
@@ -207,7 +207,7 @@ export function PaymentManagement({ ownerId, selectedLeaseId }: PaymentManagemen
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-2xl font-bold text-red-600">{stats.total_overdue.toLocaleString()} €</p>
+                  <p className="text-2xl font-bold text-red-600">{stats.total_overdue?.toLocaleString() || '0'} €</p>
                   <p className="text-sm text-muted-foreground">En retard</p>
                 </div>
                 <AlertCircle className="h-8 w-8 text-red-500" />
@@ -332,7 +332,7 @@ export function PaymentManagement({ ownerId, selectedLeaseId }: PaymentManagemen
 
                   <div className="flex items-center space-x-4">
                     <div className="text-right">
-                      <p className="text-lg font-bold">{payment.amount_due.toLocaleString()} €</p>
+                      <p className="text-lg font-bold">{payment.amount_due?.toLocaleString() || '0'} €</p>
                       <div className="text-sm text-muted-foreground">
                         Loyer: {payment.rent_amount}€ + Charges: {payment.charges_amount}€
                       </div>
@@ -352,7 +352,7 @@ export function PaymentManagement({ ownerId, selectedLeaseId }: PaymentManagemen
                         </Button>
                       )}
 
-                      {payment.status === 'overdue' && (
+                      {(payment.status === 'overdue' || (payment.status === 'pending' && new Date(payment.due_date) < new Date())) && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -396,7 +396,7 @@ export function PaymentManagement({ ownerId, selectedLeaseId }: PaymentManagemen
           </DialogHeader>
           <div className="space-y-4">
             <div className="p-4 bg-gray-50 rounded-lg">
-              <p><strong>Montant:</strong> {selectedPayment?.amount_due.toLocaleString()} €</p>
+              <p><strong>Montant:</strong> {selectedPayment?.amount_due?.toLocaleString() || '0'} €</p>
               <p><strong>Échéance:</strong> {selectedPayment && new Date(selectedPayment.due_date).toLocaleDateString("fr-FR")}</p>
             </div>
           </div>
