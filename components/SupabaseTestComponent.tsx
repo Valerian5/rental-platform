@@ -53,7 +53,7 @@ export function SupabaseTestComponent() {
 
       const { data: leases, error: leasesError } = await supabase
         .from('leases')
-        .select('id, owner_id')
+        .select('id, owner_id, tenant_id')
         .limit(1)
 
       if (leasesError) {

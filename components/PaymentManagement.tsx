@@ -29,7 +29,7 @@ import {
   AlertTriangle,
   RefreshCw
 } from "lucide-react"
-import { paymentService } from "@/lib/payment-service"
+import { paymentServiceSimple as paymentService } from "@/lib/payment-service-simple"
 import { Payment, PaymentStats, PaymentHistory } from "@/lib/payment-models"
 import { toast } from "sonner"
 

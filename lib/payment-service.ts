@@ -33,7 +33,7 @@ class PaymentService {
               title,
               address
             ),
-            tenant:users(
+            tenant:users!leases_tenant_id_fkey(
               id,
               first_name,
               last_name,
@@ -71,7 +71,7 @@ class PaymentService {
               title,
               address
             ),
-            tenant:users(
+            tenant:users!leases_tenant_id_fkey(
               id,
               first_name,
               last_name,
@@ -258,7 +258,7 @@ class PaymentService {
               title,
               address
             ),
-            tenant:users(
+            tenant:users!leases_tenant_id_fkey(
               id,
               first_name,
               last_name,
@@ -297,7 +297,7 @@ class PaymentService {
               title,
               address
             ),
-            tenant:users(
+            tenant:users!leases_tenant_id_fkey(
               id,
               first_name,
               last_name,
