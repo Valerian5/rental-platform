@@ -25,3 +25,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+scripts/check-receipt-relations.sql
+scripts/check-receipts-table-structure.sql
+scripts/create-receipt-generation-function.sql
+scripts/install-pdf-dependencies.sh
+scripts/test-pdf-generation.sql

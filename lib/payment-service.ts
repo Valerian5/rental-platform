@@ -188,6 +188,22 @@ class PaymentService {
         }
 
         result = data
+
+        // Générer la quittance automatiquement
+        try {
+          const { data: receipt, error: receiptError } = await supabase
+            .rpc('generate_receipt_for_payment', {
+              payment_id_param: input.payment_id
+            })
+
+          if (receiptError) {
+            console.error('Erreur génération quittance:', receiptError)
+            // Ne pas faire échouer la validation si la quittance échoue
+          }
+        } catch (receiptError) {
+          console.error('Erreur génération quittance:', receiptError)
+          // Ne pas faire échouer la validation si la quittance échoue
+        }
       } else {
         // Marquer comme impayé
         const { data, error } = await supabase
@@ -470,18 +486,18 @@ class PaymentService {
   }
 
   // Télécharger une quittance PDF
-  async downloadReceipt(receiptId: string): Promise<Blob> {
+  async downloadReceipt(receiptId: string): Promise<void> {
     try {
       // Récupérer les données de la quittance
       const { data: receipt, error } = await supabase
         .from('receipts')
         .select(`
           *,
-          payment:payments(
+          payment:payments!receipts_payment_id_fkey(
             *,
-            leases!inner(
+            lease:leases!payments_lease_id_fkey(
               *,
-              property:properties(*),
+              property:properties!leases_property_id_fkey(*),
               tenant:users!leases_tenant_id_fkey(*)
             )
           )
@@ -494,10 +510,11 @@ class PaymentService {
         throw new Error('Erreur lors de la récupération de la quittance')
       }
 
-      // TODO: Implémenter la génération PDF réelle
-      // Pour l'instant, retourner un blob vide
-      const pdfContent = `Quittance ${receipt.reference}\nMontant: ${receipt.total_amount}€`
-      return new Blob([pdfContent], { type: 'application/pdf' })
+      // Importer le générateur PDF dynamiquement
+      const { PDFGenerator } = await import('./pdf-generator')
+      
+      // Générer et télécharger le PDF
+      PDFGenerator.downloadReceipt(receipt)
     } catch (error) {
       console.error('Erreur downloadReceipt:', error)
       throw error
