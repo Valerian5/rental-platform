@@ -54,6 +54,13 @@ export default function FiscalPage() {
     try {
       setIsLoading(true)
       
+      // Récupérer l'utilisateur connecté
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        toast.error("Session expirée, veuillez vous reconnecter")
+        return
+      }
+
       // Récupérer le token d'authentification
       const { data: sessionData } = await supabase.auth.getSession()
       if (!sessionData.session?.access_token) {
