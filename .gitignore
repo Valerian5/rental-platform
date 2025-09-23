@@ -51,3 +51,11 @@ scripts/debug-receipt-data.sql
 scripts/fix-receipts-rls-policy.sql
 scripts/test-exact-fiscal-query.sql
 scripts/test-fiscal-query.sql
+scripts/create-fiscal-receipts-function-final.sql
+scripts/create-fiscal-years-function.sql
+scripts/create-secure-fiscal-functions.sql
+scripts/disable-rls-and-test.sql
+scripts/setup-proper-rls-policies.sql
+scripts/temporarily-disable-rls.sql
+scripts/test-direct-api-call.sql
+scripts/test-rls-and-auth.sql
