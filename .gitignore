@@ -36,3 +36,5 @@ scripts/test-complete-receipt-flow.sql
 scripts/check-receipt-function.sql
 scripts/ensure-receipt-function-exists.sql
 scripts/generate-missing-receipts.sql
+scripts/debug-fiscal-data.sql
+scripts/verify-fiscal-data-links.sql
