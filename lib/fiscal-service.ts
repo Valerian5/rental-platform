@@ -32,9 +32,9 @@ export class FiscalService {
 
       if (leasesError) throw leasesError
 
-      // 2. Récupérer les quittances pour l'année
+      // 2. Récupérer les quittances pour l'année depuis la table receipts
       const { data: receipts, error: receiptsError } = await supabase
-        .from("rent_receipts")
+        .from("receipts")
         .select(`
           id,
           lease_id,
@@ -43,7 +43,7 @@ export class FiscalService {
           rent_amount,
           charges_amount,
           total_amount,
-          status
+          generated_at
         `)
         .eq("year", year)
         .in("lease_id", leases?.map(l => l.id) || [])
@@ -95,7 +95,7 @@ export class FiscalService {
         rent_amount: receipt.rent_amount || 0,
         charges_amount: receipt.charges_amount || 0,
         total_amount: receipt.total_amount || 0,
-        status: receipt.status as "paid" | "pending" | "overdue"
+        status: "paid" as const // Les quittances sont toujours générées pour des paiements payés
       }))
 
       const expenseData: Expense[] = (expenses || []).map(expense => ({
