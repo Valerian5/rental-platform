@@ -28,6 +28,7 @@ import { EditExpenseDialog, EditExpenseDialogRef } from "@/components/fiscal/Edi
 import { AddReceiptDialog, AddReceiptDialogRef } from "@/components/fiscal/AddReceiptDialog"
 import { FiscalCalculation, Expense } from "@/lib/fiscal-calculator"
 import { supabase } from "@/lib/supabase"
+import { FiscalServiceClient } from "@/lib/fiscal-service-client"
 import { toast } from "sonner"
 
 export default function FiscalPage() {
@@ -70,27 +71,20 @@ export default function FiscalPage() {
         setProperties(propertiesData.properties || [])
       }
       
-      // Charger les années disponibles
-      const yearsResponse = await fetch(`/api/fiscal?action=years`, { headers })
-      const yearsData = await yearsResponse.json()
-      if (yearsData.success) {
-        setAvailableYears(yearsData.data)
-      }
+      // Charger les années disponibles (côté client)
+      const years = await FiscalServiceClient.getAvailableYears(user.id)
+      setAvailableYears(years)
 
-      // Charger les données fiscales
+      // Charger les données fiscales (côté client)
       console.log(`FiscalPage: Chargement des données fiscales pour l'année ${currentYear}`)
-      const fiscalResponse = await fetch(`/api/fiscal?year=${currentYear}${selectedPropertyId !== "all" ? `&property_id=${selectedPropertyId}` : ""}`, { headers })
-      const fiscalData = await fiscalResponse.json()
+      const fiscalData = await FiscalServiceClient.calculateFiscalData(
+        user.id, 
+        currentYear, 
+        selectedPropertyId !== "all" ? selectedPropertyId : undefined
+      )
       
-      console.log(`FiscalPage: Réponse API fiscale:`, fiscalData)
-      
-      if (fiscalData.success) {
-        console.log(`FiscalPage: Données fiscales chargées:`, fiscalData.data)
-        setFiscalCalculation(fiscalData.data)
-      } else {
-        console.error(`FiscalPage: Erreur API fiscale:`, fiscalData.error)
-        toast.error("Erreur lors du chargement des données fiscales")
-      }
+      console.log(`FiscalPage: Données fiscales chargées:`, fiscalData)
+      setFiscalCalculation(fiscalData)
 
       // Charger les dépenses
       const expensesResponse = await fetch(`/api/expenses?year=${currentYear}${selectedPropertyId !== "all" ? `&property_id=${selectedPropertyId}` : ""}`, { headers })

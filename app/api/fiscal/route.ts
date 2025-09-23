@@ -12,20 +12,11 @@ export async function GET(request: NextRequest) {
 
     const token = authHeader.split(' ')[1]
     
-    // Créer un client Supabase avec le token utilisateur pour respecter RLS
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        global: {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      }
-    )
+    // Créer un client Supabase avec service_role pour les opérations backend
+    const supabase = createServerClient()
     
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    // Vérifier l'authentification utilisateur avec le token
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
 
     if (authError || !user) {
       return NextResponse.json({ success: false, error: "Token invalide" }, { status: 401 })
@@ -83,20 +74,11 @@ export async function POST(request: NextRequest) {
 
     const token = authHeader.split(' ')[1]
     
-    // Créer un client Supabase avec le token utilisateur pour respecter RLS
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        global: {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      }
-    )
+    // Créer un client Supabase avec service_role pour les opérations backend
+    const supabase = createServerClient()
     
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    // Vérifier l'authentification utilisateur avec le token
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
 
     if (authError || !user) {
       return NextResponse.json({ success: false, error: "Token invalide" }, { status: 401 })
