@@ -51,7 +51,8 @@ export class FiscalService {
       if (leaseIds.length > 0) {
         console.log(`FiscalService: Exécution de la requête pour les quittances avec year=${year} et leaseIds=${JSON.stringify(leaseIds)}`)
         
-        const { data: receipts, error: receiptsError } = await supabase
+        // Essayer d'abord la requête directe
+        let { data: receipts, error: receiptsError } = await supabase
           .from("receipts")
           .select(`
             id,
@@ -65,6 +66,53 @@ export class FiscalService {
           `)
           .eq("year", year)
           .in("lease_id", leaseIds)
+          
+        // Si pas de résultats, essayer une requête alternative via payments
+        if (!receipts || receipts.length === 0) {
+          console.log(`FiscalService: Aucune quittance trouvée avec la requête directe, essai via payments`)
+          
+          const { data: receiptsViaPayments, error: receiptsViaPaymentsError } = await supabase
+            .from("receipts")
+            .select(`
+              id,
+              lease_id,
+              year,
+              month,
+              rent_amount,
+              charges_amount,
+              total_amount,
+              generated_at,
+              payment:payments!receipts_payment_id_fkey(
+                lease_id
+              )
+            `)
+            .eq("year", year)
+            
+          if (receiptsViaPaymentsError) {
+            console.error(`FiscalService: Erreur requête alternative:`, receiptsViaPaymentsError)
+          } else {
+            console.log(`FiscalService: Requête alternative trouvée ${receiptsViaPayments?.length || 0} quittances`)
+            // Filtrer par lease_id côté client
+            const filteredReceipts = receiptsViaPayments?.filter(r => 
+              r.payment && leaseIds.includes(r.payment.lease_id)
+            ) || []
+            console.log(`FiscalService: Après filtrage: ${filteredReceipts.length} quittances`)
+            
+            if (filteredReceipts.length > 0) {
+              // Utiliser les quittances filtrées
+              receipts = filteredReceipts.map(r => ({
+                id: r.id,
+                lease_id: r.lease_id,
+                year: r.year,
+                month: r.month,
+                rent_amount: r.rent_amount,
+                charges_amount: r.charges_amount,
+                total_amount: r.total_amount,
+                generated_at: r.generated_at
+              }))
+            }
+          }
+        }
 
         if (receiptsError) {
           console.error(`FiscalService: Erreur récupération quittances:`, receiptsError)
