@@ -149,10 +149,10 @@ export class FiscalPDFGenerator {
     
     // Tableau résumé
     const summaryData = [
-      ['Revenus bruts (loyers encaissés)', `${data.summary.totalRentCollected.toLocaleString('fr-FR')} €`],
-      ['Charges récupérables (non imposables)', `${data.summary.totalRecoverableCharges.toLocaleString('fr-FR')} €`],
-      ['Dépenses déductibles', `${data.summary.totalDeductibleExpenses.toLocaleString('fr-FR')} €`],
-      ['Revenu net locatif', `${data.summary.netRentalIncome.toLocaleString('fr-FR')} €`]
+      ['Revenus bruts (loyers encaissés)', `${(data.summary.totalRentCollected || 0).toLocaleString('fr-FR')} €`],
+      ['Charges récupérables (non imposables)', `${(data.summary.totalRecoverableCharges || 0).toLocaleString('fr-FR')} €`],
+      ['Dépenses déductibles', `${(data.summary.totalDeductibleExpenses || 0).toLocaleString('fr-FR')} €`],
+      ['Revenu net locatif', `${(data.summary.netRentalIncome || 0).toLocaleString('fr-FR')} €`]
     ]
     
     this.doc.autoTable({
@@ -180,19 +180,19 @@ export class FiscalPDFGenerator {
       ],
       [
         'Micro-foncier',
-        `${data.simulations.microFoncier.taxableIncome.toLocaleString('fr-FR')} €`,
+        `${(data.simulations.microFoncier.taxableIncome || 0).toLocaleString('fr-FR')} €`,
         data.simulations.recommendation.regime === 'micro-foncier' ? 'Oui' : 'Non',
         data.simulations.microFoncier.applicable ? 'Applicable' : 'Non applicable'
       ],
       [
         'Micro-BIC',
-        `${data.simulations.microBIC.taxableIncome.toLocaleString('fr-FR')} €`,
+        `${(data.simulations.microBIC.taxableIncome || 0).toLocaleString('fr-FR')} €`,
         data.simulations.recommendation.regime === 'micro-bic' ? 'Oui' : 'Non',
         'Location meublée uniquement'
       ],
       [
         'Régime réel',
-        `${data.simulations.realRegime.taxableIncome.toLocaleString('fr-FR')} €`,
+        `${(data.simulations.realRegime.taxableIncome || 0).toLocaleString('fr-FR')} €`,
         data.simulations.recommendation.regime === 'real' ? 'Oui' : 'Non',
         'Toujours applicable'
       ]
@@ -222,7 +222,7 @@ export class FiscalPDFGenerator {
     
     if (data.simulations.recommendation.savings > 0) {
       this.doc.text(
-        `Économie estimée: ${data.simulations.recommendation.savings.toLocaleString('fr-FR')} €`,
+        `Économie estimée: ${(data.simulations.recommendation.savings || 0).toLocaleString('fr-FR')} €`,
         20,
         tableY + 50
       )
@@ -243,7 +243,7 @@ export class FiscalPDFGenerator {
     
     const deductibleData = data.expenses.deductible.map(expense => [
       expense.category,
-      `${expense.amount.toLocaleString('fr-FR')} €`,
+      `${(expense.amount || 0).toLocaleString('fr-FR')} €`,
       `${expense.count} dépense${expense.count > 1 ? 's' : ''}`
     ])
     
@@ -264,7 +264,7 @@ export class FiscalPDFGenerator {
     
     const nonDeductibleData = data.expenses.nonDeductible.map(expense => [
       expense.category,
-      `${expense.amount.toLocaleString('fr-FR')} €`,
+      `${(expense.amount || 0).toLocaleString('fr-FR')} €`,
       `${expense.count} dépense${expense.count > 1 ? 's' : ''}`
     ])
     
@@ -294,8 +294,8 @@ export class FiscalPDFGenerator {
       property.title,
       property.address,
       property.type,
-      `${property.monthlyRent.toLocaleString('fr-FR')} €`,
-      `${property.charges.toLocaleString('fr-FR')} €`
+      `${(property.monthlyRent || 0).toLocaleString('fr-FR')} €`,
+      `${(property.charges || 0).toLocaleString('fr-FR')} €`
     ])
     
     this.doc.autoTable({
@@ -320,9 +320,9 @@ export class FiscalPDFGenerator {
     
     // Données préremplies
     const formData = [
-      ['Ligne 4BE - Revenus bruts', `${data.summary.totalRentCollected.toLocaleString('fr-FR')} €`],
-      ['Ligne 4BF - Charges déductibles', `${data.summary.totalDeductibleExpenses.toLocaleString('fr-FR')} €`],
-      ['Ligne 4BG - Revenu net', `${data.summary.netRentalIncome.toLocaleString('fr-FR')} €`]
+      ['Ligne 4BE - Revenus bruts', `${(data.summary.totalRentCollected || 0).toLocaleString('fr-FR')} €`],
+      ['Ligne 4BF - Charges déductibles', `${(data.summary.totalDeductibleExpenses || 0).toLocaleString('fr-FR')} €`],
+      ['Ligne 4BG - Revenu net', `${(data.summary.netRentalIncome || 0).toLocaleString('fr-FR')} €`]
     ]
     
     this.doc.autoTable({
@@ -347,9 +347,9 @@ export class FiscalPDFGenerator {
     
     // Données préremplies
     const formData = [
-      ['Chiffre d\'affaires', `${data.summary.totalRentCollected.toLocaleString('fr-FR')} €`],
-      ['Charges déductibles', `${data.summary.totalDeductibleExpenses.toLocaleString('fr-FR')} €`],
-      ['Résultat net', `${data.summary.netRentalIncome.toLocaleString('fr-FR')} €`]
+      ['Chiffre d\'affaires', `${(data.summary.totalRentCollected || 0).toLocaleString('fr-FR')} €`],
+      ['Charges déductibles', `${(data.summary.totalDeductibleExpenses || 0).toLocaleString('fr-FR')} €`],
+      ['Résultat net', `${(data.summary.netRentalIncome || 0).toLocaleString('fr-FR')} €`]
     ]
     
     this.doc.autoTable({

@@ -256,9 +256,45 @@ export class FiscalServiceClient {
           totalDeductibleExpenses: calculation.totalDeductibleExpenses,
           taxableProfit: calculation.taxableProfit
         },
+        simulations: {
+          microFoncier: {
+            taxableIncome: calculation.totalRentCollected,
+            applicable: calculation.totalRentCollected > 0
+          },
+          microBIC: {
+            taxableIncome: calculation.totalRentCollected,
+            applicable: false
+          },
+          realRegime: {
+            taxableIncome: calculation.taxableProfit,
+            applicable: true
+          },
+          recommendation: {
+            regime: 'real' as const,
+            savings: 0
+          }
+        },
+        expenses: {
+          deductible: fiscalData.expenses.filter(e => e.deductible).map(e => ({
+            category: e.category,
+            amount: e.amount,
+            count: 1
+          })),
+          nonDeductible: fiscalData.expenses.filter(e => !e.deductible).map(e => ({
+            category: e.category,
+            amount: e.amount,
+            count: 1
+          }))
+        },
+        properties: fiscalData.leases.map(lease => ({
+          title: lease.property_title,
+          address: lease.property_address,
+          type: lease.type,
+          monthlyRent: lease.monthly_rent,
+          charges: lease.charges
+        })),
         leases: fiscalData.leases,
-        receipts: fiscalData.rentReceipts,
-        expenses: fiscalData.expenses
+        receipts: fiscalData.rentReceipts
       }
     } catch (error) {
       console.error("Erreur génération récapitulatif:", error)

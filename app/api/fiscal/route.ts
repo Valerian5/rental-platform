@@ -112,10 +112,21 @@ export async function POST(request: NextRequest) {
           address: user.user_metadata?.address || "Adresse non renseignée",
           email: user.email || ""
         },
-        summary: summary.summary,
-        simulations: summary.simulations,
-        expenses: summary.expenses,
-        properties: summary.properties
+        summary: summary.summary || {
+          totalRentCollected: 0,
+          totalRecoverableCharges: 0,
+          netRentalIncome: 0,
+          totalDeductibleExpenses: 0,
+          taxableProfit: 0
+        },
+        simulations: summary.simulations || {
+          microFoncier: { taxableIncome: 0, applicable: false },
+          microBIC: { taxableIncome: 0, applicable: false },
+          realRegime: { taxableIncome: 0, applicable: true },
+          recommendation: { regime: 'real' as const, savings: 0 }
+        },
+        expenses: summary.expenses || { deductible: [], nonDeductible: [] },
+        properties: summary.properties || []
       }
       
       // Importer le générateur PDF
