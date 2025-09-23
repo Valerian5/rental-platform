@@ -24,66 +24,80 @@ export class FiscalService {
         .eq("owner_id", ownerId)
         .in("status", ["active", "signed", "expired"])
 
-      // Filtrer par propriété si spécifiée
       if (propertyId) {
         leasesQuery = leasesQuery.eq("property_id", propertyId)
       }
 
       const { data: leases, error: leasesError } = await leasesQuery
-
       if (leasesError) throw leasesError
-      
+
       console.log(`FiscalService: ${leases?.length || 0} baux trouvés pour l'owner ${ownerId}`)
 
-      // 2. Récupérer les quittances pour l'année depuis la table receipts
+      const leaseData: LeaseData[] = (leases || []).map(lease => ({
+        id: lease.id,
+        type: lease.lease_type as "unfurnished" | "furnished",
+        monthly_rent: lease.monthly_rent || 0,
+        charges: lease.charges || 0,
+        property_title: lease.property?.title || "Bien sans titre",
+        property_address: lease.property?.address || "Adresse non renseignée"
+      }))
+
+      // 2. Récupérer les quittances
       const leaseIds = leases?.map(l => l.id) || []
-      console.log(`FiscalService: Recherche des quittances pour ${leaseIds.length} baux en ${year}`)
-      console.log(`FiscalService: IDs des baux:`, leaseIds)
-      
-      if (leaseIds.length === 0) {
-        console.log(`FiscalService: Aucun bail trouvé, retour de quittances vides`)
-        return {
-          leases: leaseData,
-          rentReceipts: [],
-          expenses: [],
-          year
+      let rentReceiptData: RentReceipt[] = []
+
+      if (leaseIds.length > 0) {
+        const { data: receipts, error: receiptsError } = await supabase
+          .from("receipts")
+          .select(`
+            id,
+            lease_id,
+            year,
+            month,
+            rent_amount,
+            charges_amount,
+            total_amount,
+            generated_at
+          `)
+          .eq("year", year)
+          .in("lease_id", leaseIds)
+
+        if (receiptsError) {
+          console.error(`FiscalService: Erreur récupération quittances:`, receiptsError)
+          throw receiptsError
         }
-      }
-      
-      const { data: receipts, error: receiptsError } = await supabase
-        .from("receipts")
-        .select(`
-          id,
-          lease_id,
-          year,
-          month,
-          rent_amount,
-          charges_amount,
-          total_amount,
-          generated_at
-        `)
-        .eq("year", year)
-        .in("lease_id", leaseIds)
 
-      if (receiptsError) {
-        console.error(`FiscalService: Erreur récupération quittances:`, receiptsError)
-        throw receiptsError
-      }
-      
-      console.log(`FiscalService: ${receipts?.length || 0} quittances trouvées pour l'année ${year}`)
-      if (receipts && receipts.length > 0) {
-        console.log(`FiscalService: Détails des quittances:`, receipts.map(r => ({
-          id: r.id,
-          lease_id: r.lease_id,
-          year: r.year,
-          month: r.month,
-          rent_amount: r.rent_amount,
-          charges_amount: r.charges_amount,
-          total_amount: r.total_amount
-        })))
+        console.log(`FiscalService: ${receipts?.length || 0} quittances trouvées pour l'année ${year}`)
+
+        rentReceiptData = (receipts || []).map(receipt => {
+          let monthNumber: number
+
+          if (typeof receipt.month === "string") {
+            const parts = receipt.month.split("-") // ex: "2025-01"
+            monthNumber = parts.length === 2 ? parseInt(parts[1], 10) : parseInt(receipt.month, 10)
+          } else {
+            monthNumber = receipt.month
+          }
+
+          if (isNaN(monthNumber) || monthNumber < 1 || monthNumber > 12) {
+            console.warn(`FiscalService: Mois invalide trouvé pour receipt ${receipt.id}:`, receipt.month)
+            monthNumber = null
+          }
+
+          return {
+            id: receipt.id,
+            lease_id: receipt.lease_id,
+            year: receipt.year,
+            month: monthNumber,
+            rent_amount: receipt.rent_amount || 0,
+            charges_amount: receipt.charges_amount || 0,
+            total_amount: receipt.total_amount || 0,
+            status: "paid" as const
+          }
+        })
       }
 
-      // 3. Récupérer les dépenses pour l'année
+      // 3. Récupérer les dépenses
       let expensesQuery = supabase
         .from("expenses")
         .select(`
@@ -101,42 +115,26 @@ export class FiscalService {
         .gte("date", `${year}-01-01`)
         .lte("date", `${year}-12-31`)
 
-      // Filtrer par propriété si spécifiée
       if (propertyId) {
         expensesQuery = expensesQuery.eq("property_id", propertyId)
       }
 
       const { data: expenses, error: expensesError } = await expensesQuery
-
       if (expensesError) throw expensesError
-
-      // Transformer les données
-      const leaseData: LeaseData[] = (leases || []).map(lease => ({
-        id: lease.id,
-        type: lease.lease_type as "unfurnished" | "furnished",
-        monthly_rent: lease.monthly_rent || 0,
-        charges: lease.charges || 0,
-        property_title: lease.property?.title || "Bien sans titre",
-        property_address: lease.property?.address || "Adresse non renseignée"
-      }))
-
-      const rentReceiptData: RentReceipt[] = (receipts || []).map(receipt => ({
-        id: receipt.id,
-        lease_id: receipt.lease_id,
-        year: receipt.year,
-        month: receipt.month,
-        rent_amount: receipt.rent_amount || 0,
-        charges_amount: receipt.charges_amount || 0,
-        total_amount: receipt.total_amount || 0,
-        status: "paid" as const // Les quittances sont toujours générées pour des paiements payés
-      }))
 
       const expenseData: Expense[] = (expenses || []).map(expense => ({
         id: expense.id,
         lease_id: expense.lease_id,
         property_id: expense.property_id,
         type: expense.type as "incident" | "maintenance" | "annual_charge",
-        category: expense.category as "repair" | "maintenance" | "improvement" | "tax" | "insurance" | "interest" | "management",
+        category: expense.category as
+          | "repair"
+          | "maintenance"
+          | "improvement"
+          | "tax"
+          | "insurance"
+          | "interest"
+          | "management",
         amount: expense.amount || 0,
         date: expense.date,
         description: expense.description || "",
@@ -168,31 +166,25 @@ export class FiscalService {
    */
   static async getAvailableYears(ownerId: string): Promise<number[]> {
     try {
-      // D'abord récupérer les IDs des baux du propriétaire
       const { data: leases, error: leasesError } = await supabase
         .from("leases")
         .select("id")
         .eq("owner_id", ownerId)
 
       if (leasesError) throw leasesError
-
-      if (!leases || leases.length === 0) {
-        return []
-      }
+      if (!leases || leases.length === 0) return []
 
       const leaseIds = leases.map(l => l.id)
 
-      // Ensuite récupérer les années des quittances
       const { data: receipts, error: receiptsError } = await supabase
-        .from("rent_receipts")
+        .from("receipts")
         .select("year")
-        .eq("status", "paid")
         .in("lease_id", leaseIds)
 
       if (receiptsError) throw receiptsError
 
       const years = [...new Set(receipts?.map(r => r.year) || [])]
-      return years.sort((a, b) => b - a) // Plus récent en premier
+      return years.sort((a, b) => b - a)
     } catch (error) {
       console.error("Erreur récupération années:", error)
       return []
@@ -207,7 +199,6 @@ export class FiscalService {
       const currentYear = new Date().getFullYear()
       const previousYear = currentYear - 1
 
-      // Récupérer les revenus des 2 dernières années
       const [currentYearData, previousYearData] = await Promise.all([
         this.calculateFiscalData(ownerId, currentYear),
         this.calculateFiscalData(ownerId, previousYear)
@@ -246,10 +237,13 @@ export class FiscalService {
     const fiscalData = await this.getFiscalData(ownerId, year)
     const calculation = FiscalCalculator.calculateFiscalData(fiscalData)
 
-    const csvData = [
-      // En-têtes
+    const monthNames = [
+      "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+      "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+    ]
+
+    const csvData: string[][] = [
       ["Année", "Revenus bruts", "Charges récupérables", "Dépenses déductibles", "Revenu net"],
-      // Données
       [
         year.toString(),
         calculation.totalRentCollected.toString(),
@@ -258,12 +252,39 @@ export class FiscalService {
         (calculation.totalRentCollected - calculation.totalDeductibleExpenses).toString()
       ],
       [],
-      // Détail des simulations
-      ["Régime", "Revenu imposable", "Recommandé"],
-      ["Micro-foncier", calculation.microFoncier.taxableIncome.toString(), calculation.recommendation.regime === "micro-foncier" ? "Oui" : "Non"],
-      ["Micro-BIC", calculation.microBIC.taxableIncome.toString(), calculation.recommendation.regime === "micro-bic" ? "Oui" : "Non"],
-      ["Régime réel", calculation.realRegime.taxableIncome.toString(), calculation.recommendation.regime === "real" ? "Oui" : "Non"]
+      ["Mois", "Loyer", "Charges", "Total"]
     ]
+
+    fiscalData.rentReceipts.forEach(r => {
+      const monthLabel = r.month && r.month >= 1 && r.month <= 12
+        ? monthNames[r.month - 1]
+        : `Mois ${r.month || "?"}`
+
+      csvData.push([
+        monthLabel,
+        r.rent_amount.toString(),
+        r.charges_amount.toString(),
+        r.total_amount.toString()
+      ])
+    })
+
+    csvData.push([])
+    csvData.push(["Régime", "Revenu imposable", "Recommandé"])
+    csvData.push([
+      "Micro-foncier",
+      calculation.microFoncier.taxableIncome.toString(),
+      calculation.recommendation.regime === "micro-foncier" ? "Oui" : "Non"
+    ])
+    csvData.push([
+      "Micro-BIC",
+      calculation.microBIC.taxableIncome.toString(),
+      calculation.recommendation.regime === "micro-bic" ? "Oui" : "Non"
+    ])
+    csvData.push([
+      "Régime réel",
+      calculation.realRegime.taxableIncome.toString(),
+      calculation.recommendation.regime === "real" ? "Oui" : "Non"
+    ])
 
     return csvData.map(row => row.join(",")).join("\n")
   }
@@ -275,6 +296,11 @@ export class FiscalService {
     const fiscalData = await this.getFiscalData(ownerId, year)
     const calculation = FiscalCalculator.calculateFiscalData(fiscalData)
     const expenseBreakdown = FiscalCalculator.categorizeExpenses(fiscalData.expenses, year)
+
+    const monthNames = [
+      "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+      "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+    ]
 
     return {
       year,
@@ -297,6 +323,17 @@ export class FiscalService {
         type: lease.type === "furnished" ? "Meublé" : "Non meublé",
         monthlyRent: lease.monthly_rent,
         charges: lease.charges
+      })),
+      rentReceipts: fiscalData.rentReceipts.map(r => ({
+        id: r.id,
+        lease_id: r.lease_id,
+        month: (r.month && r.month >= 1 && r.month <= 12)
+          ? monthNames[r.month - 1]
+          : `Mois ${r.month || "?"}`,
+        year: r.year,
+        rent_amount: r.rent_amount,
+        charges_amount: r.charges_amount,
+        total_amount: r.total_amount
       }))
     }
   }
