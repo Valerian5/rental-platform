@@ -70,6 +70,9 @@ export class FiscalService {
           console.error(`FiscalService: Erreur récupération quittances:`, receiptsError)
           throw receiptsError
         }
+        
+        console.log(`FiscalService: Résultat de la requête - receipts:`, receipts)
+        console.log(`FiscalService: Nombre de quittances trouvées:`, receipts?.length || 0)
 
         console.log(`FiscalService: ${receipts?.length || 0} quittances trouvées pour l'année ${year}`)
         if (receipts && receipts.length > 0) {
