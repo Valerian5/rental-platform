@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase"
+import { createServerClient, createClient } from "@/lib/supabase"
 import { FiscalService } from "@/lib/fiscal-service"
 
 export async function GET(request: NextRequest) {
@@ -12,9 +12,20 @@ export async function GET(request: NextRequest) {
 
     const token = authHeader.split(' ')[1]
     
-    // Créer un client Supabase avec le token
-    const supabase = createServerClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    // Créer un client Supabase avec le token utilisateur pour respecter RLS
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      }
+    )
+    
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {
       return NextResponse.json({ success: false, error: "Token invalide" }, { status: 401 })
@@ -72,9 +83,20 @@ export async function POST(request: NextRequest) {
 
     const token = authHeader.split(' ')[1]
     
-    // Créer un client Supabase avec le token
-    const supabase = createServerClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    // Créer un client Supabase avec le token utilisateur pour respecter RLS
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      }
+    )
+    
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {
       return NextResponse.json({ success: false, error: "Token invalide" }, { status: 401 })

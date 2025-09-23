@@ -42,3 +42,12 @@ scripts/test-fiscal-api-directly.sql
 scripts/check-receipt-year.sql
 scripts/debug-receipt-month-format.sql
 scripts/fix-receipt-years.sql
+scripts/check-receipts-rls-policies.sql
+scripts/create-fiscal-receipts-function.sql
+scripts/create-simple-receipts-rls.sql
+scripts/debug-auth-and-rls.sql
+scripts/debug-fiscal-data-complete.sql
+scripts/debug-receipt-data.sql
+scripts/fix-receipts-rls-policy.sql
+scripts/test-exact-fiscal-query.sql
+scripts/test-fiscal-query.sql
