@@ -45,6 +45,8 @@ export class FiscalService {
       // 2. Récupérer les quittances
       const leaseIds = leases?.map(l => l.id) || []
       let rentReceiptData: RentReceipt[] = []
+      
+      console.log(`FiscalService: IDs des baux pour la recherche de quittances:`, leaseIds)
 
       if (leaseIds.length > 0) {
         const { data: receipts, error: receiptsError } = await supabase
