@@ -38,6 +38,17 @@ export class FiscalService {
       // 2. Récupérer les quittances pour l'année depuis la table receipts
       const leaseIds = leases?.map(l => l.id) || []
       console.log(`FiscalService: Recherche des quittances pour ${leaseIds.length} baux en ${year}`)
+      console.log(`FiscalService: IDs des baux:`, leaseIds)
+      
+      if (leaseIds.length === 0) {
+        console.log(`FiscalService: Aucun bail trouvé, retour de quittances vides`)
+        return {
+          leases: leaseData,
+          rentReceipts: [],
+          expenses: [],
+          year
+        }
+      }
       
       const { data: receipts, error: receiptsError } = await supabase
         .from("receipts")
@@ -54,9 +65,23 @@ export class FiscalService {
         .eq("year", year)
         .in("lease_id", leaseIds)
 
-      if (receiptsError) throw receiptsError
+      if (receiptsError) {
+        console.error(`FiscalService: Erreur récupération quittances:`, receiptsError)
+        throw receiptsError
+      }
       
       console.log(`FiscalService: ${receipts?.length || 0} quittances trouvées pour l'année ${year}`)
+      if (receipts && receipts.length > 0) {
+        console.log(`FiscalService: Détails des quittances:`, receipts.map(r => ({
+          id: r.id,
+          lease_id: r.lease_id,
+          year: r.year,
+          month: r.month,
+          rent_amount: r.rent_amount,
+          charges_amount: r.charges_amount,
+          total_amount: r.total_amount
+        })))
+      }
 
       // 3. Récupérer les dépenses pour l'année
       let expensesQuery = supabase
