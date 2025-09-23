@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
 
     // Retourner l'utilisateur et les informations de session
     const response = NextResponse.json({
-      message: "Connexion réussie",
+      message: "Connexion réussie !",
       user: profile,
       session: {
         access_token: authData.session.access_token,

@@ -186,6 +186,9 @@ export class FiscalService {
    */
   static async getAvailableYears(ownerId: string): Promise<number[]> {
     try {
+      console.log(`FiscalService: Récupération des années disponibles pour owner ${ownerId}`)
+      
+      // Récupérer d'abord les IDs des baux du propriétaire
       const { data: leases, error: leasesError } = await supabase
         .from("leases")
         .select("id")
@@ -196,6 +199,7 @@ export class FiscalService {
 
       const leaseIds = leases.map(l => l.id)
 
+      // Récupérer les années des quittances
       const { data: receipts, error: receiptsError } = await supabase
         .from("receipts")
         .select("year")
@@ -203,8 +207,10 @@ export class FiscalService {
 
       if (receiptsError) throw receiptsError
 
-      const years = [...new Set(receipts?.map(r => r.year) || [])]
-      return years.sort((a, b) => b - a)
+      const yearList = [...new Set(receipts?.map(r => r.year) || [])]
+      console.log(`FiscalService: Années trouvées:`, yearList)
+      
+      return yearList.sort((a, b) => b - a)
     } catch (error) {
       console.error("Erreur récupération années:", error)
       return []
