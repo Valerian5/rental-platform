@@ -129,18 +129,29 @@ export class FiscalCalculator {
    * Calcule le total des loyers encaissés pour une année
    */
   private static calculateTotalRentCollected(rentReceipts: RentReceipt[], year: number): number {
-    return rentReceipts
-      .filter(receipt => receipt.year === year && receipt.status === "paid")
-      .reduce((sum, receipt) => sum + receipt.rent_amount, 0)
+    console.log(`FiscalCalculator: Calcul revenus bruts pour ${rentReceipts.length} quittances en ${year}`)
+    const filteredReceipts = rentReceipts.filter(receipt => {
+      const matchesYear = receipt.year === year
+      const matchesStatus = receipt.status === "paid"
+      console.log(`FiscalCalculator: Quittance ${receipt.id} - année: ${receipt.year}, statut: ${receipt.status}, montant: ${receipt.rent_amount}`)
+      return matchesYear && matchesStatus
+    })
+    console.log(`FiscalCalculator: ${filteredReceipts.length} quittances filtrées`)
+    return filteredReceipts.reduce((sum, receipt) => sum + receipt.rent_amount, 0)
   }
 
   /**
    * Calcule le total des charges récupérables (non imposables)
    */
   private static calculateRecoverableCharges(rentReceipts: RentReceipt[], year: number): number {
-    return rentReceipts
-      .filter(receipt => receipt.year === year && receipt.status === "paid")
-      .reduce((sum, receipt) => sum + receipt.charges_amount, 0)
+    console.log(`FiscalCalculator: Calcul charges récupérables pour ${rentReceipts.length} quittances en ${year}`)
+    const filteredReceipts = rentReceipts.filter(receipt => {
+      const matchesYear = receipt.year === year
+      const matchesStatus = receipt.status === "paid"
+      return matchesYear && matchesStatus
+    })
+    console.log(`FiscalCalculator: ${filteredReceipts.length} quittances pour charges récupérables`)
+    return filteredReceipts.reduce((sum, receipt) => sum + receipt.charges_amount, 0)
   }
 
   /**

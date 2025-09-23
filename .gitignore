@@ -39,3 +39,6 @@ scripts/generate-missing-receipts.sql
 scripts/debug-fiscal-data.sql
 scripts/verify-fiscal-data-links.sql
 scripts/test-fiscal-api-directly.sql
+scripts/check-receipt-year.sql
+scripts/debug-receipt-month-format.sql
+scripts/fix-receipt-years.sql
