@@ -18,6 +18,7 @@ import {
   Receipt,
   RefreshCw,
   Plus,
+  User,
 } from "lucide-react"
 
 import { FiscalSummaryCard } from "@/components/fiscal/FiscalSummaryCard"
