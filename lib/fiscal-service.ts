@@ -49,6 +49,8 @@ export class FiscalService {
       console.log(`FiscalService: IDs des baux pour la recherche de quittances:`, leaseIds)
 
       if (leaseIds.length > 0) {
+        console.log(`FiscalService: Exécution de la requête pour les quittances avec year=${year} et leaseIds=${JSON.stringify(leaseIds)}`)
+        
         const { data: receipts, error: receiptsError } = await supabase
           .from("receipts")
           .select(`
