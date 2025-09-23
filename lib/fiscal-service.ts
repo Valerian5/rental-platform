@@ -51,20 +51,14 @@ export class FiscalService {
       if (leaseIds.length > 0) {
         console.log(`FiscalService: Exécution de la requête pour les quittances avec year=${year} et leaseIds=${JSON.stringify(leaseIds)}`)
         
+        // Utiliser la fonction SQL sécurisée pour contourner RLS
+        console.log(`FiscalService: Utilisation de la fonction SQL sécurisée get_fiscal_receipts_secure`)
+        
         const { data: receipts, error: receiptsError } = await supabase
-          .from("receipts")
-          .select(`
-            id,
-            lease_id,
-            year,
-            month,
-            rent_amount,
-            charges_amount,
-            total_amount,
-            generated_at
-          `)
-          .eq("year", year)
-          .in("lease_id", leaseIds)
+          .rpc('get_fiscal_receipts_secure', {
+            owner_id_param: ownerId,
+            year_param: year
+          })
 
         if (receiptsError) {
           console.error(`FiscalService: Erreur récupération quittances:`, receiptsError)
@@ -188,26 +182,20 @@ export class FiscalService {
     try {
       console.log(`FiscalService: Récupération des années disponibles pour owner ${ownerId}`)
       
-      // Récupérer d'abord les IDs des baux du propriétaire
-      const { data: leases, error: leasesError } = await supabase
-        .from("leases")
-        .select("id")
-        .eq("owner_id", ownerId)
+      // Utiliser la fonction SQL sécurisée pour récupérer les années
+      console.log(`FiscalService: Utilisation de la fonction SQL sécurisée get_fiscal_years_secure`)
+      
+      const { data: years, error: yearsError } = await supabase
+        .rpc('get_fiscal_years_secure', {
+          owner_id_param: ownerId
+        })
 
-      if (leasesError) throw leasesError
-      if (!leases || leases.length === 0) return []
+      if (yearsError) {
+        console.error(`FiscalService: Erreur récupération années:`, yearsError)
+        throw yearsError
+      }
 
-      const leaseIds = leases.map(l => l.id)
-
-      // Récupérer les années des quittances
-      const { data: receipts, error: receiptsError } = await supabase
-        .from("receipts")
-        .select("year")
-        .in("lease_id", leaseIds)
-
-      if (receiptsError) throw receiptsError
-
-      const yearList = [...new Set(receipts?.map(r => r.year) || [])]
+      const yearList = years?.map(y => y.year) || []
       console.log(`FiscalService: Années trouvées:`, yearList)
       
       return yearList.sort((a, b) => b - a)
