@@ -78,12 +78,17 @@ export default function FiscalPage() {
       }
 
       // Charger les données fiscales
+      console.log(`FiscalPage: Chargement des données fiscales pour l'année ${currentYear}`)
       const fiscalResponse = await fetch(`/api/fiscal?year=${currentYear}${selectedPropertyId !== "all" ? `&property_id=${selectedPropertyId}` : ""}`, { headers })
       const fiscalData = await fiscalResponse.json()
       
+      console.log(`FiscalPage: Réponse API fiscale:`, fiscalData)
+      
       if (fiscalData.success) {
+        console.log(`FiscalPage: Données fiscales chargées:`, fiscalData.data)
         setFiscalCalculation(fiscalData.data)
       } else {
+        console.error(`FiscalPage: Erreur API fiscale:`, fiscalData.error)
         toast.error("Erreur lors du chargement des données fiscales")
       }
 

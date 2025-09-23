@@ -27,7 +27,9 @@ export async function GET(request: NextRequest) {
 
     if (action === "calculate") {
       // Calculer les données fiscales
+      console.log(`API Fiscal: Calcul pour owner ${user.id}, année ${year}, propriété ${propertyId || 'toutes'}`)
       const calculation = await FiscalService.calculateFiscalData(user.id, year, propertyId)
+      console.log(`API Fiscal: Calcul terminé, revenus bruts: ${calculation.totalRentCollected}€`)
       return NextResponse.json({ success: true, data: calculation })
     }
 

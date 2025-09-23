@@ -38,3 +38,4 @@ scripts/ensure-receipt-function-exists.sql
 scripts/generate-missing-receipts.sql
 scripts/debug-fiscal-data.sql
 scripts/verify-fiscal-data-links.sql
+scripts/test-fiscal-api-directly.sql
