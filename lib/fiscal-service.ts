@@ -68,6 +68,17 @@ export class FiscalService {
         }
 
         console.log(`FiscalService: ${receipts?.length || 0} quittances trouvées pour l'année ${year}`)
+        if (receipts && receipts.length > 0) {
+          console.log(`FiscalService: Détails des quittances:`, receipts.map(r => ({
+            id: r.id,
+            lease_id: r.lease_id,
+            year: r.year,
+            month: r.month,
+            rent_amount: r.rent_amount,
+            charges_amount: r.charges_amount,
+            total_amount: r.total_amount
+          })))
+        }
 
         rentReceiptData = (receipts || []).map(receipt => {
           let monthNumber: number
@@ -81,7 +92,7 @@ export class FiscalService {
 
           if (isNaN(monthNumber) || monthNumber < 1 || monthNumber > 12) {
             console.warn(`FiscalService: Mois invalide trouvé pour receipt ${receipt.id}:`, receipt.month)
-            monthNumber = null
+            monthNumber = 1 // Valeur par défaut
           }
 
           return {
@@ -95,6 +106,8 @@ export class FiscalService {
             status: "paid" as const
           }
         })
+        
+        console.log(`FiscalService: ${rentReceiptData.length} quittances transformées pour le calculateur`)
       }
 
       // 3. Récupérer les dépenses
