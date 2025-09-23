@@ -29,6 +29,7 @@ import { AddReceiptDialog, AddReceiptDialogRef } from "@/components/fiscal/AddRe
 import { FiscalCalculation, Expense } from "@/lib/fiscal-calculator"
 import { supabase } from "@/lib/supabase"
 import { FiscalServiceClient } from "@/lib/fiscal-service-client"
+import { ExpenseServiceClient } from "@/lib/expense-service-client"
 import { toast } from "sonner"
 
 export default function FiscalPage() {
@@ -86,16 +87,13 @@ export default function FiscalPage() {
       console.log(`FiscalPage: Données fiscales chargées:`, fiscalData)
       setFiscalCalculation(fiscalData)
 
-      // Charger les dépenses
-      const expensesResponse = await fetch(`/api/expenses?year=${currentYear}${selectedPropertyId !== "all" ? `&property_id=${selectedPropertyId}` : ""}`, { headers })
-      const expensesData = await expensesResponse.json()
-      
-      if (expensesData.success) {
-        setExpenses(expensesData.expenses || [])
-      } else {
-        console.error("Erreur chargement dépenses:", expensesData.error)
-        setExpenses([])
-      }
+      // Charger les dépenses (côté client)
+      const expenses = await ExpenseServiceClient.getExpenses(
+        user.id, 
+        currentYear, 
+        selectedPropertyId !== "all" ? selectedPropertyId : undefined
+      )
+      setExpenses(expenses)
 
     } catch (error) {
       console.error("Erreur chargement données fiscales:", error)
