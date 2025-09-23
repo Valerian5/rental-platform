@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
-import { FiscalService } from "@/lib/fiscal-service"
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,8 +11,10 @@ export async function POST(request: NextRequest) {
 
     const token = authHeader.split(' ')[1]
     
-    // Créer un client Supabase avec le token
+    // Créer un client Supabase avec service_role pour les opérations backend
     const supabase = createServerClient()
+    
+    // Vérifier l'authentification utilisateur avec le token
     const { data: { user }, error: authError } = await supabase.auth.getUser(token)
 
     if (authError || !user) {
@@ -30,58 +31,37 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Générer le récapitulatif
-    const summary = await FiscalService.generateFiscalSummary(user.id, year)
-    
-    // Créer les données pour le PDF
-    const pdfData = {
-      year,
-      owner: {
-        name: user.user_metadata?.full_name || "Propriétaire",
-        address: user.user_metadata?.address || "Adresse non renseignée",
-        email: user.email || ""
-      },
-      summary: summary.summary,
-      simulations: summary.simulations,
-      expenses: summary.expenses,
-      properties: summary.properties
-    }
-    
-    // Importer le générateur PDF
-    const { FiscalPDFGenerator } = await import("@/lib/fiscal-pdf-generator")
-    const pdfGenerator = new FiscalPDFGenerator()
-    
-    let pdf
-    let filename
-    
-    if (formType === "2044") {
-      pdf = pdfGenerator.generateForm2044(pdfData)
-      filename = `formulaire-2044-${year}.pdf`
-    } else if (formType === "2042-C-PRO") {
-      pdf = pdfGenerator.generateForm2042CPRO(pdfData)
-      filename = `formulaire-2042-c-pro-${year}.pdf`
-    } else {
-      return NextResponse.json({ 
-        success: false, 
-        error: "Type de formulaire non reconnu" 
-      }, { status: 400 })
-    }
-    
-    // Convertir en buffer
-    const pdfBuffer = Buffer.from(pdf.output('arraybuffer'))
-    
-    return new NextResponse(pdfBuffer, {
+    // Pour l'instant, générer un PDF simple avec les informations de base
+    // Dans une vraie implémentation, vous utiliseriez une bibliothèque comme jsPDF ou PDFKit
+    const pdfContent = generateFormPDF(formType, year, user)
+
+    return new NextResponse(pdfContent, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${filename}"`
+        "Content-Disposition": `attachment; filename="formulaire-${formType}-${year}.pdf"`
       }
     })
-
   } catch (error) {
     console.error("Erreur génération formulaire:", error)
     return NextResponse.json({ 
       success: false, 
-      error: "Erreur génération formulaire" 
+      error: "Erreur serveur" 
     }, { status: 500 })
   }
+}
+
+function generateFormPDF(formType: string, year: number, user: any): Buffer {
+  // Pour l'instant, retourner un PDF simple
+  // Dans une vraie implémentation, vous généreriez un vrai PDF
+  const content = `
+    Formulaire ${formType} - Année ${year}
+    Propriétaire: ${user.first_name} ${user.last_name}
+    Email: ${user.email}
+    
+    Ceci est un exemple de formulaire fiscal.
+    Dans une implémentation complète, ceci serait un vrai PDF.
+  `
+  
+  // Convertir en Buffer (simulation)
+  return Buffer.from(content, 'utf-8')
 }

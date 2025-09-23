@@ -232,6 +232,35 @@ export default function FiscalPage() {
     }
   }
 
+  // Fonctions pour lier les boutons
+  const handleRegularizationCalculator = () => {
+    toast.info("Calculateur de régularisation - Fonctionnalité à venir")
+  }
+
+  const handleTaxOptimization = () => {
+    toast.info("Optimisation fiscale - Fonctionnalité à venir")
+  }
+
+  const handleAnnualSummary = () => {
+    toast.info("Récapitulatif annuel - Fonctionnalité à venir")
+  }
+
+  const handleViewSimulations = () => {
+    // Changer vers l'onglet simulations
+    const simulationsTab = document.querySelector('[value="simulations"]') as HTMLElement
+    if (simulationsTab) {
+      simulationsTab.click()
+    }
+  }
+
+  const handleViewDocuments = () => {
+    // Changer vers l'onglet documents
+    const documentsTab = document.querySelector('[value="documents"]') as HTMLElement
+    if (documentsTab) {
+      documentsTab.click()
+    }
+  }
+
   const handleAddExpense = () => {
     addExpenseDialogRef.current?.openDialog()
   }
@@ -328,8 +357,8 @@ export default function FiscalPage() {
               totalRentCollected={fiscalCalculation.totalRentCollected}
               totalRecoverableCharges={fiscalCalculation.totalRecoverableCharges}
               totalDeductibleExpenses={fiscalCalculation.totalDeductibleExpenses}
-              onGenerateDocuments={() => {}}
-              onViewDetails={() => {}}
+              onGenerateDocuments={handleViewDocuments}
+              onViewDetails={handleViewSimulations}
             />
           ) : (
               <Card>
@@ -480,15 +509,15 @@ export default function FiscalPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Button variant="outline" className="h-20 flex-col">
+                <Button variant="outline" className="h-20 flex-col" onClick={handleRegularizationCalculator}>
                   <Calculator className="h-6 w-6 mb-2" />
                   Calculateur de régularisation
                 </Button>
-                <Button variant="outline" className="h-20 flex-col">
+                <Button variant="outline" className="h-20 flex-col" onClick={handleTaxOptimization}>
                   <TrendingUp className="h-6 w-6 mb-2" />
                   Optimisation fiscale
                 </Button>
-                <Button variant="outline" className="h-20 flex-col">
+                <Button variant="outline" className="h-20 flex-col" onClick={handleAnnualSummary}>
                   <Receipt className="h-6 w-6 mb-2" />
                   Récapitulatif annuel
                 </Button>

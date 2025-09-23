@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServerClient, createClient } from "@/lib/supabase"
 import { FiscalService } from "@/lib/fiscal-service"
+import { FiscalServiceClient } from "@/lib/fiscal-service-client"
 
 export async function GET(request: NextRequest) {
   try {
@@ -89,7 +90,7 @@ export async function POST(request: NextRequest) {
 
     if (action === "export-csv") {
       // Exporter en CSV
-      const csvData = await FiscalService.exportFiscalDataCSV(user.id, year)
+      const csvData = await FiscalServiceClient.exportFiscalDataCSV(user.id, year)
       
       return new NextResponse(csvData, {
         headers: {
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest) {
 
     if (action === "export-pdf") {
       // Générer le récapitulatif PDF
-      const summary = await FiscalService.generateFiscalSummary(user.id, year)
+      const summary = await FiscalServiceClient.generateFiscalSummary(user.id, year)
       
       // Créer les données pour le PDF
       const pdfData = {

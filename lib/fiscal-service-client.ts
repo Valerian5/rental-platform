@@ -202,4 +202,67 @@ export class FiscalServiceClient {
       return []
     }
   }
+
+  /**
+   * Exporte les données fiscales en CSV (côté client)
+   */
+  static async exportFiscalDataCSV(ownerId: string, year: number): Promise<string> {
+    try {
+      const fiscalData = await this.getFiscalData(ownerId, year)
+      const calculation = FiscalCalculator.calculateFiscalData(fiscalData)
+      
+      // Créer le CSV
+      let csv = "Type,Description,Montant\n"
+      csv += `Revenus locatifs bruts,Total loyers encaissés,${calculation.totalRentCollected}\n`
+      csv += `Charges récupérables,Total charges récupérables,${calculation.totalRecoverableCharges}\n`
+      csv += `Revenus locatifs nets,Revenus nets,${calculation.netRentalIncome}\n`
+      csv += `Dépenses déductibles,Total dépenses,${calculation.totalDeductibleExpenses}\n`
+      csv += `Bénéfice imposable,Bénéfice,${calculation.taxableProfit}\n`
+      
+      return csv
+    } catch (error) {
+      console.error("Erreur export CSV:", error)
+      throw error
+    }
+  }
+
+  /**
+   * Génère un récapitulatif fiscal (côté client)
+   */
+  static async generateFiscalSummary(ownerId: string, year: number): Promise<any> {
+    try {
+      const fiscalData = await this.getFiscalData(ownerId, year)
+      const calculation = FiscalCalculator.calculateFiscalData(fiscalData)
+      
+      // Récupérer les informations du propriétaire
+      const { data: user, error: userError } = await supabase
+        .from("users")
+        .select("first_name, last_name, email")
+        .eq("id", ownerId)
+        .single()
+
+      if (userError) throw userError
+
+      return {
+        year,
+        owner: {
+          name: `${user.first_name} ${user.last_name}`,
+          email: user.email
+        },
+        summary: {
+          totalRentCollected: calculation.totalRentCollected,
+          totalRecoverableCharges: calculation.totalRecoverableCharges,
+          netRentalIncome: calculation.netRentalIncome,
+          totalDeductibleExpenses: calculation.totalDeductibleExpenses,
+          taxableProfit: calculation.taxableProfit
+        },
+        leases: fiscalData.leases,
+        receipts: fiscalData.rentReceipts,
+        expenses: fiscalData.expenses
+      }
+    } catch (error) {
+      console.error("Erreur génération récapitulatif:", error)
+      throw error
+    }
+  }
 }
