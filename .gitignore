@@ -65,3 +65,5 @@ scripts/fix-receipts-rls-final.sql
 scripts/generate-receipts-2025.sql
 scripts/test-fiscal-service-client.sql
 scripts/test-receipts-rls.sql
+scripts/fix-receipts-rls-simple.sql
+scripts/test-api-data-access.sql

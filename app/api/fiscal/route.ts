@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServerClient, createClient } from "@/lib/supabase"
-import { FiscalService } from "@/lib/fiscal-service"
 import { FiscalServiceClient } from "@/lib/fiscal-service-client"
 
 export async function GET(request: NextRequest) {
@@ -41,26 +40,26 @@ export async function GET(request: NextRequest) {
     if (action === "calculate") {
       // Calculer les données fiscales
       console.log(`API Fiscal: Calcul pour owner ${user.id}, année ${year}, propriété ${propertyId || 'toutes'}`)
-      const calculation = await FiscalService.calculateFiscalData(user.id, year, propertyId)
+      const calculation = await FiscalServiceClient.calculateFiscalData(user.id, year, propertyId)
       console.log(`API Fiscal: Calcul terminé, revenus bruts: ${calculation.totalRentCollected}€`)
       return NextResponse.json({ success: true, data: calculation })
     }
 
     if (action === "stats") {
       // Récupérer les statistiques
-      const stats = await FiscalService.getFiscalStats(user.id)
+      const stats = await FiscalServiceClient.getFiscalStats(user.id)
       return NextResponse.json({ success: true, data: stats })
     }
 
     if (action === "years") {
       // Récupérer les années disponibles
-      const years = await FiscalService.getAvailableYears(user.id)
+      const years = await FiscalServiceClient.getAvailableYears(user.id)
       return NextResponse.json({ success: true, data: years })
     }
 
     if (action === "summary") {
       // Générer le récapitulatif
-      const summary = await FiscalService.generateFiscalSummary(user.id, year)
+      const summary = await FiscalServiceClient.generateFiscalSummary(user.id, year)
       return NextResponse.json({ success: true, data: summary })
     }
 

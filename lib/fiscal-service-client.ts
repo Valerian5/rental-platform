@@ -204,6 +204,29 @@ export class FiscalServiceClient {
   }
 
   /**
+   * Récupère les statistiques fiscales (côté client)
+   */
+  static async getFiscalStats(ownerId: string): Promise<any> {
+    try {
+      const currentYear = new Date().getFullYear()
+      const fiscalData = await this.getFiscalData(ownerId, currentYear)
+      const calculation = FiscalCalculator.calculateFiscalData(fiscalData)
+      
+      return {
+        totalRentCollected: calculation.totalRentCollected,
+        totalRecoverableCharges: calculation.totalRecoverableCharges,
+        totalDeductibleExpenses: calculation.totalDeductibleExpenses,
+        netRentalIncome: calculation.netRentalIncome,
+        taxableProfit: calculation.taxableProfit,
+        year: currentYear
+      }
+    } catch (error) {
+      console.error("Erreur récupération statistiques fiscales:", error)
+      throw error
+    }
+  }
+
+  /**
    * Exporte les données fiscales en CSV (côté client)
    */
   static async exportFiscalDataCSV(ownerId: string, year: number): Promise<string> {
