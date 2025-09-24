@@ -1,9 +1,6 @@
 "use client"
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
 import {
   Calculator,
   Euro,
@@ -56,138 +53,93 @@ export function ChargeRegularizationSummary({
   }
 
   const getBalanceLabel = () => {
-    return balanceType === 'refund' ? 'Remboursement locataire' : 'Complément locataire'
+    return balanceType === 'refund' ? 'Remboursement au locataire' : 'Complément locataire'
+  }
+
+  const getDiffCardClass = () => {
+    return balanceType === 'refund' 
+      ? 'p-4 bg-green-50 rounded border border-green-200' 
+      : 'p-4 bg-red-50 rounded border border-red-200'
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Résumé des charges */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calculator className="h-5 w-5" />
-            Résumé des charges
-          </CardTitle>
-          <CardDescription>
-            Calcul automatique de la régularisation
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Provisions encaissées:</span>
-              <span className="font-semibold font-mono">{totalProvisionsCollected.toFixed(2)} €</span>
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Charges réelles totales:</span>
-              <span className="font-semibold font-mono">{totalRealCharges.toFixed(2)} €</span>
-            </div>
-            
-            <Separator />
-            
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Charges récupérables:</span>
-              <span className="font-semibold font-mono text-green-600">{recoverableCharges.toFixed(2)} €</span>
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Charges non récupérables:</span>
-              <span className="font-semibold font-mono text-orange-600">{nonRecoverableCharges.toFixed(2)} €</span>
-            </div>
-            
-            <Separator />
-            
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium">Solde locataire:</span>
-              <div className="flex items-center gap-2">
-                {getBalanceIcon()}
-                <span className={`font-bold font-mono text-lg ${getBalanceColor()}`}>
-                  {tenantBalance >= 0 ? '+' : ''}{tenantBalance.toFixed(2)} €
-                </span>
-              </div>
-            </div>
-            
-            <div className="text-center">
-              <Badge variant={balanceType === 'refund' ? 'default' : 'destructive'} className="text-sm">
-                {getBalanceLabel()}
-              </Badge>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="bg-white shadow-sm rounded-lg p-5 mb-6">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-lg font-medium">Synthèse</h2>
+          <p className="text-sm text-gray-500">Total provisions vs total réel — résultat affiché en bas.</p>
+        </div>
+        <div className="text-right">
+          <div className="text-sm">Provisions encaissées (annuel)</div>
+          <div className="text-2xl font-semibold">{totalProvisionsCollected.toFixed(2)} €</div>
+        </div>
+      </div>
 
-      {/* Actions et notes */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Actions et justificatifs
-          </CardTitle>
-          <CardDescription>
-            Générez le décompte et envoyez au locataire
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Notes de calcul */}
-          <div>
-            <label htmlFor="calculation-notes" className="text-sm font-medium">
-              Méthode de calcul
-            </label>
-            <textarea
-              id="calculation-notes"
-              className="w-full mt-2 p-3 border rounded-md resize-none"
-              rows={4}
-              placeholder="Décrivez votre méthode de calcul des charges..."
-              value={calculationNotes}
-              onChange={(e) => onNotesChange(e.target.value)}
-            />
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="p-4 bg-gray-50 rounded">
+          <div className="text-xs text-gray-400">Total charges réelles</div>
+          <div className="text-xl font-semibold mt-1">{totalRealCharges.toFixed(2)} €</div>
+        </div>
+        
+        <div className={getDiffCardClass()}>
+          <div className="text-xs text-gray-400">Différence (provisions - réelles)</div>
+          <div className={`text-xl font-semibold mt-1 ${getBalanceColor()}`}>
+            {tenantBalance >= 0 ? '+' : ''}{tenantBalance.toFixed(2)} €
           </div>
-
-          <Separator />
-
-          {/* Actions */}
-          <div className="space-y-3">
-            <Button 
-              onClick={onGenerateStatement} 
-              disabled={isGenerating}
-              className="w-full"
-            >
-              {isGenerating ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              ) : (
-                <Download className="h-4 w-4 mr-2" />
-              )}
-              Générer décompte PDF
-            </Button>
-            
-            <Button 
-              onClick={onSendToTenant} 
-              disabled={isGenerating}
-              variant="outline"
-              className="w-full"
-            >
-              <Send className="h-4 w-4 mr-2" />
-              Envoyer au locataire
-            </Button>
+          <div className="text-sm mt-2 text-gray-600">{getBalanceLabel()}</div>
+        </div>
+        
+        <div className="p-4 bg-gray-50 rounded">
+          <div className="text-xs text-gray-400">Charges récupérables</div>
+          <div className="text-xl font-semibold mt-1 text-green-600">{recoverableCharges.toFixed(2)} €</div>
+          <div className="text-xs text-gray-400 mt-1">
+            Non récupérables: {nonRecoverableCharges.toFixed(2)} €
           </div>
+        </div>
+      </div>
 
-          {/* Informations légales */}
-          <div className="bg-muted/50 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5" />
-              <div className="text-sm">
-                <p className="font-medium mb-1">Informations légales</p>
-                <ul className="text-muted-foreground space-y-1">
-                  <li>• Seules les charges récupérables sont incluses dans la régularisation</li>
-                  <li>• Les justificatifs doivent être conservés pendant 3 ans</li>
-                  <li>• Le locataire a 1 mois pour contester le décompte</li>
-                </ul>
-              </div>
-            </div>
+      {/* Actions */}
+      <div className="flex items-center gap-3">
+        <button 
+          onClick={onSendToTenant}
+          className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm"
+        >
+          <Send className="h-4 w-4 mr-2 inline" />
+          Envoyer au locataire
+        </button>
+        
+        <button 
+          onClick={onGenerateStatement}
+          disabled={isGenerating}
+          className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 text-sm"
+        >
+          {isGenerating ? (
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2 inline"></div>
+          ) : (
+            <Download className="h-4 w-4 mr-2 inline" />
+          )}
+          Télécharger PDF
+        </button>
+        
+        <div className="text-xs text-gray-400 ml-auto">
+          Dernière sauvegarde : <span className="font-medium">{new Date().toLocaleString('fr-FR')}</span>
+        </div>
+      </div>
+
+      {/* Informations légales */}
+      <div className="mt-6 bg-blue-50 rounded-lg p-4 border border-blue-200">
+        <div className="flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-medium mb-1 text-blue-800">Informations légales</p>
+            <ul className="text-blue-700 space-y-1">
+              <li>• Seules les charges récupérables sont incluses dans la régularisation</li>
+              <li>• Les justificatifs doivent être conservés pendant 3 ans</li>
+              <li>• Le locataire a 1 mois pour contester le décompte</li>
+            </ul>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   )
 }

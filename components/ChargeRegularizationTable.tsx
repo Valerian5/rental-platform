@@ -1,13 +1,11 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -18,21 +16,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import {
   Plus,
   Upload,
   FileText,
-  Euro,
-  Calculator,
-  CheckCircle,
-  AlertCircle,
   Trash2,
   Eye
 } from "lucide-react"
@@ -144,9 +130,10 @@ export function ChargeRegularizationTable({
     setChargeBreakdown(updatedBreakdown)
   }
 
-  const handleNotesChange = (index: number, notes: string) => {
+  const handleProvisionAmountChange = (index: number, amount: number) => {
     const updatedBreakdown = [...chargeBreakdown]
-    updatedBreakdown[index].notes = notes
+    updatedBreakdown[index].provision_amount = amount
+    updatedBreakdown[index].difference = updatedBreakdown[index].real_amount - amount
     setChargeBreakdown(updatedBreakdown)
   }
 
@@ -229,115 +216,16 @@ export function ChargeRegularizationTable({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Calculator className="h-5 w-5" />
-          Détail des charges par catégorie
-        </CardTitle>
-        <CardDescription>
-          Saisissez les montants réels payés et joignez les justificatifs
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Tableau des charges */}
-        <div className="border rounded-lg overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Poste</TableHead>
-                <TableHead className="text-right">Provision (€/an)</TableHead>
-                <TableHead className="text-right">Réel payé (€/an)</TableHead>
-                <TableHead className="text-right">Différence</TableHead>
-                <TableHead className="text-center">Récupérable</TableHead>
-                <TableHead className="text-center">Justificatifs</TableHead>
-                <TableHead className="text-center">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {chargeBreakdown.map((charge, index) => (
-                <TableRow key={index}>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{charge.charge_name}</div>
-                      {charge.notes && (
-                        <div className="text-sm text-muted-foreground mt-1">
-                          {charge.notes}
-                        </div>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right font-mono">
-                    {charge.provision_amount.toFixed(2)} €
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={charge.real_amount}
-                      onChange={(e) => handleRealAmountChange(index, parseFloat(e.target.value) || 0)}
-                      className="text-right font-mono"
-                    />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <span className={`font-mono ${charge.difference >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {charge.difference >= 0 ? '+' : ''}{charge.difference.toFixed(2)} €
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant={charge.is_recoverable ? "default" : "secondary"}>
-                      {charge.is_recoverable ? "Oui" : "Non"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <input
-                        type="file"
-                        id={`file-${index}`}
-                        className="hidden"
-                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0]
-                          if (file) handleFileUpload(index, file)
-                        }}
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => document.getElementById(`file-${index}`)?.click()}
-                      >
-                        <Upload className="h-4 w-4" />
-                      </Button>
-                      {charge.documents && charge.documents.length > 0 && (
-                        <Badge variant="outline">
-                          {charge.documents.length}
-                        </Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDeleteCharge(index)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-
-        {/* Bouton d'ajout */}
-        <div className="flex justify-center">
+    <div className="bg-white shadow-sm rounded-lg p-5 mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-medium">Tableau des charges</h2>
+        <div className="flex items-center gap-2">
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline">
-                <Plus className="h-4 w-4 mr-2" />
-                Ajouter une charge
-              </Button>
+              <button className="inline-flex items-center px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">
+                <Plus className="h-4 w-4 mr-1" />
+                + Ajouter une charge
+              </button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
@@ -410,17 +298,6 @@ export function ChargeRegularizationTable({
                   />
                   <Label htmlFor="is-recoverable">Incluse dans la régularisation</Label>
                 </div>
-                
-                <div>
-                  <Label htmlFor="notes">Notes</Label>
-                  <Textarea
-                    id="notes"
-                    value={newCharge.notes}
-                    onChange={(e) => setNewCharge(prev => ({ ...prev, notes: e.target.value }))}
-                    placeholder="Détails sur cette charge..."
-                    rows={3}
-                  />
-                </div>
               </div>
               
               <DialogFooter>
@@ -435,45 +312,137 @@ export function ChargeRegularizationTable({
             </DialogContent>
           </Dialog>
         </div>
+      </div>
 
-        {/* Résumé des documents */}
-        {chargeBreakdown.some(charge => charge.documents && charge.documents.length > 0) && (
-          <div className="bg-muted/50 rounded-lg p-4">
-            <h4 className="font-medium mb-2">Documents joints</h4>
-            <div className="space-y-2">
-              {chargeBreakdown.map((charge, chargeIndex) => 
-                charge.documents && charge.documents.length > 0 && (
-                  <div key={chargeIndex} className="text-sm">
-                    <span className="font-medium">{charge.charge_name}:</span>
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      {charge.documents.map((doc, docIndex) => (
-                        <div key={docIndex} className="flex items-center gap-2 bg-background rounded px-2 py-1">
-                          <FileText className="h-3 w-3" />
-                          <span>{doc.name}</span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => window.open(doc.url, '_blank')}
-                          >
-                            <Eye className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteDocument(chargeIndex, docIndex)}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ))}
+      <div className="overflow-x-auto">
+        <table className="min-w-full table-fixed text-sm">
+          <thead>
+            <tr className="text-left text-xs text-gray-500">
+              <th className="w-1/3 px-3 py-2">Poste</th>
+              <th className="w-1/6 px-3 py-2">Provision (€/an)</th>
+              <th className="w-1/6 px-3 py-2">Réel payé (€/an)</th>
+              <th className="w-1/6 px-3 py-2">Incluse (récupérable)</th>
+              <th className="w-1/6 px-3 py-2">Justificatif</th>
+              <th className="w-12 px-3 py-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white">
+            {chargeBreakdown.map((charge, index) => (
+              <tr key={index} className="border-t">
+                <td className="px-3 py-3">
+                  <input 
+                    className="w-full border rounded p-2 text-sm" 
+                    value={charge.charge_name}
+                    onChange={(e) => {
+                      const updatedBreakdown = [...chargeBreakdown]
+                      updatedBreakdown[index].charge_name = e.target.value
+                      setChargeBreakdown(updatedBreakdown)
+                    }}
+                  />
+                </td>
+                <td className="px-3 py-3">
+                  <input 
+                    className="w-full border rounded p-2 text-sm provision-input" 
+                    type="number"
+                    step="0.01"
+                    value={charge.provision_amount}
+                    onChange={(e) => handleProvisionAmountChange(index, parseFloat(e.target.value) || 0)}
+                  />
+                </td>
+                <td className="px-3 py-3">
+                  <input 
+                    className="w-full border rounded p-2 text-sm reel-input" 
+                    type="number"
+                    step="0.01"
+                    value={charge.real_amount}
+                    onChange={(e) => handleRealAmountChange(index, parseFloat(e.target.value) || 0)}
+                  />
+                </td>
+                <td className="px-3 py-3 text-center">
+                  <input 
+                    type="checkbox" 
+                    className="incluse-checkbox" 
+                    checked={charge.is_recoverable}
+                    onChange={() => handleToggleRecoverable(index)}
+                  />
+                </td>
+                <td className="px-3 py-3">
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="file" 
+                      className="file-input hidden" 
+                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) handleFileUpload(index, file)
+                      }}
+                    />
+                    <button 
+                      className="uploadBtn inline-flex items-center px-2 py-1 bg-gray-100 border rounded text-xs"
+                      onClick={() => {
+                        const fileInput = document.querySelector(`input[type="file"]`) as HTMLInputElement
+                        fileInput?.click()
+                      }}
+                    >
+                      <Upload className="h-3 w-3 mr-1" />
+                      Joindre
+                    </button>
+                    <div className="file-name text-xs ml-2">
+                      {charge.documents && charge.documents.length > 0 ? 
+                        `${charge.documents.length} fichier(s)` : '—'
+                      }
                     </div>
                   </div>
-                )
-              )}
-            </div>
+                </td>
+                <td className="px-3 py-3 text-center">
+                  <button 
+                    className="removeRowBtn text-red-600 text-sm hover:text-red-800"
+                    onClick={() => handleDeleteCharge(index)}
+                  >
+                    Suppr
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Résumé des documents joints */}
+      {chargeBreakdown.some(charge => charge.documents && charge.documents.length > 0) && (
+        <div className="mt-4 bg-gray-50 rounded-lg p-4">
+          <h4 className="text-sm font-medium mb-2">Documents joints</h4>
+          <div className="space-y-2">
+            {chargeBreakdown.map((charge, chargeIndex) => 
+              charge.documents && charge.documents.length > 0 && (
+                <div key={chargeIndex} className="text-sm">
+                  <span className="font-medium">{charge.charge_name}:</span>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {charge.documents.map((doc, docIndex) => (
+                      <div key={docIndex} className="flex items-center gap-2 bg-white rounded px-2 py-1 border">
+                        <FileText className="h-3 w-3" />
+                        <span className="text-xs">{doc.name}</span>
+                        <button
+                          className="text-blue-600 hover:text-blue-800"
+                          onClick={() => window.open(doc.url, '_blank')}
+                        >
+                          <Eye className="h-3 w-3" />
+                        </button>
+                        <button
+                          className="text-red-600 hover:text-red-800"
+                          onClick={() => handleDeleteDocument(chargeIndex, docIndex)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            )}
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+    </div>
   )
 }

@@ -1,13 +1,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
 import {
   Dialog,
   DialogContent,
@@ -23,10 +20,6 @@ import {
   Trash2,
   Save,
   X,
-  Settings,
-  Euro,
-  CheckCircle,
-  AlertCircle
 } from "lucide-react"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
@@ -42,6 +35,8 @@ interface ChargeCategory {
 interface ChargeSettingsManagerProps {
   leaseId: string
   onSettingsChange?: (settings: ChargeCategory[]) => void
+  calculationNotes?: string
+  onCalculationNotesChange?: (notes: string) => void
 }
 
 const DEFAULT_CHARGE_CATEGORIES: ChargeCategory[] = [
@@ -49,13 +44,18 @@ const DEFAULT_CHARGE_CATEGORIES: ChargeCategory[] = [
   { name: "Électricité parties communes", category: "electricite", recoverable: true, included_in_provisions: true, default_amount: 0 },
   { name: "Ascenseur", category: "ascenseur", recoverable: true, included_in_provisions: true, default_amount: 0 },
   { name: "Chauffage collectif", category: "chauffage", recoverable: true, included_in_provisions: true, default_amount: 0 },
-  { name: "Taxe ordures ménagères (TEOM)", category: "teom", recoverable: true, included_in_provisions: true, default_amount: 0 },
+  { name: "Taxe ordures ménagères (TOEM)", category: "teom", recoverable: true, included_in_provisions: true, default_amount: 0 },
   { name: "Gardiennage", category: "gardiennage", recoverable: true, included_in_provisions: true, default_amount: 0 },
   { name: "Nettoyage", category: "nettoyage", recoverable: true, included_in_provisions: true, default_amount: 0 },
   { name: "Assurance propriétaire", category: "assurance", recoverable: false, included_in_provisions: false, default_amount: 0 }
 ]
 
-export function ChargeSettingsManager({ leaseId, onSettingsChange }: ChargeSettingsManagerProps) {
+export function ChargeSettingsManager({ 
+  leaseId, 
+  onSettingsChange, 
+  calculationNotes = "",
+  onCalculationNotesChange 
+}: ChargeSettingsManagerProps) {
   const [chargeCategories, setChargeCategories] = useState<ChargeCategory[]>(DEFAULT_CHARGE_CATEGORIES)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -131,6 +131,15 @@ export function ChargeSettingsManager({ leaseId, onSettingsChange }: ChargeSetti
     }
   }
 
+  const handleToggleRecoverable = (index: number) => {
+    const updatedCategories = [...chargeCategories]
+    updatedCategories[index].recoverable = !updatedCategories[index].recoverable
+    if (!updatedCategories[index].recoverable) {
+      updatedCategories[index].included_in_provisions = false
+    }
+    setChargeCategories(updatedCategories)
+  }
+
   const handleAddCharge = () => {
     if (!newCharge.name.trim()) {
       toast.error("Veuillez saisir un nom pour la charge")
@@ -149,272 +158,153 @@ export function ChargeSettingsManager({ leaseId, onSettingsChange }: ChargeSetti
     setIsDialogOpen(false)
   }
 
-  const handleEditCharge = (index: number) => {
-    setEditingIndex(index)
-    setNewCharge({ ...chargeCategories[index] })
-    setIsDialogOpen(true)
-  }
-
-  const handleUpdateCharge = () => {
-    if (!newCharge.name.trim()) {
-      toast.error("Veuillez saisir un nom pour la charge")
-      return
-    }
-
-    if (editingIndex !== null) {
-      const updatedCategories = [...chargeCategories]
-      updatedCategories[editingIndex] = { ...newCharge }
-      setChargeCategories(updatedCategories)
-    }
-
-    setEditingIndex(null)
-    setNewCharge({
-      name: "",
-      category: "",
-      recoverable: true,
-      included_in_provisions: true,
-      default_amount: 0
-    })
-    setIsDialogOpen(false)
-  }
-
   const handleDeleteCharge = (index: number) => {
     const updatedCategories = chargeCategories.filter((_, i) => i !== index)
     setChargeCategories(updatedCategories)
   }
 
-  const handleToggleRecoverable = (index: number) => {
-    const updatedCategories = [...chargeCategories]
-    updatedCategories[index].recoverable = !updatedCategories[index].recoverable
-    setChargeCategories(updatedCategories)
-  }
-
-  const handleToggleIncluded = (index: number) => {
-    const updatedCategories = [...chargeCategories]
-    updatedCategories[index].included_in_provisions = !updatedCategories[index].included_in_provisions
-    setChargeCategories(updatedCategories)
-  }
-
-  const handleDefaultAmountChange = (index: number, amount: number) => {
-    const updatedCategories = [...chargeCategories]
-    updatedCategories[index].default_amount = amount
-    setChargeCategories(updatedCategories)
-  }
-
   if (isLoading) {
     return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-            <p>Chargement des paramètres de charges...</p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="bg-white shadow-sm rounded-lg p-5 mb-6">
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-sm text-gray-500">Chargement des paramètres de charges...</p>
+        </div>
+      </div>
     )
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Settings className="h-5 w-5" />
-          Paramétrage des charges incluses dans le bail
-        </CardTitle>
-        <CardDescription>
-          Définissez quelles charges sont récupérables et incluses dans les provisions
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Liste des charges */}
-        <div className="space-y-3">
-          {chargeCategories.map((charge, index) => (
-            <div key={index} className="border rounded-lg p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <h4 className="font-medium">{charge.name}</h4>
-                  <Badge variant={charge.recoverable ? "default" : "secondary"}>
-                    {charge.recoverable ? "Récupérable" : "Non récupérable"}
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleEditCharge(index)}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDeleteCharge(index)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    checked={charge.recoverable}
-                    onCheckedChange={() => handleToggleRecoverable(index)}
-                  />
-                  <Label className="text-sm">Récupérable</Label>
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    checked={charge.included_in_provisions}
-                    onCheckedChange={() => handleToggleIncluded(index)}
-                    disabled={!charge.recoverable}
-                  />
-                  <Label className="text-sm">Incluse dans provisions</Label>
-                </div>
-                
-                <div>
-                  <Label htmlFor={`amount-${index}`} className="text-sm">Montant par défaut (€/an)</Label>
-                  <Input
-                    id={`amount-${index}`}
-                    type="number"
-                    step="0.01"
-                    value={charge.default_amount}
-                    onChange={(e) => handleDefaultAmountChange(index, parseFloat(e.target.value) || 0)}
-                    className="h-8"
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
+    <div className="bg-white shadow-sm rounded-lg p-5 mb-6">
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <h2 className="text-lg font-medium">Paramètres du bail</h2>
+          <p className="text-sm text-gray-500">Définissez une fois ce qui est récupérable auprès du locataire.</p>
         </div>
+        <div className="text-sm text-gray-500">
+          <div>Jour de paiement : <strong>5</strong></div>
+          <div>Provision charges : <strong>75 €/mois</strong></div>
+        </div>
+      </div>
 
-        <Separator />
-
-        {/* Actions */}
-        <div className="flex items-center justify-between">
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <Plus className="h-4 w-4 mr-2" />
-                Ajouter une charge
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>
-                  {editingIndex !== null ? "Modifier la charge" : "Ajouter une charge"}
-                </DialogTitle>
-                <DialogDescription>
-                  {editingIndex !== null 
-                    ? "Modifiez les informations de la charge" 
-                    : "Ajoutez une nouvelle charge récupérable"
-                  }
-                </DialogDescription>
-              </DialogHeader>
-              
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="charge-name">Nom de la charge</Label>
-                  <Input
-                    id="charge-name"
-                    value={newCharge.name}
-                    onChange={(e) => setNewCharge(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="Ex: Entretien espaces verts"
-                  />
-                </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-gray-50 p-4 rounded">
+          <h3 className="text-sm font-semibold mb-2">Charges récupérables (cocher celles qui s'appliquent)</h3>
+          <div className="space-y-2 text-sm">
+            {chargeCategories.map((charge, index) => (
+              <label key={index} className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  className="charge-toggle"
+                  checked={charge.recoverable}
+                  onChange={() => handleToggleRecoverable(index)}
+                />
+                <span>{charge.name}</span>
+                {!charge.recoverable && (
+                  <span className="text-xs text-gray-400">(non récupérable habituellement)</span>
+                )}
+              </label>
+            ))}
+          </div>
+          
+          <div className="mt-4 flex items-center gap-2">
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <button className="inline-flex items-center px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs">
+                  <Plus className="h-3 w-3 mr-1" />
+                  Ajouter
+                </button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Ajouter une charge</DialogTitle>
+                  <DialogDescription>
+                    Ajoutez une nouvelle charge récupérable
+                  </DialogDescription>
+                </DialogHeader>
                 
-                <div>
-                  <Label htmlFor="charge-category">Catégorie</Label>
-                  <Input
-                    id="charge-category"
-                    value={newCharge.category}
-                    onChange={(e) => setNewCharge(prev => ({ ...prev, category: e.target.value }))}
-                    placeholder="Ex: entretien"
-                  />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      checked={newCharge.recoverable}
-                      onCheckedChange={(checked) => setNewCharge(prev => ({ ...prev, recoverable: checked as boolean }))}
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="charge-name">Nom de la charge</Label>
+                    <Input
+                      id="charge-name"
+                      value={newCharge.name}
+                      onChange={(e) => setNewCharge(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="Ex: Entretien espaces verts"
                     />
-                    <Label className="text-sm">Récupérable</Label>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="charge-category">Catégorie</Label>
+                    <Input
+                      id="charge-category"
+                      value={newCharge.category}
+                      onChange={(e) => setNewCharge(prev => ({ ...prev, category: e.target.value }))}
+                      placeholder="Ex: entretien"
+                    />
                   </div>
                   
                   <div className="flex items-center space-x-2">
-                    <Checkbox
-                      checked={newCharge.included_in_provisions}
-                      onCheckedChange={(checked) => setNewCharge(prev => ({ ...prev, included_in_provisions: checked as boolean }))}
+                    <input
+                      type="checkbox"
+                      id="is-recoverable"
+                      checked={newCharge.recoverable}
+                      onChange={(e) => setNewCharge(prev => ({ ...prev, recoverable: e.target.checked }))}
+                      className="rounded"
                     />
-                    <Label className="text-sm">Incluse dans provisions</Label>
+                    <Label htmlFor="is-recoverable">Récupérable</Label>
                   </div>
                 </div>
                 
-                <div>
-                  <Label htmlFor="default-amount">Montant par défaut (€/an)</Label>
-                  <Input
-                    id="default-amount"
-                    type="number"
-                    step="0.01"
-                    value={newCharge.default_amount}
-                    onChange={(e) => setNewCharge(prev => ({ ...prev, default_amount: parseFloat(e.target.value) || 0 }))}
-                  />
-                </div>
-              </div>
-              
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                  <X className="h-4 w-4 mr-2" />
-                  Annuler
-                </Button>
-                <Button onClick={editingIndex !== null ? handleUpdateCharge : handleAddCharge}>
-                  {editingIndex !== null ? (
-                    <>
-                      <Edit className="h-4 w-4 mr-2" />
-                      Modifier
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Ajouter
-                    </>
-                  )}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          <Button onClick={saveChargeSettings} disabled={isSaving}>
-            {isSaving ? (
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-            ) : (
-              <Save className="h-4 w-4 mr-2" />
-            )}
-            Sauvegarder
-          </Button>
-        </div>
-
-        {/* Résumé */}
-        <div className="bg-muted/50 rounded-lg p-4">
-          <h4 className="font-medium mb-2">Résumé des paramètres</h4>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-muted-foreground">Charges récupérables:</span>
-              <span className="ml-2 font-medium">
-                {chargeCategories.filter(c => c.recoverable).length}
-              </span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Incluses dans provisions:</span>
-              <span className="ml-2 font-medium">
-                {chargeCategories.filter(c => c.included_in_provisions).length}
-              </span>
-            </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                    <X className="h-4 w-4 mr-2" />
+                    Annuler
+                  </Button>
+                  <Button onClick={handleAddCharge}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Ajouter
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+            
+            <button
+              onClick={handleDeleteCharge}
+              className="text-red-600 text-xs hover:text-red-800"
+            >
+              Supprimer sélectionnées
+            </button>
           </div>
         </div>
-      </CardContent>
-    </Card>
+
+        <div className="bg-gray-50 p-4 rounded">
+          <h3 className="text-sm font-semibold mb-2">Méthode de calcul</h3>
+          <textarea
+            rows={4}
+            className="w-full border rounded p-2 text-sm"
+            placeholder="Ex : répartition au prorata de la surface + relevés fournisseurs."
+            value={calculationNotes}
+            onChange={(e) => onCalculationNotesChange?.(e.target.value)}
+          />
+          <p className="text-xs text-gray-400 mt-2">Ce texte sera inclus dans le PDF de décompte.</p>
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between">
+        <div className="text-sm text-gray-500">
+          <span>Charges récupérables: </span>
+          <strong>{chargeCategories.filter(c => c.recoverable).length}</strong>
+        </div>
+        <Button onClick={saveChargeSettings} disabled={isSaving} size="sm">
+          {isSaving ? (
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+          ) : (
+            <Save className="h-4 w-4 mr-2" />
+          )}
+          Sauvegarder
+        </Button>
+      </div>
+    </div>
   )
 }

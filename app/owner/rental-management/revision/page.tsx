@@ -129,6 +129,9 @@ export default function RevisionPage() {
     included_in_provisions: boolean
     default_amount: number
   }>>([])
+  
+  // Notes de calcul pour les charges
+  const [calculationNotes, setCalculationNotes] = useState("Répartition au prorata de la surface + relevés fournisseurs.")
 
   useEffect(() => {
     loadInitialData()
@@ -523,12 +526,21 @@ export default function RevisionPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* En-tête */}
-      <div>
-        <h1 className="text-3xl font-bold">Révision annuelle</h1>
-        <p className="text-muted-foreground">Gestion des révisions de loyer et régularisation des charges</p>
-      </div>
+    <div className="bg-gray-50 text-gray-800 p-6">
+      <div className="max-w-6xl mx-auto space-y-6">
+        {/* En-tête */}
+        <header className="mb-6">
+          <h1 className="text-2xl font-semibold">Régularisation des charges – {selectedLease?.property?.title || 'Sélectionnez un bail'}</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Période : {chargeRegularizationData.provisionsPeriodStart ? 
+              new Date(chargeRegularizationData.provisionsPeriodStart).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }) : 
+              'Janvier'
+            } → {chargeRegularizationData.provisionsPeriodEnd ? 
+              new Date(chargeRegularizationData.provisionsPeriodEnd).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }) : 
+              'Décembre'
+            } {currentYear}
+          </p>
+        </header>
 
       {/* Sélection du bail */}
       <Card>
@@ -714,6 +726,8 @@ export default function RevisionPage() {
             <ChargeSettingsManager
               leaseId={selectedLeaseId}
               onSettingsChange={setChargeCategories}
+              calculationNotes={calculationNotes}
+              onCalculationNotesChange={setCalculationNotes}
             />
 
             {/* Période de régularisation */}
@@ -787,11 +801,8 @@ export default function RevisionPage() {
               nonRecoverableCharges={chargeRegularizationData.nonRecoverableCharges}
               tenantBalance={chargeRegularizationData.tenantBalance}
               balanceType={chargeRegularizationData.balanceType}
-              calculationNotes={chargeRegularizationData.calculationNotes}
-              onNotesChange={(notes) => setChargeRegularizationData(prev => ({
-                ...prev,
-                calculationNotes: notes
-              }))}
+              calculationNotes={calculationNotes}
+              onNotesChange={setCalculationNotes}
               onGenerateStatement={saveChargeRegularization}
               onSendToTenant={() => {
                 // TODO: Implémenter l'envoi au locataire
@@ -821,17 +832,16 @@ export default function RevisionPage() {
         </Tabs>
       )}
 
-      {/* Message si aucun bail sélectionné */}
-      {!selectedLeaseId && (
-        <Card>
-          <CardContent className="p-6">
+        {/* Message si aucun bail sélectionné */}
+        {!selectedLeaseId && (
+          <div className="bg-white shadow-sm rounded-lg p-6">
             <div className="text-center text-muted-foreground">
               <Building className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>Sélectionnez un bail pour commencer la révision</p>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
