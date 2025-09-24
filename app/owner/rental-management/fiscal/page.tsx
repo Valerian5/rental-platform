@@ -196,7 +196,7 @@ export default function FiscalPage() {
 
   const handleGenerateForm = async (formType: "2044" | "2042-C-PRO") => {
     try {
-      if (!fiscalData) {
+      if (!fiscalCalculation) {
         toast.error("Aucune donnée fiscale disponible")
         return
       }
@@ -207,9 +207,9 @@ export default function FiscalPage() {
       
       let pdfDoc
       if (formType === "2044") {
-        pdfDoc = generator.generateForm2044(fiscalData)
+        pdfDoc = generator.generateForm2044(fiscalCalculation)
       } else {
-        pdfDoc = generator.generateForm2042CPRO(fiscalData)
+        pdfDoc = generator.generateForm2042CPRO(fiscalCalculation)
       }
 
       // Télécharger le PDF
