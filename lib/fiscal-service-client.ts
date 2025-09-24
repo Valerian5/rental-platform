@@ -180,7 +180,12 @@ export class FiscalServiceClient {
         .select("id")
         .eq("owner_id", ownerId)
 
-      if (leasesError) throw leasesError
+      if (leasesError) {
+        console.error(`FiscalServiceClient: Erreur récupération baux:`, leasesError)
+        throw leasesError
+      }
+      
+      console.log(`FiscalServiceClient: ${leases?.length || 0} baux trouvés pour l'owner ${ownerId}`)
       if (!leases || leases.length === 0) return []
 
       const leaseIds = leases.map(l => l.id)

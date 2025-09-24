@@ -27,6 +27,10 @@ export async function GET(request: NextRequest) {
     
     // Vérifier l'authentification utilisateur avec le token
     const { data: { user }, error: authError } = await supabase.auth.getUser()
+    
+    // Ajouter des logs pour déboguer
+    console.log(`API Fiscal: Utilisateur authentifié: ${user?.id}`)
+    console.log(`API Fiscal: Token utilisé: ${token.substring(0, 20)}...`)
 
     if (authError || !user) {
       return NextResponse.json({ success: false, error: "Token invalide" }, { status: 401 })
@@ -99,6 +103,10 @@ export async function POST(request: NextRequest) {
     
     // Vérifier l'authentification utilisateur avec le token
     const { data: { user }, error: authError } = await supabase.auth.getUser()
+    
+    // Ajouter des logs pour déboguer
+    console.log(`API Fiscal: Utilisateur authentifié: ${user?.id}`)
+    console.log(`API Fiscal: Token utilisé: ${token.substring(0, 20)}...`)
 
     if (authError || !user) {
       return NextResponse.json({ success: false, error: "Token invalide" }, { status: 401 })
