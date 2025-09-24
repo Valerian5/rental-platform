@@ -196,36 +196,26 @@ export default function FiscalPage() {
 
   const handleGenerateForm = async (formType: "2044" | "2042-C-PRO") => {
     try {
-      // Récupérer le token d'authentification
-      const { data: sessionData } = await supabase.auth.getSession()
-      if (!sessionData.session?.access_token) {
-        toast.error("Session expirée, veuillez vous reconnecter")
+      if (!fiscalData) {
+        toast.error("Aucune donnée fiscale disponible")
         return
       }
 
-      const response = await fetch("/api/fiscal/forms", {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${sessionData.session.access_token}`
-        },
-        body: JSON.stringify({ formType, year: currentYear })
-      })
-
-      if (response.ok) {
-        const blob = await response.blob()
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement("a")
-        a.href = url
-        a.download = `formulaire-${formType}-${currentYear}.pdf`
-        document.body.appendChild(a)
-        a.click()
-        window.URL.revokeObjectURL(url)
-        document.body.removeChild(a)
-        toast.success(`Formulaire ${formType} généré`)
+      // Générer le PDF côté client avec jsPDF
+      const { FiscalPDFGenerator } = await import("@/lib/fiscal-pdf-generator")
+      const generator = new FiscalPDFGenerator()
+      
+      let pdfDoc
+      if (formType === "2044") {
+        pdfDoc = generator.generateForm2044(fiscalData)
       } else {
-        toast.error("Erreur lors de la génération du formulaire")
+        pdfDoc = generator.generateForm2042CPRO(fiscalData)
       }
+
+      // Télécharger le PDF
+      const filename = `formulaire-${formType}-${currentYear}.pdf`
+      pdfDoc.save(filename)
+      toast.success(`Formulaire ${formType} généré avec succès`)
     } catch (error) {
       console.error("Erreur génération formulaire:", error)
       toast.error("Erreur lors de la génération du formulaire")
