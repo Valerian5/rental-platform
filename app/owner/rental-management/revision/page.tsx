@@ -40,6 +40,7 @@ import {
 
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
+import { IRLSelector } from "@/components/IRLSelector"
 
 interface Property {
   id: string
@@ -270,11 +271,38 @@ export default function RevisionPage() {
 
     setSelectedLease(lease)
     
+    // Récupérer l'IRL de référence depuis l'API si disponible
+    let referenceIrlValue = 0
+    let referenceQuarter = ''
+    
+    if (lease.trimestre_reference_irl) {
+      try {
+        // Extraire l'année et le trimestre du format "2024-T3"
+        const match = lease.trimestre_reference_irl.match(/(\d{4})-T(\d)/)
+        if (match) {
+          const year = parseInt(match[1])
+          const quarter = parseInt(match[2])
+          const quarterStr = `${year}-Q${quarter}`
+          
+          // Récupérer la valeur IRL depuis l'API
+          const response = await fetch(`/api/revisions/irl?year=${year}&quarter=${quarterStr}`)
+          const result = await response.json()
+          
+          if (result.success && result.data.length > 0) {
+            referenceIrlValue = result.data[0].value
+            referenceQuarter = quarterStr
+          }
+        }
+      } catch (error) {
+        console.error("Erreur récupération IRL de référence:", error)
+      }
+    }
+    
     // Initialiser les données de révision
     setRentRevisionData({
-      referenceIrlValue: parseFloat(lease.trimestre_reference_irl) || 0,
+      referenceIrlValue,
       newIrlValue: 0,
-      irlQuarter: '',
+      irlQuarter: referenceQuarter,
       oldRentAmount: lease.montant_loyer_mensuel,
       newRentAmount: 0,
       rentIncreaseAmount: 0,
@@ -392,7 +420,7 @@ export default function RevisionPage() {
             charge_name: cat.name,
             provision_amount: calculation.averageMonthlyProvision,
             real_amount: 0,
-            difference: 0,
+            difference: -calculation.averageMonthlyProvision,
             is_recoverable: cat.recoverable,
             is_exceptional: false
           }))
@@ -408,6 +436,33 @@ export default function RevisionPage() {
       setIsCalculating(false)
     }
   }
+
+  // Fonction pour recalculer les totaux quand les charges changent
+  const recalculateTotals = () => {
+    const breakdown = chargeRegularizationData.chargeBreakdown
+    const totalRealCharges = breakdown.reduce((sum, charge) => sum + charge.real_amount, 0)
+    const recoverableCharges = breakdown
+      .filter(charge => charge.is_recoverable)
+      .reduce((sum, charge) => sum + charge.real_amount, 0)
+    const nonRecoverableCharges = totalRealCharges - recoverableCharges
+    const tenantBalance = chargeRegularizationData.totalProvisionsCollected - recoverableCharges
+
+    setChargeRegularizationData(prev => ({
+      ...prev,
+      totalRealCharges,
+      recoverableCharges,
+      nonRecoverableCharges,
+      tenantBalance,
+      balanceType: tenantBalance >= 0 ? 'refund' : 'additional_payment'
+    }))
+  }
+
+  // Recalculer les totaux quand les charges changent
+  useEffect(() => {
+    if (chargeRegularizationData.chargeBreakdown.length > 0) {
+      recalculateTotals()
+    }
+  }, [chargeRegularizationData.chargeBreakdown])
 
   const saveRentRevision = async () => {
     if (!selectedLeaseId || !selectedLease) {
@@ -553,18 +608,6 @@ export default function RevisionPage() {
           <p className="text-muted-foreground">Gestion des révisions de loyer et régularisations de charges</p>
         </div>
         <div className="flex items-center gap-4">
-          <Select value={selectedPropertyId} onValueChange={setSelectedPropertyId}>
-            <SelectTrigger className="w-64">
-              <SelectValue placeholder="Sélectionner un logement" />
-            </SelectTrigger>
-            <SelectContent>
-              {properties.map(property => (
-                <SelectItem key={property.id} value={property.id}>
-                  {property.title} - {property.address}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Select value={currentYear.toString()} onValueChange={(value) => setCurrentYear(parseInt(value))}>
             <SelectTrigger className="w-32">
               <SelectValue placeholder="Année" />
@@ -581,30 +624,52 @@ export default function RevisionPage() {
       </div>
 
       {/* Sélection du bail */}
-      {selectedPropertyId && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Building className="h-5 w-5" />
-              Sélection du bail
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Select value={selectedLeaseId} onValueChange={setSelectedLeaseId}>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building className="h-5 w-5" />
+            Sélection du bail
+          </CardTitle>
+          <CardDescription>
+            Choisissez d'abord un logement, puis sélectionnez le bail correspondant
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label htmlFor="property-select">Logement</Label>
+            <Select value={selectedPropertyId} onValueChange={setSelectedPropertyId}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Sélectionner un bail" />
+                <SelectValue placeholder="Sélectionner un logement" />
               </SelectTrigger>
               <SelectContent>
-                {leases.map(lease => (
-                  <SelectItem key={lease.id} value={lease.id}>
-                    {lease.tenant.first_name} {lease.tenant.last_name} - {lease.montant_loyer_mensuel}€/mois
+                {properties.map(property => (
+                  <SelectItem key={property.id} value={property.id}>
+                    {property.title} - {property.address}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+          
+          {selectedPropertyId && (
+            <div>
+              <Label htmlFor="lease-select">Bail</Label>
+              <Select value={selectedLeaseId} onValueChange={setSelectedLeaseId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Sélectionner un bail" />
+                </SelectTrigger>
+                <SelectContent>
+                  {leases.map(lease => (
+                    <SelectItem key={lease.id} value={lease.id}>
+                      {lease.tenant.first_name} {lease.tenant.last_name} - {lease.montant_loyer_mensuel}€/mois
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Assistant de révision */}
       {selectedLeaseId && selectedLease && (
@@ -742,7 +807,8 @@ export default function RevisionPage() {
 
               {/* Étape 2: Régularisation des charges */}
               <TabsContent value="charges" className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Période et calcul initial */}
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-lg">Période de régularisation</CardTitle>
@@ -782,11 +848,12 @@ export default function RevisionPage() {
                         ) : (
                           <Calculator className="h-4 w-4 mr-2" />
                         )}
-                        Calculer les charges
+                        Calculer les provisions
                       </Button>
                     </CardContent>
                   </Card>
 
+                  {/* Résumé des charges */}
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-lg">Résumé des charges</CardTitle>
@@ -823,12 +890,21 @@ export default function RevisionPage() {
                             ...prev,
                             calculationNotes: e.target.value
                           }))}
+                          rows={3}
                         />
                       </div>
+                    </CardContent>
+                  </Card>
 
+                  {/* Actions */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">Actions</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
                       <Button 
                         onClick={saveChargeRegularization} 
-                        disabled={isGenerating}
+                        disabled={isGenerating || chargeRegularizationData.chargeBreakdown.length === 0}
                         className="w-full"
                       >
                         {isGenerating ? (
@@ -838,9 +914,127 @@ export default function RevisionPage() {
                         )}
                         Sauvegarder la régularisation
                       </Button>
+                      
+                      <div className="text-sm text-muted-foreground">
+                        <p>• Définissez d'abord les charges par catégorie</p>
+                        <p>• Ajoutez les justificatifs</p>
+                        <p>• Sauvegardez pour générer le décompte</p>
+                      </div>
                     </CardContent>
                   </Card>
                 </div>
+
+                {/* Détail des charges par catégorie */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Détail des charges par catégorie</CardTitle>
+                    <CardDescription>
+                      Définissez les charges réelles par catégorie et ajoutez les justificatifs
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {chargeRegularizationData.chargeBreakdown.map((charge, index) => (
+                        <div key={index} className="border rounded-lg p-4 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-medium">{charge.charge_name}</h4>
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                checked={charge.is_recoverable}
+                                onCheckedChange={(checked) => {
+                                  const newBreakdown = [...chargeRegularizationData.chargeBreakdown]
+                                  newBreakdown[index].is_recoverable = checked as boolean
+                                  setChargeRegularizationData(prev => ({
+                                    ...prev,
+                                    chargeBreakdown: newBreakdown
+                                  }))
+                                }}
+                              />
+                              <Label className="text-sm">Récupérable</Label>
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                              <Label htmlFor={`provision-${index}`}>Provision (€)</Label>
+                              <Input
+                                id={`provision-${index}`}
+                                type="number"
+                                step="0.01"
+                                value={charge.provision_amount}
+                                onChange={(e) => {
+                                  const newBreakdown = [...chargeRegularizationData.chargeBreakdown]
+                                  newBreakdown[index].provision_amount = parseFloat(e.target.value) || 0
+                                  newBreakdown[index].difference = newBreakdown[index].real_amount - newBreakdown[index].provision_amount
+                                  setChargeRegularizationData(prev => ({
+                                    ...prev,
+                                    chargeBreakdown: newBreakdown
+                                  }))
+                                }}
+                              />
+                            </div>
+                            
+                            <div>
+                              <Label htmlFor={`real-${index}`}>Montant réel (€)</Label>
+                              <Input
+                                id={`real-${index}`}
+                                type="number"
+                                step="0.01"
+                                value={charge.real_amount}
+                                onChange={(e) => {
+                                  const newBreakdown = [...chargeRegularizationData.chargeBreakdown]
+                                  newBreakdown[index].real_amount = parseFloat(e.target.value) || 0
+                                  newBreakdown[index].difference = newBreakdown[index].real_amount - newBreakdown[index].provision_amount
+                                  setChargeRegularizationData(prev => ({
+                                    ...prev,
+                                    chargeBreakdown: newBreakdown
+                                  }))
+                                }}
+                              />
+                            </div>
+                            
+                            <div>
+                              <Label htmlFor={`difference-${index}`}>Différence (€)</Label>
+                              <Input
+                                id={`difference-${index}`}
+                                type="number"
+                                step="0.01"
+                                value={charge.difference}
+                                disabled
+                                className={charge.difference >= 0 ? 'text-green-600' : 'text-red-600'}
+                              />
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <Label htmlFor={`notes-${index}`}>Notes</Label>
+                            <Textarea
+                              id={`notes-${index}`}
+                              placeholder="Détails sur cette charge..."
+                              value={charge.notes || ''}
+                              onChange={(e) => {
+                                const newBreakdown = [...chargeRegularizationData.chargeBreakdown]
+                                newBreakdown[index].notes = e.target.value
+                                setChargeRegularizationData(prev => ({
+                                  ...prev,
+                                  chargeBreakdown: newBreakdown
+                                }))
+                              }}
+                              rows={2}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                      
+                      {chargeRegularizationData.chargeBreakdown.length === 0 && (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <Calculator className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                          <p>Cliquez sur "Calculer les provisions" pour initialiser les catégories de charges</p>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
               </TabsContent>
 
               {/* Étape 3: Validation et envoi */}

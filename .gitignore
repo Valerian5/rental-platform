@@ -73,3 +73,8 @@ scripts/test-api-token.sql
 scripts/test-leases-access.sql
 scripts/test-rls-policies.sql
 scripts/test-rls-with-user.sql
+scripts/create-revision-tables-adapted.sql
+scripts/create-revision-tables-fixed.sql
+scripts/create-tenant-documents-table-adapted.sql
+scripts/diagnose-revision-tables.sql
+scripts/migrate-revision-tables-step-by-step.sql

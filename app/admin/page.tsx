@@ -437,6 +437,14 @@ function AdminContent() {
                     </button>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={activeTab === "irl-management"} onClick={() => setActiveTab("irl-management")}>
+                    <button>
+                      <BarChart3 className="h-4 w-4" />
+                      <span>Indices IRL</span>
+                    </button>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={activeTab === "users"} onClick={() => setActiveTab("users")}>
                 <button>
@@ -1220,6 +1228,16 @@ function AdminContent() {
                 src="/admin/migrate"
                 className="w-full h-screen border-0"
                 title="Migration de la Base de Données"
+              />
+            </div>
+          )}
+
+          {activeTab === "irl-management" && (
+            <div>
+              <iframe
+                src="/admin/irl-management"
+                className="w-full h-screen border-0"
+                title="Gestion des Indices IRL"
               />
             </div>
           )}

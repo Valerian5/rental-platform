@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils"
 import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { BreadcrumbNav } from "@/components/breadcrumb-nav"
+import { IRLSelector } from "@/components/IRLSelector"
 
 interface LeaseClause {
   id: string
@@ -386,12 +387,6 @@ export default function NewLeasePageComplete() {
     { value: "fibre", label: "Raccordement fibre optique" },
   ]
 
-  const trimestreIRLOptions = [
-    { value: "2024-T1", label: "1er trimestre 2024 - 142,95" },
-    { value: "2024-T2", label: "2e trimestre 2024 - 143,47" },
-    { value: "2024-T3", label: "3e trimestre 2024 - 144,01" },
-    { value: "2024-T4", label: "4e trimestre 2024 - 144,53" },
-  ]
 
 const clauseCategories = [
   { key: "clause_resolutoire", label: "Clause résolutoire" },
@@ -2126,24 +2121,12 @@ travaux_entre_locataires: formData.clauses?.travaux_entre_locataires?.enabled ? 
                       </div>
                     )}
 
-                    <div>
-                      <Label htmlFor="trimestre_reference_irl">Trimestre de référence IRL</Label>
-                      <Select
-                        value={formData.trimestre_reference_irl}
-                        onValueChange={(value) => handleInputChange("trimestre_reference_irl", value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un trimestre" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {trimestreIRLOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    <IRLSelector
+                      value={formData.trimestre_reference_irl}
+                      onValueChange={(value) => handleInputChange("trimestre_reference_irl", value)}
+                      label="Trimestre de référence IRL"
+                      placeholder="Sélectionner un trimestre"
+                    />
 
                     <div>
                       <Label htmlFor="date_revision_loyer">Date de révision du loyer</Label>

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { supabase } from "@/lib/supabase"
 
 // Interface pour les données IRL de l'INSEE
 interface IRLData {
@@ -8,9 +9,16 @@ interface IRLData {
   quarter_number: number
 }
 
-// Cache pour éviter trop d'appels à l'API INSEE
-const irlCache = new Map<string, IRLData[]>()
-const CACHE_DURATION = 24 * 60 * 60 * 1000 // 24 heures
+// Interface pour les données de la base de données
+interface IRLIndex {
+  id: string
+  year: number
+  quarter: number
+  value: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,100 +27,66 @@ export async function GET(request: NextRequest) {
     const quarter = searchParams.get('quarter')
 
     if (!year) {
-      return NextResponse.json({ error: "Année requise" }, { status: 400 })
+      return NextResponse.json({
+        success: false,
+        error: "Le paramètre 'year' est requis"
+      }, { status: 400 })
     }
 
-    const cacheKey = `irl_${year}`
-    
-    // Vérifier le cache
-    if (irlCache.has(cacheKey)) {
-      const cachedData = irlCache.get(cacheKey)!
-      const cacheTime = cachedData[0]?.cacheTime || 0
-      
-      if (Date.now() - cacheTime < CACHE_DURATION) {
-        const filteredData = quarter 
-          ? cachedData.filter(item => item.quarter === quarter)
-          : cachedData
-        
-        return NextResponse.json({ 
-          success: true, 
-          data: filteredData,
-          cached: true 
-        })
+    const yearNum = parseInt(year)
+    if (isNaN(yearNum) || yearNum < 2020 || yearNum > 2030) {
+      return NextResponse.json({
+        success: false,
+        error: "L'année doit être entre 2020 et 2030"
+      }, { status: 400 })
+    }
+
+    // Récupérer les données depuis la base de données
+    let query = supabase
+      .from('irl_indices')
+      .select('*')
+      .eq('year', yearNum)
+      .eq('is_active', true)
+      .order('quarter', { ascending: true })
+
+    // Filtrer par trimestre si spécifié
+    if (quarter) {
+      const quarterNum = parseInt(quarter.replace('Q', ''))
+      if (!isNaN(quarterNum) && quarterNum >= 1 && quarterNum <= 4) {
+        query = query.eq('quarter', quarterNum)
       }
     }
 
-    // Récupérer les données IRL depuis l'API INSEE
-    const irlData = await fetchIRLFromINSEE(parseInt(year))
-    
-    if (!irlData || irlData.length === 0) {
-      return NextResponse.json({ 
-        error: "Aucune donnée IRL trouvée pour cette année" 
-      }, { status: 404 })
+    const { data, error } = await query
+
+    if (error) {
+      console.error("Erreur base de données IRL:", error)
+      return NextResponse.json({
+        success: false,
+        error: "Erreur lors de la récupération des données IRL"
+      }, { status: 500 })
     }
 
-    // Mettre en cache
-    irlCache.set(cacheKey, irlData)
+    // Convertir les données de la base vers le format attendu
+    const irlData: IRLData[] = (data || []).map((item: IRLIndex) => ({
+      quarter: `${item.year}-Q${item.quarter}`,
+      value: item.value,
+      year: item.year,
+      quarter_number: item.quarter
+    }))
 
-    // Filtrer par trimestre si demandé
-    const filteredData = quarter 
-      ? irlData.filter(item => item.quarter === quarter)
-      : irlData
-
-    return NextResponse.json({ 
-      success: true, 
-      data: filteredData,
-      cached: false 
+    return NextResponse.json({
+      success: true,
+      data: irlData,
+      source: 'database'
     })
+
   } catch (error) {
-    console.error("Erreur récupération IRL:", error)
-    return NextResponse.json({ 
+    console.error("Erreur API IRL:", error)
+    return NextResponse.json({
+      success: false,
       error: "Erreur lors de la récupération des données IRL" 
     }, { status: 500 })
-  }
-}
-
-async function fetchIRLFromINSEE(year: number): Promise<IRLData[]> {
-  try {
-    // Simulation des données IRL (en production, utiliser l'API INSEE réelle)
-    // L'API INSEE réelle nécessiterait une clé API et une authentification
-    
-    const mockIRLData: IRLData[] = [
-      {
-        quarter: `${year}-Q1`,
-        value: 137.56,
-        year: year,
-        quarter_number: 1
-      },
-      {
-        quarter: `${year}-Q2`,
-        value: 138.12,
-        year: year,
-        quarter_number: 2
-      },
-      {
-        quarter: `${year}-Q3`,
-        value: 138.89,
-        year: year,
-        quarter_number: 3
-      },
-      {
-        quarter: `${year}-Q4`,
-        value: 139.45,
-        year: year,
-        quarter_number: 4
-      }
-    ]
-
-    // Ajouter un timestamp de cache
-    mockIRLData.forEach(item => {
-      (item as any).cacheTime = Date.now()
-    })
-
-    return mockIRLData
-  } catch (error) {
-    console.error("Erreur fetch IRL INSEE:", error)
-    throw error
   }
 }
 
@@ -123,46 +97,20 @@ export function calculateRentRevision(
   newIRL: number
 ): {
   newRent: number
-  increaseAmount: number
-  increasePercentage: number
+  increase: number
+  percentage: number
 } {
+  if (referenceIRL <= 0 || newIRL <= 0) {
+    throw new Error("Les indices IRL doivent être positifs")
+  }
+
   const newRent = (oldRent * newIRL) / referenceIRL
-  const increaseAmount = newRent - oldRent
-  const increasePercentage = (increaseAmount / oldRent) * 100
+  const increase = newRent - oldRent
+  const percentage = (increase / oldRent) * 100
 
   return {
     newRent: Math.round(newRent * 100) / 100, // Arrondir à 2 décimales
-    increaseAmount: Math.round(increaseAmount * 100) / 100,
-    increasePercentage: Math.round(increasePercentage * 100) / 100
-  }
-}
-
-// Fonction pour vérifier la conformité légale
-export function checkLegalCompliance(
-  increasePercentage: number,
-  isRentControlledZone: boolean = false
-): {
-  isCompliant: boolean
-  maxAllowedIncrease: number
-  warnings: string[]
-} {
-  const warnings: string[] = []
-  let maxAllowedIncrease = 3.5 // Augmentation maximale par défaut
-
-  // Zone tendue : augmentation limitée
-  if (isRentControlledZone) {
-    maxAllowedIncrease = 2.5
-    warnings.push("Zone tendue : augmentation limitée à 2,5%")
-  }
-
-  // Vérifier si l'augmentation dépasse le plafond
-  if (increasePercentage > maxAllowedIncrease) {
-    warnings.push(`Augmentation de ${increasePercentage.toFixed(2)}% dépasse le plafond de ${maxAllowedIncrease}%`)
-  }
-
-  return {
-    isCompliant: increasePercentage <= maxAllowedIncrease,
-    maxAllowedIncrease,
-    warnings
+    increase: Math.round(increase * 100) / 100,
+    percentage: Math.round(percentage * 100) / 100
   }
 }
