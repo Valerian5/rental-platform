@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase"
-import { FiscalService } from "@/lib/fiscal-service"
+import { createClient } from "@/lib/supabase"
+import { FiscalServiceClient } from "@/lib/fiscal-service-client"
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,9 +12,21 @@ export async function POST(request: NextRequest) {
 
     const token = authHeader.split(' ')[1]
     
-    // Créer un client Supabase avec le token
-    const supabase = createServerClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    // Créer un client Supabase avec le token utilisateur pour respecter RLS
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      }
+    )
+    
+    // Vérifier l'authentification utilisateur avec le token
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {
       return NextResponse.json({ success: false, error: "Token invalide" }, { status: 401 })
@@ -30,8 +42,8 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Générer le récapitulatif
-    const summary = await FiscalService.generateFiscalSummary(user.id, year)
+    // Générer le récapitulatif avec le client authentifié
+    const summary = await FiscalServiceClient.generateFiscalSummary(user.id, year, supabase)
     
     // Créer les données pour le PDF
     const pdfData = {
@@ -47,34 +59,12 @@ export async function POST(request: NextRequest) {
       properties: summary.properties
     }
     
-    // Importer le générateur PDF
-    const { FiscalPDFGenerator } = await import("@/lib/fiscal-pdf-generator")
-    const pdfGenerator = new FiscalPDFGenerator()
-    
-    let pdf
-    let filename
-    
-    if (formType === "2044") {
-      pdf = pdfGenerator.generateForm2044(pdfData)
-      filename = `formulaire-2044-${year}.pdf`
-    } else if (formType === "2042-C-PRO") {
-      pdf = pdfGenerator.generateForm2042CPRO(pdfData)
-      filename = `formulaire-2042-c-pro-${year}.pdf`
-    } else {
-      return NextResponse.json({ 
-        success: false, 
-        error: "Type de formulaire non reconnu" 
-      }, { status: 400 })
-    }
-    
-    // Convertir en buffer
-    const pdfBuffer = Buffer.from(pdf.output('arraybuffer'))
-    
-    return new NextResponse(pdfBuffer, {
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${filename}"`
-      }
+    // Retourner les données pour génération côté client
+    return NextResponse.json({ 
+      success: true, 
+      data: pdfData,
+      formType,
+      year 
     })
 
   } catch (error) {
