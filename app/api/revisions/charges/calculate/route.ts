@@ -1,9 +1,24 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
+import { createClient } from '@supabase/supabase-js'
+
+// Créer un client avec service role pour les opérations admin
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
 export async function POST(request: NextRequest) {
   try {
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    // Récupérer l'utilisateur depuis les headers ou le token
+    const authHeader = request.headers.get('authorization')
+    if (!authHeader) {
+      return NextResponse.json({ error: "Token d'authentification requis" }, { status: 401 })
+    }
+
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+    
     if (userError || !user) {
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
     }
@@ -11,8 +26,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { leaseId, year, provisionsPeriodStart, provisionsPeriodEnd } = body
 
-    // Récupérer les données du bail
-    const { data: lease, error: leaseError } = await supabase
+    // Récupérer les données du bail avec le client admin
+    const { data: lease, error: leaseError } = await supabaseAdmin
       .from('leases')
       .select(`
         id,
@@ -38,7 +53,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Calculer les provisions encaissées via les quittances
-    const { data: receipts, error: receiptsError } = await supabase
+    const { data: receipts, error: receiptsError } = await supabaseAdmin
       .from('rent_receipts')
       .select('charges_amount, payment_date')
       .eq('lease_id', leaseId)
@@ -57,7 +72,7 @@ export async function POST(request: NextRequest) {
     }, 0)
 
     // Récupérer les paramètres de charges du bail
-    const { data: chargeSettings, error: settingsError } = await supabase
+    const { data: chargeSettings, error: settingsError } = await supabaseAdmin
       .from('lease_charge_settings')
       .select('*')
       .eq('lease_id', leaseId)
