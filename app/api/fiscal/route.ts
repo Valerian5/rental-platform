@@ -13,11 +13,21 @@ export async function GET(request: NextRequest) {
 
     const token = authHeader.split(' ')[1]
     
-    // Créer un client Supabase avec service_role pour les opérations backend
-    const supabase = createServerClient()
+    // Créer un client Supabase avec le token utilisateur pour respecter RLS
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      }
+    )
     
     // Vérifier l'authentification utilisateur avec le token
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {
       return NextResponse.json({ success: false, error: "Token invalide" }, { status: 401 })
@@ -75,11 +85,21 @@ export async function POST(request: NextRequest) {
 
     const token = authHeader.split(' ')[1]
     
-    // Créer un client Supabase avec service_role pour les opérations backend
-    const supabase = createServerClient()
+    // Créer un client Supabase avec le token utilisateur pour respecter RLS
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      }
+    )
     
     // Vérifier l'authentification utilisateur avec le token
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {
       return NextResponse.json({ success: false, error: "Token invalide" }, { status: 401 })
@@ -89,7 +109,7 @@ export async function POST(request: NextRequest) {
     const { action, year } = body
 
     if (action === "export-csv") {
-      // Exporter en CSV
+      // Exporter en CSV - utiliser le service client pour respecter RLS
       const csvData = await FiscalServiceClient.exportFiscalDataCSV(user.id, year)
       
       return new NextResponse(csvData, {

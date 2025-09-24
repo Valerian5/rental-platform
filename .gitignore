@@ -59,3 +59,9 @@ scripts/setup-proper-rls-policies.sql
 scripts/temporarily-disable-rls.sql
 scripts/test-direct-api-call.sql
 scripts/test-rls-and-auth.sql
+scripts/create-test-data-2025.sql
+scripts/debug-receipts-2025.sql
+scripts/fix-receipts-rls-final.sql
+scripts/generate-receipts-2025.sql
+scripts/test-fiscal-service-client.sql
+scripts/test-receipts-rls.sql
