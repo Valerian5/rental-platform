@@ -78,3 +78,6 @@ scripts/create-revision-tables-fixed.sql
 scripts/create-tenant-documents-table-adapted.sql
 scripts/diagnose-revision-tables.sql
 scripts/migrate-revision-tables-step-by-step.sql
+scripts/create-irl-indices-table.sql
+scripts/run-irl-migration.js
+scripts/test-irl-api.js
