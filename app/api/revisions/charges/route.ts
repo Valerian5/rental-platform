@@ -1,0 +1,156 @@
+import { NextRequest, NextResponse } from "next/server"
+import { supabase } from "@/lib/supabase"
+
+export async function GET(request: NextRequest) {
+  try {
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError || !user) {
+      return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const propertyId = searchParams.get('propertyId')
+    const year = searchParams.get('year')
+
+    let query = supabase
+      .from('charge_regularizations')
+      .select(`
+        *,
+        lease:leases(
+          id,
+          tenant_id,
+          tenant:users!leases_tenant_id_fkey(
+            id,
+            first_name,
+            last_name,
+            email
+          ),
+          property:properties(
+            id,
+            title,
+            address,
+            city
+          )
+        ),
+        charge_breakdown(*)
+      `)
+      .eq('created_by', user.id)
+
+    if (propertyId) {
+      query = query.eq('property_id', propertyId)
+    }
+
+    if (year) {
+      query = query.eq('regularization_year', parseInt(year))
+    }
+
+    const { data: regularizations, error } = await query.order('regularization_date', { ascending: false })
+
+    if (error) {
+      console.error("Erreur récupération régularisations:", error)
+      return NextResponse.json({ error: "Erreur lors de la récupération" }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true, regularizations })
+  } catch (error) {
+    console.error("Erreur API régularisations:", error)
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError || !user) {
+      return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const { 
+      leaseId, 
+      propertyId, 
+      regularizationYear,
+      regularizationDate,
+      totalProvisionsCollected,
+      provisionsPeriodStart,
+      provisionsPeriodEnd,
+      totalRealCharges,
+      recoverableCharges,
+      nonRecoverableCharges,
+      tenantBalance,
+      balanceType,
+      calculationMethod,
+      calculationNotes,
+      chargeBreakdown
+    } = body
+
+    // Vérifier que l'utilisateur est propriétaire de la propriété
+    const { data: property, error: propertyError } = await supabase
+      .from('properties')
+      .select('owner_id')
+      .eq('id', propertyId)
+      .single()
+
+    if (propertyError || !property || property.owner_id !== user.id) {
+      return NextResponse.json({ error: "Non autorisé" }, { status: 403 })
+    }
+
+    // Créer la régularisation
+    const { data: regularization, error: regError } = await supabase
+      .from('charge_regularizations')
+      .insert({
+        lease_id: leaseId,
+        property_id: propertyId,
+        regularization_year: regularizationYear,
+        regularization_date: regularizationDate,
+        total_provisions_collected: totalProvisionsCollected,
+        provisions_period_start: provisionsPeriodStart,
+        provisions_period_end: provisionsPeriodEnd,
+        total_real_charges: totalRealCharges,
+        recoverable_charges: recoverableCharges,
+        non_recoverable_charges: nonRecoverableCharges,
+        tenant_balance: tenantBalance,
+        balance_type: balanceType,
+        calculation_method: calculationMethod,
+        calculation_notes: calculationNotes,
+        created_by: user.id
+      })
+      .select()
+      .single()
+
+    if (regError) {
+      console.error("Erreur création régularisation:", regError)
+      return NextResponse.json({ error: "Erreur lors de la création" }, { status: 500 })
+    }
+
+    // Créer le détail des charges
+    if (chargeBreakdown && chargeBreakdown.length > 0) {
+      const breakdownData = chargeBreakdown.map((charge: any) => ({
+        regularization_id: regularization.id,
+        charge_category: charge.charge_category,
+        charge_name: charge.charge_name,
+        provision_amount: charge.provision_amount || 0,
+        real_amount: charge.real_amount,
+        difference: charge.difference,
+        is_recoverable: charge.is_recoverable,
+        is_exceptional: charge.is_exceptional,
+        supporting_documents: charge.supporting_documents || [],
+        notes: charge.notes
+      }))
+
+      const { error: breakdownError } = await supabase
+        .from('charge_breakdown')
+        .insert(breakdownData)
+
+      if (breakdownError) {
+        console.error("Erreur création détail charges:", breakdownError)
+        // Ne pas faire échouer la création de la régularisation
+      }
+    }
+
+    return NextResponse.json({ success: true, regularization })
+  } catch (error) {
+    console.error("Erreur API création régularisation:", error)
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+  }
+}

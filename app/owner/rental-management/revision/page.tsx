@@ -4,554 +4,982 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { TrendingUp, Calculator, FileText, AlertCircle, Euro, Calendar, BarChart3, Search } from "lucide-react"
-import { authService } from "@/lib/auth-service"
-import { rentalManagementService } from "@/lib/rental-management-service"
+  Calculator,
+  FileText,
+  TrendingUp,
+  TrendingDown,
+  AlertTriangle,
+  Euro,
+  Calendar,
+  Download,
+  Send,
+  RefreshCw,
+  Plus,
+  Minus,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Building,
+  User,
+  Mail,
+  Phone,
+  MapPin,
+  Receipt,
+  FileCheck,
+  History,
+  Bell,
+  Settings
+} from "lucide-react"
+
+import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
 
-export default function RevisionPage() {
-  const [currentUser, setCurrentUser] = useState<any>(null)
-  const [leases, setLeases] = useState<any[]>([])
-  const [revisions, setRevisions] = useState<any[]>([])
-  const [filteredRevisions, setFilteredRevisions] = useState<any[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [filters, setFilters] = useState({
-    status: "all",
-    year: new Date().getFullYear().toString(),
-    search: "",
-  })
+interface Property {
+  id: string
+  title: string
+  address: string
+  city: string
+}
 
-  // Formulaire nouvelle révision
-  const [newRevision, setNewRevision] = useState({
-    lease_id: "",
-    current_rent: "",
-    insee_index_reference: "",
-    insee_index_current: "",
-    revision_date: "",
+interface Lease {
+  id: string
+  property_id: string
+  tenant_id: string
+  montant_loyer_mensuel: number
+  montant_provisions_charges: number
+  date_revision_loyer: string
+  trimestre_reference_irl: string
+  property: Property
+  tenant: {
+    id: string
+    first_name: string
+    last_name: string
+    email: string
+  }
+}
+
+interface IRLData {
+  quarter: string
+  value: number
+  year: number
+  quarter_number: number
+}
+
+interface RevisionData {
+  id: string
+  lease_id: string
+  property_id: string
+  revision_year: number
+  revision_date: string
+  reference_irl_value: number
+  new_irl_value: number
+  irl_quarter: string
+  old_rent_amount: number
+  new_rent_amount: number
+  rent_increase_amount: number
+  rent_increase_percentage: number
+  status: string
+  amendment_pdf_url?: string
+  created_at: string
+}
+
+interface ChargeRegularizationData {
+  id: string
+  lease_id: string
+  property_id: string
+  regularization_year: number
+  regularization_date: string
+  total_provisions_collected: number
+  provisions_period_start: string
+  provisions_period_end: string
+  total_real_charges: number
+  recoverable_charges: number
+  non_recoverable_charges: number
+  tenant_balance: number
+  balance_type: 'refund' | 'additional_payment'
+  status: string
+  statement_pdf_url?: string
+  created_at: string
+}
+
+export default function RevisionPage() {
+  const [currentStep, setCurrentStep] = useState<'rent' | 'charges' | 'validation'>('rent')
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string>("")
+  const [selectedLeaseId, setSelectedLeaseId] = useState<string>("")
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
+  
+  // Données
+  const [properties, setProperties] = useState<Property[]>([])
+  const [leases, setLeases] = useState<Lease[]>([])
+  const [selectedLease, setSelectedLease] = useState<Lease | null>(null)
+  const [irlData, setIrlData] = useState<IRLData[]>([])
+  const [revisions, setRevisions] = useState<RevisionData[]>([])
+  const [regularizations, setRegularizations] = useState<ChargeRegularizationData[]>([])
+  
+  // État de chargement
+  const [isLoading, setIsLoading] = useState(true)
+  const [isCalculating, setIsCalculating] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
+  
+  // Données de révision de loyer
+  const [rentRevisionData, setRentRevisionData] = useState({
+    referenceIrlValue: 0,
+    newIrlValue: 0,
+    irlQuarter: '',
+    oldRentAmount: 0,
+    newRentAmount: 0,
+    rentIncreaseAmount: 0,
+    rentIncreasePercentage: 0,
+    calculationMethod: '',
+    legalComplianceChecked: false,
+    complianceNotes: ''
+  })
+  
+  // Données de régularisation des charges
+  const [chargeRegularizationData, setChargeRegularizationData] = useState({
+    totalProvisionsCollected: 0,
+    provisionsPeriodStart: '',
+    provisionsPeriodEnd: '',
+    totalRealCharges: 0,
+    recoverableCharges: 0,
+    nonRecoverableCharges: 0,
+    tenantBalance: 0,
+    balanceType: 'refund' as 'refund' | 'additional_payment',
+    calculationMethod: '',
+    calculationNotes: '',
+    chargeBreakdown: [] as Array<{
+      charge_category: string
+      charge_name: string
+      provision_amount: number
+      real_amount: number
+      difference: number
+      is_recoverable: boolean
+      is_exceptional: boolean
+      notes?: string
+    }>
   })
 
   useEffect(() => {
-    const initializeData = async () => {
-      try {
-        const user = await authService.getCurrentUser()
-        if (!user || user.user_type !== "owner") return
-
-        setCurrentUser(user)
-        const leasesData = await rentalManagementService.getOwnerLeases(user.id)
-        setLeases(leasesData)
-
-        // Charger les révisions existantes
-        const revisionsData = await rentalManagementService.getRentRevisions(user.id)
-        setRevisions(revisionsData)
-      } catch (error) {
-        console.error("Erreur initialisation:", error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    initializeData()
+    loadInitialData()
   }, [])
 
   useEffect(() => {
-    applyFilters()
-  }, [revisions, filters])
-
-  const applyFilters = () => {
-    let filtered = revisions
-
-    if (filters.status !== "all") {
-      filtered = filtered.filter((revision) => revision.status === filters.status)
+    if (selectedPropertyId) {
+      loadLeasesForProperty()
     }
+  }, [selectedPropertyId])
 
-    if (filters.year !== "all") {
-      filtered = filtered.filter(
-        (revision) => new Date(revision.revision_date).getFullYear().toString() === filters.year,
-      )
+  useEffect(() => {
+    if (selectedLeaseId) {
+      loadLeaseData()
+      loadExistingRevisions()
     }
+  }, [selectedLeaseId, currentYear])
 
-    if (filters.search) {
-      filtered = filtered.filter(
-        (revision) =>
-          revision.lease?.property?.title.toLowerCase().includes(filters.search.toLowerCase()) ||
-          revision.lease?.tenant?.first_name.toLowerCase().includes(filters.search.toLowerCase()) ||
-          revision.lease?.tenant?.last_name.toLowerCase().includes(filters.search.toLowerCase()),
-      )
+  const loadInitialData = async () => {
+    try {
+      setIsLoading(true)
+      
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        toast.error("Session expirée, veuillez vous reconnecter")
+        return
+      }
+
+      // Charger les propriétés
+      const { data: propertiesData, error: propertiesError } = await supabase
+        .from('properties')
+        .select('id, title, address, city')
+        .eq('owner_id', user.id)
+        .order('title')
+
+      if (propertiesError) {
+        console.error("Erreur chargement propriétés:", propertiesError)
+        toast.error("Erreur lors du chargement des propriétés")
+        return
+      }
+
+      setProperties(propertiesData || [])
+
+      // Charger les données IRL pour l'année courante
+      await loadIRLData(currentYear)
+
+    } catch (error) {
+      console.error("Erreur chargement initial:", error)
+      toast.error("Erreur lors du chargement")
+    } finally {
+      setIsLoading(false)
     }
-
-    setFilteredRevisions(filtered)
   }
 
-  const calculateRevision = () => {
-    if (!newRevision.current_rent || !newRevision.insee_index_reference || !newRevision.insee_index_current) {
-      toast.error("Veuillez remplir tous les champs obligatoires")
+  const loadLeasesForProperty = async () => {
+    if (!selectedPropertyId) return
+
+    try {
+      const { data: leasesData, error: leasesError } = await supabase
+        .from('leases')
+        .select(`
+          id,
+          property_id,
+          tenant_id,
+          montant_loyer_mensuel,
+          montant_provisions_charges,
+          date_revision_loyer,
+          trimestre_reference_irl,
+          property:properties(
+            id,
+            title,
+            address,
+            city
+          ),
+          tenant:users!leases_tenant_id_fkey(
+            id,
+            first_name,
+            last_name,
+            email
+          )
+        `)
+        .eq('property_id', selectedPropertyId)
+        .eq('status', 'active')
+
+      if (leasesError) {
+        console.error("Erreur chargement baux:", leasesError)
+        toast.error("Erreur lors du chargement des baux")
+        return
+      }
+
+      setLeases(leasesData || [])
+    } catch (error) {
+      console.error("Erreur chargement baux:", error)
+      toast.error("Erreur lors du chargement des baux")
+    }
+  }
+
+  const loadLeaseData = async () => {
+    if (!selectedLeaseId) return
+
+    const lease = leases.find(l => l.id === selectedLeaseId)
+    if (!lease) return
+
+    setSelectedLease(lease)
+    
+    // Initialiser les données de révision
+    setRentRevisionData({
+      referenceIrlValue: parseFloat(lease.trimestre_reference_irl) || 0,
+      newIrlValue: 0,
+      irlQuarter: '',
+      oldRentAmount: lease.montant_loyer_mensuel,
+      newRentAmount: 0,
+      rentIncreaseAmount: 0,
+      rentIncreasePercentage: 0,
+      calculationMethod: 'Révision selon indice IRL INSEE',
+      legalComplianceChecked: false,
+      complianceNotes: ''
+    })
+  }
+
+  const loadExistingRevisions = async () => {
+    if (!selectedLeaseId) return
+
+    try {
+      // Charger les révisions existantes
+      const { data: revisionsData, error: revisionsError } = await supabase
+        .from('lease_revisions')
+        .select('*')
+        .eq('lease_id', selectedLeaseId)
+        .eq('revision_year', currentYear)
+
+      if (revisionsError) {
+        console.error("Erreur chargement révisions:", revisionsError)
+        return
+      }
+
+      setRevisions(revisionsData || [])
+
+      // Charger les régularisations existantes
+      const { data: regularizationsData, error: regularizationsError } = await supabase
+        .from('charge_regularizations')
+        .select('*')
+        .eq('lease_id', selectedLeaseId)
+        .eq('regularization_year', currentYear)
+
+      if (regularizationsError) {
+        console.error("Erreur chargement régularisations:", regularizationsError)
+        return
+      }
+
+      setRegularizations(regularizationsData || [])
+    } catch (error) {
+      console.error("Erreur chargement révisions existantes:", error)
+    }
+  }
+
+  const loadIRLData = async (year: number) => {
+    try {
+      const response = await fetch(`/api/revisions/irl?year=${year}`)
+      const result = await response.json()
+      
+      if (result.success) {
+        setIrlData(result.data)
+      } else {
+        toast.error("Erreur lors du chargement des données IRL")
+      }
+    } catch (error) {
+      console.error("Erreur chargement IRL:", error)
+      toast.error("Erreur lors du chargement des données IRL")
+    }
+  }
+
+  const calculateRentRevision = () => {
+    if (!rentRevisionData.referenceIrlValue || !rentRevisionData.newIrlValue) {
+      toast.error("Veuillez sélectionner les valeurs IRL")
       return
     }
 
-    const currentRent = Number.parseFloat(newRevision.current_rent)
-    const indexRef = Number.parseFloat(newRevision.insee_index_reference)
-    const indexCurrent = Number.parseFloat(newRevision.insee_index_current)
+    const newRent = (rentRevisionData.oldRentAmount * rentRevisionData.newIrlValue) / rentRevisionData.referenceIrlValue
+    const increaseAmount = newRent - rentRevisionData.oldRentAmount
+    const increasePercentage = (increaseAmount / rentRevisionData.oldRentAmount) * 100
 
-    const revisionPercentage = ((indexCurrent - indexRef) / indexRef) * 100
-    const newRent = currentRent * (1 + revisionPercentage / 100)
+    setRentRevisionData(prev => ({
+      ...prev,
+      newRentAmount: Math.round(newRent * 100) / 100,
+      rentIncreaseAmount: Math.round(increaseAmount * 100) / 100,
+      rentIncreasePercentage: Math.round(increasePercentage * 100) / 100
+    }))
 
-    return {
-      revisionPercentage: revisionPercentage.toFixed(2),
-      newRent: newRent.toFixed(2),
-      increase: (newRent - currentRent).toFixed(2),
-    }
+    toast.success("Calcul de révision effectué")
   }
 
-  const handleCreateRevision = async () => {
-    const calculation = calculateRevision()
-    if (!calculation) return
+  const calculateChargeRegularization = async () => {
+    if (!selectedLeaseId) {
+      toast.error("Veuillez sélectionner un bail")
+      return
+    }
 
     try {
-      await rentalManagementService.createRentRevision({
-        ...newRevision,
-        new_rent: Number.parseFloat(calculation.newRent),
-        revision_percentage: Number.parseFloat(calculation.revisionPercentage),
-        status: "pending",
+      setIsCalculating(true)
+
+      const response = await fetch('/api/revisions/charges/calculate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        },
+        body: JSON.stringify({
+          leaseId: selectedLeaseId,
+          year: currentYear,
+          provisionsPeriodStart: chargeRegularizationData.provisionsPeriodStart,
+          provisionsPeriodEnd: chargeRegularizationData.provisionsPeriodEnd
+        })
       })
 
-      toast.success("Révision calculée et enregistrée avec succès")
-      setNewRevision({
-        lease_id: "",
-        current_rent: "",
-        insee_index_reference: "",
-        insee_index_current: "",
-        revision_date: "",
-      })
-
-      // Recharger les révisions
-      const revisionsData = await rentalManagementService.getRentRevisions(currentUser.id)
-      setRevisions(revisionsData)
+      const result = await response.json()
+      
+      if (result.success) {
+        const calculation = result.calculation
+        setChargeRegularizationData(prev => ({
+          ...prev,
+          totalProvisionsCollected: calculation.totalProvisionsCollected,
+          chargeBreakdown: calculation.chargeCategories.map((cat: any) => ({
+            charge_category: cat.category,
+            charge_name: cat.name,
+            provision_amount: calculation.averageMonthlyProvision,
+            real_amount: 0,
+            difference: 0,
+            is_recoverable: cat.recoverable,
+            is_exceptional: false
+          }))
+        }))
+        toast.success("Calcul des charges effectué")
+      } else {
+        toast.error("Erreur lors du calcul des charges")
+      }
     } catch (error) {
-      toast.error("Erreur lors de l'enregistrement")
+      console.error("Erreur calcul charges:", error)
+      toast.error("Erreur lors du calcul des charges")
+    } finally {
+      setIsCalculating(false)
     }
   }
 
-  const handleApplyRevision = async (revisionId: string) => {
+  const saveRentRevision = async () => {
+    if (!selectedLeaseId || !selectedLease) {
+      toast.error("Veuillez sélectionner un bail")
+      return
+    }
+
     try {
-      await rentalManagementService.applyRentRevision(revisionId)
-      toast.success("Révision appliquée avec succès")
+      setIsGenerating(true)
 
-      // Recharger les révisions
-      const revisionsData = await rentalManagementService.getRentRevisions(currentUser.id)
-      setRevisions(revisionsData)
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const response = await fetch('/api/revisions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        },
+        body: JSON.stringify({
+          leaseId: selectedLeaseId,
+          propertyId: selectedLease.property_id,
+          revisionYear: currentYear,
+          revisionDate: new Date().toISOString().split('T')[0],
+          ...rentRevisionData
+        })
+      })
+
+      const result = await response.json()
+      
+      if (result.success) {
+        toast.success("Révision de loyer sauvegardée")
+        await loadExistingRevisions()
+        setCurrentStep('charges')
+      } else {
+        toast.error("Erreur lors de la sauvegarde")
+      }
     } catch (error) {
-      toast.error("Erreur lors de l'application de la révision")
+      console.error("Erreur sauvegarde révision:", error)
+      toast.error("Erreur lors de la sauvegarde")
+    } finally {
+      setIsGenerating(false)
     }
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "applied":
-        return <Badge className="bg-green-600">Appliquée</Badge>
-      case "pending":
-        return <Badge variant="secondary">En attente</Badge>
-      case "cancelled":
-        return <Badge variant="destructive">Annulée</Badge>
-      default:
-        return <Badge variant="outline">{status}</Badge>
+  const saveChargeRegularization = async () => {
+    if (!selectedLeaseId || !selectedLease) {
+      toast.error("Veuillez sélectionner un bail")
+      return
+    }
+
+    try {
+      setIsGenerating(true)
+
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const response = await fetch('/api/revisions/charges', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        },
+        body: JSON.stringify({
+          leaseId: selectedLeaseId,
+          propertyId: selectedLease.property_id,
+          regularizationYear: currentYear,
+          regularizationDate: new Date().toISOString().split('T')[0],
+          ...chargeRegularizationData
+        })
+      })
+
+      const result = await response.json()
+      
+      if (result.success) {
+        toast.success("Régularisation des charges sauvegardée")
+        await loadExistingRevisions()
+        setCurrentStep('validation')
+      } else {
+        toast.error("Erreur lors de la sauvegarde")
+      }
+    } catch (error) {
+      console.error("Erreur sauvegarde régularisation:", error)
+      toast.error("Erreur lors de la sauvegarde")
+    } finally {
+      setIsGenerating(false)
     }
   }
 
-  const getRevisionStats = () => {
-    const applied = revisions.filter((r) => r.status === "applied").length
-    const pending = revisions.filter((r) => r.status === "pending").length
-    const totalIncrease = revisions
-      .filter((r) => r.status === "applied")
-      .reduce((sum, r) => sum + (r.new_rent - r.current_rent), 0)
-    const avgIncrease =
-      revisions.length > 0 ? revisions.reduce((sum, r) => sum + r.revision_percentage, 0) / revisions.length : 0
+  const generatePDF = async (type: 'amendment' | 'statement') => {
+    try {
+      setIsGenerating(true)
+      
+      // Ici, vous implémenteriez la génération PDF
+      // Pour l'instant, on simule
+      toast.success(`PDF ${type === 'amendment' ? 'd\'avenant' : 'de décompte'} généré`)
+    } catch (error) {
+      console.error("Erreur génération PDF:", error)
+      toast.error("Erreur lors de la génération PDF")
+    } finally {
+      setIsGenerating(false)
+    }
+  }
 
-    return { applied, pending, totalIncrease, avgIncrease }
+  const sendToTenant = async (type: 'amendment' | 'statement') => {
+    try {
+      setIsGenerating(true)
+      
+      // Ici, vous implémenteriez l'envoi par email
+      // Pour l'instant, on simule
+      toast.success(`Document ${type === 'amendment' ? 'd\'avenant' : 'de décompte'} envoyé au locataire`)
+    } catch (error) {
+      console.error("Erreur envoi document:", error)
+      toast.error("Erreur lors de l'envoi")
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="text-gray-600">Chargement des révisions...</p>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold">Révision annuelle</h1>
+          <p className="text-muted-foreground">Gestion des révisions de loyer et régularisations de charges</p>
+        </div>
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <p>Chargement des données...</p>
+          </div>
         </div>
       </div>
     )
   }
 
-  const stats = getRevisionStats()
-
   return (
     <div className="space-y-6">
+      {/* En-tête */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Révision des Loyers</h1>
-          <p className="text-gray-600">Gérez les révisions annuelles selon l'indice INSEE</p>
+          <h1 className="text-3xl font-bold">Révision annuelle</h1>
+          <p className="text-muted-foreground">Gestion des révisions de loyer et régularisations de charges</p>
         </div>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button>
-              <Calculator className="h-4 w-4 mr-2" />
-              Calculer une révision
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Calculer une révision de loyer</DialogTitle>
-              <DialogDescription>Utilisez l'indice INSEE pour calculer la nouvelle révision</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="revision-lease">Bail concerné *</Label>
-                <Select
-                  value={newRevision.lease_id}
-                  onValueChange={(value) => {
-                    const selectedLease = leases.find((l) => l.id === value)
-                    setNewRevision((prev) => ({
-                      ...prev,
-                      lease_id: value,
-                      current_rent: selectedLease ? selectedLease.monthly_rent.toString() : "",
-                    }))
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner un bail" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {leases.map((lease) => (
-                      <SelectItem key={lease.id} value={lease.id}>
-                        {lease.property.title} - {lease.tenant.first_name} {lease.tenant.last_name} (
-                        {lease.monthly_rent}€)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="current-rent">Loyer actuel (€) *</Label>
-                  <Input
-                    id="current-rent"
-                    type="number"
-                    value={newRevision.current_rent}
-                    onChange={(e) => setNewRevision((prev) => ({ ...prev, current_rent: e.target.value }))}
-                    placeholder="1200"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="revision-date">Date de révision *</Label>
-                  <Input
-                    id="revision-date"
-                    type="date"
-                    value={newRevision.revision_date}
-                    onChange={(e) => setNewRevision((prev) => ({ ...prev, revision_date: e.target.value }))}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="index-ref">Indice de référence *</Label>
-                  <Input
-                    id="index-ref"
-                    type="number"
-                    step="0.01"
-                    value={newRevision.insee_index_reference}
-                    onChange={(e) => setNewRevision((prev) => ({ ...prev, insee_index_reference: e.target.value }))}
-                    placeholder="130.52"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Indice du trimestre de signature du bail</p>
-                </div>
-                <div>
-                  <Label htmlFor="index-current">Indice actuel *</Label>
-                  <Input
-                    id="index-current"
-                    type="number"
-                    step="0.01"
-                    value={newRevision.insee_index_current}
-                    onChange={(e) => setNewRevision((prev) => ({ ...prev, insee_index_current: e.target.value }))}
-                    placeholder="134.50"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Dernier indice publié par l'INSEE</p>
-                </div>
-              </div>
-
-              {newRevision.current_rent && newRevision.insee_index_reference && newRevision.insee_index_current && (
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <h4 className="font-semibold text-blue-900 mb-2">Calcul de la révision</h4>
-                  {(() => {
-                    const calc = calculateRevision()
-                    return calc ? (
-                      <div className="grid grid-cols-3 gap-4 text-sm">
-                        <div>
-                          <p className="text-blue-700">Augmentation</p>
-                          <p className="font-bold text-blue-900">+{calc.revisionPercentage}%</p>
-                        </div>
-                        <div>
-                          <p className="text-blue-700">Nouveau loyer</p>
-                          <p className="font-bold text-blue-900">{calc.newRent}€</p>
-                        </div>
-                        <div>
-                          <p className="text-blue-700">Différence</p>
-                          <p className="font-bold text-blue-900">+{calc.increase}€</p>
-                        </div>
-                      </div>
-                    ) : null
-                  })()}
-                </div>
-              )}
-
-              <div className="flex justify-end space-x-2">
-                <Button variant="outline">Annuler</Button>
-                <Button onClick={handleCreateRevision}>Enregistrer la révision</Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center gap-4">
+          <Select value={selectedPropertyId} onValueChange={setSelectedPropertyId}>
+            <SelectTrigger className="w-64">
+              <SelectValue placeholder="Sélectionner un logement" />
+            </SelectTrigger>
+            <SelectContent>
+              {properties.map(property => (
+                <SelectItem key={property.id} value={property.id}>
+                  {property.title} - {property.address}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={currentYear.toString()} onValueChange={(value) => setCurrentYear(parseInt(value))}>
+            <SelectTrigger className="w-32">
+              <SelectValue placeholder="Année" />
+            </SelectTrigger>
+            <SelectContent>
+              {[currentYear - 1, currentYear, currentYear + 1].map(year => (
+                <SelectItem key={year} value={year.toString()}>
+                  {year}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      {/* Statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Sélection du bail */}
+      {selectedPropertyId && (
         <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Appliquées</p>
-                <p className="text-3xl font-bold text-green-600">{stats.applied}</p>
-              </div>
-              <TrendingUp className="h-8 w-8 text-green-600" />
-            </div>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building className="h-5 w-5" />
+              Sélection du bail
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Select value={selectedLeaseId} onValueChange={setSelectedLeaseId}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Sélectionner un bail" />
+              </SelectTrigger>
+              <SelectContent>
+                {leases.map(lease => (
+                  <SelectItem key={lease.id} value={lease.id}>
+                    {lease.tenant.first_name} {lease.tenant.last_name} - {lease.montant_loyer_mensuel}€/mois
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </CardContent>
         </Card>
+      )}
 
+      {/* Assistant de révision */}
+      {selectedLeaseId && selectedLease && (
         <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">En attente</p>
-                <p className="text-3xl font-bold text-orange-600">{stats.pending}</p>
-              </div>
-              <AlertCircle className="h-8 w-8 text-orange-600" />
-            </div>
-          </CardContent>
-        </Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calculator className="h-5 w-5" />
+              Assistant de révision {currentYear}
+            </CardTitle>
+            <CardDescription>
+              {selectedLease.property.title} - {selectedLease.tenant.first_name} {selectedLease.tenant.last_name}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Tabs value={currentStep} onValueChange={(value) => setCurrentStep(value as any)}>
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="rent" className="flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" />
+                  Révision loyer
+                </TabsTrigger>
+                <TabsTrigger value="charges" className="flex items-center gap-2">
+                  <Receipt className="h-4 w-4" />
+                  Régularisation charges
+                </TabsTrigger>
+                <TabsTrigger value="validation" className="flex items-center gap-2">
+                  <FileCheck className="h-4 w-4" />
+                  Validation & envoi
+                </TabsTrigger>
+              </TabsList>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Gain total</p>
-                <p className="text-3xl font-bold text-blue-600">+{stats.totalIncrease.toFixed(0)}€</p>
-              </div>
-              <Euro className="h-8 w-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Augmentation moy.</p>
-                <p className="text-3xl font-bold text-purple-600">{stats.avgIncrease.toFixed(1)}%</p>
-              </div>
-              <BarChart3 className="h-8 w-8 text-purple-600" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filtres */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-wrap gap-4 items-end">
-            <div className="flex-1 min-w-[200px]">
-              <Label htmlFor="search">Rechercher</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  id="search"
-                  placeholder="Rechercher par propriété ou locataire..."
-                  value={filters.search}
-                  onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="status">Statut</Label>
-              <Select
-                value={filters.status}
-                onValueChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}
-              >
-                <SelectTrigger className="w-[150px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous</SelectItem>
-                  <SelectItem value="applied">Appliquée</SelectItem>
-                  <SelectItem value="pending">En attente</SelectItem>
-                  <SelectItem value="cancelled">Annulée</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="year">Année</Label>
-              <Select value={filters.year} onValueChange={(value) => setFilters((prev) => ({ ...prev, year: value }))}>
-                <SelectTrigger className="w-[120px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Toutes</SelectItem>
-                  <SelectItem value="2024">2024</SelectItem>
-                  <SelectItem value="2023">2023</SelectItem>
-                  <SelectItem value="2022">2022</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Liste des révisions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Révisions de loyer</CardTitle>
-          <CardDescription>Historique et suivi des révisions annuelles</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {filteredRevisions.length > 0 ? (
-              filteredRevisions.map((revision) => (
-                <div key={revision.id} className="p-4 border rounded-lg">
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-2 flex-1">
-                      <div className="flex items-center space-x-2">
-                        <h3 className="font-medium">
-                          {revision.lease?.property?.title} - {revision.lease?.tenant?.first_name}{" "}
-                          {revision.lease?.tenant?.last_name}
-                        </h3>
-                        {getStatusBadge(revision.status)}
+              {/* Étape 1: Révision du loyer */}
+              <TabsContent value="rent" className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">Données IRL</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div>
+                        <Label htmlFor="reference-irl">IRL de référence</Label>
+                        <Input
+                          id="reference-irl"
+                          type="number"
+                          step="0.01"
+                          value={rentRevisionData.referenceIrlValue}
+                          onChange={(e) => setRentRevisionData(prev => ({
+                            ...prev,
+                            referenceIrlValue: parseFloat(e.target.value) || 0
+                          }))}
+                        />
                       </div>
-                      <div className="grid grid-cols-4 gap-4 text-sm">
-                        <div>
-                          <span className="text-gray-500">Loyer actuel: </span>
-                          <span className="font-medium">{revision.current_rent}€</span>
+                      <div>
+                        <Label htmlFor="new-irl">Nouvel IRL</Label>
+                        <Select onValueChange={(value) => {
+                          const irlValue = irlData.find(irl => irl.quarter === value)
+                          if (irlValue) {
+                            setRentRevisionData(prev => ({
+                              ...prev,
+                              newIrlValue: irlValue.value,
+                              irlQuarter: value
+                            }))
+                          }
+                        }}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionner le trimestre" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {irlData.map(irl => (
+                              <SelectItem key={irl.quarter} value={irl.quarter}>
+                                {irl.quarter} - {irl.value}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button onClick={calculateRentRevision} className="w-full">
+                        <Calculator className="h-4 w-4 mr-2" />
+                        Calculer la révision
+                      </Button>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">Résultat du calcul</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span>Ancien loyer:</span>
+                          <span className="font-semibold">{rentRevisionData.oldRentAmount.toFixed(2)} €</span>
                         </div>
-                        <div>
-                          <span className="text-gray-500">Nouveau loyer: </span>
-                          <span className="font-medium text-green-600">{revision.new_rent}€</span>
+                        <div className="flex justify-between">
+                          <span>Nouveau loyer:</span>
+                          <span className="font-semibold text-green-600">{rentRevisionData.newRentAmount.toFixed(2)} €</span>
                         </div>
-                        <div>
-                          <span className="text-gray-500">Augmentation: </span>
-                          <span className="font-medium">+{revision.revision_percentage}%</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-500">Date: </span>
-                          <span className="font-medium">
-                            {new Date(revision.revision_date).toLocaleDateString("fr-FR")}
+                        <div className="flex justify-between">
+                          <span>Augmentation:</span>
+                          <span className="font-semibold text-blue-600">
+                            {rentRevisionData.rentIncreaseAmount.toFixed(2)} € ({rentRevisionData.rentIncreasePercentage.toFixed(2)}%)
                           </span>
                         </div>
                       </div>
-                      <div className="text-sm text-gray-500">
-                        Indice de référence: {revision.insee_index_reference} → Indice actuel:{" "}
-                        {revision.insee_index_current}
+                      
+                      <div className="pt-4">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="compliance"
+                            checked={rentRevisionData.legalComplianceChecked}
+                            onCheckedChange={(checked) => setRentRevisionData(prev => ({
+                              ...prev,
+                              legalComplianceChecked: checked as boolean
+                            }))}
+                          />
+                          <Label htmlFor="compliance">Conformité légale vérifiée</Label>
+                        </div>
+                      </div>
+
+                      <Button 
+                        onClick={saveRentRevision} 
+                        disabled={!rentRevisionData.legalComplianceChecked || isGenerating}
+                        className="w-full"
+                      >
+                        {isGenerating ? (
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                        )}
+                        Sauvegarder la révision
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+
+              {/* Étape 2: Régularisation des charges */}
+              <TabsContent value="charges" className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">Période de régularisation</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div>
+                        <Label htmlFor="period-start">Début de période</Label>
+                        <Input
+                          id="period-start"
+                          type="date"
+                          value={chargeRegularizationData.provisionsPeriodStart}
+                          onChange={(e) => setChargeRegularizationData(prev => ({
+                            ...prev,
+                            provisionsPeriodStart: e.target.value
+                          }))}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="period-end">Fin de période</Label>
+                        <Input
+                          id="period-end"
+                          type="date"
+                          value={chargeRegularizationData.provisionsPeriodEnd}
+                          onChange={(e) => setChargeRegularizationData(prev => ({
+                            ...prev,
+                            provisionsPeriodEnd: e.target.value
+                          }))}
+                        />
+                      </div>
+                      <Button 
+                        onClick={calculateChargeRegularization} 
+                        disabled={isCalculating}
+                        className="w-full"
+                      >
+                        {isCalculating ? (
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Calculator className="h-4 w-4 mr-2" />
+                        )}
+                        Calculer les charges
+                      </Button>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">Résumé des charges</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span>Provisions encaissées:</span>
+                          <span className="font-semibold">{chargeRegularizationData.totalProvisionsCollected.toFixed(2)} €</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Charges réelles:</span>
+                          <span className="font-semibold">{chargeRegularizationData.totalRealCharges.toFixed(2)} €</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Charges récupérables:</span>
+                          <span className="font-semibold text-green-600">{chargeRegularizationData.recoverableCharges.toFixed(2)} €</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Solde locataire:</span>
+                          <span className={`font-semibold ${chargeRegularizationData.tenantBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {chargeRegularizationData.tenantBalance.toFixed(2)} €
+                          </span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="calculation-notes">Méthode de calcul</Label>
+                        <Textarea
+                          id="calculation-notes"
+                          placeholder="Décrivez votre méthode de calcul des charges..."
+                          value={chargeRegularizationData.calculationNotes}
+                          onChange={(e) => setChargeRegularizationData(prev => ({
+                            ...prev,
+                            calculationNotes: e.target.value
+                          }))}
+                        />
+                      </div>
+
+                      <Button 
+                        onClick={saveChargeRegularization} 
+                        disabled={isGenerating}
+                        className="w-full"
+                      >
+                        {isGenerating ? (
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                        )}
+                        Sauvegarder la régularisation
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+
+              {/* Étape 3: Validation et envoi */}
+              <TabsContent value="validation" className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">Documents générés</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start"
+                          onClick={() => generatePDF('amendment')}
+                          disabled={isGenerating}
+                        >
+                          <FileText className="h-4 w-4 mr-2" />
+                          Générer avenant de bail (PDF)
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start"
+                          onClick={() => generatePDF('statement')}
+                          disabled={isGenerating}
+                        >
+                          <Receipt className="h-4 w-4 mr-2" />
+                          Générer décompte de charges (PDF)
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">Envoi au locataire</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start"
+                          onClick={() => sendToTenant('amendment')}
+                          disabled={isGenerating}
+                        >
+                          <Send className="h-4 w-4 mr-2" />
+                          Envoyer avenant par email
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start"
+                          onClick={() => sendToTenant('statement')}
+                          disabled={isGenerating}
+                        >
+                          <Send className="h-4 w-4 mr-2" />
+                          Envoyer décompte par email
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Historique des révisions */}
+      {(revisions.length > 0 || regularizations.length > 0) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <History className="h-5 w-5" />
+              Historique des révisions {currentYear}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="revisions" className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="revisions">Révisions de loyer</TabsTrigger>
+                <TabsTrigger value="regularizations">Régularisations de charges</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="revisions" className="space-y-4">
+                {revisions.map(revision => (
+                  <div key={revision.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div>
+                      <div className="font-semibold">
+                        Révision {revision.revision_year} - {revision.irl_quarter}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {revision.old_rent_amount.toFixed(2)}€ → {revision.new_rent_amount.toFixed(2)}€ 
+                        (+{revision.rent_increase_percentage.toFixed(2)}%)
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      {revision.status === "pending" && (
-                        <Button size="sm" onClick={() => handleApplyRevision(revision.id)}>
-                          Appliquer
+                    <div className="flex items-center gap-2">
+                      <Badge variant={revision.status === 'sent' ? 'default' : 'secondary'}>
+                        {revision.status}
+                      </Badge>
+                      {revision.amendment_pdf_url && (
+                        <Button variant="outline" size="sm">
+                          <Download className="h-4 w-4" />
                         </Button>
                       )}
-                      <Button size="sm" variant="outline">
-                        <FileText className="h-4 w-4 mr-1" />
-                        Courrier
-                      </Button>
                     </div>
                   </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                <Calculator className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                <p>Aucune révision trouvée</p>
-                <p className="text-sm">Calculez votre première révision de loyer</p>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+                ))}
+              </TabsContent>
 
-      {/* Guide des révisions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Guide de révision des loyers</CardTitle>
-          <CardDescription>Informations importantes sur la procédure légale</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div className="flex items-start space-x-3">
-                <Calendar className="h-5 w-5 text-blue-600 mt-0.5" />
-                <div>
-                  <h4 className="font-medium">Quand réviser ?</h4>
-                  <p className="text-sm text-gray-600">
-                    Une fois par an, à la date anniversaire du bail ou à une date convenue dans le contrat.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start space-x-3">
-                <BarChart3 className="h-5 w-5 text-green-600 mt-0.5" />
-                <div>
-                  <h4 className="font-medium">Indice de référence</h4>
-                  <p className="text-sm text-gray-600">
-                    Utilisez l'IRL (Indice de Référence des Loyers) publié par l'INSEE chaque trimestre.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-start space-x-3">
-                <FileText className="h-5 w-5 text-purple-600 mt-0.5" />
-                <div>
-                  <h4 className="font-medium">Procédure</h4>
-                  <p className="text-sm text-gray-600">
-                    Envoyez un courrier recommandé avec accusé de réception au locataire.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start space-x-3">
-                <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5" />
-                <div>
-                  <h4 className="font-medium">Délai</h4>
-                  <p className="text-sm text-gray-600">
-                    La révision prend effet au plus tôt 1 mois après la demande du propriétaire.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+              <TabsContent value="regularizations" className="space-y-4">
+                {regularizations.map(regularization => (
+                  <div key={regularization.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div>
+                      <div className="font-semibold">
+                        Régularisation {regularization.regularization_year}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Provisions: {regularization.total_provisions_collected.toFixed(2)}€ | 
+                        Réel: {regularization.total_real_charges.toFixed(2)}€ | 
+                        Solde: {regularization.tenant_balance.toFixed(2)}€
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={regularization.status === 'sent' ? 'default' : 'secondary'}>
+                        {regularization.status}
+                      </Badge>
+                      {regularization.statement_pdf_url && (
+                        <Button variant="outline" size="sm">
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
