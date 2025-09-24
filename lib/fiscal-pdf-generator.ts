@@ -348,56 +348,212 @@ export class FiscalPDFGenerator {
   }
 
   private addForm2044Content(data: FiscalPDFData) {
-    this.doc.setFontSize(14)
+    this.doc.setFontSize(16)
     this.doc.setFont('helvetica', 'bold')
-    this.doc.text('Formulaire 2044 - Revenus fonciers', 20, 100)
+    this.doc.text('FORMULAIRE 2044 - REVENUS FONCIERS', 20, 100)
     
     // Instructions
     this.doc.setFontSize(10)
     this.doc.setFont('helvetica', 'normal')
-    this.doc.text('Ce formulaire est prérempli avec vos données. Vérifiez et complétez selon vos besoins.', 20, 120)
+    this.doc.text('Déclaration des revenus fonciers - Année d\'imposition ' + data.year, 20, 115)
+    this.doc.text('Ce formulaire est prérempli avec vos données. Vérifiez et complétez selon vos besoins.', 20, 125)
     
-    // Données préremplies
-    const formData = [
-      ['Ligne 4BE - Revenus bruts', formatAmount(data.summary.totalRentCollected || 0)],
-      ['Ligne 4BF - Charges déductibles', formatAmount(data.summary.totalDeductibleExpenses || 0)],
-      ['Ligne 4BG - Revenu net', formatAmount(data.summary.netRentalIncome || 0)]
+    // Section A - Revenus bruts
+    this.doc.setFontSize(12)
+    this.doc.setFont('helvetica', 'bold')
+    this.doc.text('A - REVENUS BRUTS', 20, 145)
+    
+    const revenueData = [
+      ['Ligne 4BE', 'Revenus bruts (loyers encaissés)', formatAmount(data.summary.totalRentCollected || 0)],
+      ['Ligne 4BF', 'Charges récupérables (non imposables)', formatAmount(data.summary.totalRecoverableCharges || 0)],
+      ['Ligne 4BG', 'Revenu net imposable', formatAmount(data.summary.netRentalIncome || 0)]
     ]
     
     this.doc.autoTable({
-      startY: 140,
-      head: [['Ligne', 'Montant']],
-      body: formData,
+      startY: 155,
+      head: [['Ligne', 'Description', 'Montant']],
+      body: revenueData,
       theme: 'grid',
       headStyles: { fillColor: [66, 139, 202] },
-      styles: { fontSize: 10 }
+      styles: { fontSize: 10 },
+      columnStyles: {
+        0: { cellWidth: 20 },
+        1: { cellWidth: 80 },
+        2: { cellWidth: 30, halign: 'right' }
+      }
+    })
+    
+    // Section B - Charges déductibles
+    const tableY = (this.doc as any).lastAutoTable.finalY || 155
+    this.doc.setFontSize(12)
+    this.doc.setFont('helvetica', 'bold')
+    this.doc.text('B - CHARGES DÉDUCTIBLES', 20, tableY + 20)
+    
+    const chargesData = [
+      ['Ligne 4BF', 'Charges déductibles', formatAmount(data.summary.totalDeductibleExpenses || 0)],
+      ['', 'Dont réparations et améliorations', formatAmount(0)],
+      ['', 'Dont charges de gestion', formatAmount(0)],
+      ['', 'Dont assurances', formatAmount(0)],
+      ['', 'Dont intérêts d\'emprunt', formatAmount(0)]
+    ]
+    
+    this.doc.autoTable({
+      startY: tableY + 30,
+      head: [['Ligne', 'Description', 'Montant']],
+      body: chargesData,
+      theme: 'grid',
+      headStyles: { fillColor: [40, 167, 69] },
+      styles: { fontSize: 10 },
+      columnStyles: {
+        0: { cellWidth: 20 },
+        1: { cellWidth: 80 },
+        2: { cellWidth: 30, halign: 'right' }
+      }
+    })
+    
+    // Section C - Résultat
+    const chargesTableY = (this.doc as any).lastAutoTable.finalY || tableY + 30
+    this.doc.setFontSize(12)
+    this.doc.setFont('helvetica', 'bold')
+    this.doc.text('C - RÉSULTAT', 20, chargesTableY + 20)
+    
+    const resultData = [
+      ['Ligne 4BG', 'Revenu net foncier', formatAmount(data.summary.netRentalIncome || 0)],
+      ['', 'Déficit foncier reportable', formatAmount(0)],
+      ['', 'Résultat net imposable', formatAmount(data.summary.netRentalIncome || 0)]
+    ]
+    
+    this.doc.autoTable({
+      startY: chargesTableY + 30,
+      head: [['Ligne', 'Description', 'Montant']],
+      body: resultData,
+      theme: 'grid',
+      headStyles: { fillColor: [220, 53, 69] },
+      styles: { fontSize: 10 },
+      columnStyles: {
+        0: { cellWidth: 20 },
+        1: { cellWidth: 80 },
+        2: { cellWidth: 30, halign: 'right' }
+      }
     })
   }
 
   private addForm2042CPROContent(data: FiscalPDFData) {
-    this.doc.setFontSize(14)
+    this.doc.setFontSize(16)
     this.doc.setFont('helvetica', 'bold')
-    this.doc.text('Formulaire 2042-C-PRO - BIC/LMNP', 20, 100)
+    this.doc.text('FORMULAIRE 2042-C-PRO - BIC/LMNP', 20, 100)
     
     // Instructions
     this.doc.setFontSize(10)
     this.doc.setFont('helvetica', 'normal')
-    this.doc.text('Ce formulaire est prérempli avec vos données pour la location meublée. Vérifiez et complétez selon vos besoins.', 20, 120)
+    this.doc.text('Déclaration des bénéfices industriels et commerciaux - Location meublée', 20, 115)
+    this.doc.text('Année d\'imposition ' + data.year + ' - Ce formulaire est prérempli avec vos données.', 20, 125)
     
-    // Données préremplies
-    const formData = [
-      ['Chiffre d\'affaires', formatAmount(data.summary.totalRentCollected || 0)],
-      ['Charges déductibles', formatAmount(data.summary.totalDeductibleExpenses || 0)],
-      ['Résultat net', formatAmount(data.summary.netRentalIncome || 0)]
+    // Section A - Chiffre d'affaires
+    this.doc.setFontSize(12)
+    this.doc.setFont('helvetica', 'bold')
+    this.doc.text('A - CHIFFRE D\'AFFAIRES', 20, 145)
+    
+    const revenueData = [
+      ['Ligne CA', 'Chiffre d\'affaires (loyers meublés)', formatAmount(data.summary.totalRentCollected || 0)],
+      ['', 'Dont charges récupérables', formatAmount(data.summary.totalRecoverableCharges || 0)],
+      ['', 'Chiffre d\'affaires net', formatAmount(data.summary.totalRentCollected || 0)]
     ]
     
     this.doc.autoTable({
-      startY: 140,
-      head: [['Élément', 'Montant']],
-      body: formData,
+      startY: 155,
+      head: [['Ligne', 'Description', 'Montant']],
+      body: revenueData,
       theme: 'grid',
       headStyles: { fillColor: [66, 139, 202] },
-      styles: { fontSize: 10 }
+      styles: { fontSize: 10 },
+      columnStyles: {
+        0: { cellWidth: 20 },
+        1: { cellWidth: 80 },
+        2: { cellWidth: 30, halign: 'right' }
+      }
+    })
+    
+    // Section B - Charges déductibles
+    const tableY = (this.doc as any).lastAutoTable.finalY || 155
+    this.doc.setFontSize(12)
+    this.doc.setFont('helvetica', 'bold')
+    this.doc.text('B - CHARGES DÉDUCTIBLES', 20, tableY + 20)
+    
+    const chargesData = [
+      ['Ligne CD', 'Charges déductibles totales', formatAmount(data.summary.totalDeductibleExpenses || 0)],
+      ['', 'Dont amortissements', formatAmount(0)],
+      ['', 'Dont réparations et maintenance', formatAmount(0)],
+      ['', 'Dont charges de gestion', formatAmount(0)],
+      ['', 'Dont assurances', formatAmount(0)],
+      ['', 'Dont intérêts d\'emprunt', formatAmount(0)],
+      ['', 'Dont autres charges', formatAmount(0)]
+    ]
+    
+    this.doc.autoTable({
+      startY: tableY + 30,
+      head: [['Ligne', 'Description', 'Montant']],
+      body: chargesData,
+      theme: 'grid',
+      headStyles: { fillColor: [40, 167, 69] },
+      styles: { fontSize: 10 },
+      columnStyles: {
+        0: { cellWidth: 20 },
+        1: { cellWidth: 80 },
+        2: { cellWidth: 30, halign: 'right' }
+      }
+    })
+    
+    // Section C - Résultat
+    const chargesTableY = (this.doc as any).lastAutoTable.finalY || tableY + 30
+    this.doc.setFontSize(12)
+    this.doc.setFont('helvetica', 'bold')
+    this.doc.text('C - RÉSULTAT', 20, chargesTableY + 20)
+    
+    const resultData = [
+      ['Ligne RN', 'Résultat net BIC', formatAmount(data.summary.netRentalIncome || 0)],
+      ['', 'Déficit reportable', formatAmount(0)],
+      ['', 'Résultat net imposable', formatAmount(data.summary.netRentalIncome || 0)]
+    ]
+    
+    this.doc.autoTable({
+      startY: chargesTableY + 30,
+      head: [['Ligne', 'Description', 'Montant']],
+      body: resultData,
+      theme: 'grid',
+      headStyles: { fillColor: [220, 53, 69] },
+      styles: { fontSize: 10 },
+      columnStyles: {
+        0: { cellWidth: 20 },
+        1: { cellWidth: 80 },
+        2: { cellWidth: 30, halign: 'right' }
+      }
+    })
+    
+    // Section D - Régime fiscal
+    const resultTableY = (this.doc as any).lastAutoTable.finalY || chargesTableY + 30
+    this.doc.setFontSize(12)
+    this.doc.setFont('helvetica', 'bold')
+    this.doc.text('D - RÉGIME FISCAL APPLICABLE', 20, resultTableY + 20)
+    
+    const regimeData = [
+      ['Micro-BIC', 'Abattement forfaitaire 50%', 'Revenus < 72 600€'],
+      ['Régime réel', 'Déduction des charges réelles', 'Revenus ≥ 72 600€'],
+      ['Recommandé', data.simulations?.recommendation?.regime || 'Régime réel', 'Selon calcul optimisé']
+    ]
+    
+    this.doc.autoTable({
+      startY: resultTableY + 30,
+      head: [['Régime', 'Modalités', 'Conditions']],
+      body: regimeData,
+      theme: 'grid',
+      headStyles: { fillColor: [108, 117, 125] },
+      styles: { fontSize: 10 },
+      columnStyles: {
+        0: { cellWidth: 30 },
+        1: { cellWidth: 60 },
+        2: { cellWidth: 40 }
+      }
     })
   }
 

@@ -67,12 +67,16 @@ function generateFormPDF(formType: string, year: number, user: any, fiscalData: 
     // Utiliser le générateur PDF approprié selon le type de formulaire
     if (formType === '2044') {
       const generator = new FiscalPDFGenerator()
-      const pdfBuffer = generator.generateForm2044(fiscalData)
-      return pdfBuffer
+      const pdfDoc = generator.generateForm2044(fiscalData)
+      // Convertir le PDF jsPDF en Buffer
+      const pdfOutput = pdfDoc.output('arraybuffer')
+      return Buffer.from(pdfOutput)
     } else if (formType === '2042-c-pro') {
       const generator = new FiscalPDFGenerator()
-      const pdfBuffer = generator.generateForm2042CPRO(fiscalData)
-      return pdfBuffer
+      const pdfDoc = generator.generateForm2042CPRO(fiscalData)
+      // Convertir le PDF jsPDF en Buffer
+      const pdfOutput = pdfDoc.output('arraybuffer')
+      return Buffer.from(pdfOutput)
     } else {
       // Fallback pour d'autres types de formulaires
       const content = `

@@ -67,3 +67,9 @@ scripts/test-fiscal-service-client.sql
 scripts/test-receipts-rls.sql
 scripts/fix-receipts-rls-simple.sql
 scripts/test-api-data-access.sql
+scripts/debug-payments-receipts.sql
+scripts/fix-leases-rls.sql
+scripts/test-api-token.sql
+scripts/test-leases-access.sql
+scripts/test-rls-policies.sql
+scripts/test-rls-with-user.sql
