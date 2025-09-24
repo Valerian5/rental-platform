@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase"
 import { FiscalServiceClient } from "@/lib/fiscal-service-client"
+import { FiscalPDFGenerator } from "@/lib/fiscal-pdf-generator"
 
 export async function POST(request: NextRequest) {
   try {
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Générer le formulaire avec les données fiscales réelles
-    const fiscalData = await FiscalServiceClient.generateFiscalSummary(user.id, year)
+    const fiscalData = await FiscalServiceClient.generateFiscalSummary(user.id, year, supabase)
     const pdfContent = generateFormPDF(formType, year, user, fiscalData)
 
     return new NextResponse(pdfContent, {
@@ -62,23 +63,39 @@ export async function POST(request: NextRequest) {
 }
 
 function generateFormPDF(formType: string, year: number, user: any, fiscalData: any): Buffer {
-  // Générer un PDF avec les données fiscales réelles
-  const content = `
-    Formulaire ${formType} - Année ${year}
-    Propriétaire: ${user.first_name} ${user.last_name}
-    Email: ${user.email}
-    
-    Données fiscales:
-    - Revenus bruts: ${fiscalData.summary?.totalRentCollected || 0} €
-    - Charges récupérables: ${fiscalData.summary?.totalRecoverableCharges || 0} €
-    - Dépenses déductibles: ${fiscalData.summary?.totalDeductibleExpenses || 0} €
-    - Revenu net: ${fiscalData.summary?.netRentalIncome || 0} €
-    - Bénéfice imposable: ${fiscalData.summary?.taxableProfit || 0} €
-    
-    Nombre de quittances: ${fiscalData.receipts?.length || 0}
-    Nombre de dépenses: ${fiscalData.expenses?.deductible?.length + fiscalData.expenses?.nonDeductible?.length || 0}
-  `
-  
-  // Convertir en Buffer (simulation)
-  return Buffer.from(content, 'utf-8')
+  try {
+    // Utiliser le générateur PDF approprié selon le type de formulaire
+    if (formType === '2044') {
+      const generator = new FiscalPDFGenerator()
+      const pdfBuffer = generator.generateForm2044(fiscalData)
+      return pdfBuffer
+    } else if (formType === '2042-c-pro') {
+      const generator = new FiscalPDFGenerator()
+      const pdfBuffer = generator.generateForm2042CPRO(fiscalData)
+      return pdfBuffer
+    } else {
+      // Fallback pour d'autres types de formulaires
+      const content = `
+        Formulaire ${formType} - Année ${year}
+        Propriétaire: ${user.first_name} ${user.last_name}
+        Email: ${user.email}
+        
+        Données fiscales:
+        - Revenus bruts: ${fiscalData.summary?.totalRentCollected || 0} €
+        - Charges récupérables: ${fiscalData.summary?.totalRecoverableCharges || 0} €
+        - Dépenses déductibles: ${fiscalData.summary?.totalDeductibleExpenses || 0} €
+        - Revenu net: ${fiscalData.summary?.netRentalIncome || 0} €
+        - Bénéfice imposable: ${fiscalData.summary?.taxableProfit || 0} €
+        
+        Nombre de quittances: ${fiscalData.receipts?.length || 0}
+        Nombre de dépenses: ${fiscalData.expenses?.deductible?.length + fiscalData.expenses?.nonDeductible?.length || 0}
+      `
+      return Buffer.from(content, 'utf-8')
+    }
+  } catch (error) {
+    console.error("Erreur génération PDF formulaire:", error)
+    // Fallback en cas d'erreur
+    const content = `Erreur lors de la génération du formulaire ${formType} pour l'année ${year}`
+    return Buffer.from(content, 'utf-8')
+  }
 }
