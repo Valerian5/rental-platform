@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServerClient, createClient } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase"
 import { FiscalServiceClient } from "@/lib/fiscal-service-client"
 
 export async function GET(request: NextRequest) {
@@ -12,8 +13,8 @@ export async function GET(request: NextRequest) {
 
     const token = authHeader.split(' ')[1]
     
-    // Créer un client Supabase avec le token utilisateur pour respecter RLS
-    const supabase = createClient(
+    // Utiliser le même client que le côté client, mais avec le token utilisateur
+    const supabaseClient = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
@@ -26,11 +27,13 @@ export async function GET(request: NextRequest) {
     )
     
     // Vérifier l'authentification utilisateur avec le token
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
     
     // Ajouter des logs pour déboguer
     console.log(`API Fiscal: Utilisateur authentifié: ${user?.id}`)
     console.log(`API Fiscal: Token utilisé: ${token.substring(0, 20)}...`)
+    
+    // Utiliser le client authentifié pour toutes les opérations
 
     if (authError || !user) {
       return NextResponse.json({ success: false, error: "Token invalide" }, { status: 401 })
@@ -44,26 +47,26 @@ export async function GET(request: NextRequest) {
     if (action === "calculate") {
       // Calculer les données fiscales
       console.log(`API Fiscal: Calcul pour owner ${user.id}, année ${year}, propriété ${propertyId || 'toutes'}`)
-      const calculation = await FiscalServiceClient.calculateFiscalData(user.id, year, propertyId)
+      const calculation = await FiscalServiceClient.calculateFiscalData(user.id, year, propertyId, supabaseClient)
       console.log(`API Fiscal: Calcul terminé, revenus bruts: ${calculation.totalRentCollected}€`)
       return NextResponse.json({ success: true, data: calculation })
     }
 
     if (action === "stats") {
       // Récupérer les statistiques
-      const stats = await FiscalServiceClient.getFiscalStats(user.id)
+      const stats = await FiscalServiceClient.getFiscalStats(user.id, supabaseClient)
       return NextResponse.json({ success: true, data: stats })
     }
 
     if (action === "years") {
       // Récupérer les années disponibles
-      const years = await FiscalServiceClient.getAvailableYears(user.id)
+      const years = await FiscalServiceClient.getAvailableYears(user.id, supabaseClient)
       return NextResponse.json({ success: true, data: years })
     }
 
     if (action === "summary") {
       // Générer le récapitulatif
-      const summary = await FiscalServiceClient.generateFiscalSummary(user.id, year)
+      const summary = await FiscalServiceClient.generateFiscalSummary(user.id, year, supabaseClient)
       return NextResponse.json({ success: true, data: summary })
     }
 
@@ -88,8 +91,8 @@ export async function POST(request: NextRequest) {
 
     const token = authHeader.split(' ')[1]
     
-    // Créer un client Supabase avec le token utilisateur pour respecter RLS
-    const supabase = createClient(
+    // Utiliser le même client que le côté client, mais avec le token utilisateur
+    const supabaseClient = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
@@ -102,11 +105,13 @@ export async function POST(request: NextRequest) {
     )
     
     // Vérifier l'authentification utilisateur avec le token
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
     
     // Ajouter des logs pour déboguer
     console.log(`API Fiscal: Utilisateur authentifié: ${user?.id}`)
     console.log(`API Fiscal: Token utilisé: ${token.substring(0, 20)}...`)
+    
+    // Utiliser le client authentifié pour toutes les opérations
 
     if (authError || !user) {
       return NextResponse.json({ success: false, error: "Token invalide" }, { status: 401 })
@@ -117,7 +122,7 @@ export async function POST(request: NextRequest) {
 
     if (action === "export-csv") {
       // Exporter en CSV - utiliser le service client pour respecter RLS
-      const csvData = await FiscalServiceClient.exportFiscalDataCSV(user.id, year)
+      const csvData = await FiscalServiceClient.exportFiscalDataCSV(user.id, year, supabaseClient)
       
       return new NextResponse(csvData, {
         headers: {
@@ -129,7 +134,7 @@ export async function POST(request: NextRequest) {
 
     if (action === "export-pdf") {
       // Générer le récapitulatif PDF
-      const summary = await FiscalServiceClient.generateFiscalSummary(user.id, year)
+      const summary = await FiscalServiceClient.generateFiscalSummary(user.id, year, supabaseClient)
       
       // Créer les données pour le PDF
       const pdfData = {

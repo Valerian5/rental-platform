@@ -10,10 +10,11 @@ export class FiscalServiceClient {
   /**
    * Récupère toutes les données fiscales pour une année donnée (côté client)
    */
-  static async getFiscalData(ownerId: string, year: number, propertyId?: string): Promise<FiscalData> {
+  static async getFiscalData(ownerId: string, year: number, propertyId?: string, customSupabase?: any): Promise<FiscalData> {
+    const client = customSupabase || supabase
     try {
       // 1. Récupérer les baux du propriétaire
-      let leasesQuery = supabase
+      let leasesQuery = client
         .from("leases")
         .select(`
           id,
@@ -47,7 +48,7 @@ export class FiscalServiceClient {
       console.log(`FiscalServiceClient: IDs des baux pour la recherche de quittances:`, leaseIds)
 
       if (leaseIds.length > 0) {
-        const { data: receipts, error: receiptsError } = await supabase
+        const { data: receipts, error: receiptsError } = await client
           .from("receipts")
           .select(`
             id,
@@ -99,7 +100,7 @@ export class FiscalServiceClient {
       }
 
       // 3. Récupérer les dépenses pour l'année
-      let expensesQuery = supabase
+      let expensesQuery = client
         .from("expenses")
         .select(`
           id,
@@ -162,20 +163,22 @@ export class FiscalServiceClient {
   /**
    * Calcule les données fiscales pour une année (côté client)
    */
-  static async calculateFiscalData(ownerId: string, year: number, propertyId?: string) {
-    const fiscalData = await this.getFiscalData(ownerId, year, propertyId)
+  static async calculateFiscalData(ownerId: string, year: number, propertyId?: string, customSupabase?: any) {
+    const fiscalData = await this.getFiscalData(ownerId, year, propertyId, customSupabase)
     return FiscalCalculator.calculateFiscalData(fiscalData)
   }
 
   /**
    * Récupère les années disponibles pour un propriétaire (côté client)
    */
-  static async getAvailableYears(ownerId: string): Promise<number[]> {
+  static async getAvailableYears(ownerId: string, customSupabase?: any): Promise<number[]> {
     try {
       console.log(`FiscalServiceClient: Récupération des années disponibles pour owner ${ownerId}`)
       
+      const client = customSupabase || supabase
+      
       // Récupérer d'abord les IDs des baux du propriétaire
-      const { data: leases, error: leasesError } = await supabase
+      const { data: leases, error: leasesError } = await client
         .from("leases")
         .select("id")
         .eq("owner_id", ownerId)
@@ -191,7 +194,7 @@ export class FiscalServiceClient {
       const leaseIds = leases.map(l => l.id)
 
       // Récupérer les années des quittances
-      const { data: receipts, error: receiptsError } = await supabase
+      const { data: receipts, error: receiptsError } = await client
         .from("receipts")
         .select("year")
         .in("lease_id", leaseIds)
@@ -211,10 +214,10 @@ export class FiscalServiceClient {
   /**
    * Récupère les statistiques fiscales (côté client)
    */
-  static async getFiscalStats(ownerId: string): Promise<any> {
+  static async getFiscalStats(ownerId: string, customSupabase?: any): Promise<any> {
     try {
       const currentYear = new Date().getFullYear()
-      const fiscalData = await this.getFiscalData(ownerId, currentYear)
+      const fiscalData = await this.getFiscalData(ownerId, currentYear, undefined, customSupabase)
       const calculation = FiscalCalculator.calculateFiscalData(fiscalData)
       
       return {
@@ -234,9 +237,9 @@ export class FiscalServiceClient {
   /**
    * Exporte les données fiscales en CSV (côté client)
    */
-  static async exportFiscalDataCSV(ownerId: string, year: number): Promise<string> {
+  static async exportFiscalDataCSV(ownerId: string, year: number, customSupabase?: any): Promise<string> {
     try {
-      const fiscalData = await this.getFiscalData(ownerId, year)
+      const fiscalData = await this.getFiscalData(ownerId, year, undefined, customSupabase)
       const calculation = FiscalCalculator.calculateFiscalData(fiscalData)
       
       // Créer le CSV
@@ -257,13 +260,14 @@ export class FiscalServiceClient {
   /**
    * Génère un récapitulatif fiscal (côté client)
    */
-  static async generateFiscalSummary(ownerId: string, year: number): Promise<any> {
+  static async generateFiscalSummary(ownerId: string, year: number, customSupabase?: any): Promise<any> {
     try {
-      const fiscalData = await this.getFiscalData(ownerId, year)
+      const client = customSupabase || supabase
+      const fiscalData = await this.getFiscalData(ownerId, year, undefined, customSupabase)
       const calculation = FiscalCalculator.calculateFiscalData(fiscalData)
       
       // Récupérer les informations du propriétaire
-      const { data: user, error: userError } = await supabase
+      const { data: user, error: userError } = await client
         .from("users")
         .select("first_name, last_name, email")
         .eq("id", ownerId)
