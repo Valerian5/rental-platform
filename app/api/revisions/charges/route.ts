@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (year) {
-      query = query.eq('regularization_year', parseInt(year))
+      query = query.eq('year', parseInt(year))
     }
 
     const { data: regularizations, error } = await query.order('regularization_date', { ascending: false })
@@ -121,19 +121,26 @@ export async function POST(request: NextRequest) {
       .insert({
         lease_id: leaseId,
         property_id: propertyId,
-        regularization_year: regularizationYear,
+        year: regularizationYear, // Utiliser la colonne 'year' (integer)
+        regularization_year: regularizationYear.toString(), // Garder aussi en text
         regularization_date: regularizationDate,
-        total_provisions_collected: totalProvisionsCollected,
+        total_provisions_collected: totalProvisionsCollected?.toString(),
         provisions_period_start: provisionsPeriodStart,
         provisions_period_end: provisionsPeriodEnd,
-        total_real_charges: totalRealCharges,
-        recoverable_charges: recoverableCharges,
-        non_recoverable_charges: nonRecoverableCharges,
-        tenant_balance: tenantBalance,
+        total_real_charges: totalRealCharges?.toString(),
+        recoverable_charges: recoverableCharges?.toString(),
+        non_recoverable_charges: nonRecoverableCharges?.toString(),
+        tenant_balance: tenantBalance?.toString(),
         balance_type: balanceType,
         calculation_method: calculationMethod,
         calculation_notes: calculationNotes,
-        created_by: user.id
+        created_by: user.id,
+        // Ajouter les colonnes obligatoires
+        total_charges_paid: totalProvisionsCollected || 0,
+        actual_charges: totalRealCharges || 0,
+        difference: tenantBalance || 0,
+        type: balanceType,
+        status: 'calculated'
       })
       .select()
       .single()
