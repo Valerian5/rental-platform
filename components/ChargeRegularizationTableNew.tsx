@@ -80,16 +80,16 @@ export function ChargeRegularizationTableNew({
 
   // Initialiser avec les données pré-remplies
   useEffect(() => {
-    if (initialData.length > 0) {
+    if (initialData && initialData.length > 0) {
       setChargeBreakdown(initialData)
       console.log('📊 Données initiales chargées dans le tableau:', initialData)
-    } else {
+    } else if (chargeCategories && chargeCategories.length > 0) {
       // Initialiser avec les catégories par défaut
       const defaultBreakdown = chargeCategories.map(cat => ({
-        category: cat.name,
+        category: cat.name || '',
         provisionAmount: 0,
         realAmount: 0,
-        isRecoverable: cat.isRecoverable,
+        isRecoverable: cat.isRecoverable || false,
         notes: ''
       }))
       setChargeBreakdown(defaultBreakdown)
@@ -98,25 +98,39 @@ export function ChargeRegularizationTableNew({
 
   // Calculer les totaux quand les données changent
   useEffect(() => {
-    const totalRealCharges = chargeBreakdown.reduce((sum, charge) => sum + charge.realAmount, 0)
+    if (!chargeBreakdown || chargeBreakdown.length === 0) return
+
+    const totalRealCharges = chargeBreakdown.reduce((sum, charge) => {
+      return sum + (charge.realAmount || 0)
+    }, 0)
+    
     const recoverableCharges = chargeBreakdown
       .filter(charge => charge.isRecoverable)
-      .reduce((sum, charge) => sum + charge.realAmount, 0)
+      .reduce((sum, charge) => {
+        return sum + (charge.realAmount || 0)
+      }, 0)
+      
     const nonRecoverableCharges = totalRealCharges - recoverableCharges
-    const tenantBalance = totalProvisionsCollected - recoverableCharges
+    const tenantBalance = (totalProvisionsCollected || 0) - recoverableCharges
 
-    onCalculationChange({
-      totalRealCharges,
-      recoverableCharges,
-      nonRecoverableCharges,
-      tenantBalance,
-      balanceType: tenantBalance >= 0 ? 'refund' : 'additional_payment'
-    })
+    if (onCalculationChange) {
+      onCalculationChange({
+        totalRealCharges,
+        recoverableCharges,
+        nonRecoverableCharges,
+        tenantBalance,
+        balanceType: tenantBalance >= 0 ? 'refund' : 'additional_payment'
+      })
+    }
 
-    onDataChange(chargeBreakdown)
+    if (onDataChange) {
+      onDataChange(chargeBreakdown)
+    }
   }, [chargeBreakdown, totalProvisionsCollected, onDataChange, onCalculationChange])
 
   const handleInputChange = (index: number, field: keyof ChargeBreakdown, value: any) => {
+    if (!chargeBreakdown || index < 0 || index >= chargeBreakdown.length) return
+    
     const updated = [...chargeBreakdown]
     updated[index] = { ...updated[index], [field]: value }
     setChargeBreakdown(updated)
@@ -128,7 +142,7 @@ export function ChargeRegularizationTableNew({
       return
     }
 
-    const updated = [...chargeBreakdown, { ...newCharge }]
+    const updated = [...(chargeBreakdown || []), { ...newCharge }]
     setChargeBreakdown(updated)
     setNewCharge({
       category: '',
@@ -142,12 +156,16 @@ export function ChargeRegularizationTableNew({
   }
 
   const handleRemoveCharge = (index: number) => {
+    if (!chargeBreakdown || index < 0 || index >= chargeBreakdown.length) return
+    
     const updated = chargeBreakdown.filter((_, i) => i !== index)
     setChargeBreakdown(updated)
     toast.success("Charge supprimée")
   }
 
   const handleFileUpload = async (index: number, file: File) => {
+    if (!chargeBreakdown || index < 0 || index >= chargeBreakdown.length) return
+    
     try {
       const fileExt = file.name.split('.').pop()
       const fileName = `${Date.now()}.${fileExt}`
@@ -261,7 +279,7 @@ export function ChargeRegularizationTableNew({
               </tr>
             </thead>
             <tbody>
-              {chargeBreakdown.map((charge, index) => (
+              {chargeBreakdown && chargeBreakdown.length > 0 ? chargeBreakdown.map((charge, index) => (
                 <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
                   <td className="py-3 px-4">
                     <div className="flex items-center space-x-2">
@@ -339,7 +357,13 @@ export function ChargeRegularizationTableNew({
                     </Button>
                   </td>
                 </tr>
-              ))}
+              )) : (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-gray-500">
+                    Aucune charge configurée
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

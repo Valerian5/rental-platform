@@ -33,6 +33,7 @@ import { IRLSelector } from "@/components/IRLSelector"
 import { ChargeSettingsManagerNew } from "@/components/ChargeSettingsManagerNew"
 import { ChargeRegularizationTableNew } from "@/components/ChargeRegularizationTableNew"
 import { ChargeRegularizationSummary } from "@/components/ChargeRegularizationSummary"
+import { ChargeRegularizationFallback } from "@/components/ChargeRegularizationFallback"
 import { 
   calculateEffectiveOccupationPeriod, 
   calculateExactProrata, 
@@ -1047,38 +1048,42 @@ export default function RevisionPage() {
             </div>
 
             {/* Tableau de saisie des charges */}
-        {selectedLeaseId && (
-          <ChargeRegularizationTableNew
-            chargeCategories={chargeCategories}
-            totalProvisionsCollected={chargeRegularizationData.totalProvisionsCollected}
-            occupationPeriod={chargeRegularizationData.provisionsPeriodStart && chargeRegularizationData.provisionsPeriodEnd ? {
-              start: new Date(chargeRegularizationData.provisionsPeriodStart),
-              end: new Date(chargeRegularizationData.provisionsPeriodEnd)
-            } : {
-              start: new Date(currentYear, 0, 1),
-              end: new Date(currentYear, 11, 31)
-            }}
-            initialData={chargeRegularizationData.chargeBreakdown}
-            onDataChange={(data) => setChargeRegularizationData(prev => ({
-              ...prev,
-              chargeBreakdown: data
-            }))}
-            onCalculationChange={(calculation) => setChargeRegularizationData(prev => ({
-              ...prev,
-              ...calculation
-            }))}
-          />
-        )}
+        {selectedLeaseId ? (
+          chargeCategories && chargeCategories.length > 0 ? (
+            <ChargeRegularizationTableNew
+              chargeCategories={chargeCategories}
+              totalProvisionsCollected={chargeRegularizationData.totalProvisionsCollected || 0}
+              occupationPeriod={chargeRegularizationData.provisionsPeriodStart && chargeRegularizationData.provisionsPeriodEnd ? {
+                start: new Date(chargeRegularizationData.provisionsPeriodStart),
+                end: new Date(chargeRegularizationData.provisionsPeriodEnd)
+              } : {
+                start: new Date(currentYear, 0, 1),
+                end: new Date(currentYear, 11, 31)
+              }}
+              initialData={chargeRegularizationData.chargeBreakdown || []}
+              onDataChange={(data) => setChargeRegularizationData(prev => ({
+                ...prev,
+                chargeBreakdown: data
+              }))}
+              onCalculationChange={(calculation) => setChargeRegularizationData(prev => ({
+                ...prev,
+                ...calculation
+              }))}
+            />
+          ) : (
+            <ChargeRegularizationFallback />
+          )
+        ) : null}
 
             {/* Résumé et actions */}
             <ChargeRegularizationSummary
-              totalProvisionsCollected={chargeRegularizationData.totalProvisionsCollected}
-              totalRealCharges={chargeRegularizationData.totalRealCharges}
-              recoverableCharges={chargeRegularizationData.recoverableCharges}
-              nonRecoverableCharges={chargeRegularizationData.nonRecoverableCharges}
-              tenantBalance={chargeRegularizationData.tenantBalance}
-              balanceType={chargeRegularizationData.balanceType}
-              calculationNotes={calculationNotes}
+              totalProvisionsCollected={chargeRegularizationData.totalProvisionsCollected || 0}
+              totalRealCharges={chargeRegularizationData.totalRealCharges || 0}
+              recoverableCharges={chargeRegularizationData.recoverableCharges || 0}
+              nonRecoverableCharges={chargeRegularizationData.nonRecoverableCharges || 0}
+              tenantBalance={chargeRegularizationData.tenantBalance || 0}
+              balanceType={chargeRegularizationData.balanceType || 'refund'}
+              calculationNotes={calculationNotes || ''}
               onNotesChange={setCalculationNotes}
               onGenerateStatement={saveChargeRegularization}
               onSendToTenant={() => {
