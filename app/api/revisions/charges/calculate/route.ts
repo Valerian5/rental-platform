@@ -48,11 +48,24 @@ export async function POST(request: NextRequest) {
     }
 
     // Calculer les provisions encaissées via les quittances
+    const year = parseInt(provisionsPeriodStart.split('-')[0])
+    const startMonth = provisionsPeriodStart.split('-')[1]
+    const endMonth = provisionsPeriodEnd.split('-')[1]
+    
+    console.log('🔍 Recherche quittances pour:', {
+      leaseId,
+      year,
+      startMonth,
+      endMonth,
+      provisionsPeriodStart,
+      provisionsPeriodEnd
+    })
+    
     const { data: receipts, error: receiptsError } = await supabaseAdmin
       .from('receipts')
       .select('charges_amount, month, year, rent_amount, generated_at')
       .eq('lease_id', leaseId)
-      .eq('year', parseInt(provisionsPeriodStart.split('-')[0]))
+      .eq('year', year)
       .order('month', { ascending: true })
 
     if (receiptsError) {
@@ -60,10 +73,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Erreur lors du calcul" }, { status: 500 })
     }
 
+    console.log('📊 Quittances trouvées:', receipts.length)
+    receipts.forEach(receipt => {
+      console.log(`   - ${receipt.month}: ${receipt.charges_amount} € de charges`)
+    })
+
     // Calculer les provisions encaissées depuis les quittances
     const totalProvisionsCollected = receipts.reduce((sum, receipt) => {
       return sum + (receipt.charges_amount || 0)
     }, 0)
+    
+    console.log('💰 Total provisions calculé:', totalProvisionsCollected, '€')
 
     // Calculer le nombre de quittances et la moyenne mensuelle
     const receiptCount = receipts.length

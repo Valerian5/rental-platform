@@ -153,10 +153,15 @@ export default function RevisionPage() {
     if (selectedLeaseId) {
       loadLeaseData()
       loadExistingRevisions()
-      // Calculer automatiquement la période d'occupation
-      calculateChargeRegularization()
     }
   }, [selectedLeaseId])
+
+  // Calculer automatiquement la période d'occupation quand le bail est chargé
+  useEffect(() => {
+    if (selectedLease && selectedLease.start_date) {
+      calculateChargeRegularization()
+    }
+  }, [selectedLease])
 
   useEffect(() => {
     loadIRLData(currentYear)
@@ -358,6 +363,8 @@ export default function RevisionPage() {
       if (regularizationsData && regularizationsData.length > 0) {
         const latestRegularization = regularizationsData[0] // Prendre la plus récente
         
+        console.log('🔄 Restauration des données de régularisation:', latestRegularization)
+        
         setChargeRegularizationData({
           totalProvisionsCollected: parseFloat(latestRegularization.total_provisions_collected) || 0,
           provisionsPeriodStart: latestRegularization.provisions_period_start || '',
@@ -371,6 +378,8 @@ export default function RevisionPage() {
         })
         
         setCalculationNotes(latestRegularization.calculation_notes || '')
+      } else {
+        console.log('ℹ️ Aucune régularisation existante trouvée')
       }
 
       // Les paramètres de charges sont chargés par le composant ChargeSettingsManager
@@ -485,8 +494,11 @@ export default function RevisionPage() {
           totalProvisionsCollected: result.calculation.totalProvisionsCollected,
           calculationMethod: `Calcul basé sur ${formatProrata(prorata)} (${formatPeriod(occupationPeriod)})`
         }))
+        console.log('✅ Provisions calculées:', result.calculation.totalProvisionsCollected, '€')
+        console.log('✅ Nombre de quittances:', result.calculation.receiptCount)
         toast.success(`Calcul des provisions effectué pour ${formatProrata(prorata)}`)
       } else {
+        console.error('❌ Erreur calcul provisions:', result)
         toast.error("Erreur lors du calcul")
       }
     } catch (error) {
@@ -875,6 +887,25 @@ export default function RevisionPage() {
           <TabsContent value="charges" className="space-y-6">
             {/* Section de régularisation des charges */}
             <div className="space-y-6">
+              {/* Debug info - À supprimer en production */}
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm">
+                <h4 className="font-bold text-yellow-800 mb-2">🔍 Debug Info</h4>
+                <div className="grid grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <strong>Bail sélectionné:</strong> {selectedLeaseId ? 'Oui' : 'Non'}<br/>
+                    <strong>Date d'entrée:</strong> {selectedLease?.start_date || 'Non définie'}<br/>
+                    <strong>Date de fin:</strong> {selectedLease?.end_date || 'Non définie'}<br/>
+                    <strong>Provisions mensuelles:</strong> {selectedLease?.montant_provisions_charges || 'Non définies'} €
+                  </div>
+                  <div>
+                    <strong>Période calculée:</strong> {chargeRegularizationData.provisionsPeriodStart} → {chargeRegularizationData.provisionsPeriodEnd}<br/>
+                    <strong>Provisions encaissées:</strong> {chargeRegularizationData.totalProvisionsCollected} €<br/>
+                    <strong>Catégories chargées:</strong> {chargeCategories.length}<br/>
+                    <strong>Année courante:</strong> {currentYear}
+                  </div>
+                </div>
+              </div>
+
               {/* En-tête avec informations du bail */}
               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-200">
                 <div className="flex items-center justify-between">
