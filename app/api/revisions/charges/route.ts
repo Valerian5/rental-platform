@@ -127,27 +127,31 @@ export async function POST(request: NextRequest) {
 
     if (existingRegularization) {
       // Mettre à jour la régularisation existante
+      const updateData = {
+        regularization_date: regularizationDate,
+        total_provisions_collected: totalProvisionsCollected?.toString(),
+        provisions_period_start: provisionsPeriodStart,
+        provisions_period_end: provisionsPeriodEnd,
+        total_real_charges: totalRealCharges?.toString(),
+        recoverable_charges: recoverableCharges?.toString(),
+        non_recoverable_charges: nonRecoverableCharges?.toString(),
+        tenant_balance: tenantBalance?.toString(),
+        balance_type: balanceType,
+        calculation_method: calculationMethod,
+        calculation_notes: calculationNotes,
+        // Ajouter les colonnes obligatoires
+        total_charges_paid: totalProvisionsCollected || 0,
+        actual_charges: totalRealCharges || 0,
+        difference: tenantBalance || 0,
+        type: balanceType,
+        status: 'calculated',
+        // Ajouter updated_at manuellement pour éviter le trigger
+        updated_at: new Date().toISOString()
+      }
+
       const { data: updatedRegularization, error: updateError } = await supabaseAdmin
         .from('charge_regularizations')
-        .update({
-          regularization_date: regularizationDate,
-          total_provisions_collected: totalProvisionsCollected?.toString(),
-          provisions_period_start: provisionsPeriodStart,
-          provisions_period_end: provisionsPeriodEnd,
-          total_real_charges: totalRealCharges?.toString(),
-          recoverable_charges: recoverableCharges?.toString(),
-          non_recoverable_charges: nonRecoverableCharges?.toString(),
-          tenant_balance: tenantBalance?.toString(),
-          balance_type: balanceType,
-          calculation_method: calculationMethod,
-          calculation_notes: calculationNotes,
-          // Ajouter les colonnes obligatoires
-          total_charges_paid: totalProvisionsCollected || 0,
-          actual_charges: totalRealCharges || 0,
-          difference: tenantBalance || 0,
-          type: balanceType,
-          status: 'calculated'
-        })
+        .update(updateData)
         .eq('id', existingRegularization.id)
         .select()
         .single()
@@ -160,32 +164,36 @@ export async function POST(request: NextRequest) {
       regularization = updatedRegularization
     } else {
       // Créer une nouvelle régularisation
+      const insertData = {
+        lease_id: leaseId,
+        property_id: propertyId,
+        year: regularizationYear, // Utiliser la colonne 'year' (integer)
+        regularization_year: regularizationYear.toString(), // Garder aussi en text
+        regularization_date: regularizationDate,
+        total_provisions_collected: totalProvisionsCollected?.toString(),
+        provisions_period_start: provisionsPeriodStart,
+        provisions_period_end: provisionsPeriodEnd,
+        total_real_charges: totalRealCharges?.toString(),
+        recoverable_charges: recoverableCharges?.toString(),
+        non_recoverable_charges: nonRecoverableCharges?.toString(),
+        tenant_balance: tenantBalance?.toString(),
+        balance_type: balanceType,
+        calculation_method: calculationMethod,
+        calculation_notes: calculationNotes,
+        created_by: user.id,
+        // Ajouter les colonnes obligatoires
+        total_charges_paid: totalProvisionsCollected || 0,
+        actual_charges: totalRealCharges || 0,
+        difference: tenantBalance || 0,
+        type: balanceType,
+        status: 'calculated',
+        // Ajouter updated_at manuellement
+        updated_at: new Date().toISOString()
+      }
+
       const { data: newRegularization, error: insertError } = await supabaseAdmin
         .from('charge_regularizations')
-        .insert({
-          lease_id: leaseId,
-          property_id: propertyId,
-          year: regularizationYear, // Utiliser la colonne 'year' (integer)
-          regularization_year: regularizationYear.toString(), // Garder aussi en text
-          regularization_date: regularizationDate,
-          total_provisions_collected: totalProvisionsCollected?.toString(),
-          provisions_period_start: provisionsPeriodStart,
-          provisions_period_end: provisionsPeriodEnd,
-          total_real_charges: totalRealCharges?.toString(),
-          recoverable_charges: recoverableCharges?.toString(),
-          non_recoverable_charges: nonRecoverableCharges?.toString(),
-          tenant_balance: tenantBalance?.toString(),
-          balance_type: balanceType,
-          calculation_method: calculationMethod,
-          calculation_notes: calculationNotes,
-          created_by: user.id,
-          // Ajouter les colonnes obligatoires
-          total_charges_paid: totalProvisionsCollected || 0,
-          actual_charges: totalRealCharges || 0,
-          difference: tenantBalance || 0,
-          type: balanceType,
-          status: 'calculated'
-        })
+        .insert(insertData)
         .select()
         .single()
 

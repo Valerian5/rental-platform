@@ -90,11 +90,22 @@ export async function POST(request: NextRequest) {
     })
 
     // Calculer les provisions encaissées depuis les quittances
+    // MAIS seulement pour la période effective d'occupation
+    const startDate = new Date(provisionsPeriodStart)
+    const endDate = new Date(provisionsPeriodEnd)
+    
     const totalProvisionsCollected = receipts.reduce((sum, receipt) => {
-      return sum + (receipt.charges_amount || 0)
+      // Vérifier si la quittance est dans la période d'occupation
+      const receiptDate = new Date(`${receipt.year}-${receipt.month.padStart(2, '0')}-01`)
+      
+      if (receiptDate >= startDate && receiptDate <= endDate) {
+        return sum + (receipt.charges_amount || 0)
+      }
+      return sum
     }, 0)
     
-    console.log('💰 Total provisions calculé:', totalProvisionsCollected, '€')
+    console.log('💰 Total provisions calculé pour la période effective:', totalProvisionsCollected, '€')
+    console.log('📅 Période effective:', provisionsPeriodStart, '→', provisionsPeriodEnd)
 
     // Calculer le nombre de quittances et la moyenne mensuelle
     const receiptCount = receipts.length
