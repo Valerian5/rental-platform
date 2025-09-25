@@ -27,27 +27,19 @@ import { supabase } from "@/lib/supabase"
 import { calculateProratedAmount, calculateExactProrata } from "@/lib/date-utils"
 
 interface ChargeCategory {
+  id: string
   name: string
-  category: string
-  recoverable: boolean
-  included_in_provisions: boolean
-  default_amount: number
+  isRecoverable: boolean
 }
 
 interface ChargeBreakdown {
-  charge_name: string
+  id?: string
   category: string
-  provision_amount: number
-  real_amount: number
-  difference: number
-  is_recoverable: boolean
+  provisionAmount: number
+  realAmount: number
+  isRecoverable: boolean
+  justificationFileUrl?: string
   notes?: string
-  documents?: Array<{
-    id: string
-    name: string
-    url: string
-    uploaded_at: string
-  }>
 }
 
 interface ChargeRegularizationTableProps {
@@ -57,6 +49,7 @@ interface ChargeRegularizationTableProps {
     start: Date
     end: Date
   }
+  initialData?: ChargeBreakdown[]
   onDataChange: (data: ChargeBreakdown[]) => void
   onCalculationChange: (calculation: {
     totalRealCharges: number

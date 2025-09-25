@@ -30,8 +30,8 @@ import {
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
 import { IRLSelector } from "@/components/IRLSelector"
-import { ChargeSettingsManager } from "@/components/ChargeSettingsManager"
-import { ChargeRegularizationTable } from "@/components/ChargeRegularizationTable"
+import { ChargeSettingsManagerNew } from "@/components/ChargeSettingsManagerNew"
+import { ChargeRegularizationTableNew } from "@/components/ChargeRegularizationTableNew"
 import { ChargeRegularizationSummary } from "@/components/ChargeRegularizationSummary"
 import { 
   calculateEffectiveOccupationPeriod, 
@@ -378,6 +378,19 @@ export default function RevisionPage() {
         
         console.log('🔄 Restauration des données de régularisation:', latestRegularization)
         
+        // Charger le détail des charges depuis charge_breakdown
+        const chargeBreakdown = latestRegularization.charge_breakdown?.map(charge => ({
+          id: charge.id,
+          category: charge.charge_category,
+          provisionAmount: parseFloat(charge.provision_amount) || 0,
+          realAmount: parseFloat(charge.real_amount) || 0,
+          isRecoverable: charge.is_recoverable,
+          justificationFileUrl: charge.justification_file_url,
+          notes: charge.notes
+        })) || []
+
+        console.log('📊 Détail des charges chargé:', chargeBreakdown)
+
         setChargeRegularizationData({
           totalProvisionsCollected: parseFloat(latestRegularization.total_provisions_collected) || 0,
           provisionsPeriodStart: latestRegularization.provisions_period_start || '',
@@ -387,12 +400,51 @@ export default function RevisionPage() {
           nonRecoverableCharges: parseFloat(latestRegularization.non_recoverable_charges) || 0,
           tenantBalance: parseFloat(latestRegularization.tenant_balance) || 0,
           balanceType: latestRegularization.balance_type || 'refund',
-          chargeBreakdown: [] // TODO: Charger le détail des charges
+          chargeBreakdown: chargeBreakdown
         })
         
         setCalculationNotes(latestRegularization.calculation_notes || '')
       } else {
         console.log('ℹ️ Aucune régularisation existante trouvée')
+      }
+
+      // Charger les paramètres de charges du bail pour pré-remplir les catégories
+      const { data: chargeSettings, error: settingsError } = await supabase
+        .from('lease_charge_settings')
+        .select('*')
+        .eq('lease_id', selectedLeaseId)
+        .single()
+
+      if (chargeSettings && !settingsError) {
+        console.log('⚙️ Paramètres de charges trouvés:', chargeSettings)
+        
+        // Reconstituer les catégories de charges depuis les paramètres
+        const categories = []
+        if (chargeSettings.water_charges) categories.push({ id: 'water', name: 'Eau froide', isRecoverable: true })
+        if (chargeSettings.heating_charges) categories.push({ id: 'heating', name: 'Chauffage collectif', isRecoverable: true })
+        if (chargeSettings.elevator_charges) categories.push({ id: 'elevator', name: 'Ascenseur', isRecoverable: true })
+        if (chargeSettings.common_electricity) categories.push({ id: 'common_electricity', name: 'Électricité parties communes', isRecoverable: true })
+        if (chargeSettings.garbage_tax) categories.push({ id: 'garbage_tax', name: 'Taxe ordures ménagères (TEOM)', isRecoverable: true })
+        if (chargeSettings.cleaning_charges) categories.push({ id: 'cleaning', name: 'Nettoyage parties communes', isRecoverable: true })
+        if (chargeSettings.gardener_charges) categories.push({ id: 'gardener', name: 'Entretien espaces verts', isRecoverable: true })
+        if (chargeSettings.insurance_charges) categories.push({ id: 'insurance', name: 'Assurance propriétaire', isRecoverable: false })
+        
+        setChargeCategories(categories)
+        console.log('📋 Catégories de charges restaurées:', categories)
+      } else {
+        console.log('ℹ️ Aucun paramètre de charges trouvé, utilisation des catégories par défaut')
+        // Utiliser des catégories par défaut basées sur la réglementation Service-Public.fr
+        const defaultCategories = [
+          { id: 'water', name: 'Eau froide', isRecoverable: true },
+          { id: 'heating', name: 'Chauffage collectif', isRecoverable: true },
+          { id: 'elevator', name: 'Ascenseur', isRecoverable: true },
+          { id: 'common_electricity', name: 'Électricité parties communes', isRecoverable: true },
+          { id: 'garbage_tax', name: 'Taxe ordures ménagères (TEOM)', isRecoverable: true },
+          { id: 'cleaning', name: 'Nettoyage parties communes', isRecoverable: true },
+          { id: 'gardener', name: 'Entretien espaces verts', isRecoverable: true },
+          { id: 'insurance', name: 'Assurance propriétaire', isRecoverable: false }
+        ]
+        setChargeCategories(defaultCategories)
       }
 
       // Les paramètres de charges sont chargés par le composant ChargeSettingsManager
@@ -900,42 +952,6 @@ export default function RevisionPage() {
           <TabsContent value="charges" className="space-y-6">
             {/* Section de régularisation des charges */}
             <div className="space-y-6">
-              {/* Debug info - À supprimer en production */}
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm">
-                <h4 className="font-bold text-yellow-800 mb-2">🔍 Debug Info</h4>
-                <div className="grid grid-cols-2 gap-4 text-xs">
-                  <div>
-                    <strong>Bail sélectionné:</strong> {selectedLeaseId ? 'Oui' : 'Non'}<br/>
-                    <strong>Date d'entrée:</strong> {selectedLease?.start_date || 'Non définie'}<br/>
-                    <strong>Date de fin:</strong> {selectedLease?.end_date || 'Non définie'}<br/>
-                    <strong>Provisions mensuelles:</strong> {selectedLease?.montant_provisions_charges || 'Non définies'} €<br/>
-                    <strong>Charges:</strong> {selectedLease?.charges || 'Non définies'} €
-                  </div>
-                  <div>
-                    <strong>Période calculée:</strong> {chargeRegularizationData.provisionsPeriodStart} → {chargeRegularizationData.provisionsPeriodEnd}<br/>
-                    <strong>Provisions encaissées:</strong> {chargeRegularizationData.totalProvisionsCollected} €<br/>
-                    <strong>Catégories chargées:</strong> {chargeCategories.length}<br/>
-                    <strong>Année courante:</strong> {currentYear}
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
-                    onClick={async () => {
-                      if (!selectedLeaseId) return
-                      console.log('🧪 Test direct des quittances...')
-                      const { data: receipts, error } = await supabase
-                        .from('receipts')
-                        .select('*')
-                        .eq('lease_id', selectedLeaseId)
-                      console.log('🧪 Résultat test quittances:', { receipts, error })
-                    }}
-                  >
-                    🧪 Tester quittances
-                  </Button>
-                </div>
-              </div>
 
               {/* En-tête avec informations du bail */}
               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-200">
@@ -966,12 +982,12 @@ export default function RevisionPage() {
               </div>
 
               {/* Paramétrage des charges */}
-              <ChargeSettingsManager
-                leaseId={selectedLeaseId}
-                onSettingsChange={setChargeCategories}
-                calculationNotes={calculationNotes}
-                onCalculationNotesChange={setCalculationNotes}
-              />
+            <ChargeSettingsManagerNew
+              leaseId={selectedLeaseId}
+              onSettingsChange={setChargeCategories}
+              calculationNotes={calculationNotes}
+              onCalculationNotesChange={setCalculationNotes}
+            />
 
               {/* Calcul automatique des provisions */}
               <Card className="border-green-200 bg-green-50">
@@ -1031,27 +1047,28 @@ export default function RevisionPage() {
             </div>
 
             {/* Tableau de saisie des charges */}
-            {chargeCategories.length > 0 && (
-              <ChargeRegularizationTable
-                chargeCategories={chargeCategories}
-                totalProvisionsCollected={chargeRegularizationData.totalProvisionsCollected}
-                occupationPeriod={chargeRegularizationData.provisionsPeriodStart && chargeRegularizationData.provisionsPeriodEnd ? {
-                  start: new Date(chargeRegularizationData.provisionsPeriodStart),
-                  end: new Date(chargeRegularizationData.provisionsPeriodEnd)
-                } : {
-                  start: new Date(currentYear, 0, 1),
-                  end: new Date(currentYear, 11, 31)
-                }}
-                onDataChange={(data) => setChargeRegularizationData(prev => ({
-                  ...prev,
-                  chargeBreakdown: data
-                }))}
-                onCalculationChange={(calculation) => setChargeRegularizationData(prev => ({
-                  ...prev,
-                  ...calculation
-                }))}
-              />
-            )}
+        {selectedLeaseId && (
+          <ChargeRegularizationTableNew
+            chargeCategories={chargeCategories}
+            totalProvisionsCollected={chargeRegularizationData.totalProvisionsCollected}
+            occupationPeriod={chargeRegularizationData.provisionsPeriodStart && chargeRegularizationData.provisionsPeriodEnd ? {
+              start: new Date(chargeRegularizationData.provisionsPeriodStart),
+              end: new Date(chargeRegularizationData.provisionsPeriodEnd)
+            } : {
+              start: new Date(currentYear, 0, 1),
+              end: new Date(currentYear, 11, 31)
+            }}
+            initialData={chargeRegularizationData.chargeBreakdown}
+            onDataChange={(data) => setChargeRegularizationData(prev => ({
+              ...prev,
+              chargeBreakdown: data
+            }))}
+            onCalculationChange={(calculation) => setChargeRegularizationData(prev => ({
+              ...prev,
+              ...calculation
+            }))}
+          />
+        )}
 
             {/* Résumé et actions */}
             <ChargeRegularizationSummary
