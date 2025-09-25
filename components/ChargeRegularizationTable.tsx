@@ -52,6 +52,7 @@ interface ChargeBreakdown {
 interface ChargeRegularizationTableProps {
   chargeCategories: ChargeCategory[]
   totalProvisionsCollected: number
+  occupationMonths: number
   onDataChange: (data: ChargeBreakdown[]) => void
   onCalculationChange: (calculation: {
     totalRealCharges: number
@@ -65,6 +66,7 @@ interface ChargeRegularizationTableProps {
 export function ChargeRegularizationTable({
   chargeCategories,
   totalProvisionsCollected,
+  occupationMonths,
   onDataChange,
   onCalculationChange
 }: ChargeRegularizationTableProps) {
@@ -105,10 +107,20 @@ export function ChargeRegularizationTable({
   }, [chargeBreakdown, totalProvisionsCollected])
 
   const recalculateTotals = () => {
-    const totalRealCharges = chargeBreakdown.reduce((sum, charge) => sum + charge.real_amount, 0)
+    // Calculer les charges réelles proratisées
+    const totalRealCharges = chargeBreakdown.reduce((sum, charge) => {
+      // Si c'est une charge annuelle, proratiser selon les mois d'occupation
+      const proratedAmount = occupationMonths > 0 ? (charge.real_amount * occupationMonths) / 12 : charge.real_amount
+      return sum + proratedAmount
+    }, 0)
+    
     const recoverableCharges = chargeBreakdown
       .filter(charge => charge.is_recoverable)
-      .reduce((sum, charge) => sum + charge.real_amount, 0)
+      .reduce((sum, charge) => {
+        const proratedAmount = occupationMonths > 0 ? (charge.real_amount * occupationMonths) / 12 : charge.real_amount
+        return sum + proratedAmount
+      }, 0)
+    
     const nonRecoverableCharges = totalRealCharges - recoverableCharges
     const tenantBalance = totalProvisionsCollected - recoverableCharges
 
@@ -318,9 +330,10 @@ export function ChargeRegularizationTable({
         <table className="min-w-full table-fixed text-sm">
           <thead>
             <tr className="text-left text-xs text-gray-500">
-              <th className="w-1/3 px-3 py-2">Poste</th>
+              <th className="w-1/4 px-3 py-2">Poste</th>
               <th className="w-1/6 px-3 py-2">Provision (€/an)</th>
-              <th className="w-1/6 px-3 py-2">Réel payé (€/an)</th>
+              <th className="w-1/6 px-3 py-2">Charges annuelles (€/an)</th>
+              <th className="w-1/6 px-3 py-2">Quote-part locataire (€)</th>
               <th className="w-1/6 px-3 py-2">Incluse (récupérable)</th>
               <th className="w-1/6 px-3 py-2">Justificatif</th>
               <th className="w-12 px-3 py-2">Actions</th>
@@ -356,7 +369,19 @@ export function ChargeRegularizationTable({
                     step="0.01"
                     value={charge.real_amount}
                     onChange={(e) => handleRealAmountChange(index, parseFloat(e.target.value) || 0)}
+                    placeholder="Montant annuel"
                   />
+                </td>
+                <td className="px-3 py-3">
+                  <div className="text-sm font-medium text-blue-600">
+                    {occupationMonths > 0 ? 
+                      `${((charge.real_amount * occupationMonths) / 12).toFixed(2)} €` : 
+                      '—'
+                    }
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {occupationMonths > 0 ? `(${occupationMonths}/12 mois)` : ''}
+                  </div>
                 </td>
                 <td className="px-3 py-3 text-center">
                   <input 

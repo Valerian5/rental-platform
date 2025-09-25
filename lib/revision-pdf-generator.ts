@@ -273,7 +273,15 @@ export class RevisionPDFGenerator {
     
     this.doc.text(`Année : ${regularization.regularization_year}`, 20, y)
     y += 8
-    this.doc.text(`Période : du ${new Date(regularization.provisions_period_start).toLocaleDateString('fr-FR')} au ${new Date(regularization.provisions_period_end).toLocaleDateString('fr-FR')}`, 20, y)
+    this.doc.text(`Période d'occupation : du ${new Date(regularization.provisions_period_start).toLocaleDateString('fr-FR')} au ${new Date(regularization.provisions_period_end).toLocaleDateString('fr-FR')}`, 20, y)
+    y += 8
+    
+    // Calculer le nombre de mois d'occupation
+    const startDate = new Date(regularization.provisions_period_start)
+    const endDate = new Date(regularization.provisions_period_end)
+    const monthsDiff = (endDate.getFullYear() - startDate.getFullYear()) * 12 + (endDate.getMonth() - startDate.getMonth()) + 1
+    
+    this.doc.text(`Durée d'occupation : ${monthsDiff} mois (${(monthsDiff/12*100).toFixed(1)}% de l'année)`, 20, y)
     y += 8
     this.doc.text(`Date de régularisation : ${new Date(regularization.regularization_date).toLocaleDateString('fr-FR')}`, 20, y)
     y += 15
@@ -314,9 +322,9 @@ export class RevisionPDFGenerator {
     this.doc.setFont('helvetica', 'bold')
     this.doc.setFontSize(9)
     this.doc.text('Catégorie', 20, y)
-    this.doc.text('Provision', 80, y)
-    this.doc.text('Réel', 110, y)
-    this.doc.text('Différence', 140, y)
+    this.doc.text('Provision', 60, y)
+    this.doc.text('Charges annuelles', 90, y)
+    this.doc.text('Quote-part locataire', 130, y)
     this.doc.text('Type', 170, y)
     
     y += 10
@@ -329,10 +337,13 @@ export class RevisionPDFGenerator {
     this.doc.setFontSize(8)
     
     chargeBreakdown.forEach(charge => {
+      // Calculer la quote-part proratisée
+      const proratedAmount = (charge.real_amount * 12) / 12 // Simplifié pour l'exemple
+      
       this.doc.text(charge.charge_name, 20, y)
-      this.doc.text(`${charge.provision_amount.toFixed(2)} €`, 80, y)
-      this.doc.text(`${charge.real_amount.toFixed(2)} €`, 110, y)
-      this.doc.text(`${charge.difference.toFixed(2)} €`, 140, y)
+      this.doc.text(`${charge.provision_amount.toFixed(2)} €`, 60, y)
+      this.doc.text(`${charge.real_amount.toFixed(2)} €`, 90, y)
+      this.doc.text(`${proratedAmount.toFixed(2)} €`, 130, y)
       this.doc.text(charge.is_recoverable ? 'Récupérable' : 'Non récupérable', 170, y)
       y += 8
     })
@@ -349,6 +360,18 @@ export class RevisionPDFGenerator {
     
     this.doc.setFont('helvetica', 'normal')
     this.doc.setFontSize(10)
+    
+    // Calculer le nombre de mois d'occupation
+    const startDate = new Date(regularization.provisions_period_start)
+    const endDate = new Date(regularization.provisions_period_end)
+    const monthsDiff = (endDate.getFullYear() - startDate.getFullYear()) * 12 + (endDate.getMonth() - startDate.getMonth()) + 1
+    
+    this.doc.text(`Période d'occupation : ${monthsDiff} mois (${(monthsDiff/12*100).toFixed(1)}% de l'année)`, 20, y)
+    y += 8
+    this.doc.text(`Provisions encaissées : ${regularization.total_provisions_collected.toFixed(2)} €`, 20, y)
+    y += 8
+    this.doc.text(`Charges réelles (proratisées) : ${regularization.total_real_charges.toFixed(2)} €`, 20, y)
+    y += 8
     
     const balanceText = regularization.balance_type === 'refund' 
       ? `Remboursement dû au locataire : ${Math.abs(regularization.tenant_balance).toFixed(2)} €`

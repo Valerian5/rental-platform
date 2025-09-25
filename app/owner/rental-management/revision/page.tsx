@@ -154,6 +154,27 @@ export default function RevisionPage() {
     loadIRLData(currentYear)
   }, [currentYear])
 
+  // Recalculer automatiquement les totaux quand les données changent
+  useEffect(() => {
+    if (chargeRegularizationData.chargeBreakdown.length > 0) {
+      const totalRealCharges = chargeRegularizationData.chargeBreakdown.reduce((sum, charge) => sum + (charge.real_amount || 0), 0)
+      const recoverableCharges = chargeRegularizationData.chargeBreakdown
+        .filter(charge => charge.is_recoverable)
+        .reduce((sum, charge) => sum + (charge.real_amount || 0), 0)
+      const nonRecoverableCharges = totalRealCharges - recoverableCharges
+      const tenantBalance = chargeRegularizationData.totalProvisionsCollected - recoverableCharges
+
+      setChargeRegularizationData(prev => ({
+        ...prev,
+        totalRealCharges,
+        recoverableCharges,
+        nonRecoverableCharges,
+        tenantBalance,
+        balanceType: tenantBalance >= 0 ? 'refund' : 'additional_payment'
+      }))
+    }
+  }, [chargeRegularizationData.chargeBreakdown, chargeRegularizationData.totalProvisionsCollected])
+
   const loadInitialData = async () => {
     try {
       setIsLoading(true)
@@ -324,6 +345,25 @@ export default function RevisionPage() {
       }
 
       setRegularizations(regularizationsData || [])
+
+      // Restaurer les données de régularisation si elles existent
+      if (regularizationsData && regularizationsData.length > 0) {
+        const latestRegularization = regularizationsData[0] // Prendre la plus récente
+        
+        setChargeRegularizationData({
+          totalProvisionsCollected: parseFloat(latestRegularization.total_provisions_collected) || 0,
+          provisionsPeriodStart: latestRegularization.provisions_period_start || '',
+          provisionsPeriodEnd: latestRegularization.provisions_period_end || '',
+          totalRealCharges: parseFloat(latestRegularization.total_real_charges) || 0,
+          recoverableCharges: parseFloat(latestRegularization.recoverable_charges) || 0,
+          nonRecoverableCharges: parseFloat(latestRegularization.non_recoverable_charges) || 0,
+          tenantBalance: parseFloat(latestRegularization.tenant_balance) || 0,
+          balanceType: latestRegularization.balance_type || 'refund',
+          chargeBreakdown: [] // TODO: Charger le détail des charges
+        })
+        
+        setCalculationNotes(latestRegularization.calculation_notes || '')
+      }
     } catch (error) {
       console.error("Erreur chargement révisions existantes:", error)
     }
@@ -381,13 +421,39 @@ export default function RevisionPage() {
   }
 
   const calculateChargeRegularization = async () => {
-    if (!selectedLeaseId) {
+    if (!selectedLeaseId || !selectedLease) {
       toast.error("Veuillez sélectionner un bail")
       return
     }
 
     try {
       setIsCalculating(true)
+
+      // Calculer automatiquement la période d'occupation
+      const leaseStartDate = new Date(selectedLease.start_date)
+      const leaseEndDate = selectedLease.end_date ? new Date(selectedLease.end_date) : null
+      
+      // Période de régularisation pour l'année courante
+      const yearStart = new Date(currentYear, 0, 1) // 1er janvier
+      const yearEnd = new Date(currentYear, 11, 31) // 31 décembre
+      
+      // Déterminer la période effective d'occupation
+      const effectiveStart = leaseStartDate > yearStart ? leaseStartDate : yearStart
+      const effectiveEnd = leaseEndDate && leaseEndDate < yearEnd ? leaseEndDate : yearEnd
+      
+      // Calculer le nombre de mois d'occupation
+      const monthsDiff = (effectiveEnd.getFullYear() - effectiveStart.getFullYear()) * 12 + 
+                        (effectiveEnd.getMonth() - effectiveStart.getMonth()) + 1
+      
+      // Mettre à jour les dates de période
+      const provisionsPeriodStart = effectiveStart.toISOString().split('T')[0]
+      const provisionsPeriodEnd = effectiveEnd.toISOString().split('T')[0]
+      
+      setChargeRegularizationData(prev => ({
+        ...prev,
+        provisionsPeriodStart,
+        provisionsPeriodEnd
+      }))
 
       const response = await fetch('/api/revisions/charges/calculate', {
         method: 'POST',
@@ -398,8 +464,8 @@ export default function RevisionPage() {
         body: JSON.stringify({
           leaseId: selectedLeaseId,
           year: currentYear,
-          provisionsPeriodStart: chargeRegularizationData.provisionsPeriodStart,
-          provisionsPeriodEnd: chargeRegularizationData.provisionsPeriodEnd
+          provisionsPeriodStart,
+          provisionsPeriodEnd
         })
       })
 
@@ -409,9 +475,9 @@ export default function RevisionPage() {
         setChargeRegularizationData(prev => ({
           ...prev,
           totalProvisionsCollected: result.calculation.totalProvisionsCollected,
-          calculationMethod: `Calcul basé sur ${result.calculation.monthsCount} mois de provisions`
+          calculationMethod: `Calcul basé sur ${monthsDiff} mois d'occupation (${provisionsPeriodStart} → ${provisionsPeriodEnd})`
         }))
-        toast.success("Calcul des provisions effectué")
+        toast.success(`Calcul des provisions effectué pour ${monthsDiff} mois d'occupation`)
       } else {
         toast.error("Erreur lors du calcul")
       }
@@ -513,6 +579,9 @@ export default function RevisionPage() {
       if (response.ok && result.success) {
         toast.success("Régularisation des charges sauvegardée")
         await loadExistingRevisions()
+        
+        // Générer le PDF après sauvegarde
+        await generateChargeStatementPDF(result.regularization)
       } else {
         console.error("Erreur API:", result)
         toast.error(`Erreur lors de la sauvegarde: ${result.error || 'Erreur inconnue'}`)
@@ -522,6 +591,63 @@ export default function RevisionPage() {
       toast.error("Erreur lors de la sauvegarde")
     } finally {
       setIsGenerating(false)
+    }
+  }
+
+  const generateChargeStatementPDF = async (regularizationData: any) => {
+    try {
+      // Importer le générateur PDF
+      const { RevisionPDFGenerator } = await import('@/lib/revision-pdf-generator')
+      
+      // Préparer les données pour le PDF
+      const pdfData = {
+        lease: {
+          id: selectedLease!.id,
+          property: {
+            title: selectedLease!.property.title,
+            address: selectedLease!.property.address,
+            city: selectedLease!.property.city
+          },
+          tenant: {
+            first_name: selectedLease!.tenant.first_name,
+            last_name: selectedLease!.tenant.last_name,
+            email: selectedLease!.tenant.email
+          },
+          owner: {
+            first_name: selectedLease!.owner.first_name,
+            last_name: selectedLease!.owner.last_name,
+            email: selectedLease!.owner.email
+          }
+        },
+        regularization: {
+          regularization_year: currentYear,
+          regularization_date: new Date().toISOString(),
+          total_provisions_collected: chargeRegularizationData.totalProvisionsCollected,
+          provisions_period_start: chargeRegularizationData.provisionsPeriodStart,
+          provisions_period_end: chargeRegularizationData.provisionsPeriodEnd,
+          total_real_charges: chargeRegularizationData.totalRealCharges,
+          recoverable_charges: chargeRegularizationData.recoverableCharges,
+          non_recoverable_charges: chargeRegularizationData.nonRecoverableCharges,
+          tenant_balance: chargeRegularizationData.tenantBalance,
+          balance_type: chargeRegularizationData.balanceType,
+          calculation_method: 'prorata_surface',
+          calculation_notes: calculationNotes
+        },
+        chargeBreakdown: chargeRegularizationData.chargeBreakdown || []
+      }
+
+      // Générer le PDF
+      const generator = new RevisionPDFGenerator()
+      const pdf = generator.generateChargeStatement(pdfData)
+      
+      // Télécharger le PDF
+      const fileName = `decompte-charges-${selectedLease!.property.title.replace(/\s+/g, '-')}-${currentYear}.pdf`
+      pdf.save(fileName)
+      
+      toast.success("PDF généré et téléchargé")
+    } catch (error) {
+      console.error("Erreur génération PDF:", error)
+      toast.error("Erreur lors de la génération du PDF")
     }
   }
 
@@ -799,6 +925,12 @@ export default function RevisionPage() {
               <ChargeRegularizationTable
                 chargeCategories={chargeCategories}
                 totalProvisionsCollected={chargeRegularizationData.totalProvisionsCollected}
+                occupationMonths={(() => {
+                  if (!chargeRegularizationData.provisionsPeriodStart || !chargeRegularizationData.provisionsPeriodEnd) return 0
+                  const start = new Date(chargeRegularizationData.provisionsPeriodStart)
+                  const end = new Date(chargeRegularizationData.provisionsPeriodEnd)
+                  return (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1
+                })()}
                 onDataChange={(data) => setChargeRegularizationData(prev => ({
                   ...prev,
                   chargeBreakdown: data
