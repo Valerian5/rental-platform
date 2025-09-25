@@ -61,6 +61,17 @@ export async function POST(request: NextRequest) {
       provisionsPeriodEnd
     })
     
+    // D'abord, vérifier toutes les quittances pour ce bail
+    const { data: allReceipts, error: allReceiptsError } = await supabaseAdmin
+      .from('receipts')
+      .select('charges_amount, month, year, rent_amount, generated_at')
+      .eq('lease_id', leaseId)
+      .order('year', { ascending: true })
+      .order('month', { ascending: true })
+    
+    console.log('📋 Toutes les quittances pour ce bail:', allReceipts)
+    
+    // Maintenant filtrer par année
     const { data: receipts, error: receiptsError } = await supabaseAdmin
       .from('receipts')
       .select('charges_amount, month, year, rent_amount, generated_at')

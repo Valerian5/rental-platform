@@ -234,8 +234,12 @@ export default function RevisionPage() {
           id,
           property_id,
           tenant_id,
+          start_date,
+          end_date,
+          monthly_rent,
           montant_loyer_mensuel,
           montant_provisions_charges,
+          charges,
           date_revision_loyer,
           trimestre_reference_irl,
           property:properties(
@@ -273,6 +277,15 @@ export default function RevisionPage() {
 
     const lease = leases.find(l => l.id === selectedLeaseId)
     if (!lease) return
+
+    console.log('🏠 Bail sélectionné:', {
+      id: lease.id,
+      start_date: lease.start_date,
+      end_date: lease.end_date,
+      monthly_rent: lease.monthly_rent,
+      montant_provisions_charges: lease.montant_provisions_charges,
+      charges: lease.charges
+    })
 
     setSelectedLease(lease)
     
@@ -895,7 +908,8 @@ export default function RevisionPage() {
                     <strong>Bail sélectionné:</strong> {selectedLeaseId ? 'Oui' : 'Non'}<br/>
                     <strong>Date d'entrée:</strong> {selectedLease?.start_date || 'Non définie'}<br/>
                     <strong>Date de fin:</strong> {selectedLease?.end_date || 'Non définie'}<br/>
-                    <strong>Provisions mensuelles:</strong> {selectedLease?.montant_provisions_charges || 'Non définies'} €
+                    <strong>Provisions mensuelles:</strong> {selectedLease?.montant_provisions_charges || 'Non définies'} €<br/>
+                    <strong>Charges:</strong> {selectedLease?.charges || 'Non définies'} €
                   </div>
                   <div>
                     <strong>Période calculée:</strong> {chargeRegularizationData.provisionsPeriodStart} → {chargeRegularizationData.provisionsPeriodEnd}<br/>
@@ -903,6 +917,23 @@ export default function RevisionPage() {
                     <strong>Catégories chargées:</strong> {chargeCategories.length}<br/>
                     <strong>Année courante:</strong> {currentYear}
                   </div>
+                </div>
+                <div className="mt-2">
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={async () => {
+                      if (!selectedLeaseId) return
+                      console.log('🧪 Test direct des quittances...')
+                      const { data: receipts, error } = await supabase
+                        .from('receipts')
+                        .select('*')
+                        .eq('lease_id', selectedLeaseId)
+                      console.log('🧪 Résultat test quittances:', { receipts, error })
+                    }}
+                  >
+                    🧪 Tester quittances
+                  </Button>
                 </div>
               </div>
 
