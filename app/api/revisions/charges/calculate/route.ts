@@ -99,17 +99,26 @@ export async function POST(request: NextRequest) {
     const endDate = new Date(provisionsPeriodEnd)
     
     const totalProvisionsCollected = receipts.reduce((sum, receipt) => {
-      // Vérifier si la quittance est dans la période d'occupation
-      // Le mois peut être au format "2025-09" ou "09"
-      let monthStr = receipt.month
-      if (monthStr.includes('-')) {
-        monthStr = monthStr.split('-')[1] // Extraire le mois si format "2025-09"
+      // Utiliser la même logique que la page fiscale pour parser le mois
+      let monthNumber: number
+
+      if (typeof receipt.month === "string") {
+        const parts = receipt.month.split("-") // ex: "2025-09"
+        monthNumber = parts.length === 2 ? parseInt(parts[1], 10) : parseInt(receipt.month, 10)
+      } else {
+        monthNumber = receipt.month
       }
-      
-      const receiptDate = new Date(`${receipt.year}-${monthStr.padStart(2, '0')}-01`)
+
+      if (isNaN(monthNumber) || monthNumber < 1 || monthNumber > 12) {
+        console.warn(`Mois invalide trouvé pour receipt ${receipt.id}:`, receipt.month)
+        monthNumber = 1 // Valeur par défaut
+      }
+
+      // Créer la date de la quittance (1er du mois)
+      const receiptDate = new Date(`${receipt.year}-${monthNumber.toString().padStart(2, '0')}-01`)
       
       console.log(`📅 Vérification quittance ${receipt.month}:`, {
-        monthStr,
+        monthNumber,
         receiptDate: receiptDate.toISOString().split('T')[0],
         startDate: startDate.toISOString().split('T')[0],
         endDate: endDate.toISOString().split('T')[0],
