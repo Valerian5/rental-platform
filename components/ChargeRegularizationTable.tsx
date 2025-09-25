@@ -24,6 +24,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
+import { calculateProratedAmount, calculateExactProrata } from "@/lib/date-utils"
 
 interface ChargeCategory {
   name: string
@@ -52,7 +53,10 @@ interface ChargeBreakdown {
 interface ChargeRegularizationTableProps {
   chargeCategories: ChargeCategory[]
   totalProvisionsCollected: number
-  occupationMonths: number
+  occupationPeriod: {
+    start: Date
+    end: Date
+  }
   onDataChange: (data: ChargeBreakdown[]) => void
   onCalculationChange: (calculation: {
     totalRealCharges: number
@@ -66,7 +70,7 @@ interface ChargeRegularizationTableProps {
 export function ChargeRegularizationTable({
   chargeCategories,
   totalProvisionsCollected,
-  occupationMonths,
+  occupationPeriod,
   onDataChange,
   onCalculationChange
 }: ChargeRegularizationTableProps) {
@@ -107,17 +111,23 @@ export function ChargeRegularizationTable({
   }, [chargeBreakdown, totalProvisionsCollected])
 
   const recalculateTotals = () => {
+    // Calculer le prorata exact en jours
+    const prorata = calculateExactProrata(
+      occupationPeriod.start,
+      occupationPeriod.end,
+      occupationPeriod.start.getFullYear()
+    )
+    
     // Calculer les charges réelles proratisées
     const totalRealCharges = chargeBreakdown.reduce((sum, charge) => {
-      // Si c'est une charge annuelle, proratiser selon les mois d'occupation
-      const proratedAmount = occupationMonths > 0 ? (charge.real_amount * occupationMonths) / 12 : charge.real_amount
+      const proratedAmount = calculateProratedAmount(charge.real_amount, prorata)
       return sum + proratedAmount
     }, 0)
     
     const recoverableCharges = chargeBreakdown
       .filter(charge => charge.is_recoverable)
       .reduce((sum, charge) => {
-        const proratedAmount = occupationMonths > 0 ? (charge.real_amount * occupationMonths) / 12 : charge.real_amount
+        const proratedAmount = calculateProratedAmount(charge.real_amount, prorata)
         return sum + proratedAmount
       }, 0)
     
@@ -374,13 +384,25 @@ export function ChargeRegularizationTable({
                 </td>
                 <td className="px-3 py-3">
                   <div className="text-sm font-medium text-blue-600">
-                    {occupationMonths > 0 ? 
-                      `${((charge.real_amount * occupationMonths) / 12).toFixed(2)} €` : 
-                      '—'
-                    }
+                    {(() => {
+                      const prorata = calculateExactProrata(
+                        occupationPeriod.start,
+                        occupationPeriod.end,
+                        occupationPeriod.start.getFullYear()
+                      )
+                      const proratedAmount = calculateProratedAmount(charge.real_amount, prorata)
+                      return `${proratedAmount.toFixed(2)} €`
+                    })()}
                   </div>
                   <div className="text-xs text-gray-500">
-                    {occupationMonths > 0 ? `(${occupationMonths}/12 mois)` : ''}
+                    {(() => {
+                      const prorata = calculateExactProrata(
+                        occupationPeriod.start,
+                        occupationPeriod.end,
+                        occupationPeriod.start.getFullYear()
+                      )
+                      return `${prorata.occupationDays} jours (${prorata.percentage.toFixed(1)}%)`
+                    })()}
                   </div>
                 </td>
                 <td className="px-3 py-3 text-center">

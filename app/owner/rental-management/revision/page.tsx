@@ -33,6 +33,12 @@ import { IRLSelector } from "@/components/IRLSelector"
 import { ChargeSettingsManager } from "@/components/ChargeSettingsManager"
 import { ChargeRegularizationTable } from "@/components/ChargeRegularizationTable"
 import { ChargeRegularizationSummary } from "@/components/ChargeRegularizationSummary"
+import { 
+  calculateEffectiveOccupationPeriod, 
+  calculateExactProrata, 
+  formatPeriod, 
+  formatProrata 
+} from "@/lib/date-utils"
 
 interface Property {
   id: string
@@ -429,25 +435,23 @@ export default function RevisionPage() {
     try {
       setIsCalculating(true)
 
-      // Calculer automatiquement la période d'occupation
+      // Calculer automatiquement la période d'occupation avec prorata exact
       const leaseStartDate = new Date(selectedLease.start_date)
       const leaseEndDate = selectedLease.end_date ? new Date(selectedLease.end_date) : null
       
-      // Période de régularisation pour l'année courante
-      const yearStart = new Date(currentYear, 0, 1) // 1er janvier
-      const yearEnd = new Date(currentYear, 11, 31) // 31 décembre
+      // Calculer la période effective d'occupation
+      const occupationPeriod = calculateEffectiveOccupationPeriod(
+        leaseStartDate,
+        leaseEndDate,
+        currentYear
+      )
       
-      // Déterminer la période effective d'occupation
-      const effectiveStart = leaseStartDate > yearStart ? leaseStartDate : yearStart
-      const effectiveEnd = leaseEndDate && leaseEndDate < yearEnd ? leaseEndDate : yearEnd
-      
-      // Calculer le nombre de mois d'occupation
-      const monthsDiff = (effectiveEnd.getFullYear() - effectiveStart.getFullYear()) * 12 + 
-                        (effectiveEnd.getMonth() - effectiveStart.getMonth()) + 1
+      // Calculer le prorata exact en jours
+      const prorata = calculateExactProrata(leaseStartDate, leaseEndDate, currentYear)
       
       // Mettre à jour les dates de période
-      const provisionsPeriodStart = effectiveStart.toISOString().split('T')[0]
-      const provisionsPeriodEnd = effectiveEnd.toISOString().split('T')[0]
+      const provisionsPeriodStart = occupationPeriod.start.toISOString().split('T')[0]
+      const provisionsPeriodEnd = occupationPeriod.end.toISOString().split('T')[0]
       
       setChargeRegularizationData(prev => ({
         ...prev,
@@ -475,9 +479,9 @@ export default function RevisionPage() {
         setChargeRegularizationData(prev => ({
           ...prev,
           totalProvisionsCollected: result.calculation.totalProvisionsCollected,
-          calculationMethod: `Calcul basé sur ${monthsDiff} mois d'occupation (${provisionsPeriodStart} → ${provisionsPeriodEnd})`
+          calculationMethod: `Calcul basé sur ${formatProrata(prorata)} (${formatPeriod(occupationPeriod)})`
         }))
-        toast.success(`Calcul des provisions effectué pour ${monthsDiff} mois d'occupation`)
+        toast.success(`Calcul des provisions effectué pour ${formatProrata(prorata)}`)
       } else {
         toast.error("Erreur lors du calcul")
       }
@@ -865,72 +869,107 @@ export default function RevisionPage() {
 
           {/* Étape 2: Régularisation des charges */}
           <TabsContent value="charges" className="space-y-6">
-            {/* Paramétrage des charges */}
-            <ChargeSettingsManager
-              leaseId={selectedLeaseId}
-              onSettingsChange={setChargeCategories}
-              calculationNotes={calculationNotes}
-              onCalculationNotesChange={setCalculationNotes}
-            />
-
-            {/* Période de régularisation */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Période de régularisation</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Section de régularisation des charges */}
+            <div className="space-y-6">
+              {/* En-tête avec informations du bail */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-200">
+                <div className="flex items-center justify-between">
                   <div>
-                    <Label htmlFor="period-start">Début de période</Label>
-                    <Input
-                      id="period-start"
-                      type="date"
-                      value={chargeRegularizationData.provisionsPeriodStart}
-                      onChange={(e) => setChargeRegularizationData(prev => ({
-                        ...prev,
-                        provisionsPeriodStart: e.target.value
-                      }))}
-                    />
+                    <h3 className="text-lg font-semibold text-gray-900">Régularisation des charges</h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Bail : {selectedLease?.property?.title} • 
+                      Locataire : {selectedLease?.tenant?.first_name} {selectedLease?.tenant?.last_name}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Période : {chargeRegularizationData.provisionsPeriodStart ? 
+                        new Date(chargeRegularizationData.provisionsPeriodStart).toLocaleDateString('fr-FR') : 
+                        'Non définie'
+                      } → {chargeRegularizationData.provisionsPeriodEnd ? 
+                        new Date(chargeRegularizationData.provisionsPeriodEnd).toLocaleDateString('fr-FR') : 
+                        'Non définie'
+                      }
+                    </p>
                   </div>
-                  <div>
-                    <Label htmlFor="period-end">Fin de période</Label>
-                    <Input
-                      id="period-end"
-                      type="date"
-                      value={chargeRegularizationData.provisionsPeriodEnd}
-                      onChange={(e) => setChargeRegularizationData(prev => ({
-                        ...prev,
-                        provisionsPeriodEnd: e.target.value
-                      }))}
-                    />
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {chargeRegularizationData.totalProvisionsCollected.toFixed(2)} €
+                    </div>
+                    <div className="text-xs text-gray-500">Provisions encaissées</div>
                   </div>
                 </div>
-                <Button 
-                  onClick={calculateChargeRegularization} 
-                  disabled={isCalculating}
-                  className="w-full"
-                >
-                  {isCalculating ? (
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Calculator className="h-4 w-4 mr-2" />
-                  )}
-                  Calculer les provisions
-                </Button>
-              </CardContent>
-            </Card>
+              </div>
+
+              {/* Paramétrage des charges */}
+              <ChargeSettingsManager
+                leaseId={selectedLeaseId}
+                onSettingsChange={setChargeCategories}
+                calculationNotes={calculationNotes}
+                onCalculationNotesChange={setCalculationNotes}
+              />
+
+              {/* Calcul automatique des provisions */}
+              <Card className="border-green-200 bg-green-50">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center text-green-800">
+                    <Calculator className="h-5 w-5 mr-2" />
+                    Calcul automatique des provisions
+                  </CardTitle>
+                  <CardDescription className="text-green-700">
+                    Les provisions sont calculées automatiquement depuis les quittances de loyer
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-white rounded-lg p-4 border border-green-200">
+                      <div className="text-sm text-gray-600">Période d'occupation</div>
+                      <div className="text-lg font-semibold text-gray-900">
+                        {chargeRegularizationData.provisionsPeriodStart && chargeRegularizationData.provisionsPeriodEnd ? 
+                          (() => {
+                            const start = new Date(chargeRegularizationData.provisionsPeriodStart)
+                            const end = new Date(chargeRegularizationData.provisionsPeriodEnd)
+                            const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+                            return `${days} jours`
+                          })() : 
+                          'Non calculée'
+                        }
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 border border-green-200">
+                      <div className="text-sm text-gray-600">Provisions mensuelles</div>
+                      <div className="text-lg font-semibold text-gray-900">
+                        {selectedLease?.montant_provisions_charges ? 
+                          `${selectedLease.montant_provisions_charges.toFixed(2)} €` : 
+                          'Non définies'
+                        }
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <Button 
+                    onClick={calculateChargeRegularization} 
+                    disabled={isCalculating}
+                    className="w-full bg-green-600 hover:bg-green-700"
+                  >
+                    {isCalculating ? (
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Calculator className="h-4 w-4 mr-2" />
+                    )}
+                    Calculer automatiquement les provisions
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
 
             {/* Tableau de saisie des charges */}
-            {chargeCategories.length > 0 && (
+            {chargeCategories.length > 0 && chargeRegularizationData.provisionsPeriodStart && chargeRegularizationData.provisionsPeriodEnd && (
               <ChargeRegularizationTable
                 chargeCategories={chargeCategories}
                 totalProvisionsCollected={chargeRegularizationData.totalProvisionsCollected}
-                occupationMonths={(() => {
-                  if (!chargeRegularizationData.provisionsPeriodStart || !chargeRegularizationData.provisionsPeriodEnd) return 0
-                  const start = new Date(chargeRegularizationData.provisionsPeriodStart)
-                  const end = new Date(chargeRegularizationData.provisionsPeriodEnd)
-                  return (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1
-                })()}
+                occupationPeriod={{
+                  start: new Date(chargeRegularizationData.provisionsPeriodStart),
+                  end: new Date(chargeRegularizationData.provisionsPeriodEnd)
+                }}
                 onDataChange={(data) => setChargeRegularizationData(prev => ({
                   ...prev,
                   chargeBreakdown: data

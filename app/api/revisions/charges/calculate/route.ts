@@ -50,21 +50,32 @@ export async function POST(request: NextRequest) {
     // Calculer les provisions encaissées via les quittances
     const { data: receipts, error: receiptsError } = await supabaseAdmin
       .from('rent_receipts')
-      .select('charges_amount, payment_date')
+      .select('charges_amount, payment_date, rent_amount')
       .eq('lease_id', leaseId)
       .gte('payment_date', provisionsPeriodStart)
       .lte('payment_date', provisionsPeriodEnd)
       .eq('status', 'paid')
+      .order('payment_date', { ascending: true })
 
     if (receiptsError) {
       console.error("Erreur récupération quittances:", receiptsError)
       return NextResponse.json({ error: "Erreur lors du calcul" }, { status: 500 })
     }
 
-    // Calculer le total des provisions encaissées
+    // Calculer les provisions encaissées depuis les quittances
     const totalProvisionsCollected = receipts.reduce((sum, receipt) => {
       return sum + (receipt.charges_amount || 0)
     }, 0)
+
+    // Calculer le nombre de quittances et la moyenne mensuelle
+    const receiptCount = receipts.length
+    const averageMonthlyProvision = receiptCount > 0 ? totalProvisionsCollected / receiptCount : 0
+
+    // Calculer la période en jours pour un calcul plus précis
+    const startDate = new Date(provisionsPeriodStart)
+    const endDate = new Date(provisionsPeriodEnd)
+    const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
+    const monthsDiff = daysDiff / 30.44 // Moyenne de jours par mois
 
     // Récupérer les paramètres de charges du bail
     const { data: chargeSettings, error: settingsError } = await supabaseAdmin
@@ -87,20 +98,21 @@ export async function POST(request: NextRequest) {
     const chargeCategories = chargeSettings?.charge_categories || defaultChargeCategories
 
     // Calculer le nombre de mois de provisions
-    const startDate = new Date(provisionsPeriodStart)
-    const endDate = new Date(provisionsPeriodEnd)
-    const monthsCount = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30))
-
-    // Calculer la provision mensuelle moyenne
-    const averageMonthlyProvision = monthsCount > 0 ? totalProvisionsCollected / monthsCount : 0
 
     return NextResponse.json({
       success: true,
       calculation: {
         totalProvisionsCollected,
-        monthsCount,
+        receiptCount,
         averageMonthlyProvision,
+        daysDiff,
+        monthsDiff,
         chargeCategories,
+        receipts: receipts.map(receipt => ({
+          date: receipt.payment_date,
+          chargesAmount: receipt.charges_amount,
+          rentAmount: receipt.rent_amount
+        })),
         lease: {
           id: lease.id,
           property: lease.property,

@@ -63,66 +63,98 @@ export function ChargeRegularizationSummary({
   }
 
   return (
-    <div className="bg-white shadow-sm rounded-lg p-5 mb-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="bg-white shadow-lg rounded-xl p-6 mb-6 border border-gray-200">
+      {/* En-tête avec titre et provisions */}
+      <div className="flex items-center justify-between mb-8">
         <div>
-          <h2 className="text-lg font-medium">Synthèse</h2>
-          <p className="text-sm text-gray-500">Total provisions vs total réel — résultat affiché en bas.</p>
+          <h2 className="text-xl font-bold text-gray-900 flex items-center">
+            <Euro className="h-6 w-6 mr-2 text-blue-600" />
+            Synthèse de la régularisation
+          </h2>
+          <p className="text-sm text-gray-600 mt-1">
+            Comparaison provisions encaissées vs charges réelles
+          </p>
         </div>
-        <div className="text-right">
-          <div className="text-sm">Provisions encaissées (annuel)</div>
-          <div className="text-2xl font-semibold">{totalProvisionsCollected.toFixed(2)} €</div>
+        <div className="text-right bg-blue-50 rounded-lg p-4 border border-blue-200">
+          <div className="text-sm text-blue-600 font-medium">Provisions encaissées</div>
+          <div className="text-3xl font-bold text-blue-700">{totalProvisionsCollected.toFixed(2)} €</div>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="p-4 bg-gray-50 rounded">
-          <div className="text-xs text-gray-400">Total charges réelles</div>
-          <div className="text-xl font-semibold mt-1">{totalRealCharges.toFixed(2)} €</div>
-        </div>
-        
-        <div className={getDiffCardClass()}>
-          <div className="text-xs text-gray-400">Différence (provisions - réelles)</div>
-          <div className={`text-xl font-semibold mt-1 ${getBalanceColor()}`}>
-            {tenantBalance >= 0 ? '+' : ''}{tenantBalance.toFixed(2)} €
+      {/* Grille des totaux */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        {/* Charges réelles */}
+        <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-sm font-medium text-gray-600">Charges réelles</div>
+            <TrendingUp className="h-4 w-4 text-gray-400" />
           </div>
-          <div className="text-sm mt-2 text-gray-600">{getBalanceLabel()}</div>
-        </div>
-        
-        <div className="p-4 bg-gray-50 rounded">
-          <div className="text-xs text-gray-400">Charges récupérables</div>
-          <div className="text-xl font-semibold mt-1 text-green-600">{recoverableCharges.toFixed(2)} €</div>
-          <div className="text-xs text-gray-400 mt-1">
+          <div className="text-2xl font-bold text-gray-900">{totalRealCharges.toFixed(2)} €</div>
+          <div className="text-xs text-gray-500 mt-1">
+            Récupérables: {recoverableCharges.toFixed(2)} €
+          </div>
+          <div className="text-xs text-gray-500">
             Non récupérables: {nonRecoverableCharges.toFixed(2)} €
           </div>
+        </div>
+        
+        {/* Différence/Solde */}
+        <div className={`rounded-xl p-6 border-2 ${getDiffCardClass()}`}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-sm font-medium text-gray-600">Solde locataire</div>
+            {getBalanceIcon()}
+          </div>
+          <div className={`text-3xl font-bold ${getBalanceColor()}`}>
+            {tenantBalance >= 0 ? '+' : ''}{tenantBalance.toFixed(2)} €
+          </div>
+          <div className="text-sm font-medium mt-2 text-gray-700">{getBalanceLabel()}</div>
+        </div>
+        
+        {/* Répartition */}
+        <div className="bg-green-50 rounded-xl p-6 border border-green-200">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-sm font-medium text-green-700">Répartition</div>
+            <CheckCircle className="h-4 w-4 text-green-600" />
+          </div>
+          <div className="text-lg font-bold text-green-800">
+            {recoverableCharges > 0 ? 
+              `${((recoverableCharges / totalRealCharges) * 100).toFixed(1)}%` : 
+              '0%'
+            }
+          </div>
+          <div className="text-xs text-green-600 mt-1">Charges récupérables</div>
         </div>
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-3">
-        <button 
-          onClick={onSendToTenant}
-          className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm"
-        >
-          <Send className="h-4 w-4 mr-2 inline" />
-          Envoyer au locataire
-        </button>
-        
-        <button 
-          onClick={onGenerateStatement}
-          disabled={isGenerating}
-          className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 text-sm"
-        >
-          {isGenerating ? (
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2 inline"></div>
-          ) : (
-            <Download className="h-4 w-4 mr-2 inline" />
-          )}
-          Télécharger PDF
-        </button>
-        
-        <div className="text-xs text-gray-400 ml-auto">
-          Dernière sauvegarde : <span className="font-medium">{new Date().toLocaleString('fr-FR')}</span>
+      <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button 
+              onClick={onSendToTenant}
+              className="inline-flex items-center px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+            >
+              <Send className="h-4 w-4 mr-2" />
+              Envoyer au locataire
+            </button>
+            
+            <button 
+              onClick={onGenerateStatement}
+              disabled={isGenerating}
+              className="inline-flex items-center px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isGenerating ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+              ) : (
+                <Download className="h-4 w-4 mr-2" />
+              )}
+              Télécharger PDF
+            </button>
+          </div>
+          
+          <div className="text-sm text-gray-500 bg-white rounded-lg px-3 py-2 border border-gray-200">
+            <span className="font-medium">Dernière sauvegarde :</span> {new Date().toLocaleString('fr-FR')}
+          </div>
         </div>
       </div>
 
