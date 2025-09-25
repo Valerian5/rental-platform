@@ -34,6 +34,7 @@ import { ChargeSettingsManagerNew } from "@/components/ChargeSettingsManagerNew"
 import { ChargeRegularizationTableNew } from "@/components/ChargeRegularizationTableNew"
 import { ChargeRegularizationSummary } from "@/components/ChargeRegularizationSummary"
 import { ChargeRegularizationFallback } from "@/components/ChargeRegularizationFallback"
+import { DebugPanel } from "@/components/DebugPanel"
 import { 
   calculateEffectiveOccupationPeriod, 
   calculateExactProrata, 
@@ -160,6 +161,7 @@ export default function RevisionPage() {
   // Calculer automatiquement la période d'occupation quand le bail est chargé
   useEffect(() => {
     if (selectedLease && selectedLease.start_date) {
+      console.log('🔄 Calcul automatique des provisions pour le bail:', selectedLease.id)
       calculateChargeRegularization()
     }
   }, [selectedLease])
@@ -530,9 +532,14 @@ export default function RevisionPage() {
 
   const calculateChargeRegularization = async () => {
     if (!selectedLeaseId || !selectedLease) {
+      console.log('❌ Pas de bail sélectionné ou bail non chargé')
       toast.error("Veuillez sélectionner un bail")
       return
     }
+
+    console.log('🔄 Début du calcul des provisions pour le bail:', selectedLeaseId)
+    console.log('📅 Date de début du bail:', selectedLease.start_date)
+    console.log('📅 Date de fin du bail:', selectedLease.end_date)
 
     try {
       setIsCalculating(true)
@@ -555,11 +562,22 @@ export default function RevisionPage() {
       const provisionsPeriodStart = occupationPeriod.start.toISOString().split('T')[0]
       const provisionsPeriodEnd = occupationPeriod.end.toISOString().split('T')[0]
       
+      console.log('📅 Période calculée:', provisionsPeriodStart, '→', provisionsPeriodEnd)
+      
       setChargeRegularizationData(prev => ({
         ...prev,
         provisionsPeriodStart,
         provisionsPeriodEnd
       }))
+
+      const requestBody = {
+        leaseId: selectedLeaseId,
+        year: currentYear,
+        provisionsPeriodStart,
+        provisionsPeriodEnd
+      }
+
+      console.log('📤 Envoi de la requête API avec:', requestBody)
 
       const response = await fetch('/api/revisions/charges/calculate', {
         method: 'POST',
@@ -567,15 +585,13 @@ export default function RevisionPage() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
         },
-        body: JSON.stringify({
-          leaseId: selectedLeaseId,
-          year: currentYear,
-          provisionsPeriodStart,
-          provisionsPeriodEnd
-        })
+        body: JSON.stringify(requestBody)
       })
 
+      console.log('📥 Réponse API reçue:', response.status)
+
       const result = await response.json()
+      console.log('📊 Résultat API:', result)
       
       if (result.success) {
         setChargeRegularizationData(prev => ({
@@ -646,6 +662,10 @@ export default function RevisionPage() {
       toast.error("Veuillez sélectionner un bail")
       return
     }
+
+    console.log('💾 Sauvegarde de la régularisation des charges')
+    console.log('📊 Données à sauvegarder:', chargeRegularizationData)
+    console.log('📋 Détail des charges:', chargeRegularizationData.chargeBreakdown)
 
     try {
       setIsGenerating(true)
@@ -976,6 +996,12 @@ export default function RevisionPage() {
           <TabsContent value="charges" className="space-y-6">
             {/* Section de régularisation des charges */}
             <div className="space-y-6">
+              {/* Panel de debug temporaire */}
+              <DebugPanel 
+                leaseId={selectedLeaseId}
+                chargeCategories={chargeCategories}
+                chargeRegularizationData={chargeRegularizationData}
+              />
 
               {/* En-tête avec informations du bail */}
               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-200">

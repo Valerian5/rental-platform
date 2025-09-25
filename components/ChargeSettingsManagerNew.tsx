@@ -161,6 +161,11 @@ export function ChargeSettingsManagerNew({
       // Notifier les changements de catégories après sauvegarde
       notifySettingsChange(selectedCharges)
 
+      // Forcer le rechargement des paramètres
+      setTimeout(() => {
+        window.location.reload()
+      }, 1000)
+
       toast.success("Paramètres sauvegardés")
     } catch (error) {
       console.error('Erreur sauvegarde paramètres:', error)
