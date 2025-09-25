@@ -1100,8 +1100,10 @@ export default function RevisionPage() {
                         // Forcer le calcul avec les données connues
                         setChargeRegularizationData(prev => ({
                           ...prev,
-                          totalProvisionsCollected: 70 // Montant de la quittance de septembre
+                          totalProvisionsCollected: 70, // Montant de la quittance de septembre
+                          calculationMethod: "Calcul forcé avec données connues (70 € pour septembre)"
                         }))
+                        toast.success("Provisions forcées à 70 €")
                       }}
                       variant="outline"
                       className="px-3"

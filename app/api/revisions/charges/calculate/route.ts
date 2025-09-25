@@ -109,6 +109,7 @@ export async function POST(request: NextRequest) {
       const receiptDate = new Date(`${receipt.year}-${monthStr.padStart(2, '0')}-01`)
       
       console.log(`📅 Vérification quittance ${receipt.month}:`, {
+        monthStr,
         receiptDate: receiptDate.toISOString().split('T')[0],
         startDate: startDate.toISOString().split('T')[0],
         endDate: endDate.toISOString().split('T')[0],
@@ -117,13 +118,21 @@ export async function POST(request: NextRequest) {
       })
       
       if (receiptDate >= startDate && receiptDate <= endDate) {
+        console.log(`✅ Quittance incluse: ${receipt.month} = ${receipt.charges_amount} €`)
         return sum + (receipt.charges_amount || 0)
+      } else {
+        console.log(`❌ Quittance exclue: ${receipt.month} (hors période)`)
       }
       return sum
     }, 0)
     
     console.log('💰 Total provisions calculé pour la période effective:', totalProvisionsCollected, '€')
     console.log('📅 Période effective:', provisionsPeriodStart, '→', provisionsPeriodEnd)
+    console.log('📅 Dates de calcul:')
+    console.log('   - startDate:', startDate.toISOString().split('T')[0])
+    console.log('   - endDate:', endDate.toISOString().split('T')[0])
+    console.log('   - startDate type:', typeof startDate, startDate)
+    console.log('   - endDate type:', typeof endDate, endDate)
 
     // Calculer le nombre de quittances et la moyenne mensuelle
     const receiptCount = receipts.length
