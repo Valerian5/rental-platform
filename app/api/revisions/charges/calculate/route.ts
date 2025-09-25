@@ -112,8 +112,6 @@ export async function POST(request: NextRequest) {
     const averageMonthlyProvision = receiptCount > 0 ? totalProvisionsCollected / receiptCount : 0
 
     // Calculer la période en jours pour un calcul plus précis
-    const startDate = new Date(provisionsPeriodStart)
-    const endDate = new Date(provisionsPeriodEnd)
     const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
     const monthsDiff = daysDiff / 30.44 // Moyenne de jours par mois
 
