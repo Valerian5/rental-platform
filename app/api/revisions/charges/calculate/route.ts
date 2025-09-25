@@ -71,12 +71,15 @@ export async function POST(request: NextRequest) {
     
     console.log('📋 Toutes les quittances pour ce bail:', allReceipts)
     
-    // Maintenant filtrer par année
+    // Maintenant filtrer par année (s'assurer que year est un integer)
+    const yearInt = parseInt(year.toString())
+    console.log('📊 Conversion année:', year, '→', yearInt)
+    
     const { data: receipts, error: receiptsError } = await supabaseAdmin
       .from('receipts')
       .select('charges_amount, month, year, rent_amount, generated_at')
       .eq('lease_id', leaseId)
-      .eq('year', year)
+      .eq('year', yearInt)
       .order('month', { ascending: true })
 
     if (receiptsError) {
@@ -85,8 +88,9 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('📊 Quittances trouvées:', receipts.length)
+    console.log('📊 Année recherchée:', year, 'Type:', typeof year)
     receipts.forEach(receipt => {
-      console.log(`   - ${receipt.month}: ${receipt.charges_amount} € de charges`)
+      console.log(`   - ${receipt.month}: ${receipt.charges_amount} € de charges (année: ${receipt.year})`)
     })
 
     // Calculer les provisions encaissées depuis les quittances

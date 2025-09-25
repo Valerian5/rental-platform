@@ -161,10 +161,17 @@ export function ChargeSettingsManagerNew({
       // Notifier les changements de catégories après sauvegarde
       notifySettingsChange(selectedCharges)
 
-      // Forcer le rechargement des paramètres
-      setTimeout(() => {
-        window.location.reload()
-      }, 1000)
+      // Notifier le parent pour recharger les données
+      if (onSettingsChange) {
+        const categories = RECOVERABLE_CHARGES
+          .filter(charge => selectedCharges[charge.id])
+          .map(charge => ({
+            id: charge.id,
+            name: charge.name,
+            isRecoverable: charge.id !== 'insurance'
+          }))
+        onSettingsChange(categories)
+      }
 
       toast.success("Paramètres sauvegardés")
     } catch (error) {

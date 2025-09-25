@@ -1080,18 +1080,35 @@ export default function RevisionPage() {
                     </div>
                   </div>
                   
-                  <Button 
-                    onClick={calculateChargeRegularization} 
-                    disabled={isCalculating}
-                    className="w-full bg-green-600 hover:bg-green-700"
-                  >
-                    {isCalculating ? (
-                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <Calculator className="h-4 w-4 mr-2" />
-                    )}
-                    Calculer automatiquement les provisions
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={calculateChargeRegularization} 
+                      disabled={isCalculating}
+                      className="flex-1 bg-green-600 hover:bg-green-700"
+                    >
+                      {isCalculating ? (
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Calculator className="h-4 w-4 mr-2" />
+                      )}
+                      Calculer automatiquement les provisions
+                    </Button>
+                    
+                    <Button 
+                      onClick={() => {
+                        console.log('🔍 Test direct - Quittances:', chargeRegularizationData)
+                        // Forcer le calcul avec les données connues
+                        setChargeRegularizationData(prev => ({
+                          ...prev,
+                          totalProvisionsCollected: 70 // Montant de la quittance de septembre
+                        }))
+                      }}
+                      variant="outline"
+                      className="px-3"
+                    >
+                      🧪 Test
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             </div>

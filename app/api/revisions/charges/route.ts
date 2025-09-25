@@ -242,6 +242,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Créer le détail des charges
+    console.log('📊 ChargeBreakdown reçu:', chargeBreakdown)
+    console.log('📊 Type de chargeBreakdown:', typeof chargeBreakdown)
+    console.log('📊 Longueur de chargeBreakdown:', chargeBreakdown?.length)
+    
     if (chargeBreakdown && chargeBreakdown.length > 0) {
       console.log('📊 Sauvegarde du détail des charges:', chargeBreakdown)
       
