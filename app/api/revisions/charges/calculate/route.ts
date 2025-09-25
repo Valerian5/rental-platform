@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { leaseId, year, provisionsPeriodStart, provisionsPeriodEnd } = body
+    const { leaseId, year: requestYear, provisionsPeriodStart, provisionsPeriodEnd } = body
 
     const supabaseAdmin = createServerClient()
 
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     
     console.log('🔍 Recherche quittances pour:', {
       leaseId,
-      year,
+      year: requestYear,
       startMonth,
       endMonth,
       provisionsPeriodStart,
