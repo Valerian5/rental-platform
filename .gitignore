@@ -81,3 +81,7 @@ scripts/migrate-revision-tables-step-by-step.sql
 scripts/create-irl-indices-table.sql
 scripts/run-irl-migration.js
 scripts/test-irl-api.js
+scripts/check-revision-tables.js
+scripts/create-exec-sql-function.sql
+scripts/run-lease-charge-settings-migration.js
+scripts/setup-revision-system.js

@@ -478,27 +478,44 @@ export default function RevisionPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
+      // Préparer les données pour l'API
+      const apiData = {
+        leaseId: selectedLeaseId,
+        propertyId: selectedLease.property_id,
+        regularizationYear: currentYear,
+        regularizationDate: new Date().toISOString(),
+        totalProvisionsCollected: chargeRegularizationData.totalProvisionsCollected,
+        provisionsPeriodStart: chargeRegularizationData.provisionsPeriodStart,
+        provisionsPeriodEnd: chargeRegularizationData.provisionsPeriodEnd,
+        totalRealCharges: chargeRegularizationData.totalRealCharges,
+        recoverableCharges: chargeRegularizationData.recoverableCharges,
+        nonRecoverableCharges: chargeRegularizationData.nonRecoverableCharges,
+        tenantBalance: chargeRegularizationData.tenantBalance,
+        balanceType: chargeRegularizationData.balanceType,
+        calculationMethod: 'prorata_surface', // Valeur par défaut
+        calculationNotes: calculationNotes,
+        chargeBreakdown: chargeRegularizationData.chargeBreakdown || []
+      }
+
+      console.log('Données envoyées à l\'API:', apiData)
+
       const response = await fetch('/api/revisions/charges', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
         },
-        body: JSON.stringify({
-          leaseId: selectedLeaseId,
-          propertyId: selectedLease.property_id,
-          regularizationYear: currentYear,
-          ...chargeRegularizationData
-        })
+        body: JSON.stringify(apiData)
       })
 
       const result = await response.json()
       
-      if (result.success) {
+      if (response.ok && result.success) {
         toast.success("Régularisation des charges sauvegardée")
         await loadExistingRevisions()
       } else {
-        toast.error("Erreur lors de la sauvegarde")
+        console.error("Erreur API:", result)
+        toast.error(`Erreur lors de la sauvegarde: ${result.error || 'Erreur inconnue'}`)
       }
     } catch (error) {
       console.error("Erreur sauvegarde régularisation:", error)

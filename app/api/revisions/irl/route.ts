@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { supabase, createServerClient } from "@/lib/supabase"
 
 // Interface pour les données IRL de l'INSEE
 interface IRLData {
@@ -41,8 +41,10 @@ export async function GET(request: NextRequest) {
       }, { status: 400 })
     }
 
+    const supabaseAdmin = createServerClient()
+    
     // Récupérer les données depuis la base de données
-    let query = supabase
+    let query = supabaseAdmin
       .from('irl_indices')
       .select('*')
       .eq('year', yearNum)

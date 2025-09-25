@@ -1,12 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
-import { createClient } from '@supabase/supabase-js'
-
-// Créer un client avec service role pour les opérations admin
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+import { supabase, createServerClient } from "@/lib/supabase"
 
 export async function GET(request: NextRequest) {
   try {
@@ -27,6 +20,8 @@ export async function GET(request: NextRequest) {
     const propertyId = searchParams.get('propertyId')
     const year = searchParams.get('year')
 
+    const supabaseAdmin = createServerClient()
+    
     let query = supabaseAdmin
       .from('charge_regularizations')
       .select(`
@@ -107,6 +102,8 @@ export async function POST(request: NextRequest) {
       chargeBreakdown
     } = body
 
+    const supabaseAdmin = createServerClient()
+    
     // Vérifier que l'utilisateur est propriétaire de la propriété
     const { data: property, error: propertyError } = await supabaseAdmin
       .from('properties')

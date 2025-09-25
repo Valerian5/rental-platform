@@ -107,13 +107,45 @@ export function ChargeSettingsManager({
     try {
       setIsSaving(true)
 
-      const { error } = await supabase
+      // D'abord, vérifier si un enregistrement existe déjà
+      const { data: existingSettings, error: checkError } = await supabase
         .from('lease_charge_settings')
-        .upsert({
-          lease_id: leaseId,
-          charge_categories: chargeCategories,
-          updated_at: new Date().toISOString()
-        })
+        .select('id')
+        .eq('lease_id', leaseId)
+        .single()
+
+      let error
+      if (checkError && checkError.code !== 'PGRST116') {
+        // Erreur autre que "pas de ligne trouvée"
+        console.error("Erreur vérification paramètres:", checkError)
+        toast.error("Erreur lors de la vérification")
+        return
+      }
+
+      if (existingSettings) {
+        // Mettre à jour l'enregistrement existant
+        const { error: updateError } = await supabase
+          .from('lease_charge_settings')
+          .update({
+            charge_categories: chargeCategories,
+            updated_at: new Date().toISOString()
+          })
+          .eq('lease_id', leaseId)
+        
+        error = updateError
+      } else {
+        // Créer un nouvel enregistrement
+        const { error: insertError } = await supabase
+          .from('lease_charge_settings')
+          .insert({
+            lease_id: leaseId,
+            charge_categories: chargeCategories,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+        
+        error = insertError
+      }
 
       if (error) {
         console.error("Erreur sauvegarde paramètres:", error)
