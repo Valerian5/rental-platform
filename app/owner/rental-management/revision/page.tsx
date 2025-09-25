@@ -153,6 +153,8 @@ export default function RevisionPage() {
     if (selectedLeaseId) {
       loadLeaseData()
       loadExistingRevisions()
+      // Calculer automatiquement la période d'occupation
+      calculateChargeRegularization()
     }
   }, [selectedLeaseId])
 
@@ -370,6 +372,8 @@ export default function RevisionPage() {
         
         setCalculationNotes(latestRegularization.calculation_notes || '')
       }
+
+      // Les paramètres de charges sont chargés par le composant ChargeSettingsManager
     } catch (error) {
       console.error("Erreur chargement révisions existantes:", error)
     }
@@ -928,7 +932,10 @@ export default function RevisionPage() {
                             const start = new Date(chargeRegularizationData.provisionsPeriodStart)
                             const end = new Date(chargeRegularizationData.provisionsPeriodEnd)
                             const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
-                            return `${days} jours`
+                            const year = start.getFullYear()
+                            const totalDaysInYear = new Date(year, 11, 31).getDate() === 31 ? 365 : 366
+                            const percentage = (days / totalDaysInYear) * 100
+                            return `${days} jours (${percentage.toFixed(1)}%)`
                           })() : 
                           'Non calculée'
                         }
@@ -962,13 +969,16 @@ export default function RevisionPage() {
             </div>
 
             {/* Tableau de saisie des charges */}
-            {chargeCategories.length > 0 && chargeRegularizationData.provisionsPeriodStart && chargeRegularizationData.provisionsPeriodEnd && (
+            {chargeCategories.length > 0 && (
               <ChargeRegularizationTable
                 chargeCategories={chargeCategories}
                 totalProvisionsCollected={chargeRegularizationData.totalProvisionsCollected}
-                occupationPeriod={{
+                occupationPeriod={chargeRegularizationData.provisionsPeriodStart && chargeRegularizationData.provisionsPeriodEnd ? {
                   start: new Date(chargeRegularizationData.provisionsPeriodStart),
                   end: new Date(chargeRegularizationData.provisionsPeriodEnd)
+                } : {
+                  start: new Date(currentYear, 0, 1),
+                  end: new Date(currentYear, 11, 31)
                 }}
                 onDataChange={(data) => setChargeRegularizationData(prev => ({
                   ...prev,

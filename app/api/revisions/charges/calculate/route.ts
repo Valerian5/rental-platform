@@ -49,13 +49,11 @@ export async function POST(request: NextRequest) {
 
     // Calculer les provisions encaissées via les quittances
     const { data: receipts, error: receiptsError } = await supabaseAdmin
-      .from('rent_receipts')
-      .select('charges_amount, payment_date, rent_amount')
+      .from('receipts')
+      .select('charges_amount, month, year, rent_amount, generated_at')
       .eq('lease_id', leaseId)
-      .gte('payment_date', provisionsPeriodStart)
-      .lte('payment_date', provisionsPeriodEnd)
-      .eq('status', 'paid')
-      .order('payment_date', { ascending: true })
+      .eq('year', parseInt(provisionsPeriodStart.split('-')[0]))
+      .order('month', { ascending: true })
 
     if (receiptsError) {
       console.error("Erreur récupération quittances:", receiptsError)
@@ -109,9 +107,11 @@ export async function POST(request: NextRequest) {
         monthsDiff,
         chargeCategories,
         receipts: receipts.map(receipt => ({
-          date: receipt.payment_date,
+          month: receipt.month,
+          year: receipt.year,
           chargesAmount: receipt.charges_amount,
-          rentAmount: receipt.rent_amount
+          rentAmount: receipt.rent_amount,
+          generatedAt: receipt.generated_at
         })),
         lease: {
           id: lease.id,
