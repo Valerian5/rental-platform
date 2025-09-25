@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -39,6 +39,24 @@ export function ChargeSettingsManagerNew({
   const [notes, setNotes] = useState(calculationNotes)
   const [isLoading, setIsLoading] = useState(false)
 
+  // Fonction stable pour notifier les changements
+  const notifySettingsChange = useCallback((charges: Record<string, boolean>) => {
+    if (onSettingsChange && charges) {
+      try {
+        const categories = RECOVERABLE_CHARGES
+          .filter(charge => charge && charge.id && charges[charge.id])
+          .map(charge => ({
+            id: charge.id,
+            name: charge.name,
+            isRecoverable: charge.id !== 'insurance'
+          }))
+        onSettingsChange(categories)
+      } catch (error) {
+        console.error('Erreur lors de la notification des changements:', error)
+      }
+    }
+  }, [onSettingsChange])
+
   // Charger les paramètres existants
   useEffect(() => {
     const loadSettings = async () => {
@@ -70,16 +88,7 @@ export function ChargeSettingsManagerNew({
           setNotes(settings.calculation_method || '')
           
           // Notifier le parent des catégories sélectionnées
-          if (onSettingsChange) {
-            const categories = RECOVERABLE_CHARGES
-              .filter(charge => charges[charge.id])
-              .map(charge => ({
-                id: charge.id,
-                name: charge.name,
-                isRecoverable: charge.id !== 'insurance'
-              }))
-            onSettingsChange(categories)
-          }
+          notifySettingsChange(charges)
         } else {
           console.log('ℹ️ Aucun paramètre de charges trouvé')
         }
@@ -89,23 +98,18 @@ export function ChargeSettingsManagerNew({
     }
 
     loadSettings()
-  }, [leaseId, onSettingsChange])
+  }, [leaseId, notifySettingsChange])
 
   const handleChargeToggle = (chargeId: string) => {
+    if (!chargeId) return
+    
     const updated = { ...selectedCharges, [chargeId]: !selectedCharges[chargeId] }
     setSelectedCharges(updated)
     
-    // Notifier le parent des catégories sélectionnées
-    if (onSettingsChange) {
-      const categories = RECOVERABLE_CHARGES
-        .filter(charge => updated[charge.id])
-        .map(charge => ({
-          id: charge.id,
-          name: charge.name,
-          isRecoverable: charge.id !== 'insurance'
-        }))
-      onSettingsChange(categories)
-    }
+    // Notifier le parent des catégories sélectionnées avec un délai pour éviter les appels multiples
+    setTimeout(() => {
+      notifySettingsChange(updated)
+    }, 0)
   }
 
   const handleSave = async () => {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -167,6 +167,29 @@ export default function RevisionPage() {
   useEffect(() => {
     loadIRLData(currentYear)
   }, [currentYear])
+
+  // Fonctions stables pour les callbacks
+  const handleChargeCategoriesChange = useCallback((categories: any[]) => {
+    setChargeCategories(categories)
+  }, [])
+
+  const handleCalculationNotesChange = useCallback((notes: string) => {
+    setCalculationNotes(notes)
+  }, [])
+
+  const handleChargeDataChange = useCallback((data: any[]) => {
+    setChargeRegularizationData(prev => ({
+      ...prev,
+      chargeBreakdown: data
+    }))
+  }, [])
+
+  const handleCalculationChange = useCallback((calculation: any) => {
+    setChargeRegularizationData(prev => ({
+      ...prev,
+      ...calculation
+    }))
+  }, [])
 
   // Recalculer automatiquement les totaux quand les données changent
   useEffect(() => {
@@ -985,9 +1008,9 @@ export default function RevisionPage() {
               {/* Paramétrage des charges */}
             <ChargeSettingsManagerNew
               leaseId={selectedLeaseId}
-              onSettingsChange={setChargeCategories}
+              onSettingsChange={handleChargeCategoriesChange}
               calculationNotes={calculationNotes}
-              onCalculationNotesChange={setCalculationNotes}
+              onCalculationNotesChange={handleCalculationNotesChange}
             />
 
               {/* Calcul automatique des provisions */}
@@ -1061,14 +1084,8 @@ export default function RevisionPage() {
                 end: new Date(currentYear, 11, 31)
               }}
               initialData={chargeRegularizationData.chargeBreakdown || []}
-              onDataChange={(data) => setChargeRegularizationData(prev => ({
-                ...prev,
-                chargeBreakdown: data
-              }))}
-              onCalculationChange={(calculation) => setChargeRegularizationData(prev => ({
-                ...prev,
-                ...calculation
-              }))}
+              onDataChange={handleChargeDataChange}
+              onCalculationChange={handleCalculationChange}
             />
           ) : (
             <ChargeRegularizationFallback />
@@ -1084,7 +1101,7 @@ export default function RevisionPage() {
               tenantBalance={chargeRegularizationData.tenantBalance || 0}
               balanceType={chargeRegularizationData.balanceType || 'refund'}
               calculationNotes={calculationNotes || ''}
-              onNotesChange={setCalculationNotes}
+              onNotesChange={handleCalculationNotesChange}
               onGenerateStatement={saveChargeRegularization}
               onSendToTenant={() => {
                 // TODO: Implémenter l'envoi au locataire
