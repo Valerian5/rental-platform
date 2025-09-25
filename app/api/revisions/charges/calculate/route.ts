@@ -96,7 +96,21 @@ export async function POST(request: NextRequest) {
     
     const totalProvisionsCollected = receipts.reduce((sum, receipt) => {
       // Vérifier si la quittance est dans la période d'occupation
-      const receiptDate = new Date(`${receipt.year}-${receipt.month.padStart(2, '0')}-01`)
+      // Le mois peut être au format "2025-09" ou "09"
+      let monthStr = receipt.month
+      if (monthStr.includes('-')) {
+        monthStr = monthStr.split('-')[1] // Extraire le mois si format "2025-09"
+      }
+      
+      const receiptDate = new Date(`${receipt.year}-${monthStr.padStart(2, '0')}-01`)
+      
+      console.log(`📅 Vérification quittance ${receipt.month}:`, {
+        receiptDate: receiptDate.toISOString().split('T')[0],
+        startDate: startDate.toISOString().split('T')[0],
+        endDate: endDate.toISOString().split('T')[0],
+        inRange: receiptDate >= startDate && receiptDate <= endDate,
+        chargesAmount: receipt.charges_amount
+      })
       
       if (receiptDate >= startDate && receiptDate <= endDate) {
         return sum + (receipt.charges_amount || 0)

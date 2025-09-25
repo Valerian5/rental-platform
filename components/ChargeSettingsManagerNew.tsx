@@ -158,6 +158,9 @@ export function ChargeSettingsManagerNew({
         onCalculationNotesChange(notes)
       }
 
+      // Notifier les changements de catégories après sauvegarde
+      notifySettingsChange(selectedCharges)
+
       toast.success("Paramètres sauvegardés")
     } catch (error) {
       console.error('Erreur sauvegarde paramètres:', error)

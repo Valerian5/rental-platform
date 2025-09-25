@@ -162,6 +162,42 @@ export async function POST(request: NextRequest) {
       }
 
       regularization = updatedRegularization
+      
+      // Supprimer l'ancien détail des charges et recréer
+      if (chargeBreakdown && chargeBreakdown.length > 0) {
+        console.log('🔄 Mise à jour du détail des charges:', chargeBreakdown)
+        
+        // Supprimer l'ancien détail
+        await supabaseAdmin
+          .from('charge_breakdown')
+          .delete()
+          .eq('regularization_id', regularization.id)
+        
+        // Créer le nouveau détail
+        const breakdownData = chargeBreakdown.map((charge: any) => ({
+          regularization_id: regularization.id,
+          charge_category: charge.category || charge.charge_category,
+          charge_name: charge.category || charge.charge_name,
+          provision_amount: charge.provisionAmount || charge.provision_amount || 0,
+          real_amount: charge.realAmount || charge.real_amount || 0,
+          difference: (charge.realAmount || charge.real_amount || 0) - (charge.provisionAmount || charge.provision_amount || 0),
+          is_recoverable: charge.isRecoverable !== undefined ? charge.isRecoverable : charge.is_recoverable,
+          is_exceptional: charge.isExceptional || charge.is_exceptional || false,
+          supporting_documents: charge.supporting_documents || [],
+          justification_file_url: charge.justificationFileUrl || charge.justification_file_url,
+          notes: charge.notes || ''
+        }))
+
+        const { error: breakdownError } = await supabaseAdmin
+          .from('charge_breakdown')
+          .insert(breakdownData)
+
+        if (breakdownError) {
+          console.error("Erreur mise à jour détail charges:", breakdownError)
+        } else {
+          console.log('✅ Détail des charges mis à jour avec succès')
+        }
+      }
     } else {
       // Créer une nouvelle régularisation
       const insertData = {
@@ -207,18 +243,23 @@ export async function POST(request: NextRequest) {
 
     // Créer le détail des charges
     if (chargeBreakdown && chargeBreakdown.length > 0) {
+      console.log('📊 Sauvegarde du détail des charges:', chargeBreakdown)
+      
       const breakdownData = chargeBreakdown.map((charge: any) => ({
         regularization_id: regularization.id,
-        charge_category: charge.charge_category,
-        charge_name: charge.charge_name,
-        provision_amount: charge.provision_amount || 0,
-        real_amount: charge.real_amount,
-        difference: charge.difference,
-        is_recoverable: charge.is_recoverable,
-        is_exceptional: charge.is_exceptional,
+        charge_category: charge.category || charge.charge_category,
+        charge_name: charge.category || charge.charge_name,
+        provision_amount: charge.provisionAmount || charge.provision_amount || 0,
+        real_amount: charge.realAmount || charge.real_amount || 0,
+        difference: (charge.realAmount || charge.real_amount || 0) - (charge.provisionAmount || charge.provision_amount || 0),
+        is_recoverable: charge.isRecoverable !== undefined ? charge.isRecoverable : charge.is_recoverable,
+        is_exceptional: charge.isExceptional || charge.is_exceptional || false,
         supporting_documents: charge.supporting_documents || [],
-        notes: charge.notes
+        justification_file_url: charge.justificationFileUrl || charge.justification_file_url,
+        notes: charge.notes || ''
       }))
+
+      console.log('📊 Données formatées pour charge_breakdown:', breakdownData)
 
       const { error: breakdownError } = await supabaseAdmin
         .from('charge_breakdown')
@@ -227,6 +268,8 @@ export async function POST(request: NextRequest) {
       if (breakdownError) {
         console.error("Erreur création détail charges:", breakdownError)
         // Ne pas faire échouer la création de la régularisation
+      } else {
+        console.log('✅ Détail des charges sauvegardé avec succès')
       }
     }
 
