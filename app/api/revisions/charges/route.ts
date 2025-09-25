@@ -1,9 +1,24 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
+import { createClient } from '@supabase/supabase-js'
+
+// Créer un client avec service role pour les opérations admin
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
 export async function GET(request: NextRequest) {
   try {
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    // Récupérer l'utilisateur depuis les headers ou le token
+    const authHeader = request.headers.get('authorization')
+    if (!authHeader) {
+      return NextResponse.json({ error: "Token d'authentification requis" }, { status: 401 })
+    }
+
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+    
     if (userError || !user) {
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
     }
@@ -12,7 +27,7 @@ export async function GET(request: NextRequest) {
     const propertyId = searchParams.get('propertyId')
     const year = searchParams.get('year')
 
-    let query = supabase
+    let query = supabaseAdmin
       .from('charge_regularizations')
       .select(`
         *,
@@ -60,7 +75,15 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    // Récupérer l'utilisateur depuis les headers ou le token
+    const authHeader = request.headers.get('authorization')
+    if (!authHeader) {
+      return NextResponse.json({ error: "Token d'authentification requis" }, { status: 401 })
+    }
+
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+    
     if (userError || !user) {
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
     }
@@ -85,7 +108,7 @@ export async function POST(request: NextRequest) {
     } = body
 
     // Vérifier que l'utilisateur est propriétaire de la propriété
-    const { data: property, error: propertyError } = await supabase
+    const { data: property, error: propertyError } = await supabaseAdmin
       .from('properties')
       .select('owner_id')
       .eq('id', propertyId)
@@ -96,7 +119,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Créer la régularisation
-    const { data: regularization, error: regError } = await supabase
+    const { data: regularization, error: regError } = await supabaseAdmin
       .from('charge_regularizations')
       .insert({
         lease_id: leaseId,
@@ -138,7 +161,7 @@ export async function POST(request: NextRequest) {
         notes: charge.notes
       }))
 
-      const { error: breakdownError } = await supabase
+      const { error: breakdownError } = await supabaseAdmin
         .from('charge_breakdown')
         .insert(breakdownData)
 
