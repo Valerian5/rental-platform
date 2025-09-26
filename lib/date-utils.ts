@@ -116,3 +116,19 @@ export function formatPeriod(period: DateRange): string {
 export function formatProrata(prorata: ProrataCalculation): string {
   return `${prorata.occupationDays} jours (${prorata.percentage.toFixed(1)}% de l'année)`
 }
+
+/**
+ * Calcule le nombre de jours d'occupation dans une année donnée
+ * Version simplifiée pour la v2
+ */
+export function calculateDaysInYear(startDate: Date, endDate: Date, year: number): number {
+  const yearStart = new Date(year, 0, 1)
+  const yearEnd = new Date(year, 11, 31)
+  
+  const effectiveStart = startDate > yearStart ? startDate : yearStart
+  const effectiveEnd = endDate < yearEnd ? endDate : yearEnd
+  
+  if (effectiveStart > effectiveEnd) return 0
+  
+  return Math.ceil((effectiveEnd.getTime() - effectiveStart.getTime()) / (1000 * 60 * 60 * 24)) + 1
+}
