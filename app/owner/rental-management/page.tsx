@@ -240,8 +240,28 @@ export default function RentalManagementPage() {
   return (
     <div className="container mx-auto py-6 max-w-7xl">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Gestion Locative</h1>
-        <p className="text-gray-600">Gérez vos baux, quittances, incidents et documents</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Gestion Locative</h1>
+            <p className="text-gray-600">Gérez vos baux, paiements, incidents et documents</p>
+          </div>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => window.open('/owner/rental-management/rent-revision', '_blank')}
+            >
+              <TrendingUp className="h-4 w-4 mr-2" />
+              Révision loyer
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => window.open('/owner/rental-management/revision', '_blank')}
+            >
+              <Calculator className="h-4 w-4 mr-2" />
+              Régularisation charges
+            </Button>
+          </div>
+        </div>
       </div>
 
       {/* Sélecteur de bail */}
@@ -295,28 +315,27 @@ export default function RentalManagementPage() {
       )}
 
       {selectedLease && (
-        <Tabs defaultValue="receipts" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
-            <TabsTrigger value="receipts">Quittances</TabsTrigger>
+        <Tabs defaultValue="payments" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-5">
+            <TabsTrigger value="payments">Paiements</TabsTrigger>
             <TabsTrigger value="incidents">Incidents</TabsTrigger>
             <TabsTrigger value="maintenance">Travaux</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
-            <TabsTrigger value="revision">Révision</TabsTrigger>
             <TabsTrigger value="fiscal">Fiscal</TabsTrigger>
           </TabsList>
 
-          {/* ONGLET QUITTANCES */}
-          <TabsContent value="receipts">
+          {/* ONGLET PAIEMENTS */}
+          <TabsContent value="payments">
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle className="flex items-center">
-                      <Receipt className="h-5 w-5 mr-2" />
-                      Gestion des quittances
+                      <CreditCard className="h-5 w-5 mr-2" />
+                      Gestion des paiements
                     </CardTitle>
                     <CardDescription>
-                      Générez et suivez les quittances de loyer pour {selectedLease.tenant.first_name}{" "}
+                      Suivez les paiements de loyer pour {selectedLease.tenant.first_name}{" "}
                       {selectedLease.tenant.last_name}
                     </CardDescription>
                   </div>
@@ -332,7 +351,7 @@ export default function RentalManagementPage() {
                     <div key={receipt.id} className="flex items-center justify-between p-4 border rounded-lg">
                       <div className="space-y-1">
                         <h3 className="font-medium">
-                          Quittance {receipt.month} {receipt.year}
+                          Paiement {receipt.month} {receipt.year}
                         </h3>
                         <div className="text-sm text-gray-600">
                           Loyer: {receipt.rent_amount}€ + Charges: {receipt.charges_amount}€ = {receipt.total_amount}€
@@ -716,63 +735,6 @@ export default function RentalManagementPage() {
             </Card>
           </TabsContent>
 
-          {/* ONGLET RÉVISION */}
-          <TabsContent value="revision">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <TrendingUp className="h-5 w-5 mr-2" />
-                    Révision de loyer
-                  </CardTitle>
-                  <CardDescription>Calculer la révision selon l'indice INSEE</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <h3 className="font-medium mb-2">Loyer actuel</h3>
-                    <div className="text-2xl font-bold text-blue-600">{selectedLease.monthly_rent}€</div>
-                    <div className="text-sm text-gray-600">+ {selectedLease.charges}€ de charges</div>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="insee-index">Nouvel indice INSEE</Label>
-                    <Input id="insee-index" type="number" step="0.01" placeholder="Ex: 130.52" />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Consultez l'indice de référence des loyers sur le site de l'INSEE
-                    </p>
-                  </div>
-
-                  <Button className="w-full">
-                    <Calculator className="h-4 w-4 mr-2" />
-                    Calculer la révision
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Régularisation des charges</CardTitle>
-                  <CardDescription>Calculer la régularisation annuelle</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <Label htmlFor="actual-charges">Charges réelles de l'année</Label>
-                    <Input id="actual-charges" type="number" placeholder="Montant total des charges" />
-                  </div>
-
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <h3 className="font-medium mb-2">Charges provisionnelles payées</h3>
-                    <div className="text-lg font-semibold">
-                      {receipts.reduce((sum, receipt) => sum + receipt.charges_amount, 0)}€
-                    </div>
-                    <div className="text-sm text-gray-600">Sur {receipts.length} mois</div>
-                  </div>
-
-                  <Button className="w-full">Calculer la régularisation</Button>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
 
           {/* ONGLET FISCAL */}
           <TabsContent value="fiscal">
