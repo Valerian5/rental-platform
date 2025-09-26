@@ -407,7 +407,7 @@ export default function RevisionPage() {
         // Charger le détail des charges depuis charge_breakdown
         const chargeBreakdown = latestRegularization.charge_breakdown?.map(charge => ({
           id: charge.id,
-          category: charge.charge_category,
+          category: charge.charge_category || charge.charge_name,
           provisionAmount: parseFloat(charge.provision_amount) || 0,
           realAmount: parseFloat(charge.real_amount) || 0,
           isRecoverable: charge.is_recoverable,
@@ -415,7 +415,8 @@ export default function RevisionPage() {
           notes: charge.notes
         })) || []
 
-        console.log('📊 Détail des charges chargé:', chargeBreakdown)
+        console.log('📊 Détail des charges chargé depuis charge_breakdown:', chargeBreakdown)
+        console.log('📊 Données brutes de charge_breakdown:', latestRegularization.charge_breakdown)
 
         setChargeRegularizationData({
           totalProvisionsCollected: parseFloat(latestRegularization.total_provisions_collected) || 0,

@@ -89,6 +89,7 @@ export async function POST(request: NextRequest) {
 
     console.log('📊 Quittances trouvées:', receipts.length)
     console.log('📊 Année recherchée:', year, 'Type:', typeof year)
+    console.log('📊 Période de calcul:', provisionsPeriodStart, '→', provisionsPeriodEnd)
     receipts.forEach(receipt => {
       console.log(`   - ${receipt.month}: ${receipt.charges_amount} € de charges (année: ${receipt.year})`)
     })
@@ -117,16 +118,22 @@ export async function POST(request: NextRequest) {
       // Créer la date de la quittance (1er du mois)
       const receiptDate = new Date(`${receipt.year}-${monthNumber.toString().padStart(2, '0')}-01`)
       
+      // Vérifier si la quittance est dans la période (plus flexible)
+      const isInRange = receiptDate >= startDate && receiptDate <= endDate
+      
       console.log(`📅 Vérification quittance ${receipt.month}:`, {
         monthNumber,
         receiptDate: receiptDate.toISOString().split('T')[0],
         startDate: startDate.toISOString().split('T')[0],
         endDate: endDate.toISOString().split('T')[0],
-        inRange: receiptDate >= startDate && receiptDate <= endDate,
-        chargesAmount: receipt.charges_amount
+        inRange: isInRange,
+        chargesAmount: receipt.charges_amount,
+        receiptDateTimestamp: receiptDate.getTime(),
+        startDateTimestamp: startDate.getTime(),
+        endDateTimestamp: endDate.getTime()
       })
       
-      if (receiptDate >= startDate && receiptDate <= endDate) {
+      if (isInRange) {
         console.log(`✅ Quittance incluse: ${receipt.month} = ${receipt.charges_amount} €`)
         return sum + (receipt.charges_amount || 0)
       } else {
@@ -146,6 +153,14 @@ export async function POST(request: NextRequest) {
     // Calculer le nombre de quittances et la moyenne mensuelle
     const receiptCount = receipts.length
     const averageMonthlyProvision = receiptCount > 0 ? totalProvisionsCollected / receiptCount : 0
+    
+    // Pour l'affichage, on prend le montant total des quittances sans prorata
+    const totalProvisionsFromReceipts = receipts.reduce((sum, receipt) => {
+      return sum + (receipt.charges_amount || 0)
+    }, 0)
+    
+    console.log('💰 Provisions totales des quittances (sans prorata):', totalProvisionsFromReceipts, '€')
+    console.log('💰 Provisions pour la période effective (avec prorata):', totalProvisionsCollected, '€')
 
     // Calculer la période en jours pour un calcul plus précis
     const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
@@ -176,7 +191,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       calculation: {
-        totalProvisionsCollected,
+        totalProvisionsCollected: totalProvisionsFromReceipts, // Montant sans prorata pour l'affichage
+        totalProvisionsCollectedProrated: totalProvisionsCollected, // Montant avec prorata pour les calculs
         receiptCount,
         averageMonthlyProvision,
         daysDiff,

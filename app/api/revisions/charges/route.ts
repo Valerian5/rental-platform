@@ -245,6 +245,10 @@ export async function POST(request: NextRequest) {
     console.log('📊 ChargeBreakdown reçu:', chargeBreakdown)
     console.log('📊 Type de chargeBreakdown:', typeof chargeBreakdown)
     console.log('📊 Longueur de chargeBreakdown:', chargeBreakdown?.length)
+    console.log('📊 ChargeBreakdown est un array:', Array.isArray(chargeBreakdown))
+    if (chargeBreakdown && chargeBreakdown.length > 0) {
+      console.log('📊 Premier élément:', chargeBreakdown[0])
+    }
     
     if (chargeBreakdown && chargeBreakdown.length > 0) {
       console.log('📊 Sauvegarde du détail des charges:', chargeBreakdown)
