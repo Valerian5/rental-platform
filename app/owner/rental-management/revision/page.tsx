@@ -168,37 +168,45 @@ export default function ChargeRegularizationPageV2() {
     }
   }, [selectedLease, selectedYear])
 
-  // Calculer les provisions pour l'année
+  // Calculer les provisions pour l'année avec prorata
   const calculateProvisions = useCallback(async () => {
     if (!selectedLease) return 0
 
     try {
-      const { data: receipts, error } = await supabase
-        .from('receipts')
-        .select('month, year, charges_amount')
-        .eq('lease_id', selectedLease.id)
-        .eq('year', selectedYear)
+      const leaseStartDate = new Date(selectedLease.start_date)
+      const leaseEndDate = new Date(selectedLease.end_date)
+      const yearStart = new Date(selectedYear, 0, 1)
+      const yearEnd = new Date(selectedYear, 11, 31)
 
-      if (error) throw error
+      // Période effective d'occupation dans l'année
+      const effectiveStart = leaseStartDate > yearStart ? leaseStartDate : yearStart
+      const effectiveEnd = leaseEndDate < yearEnd ? leaseEndDate : yearEnd
 
-      const totalProvisions = receipts?.reduce((sum, receipt) => {
-        const monthNumber = typeof receipt.month === 'string' 
-          ? parseInt(receipt.month.split('-')[1] || receipt.month, 10)
-          : receipt.month
+      let totalProvisions = 0
+      const monthlyCharges = selectedLease.charges || 0
 
-        if (isNaN(monthNumber) || monthNumber < 1 || monthNumber > 12) return sum
+      // Calculer les provisions mois par mois
+      for (let month = 1; month <= 12; month++) {
+        const monthStart = new Date(selectedYear, month - 1, 1)
+        const monthEnd = new Date(selectedYear, month, 0) // Dernier jour du mois
 
-        const receiptDate = new Date(selectedYear, monthNumber - 1, 1)
-        const startDate = new Date(selectedLease.start_date)
-        const endDate = new Date(selectedLease.end_date)
-
-        // Vérifier si la quittance est dans la période d'occupation
-        if (receiptDate >= startDate && receiptDate <= endDate) {
-          return sum + (receipt.charges_amount || 0)
+        // Vérifier si le mois est dans la période d'occupation
+        if (monthStart >= effectiveStart && monthStart <= effectiveEnd) {
+          // Si c'est le premier mois d'occupation, appliquer le prorata
+          if (monthStart.getTime() === effectiveStart.getTime()) {
+            const daysInMonth = monthEnd.getDate()
+            const daysOccupied = Math.min(
+              daysInMonth - effectiveStart.getDate() + 1,
+              daysInMonth
+            )
+            const prorata = daysOccupied / daysInMonth
+            totalProvisions += monthlyCharges * prorata
+          } else {
+            // Mois complets
+            totalProvisions += monthlyCharges
+          }
         }
-
-        return sum
-      }, 0) || 0
+      }
 
       return totalProvisions
     } catch (error) {
@@ -303,6 +311,83 @@ export default function ChargeRegularizationPageV2() {
       toast.error('Erreur lors de la sauvegarde')
     } finally {
       setSaving(false)
+    }
+  }, [regularization, selectedLease, selectedYear])
+
+  // Générer le PDF
+  const generatePDF = useCallback(async () => {
+    if (!regularization || !selectedLease) return
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const response = await fetch('/api/regularizations/pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        },
+        body: JSON.stringify({
+          regularizationId: regularization.id,
+          leaseId: selectedLease.id,
+          year: selectedYear
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Erreur génération PDF')
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `regularisation-charges-${selectedYear}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      toast.success('PDF généré et téléchargé')
+    } catch (error) {
+      console.error('Erreur génération PDF:', error)
+      toast.error('Erreur lors de la génération du PDF')
+    }
+  }, [regularization, selectedLease, selectedYear])
+
+  // Envoyer au locataire
+  const sendToTenant = useCallback(async () => {
+    if (!regularization || !selectedLease) return
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const response = await fetch('/api/regularizations/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        },
+        body: JSON.stringify({
+          regularizationId: regularization.id,
+          leaseId: selectedLease.id,
+          year: selectedYear
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Erreur envoi au locataire')
+      }
+
+      // Mettre à jour le statut
+      setRegularization(prev => prev ? { ...prev, status: 'sent' } : null)
+
+      toast.success('Régularisation envoyée au locataire')
+    } catch (error) {
+      console.error('Erreur envoi:', error)
+      toast.error('Erreur lors de l\'envoi au locataire')
     }
   }, [regularization, selectedLease, selectedYear])
 
@@ -411,8 +496,8 @@ export default function ChargeRegularizationPageV2() {
       {/* Actions */}
       <ActionButtons
         onSave={saveRegularization}
-        onGeneratePDF={() => {/* TODO */}}
-        onSend={() => {/* TODO */}}
+        onGeneratePDF={generatePDF}
+        onSend={sendToTenant}
         saving={saving}
         disabled={!regularization}
       />
