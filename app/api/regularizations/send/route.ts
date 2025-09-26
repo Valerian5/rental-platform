@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase'
+import { createClient, createServerClient } from '@/lib/supabase'
 import { generateChargeRegularizationPDFBlob } from '@/lib/charge-regularization-pdf-generator'
 
 export async function POST(request: NextRequest) {
@@ -11,8 +11,21 @@ export async function POST(request: NextRequest) {
     }
 
     const token = authHeader.replace('Bearer ', '')
-    const supabase = createClient()
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+    
+    // Utiliser le même client que le côté client, mais avec le token utilisateur
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      }
+    )
+    
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
     
     if (userError || !user) {
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
@@ -25,7 +38,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 })
     }
 
-    const supabaseAdmin = createClient()
+    const supabaseAdmin = createServerClient()
 
     // Récupérer les données complètes
     const { data: regularization, error: regularizationError } = await supabaseAdmin
@@ -74,7 +87,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Générer le PDF
-    const pdfBlob = await generateChargeRegularizationPDFBlob(lease, regularization)
+    const { generateChargeRegularizationPDF } = await import('@/lib/charge-regularization-pdf-generator')
+    const pdf = generateChargeRegularizationPDF(lease, regularization)
+    
+    // Convertir en buffer
+    const pdfBuffer = Buffer.from(pdf.output('arraybuffer'))
     
     // Uploader le PDF dans le storage
     const fileName = `regularisation-charges-${year}-${Date.now()}.pdf`
@@ -82,7 +99,7 @@ export async function POST(request: NextRequest) {
     
     const { error: uploadError } = await supabaseAdmin.storage
       .from('documents')
-      .upload(filePath, pdfBlob, {
+      .upload(filePath, pdfBuffer, {
         contentType: 'application/pdf',
         upsert: false
       })

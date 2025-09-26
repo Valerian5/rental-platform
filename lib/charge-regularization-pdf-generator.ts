@@ -206,10 +206,3 @@ export function generateChargeRegularizationPDF(
   return doc
 }
 
-export async function generateChargeRegularizationPDFBlob(
-  lease: Lease,
-  regularization: ChargeRegularization
-): Promise<Blob> {
-  const pdf = generateChargeRegularizationPDF(lease, regularization)
-  return pdf.output('blob')
-}

@@ -336,8 +336,7 @@ export default function ChargeRegularizationPageV2() {
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Erreur génération PDF')
+        throw new Error('Erreur génération PDF')
       }
 
       const blob = await response.blob()
@@ -379,8 +378,7 @@ export default function ChargeRegularizationPageV2() {
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Erreur envoi au locataire')
+        throw new Error('Erreur envoi au locataire')
       }
 
       // Mettre à jour le statut
