@@ -23,7 +23,6 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
-import { IRLSelector } from "@/components/IRLSelector"
 
 interface Property {
   id: string
@@ -69,15 +68,27 @@ interface IRLIndex {
 interface RentRevision {
   id?: string
   lease_id: string
-  year: number
-  old_rent: number
-  new_rent: number
-  reference_irl: number
-  new_irl: number
+  property_id: string
+  revision_year: number
   revision_date: string
-  status: 'draft' | 'sent' | 'accepted'
-  document_url?: string
+  reference_irl_value: number
+  new_irl_value: number
+  irl_quarter: string
+  old_rent_amount: number
+  new_rent_amount: number
+  rent_increase_amount: number
+  rent_increase_percentage: number
+  status: 'draft' | 'calculated' | 'validated' | 'sent' | 'signed'
+  validation_date?: string
+  sent_to_tenant_date?: string
+  amendment_pdf_url?: string
+  amendment_pdf_filename?: string
+  calculation_method?: string
+  legal_compliance_checked?: boolean
+  compliance_notes?: string
   created_at?: string
+  updated_at?: string
+  created_by?: string
 }
 
 export default function RentRevisionPage() {
@@ -184,7 +195,7 @@ export default function RentRevisionPage() {
         .from('lease_revisions')
         .select('*')
         .eq('lease_id', leaseId)
-        .eq('year', year)
+        .eq('revision_year', year)
         .single()
 
       if (error && error.code !== 'PGRST116') {
@@ -197,12 +208,16 @@ export default function RentRevisionPage() {
         // Créer une nouvelle révision
         const newRevision: RentRevision = {
           lease_id: leaseId,
-          year: year,
-          old_rent: selectedLease?.monthly_rent || 0,
-          new_rent: 0,
-          reference_irl: 0,
-          new_irl: 0,
+          property_id: selectedLease?.property_id || '',
+          revision_year: year,
           revision_date: new Date().toISOString().split('T')[0],
+          reference_irl_value: selectedLease?.loyer_reference || 0,
+          new_irl_value: 0,
+          irl_quarter: selectedLease?.trimestre_reference_irl || '',
+          old_rent_amount: selectedLease?.monthly_rent || 0,
+          new_rent_amount: 0,
+          rent_increase_amount: 0,
+          rent_increase_percentage: 0,
           status: 'draft'
         }
         setRevision(newRevision)
@@ -215,10 +230,22 @@ export default function RentRevisionPage() {
 
   // Calculer la révision
   const calculateRevision = useCallback((oldRent: number, referenceIRL: number, newIRL: number) => {
-    if (referenceIRL === 0 || newIRL === 0) return oldRent
+    if (referenceIRL === 0 || newIRL === 0) return {
+      newRent: oldRent,
+      increaseAmount: 0,
+      increasePercentage: 0
+    }
     
     const newRent = (oldRent * newIRL) / referenceIRL
-    return Math.round(newRent * 100) / 100 // Arrondir à 2 décimales
+    const roundedNewRent = Math.round(newRent * 100) / 100
+    const increaseAmount = roundedNewRent - oldRent
+    const increasePercentage = (increaseAmount / oldRent) * 100
+    
+    return {
+      newRent: roundedNewRent,
+      increaseAmount: Math.round(increaseAmount * 100) / 100,
+      increasePercentage: Math.round(increasePercentage * 100) / 100
+    }
   }, [])
 
   // Sauvegarder la révision
@@ -322,11 +349,16 @@ export default function RentRevisionPage() {
 
   // Mise à jour du calcul automatique
   useEffect(() => {
-    if (revision && revision.reference_irl > 0 && revision.new_irl > 0) {
-      const newRent = calculateRevision(revision.old_rent, revision.reference_irl, revision.new_irl)
-      setRevision(prev => prev ? { ...prev, new_rent: newRent } : null)
+    if (revision && revision.reference_irl_value > 0 && revision.new_irl_value > 0) {
+      const calculation = calculateRevision(revision.old_rent_amount, revision.reference_irl_value, revision.new_irl_value)
+      setRevision(prev => prev ? { 
+        ...prev, 
+        new_rent_amount: calculation.newRent,
+        rent_increase_amount: calculation.increaseAmount,
+        rent_increase_percentage: calculation.increasePercentage
+      } : null)
     }
-  }, [revision?.reference_irl, revision?.new_irl, revision?.old_rent, calculateRevision])
+  }, [revision?.reference_irl_value, revision?.new_irl_value, revision?.old_rent_amount, calculateRevision])
 
   if (properties.length === 0) {
     return (
@@ -402,154 +434,208 @@ export default function RentRevisionPage() {
       </Card>
 
       {selectedLease && revision && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Calcul de révision */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calculator className="h-5 w-5" />
-                Calcul de révision
-              </CardTitle>
-              <CardDescription>
-                Révision pour {selectedLease.tenant.first_name} {selectedLease.tenant.last_name}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Loyer actuel */}
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <h3 className="font-medium mb-2">Loyer actuel</h3>
-                <div className="text-2xl font-bold text-blue-600">{revision.old_rent}€</div>
-                <div className="text-sm text-gray-600">+ {selectedLease.charges}€ de charges</div>
-              </div>
-
-              {/* Indice de référence */}
-              <div>
-                <Label htmlFor="reference-irl">Indice IRL de référence</Label>
-                <Input
-                  id="reference-irl"
-                  type="number"
-                  step="0.01"
-                  value={revision.reference_irl}
-                  onChange={(e) => setRevision(prev => prev ? { 
-                    ...prev, 
-                    reference_irl: parseFloat(e.target.value) || 0 
-                  } : null)}
-                  placeholder="Ex: 130.52"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Indice au moment de la signature du bail
-                </p>
-              </div>
-
-              {/* Nouvel indice */}
-              <div>
-                <Label htmlFor="new-irl">Nouvel indice IRL</Label>
-                <IRLSelector
-                  value={revision.new_irl}
-                  onChange={(value) => setRevision(prev => prev ? { 
-                    ...prev, 
-                    new_irl: value 
-                  } : null)}
-                  year={selectedYear}
-                  indices={irlIndices}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Dernier indice publié par l'INSEE
-                </p>
-              </div>
-
-              {/* Date de révision */}
-              <div>
-                <Label htmlFor="revision-date">Date de révision</Label>
-                <Input
-                  id="revision-date"
-                  type="date"
-                  value={revision.revision_date}
-                  onChange={(e) => setRevision(prev => prev ? { 
-                    ...prev, 
-                    revision_date: e.target.value 
-                  } : null)}
-                />
-              </div>
-
-              {/* Résultat */}
-              {revision.new_rent > 0 && (
-                <div className="bg-green-50 p-4 rounded-lg">
-                  <h3 className="font-medium mb-2">Nouveau loyer</h3>
-                  <div className="text-2xl font-bold text-green-600">{revision.new_rent}€</div>
-                  <div className="text-sm text-gray-600">
-                    Évolution: {((revision.new_rent - revision.old_rent) / revision.old_rent * 100).toFixed(2)}%
+        <>
+          {/* Encart de récapitulatif */}
+          {revision.new_rent_amount > 0 && (
+            <Card className="bg-gradient-to-r from-green-50 to-blue-50 border-green-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-green-800">
+                  <TrendingUp className="h-5 w-5" />
+                  Récapitulatif de la révision
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Ancien loyer */}
+                  <div className="text-center">
+                    <div className="text-sm text-gray-600 mb-1">Ancien loyer</div>
+                    <div className="text-2xl font-bold text-gray-800">{revision.old_rent_amount}€</div>
+                    <div className="text-xs text-gray-500">par mois</div>
+                  </div>
+                  
+                  {/* Nouveau loyer */}
+                  <div className="text-center">
+                    <div className="text-sm text-gray-600 mb-1">Nouveau loyer</div>
+                    <div className="text-2xl font-bold text-green-600">{revision.new_rent_amount}€</div>
+                    <div className="text-xs text-gray-500">par mois</div>
+                  </div>
+                  
+                  {/* Augmentation */}
+                  <div className="text-center">
+                    <div className="text-sm text-gray-600 mb-1">Augmentation</div>
+                    <div className="text-2xl font-bold text-blue-600">
+                      +{revision.rent_increase_amount}€
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      (+{revision.rent_increase_percentage}%)
+                    </div>
                   </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+                
+                {/* Détails du calcul */}
+                <div className="mt-4 p-3 bg-white rounded-lg border">
+                  <div className="text-sm text-gray-600 mb-2">Calcul :</div>
+                  <div className="text-sm font-mono">
+                    {revision.old_rent_amount}€ × ({revision.new_irl_value} ÷ {revision.reference_irl_value}) = {revision.new_rent_amount}€
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
-          {/* Actions et statut */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Actions
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Statut */}
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <span className="font-medium">Statut</span>
-                <Badge variant={
-                  revision.status === 'accepted' ? 'default' : 
-                  revision.status === 'sent' ? 'secondary' : 
-                  'outline'
-                }>
-                  {revision.status === 'accepted' ? 'Accepté' : 
-                   revision.status === 'sent' ? 'Envoyé' : 
-                   'Brouillon'}
-                </Badge>
-              </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Calcul de révision */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calculator className="h-5 w-5" />
+                  Calcul de révision
+                </CardTitle>
+                <CardDescription>
+                  Révision pour {selectedLease.tenant.first_name} {selectedLease.tenant.last_name}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Loyer actuel */}
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <h3 className="font-medium mb-2">Loyer actuel</h3>
+                  <div className="text-2xl font-bold text-blue-600">{revision.old_rent_amount}€</div>
+                  <div className="text-sm text-gray-600">+ {selectedLease.charges}€ de charges</div>
+                </div>
 
-              {/* Actions */}
-              <div className="space-y-2">
-                <Button 
-                  onClick={saveRevision} 
-                  className="w-full"
-                  disabled={saving}
-                >
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  {saving ? 'Sauvegarde...' : 'Sauvegarder'}
-                </Button>
+                {/* Indice de référence */}
+                <div>
+                  <Label htmlFor="reference-irl">Indice IRL de référence</Label>
+                  <Input
+                    id="reference-irl"
+                    type="number"
+                    step="0.01"
+                    value={revision.reference_irl_value}
+                    onChange={(e) => setRevision(prev => prev ? { 
+                      ...prev, 
+                      reference_irl_value: parseFloat(e.target.value) || 0 
+                    } : null)}
+                    placeholder="Ex: 130.52"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Indice au moment de la signature du bail
+                    {selectedLease?.trimestre_reference_irl && (
+                      <span className="block text-blue-600">
+                        Trimestre de référence: {selectedLease.trimestre_reference_irl}
+                      </span>
+                    )}
+                  </p>
+                </div>
 
-                <Button 
-                  onClick={generatePDF} 
-                  variant="outline" 
-                  className="w-full"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Générer PDF
-                </Button>
+                {/* Nouvel indice */}
+                <div>
+                  <Label htmlFor="new-irl">Nouvel indice IRL</Label>
+                  <Select
+                    value={revision.new_irl_value.toString()}
+                    onValueChange={(value) => setRevision(prev => prev ? { 
+                      ...prev, 
+                      new_irl_value: parseFloat(value) || 0 
+                    } : null)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionner un indice" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {irlIndices.map(index => (
+                        <SelectItem key={index.id} value={index.value.toString()}>
+                          {index.quarter} {index.year} - {index.value}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Dernier indice publié par l'INSEE
+                  </p>
+                </div>
 
-                <Button 
-                  onClick={sendToTenant} 
-                  variant="outline" 
-                  className="w-full"
-                  disabled={revision.status === 'sent' || revision.status === 'accepted'}
-                >
-                  <Send className="h-4 w-4 mr-2" />
-                  Envoyer au locataire
-                </Button>
-              </div>
+                {/* Date de révision */}
+                <div>
+                  <Label htmlFor="revision-date">Date de révision</Label>
+                  <Input
+                    id="revision-date"
+                    type="date"
+                    value={revision.revision_date}
+                    onChange={(e) => setRevision(prev => prev ? { 
+                      ...prev, 
+                      revision_date: e.target.value 
+                    } : null)}
+                  />
+                </div>
+              </CardContent>
+            </Card>
 
-              {/* Informations légales */}
-              <Alert>
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>
-                  La révision de loyer doit respecter les plafonds légaux et être notifiée au locataire 
-                  dans les délais prévus par la loi.
-                </AlertDescription>
-              </Alert>
-            </CardContent>
-          </Card>
-        </div>
+            {/* Actions et statut */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Actions
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Statut */}
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <span className="font-medium">Statut</span>
+                  <Badge variant={
+                    revision.status === 'signed' ? 'default' : 
+                    revision.status === 'sent' ? 'secondary' : 
+                    'outline'
+                  }>
+                    {revision.status === 'signed' ? 'Signé' : 
+                     revision.status === 'sent' ? 'Envoyé' : 
+                     revision.status === 'calculated' ? 'Calculé' :
+                     'Brouillon'}
+                  </Badge>
+                </div>
+
+                {/* Actions */}
+                <div className="space-y-2">
+                  <Button 
+                    onClick={saveRevision} 
+                    className="w-full"
+                    disabled={saving}
+                  >
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    {saving ? 'Sauvegarde...' : 'Sauvegarder'}
+                  </Button>
+
+                  <Button 
+                    onClick={generatePDF} 
+                    variant="outline" 
+                    className="w-full"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Générer PDF
+                  </Button>
+
+                  <Button 
+                    onClick={sendToTenant} 
+                    variant="outline" 
+                    className="w-full"
+                    disabled={revision.status === 'sent' || revision.status === 'signed'}
+                  >
+                    <Send className="h-4 w-4 mr-2" />
+                    Envoyer au locataire
+                  </Button>
+                </div>
+
+                {/* Informations légales */}
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    La révision de loyer doit respecter les plafonds légaux et être notifiée au locataire 
+                    dans les délais prévus par la loi.
+                  </AlertDescription>
+                </Alert>
+              </CardContent>
+            </Card>
+          </div>
+        </>
       )}
     </div>
   )
