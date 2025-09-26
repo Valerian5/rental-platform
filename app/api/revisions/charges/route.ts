@@ -69,17 +69,27 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  console.log('🚀 API POST /api/revisions/charges appelée')
   try {
     // Récupérer l'utilisateur depuis les headers ou le token
     const authHeader = request.headers.get('authorization')
+    console.log('🔑 Auth header reçu:', authHeader ? 'Oui' : 'Non')
+    
     if (!authHeader) {
+      console.log('❌ Token d\'authentification manquant')
       return NextResponse.json({ error: "Token d'authentification requis" }, { status: 401 })
     }
 
     const token = authHeader.replace('Bearer ', '')
+    console.log('🔑 Token extrait:', token ? 'Oui' : 'Non')
+    
     const { data: { user }, error: userError } = await supabase.auth.getUser(token)
     
+    console.log('👤 Utilisateur authentifié:', user ? 'Oui' : 'Non')
+    console.log('❌ Erreur auth:', userError)
+    
     if (userError || !user) {
+      console.log('❌ Échec de l\'authentification')
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
     }
 
