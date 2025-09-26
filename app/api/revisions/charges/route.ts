@@ -182,12 +182,19 @@ export async function POST(request: NextRequest) {
       // Supprimer l'ancien détail des charges et recréer
       if (chargeBreakdown && chargeBreakdown.length > 0) {
         console.log('🔄 Mise à jour du détail des charges:', chargeBreakdown)
+        console.log('🔄 ID de régularisation:', regularization.id)
         
         // Supprimer l'ancien détail
-        await supabaseAdmin
+        const { error: deleteError } = await supabaseAdmin
           .from('charge_breakdown')
           .delete()
           .eq('regularization_id', regularization.id)
+        
+        if (deleteError) {
+          console.error("Erreur suppression ancien détail:", deleteError)
+        } else {
+          console.log('✅ Ancien détail supprimé avec succès')
+        }
         
         // Créer le nouveau détail
         const breakdownData = chargeBreakdown.map((charge: any) => ({
@@ -204,14 +211,16 @@ export async function POST(request: NextRequest) {
           notes: charge.notes || ''
         }))
 
+        console.log('📊 Données à insérer:', breakdownData)
+
         const { error: breakdownError } = await supabaseAdmin
           .from('charge_breakdown')
           .insert(breakdownData)
 
         if (breakdownError) {
-          console.error("Erreur mise à jour détail charges:", breakdownError)
+          console.error("Erreur insertion nouveau détail:", breakdownError)
         } else {
-          console.log('✅ Détail des charges mis à jour avec succès')
+          console.log('✅ Nouveau détail inséré avec succès')
         }
       }
     } else {

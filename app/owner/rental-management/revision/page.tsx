@@ -417,7 +417,12 @@ export default function RevisionPage() {
         console.log('🔄 Restauration des données de régularisation:', latestRegularization)
         
         // Charger le détail des charges depuis charge_breakdown
-        const chargeBreakdown = latestRegularization.charge_breakdown?.map(charge => ({
+        // Filtrer les charges selon les paramètres de charges
+        const allChargeBreakdown = latestRegularization.charge_breakdown || []
+        const filteredChargeBreakdown = allChargeBreakdown.filter(charge => {
+          const category = charge.charge_category || charge.charge_name
+          return chargeCategories.some(cat => cat.name === category)
+        }).map(charge => ({
           id: charge.id,
           category: charge.charge_category || charge.charge_name,
           provisionAmount: parseFloat(charge.provision_amount) || 0,
@@ -425,11 +430,12 @@ export default function RevisionPage() {
           isRecoverable: charge.is_recoverable,
           justificationFileUrl: charge.justification_file_url,
           notes: charge.notes
-        })) || []
+        }))
 
-        console.log('📊 Détail des charges chargé depuis charge_breakdown:', chargeBreakdown)
+        console.log('📊 Détail des charges chargé depuis charge_breakdown:', filteredChargeBreakdown)
         console.log('📊 Données brutes de charge_breakdown:', latestRegularization.charge_breakdown)
         console.log('📊 Nombre d\'éléments dans charge_breakdown:', latestRegularization.charge_breakdown?.length)
+        console.log('📊 Charges filtrées selon paramètres:', filteredChargeBreakdown.length)
 
         setChargeRegularizationData({
           totalProvisionsCollected: parseFloat(latestRegularization.total_provisions_collected) || 0,
@@ -440,7 +446,7 @@ export default function RevisionPage() {
           nonRecoverableCharges: parseFloat(latestRegularization.non_recoverable_charges) || 0,
           tenantBalance: parseFloat(latestRegularization.tenant_balance) || 0,
           balanceType: latestRegularization.balance_type || 'refund',
-          chargeBreakdown: chargeBreakdown
+          chargeBreakdown: filteredChargeBreakdown
         })
         
         setCalculationNotes(latestRegularization.calculation_notes || '')
