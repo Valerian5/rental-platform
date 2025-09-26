@@ -725,27 +725,61 @@ export default function RevisionPage() {
 
   const generateChargeStatementPDF = async (regularizationData: any) => {
     try {
+      console.log('📄 Génération PDF - Données de régularisation:', regularizationData)
+      
+      // Récupérer les données complètes du bail avec le locataire
+      const { data: leaseData, error: leaseError } = await supabase
+        .from('leases')
+        .select(`
+          *,
+          property:properties(*),
+          tenant:users(*),
+          owner:users!owner_id(*)
+        `)
+        .eq('id', selectedLease!.id)
+        .single()
+
+      if (leaseError || !leaseData) {
+        console.error("Erreur récupération données bail:", leaseError)
+        toast.error("Impossible de récupérer les données du bail")
+        return
+      }
+
+      console.log('📄 Données récupérées pour PDF:', {
+        lease: leaseData,
+        tenant: leaseData.tenant,
+        property: leaseData.property,
+        owner: leaseData.owner
+      })
+
+      // Vérifier que les données du locataire existent
+      if (!leaseData.tenant || !leaseData.tenant.first_name) {
+        console.error("Données du locataire manquantes:", leaseData.tenant)
+        toast.error("Données du locataire manquantes")
+        return
+      }
+
       // Importer le générateur PDF
       const { RevisionPDFGenerator } = await import('@/lib/revision-pdf-generator')
       
       // Préparer les données pour le PDF
       const pdfData = {
         lease: {
-          id: selectedLease!.id,
+          id: leaseData.id,
           property: {
-            title: selectedLease!.property.title,
-            address: selectedLease!.property.address,
-            city: selectedLease!.property.city
+            title: leaseData.property?.title || 'Bien sans titre',
+            address: leaseData.property?.address || 'Adresse non renseignée',
+            city: leaseData.property?.city || 'Ville non renseignée'
           },
           tenant: {
-            first_name: selectedLease!.tenant.first_name,
-            last_name: selectedLease!.tenant.last_name,
-            email: selectedLease!.tenant.email
+            first_name: leaseData.tenant.first_name,
+            last_name: leaseData.tenant.last_name,
+            email: leaseData.tenant.email
           },
           owner: {
-            first_name: selectedLease!.owner.first_name,
-            last_name: selectedLease!.owner.last_name,
-            email: selectedLease!.owner.email
+            first_name: leaseData.owner?.first_name || 'Propriétaire',
+            last_name: leaseData.owner?.last_name || 'Propriétaire',
+            email: leaseData.owner?.email || 'email@example.com'
           }
         },
         regularization: {

@@ -100,6 +100,8 @@ export function ChargeRegularizationTableNew({
   useEffect(() => {
     if (!chargeBreakdown || chargeBreakdown.length === 0) return
 
+    console.log('📊 Recalcul des totaux pour:', chargeBreakdown)
+
     const totalRealCharges = chargeBreakdown.reduce((sum, charge) => {
       return sum + (charge.realAmount || 0)
     }, 0)
@@ -112,6 +114,14 @@ export function ChargeRegularizationTableNew({
       
     const nonRecoverableCharges = totalRealCharges - recoverableCharges
     const tenantBalance = (totalProvisionsCollected || 0) - recoverableCharges
+
+    console.log('📊 Totaux calculés:', {
+      totalRealCharges,
+      recoverableCharges,
+      nonRecoverableCharges,
+      tenantBalance,
+      balanceType: tenantBalance >= 0 ? 'refund' : 'additional_payment'
+    })
 
     if (onCalculationChange) {
       onCalculationChange({

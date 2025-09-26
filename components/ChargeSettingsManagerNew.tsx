@@ -74,15 +74,17 @@ export function ChargeSettingsManagerNew({
           
           // Reconstituer les charges sélectionnées
           const charges = {
-            water: settings.water_charges || false,
-            heating: settings.heating_charges || false,
-            elevator: settings.elevator_charges || false,
-            common_electricity: settings.common_electricity || false,
-            garbage_tax: settings.garbage_tax || false,
-            cleaning: settings.cleaning_charges || false,
-            gardener: settings.gardener_charges || false,
-            insurance: settings.insurance_charges || false
+            water: settings.water_charges === 'true' || settings.water_charges === true,
+            heating: settings.heating_charges === 'true' || settings.heating_charges === true,
+            elevator: settings.elevator_charges === 'true' || settings.elevator_charges === true,
+            common_electricity: settings.common_electricity === 'true' || settings.common_electricity === true,
+            garbage_tax: settings.garbage_tax === 'true' || settings.garbage_tax === true,
+            cleaning: settings.cleaning_charges === 'true' || settings.cleaning_charges === true,
+            gardener: settings.gardener_charges === 'true' || settings.gardener_charges === true,
+            insurance: settings.insurance_charges === 'true' || settings.insurance_charges === true
           }
+          
+          console.log('⚙️ Charges reconstituées:', charges)
           
           setSelectedCharges(charges)
           setNotes(settings.calculation_method || '')
