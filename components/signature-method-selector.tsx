@@ -169,7 +169,12 @@ export function SignatureMethodSelector({
                   </AlertDescription>
                 </Alert>
 
-                <DocuSignSignatureManager leaseId={leaseId} leaseStatus={leaseStatus} onStatusChange={onStatusChange} />
+                <DocuSignSignatureManager 
+  leaseId={leaseId} 
+  leaseStatus={leaseStatus} 
+  currentRole={userType}
+  onStatusChange={onStatusChange} 
+/>
               </div>
             ) : (
               <Alert className="bg-orange-50 border-orange-200">
