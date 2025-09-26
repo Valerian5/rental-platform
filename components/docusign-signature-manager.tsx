@@ -55,22 +55,27 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
       const response = await fetch(`/api/leases/${leaseId}/signature-status`)
       if (!response.ok) return
       const data = await response.json()
+  
       const hasEnvelope = !!data.lease.docusign_envelope_id
       setHasDocuSignEnvelope(hasEnvelope)
-
+  
       setSignatureStatus({
         status: data.lease.status,
         ownerSigned: data.lease.signed_by_owner,
         tenantSigned: data.lease.signed_by_tenant,
       })
-
-      if (data.lease.status === "active") {
-        toast.success("Toutes les signatures ont été collectées !")
-        onStatusChange?.("active")
-      }
-
-      if (hasEnvelope) {
-        setSigningUrls(data.signingUrls || null)
+  
+      // Si l'enveloppe existe mais qu'on n'a pas encore récupéré les liens
+      if (hasEnvelope && !signingUrls) {
+        try {
+          const urlsRes = await fetch(`/api/leases/${leaseId}/signing-urls`)
+          if (urlsRes.ok) {
+            const urlsData = await urlsRes.json()
+            setSigningUrls(urlsData.signingUrls)
+          }
+        } catch (err) {
+          console.error("Erreur récupération URLs DocuSign:", err)
+        }
       }
     } catch (error) {
       console.error("Erreur vérification statut:", error)
@@ -78,6 +83,7 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
       setLoading(false)
     }
   }
+  
 
   useEffect(() => {
     // Vérifier le statut au chargement
