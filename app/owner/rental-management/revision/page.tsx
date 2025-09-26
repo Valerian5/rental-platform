@@ -4,7 +4,8 @@ import React, { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Building } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Calendar, Building, MapPin, User, Euro } from "lucide-react"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
 import { calculateDaysInYear } from "@/lib/date-utils"
@@ -13,6 +14,27 @@ import { LeaseInfoCard } from "@/components/LeaseInfoCard"
 import { ExpensesTable } from "@/components/ExpensesTable"
 import { BalanceSummary } from "@/components/BalanceSummary"
 import { ActionButtons } from "@/components/ActionButtons"
+
+interface Property {
+  id: string
+  title: string
+  address: string
+  city: string
+  postal_code: string
+  has_lease: boolean
+  lease?: {
+    id: string
+    start_date: string
+    end_date: string
+    monthly_rent: number
+    charges: number
+    status: string
+    tenant: {
+      first_name: string
+      last_name: string
+    }
+  }
+}
 
 interface Lease {
   id: string
@@ -63,19 +85,81 @@ interface SupportingDocument {
 }
 
 export default function ChargeRegularizationPageV2() {
+  const [properties, setProperties] = useState<Property[]>([])
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null)
   const [selectedLease, setSelectedLease] = useState<Lease | null>(null)
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
   const [regularization, setRegularization] = useState<ChargeRegularization | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  // Charger les baux du propriétaire
-  const loadLeases = useCallback(async () => {
+  // Charger les propriétés du propriétaire avec leurs baux
+  const loadProperties = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const { data: leases, error } = await supabase
+      const { data: propertiesData, error } = await supabase
+        .from('properties')
+        .select(`
+          id,
+          title,
+          address,
+          city,
+          postal_code,
+          leases!inner(
+            id,
+            start_date,
+            end_date,
+            monthly_rent,
+            charges,
+            status,
+            tenant:users!leases_tenant_id_fkey(
+              first_name,
+              last_name
+            )
+          )
+        `)
+        .eq('owner_id', user.id)
+        .order('title')
+
+      if (error) throw error
+
+      // Transformer les données pour inclure has_lease et le bail actif
+      const transformedProperties = propertiesData.map(property => {
+        const activeLease = property.leases.find((lease: any) => lease.status === 'active')
+        return {
+          id: property.id,
+          title: property.title,
+          address: property.address,
+          city: property.city,
+          postal_code: property.postal_code,
+          has_lease: property.leases.length > 0,
+          lease: activeLease || property.leases[0] // Prendre le bail actif ou le premier disponible
+        }
+      })
+
+      setProperties(transformedProperties)
+
+      // Sélectionner automatiquement la première propriété si aucune n'est sélectionnée
+      if (!selectedPropertyId && transformedProperties.length > 0) {
+        setSelectedPropertyId(transformedProperties[0].id)
+      }
+    } catch (error) {
+      console.error('Erreur chargement propriétés:', error)
+      toast.error('Erreur lors du chargement des propriétés')
+    }
+  }, [selectedPropertyId])
+
+  // Charger le bail pour la propriété sélectionnée
+  const loadLease = useCallback(async () => {
+    if (!selectedPropertyId) return
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data: lease, error } = await supabase
         .from('leases')
         .select(`
           id,
@@ -94,19 +178,25 @@ export default function ChargeRegularizationPageV2() {
             email
           )
         `)
-        .eq('owner_id', user.id)
+        .eq('property_id', selectedPropertyId)
         .eq('status', 'active')
+        .single()
 
-      if (error) throw error
+      if (error && error.code !== 'PGRST116') {
+        throw error
+      }
 
-      if (leases && leases.length > 0) {
-        setSelectedLease(leases[0])
+      if (lease) {
+        setSelectedLease(lease)
+      } else {
+        setSelectedLease(null)
       }
     } catch (error) {
-      console.error('Erreur chargement baux:', error)
-      toast.error('Erreur lors du chargement des baux')
+      console.error('Erreur chargement bail:', error)
+      toast.error('Erreur lors du chargement du bail')
+      setSelectedLease(null)
     }
-  }, [])
+  }, [selectedPropertyId])
 
   // Charger la régularisation pour l'année sélectionnée
   const loadRegularization = useCallback(async () => {
@@ -380,6 +470,13 @@ export default function ChargeRegularizationPageV2() {
     }
   }, [regularization, selectedLease, selectedYear])
 
+  // Gérer les changements de propriété
+  const handlePropertyChange = (propertyId: string | null) => {
+    setSelectedPropertyId(propertyId)
+    setSelectedLease(null)
+    setRegularization(null)
+  }
+
   // Gérer les changements d'année
   const handleYearChange = (year: number) => {
     setSelectedYear(year)
@@ -403,8 +500,12 @@ export default function ChargeRegularizationPageV2() {
 
   // Effets
   useEffect(() => {
-    loadLeases()
-  }, [loadLeases])
+    loadProperties()
+  }, [loadProperties])
+
+  useEffect(() => {
+    loadLease()
+  }, [loadLease])
 
   useEffect(() => {
     loadRegularization()
@@ -414,12 +515,143 @@ export default function ChargeRegularizationPageV2() {
     updateCalculations()
   }, [updateCalculations])
 
-  if (!selectedLease) {
+  if (properties.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <Building className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-500">Aucun bail actif trouvé</p>
+          <p className="text-gray-500">Aucune propriété trouvée</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!selectedPropertyId) {
+    return (
+      <div className="space-y-6">
+        {/* En-tête */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Régularisation des charges</h1>
+            <p className="text-gray-600">Gestion des charges locatives par année</p>
+          </div>
+        </div>
+
+        {/* Sélecteur de propriété */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Sélection du bien</CardTitle>
+            <CardDescription>
+              Choisissez le bien pour lequel effectuer la régularisation des charges
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-2 block">
+                Propriété
+              </label>
+              <Select
+                value={selectedPropertyId || ""}
+                onValueChange={handlePropertyChange}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionnez une propriété" />
+                </SelectTrigger>
+                <SelectContent>
+                  {properties.map((property) => (
+                    <SelectItem key={property.id} value={property.id}>
+                      <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center space-x-2">
+                          <Building className="h-4 w-4" />
+                          <span>{property.title}</span>
+                        </div>
+                        <div className="flex items-center space-x-2 ml-4">
+                          {property.has_lease ? (
+                            <Badge className="text-xs">
+                              Bail
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-xs">
+                              Sans bail
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (!selectedLease) {
+    return (
+      <div className="space-y-6">
+        {/* En-tête */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Régularisation des charges</h1>
+            <p className="text-gray-600">Gestion des charges locatives par année</p>
+          </div>
+        </div>
+
+        {/* Sélecteur de propriété */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Sélection du bien</CardTitle>
+            <CardDescription>
+              Choisissez le bien pour lequel effectuer la régularisation des charges
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-2 block">
+                Propriété
+              </label>
+              <Select
+                value={selectedPropertyId || ""}
+                onValueChange={handlePropertyChange}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionnez une propriété" />
+                </SelectTrigger>
+                <SelectContent>
+                  {properties.map((property) => (
+                    <SelectItem key={property.id} value={property.id}>
+                      <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center space-x-2">
+                          <Building className="h-4 w-4" />
+                          <span>{property.title}</span>
+                        </div>
+                        <div className="flex items-center space-x-2 ml-4">
+                          {property.has_lease ? (
+                            <Badge className="text-xs">
+                              Bail
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-xs">
+                              Sans bail
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <Building className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500">Aucun bail actif trouvé pour cette propriété</p>
+          </div>
         </div>
       </div>
     )
@@ -438,6 +670,113 @@ export default function ChargeRegularizationPageV2() {
           {selectedYear}
         </Badge>
       </div>
+
+      {/* Sélecteur de propriété */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Sélection du bien</CardTitle>
+          <CardDescription>
+            Choisissez le bien pour lequel effectuer la régularisation des charges
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-2 block">
+              Propriété
+            </label>
+            <Select
+              value={selectedPropertyId || ""}
+              onValueChange={handlePropertyChange}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Sélectionnez une propriété" />
+              </SelectTrigger>
+              <SelectContent>
+                {properties.map((property) => (
+                  <SelectItem key={property.id} value={property.id}>
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex items-center space-x-2">
+                        <Building className="h-4 w-4" />
+                        <span>{property.title}</span>
+                      </div>
+                      <div className="flex items-center space-x-2 ml-4">
+                        {property.has_lease ? (
+                          <Badge className="text-xs">
+                            Bail
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-xs">
+                            Sans bail
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {selectedPropertyId && (
+            <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <h3 className="font-medium text-gray-900">
+                    {properties.find(p => p.id === selectedPropertyId)?.title}
+                  </h3>
+                  <div className="flex items-center text-sm text-gray-600">
+                    <MapPin className="h-4 w-4 mr-1" />
+                    {properties.find(p => p.id === selectedPropertyId)?.address}, {properties.find(p => p.id === selectedPropertyId)?.city} {properties.find(p => p.id === selectedPropertyId)?.postal_code}
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  {properties.find(p => p.id === selectedPropertyId)?.has_lease ? (
+                    <Badge className="text-xs">
+                      Bail actif
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-xs">
+                      Sans bail
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              {selectedLease && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t border-gray-200">
+                  <div className="flex items-center space-x-2">
+                    <User className="h-4 w-4 text-gray-400" />
+                    <div>
+                      <div className="text-xs text-gray-500">Locataire</div>
+                      <div className="text-sm font-medium">
+                        {selectedLease.tenant.first_name} {selectedLease.tenant.last_name}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Calendar className="h-4 w-4 text-gray-400" />
+                    <div>
+                      <div className="text-xs text-gray-500">Période</div>
+                      <div className="text-sm font-medium">
+                        {new Date(selectedLease.start_date).toLocaleDateString('fr-FR')} - {new Date(selectedLease.end_date).toLocaleDateString('fr-FR')}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Euro className="h-4 w-4 text-gray-400" />
+                    <div>
+                      <div className="text-xs text-gray-500">Loyer + Charges</div>
+                      <div className="text-sm font-medium">
+                        {selectedLease.monthly_rent.toFixed(2)} € + {selectedLease.charges.toFixed(2)} €
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Navigation par année */}
       <YearSelector
