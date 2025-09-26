@@ -5,15 +5,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar, Building, MapPin, User, Euro } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Calendar, Building, MapPin, User, Euro, Plus, Edit, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
 import { calculateDaysInYear } from "@/lib/date-utils"
-import { YearSelector } from "@/components/YearSelector"
-import { LeaseInfoCard } from "@/components/LeaseInfoCard"
-import { ExpensesTable } from "@/components/ExpensesTable"
-import { BalanceSummary } from "@/components/BalanceSummary"
-import { ActionButtons } from "@/components/ActionButtons"
 
 interface Property {
   id: string
@@ -54,6 +61,15 @@ interface Lease {
   }
 }
 
+interface ChargeExpense {
+  id: string
+  category: string
+  amount: number
+  is_recoverable: boolean
+  notes?: string
+  supporting_documents: any[]
+}
+
 interface ChargeRegularization {
   id: string
   year: number
@@ -67,23 +83,6 @@ interface ChargeRegularization {
   expenses: ChargeExpense[]
 }
 
-interface ChargeExpense {
-  id: string
-  category: string
-  amount: number
-  is_recoverable: boolean
-  notes?: string
-  supporting_documents: SupportingDocument[]
-}
-
-interface SupportingDocument {
-  id: string
-  file_name: string
-  file_url: string
-  file_size?: number
-  file_type?: string
-}
-
 export default function ChargeRegularizationPageV2() {
   const [properties, setProperties] = useState<Property[]>([])
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null)
@@ -92,6 +91,16 @@ export default function ChargeRegularizationPageV2() {
   const [regularization, setRegularization] = useState<ChargeRegularization | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  
+  // États pour le popup d'ajout de dépense
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingExpense, setEditingExpense] = useState<ChargeExpense | null>(null)
+  const [formData, setFormData] = useState({
+    category: '',
+    amount: 0,
+    is_recoverable: true,
+    notes: ''
+  })
 
   // Charger les propriétés du propriétaire avec leurs baux
   const loadProperties = useCallback(async () => {
@@ -160,7 +169,9 @@ export default function ChargeRegularizationPageV2() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const { data: lease, error } = await supabase
+      console.log('🔍 loadLease - Recherche bail pour property_id:', selectedPropertyId)
+
+      const { data: leases, error } = await supabase
         .from('leases')
         .select(`
           id,
@@ -181,16 +192,20 @@ export default function ChargeRegularizationPageV2() {
         `)
         .eq('property_id', selectedPropertyId)
         .eq('status', 'active')
-        .single()
 
-      if (error && error.code !== 'PGRST116') {
+      console.log('🔍 loadLease - Résultat:', { leases, error })
+
+      if (error) {
+        console.error('❌ loadLease - Erreur:', error)
         throw error
       }
 
-      if (lease) {
-        setSelectedLease(lease)
+      if (leases && leases.length > 0) {
+        setSelectedLease(leases[0])
+        console.log('🔍 loadLease - Bail trouvé:', leases[0])
       } else {
         setSelectedLease(null)
+        console.log('🔍 loadLease - Aucun bail actif trouvé')
       }
     } catch (error) {
       console.error('Erreur chargement bail:', error)
@@ -213,7 +228,6 @@ export default function ChargeRegularizationPageV2() {
       if (!user) return
 
       // Pour l'instant, créer directement une nouvelle régularisation
-      // TODO: Implémenter la sauvegarde/chargement depuis la base de données
       console.log('🔍 loadRegularization - Création d\'une nouvelle régularisation')
       
       const daysOccupied = calculateDaysInYear(
@@ -303,67 +317,6 @@ export default function ChargeRegularizationPageV2() {
     } : null)
   }, [regularization, calculateProvisions])
 
-  // Sauvegarder la régularisation
-  const saveRegularization = useCallback(async () => {
-    if (!regularization || !selectedLease) return
-
-    setSaving(true)
-    try {
-      console.log('🔍 saveRegularization - Sauvegarde en cours...')
-      console.log('🔍 saveRegularization - Données:', regularization)
-      
-      // Pour l'instant, simuler une sauvegarde réussie
-      // TODO: Implémenter la vraie sauvegarde en base de données
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      toast.success('Régularisation sauvegardée (mode démo)')
-    } catch (error) {
-      console.error('Erreur sauvegarde:', error)
-      toast.error('Erreur lors de la sauvegarde')
-    } finally {
-      setSaving(false)
-    }
-  }, [regularization, selectedLease, selectedYear])
-
-  // Générer le PDF
-  const generatePDF = useCallback(async () => {
-    if (!regularization || !selectedLease) return
-
-    try {
-      console.log('🔍 generatePDF - Génération PDF en cours...')
-      
-      // Pour l'instant, simuler la génération PDF
-      // TODO: Implémenter la vraie génération PDF
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      toast.success('PDF généré (mode démo)')
-    } catch (error) {
-      console.error('Erreur génération PDF:', error)
-      toast.error('Erreur lors de la génération du PDF')
-    }
-  }, [regularization, selectedLease, selectedYear])
-
-  // Envoyer au locataire
-  const sendToTenant = useCallback(async () => {
-    if (!regularization || !selectedLease) return
-
-    try {
-      console.log('🔍 sendToTenant - Envoi au locataire en cours...')
-      
-      // Pour l'instant, simuler l'envoi
-      // TODO: Implémenter le vrai envoi au locataire
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      // Mettre à jour le statut
-      setRegularization((prev: ChargeRegularization | null) => prev ? { ...prev, status: 'sent' } : null)
-
-      toast.success('Régularisation envoyée au locataire (mode démo)')
-    } catch (error) {
-      console.error('Erreur envoi:', error)
-      toast.error('Erreur lors de l\'envoi au locataire')
-    }
-  }, [regularization, selectedLease, selectedYear])
-
   // Gérer les changements de propriété
   const handlePropertyChange = (propertyId: string | null) => {
     setSelectedPropertyId(propertyId)
@@ -391,6 +344,104 @@ export default function ChargeRegularizationPageV2() {
   const handleNotesChange = (notes: string) => {
     setRegularization((prev: ChargeRegularization | null) => prev ? { ...prev, notes } : null)
   }
+
+  // Fonctions pour le popup d'ajout de dépense
+  const handleAddExpense = () => {
+    console.log('🔍 ExpensesTable - handleAddExpense appelé')
+    try {
+      setEditingExpense(null)
+      setFormData({
+        category: '',
+        amount: 0,
+        is_recoverable: true,
+        notes: ''
+      })
+      console.log('🔍 ExpensesTable - État formData réinitialisé')
+      setIsDialogOpen(true)
+      console.log('🔍 ExpensesTable - Dialog ouvert')
+    } catch (error) {
+      console.error('❌ ExpensesTable - Erreur handleAddExpense:', error)
+    }
+  }
+
+  const handleEditExpense = (expense: ChargeExpense) => {
+    console.log('🔍 ExpensesTable - handleEditExpense appelé:', expense)
+    try {
+      setEditingExpense(expense)
+      setFormData({
+        category: expense.category,
+        amount: expense.amount,
+        is_recoverable: expense.is_recoverable,
+        notes: expense.notes || ''
+      })
+      console.log('🔍 ExpensesTable - État formData mis à jour')
+      setIsDialogOpen(true)
+      console.log('🔍 ExpensesTable - Dialog ouvert pour édition')
+    } catch (error) {
+      console.error('❌ ExpensesTable - Erreur handleEditExpense:', error)
+    }
+  }
+
+  const handleDeleteExpense = (expenseId: string) => {
+    if (!regularization) return
+    const updatedExpenses = regularization.expenses.filter(expense => expense.id !== expenseId)
+    handleExpensesChange(updatedExpenses)
+    toast.success('Dépense supprimée')
+  }
+
+  const handleSaveExpense = () => {
+    if (!regularization) return
+    
+    if (!formData.category || formData.amount <= 0) {
+      toast.error('Veuillez remplir tous les champs obligatoires')
+      return
+    }
+
+    const expenseData: ChargeExpense = {
+      id: editingExpense?.id || `temp-${Date.now()}`,
+      category: formData.category,
+      amount: formData.amount,
+      is_recoverable: formData.is_recoverable,
+      notes: formData.notes,
+      supporting_documents: editingExpense?.supporting_documents || []
+    }
+
+    if (editingExpense) {
+      // Modifier
+      const updatedExpenses = regularization.expenses.map(expense =>
+        expense.id === editingExpense.id ? expenseData : expense
+      )
+      handleExpensesChange(updatedExpenses)
+      toast.success('Dépense modifiée')
+    } else {
+      // Ajouter
+      handleExpensesChange([...regularization.expenses, expenseData])
+      toast.success('Dépense ajoutée')
+    }
+
+    setIsDialogOpen(false)
+  }
+
+  // Sauvegarder la régularisation
+  const saveRegularization = useCallback(async () => {
+    if (!regularization || !selectedLease) return
+
+    setSaving(true)
+    try {
+      console.log('🔍 saveRegularization - Sauvegarde en cours...')
+      console.log('🔍 saveRegularization - Données:', regularization)
+      
+      // Pour l'instant, simuler une sauvegarde réussie
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      toast.success('Régularisation sauvegardée (mode démo)')
+    } catch (error) {
+      console.error('Erreur sauvegarde:', error)
+      toast.error('Erreur lors de la sauvegarde')
+    } finally {
+      setSaving(false)
+    }
+  }, [regularization, selectedLease, selectedYear])
 
   // Effets
   useEffect(() => {
@@ -673,35 +724,196 @@ export default function ChargeRegularizationPageV2() {
       </Card>
 
       {/* Navigation par année */}
-      <YearSelector
-        value={selectedYear}
-        onChange={handleYearChange}
-        leaseStartDate={selectedLease.start_date}
-        leaseEndDate={selectedLease.end_date}
-      />
+      <Card>
+        <CardHeader>
+          <CardTitle>Année de régularisation</CardTitle>
+          <CardDescription>
+            Sélectionnez l'année pour laquelle effectuer la régularisation
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Select value={selectedYear.toString()} onValueChange={(value) => handleYearChange(parseInt(value))}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[2023, 2024, 2025, 2026].map(year => (
+                <SelectItem key={year} value={year.toString()}>
+                  {year}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
 
       {/* Informations du bail */}
-      <LeaseInfoCard
-        lease={selectedLease}
-        year={selectedYear}
-        daysOccupied={regularization?.days_occupied || 0}
-      />
+      <Card>
+        <CardHeader>
+          <CardTitle>Informations du bail</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <div className="text-sm text-gray-500">Période d'occupation en {selectedYear}</div>
+              <div className="text-lg font-semibold">{regularization?.days_occupied || 0} jours</div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-500">Charges mensuelles</div>
+              <div className="text-lg font-semibold">{selectedLease.charges.toFixed(2)} €</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Tableau des dépenses */}
-      <ExpensesTable
-        expenses={regularization?.expenses || []}
-        daysOccupied={regularization?.days_occupied || 0}
-        onExpensesChange={handleExpensesChange}
-        loading={loading}
-      />
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Dépenses réelles</CardTitle>
+              <CardDescription>
+                Saisissez les montants payés annuellement pour chaque poste
+              </CardDescription>
+            </div>
+            <Button onClick={handleAddExpense} size="sm">
+              <Plus className="h-4 w-4 mr-2" />
+              Ajouter une dépense
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {regularization?.expenses.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500 mb-4">Aucune dépense enregistrée</p>
+              <Button onClick={handleAddExpense} variant="outline">
+                <Plus className="h-4 w-4 mr-2" />
+                Ajouter la première dépense
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {regularization?.expenses.map((expense) => (
+                <div key={expense.id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="space-y-1">
+                    <div className="font-medium">{expense.category}</div>
+                    <div className="text-sm text-gray-600">
+                      {expense.amount.toFixed(2)} € - {expense.is_recoverable ? 'Récupérable' : 'Non récupérable'}
+                    </div>
+                    {expense.notes && (
+                      <div className="text-sm text-gray-500">{expense.notes}</div>
+                    )}
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleEditExpense(expense)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeleteExpense(expense.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Dialog d'ajout/modification */}
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>
+                  {editingExpense ? 'Modifier la dépense' : 'Ajouter une dépense'}
+                </DialogTitle>
+                <DialogDescription>
+                  Saisissez les informations de la dépense
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="category">Poste de dépense *</Label>
+                  <Input
+                    id="category"
+                    value={formData.category}
+                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    placeholder="Ex: Eau froide, Chauffage, Ascenseur..."
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="amount">Montant payé (€) *</Label>
+                  <Input
+                    id="amount"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.amount}
+                    onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="recoverable"
+                    checked={formData.is_recoverable}
+                    onCheckedChange={(checked) => setFormData({ ...formData, is_recoverable: !!checked })}
+                  />
+                  <Label htmlFor="recoverable">Charge récupérable</Label>
+                </div>
+                <div>
+                  <Label htmlFor="notes">Notes (optionnel)</Label>
+                  <Textarea
+                    id="notes"
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    placeholder="Informations complémentaires..."
+                    rows={3}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  Annuler
+                </Button>
+                <Button onClick={handleSaveExpense}>
+                  {editingExpense ? 'Modifier' : 'Ajouter'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </CardContent>
+      </Card>
 
       {/* Résumé et balance */}
-      <BalanceSummary
-        totalProvisions={regularization?.total_provisions || 0}
-        totalQuotePart={regularization?.total_quote_part || 0}
-        balance={regularization?.balance || 0}
-        daysOccupied={regularization?.days_occupied || 0}
-      />
+      <Card>
+        <CardHeader>
+          <CardTitle>Synthèse de la régularisation</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="text-center">
+              <div className="text-sm text-gray-500">Total provisions</div>
+              <div className="text-2xl font-bold">{regularization?.total_provisions.toFixed(2) || '0.00'} €</div>
+            </div>
+            <div className="text-center">
+              <div className="text-sm text-gray-500">Quote-part locataire</div>
+              <div className="text-2xl font-bold text-blue-600">{regularization?.total_quote_part.toFixed(2) || '0.00'} €</div>
+            </div>
+            <div className="text-center">
+              <div className="text-sm text-gray-500">Balance</div>
+              <div className={`text-2xl font-bold ${(regularization?.balance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {regularization?.balance.toFixed(2) || '0.00'} €
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Notes et méthode de calcul */}
       <Card>
@@ -712,23 +924,37 @@ export default function ChargeRegularizationPageV2() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <textarea
-            className="w-full h-24 p-3 border border-gray-300 rounded-md resize-none"
+          <Textarea
+            className="w-full h-24"
             placeholder="Ex: Répartition au prorata de la surface + relevés fournisseurs..."
             value={regularization?.notes || ''}
-            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleNotesChange(e.target.value)}
+            onChange={(e) => handleNotesChange(e.target.value)}
           />
         </CardContent>
       </Card>
 
       {/* Actions */}
-      <ActionButtons
-        onSave={saveRegularization}
-        onGeneratePDF={generatePDF}
-        onSend={sendToTenant}
-        saving={saving}
-        disabled={!regularization}
-      />
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <Button
+              onClick={saveRegularization}
+              disabled={saving || !regularization}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {saving ? 'Sauvegarde...' : 'Sauvegarder'}
+            </Button>
+            <div className="flex space-x-2">
+              <Button variant="outline" disabled={!regularization}>
+                Générer PDF
+              </Button>
+              <Button variant="outline" disabled={!regularization}>
+                Envoyer au locataire
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
