@@ -74,25 +74,39 @@ export function ExpensesTable({ expenses, daysOccupied, onExpensesChange, loadin
   }
 
   const handleAddExpense = () => {
-    setEditingExpense(null)
-    setFormData({
-      category: '',
-      amount: 0,
-      is_recoverable: true,
-      notes: ''
-    })
-    setIsDialogOpen(true)
+    console.log('🔍 ExpensesTable - handleAddExpense appelé')
+    try {
+      setEditingExpense(null)
+      setFormData({
+        category: '',
+        amount: 0,
+        is_recoverable: true,
+        notes: ''
+      })
+      console.log('🔍 ExpensesTable - État formData réinitialisé')
+      setIsDialogOpen(true)
+      console.log('🔍 ExpensesTable - Dialog ouvert')
+    } catch (error) {
+      console.error('❌ ExpensesTable - Erreur handleAddExpense:', error)
+    }
   }
 
   const handleEditExpense = (expense: ChargeExpense) => {
-    setEditingExpense(expense)
-    setFormData({
-      category: expense.category,
-      amount: expense.amount,
-      is_recoverable: expense.is_recoverable,
-      notes: expense.notes || ''
-    })
-    setIsDialogOpen(true)
+    console.log('🔍 ExpensesTable - handleEditExpense appelé:', expense)
+    try {
+      setEditingExpense(expense)
+      setFormData({
+        category: expense.category,
+        amount: expense.amount,
+        is_recoverable: expense.is_recoverable,
+        notes: expense.notes || ''
+      })
+      console.log('🔍 ExpensesTable - État formData mis à jour')
+      setIsDialogOpen(true)
+      console.log('🔍 ExpensesTable - Dialog ouvert pour édition')
+    } catch (error) {
+      console.error('❌ ExpensesTable - Erreur handleEditExpense:', error)
+    }
   }
 
   const handleDeleteExpense = (expenseId: string) => {

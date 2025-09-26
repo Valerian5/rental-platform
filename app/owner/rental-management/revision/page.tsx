@@ -1,11 +1,10 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Building, User, Euro, FileText, Send } from "lucide-react"
+import { Calendar, Building } from "lucide-react"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
 import { calculateDaysInYear } from "@/lib/date-utils"
@@ -169,7 +168,7 @@ export default function ChargeRegularizationPageV2() {
   }, [selectedLease, selectedYear])
 
   // Calculer les provisions pour l'année (sans prorata)
-  const calculateProvisions = useCallback(async () => {
+  const calculateProvisions = useCallback(async (): Promise<number> => {
     if (!selectedLease) return 0
 
     try {
@@ -209,15 +208,15 @@ export default function ChargeRegularizationPageV2() {
 
     const totalProvisions = await calculateProvisions()
     const totalQuotePart = regularization.expenses
-      .filter(expense => expense.is_recoverable)
-      .reduce((sum, expense) => {
+      .filter((expense: ChargeExpense) => expense.is_recoverable)
+      .reduce((sum: number, expense: ChargeExpense) => {
         const quotePart = expense.amount * (regularization.days_occupied / 365)
         return sum + quotePart
       }, 0)
 
     const balance = totalProvisions - totalQuotePart
 
-    setRegularization(prev => prev ? {
+    setRegularization((prev: ChargeRegularization | null) => prev ? {
       ...prev,
       total_provisions: totalProvisions,
       total_quote_part: totalQuotePart,
@@ -278,7 +277,7 @@ export default function ChargeRegularizationPageV2() {
           .eq('regularization_id', regularizationId)
 
         // Insérer les nouvelles dépenses
-        const expensesData = regularization.expenses.map(expense => ({
+        const expensesData = regularization.expenses.map((expense: ChargeExpense) => ({
           regularization_id: regularizationId,
           category: expense.category,
           amount: expense.amount,
@@ -372,7 +371,7 @@ export default function ChargeRegularizationPageV2() {
       }
 
       // Mettre à jour le statut
-      setRegularization(prev => prev ? { ...prev, status: 'sent' } : null)
+      setRegularization((prev: ChargeRegularization | null) => prev ? { ...prev, status: 'sent' } : null)
 
       toast.success('Régularisation envoyée au locataire')
     } catch (error) {
@@ -388,12 +387,18 @@ export default function ChargeRegularizationPageV2() {
 
   // Gérer les changements de dépenses
   const handleExpensesChange = (expenses: ChargeExpense[]) => {
-    setRegularization(prev => prev ? { ...prev, expenses } : null)
+    console.log('🔍 Page - handleExpensesChange appelé:', expenses)
+    try {
+      setRegularization((prev: ChargeRegularization | null) => prev ? { ...prev, expenses } : null)
+      console.log('🔍 Page - État regularization mis à jour')
+    } catch (error) {
+      console.error('❌ Page - Erreur handleExpensesChange:', error)
+    }
   }
 
   // Gérer les changements de notes
   const handleNotesChange = (notes: string) => {
-    setRegularization(prev => prev ? { ...prev, notes } : null)
+    setRegularization((prev: ChargeRegularization | null) => prev ? { ...prev, notes } : null)
   }
 
   // Effets
@@ -428,7 +433,7 @@ export default function ChargeRegularizationPageV2() {
           <h1 className="text-2xl font-bold text-gray-900">Régularisation des charges</h1>
           <p className="text-gray-600">Gestion des charges locatives par année</p>
         </div>
-        <Badge variant="outline" className="text-sm">
+        <Badge className="text-sm">
           <Calendar className="h-4 w-4 mr-2" />
           {selectedYear}
         </Badge>
@@ -478,7 +483,7 @@ export default function ChargeRegularizationPageV2() {
             className="w-full h-24 p-3 border border-gray-300 rounded-md resize-none"
             placeholder="Ex: Répartition au prorata de la surface + relevés fournisseurs..."
             value={regularization?.notes || ''}
-            onChange={(e) => handleNotesChange(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleNotesChange(e.target.value)}
           />
         </CardContent>
       </Card>
