@@ -141,9 +141,13 @@ export function ChargeRegularizationTableNew({
   const handleInputChange = (index: number, field: keyof ChargeBreakdown, value: any) => {
     if (!chargeBreakdown || index < 0 || index >= chargeBreakdown.length) return
     
+    console.log('📝 Modification du champ:', { index, field, value })
+    
     const updated = [...chargeBreakdown]
     updated[index] = { ...updated[index], [field]: value }
     setChargeBreakdown(updated)
+    
+    console.log('📝 Données mises à jour:', updated)
   }
 
   const handleAddCharge = () => {

@@ -253,19 +253,28 @@ export async function POST(request: NextRequest) {
     if (chargeBreakdown && chargeBreakdown.length > 0) {
       console.log('📊 Sauvegarde du détail des charges:', chargeBreakdown)
       
-      const breakdownData = chargeBreakdown.map((charge: any) => ({
-        regularization_id: regularization.id,
-        charge_category: charge.category || charge.charge_category,
-        charge_name: charge.category || charge.charge_name,
-        provision_amount: charge.provisionAmount || charge.provision_amount || 0,
-        real_amount: charge.realAmount || charge.real_amount || 0,
-        difference: (charge.realAmount || charge.real_amount || 0) - (charge.provisionAmount || charge.provision_amount || 0),
-        is_recoverable: charge.isRecoverable !== undefined ? charge.isRecoverable : charge.is_recoverable,
-        is_exceptional: charge.isExceptional || charge.is_exceptional || false,
-        supporting_documents: charge.supporting_documents || [],
-        justification_file_url: charge.justificationFileUrl || charge.justification_file_url,
-        notes: charge.notes || ''
-      }))
+      const breakdownData = chargeBreakdown.map((charge: any) => {
+        const provisionAmount = charge.provisionAmount || charge.provision_amount || 0
+        const realAmount = charge.realAmount || charge.real_amount || 0
+        const difference = realAmount - provisionAmount
+        
+        const mappedCharge = {
+          regularization_id: regularization.id,
+          charge_category: charge.category || charge.charge_category || 'charge',
+          charge_name: charge.category || charge.charge_name || 'Charge',
+          provision_amount: provisionAmount,
+          real_amount: realAmount,
+          difference: difference,
+          is_recoverable: charge.isRecoverable !== undefined ? charge.isRecoverable : (charge.is_recoverable !== undefined ? charge.is_recoverable : true),
+          is_exceptional: charge.isExceptional || charge.is_exceptional || false,
+          supporting_documents: charge.supporting_documents || [],
+          justification_file_url: charge.justificationFileUrl || charge.justification_file_url,
+          notes: charge.notes || ''
+        }
+        
+        console.log('📊 Charge mappée:', mappedCharge)
+        return mappedCharge
+      })
 
       console.log('📊 Données formatées pour charge_breakdown:', breakdownData)
 

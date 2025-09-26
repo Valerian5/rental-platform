@@ -180,10 +180,19 @@ export default function RevisionPage() {
   }, [])
 
   const handleChargeDataChange = useCallback((data: any[]) => {
-    setChargeRegularizationData(prev => ({
-      ...prev,
-      chargeBreakdown: data
-    }))
+    console.log('📊 handleChargeDataChange appelé avec:', data)
+    console.log('📊 Type de data:', typeof data)
+    console.log('📊 Longueur de data:', data?.length)
+    console.log('📊 Est un array:', Array.isArray(data))
+    
+    setChargeRegularizationData(prev => {
+      const updated = {
+        ...prev,
+        chargeBreakdown: data
+      }
+      console.log('📊 Données mises à jour dans le parent:', updated)
+      return updated
+    })
   }, [])
 
   const handleCalculationChange = useCallback((calculation: any) => {
@@ -667,6 +676,9 @@ export default function RevisionPage() {
     console.log('💾 Sauvegarde de la régularisation des charges')
     console.log('📊 Données à sauvegarder:', chargeRegularizationData)
     console.log('📋 Détail des charges:', chargeRegularizationData.chargeBreakdown)
+    console.log('📊 Type de chargeBreakdown:', typeof chargeRegularizationData.chargeBreakdown)
+    console.log('📊 Longueur de chargeBreakdown:', chargeRegularizationData.chargeBreakdown?.length)
+    console.log('📊 Est un array:', Array.isArray(chargeRegularizationData.chargeBreakdown))
 
     try {
       setIsGenerating(true)
@@ -693,7 +705,10 @@ export default function RevisionPage() {
         chargeBreakdown: chargeRegularizationData.chargeBreakdown || []
       }
 
-      console.log('Données envoyées à l\'API:', apiData)
+      console.log('📤 Données envoyées à l\'API:', apiData)
+      console.log('📋 Détail des charges envoyé:', apiData.chargeBreakdown)
+      console.log('📊 Type de chargeBreakdown:', typeof apiData.chargeBreakdown)
+      console.log('📊 Longueur de chargeBreakdown:', apiData.chargeBreakdown?.length)
 
       const response = await fetch('/api/revisions/charges', {
         method: 'POST',
