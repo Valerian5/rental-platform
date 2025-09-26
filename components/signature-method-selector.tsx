@@ -1,7 +1,5 @@
 "use client"
 
-import type React from "react"
-
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -16,17 +14,10 @@ import { premiumFeaturesService } from "@/lib/premium-features-service"
 
 interface SignatureMethodSelectorProps {
   leaseId: string
-  leaseStatus: string
   userType: "owner" | "tenant"
-  onStatusChange?: (newStatus: string) => void
 }
 
-export function SignatureMethodSelector({
-  leaseId,
-  leaseStatus,
-  userType,
-  onStatusChange,
-}: SignatureMethodSelectorProps) {
+export function SignatureMethodSelector({ leaseId, userType }: SignatureMethodSelectorProps) {
   const [isElectronicEnabled, setIsElectronicEnabled] = useState(false)
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -49,18 +40,16 @@ export function SignatureMethodSelector({
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
-    if (file) {
-      if (file.type !== "application/pdf") {
-        toast.error("Seuls les fichiers PDF sont acceptés")
-        return
-      }
-      if (file.size > 10 * 1024 * 1024) {
-        // 10MB
-        toast.error("Le fichier ne peut pas dépasser 10MB")
-        return
-      }
-      setSelectedFile(file)
+    if (!file) return
+    if (file.type !== "application/pdf") {
+      toast.error("Seuls les fichiers PDF sont acceptés")
+      return
     }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Le fichier ne peut pas dépasser 10MB")
+      return
+    }
+    setSelectedFile(file)
   }
 
   const handleUploadSignedDocument = async () => {
@@ -71,7 +60,6 @@ export function SignatureMethodSelector({
 
     try {
       setUploading(true)
-
       const formData = new FormData()
       formData.append("document", selectedFile)
       formData.append("signerType", userType)
@@ -80,18 +68,11 @@ export function SignatureMethodSelector({
         method: "POST",
         body: formData,
       })
-
       const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || "Erreur lors de l'upload")
-      }
+      if (!response.ok) throw new Error(result.error || "Erreur lors de l'upload")
 
       toast.success("Document signé uploadé avec succès")
-      onStatusChange?.(result.leaseStatus)
       setSelectedFile(null)
-
-      // Reset file input
       const fileInput = document.getElementById("signed-document-upload") as HTMLInputElement
       if (fileInput) fileInput.value = ""
     } catch (error) {
@@ -106,7 +87,6 @@ export function SignatureMethodSelector({
     try {
       const response = await fetch(`/api/leases/${leaseId}/download-document`)
       if (!response.ok) throw new Error("Erreur téléchargement")
-
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement("a")
@@ -123,11 +103,9 @@ export function SignatureMethodSelector({
   if (loading) {
     return (
       <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-center">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-            <span className="ml-2">Chargement...</span>
-          </div>
+        <CardContent className="p-6 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <span className="ml-2">Chargement...</span>
         </CardContent>
       </Card>
     )
@@ -137,8 +115,7 @@ export function SignatureMethodSelector({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <FileText className="h-5 w-5" />
-          Signature du bail
+          <FileText className="h-5 w-5" /> Signature du bail
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -146,42 +123,25 @@ export function SignatureMethodSelector({
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="electronic" disabled={!isElectronicEnabled}>
               <div className="flex items-center gap-2">
-                <Zap className="h-4 w-4" />
-                Signature électronique
+                <Zap className="h-4 w-4" /> Signature électronique
                 {isElectronicEnabled && <Crown className="h-3 w-3 text-yellow-500" />}
               </div>
             </TabsTrigger>
             <TabsTrigger value="manual">
               <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                Signature manuelle
+                <FileText className="h-4 w-4" /> Signature manuelle
               </div>
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="electronic" className="space-y-4">
             {isElectronicEnabled ? (
-              <div className="space-y-4">
-                <Alert className="bg-blue-50 border-blue-200">
-                  <Crown className="h-4 w-4 text-blue-600" />
-                  <AlertDescription className="text-blue-800">
-                    <strong>Fonctionnalité Premium</strong> - Signature électronique sécurisée via DocuSign
-                  </AlertDescription>
-                </Alert>
-
-                <DocuSignSignatureManager 
-  leaseId={leaseId} 
-  leaseStatus={leaseStatus} 
-  currentRole={userType}
-  onStatusChange={onStatusChange} 
-/>
-              </div>
+              <DocuSignSignatureManager leaseId={leaseId} />
             ) : (
               <Alert className="bg-orange-50 border-orange-200">
                 <Crown className="h-4 w-4 text-orange-600" />
                 <AlertDescription className="text-orange-800">
-                  <strong>Fonctionnalité Premium</strong> - La signature électronique n'est pas activée. Contactez votre
-                  administrateur pour activer cette fonctionnalité.
+                  La signature électronique n'est pas activée. Contactez votre administrateur pour l'activer.
                 </AlertDescription>
               </Alert>
             )}
@@ -191,28 +151,20 @@ export function SignatureMethodSelector({
             <Alert>
               <FileText className="h-4 w-4" />
               <AlertDescription>
-                Téléchargez le document, imprimez-le, signez-le et uploadez la version signée.
+                Téléchargez le document, signez-le manuellement, puis uploadez-le.
               </AlertDescription>
             </Alert>
 
             <div className="space-y-4">
               <div className="p-4 border rounded-lg bg-gray-50">
                 <h4 className="font-medium mb-2">1. Télécharger le document</h4>
-                <p className="text-sm text-gray-600 mb-3">
-                  Téléchargez le bail au format PDF pour l'imprimer et le signer.
-                </p>
-                <Button onClick={downloadDocument} variant="outline" className="w-full bg-transparent">
-                  <Download className="h-4 w-4 mr-2" />
-                  Télécharger le bail (PDF)
+                <Button onClick={downloadDocument} variant="outline" className="w-full">
+                  <Download className="h-4 w-4 mr-2" /> Télécharger le bail (PDF)
                 </Button>
               </div>
 
               <div className="p-4 border rounded-lg">
                 <h4 className="font-medium mb-2">2. Uploader le document signé</h4>
-                <p className="text-sm text-gray-600 mb-3">
-                  Une fois signé, scannez ou photographiez le document et uploadez-le ici.
-                </p>
-
                 <div className="space-y-3">
                   <div>
                     <Label htmlFor="signed-document-upload">Document signé (PDF uniquement)</Label>
@@ -242,8 +194,7 @@ export function SignatureMethodSelector({
                       </>
                     ) : (
                       <>
-                        <Upload className="h-4 w-4 mr-2" />
-                        Uploader le document signé
+                        <Upload className="h-4 w-4 mr-2" /> Uploader le document signé
                       </>
                     )}
                   </Button>
@@ -253,8 +204,7 @@ export function SignatureMethodSelector({
               <Alert className="bg-yellow-50 border-yellow-200">
                 <AlertTriangle className="h-4 w-4 text-yellow-600" />
                 <AlertDescription className="text-yellow-800">
-                  <strong>Important :</strong> Assurez-vous que le document est clairement lisible et que toutes les
-                  signatures sont visibles.
+                  Assurez-vous que le document est lisible et toutes les signatures sont visibles.
                 </AlertDescription>
               </Alert>
             </div>
