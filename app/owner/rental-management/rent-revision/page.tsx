@@ -188,30 +188,64 @@ export default function RentRevisionPage() {
     }
   }, [])
 
+  // Récupérer l'indice IRL de référence depuis le bail
+  const getReferenceIRLValue = useCallback(async (trimestreReference: string) => {
+    if (!trimestreReference) return 0
+
+    try {
+      // Parser le trimestre (ex: "2025-T1" -> year: 2025, quarter: 1)
+      const match = trimestreReference.match(/(\d{4})-T(\d)/)
+      if (!match) return 0
+
+      const year = parseInt(match[1])
+      const quarter = parseInt(match[2])
+
+      const { data: irlData, error } = await supabase
+        .from('irl_indices')
+        .select('value')
+        .eq('year', year)
+        .eq('quarter', quarter)
+        .single()
+
+      if (error || !irlData) return 0
+      return irlData.value
+    } catch (error) {
+      console.error('Erreur récupération IRL référence:', error)
+      return 0
+    }
+  }, [])
+
   // Charger la révision existante
   const loadExistingRevision = useCallback(async (leaseId: string, year: number) => {
     try {
+      // Utiliser une requête différente pour éviter l'erreur 406
       const { data: revisionData, error } = await supabase
         .from('lease_revisions')
         .select('*')
         .eq('lease_id', leaseId)
         .eq('revision_year', year)
-        .single()
+        .maybeSingle()
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
+        console.error('Erreur chargement révision:', error)
         throw error
       }
 
       if (revisionData) {
         setRevision(revisionData)
       } else {
+        // Récupérer l'indice IRL de référence
+        const referenceIRLValue = selectedLease?.trimestre_reference_irl 
+          ? await getReferenceIRLValue(selectedLease.trimestre_reference_irl)
+          : 0
+
         // Créer une nouvelle révision
         const newRevision: RentRevision = {
           lease_id: leaseId,
           property_id: selectedLease?.property_id || '',
           revision_year: year,
           revision_date: new Date().toISOString().split('T')[0],
-          reference_irl_value: selectedLease?.loyer_reference || 0,
+          reference_irl_value: referenceIRLValue,
           new_irl_value: 0,
           irl_quarter: selectedLease?.trimestre_reference_irl || '',
           old_rent_amount: selectedLease?.monthly_rent || 0,
@@ -226,7 +260,7 @@ export default function RentRevisionPage() {
       console.error('Erreur chargement révision:', error)
       toast.error('Erreur lors du chargement de la révision')
     }
-  }, [selectedLease])
+  }, [selectedLease, getReferenceIRLValue])
 
   // Calculer la révision
   const calculateRevision = useCallback((oldRent: number, referenceIRL: number, newIRL: number) => {
@@ -294,16 +328,46 @@ export default function RentRevisionPage() {
 
   // Générer le PDF
   const generatePDF = useCallback(async () => {
-    if (!revision || !selectedLease) return
+    if (!revision || !selectedLease || !revision.id) return
 
     try {
-      // TODO: Implémenter la génération PDF
-      toast.success('PDF généré (fonctionnalité à implémenter)')
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const response = await fetch('/api/revisions/rent/pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        },
+        body: JSON.stringify({
+          revisionId: revision.id,
+          leaseId: selectedLease.id,
+          year: selectedYear
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Erreur génération PDF')
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `revision-loyer-${selectedYear}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      toast.success('PDF généré et téléchargé')
     } catch (error) {
       console.error('Erreur génération PDF:', error)
       toast.error('Erreur lors de la génération du PDF')
     }
-  }, [revision, selectedLease])
+  }, [revision, selectedLease, selectedYear])
 
   // Envoyer au locataire
   const sendToTenant = useCallback(async () => {
@@ -517,14 +581,19 @@ export default function RentRevisionPage() {
                     } : null)}
                     placeholder="Ex: 130.52"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Indice au moment de la signature du bail
-                    {selectedLease?.trimestre_reference_irl && (
-                      <span className="block text-blue-600">
-                        Trimestre de référence: {selectedLease.trimestre_reference_irl}
-                      </span>
-                    )}
-                  </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Indice au moment de la signature du bail
+                  {selectedLease?.trimestre_reference_irl && (
+                    <span className="block text-blue-600">
+                      Trimestre de référence: {selectedLease.trimestre_reference_irl}
+                      {revision.reference_irl_value > 0 && (
+                        <span className="block text-green-600">
+                          ✓ Valeur récupérée: {revision.reference_irl_value}
+                        </span>
+                      )}
+                    </span>
+                  )}
+                </p>
                 </div>
 
                 {/* Nouvel indice */}
