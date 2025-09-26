@@ -248,6 +248,9 @@ export async function POST(request: NextRequest) {
     console.log('📊 ChargeBreakdown est un array:', Array.isArray(chargeBreakdown))
     if (chargeBreakdown && chargeBreakdown.length > 0) {
       console.log('📊 Premier élément:', chargeBreakdown[0])
+      console.log('📊 Tous les éléments:', chargeBreakdown)
+    } else {
+      console.log('❌ Aucune donnée de chargeBreakdown reçue ou tableau vide')
     }
     
     if (chargeBreakdown && chargeBreakdown.length > 0) {

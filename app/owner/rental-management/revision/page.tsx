@@ -393,10 +393,13 @@ export default function RevisionPage() {
 
       setRevisions(revisionsData || [])
 
-      // Charger les régularisations existantes
+      // Charger les régularisations existantes avec le détail des charges
       const { data: regularizationsData, error: regularizationsError } = await supabase
         .from('charge_regularizations')
-        .select('*')
+        .select(`
+          *,
+          charge_breakdown:charge_breakdown(*)
+        `)
         .eq('lease_id', selectedLeaseId)
         .eq('regularization_year', currentYear)
 
@@ -426,6 +429,7 @@ export default function RevisionPage() {
 
         console.log('📊 Détail des charges chargé depuis charge_breakdown:', chargeBreakdown)
         console.log('📊 Données brutes de charge_breakdown:', latestRegularization.charge_breakdown)
+        console.log('📊 Nombre d'éléments dans charge_breakdown:', latestRegularization.charge_breakdown?.length)
 
         setChargeRegularizationData({
           totalProvisionsCollected: parseFloat(latestRegularization.total_provisions_collected) || 0,
