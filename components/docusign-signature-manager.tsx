@@ -65,17 +65,12 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
         tenantSigned: data.lease.signed_by_tenant,
       })
   
-      // Si l'enveloppe existe mais qu'on n'a pas encore récupéré les liens
-      if (hasEnvelope && !signingUrls) {
-        try {
-          const urlsRes = await fetch(`/api/leases/${leaseId}/signing-urls`)
-          if (urlsRes.ok) {
-            const urlsData = await urlsRes.json()
-            setSigningUrls(urlsData.signingUrls)
-          }
-        } catch (err) {
-          console.error("Erreur récupération URLs DocuSign:", err)
-        }
+      // On récupère les URLs existantes en base si elles sont présentes
+      if (hasEnvelope) {
+        setSigningUrls({
+          owner: data.lease.owner_signed_document_url || null,
+          tenant: data.lease.tenant_signed_document_url || null,
+        })
       }
     } catch (error) {
       console.error("Erreur vérification statut:", error)
@@ -83,6 +78,7 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
       setLoading(false)
     }
   }
+  
   
 
   useEffect(() => {
