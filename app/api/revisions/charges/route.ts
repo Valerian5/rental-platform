@@ -84,6 +84,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
+    console.log('📥 Body reçu par l\'API:', body)
+    
     const { 
       leaseId, 
       propertyId, 
@@ -101,6 +103,10 @@ export async function POST(request: NextRequest) {
       calculationNotes,
       chargeBreakdown
     } = body
+    
+    console.log('📊 ChargeBreakdown extrait du body:', chargeBreakdown)
+    console.log('📊 Type de chargeBreakdown:', typeof chargeBreakdown)
+    console.log('📊 Longueur de chargeBreakdown:', chargeBreakdown?.length)
 
     const supabaseAdmin = createServerClient()
     
