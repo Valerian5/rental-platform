@@ -168,7 +168,7 @@ export default function ChargeRegularizationPageV2() {
     }
   }, [selectedLease, selectedYear])
 
-  // Calculer les provisions pour l'année (sans prorata)
+  // Calculer les provisions pour l'année avec prorata
   const calculateProvisions = useCallback(async () => {
     if (!selectedLease) return 0
 
@@ -185,14 +185,26 @@ export default function ChargeRegularizationPageV2() {
       let totalProvisions = 0
       const monthlyCharges = selectedLease.charges || 0
 
-      // Calculer les provisions mois par mois (sans prorata)
+      // Calculer les provisions mois par mois
       for (let month = 1; month <= 12; month++) {
         const monthStart = new Date(selectedYear, month - 1, 1)
+        const monthEnd = new Date(selectedYear, month, 0) // Dernier jour du mois
 
         // Vérifier si le mois est dans la période d'occupation
         if (monthStart >= effectiveStart && monthStart <= effectiveEnd) {
-          // Montant complet du mois (pas de prorata)
-          totalProvisions += monthlyCharges
+          // Si c'est le premier mois d'occupation, appliquer le prorata
+          if (monthStart.getTime() === effectiveStart.getTime()) {
+            const daysInMonth = monthEnd.getDate()
+            const daysOccupied = Math.min(
+              daysInMonth - effectiveStart.getDate() + 1,
+              daysInMonth
+            )
+            const prorata = daysOccupied / daysInMonth
+            totalProvisions += monthlyCharges * prorata
+          } else {
+            // Mois complets
+            totalProvisions += monthlyCharges
+          }
         }
       }
 
