@@ -3,10 +3,9 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { FileText, CheckCircle, Clock, RefreshCw, ExternalLink, Building, User } from "lucide-react"
 import { toast } from "sonner"
+import { Loader2, CheckCircle, XCircle, Clock } from "lucide-react"
 
 interface DocuSignSignatureManagerProps {
   leaseId: string
@@ -16,9 +15,8 @@ interface DocuSignSignatureManagerProps {
 }
 
 interface SignatureStatus {
-  status: string
-  ownerSigned: boolean
-  tenantSigned: boolean
+  owner: "pending" | "signed" | "declined"
+  tenant: "pending" | "signed" | "declined"
 }
 
 export function DocuSignSignatureManager({
@@ -27,138 +25,152 @@ export function DocuSignSignatureManager({
   currentRole,
   onStatusChange,
 }: DocuSignSignatureManagerProps) {
-  const [loading, setLoading] = useState(false)
-  const [signatureStatus, setSignatureStatus] = useState<SignatureStatus | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [sending, setSending] = useState(false)
+  const [signing, setSigning] = useState(false)
+  const [envelopeId, setEnvelopeId] = useState<string | null>(null)
+  const [status, setStatus] = useState<SignatureStatus>({
+    owner: "pending",
+    tenant: "pending",
+  })
+
+  useEffect(() => {
+    checkSignatureStatus()
+  }, [])
 
   const checkSignatureStatus = async () => {
     try {
-      setLoading(true)
       const res = await fetch(`/api/leases/${leaseId}/signature-status`)
+      if (!res.ok) throw new Error("Erreur récupération statut")
       const data = await res.json()
-
-      if (res.ok) {
-        const status = {
-          status: data.lease.status,
-          ownerSigned: data.lease.signed_by_owner,
-          tenantSigned: data.lease.signed_by_tenant,
-        }
-        setSignatureStatus(status)
-
-        if (status.status === "active") {
-          toast.success("Toutes les signatures ont été collectées !")
-          onStatusChange?.("active")
-        }
-      }
+      setEnvelopeId(data.envelopeId || null)
+      setStatus(data.status || { owner: "pending", tenant: "pending" })
+      onStatusChange?.(data.leaseStatus)
     } catch (err) {
-      console.error("Erreur statut DocuSign:", err)
+      console.error("Erreur statut signature:", err)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleSign = async (role: "owner" | "tenant") => {
+  const handleSendToDocuSign = async () => {
     try {
-      const res = await fetch(`/api/leases/${leaseId}/signing-url?role=${role}`)
+      setSending(true)
+      const res = await fetch(`/api/leases/${leaseId}/send-to-docusign`, { method: "POST" })
       const data = await res.json()
-      if (res.ok && data.url) {
-        window.open(data.url, "_blank")
-      } else {
-        toast.error(data.error || "Impossible de générer le lien de signature")
-      }
+      if (!res.ok) throw new Error(data.error || "Erreur création enveloppe")
+
+      toast.success("Enveloppe DocuSign créée et envoyée")
+      setEnvelopeId(data.envelopeId)
+      onStatusChange?.("sent_to_tenant")
+      await checkSignatureStatus()
     } catch (err) {
-      console.error("Erreur génération lien signature:", err)
-      toast.error("Erreur lors de la récupération du lien")
+      console.error(err)
+      toast.error(err instanceof Error ? err.message : "Erreur lors de l’envoi")
+    } finally {
+      setSending(false)
     }
   }
 
-  useEffect(() => {
-    checkSignatureStatus()
-    if (leaseStatus === "sent_to_tenant") {
-      const interval = setInterval(checkSignatureStatus, 30000)
-      return () => clearInterval(interval)
+  const handleSign = async () => {
+    try {
+      setSigning(true)
+      const res = await fetch(
+        `/api/leases/${leaseId}/signing-url?role=${currentRole}`,
+        { method: "GET" }
+      )
+      const data = await res.json()
+      if (!res.ok || !data.url) throw new Error(data.error || "Erreur génération URL")
+      window.open(data.url, "_blank")
+    } catch (err) {
+      console.error(err)
+      toast.error("Impossible d’ouvrir la signature DocuSign")
+    } finally {
+      setSigning(false)
     }
-  }, [leaseStatus])
+  }
 
-  if (!signatureStatus) {
+  const renderStatus = (role: "owner" | "tenant") => {
+    const value = status[role]
+    if (value === "signed") {
+      return (
+        <div className="flex items-center gap-2 text-green-600">
+          <CheckCircle className="h-4 w-4" /> Signé
+        </div>
+      )
+    }
+    if (value === "declined") {
+      return (
+        <div className="flex items-center gap-2 text-red-600">
+          <XCircle className="h-4 w-4" /> Refusé
+        </div>
+      )
+    }
+    return (
+      <div className="flex items-center gap-2 text-yellow-600">
+        <Clock className="h-4 w-4" /> En attente
+      </div>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-6">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    )
+  }
+
+  // Étape 1 : aucune enveloppe encore créée
+  if (!envelopeId) {
     return (
       <Card>
-        <CardContent className="py-6 text-center text-gray-500">
-          Chargement du statut de signature...
+        <CardHeader>
+          <CardTitle>Signature DocuSign</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Alert>
+            <AlertDescription>
+              Aucune enveloppe DocuSign n’a encore été créée pour ce bail.
+            </AlertDescription>
+          </Alert>
+          <Button onClick={handleSendToDocuSign} disabled={sending}>
+            {sending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Envoyer pour signature via DocuSign
+          </Button>
         </CardContent>
       </Card>
     )
   }
 
-  const renderSignerBlock = (
-    role: "owner" | "tenant",
-    label: string,
-    icon: React.ReactNode,
-    signed: boolean
-  ) => {
-    const isCurrentUser = currentRole === role
-
-    return (
-      <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-        {icon}
-        <div className="flex-1">
-          <p className="font-medium">{label}</p>
-          <div className="flex items-center gap-2 mt-1">
-            {signed ? (
-              <>
-                <CheckCircle className="h-4 w-4 text-green-600" />
-                <span className="text-sm text-green-600">Signé</span>
-              </>
-            ) : (
-              <>
-                <Clock className="h-4 w-4 text-yellow-600" />
-                <span className="text-sm text-yellow-600">En attente</span>
-              </>
-            )}
-          </div>
+  // Étape 2 : enveloppe existante → affichage des statuts + bouton signer
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center p-4 border rounded-lg">
+        <div>
+          <p className="font-medium">Bailleur</p>
+          {renderStatus("owner")}
         </div>
-        {isCurrentUser && !signed && (
-          <Button size="sm" variant="outline" onClick={() => handleSign(role)}>
-            <ExternalLink className="h-4 w-4" />
-            <span className="ml-1">Signer</span>
+        {currentRole === "owner" && status.owner === "pending" && (
+          <Button onClick={handleSign} disabled={signing}>
+            {signing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Signer
           </Button>
         )}
       </div>
-    )
-  }
 
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Signature DocuSign
-          </CardTitle>
-          <Button variant="outline" size="sm" onClick={checkSignatureStatus} disabled={loading}>
-            {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+      <div className="flex justify-between items-center p-4 border rounded-lg">
+        <div>
+          <p className="font-medium">Locataire</p>
+          {renderStatus("tenant")}
+        </div>
+        {currentRole === "tenant" && status.tenant === "pending" && (
+          <Button onClick={handleSign} disabled={signing}>
+            {signing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Signer
           </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-center justify-between">
-          <span className="font-medium">Statut de l'enveloppe:</span>
-          <Badge variant="outline">{signatureStatus.status}</Badge>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {renderSignerBlock("owner", "Bailleur", <Building className="h-5 w-5 text-gray-600" />, signatureStatus.ownerSigned)}
-          {renderSignerBlock("tenant", "Locataire", <User className="h-5 w-5 text-gray-600" />, signatureStatus.tenantSigned)}
-        </div>
-
-        {signatureStatus.status === "completed" && (
-          <Alert className="bg-green-50 border-green-200">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-800">
-              Le contrat a été signé par toutes les parties. Le bail est maintenant actif.
-            </AlertDescription>
-          </Alert>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }
