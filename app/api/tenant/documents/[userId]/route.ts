@@ -8,6 +8,8 @@ export async function GET(
   try {
     const { userId } = params
 
+    console.log('🔍 API Documents Tenant - User ID:', userId)
+
     if (!userId) {
       return NextResponse.json({ error: "ID utilisateur requis" }, { status: 400 })
     }
@@ -15,12 +17,16 @@ export async function GET(
     const supabaseAdmin = createServerClient()
 
     // Récupérer les notifications de documents pour cet utilisateur
+    console.log('🔍 API Documents Tenant - Récupération des notifications...')
     const { data: notifications, error: notificationsError } = await supabaseAdmin
       .from('notifications')
       .select('*')
       .eq('user_id', userId)
       .in('type', ['charge_regularization', 'rent_revision'])
       .order('created_at', { ascending: false })
+
+    console.log('🔍 API Documents Tenant - Notifications trouvées:', notifications?.length || 0)
+    console.log('🔍 API Documents Tenant - Erreur notifications:', notificationsError)
 
     if (notificationsError) {
       console.error('Erreur récupération notifications:', notificationsError)

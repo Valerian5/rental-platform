@@ -106,7 +106,8 @@ export async function POST(request: NextRequest) {
       .getPublicUrl(filePath)
 
     // Créer une notification pour le locataire
-    const { error: notificationError } = await supabaseAdmin
+    console.log('🔔 Création notification révision pour locataire:', revision.lease.tenant.id)
+    const { data: notificationData, error: notificationError } = await supabaseAdmin
       .from('notifications')
       .insert({
         user_id: revision.lease.tenant.id,
@@ -125,9 +126,13 @@ export async function POST(request: NextRequest) {
         },
         is_read: false
       })
+      .select()
 
+    console.log('🔔 Notification révision créée:', notificationData)
     if (notificationError) {
-      console.error('Erreur création notification:', notificationError)
+      console.error('❌ Erreur création notification révision:', notificationError)
+    } else {
+      console.log('✅ Notification révision créée avec succès')
     }
 
     // Mettre à jour le statut de la révision
