@@ -2,8 +2,8 @@
 import { Payment, Reminder } from './payment-models'
 
 export interface NotificationData {
-  type: 'payment_received' | 'payment_overdue' | 'reminder_sent' | 'receipt_generated'
-  payment: Payment
+  type: 'payment_received' | 'payment_overdue' | 'reminder_sent' | 'receipt_generated' | 'charge_regularization' | 'rent_revision'
+  payment?: Payment
   recipient: {
     email: string
     name: string
@@ -71,6 +71,66 @@ class NotificationService {
       recipient: {
         email: tenantEmail,
         name: tenantName
+      }
+    }
+
+    return this.sendNotification(notification)
+  }
+
+  // Envoyer une notification de régularisation des charges
+  async sendChargeRegularizationNotification(
+    tenantEmail: string, 
+    tenantName: string, 
+    propertyTitle: string, 
+    year: number, 
+    balance: number, 
+    balanceType: 'refund' | 'additional_payment',
+    pdfUrl: string
+  ) {
+    const notification: NotificationData = {
+      type: 'charge_regularization',
+      recipient: {
+        email: tenantEmail,
+        name: tenantName
+      },
+      data: {
+        propertyTitle,
+        year,
+        balance,
+        balanceType,
+        pdfUrl
+      }
+    }
+
+    return this.sendNotification(notification)
+  }
+
+  // Envoyer une notification de révision de loyer
+  async sendRentRevisionNotification(
+    tenantEmail: string, 
+    tenantName: string, 
+    propertyTitle: string, 
+    year: number, 
+    oldRent: number, 
+    newRent: number, 
+    increase: number, 
+    increasePercentage: number,
+    pdfUrl: string
+  ) {
+    const notification: NotificationData = {
+      type: 'rent_revision',
+      recipient: {
+        email: tenantEmail,
+        name: tenantName
+      },
+      data: {
+        propertyTitle,
+        year,
+        oldRent,
+        newRent,
+        increase,
+        increasePercentage,
+        pdfUrl
       }
     }
 

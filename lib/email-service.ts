@@ -30,6 +30,8 @@ import TenantRefusedApplicationToOwnerEmail from "@/components/emails/tenant-ref
 import SignatureRequiredEmail from "@/components/emails/signature-required-email"
 import SignatureCompletedEmail from "@/components/emails/signature-completed-email"
 import LeaseFullySignedEmail from "@/components/emails/lease-fully-signed-email"
+import ChargeRegularizationEmail from "@/components/emails/charge-regularization-email"
+import RentRevisionEmail from "@/components/emails/rent-revision-email"
 
 
 // --- CONFIG EXPÉDITEUR ---
@@ -68,6 +70,8 @@ export enum NotificationType {
   LEASE_DOCUMENT_SHARED = "leaseDocumentShared",
   ADMIN_INVITATION = "adminInvitation",
   DOCUMENT_REMINDER = "documentReminder",
+  CHARGE_REGULARIZATION = "chargeRegularization",
+  RENT_REVISION = "rentRevision",
 }
 
 export type NotificationSettings = {
@@ -721,6 +725,62 @@ export async function sendLeaseFullySignedEmail(
       propertyTitle: property.title,
       propertyAddress: property.address,
       leaseUrl,
+      logoUrl,
+    })
+  )
+}
+
+// --- NOTIFICATIONS POUR RÉGULARISATIONS ---
+
+export async function sendChargeRegularizationEmail(
+  user: User,
+  property: Property,
+  year: number,
+  balance: number,
+  balanceType: 'refund' | 'additional_payment',
+  pdfUrl: string,
+  logoUrl?: string,
+) {
+  await sendEmail(
+    user,
+    NotificationType.CHARGE_REGULARIZATION,
+    `Régularisation des charges ${year} - ${property.title}`,
+    ChargeRegularizationEmail({
+      tenantName: user.name,
+      propertyTitle: property.title,
+      year,
+      balance,
+      balanceType,
+      pdfUrl,
+      logoUrl,
+    })
+  )
+}
+
+export async function sendRentRevisionEmail(
+  user: User,
+  property: Property,
+  year: number,
+  oldRent: number,
+  newRent: number,
+  increase: number,
+  increasePercentage: number,
+  pdfUrl: string,
+  logoUrl?: string,
+) {
+  await sendEmail(
+    user,
+    NotificationType.RENT_REVISION,
+    `Révision de loyer ${year} - ${property.title}`,
+    RentRevisionEmail({
+      tenantName: user.name,
+      propertyTitle: property.title,
+      year,
+      oldRent,
+      newRent,
+      increase,
+      increasePercentage,
+      pdfUrl,
       logoUrl,
     })
   )

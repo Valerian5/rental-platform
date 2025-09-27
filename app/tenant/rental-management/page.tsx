@@ -86,11 +86,29 @@ interface IncidentResponse {
   created_at: string
 }
 
+interface Document {
+  id: string
+  type: 'charge_regularization' | 'rent_revision' | 'lease' | 'other'
+  title: string
+  description: string
+  year?: number
+  amount?: number
+  balance_type?: 'refund' | 'additional_payment'
+  old_rent?: number
+  new_rent?: number
+  increase?: number
+  increase_percentage?: number
+  pdf_url: string
+  created_at: string
+  data?: any
+}
+
 export default function TenantRentalManagementPage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [activeLease, setActiveLease] = useState<Lease | null>(null)
   const [rentReceipts, setRentReceipts] = useState<RentReceipt[]>([])
   const [incidents, setIncidents] = useState<Incident[]>([])
+  const [documents, setDocuments] = useState<Document[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("overview")
 
@@ -126,6 +144,13 @@ export default function TenantRentalManagementPage() {
         const incidentsData = await incidentsResponse.json()
         if (incidentsData.success) {
           setIncidents(incidentsData.incidents || [])
+        }
+
+        // Récupérer les documents
+        const documentsResponse = await fetch(`/api/tenant/documents/${user.id}`)
+        const documentsData = await documentsResponse.json()
+        if (documentsData.success) {
+          setDocuments(documentsData.documents || [])
         }
       } catch (error) {
         console.error("Erreur:", error)
@@ -727,6 +752,7 @@ export default function TenantRentalManagementPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
+                {/* Contrat de bail */}
                 <div className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex items-center space-x-4">
                     <FileText className="h-8 w-8 text-muted-foreground" />
@@ -743,6 +769,41 @@ export default function TenantRentalManagementPage() {
                   </Button>
                 </div>
 
+                {/* Documents de régularisation */}
+                {documents.map((doc) => (
+                  <div key={doc.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center space-x-4">
+                      <FileText className="h-8 w-8 text-muted-foreground" />
+                      <div>
+                        <p className="font-medium">{doc.title}</p>
+                        <p className="text-sm text-muted-foreground">{doc.description}</p>
+                        {doc.year && (
+                          <p className="text-xs text-muted-foreground">Année {doc.year}</p>
+                        )}
+                        {doc.amount && (
+                          <p className="text-xs text-muted-foreground">
+                            {doc.balance_type === 'refund' ? 'Remboursement' : 'Complément'}: {doc.amount.toFixed(2)} €
+                          </p>
+                        )}
+                        {doc.increase && (
+                          <p className="text-xs text-muted-foreground">
+                            {doc.increase > 0 ? 'Augmentation' : 'Diminution'}: {doc.increase.toFixed(2)} € ({doc.increase_percentage?.toFixed(2)}%)
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Button size="sm" variant="outline" asChild>
+                        <a href={doc.pdf_url} target="_blank" rel="noopener noreferrer">
+                          <Download className="h-4 w-4 mr-2" />
+                          Télécharger
+                        </a>
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* État des lieux d'entrée */}
                 <div className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex items-center space-x-4">
                     <FileText className="h-8 w-8 text-muted-foreground" />
@@ -755,6 +816,13 @@ export default function TenantRentalManagementPage() {
                     Non disponible
                   </Button>
                 </div>
+
+                {documents.length === 0 && (
+                  <div className="text-center py-8">
+                    <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                    <p className="text-muted-foreground">Aucun document de régularisation disponible</p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

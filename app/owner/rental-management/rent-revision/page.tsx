@@ -374,14 +374,37 @@ export default function RentRevisionPage() {
     if (!revision || !selectedLease) return
 
     try {
-      // TODO: Implémenter l'envoi au locataire
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        toast.error('Token d\'authentification requis')
+        return
+      }
+
+      const response = await fetch('/api/revisions/rent/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          revisionId: revision.id,
+          leaseId: selectedLease.id,
+          year: selectedYear
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Erreur lors de l\'envoi')
+      }
+
       setRevision(prev => prev ? { ...prev, status: 'sent' } : null)
-      toast.success('Révision envoyée au locataire (fonctionnalité à implémenter)')
+      toast.success('Révision envoyée au locataire')
     } catch (error) {
       console.error('Erreur envoi:', error)
-      toast.error('Erreur lors de l\'envoi')
+      toast.error(`Erreur lors de l'envoi: ${error.message}`)
     }
-  }, [revision, selectedLease])
+  }, [revision, selectedLease, selectedYear])
 
   // Effets
   useEffect(() => {

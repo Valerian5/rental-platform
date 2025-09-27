@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServerClient } from '@/lib/supabase'
-import { generateChargeRegularizationPDFBlob } from '@/lib/charge-regularization-pdf-generator'
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,76 +31,62 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { regularizationId, leaseId, year } = body
+    const { revisionId, leaseId, year } = body
 
-    if (!regularizationId || !leaseId || !year) {
+    if (!revisionId || !leaseId || !year) {
       return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 })
     }
 
     const supabaseAdmin = createServerClient()
 
     // Récupérer les données complètes
-    const { data: regularization, error: regularizationError } = await supabaseAdmin
-      .from('charge_regularizations_v2')
+    const { data: revision, error: revisionError } = await supabaseAdmin
+      .from('lease_revisions')
       .select(`
         *,
-        expenses:charge_expenses(
+        lease:leases(
           *,
-          supporting_documents:charge_supporting_documents(*)
+          property:properties(
+            title,
+            address,
+            city
+          ),
+          tenant:users!leases_tenant_id_fkey(
+            first_name,
+            last_name,
+            email
+          ),
+          owner:users!leases_owner_id_fkey(
+            first_name,
+            last_name,
+            email
+          )
         )
       `)
-      .eq('id', regularizationId)
+      .eq('id', revisionId)
       .eq('created_by', user.id)
       .single()
 
-    if (regularizationError || !regularization) {
-      console.log('Régularisation non trouvée:', regularizationError)
-      return NextResponse.json({ error: "Régularisation non trouvée" }, { status: 404 })
-    }
-
-    const { data: lease, error: leaseError } = await supabaseAdmin
-      .from('leases')
-      .select(`
-        *,
-        property:properties(
-          title,
-          address,
-          city
-        ),
-        tenant:users!leases_tenant_id_fkey(
-          first_name,
-          last_name,
-          email
-        ),
-        owner:users!leases_owner_id_fkey(
-          first_name,
-          last_name,
-          email
-        )
-      `)
-      .eq('id', leaseId)
-      .single()
-
-    if (leaseError || !lease) {
-      console.log('Bail non trouvé:', leaseError)
-      return NextResponse.json({ error: "Bail non trouvé" }, { status: 404 })
+    if (revisionError || !revision) {
+      console.log('Révision non trouvée:', revisionError)
+      return NextResponse.json({ error: "Révision non trouvée" }, { status: 404 })
     }
 
     // Vérifier que l'utilisateur est propriétaire
-    if (lease.owner_id !== user.id) {
+    if (revision.lease.owner_id !== user.id) {
       return NextResponse.json({ error: "Non autorisé" }, { status: 403 })
     }
 
     // Générer le PDF
-    const { generateChargeRegularizationPDF } = await import('@/lib/charge-regularization-pdf-generator')
-    const pdf = generateChargeRegularizationPDF(lease, regularization)
+    const { generateRentRevisionPDF } = await import('@/lib/rent-revision-pdf-generator')
+    const pdf = generateRentRevisionPDF(revision.lease, revision)
     
     // Convertir en buffer
     const pdfBuffer = Buffer.from(pdf.output('arraybuffer'))
     
     // Uploader le PDF dans le storage
-    const fileName = `regularisation-charges-${year}-${Date.now()}.pdf`
-    const filePath = `tenant-documents/${lease.tenant.id}/${fileName}`
+    const fileName = `revision-loyer-${year}-${Date.now()}.pdf`
+    const filePath = `tenant-documents/${revision.lease.tenant.id}/${fileName}`
     
     const { error: uploadError } = await supabaseAdmin.storage
       .from('documents')
@@ -124,17 +109,19 @@ export async function POST(request: NextRequest) {
     const { error: notificationError } = await supabaseAdmin
       .from('notifications')
       .insert({
-        user_id: lease.tenant.id,
-        type: 'charge_regularization',
-        title: `Régularisation des charges ${year}`,
-        message: `Votre propriétaire vous a envoyé la régularisation des charges pour l'année ${year}.`,
+        user_id: revision.lease.tenant.id,
+        type: 'rent_revision',
+        title: `Révision de loyer ${year}`,
+        message: `Votre propriétaire vous a envoyé la révision de loyer pour l'année ${year}.`,
         data: {
-          regularization_id: regularizationId,
+          revision_id: revisionId,
           lease_id: leaseId,
           year: year,
           pdf_url: publicUrl,
-          balance: regularization.balance,
-          balance_type: regularization.balance >= 0 ? 'refund' : 'additional_payment'
+          old_rent: revision.old_rent,
+          new_rent: revision.new_rent,
+          increase: revision.increase,
+          increase_percentage: revision.increase_percentage
         },
         is_read: false
       })
@@ -143,14 +130,14 @@ export async function POST(request: NextRequest) {
       console.error('Erreur création notification:', notificationError)
     }
 
-    // Mettre à jour le statut de la régularisation
+    // Mettre à jour le statut de la révision
     const { error: updateError } = await supabaseAdmin
-      .from('charge_regularizations_v2')
+      .from('lease_revisions')
       .update({ 
         status: 'sent',
         updated_at: new Date().toISOString()
       })
-      .eq('id', regularizationId)
+      .eq('id', revisionId)
 
     if (updateError) {
       console.error('Erreur mise à jour statut:', updateError)
@@ -158,26 +145,28 @@ export async function POST(request: NextRequest) {
 
     // Envoyer l'email au locataire
     try {
-      const { sendChargeRegularizationEmail } = await import('@/lib/email-service')
+      const { sendRentRevisionEmail } = await import('@/lib/email-service')
       
-      await sendChargeRegularizationEmail(
+      await sendRentRevisionEmail(
         {
-          id: lease.tenant.id,
-          name: `${lease.tenant.first_name} ${lease.tenant.last_name}`,
-          email: lease.tenant.email
+          id: revision.lease.tenant.id,
+          name: `${revision.lease.tenant.first_name} ${revision.lease.tenant.last_name}`,
+          email: revision.lease.tenant.email
         },
         {
-          id: lease.property.id,
-          title: lease.property.title,
-          address: lease.property.address
+          id: revision.lease.property.id,
+          title: revision.lease.property.title,
+          address: revision.lease.property.address
         },
         year,
-        regularization.balance,
-        regularization.balance >= 0 ? 'additional_payment' : 'refund',
+        revision.old_rent,
+        revision.new_rent,
+        revision.increase,
+        revision.increase_percentage,
         publicUrl
       )
       
-      console.log(`✅ Email de régularisation envoyé à ${lease.tenant.email}`)
+      console.log(`✅ Email de révision envoyé à ${revision.lease.tenant.email}`)
     } catch (emailError) {
       console.error('Erreur envoi email:', emailError)
       // Ne pas faire échouer la requête si l'email échoue
@@ -185,12 +174,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ 
       success: true,
-      message: 'Régularisation envoyée au locataire',
+      message: 'Révision envoyée au locataire',
       pdf_url: publicUrl
     })
 
   } catch (error) {
-    console.error('Erreur envoi régularisation:', error)
+    console.error('Erreur envoi révision:', error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }
