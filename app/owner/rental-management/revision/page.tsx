@@ -232,13 +232,16 @@ export default function ChargeRegularizationPageV2() {
         year
       )
 
+      // Calculer les provisions pour cette année
+      const totalProvisions = await calculateProvisions(lease, year)
+
       const newRegularization: ChargeRegularization = {
         id: `temp-${Date.now()}`,
         year: year,
         days_occupied: daysOccupied,
-        total_provisions: 0,
+        total_provisions: totalProvisions,
         total_quote_part: 0,
-        balance: 0,
+        balance: totalProvisions,
         calculation_method: 'Prorata jour exact',
         notes: '',
         status: 'draft',
@@ -333,7 +336,21 @@ export default function ChargeRegularizationPageV2() {
     try {
       setRegularization((prev: ChargeRegularization | null) => {
         if (!prev) return null
-        return { ...prev, expenses }
+        const updated = { ...prev, expenses }
+        
+        // Recalculer les totaux immédiatement
+        const totalQuotePart = updated.expenses
+          .filter((expense: ChargeExpense) => expense.is_recoverable)
+          .reduce((sum: number, expense: ChargeExpense) => {
+            const quotePart = expense.amount * (updated.days_occupied / 365)
+            return sum + quotePart
+          }, 0)
+
+        return {
+          ...updated,
+          total_quote_part: totalQuotePart,
+          balance: updated.total_provisions - totalQuotePart
+        }
       })
       console.log('🔍 Page - État regularization mis à jour')
     } catch (error) {
@@ -424,7 +441,7 @@ export default function ChargeRegularizationPageV2() {
   }
 
   // Sauvegarder la régularisation
-  const saveRegularization = useCallback(async () => {
+  const saveRegularization = async () => {
     if (!regularization || !selectedLease) return
 
     setSaving(true)
@@ -442,7 +459,41 @@ export default function ChargeRegularizationPageV2() {
     } finally {
       setSaving(false)
     }
-  }, [])
+  }
+
+  // Générer le PDF
+  const generatePDF = async () => {
+    if (!regularization || !selectedLease) return
+
+    try {
+      console.log('🔍 generatePDF - Génération en cours...')
+      
+      // Pour l'instant, simuler une génération réussie
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      toast.success('PDF généré (mode démo)')
+    } catch (error) {
+      console.error('Erreur génération PDF:', error)
+      toast.error('Erreur lors de la génération du PDF')
+    }
+  }
+
+  // Envoyer au locataire
+  const sendToTenant = async () => {
+    if (!regularization || !selectedLease) return
+
+    try {
+      console.log('🔍 sendToTenant - Envoi en cours...')
+      
+      // Pour l'instant, simuler un envoi réussi
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      toast.success('Envoyé au locataire (mode démo)')
+    } catch (error) {
+      console.error('Erreur envoi:', error)
+      toast.error('Erreur lors de l\'envoi')
+    }
+  }
 
   // Effets
   useEffect(() => {
@@ -790,7 +841,7 @@ export default function ChargeRegularizationPageV2() {
           </div>
         </CardHeader>
         <CardContent>
-          {regularization?.expenses.length === 0 ? (
+          {!regularization || regularization.expenses.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-gray-500 mb-4">Aucune dépense enregistrée</p>
               <Button onClick={handleAddExpense} variant="outline">
@@ -800,7 +851,7 @@ export default function ChargeRegularizationPageV2() {
             </div>
           ) : (
             <div className="space-y-4">
-              {regularization?.expenses.map((expense) => (
+              {regularization.expenses.map((expense: ChargeExpense) => (
                 <div key={expense.id} className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="space-y-1">
                     <div className="font-medium">{expense.category}</div>
@@ -829,7 +880,7 @@ export default function ChargeRegularizationPageV2() {
                   </div>
                 </div>
               ))}
-              </div>
+            </div>
           )}
 
           {/* Dialog d'ajout/modification */}
@@ -882,6 +933,26 @@ export default function ChargeRegularizationPageV2() {
                     placeholder="Informations complémentaires..."
                     rows={3}
                   />
+                </div>
+                <div>
+                  <Label htmlFor="documents">Pièces jointes (optionnel)</Label>
+                  <Input
+                    id="documents"
+                    type="file"
+                    multiple
+                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                    onChange={(e) => {
+                      const files = e.target.files
+                      if (files) {
+                        console.log('Fichiers sélectionnés:', files.length)
+                        // Ici on pourrait traiter l'upload des fichiers
+                      }
+                    }}
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Formats acceptés: PDF, JPG, PNG, DOC, DOCX
+                  </p>
                 </div>
               </div>
               <DialogFooter>
@@ -952,10 +1023,18 @@ export default function ChargeRegularizationPageV2() {
               {saving ? 'Sauvegarde...' : 'Sauvegarder'}
             </Button>
             <div className="flex space-x-2">
-              <Button variant="outline" disabled={!regularization}>
+              <Button 
+                variant="outline" 
+                disabled={!regularization}
+                onClick={generatePDF}
+              >
                 Générer PDF
               </Button>
-              <Button variant="outline" disabled={!regularization}>
+              <Button 
+                variant="outline" 
+                disabled={!regularization}
+                onClick={sendToTenant}
+              >
                 Envoyer au locataire
               </Button>
             </div>
