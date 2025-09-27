@@ -241,7 +241,7 @@ export default function ChargeRegularizationPageV2() {
         days_occupied: daysOccupied,
         total_provisions: totalProvisions,
         total_quote_part: 0,
-        balance: totalProvisions,
+        balance: -totalProvisions, // Balance négative = complément à réclamer
         calculation_method: 'Prorata jour exact',
         notes: '',
         status: 'draft',
@@ -302,7 +302,7 @@ export default function ChargeRegularizationPageV2() {
         return sum + quotePart
       }, 0)
 
-    const balance = totalProvisions - totalQuotePart
+    const balance = totalQuotePart - totalProvisions // Balance = quote-part - provisions
 
     setRegularization((prev: ChargeRegularization | null) => prev ? {
       ...prev,
@@ -349,7 +349,7 @@ export default function ChargeRegularizationPageV2() {
         return {
           ...updated,
           total_quote_part: totalQuotePart,
-          balance: updated.total_provisions - totalQuotePart
+          balance: totalQuotePart - updated.total_provisions
         }
       })
       console.log('🔍 Page - État regularization mis à jour')
@@ -449,13 +449,36 @@ export default function ChargeRegularizationPageV2() {
       console.log('🔍 saveRegularization - Sauvegarde en cours...')
       console.log('🔍 saveRegularization - Données:', regularization)
       
-      // Pour l'instant, simuler une sauvegarde réussie
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      const response = await fetch('/api/revisions/charges', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          lease_id: selectedLease.id,
+          year: selectedYear,
+          days_occupied: regularization.days_occupied,
+          total_provisions: regularization.total_provisions,
+          total_quote_part: regularization.total_quote_part,
+          balance: regularization.balance,
+          calculation_method: regularization.calculation_method,
+          notes: regularization.notes,
+          expenses: regularization.expenses
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Erreur lors de la sauvegarde')
+      }
+
+      const result = await response.json()
+      console.log('✅ saveRegularization - Sauvegarde réussie:', result)
       
-      toast.success('Régularisation sauvegardée (mode démo)')
+      toast.success('Régularisation sauvegardée avec succès')
     } catch (error) {
-      console.error('Erreur sauvegarde:', error)
-      toast.error('Erreur lors de la sauvegarde')
+      console.error('❌ saveRegularization - Erreur:', error)
+      toast.error(`Erreur lors de la sauvegarde: ${error.message}`)
     } finally {
       setSaving(false)
     }
@@ -468,13 +491,38 @@ export default function ChargeRegularizationPageV2() {
     try {
       console.log('🔍 generatePDF - Génération en cours...')
       
-      // Pour l'instant, simuler une génération réussie
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      const response = await fetch('/api/regularizations/pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          lease_id: selectedLease.id,
+          year: selectedYear,
+          regularization_data: regularization
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Erreur lors de la génération du PDF')
+      }
+
+      // Télécharger le PDF
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `regularisation-charges-${selectedYear}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
       
-      toast.success('PDF généré (mode démo)')
+      toast.success('PDF généré et téléchargé')
     } catch (error) {
-      console.error('Erreur génération PDF:', error)
-      toast.error('Erreur lors de la génération du PDF')
+      console.error('❌ generatePDF - Erreur:', error)
+      toast.error(`Erreur lors de la génération du PDF: ${error.message}`)
     }
   }
 
@@ -485,13 +533,30 @@ export default function ChargeRegularizationPageV2() {
     try {
       console.log('🔍 sendToTenant - Envoi en cours...')
       
-      // Pour l'instant, simuler un envoi réussi
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      const response = await fetch('/api/regularizations/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          lease_id: selectedLease.id,
+          year: selectedYear,
+          regularization_data: regularization
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Erreur lors de l\'envoi')
+      }
+
+      const result = await response.json()
+      console.log('✅ sendToTenant - Envoi réussi:', result)
       
-      toast.success('Envoyé au locataire (mode démo)')
+      toast.success('Régularisation envoyée au locataire')
     } catch (error) {
-      console.error('Erreur envoi:', error)
-      toast.error('Erreur lors de l\'envoi')
+      console.error('❌ sendToTenant - Erreur:', error)
+      toast.error(`Erreur lors de l'envoi: ${error.message}`)
     }
   }
 
@@ -851,35 +916,85 @@ export default function ChargeRegularizationPageV2() {
             </div>
           ) : (
             <div className="space-y-4">
-              {regularization.expenses.map((expense: ChargeExpense) => (
-                <div key={expense.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="space-y-1">
+              {/* En-tête du tableau */}
+              <div className="grid grid-cols-6 gap-4 p-3 bg-gray-50 rounded-lg font-medium text-sm text-gray-700">
+                <div>Poste de dépense</div>
+                <div>Montant payé (€)</div>
+                <div>Récupérable</div>
+                <div>Quote-part locataire (€)</div>
+                <div>Justificatifs</div>
+                <div>Actions</div>
+              </div>
+              
+              {/* Lignes des dépenses */}
+              {regularization.expenses.map((expense: ChargeExpense) => {
+                const quotePart = expense.is_recoverable ? expense.amount * (regularization.days_occupied / 365) : 0
+                return (
+                  <div key={expense.id} className="grid grid-cols-6 gap-4 p-3 border rounded-lg items-center">
                     <div className="font-medium">{expense.category}</div>
-                    <div className="text-sm text-gray-600">
-                      {expense.amount.toFixed(2)} € - {expense.is_recoverable ? 'Récupérable' : 'Non récupérable'}
+                    <div>{expense.amount.toFixed(2)}</div>
+                    <div className="flex items-center">
+                      <Checkbox checked={expense.is_recoverable} disabled />
                     </div>
-                    {expense.notes && (
-                      <div className="text-sm text-gray-500">{expense.notes}</div>
-                    )}
+                    <div className="font-medium">{quotePart.toFixed(2)}</div>
+                    <div className="text-sm text-gray-500">
+                      {expense.supporting_documents?.length || 0} fichier(s)
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEditExpense(expense)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteExpense(expense.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleEditExpense(expense)}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDeleteExpense(expense.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                )
+              })}
+              
+              {/* Totaux */}
+              <div className="grid grid-cols-6 gap-4 p-3 bg-blue-50 rounded-lg font-medium">
+                <div>Total dépenses</div>
+                <div className="text-blue-600">
+                  {regularization.expenses.reduce((sum, expense) => sum + expense.amount, 0).toFixed(2)} €
                 </div>
-              ))}
+                <div></div>
+                <div></div>
+                <div></div>
+                <div></div>
+              </div>
+              
+              <div className="grid grid-cols-6 gap-4 p-3 bg-green-50 rounded-lg font-medium">
+                <div>Total récupérable</div>
+                <div className="text-green-600">
+                  {regularization.expenses
+                    .filter(expense => expense.is_recoverable)
+                    .reduce((sum, expense) => sum + expense.amount, 0).toFixed(2)} €
+                </div>
+                <div></div>
+                <div></div>
+                <div></div>
+                <div></div>
+              </div>
+              
+              <div className="grid grid-cols-6 gap-4 p-3 bg-orange-50 rounded-lg font-medium">
+                <div>Quote-part locataire</div>
+                <div></div>
+                <div></div>
+                <div className="text-orange-600">
+                  {regularization.total_quote_part.toFixed(2)} €
+                </div>
+                <div></div>
+                <div></div>
+              </div>
             </div>
           )}
 
@@ -971,23 +1086,78 @@ export default function ChargeRegularizationPageV2() {
       {/* Résumé et balance */}
       <Card>
         <CardHeader>
-          <CardTitle>Synthèse de la régularisation</CardTitle>
+          <CardTitle>Résumé de la régularisation</CardTitle>
+          <CardDescription>
+            Calcul basé sur {regularization?.days_occupied || 0} jours d'occupation ({regularization ? ((regularization.days_occupied / 365) * 100).toFixed(1) : '0'}% de l'année)
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="text-center">
-              <div className="text-sm text-gray-500">Total provisions</div>
-              <div className="text-2xl font-bold">{regularization?.total_provisions.toFixed(2) || '0.00'} €</div>
-            </div>
-            <div className="text-center">
-              <div className="text-sm text-gray-500">Quote-part locataire</div>
-              <div className="text-2xl font-bold text-blue-600">{regularization?.total_quote_part.toFixed(2) || '0.00'} €</div>
-            </div>
-            <div className="text-center">
-              <div className="text-sm text-gray-500">Balance</div>
-              <div className={`text-2xl font-bold ${(regularization?.balance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {regularization?.balance.toFixed(2) || '0.00'} €
+        <CardContent className="space-y-6">
+          {/* Informations principales */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                <span className="font-medium">Provisions versées</span>
+                <span className="text-lg font-bold">{regularization?.total_provisions.toFixed(2) || '0.00'} €</span>
               </div>
+              <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                <span className="font-medium">Montant total encaissé</span>
+                <span className="text-lg font-bold text-blue-600">{regularization?.total_provisions.toFixed(2) || '0.00'} €</span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
+                <span className="font-medium">Quote-part locataire</span>
+                <span className="text-lg font-bold text-orange-600">{regularization?.total_quote_part.toFixed(2) || '0.00'} €</span>
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+                <span className="font-medium">Montant dû par le locataire</span>
+                <span className="text-lg font-bold text-red-600">{Math.abs(regularization?.balance || 0).toFixed(2)} €</span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+                <span className="font-medium">Balance</span>
+                <span className={`text-lg font-bold ${(regularization?.balance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {regularization?.balance.toFixed(2) || '0.00'} €
+                </span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-yellow-50 rounded-lg">
+                <span className="font-medium">{(regularization?.balance || 0) >= 0 ? 'Trop-perçu' : 'Complément à réclamer'}</span>
+                <span className={`text-lg font-bold ${(regularization?.balance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {Math.abs(regularization?.balance || 0).toFixed(2)} €
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Détail du calcul */}
+          <div className="border-t pt-6">
+            <h4 className="font-semibold text-gray-900 mb-4">Détail du calcul</h4>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span>Provisions versées :</span>
+                <span className="font-medium">{regularization?.total_provisions.toFixed(2) || '0.00'} €</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Quote-part locataire :</span>
+                <span className="font-medium text-red-600">-{regularization?.total_quote_part.toFixed(2) || '0.00'} €</span>
+              </div>
+              <div className="flex justify-between border-t pt-2 font-semibold">
+                <span>Balance :</span>
+                <span className={regularization?.balance && regularization.balance >= 0 ? 'text-green-600' : 'text-red-600'}>
+                  {regularization?.balance.toFixed(2) || '0.00'} €
+                </span>
+              </div>
+            </div>
+            
+            {/* Message explicatif */}
+            <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>{(regularization?.balance || 0) >= 0 ? 'Trop-perçu' : 'Complément à réclamer'}</strong> : 
+                {(regularization?.balance || 0) >= 0 
+                  ? ` Le propriétaire doit rembourser ${Math.abs(regularization?.balance || 0).toFixed(2)} € au locataire.`
+                  : ` Le locataire doit verser ${Math.abs(regularization?.balance || 0).toFixed(2)} € en complément des provisions déjà payées.`
+                }
+              </p>
             </div>
           </div>
         </CardContent>
