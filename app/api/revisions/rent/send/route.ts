@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
           increase: revision.increase,
           increase_percentage: revision.increase_percentage
         },
-        is_read: false
+        read: false
       })
       .select()
 

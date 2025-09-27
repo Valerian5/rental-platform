@@ -14,7 +14,7 @@ BEGIN
             title VARCHAR(255) NOT NULL,
             message TEXT NOT NULL,
             data JSONB DEFAULT '{}',
-            is_read BOOLEAN DEFAULT false,
+            read BOOLEAN DEFAULT false,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             read_at TIMESTAMP WITH TIME ZONE,
             
@@ -25,7 +25,7 @@ BEGIN
         -- Créer les index
         CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON public.notifications(user_id);
         CREATE INDEX IF NOT EXISTS idx_notifications_type ON public.notifications(type);
-        CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON public.notifications(is_read);
+        CREATE INDEX IF NOT EXISTS idx_notifications_read ON public.notifications(read);
         CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON public.notifications(created_at);
         
         RAISE NOTICE 'Table notifications créée';
@@ -67,7 +67,7 @@ SELECT
     COUNT(*) as total_notifications,
     COUNT(CASE WHEN type = 'charge_regularization' THEN 1 END) as charge_regularizations,
     COUNT(CASE WHEN type = 'rent_revision' THEN 1 END) as rent_revisions,
-    COUNT(CASE WHEN is_read = false THEN 1 END) as unread_notifications
+    COUNT(CASE WHEN read = false THEN 1 END) as unread_notifications
 FROM public.notifications;
 
 -- 6. Afficher les politiques créées

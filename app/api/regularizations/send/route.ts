@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
           balance: regularization.balance,
           balance_type: regularization.balance >= 0 ? 'refund' : 'additional_payment'
         },
-        is_read: false
+        read: false
       })
       .select()
 
