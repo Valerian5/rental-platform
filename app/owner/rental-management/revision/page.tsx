@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Building, User, Euro, Plus, FileText, Send, RefreshCw } from "lucide-react"
+import { Calendar, Building, User, Euro, Plus, FileText, Send, RefreshCw, Edit, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
 import { calculateDaysInYear } from "@/lib/date-utils"
@@ -466,7 +466,7 @@ export default function ChargeRegularizationPageV2() {
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
             Actualiser
-          </Button>
+            </Button>
         </div>
       </div>
 
@@ -480,19 +480,19 @@ export default function ChargeRegularizationPageV2() {
         </CardHeader>
         <CardContent>
           <Select value={selectedYear.toString()} onValueChange={(value) => handleYearChange(parseInt(value))}>
-            <SelectTrigger>
+                  <SelectTrigger>
               <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
+                  </SelectTrigger>
+                  <SelectContent>
               {[2023, 2024, 2025, 2026].map(year => (
                 <SelectItem key={year} value={year.toString()}>
                   {year}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+          </CardContent>
+        </Card>
 
       {/* Informations du bail */}
       <Card>
@@ -539,7 +539,7 @@ export default function ChargeRegularizationPageV2() {
               </Button>
             </div>
           ) : (
-            <div className="space-y-4">
+          <div className="space-y-4">
               {/* En-tête du tableau */}
               <div className="grid grid-cols-6 gap-4 p-3 bg-gray-50 rounded-lg font-medium text-sm text-gray-700">
                 <div>Poste de dépense</div>
@@ -548,7 +548,7 @@ export default function ChargeRegularizationPageV2() {
                 <div>Quote-part locataire (€)</div>
                 <div>Justificatifs</div>
                 <div>Actions</div>
-              </div>
+                      </div>
               
               {/* Lignes des dépenses */}
               {regularization.expenses.map((expense: ChargeExpense) => {
@@ -559,15 +559,15 @@ export default function ChargeRegularizationPageV2() {
                     <div>{expense.amount.toFixed(2)}</div>
                     <div className="flex items-center">
                       <input type="checkbox" checked={expense.is_recoverable} disabled className="mr-2" />
-                    </div>
+                        </div>
                     <div className="font-medium">{quotePart.toFixed(2)}</div>
-                    <div className="text-sm text-gray-500">
+                      <div className="text-sm text-gray-500">
                       {expense.supporting_documents?.length || 0} fichier(s)
                     </div>
                     <div className="flex items-center space-x-2">
                       <Button variant="ghost" size="sm">
                         <Edit className="h-4 w-4" />
-                      </Button>
+                        </Button>
                       <Button variant="ghost" size="sm">
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -611,8 +611,8 @@ export default function ChargeRegularizationPageV2() {
                 <div></div>
                 <div></div>
               </div>
-            </div>
-          )}
+              </div>
+            )}
         </CardContent>
       </Card>
 
@@ -631,7 +631,7 @@ export default function ChargeRegularizationPageV2() {
               <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                 <span className="font-medium">Provisions versées</span>
                 <span className="text-lg font-bold">{regularization?.total_provisions.toFixed(2) || '0.00'} €</span>
-              </div>
+                </div>
               <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
                 <span className="font-medium">Montant total encaissé</span>
                 <span className="text-lg font-bold text-blue-600">{regularization?.total_provisions.toFixed(2) || '0.00'} €</span>
@@ -641,7 +641,7 @@ export default function ChargeRegularizationPageV2() {
                 <span className="text-lg font-bold text-orange-600">{regularization?.total_quote_part.toFixed(2) || '0.00'} €</span>
               </div>
             </div>
-            
+
             <div className="space-y-4">
               <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
                 <span className="font-medium">Montant dû par le locataire</span>
@@ -679,9 +679,9 @@ export default function ChargeRegularizationPageV2() {
                 <span className={regularization?.balance && regularization.balance >= 0 ? 'text-green-600' : 'text-red-600'}>
                   {regularization?.balance.toFixed(2) || '0.00'} €
                 </span>
+                </div>
               </div>
-            </div>
-            
+
             {/* Message explicatif */}
             <div className="mt-4 p-4 bg-blue-50 rounded-lg">
               <p className="text-sm text-blue-800">
@@ -690,9 +690,9 @@ export default function ChargeRegularizationPageV2() {
                   ? ` Le propriétaire doit rembourser ${Math.abs(regularization?.balance || 0).toFixed(2)} € au locataire.`
                   : ` Le locataire doit verser ${Math.abs(regularization?.balance || 0).toFixed(2)} € en complément des provisions déjà payées.`
                 }
-              </p>
-            </div>
-          </div>
+                  </p>
+                </div>
+              </div>
         </CardContent>
       </Card>
 
