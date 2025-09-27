@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     const supabaseAdmin = createServerClient()
     
     let query = supabaseAdmin
-      .from('charge_regularizations')
+      .from('charge_regularizations_v2')
       .select(`
         *,
         lease:leases(
@@ -42,19 +42,23 @@ export async function GET(request: NextRequest) {
             city
           )
         ),
-        charge_breakdown(*)
+        expenses:charge_expenses(
+          *,
+          supporting_documents:charge_supporting_documents(*)
+        )
       `)
       .eq('created_by', user.id)
 
     if (propertyId) {
-      query = query.eq('property_id', propertyId)
+      // Pour la table v2, on doit joindre via lease
+      query = query.eq('lease.property_id', propertyId)
     }
 
     if (year) {
       query = query.eq('year', parseInt(year))
     }
 
-    const { data: regularizations, error } = await query.order('regularization_date', { ascending: false })
+    const { data: regularizations, error } = await query.order('created_at', { ascending: false })
 
     if (error) {
       console.error("Erreur récupération régularisations:", error)
@@ -100,40 +104,32 @@ export async function POST(request: NextRequest) {
       leaseId, 
       propertyId, 
       regularizationYear,
-      regularizationDate,
       totalProvisionsCollected,
-      provisionsPeriodStart,
-      provisionsPeriodEnd,
       totalRealCharges,
       recoverableCharges,
-      nonRecoverableCharges,
       tenantBalance,
       balanceType,
       calculationMethod,
       calculationNotes,
       chargeBreakdown
     } = body
-    
-    console.log('📊 ChargeBreakdown extrait du body:', chargeBreakdown)
-    console.log('📊 Type de chargeBreakdown:', typeof chargeBreakdown)
-    console.log('📊 Longueur de chargeBreakdown:', chargeBreakdown?.length)
 
     const supabaseAdmin = createServerClient()
     
-    // Vérifier que l'utilisateur est propriétaire de la propriété
-    const { data: property, error: propertyError } = await supabaseAdmin
-      .from('properties')
-      .select('owner_id')
-      .eq('id', propertyId)
+    // Vérifier que l'utilisateur est propriétaire du bail
+    const { data: lease, error: leaseError } = await supabaseAdmin
+      .from('leases')
+      .select('id, property_id, property:properties(owner_id)')
+      .eq('id', leaseId)
       .single()
 
-    if (propertyError || !property || property.owner_id !== user.id) {
+    if (leaseError || !lease || lease.property.owner_id !== user.id) {
       return NextResponse.json({ error: "Non autorisé" }, { status: 403 })
     }
 
     // Vérifier si une régularisation existe déjà pour ce bail et cette année
     const { data: existingRegularization, error: checkError } = await supabaseAdmin
-      .from('charge_regularizations')
+      .from('charge_regularizations_v2')
       .select('id')
       .eq('lease_id', leaseId)
       .eq('year', regularizationYear)
@@ -144,29 +140,17 @@ export async function POST(request: NextRequest) {
     if (existingRegularization) {
       // Mettre à jour la régularisation existante
       const updateData = {
-        regularization_date: regularizationDate,
-        total_provisions_collected: totalProvisionsCollected?.toString(),
-        provisions_period_start: provisionsPeriodStart,
-        provisions_period_end: provisionsPeriodEnd,
-        total_real_charges: totalRealCharges?.toString(),
-        recoverable_charges: recoverableCharges?.toString(),
-        non_recoverable_charges: nonRecoverableCharges?.toString(),
-        tenant_balance: tenantBalance?.toString(),
-        balance_type: balanceType,
+        total_provisions: totalProvisionsCollected || 0,
+        total_quote_part: recoverableCharges || 0,
+        balance: tenantBalance || 0,
         calculation_method: calculationMethod,
-        calculation_notes: calculationNotes,
-        // Ajouter les colonnes obligatoires
-        total_charges_paid: totalProvisionsCollected || 0,
-        actual_charges: totalRealCharges || 0,
-        difference: tenantBalance || 0,
-        type: balanceType,
-        status: 'calculated',
-        // Ajouter updated_at manuellement pour éviter le trigger
+        notes: calculationNotes,
+        status: 'draft',
         updated_at: new Date().toISOString()
       }
 
       const { data: updatedRegularization, error: updateError } = await supabaseAdmin
-        .from('charge_regularizations')
+        .from('charge_regularizations_v2')
         .update(updateData)
         .eq('id', existingRegularization.id)
         .select()
@@ -179,81 +163,53 @@ export async function POST(request: NextRequest) {
 
       regularization = updatedRegularization
       
-      // Supprimer l'ancien détail des charges et recréer
+      // Supprimer les anciennes dépenses et recréer
       if (chargeBreakdown && chargeBreakdown.length > 0) {
-        console.log('🔄 Mise à jour du détail des charges:', chargeBreakdown)
-        console.log('🔄 ID de régularisation:', regularization.id)
-        
-        // Supprimer l'ancien détail
+        // Supprimer les anciennes dépenses
         const { error: deleteError } = await supabaseAdmin
-          .from('charge_breakdown')
+          .from('charge_expenses')
           .delete()
           .eq('regularization_id', regularization.id)
         
         if (deleteError) {
-          console.error("Erreur suppression ancien détail:", deleteError)
-        } else {
-          console.log('✅ Ancien détail supprimé avec succès')
+          console.error("Erreur suppression anciennes dépenses:", deleteError)
         }
         
-        // Créer le nouveau détail
-        const breakdownData = chargeBreakdown.map((charge: any) => ({
+        // Créer les nouvelles dépenses
+        const expensesData = chargeBreakdown.map((charge: any) => ({
           regularization_id: regularization.id,
-          charge_category: charge.category || charge.charge_category,
-          charge_name: charge.category || charge.charge_name,
-          provision_amount: charge.provisionAmount || charge.provision_amount || 0,
-          real_amount: charge.realAmount || charge.real_amount || 0,
-          difference: (charge.realAmount || charge.real_amount || 0) - (charge.provisionAmount || charge.provision_amount || 0),
-          is_recoverable: charge.isRecoverable !== undefined ? charge.isRecoverable : charge.is_recoverable,
-          is_exceptional: charge.isExceptional || charge.is_exceptional || false,
-          supporting_documents: charge.supporting_documents || [],
-          justification_file_url: charge.justificationFileUrl || charge.justification_file_url,
+          category: charge.category,
+          amount: charge.realAmount || 0,
+          is_recoverable: charge.isRecoverable !== undefined ? charge.isRecoverable : true,
           notes: charge.notes || ''
         }))
 
-        console.log('📊 Données à insérer:', breakdownData)
+        const { error: expensesError } = await supabaseAdmin
+          .from('charge_expenses')
+          .insert(expensesData)
 
-        const { error: breakdownError } = await supabaseAdmin
-          .from('charge_breakdown')
-          .insert(breakdownData)
-
-        if (breakdownError) {
-          console.error("Erreur insertion nouveau détail:", breakdownError)
-        } else {
-          console.log('✅ Nouveau détail inséré avec succès')
+        if (expensesError) {
+          console.error("Erreur insertion nouvelles dépenses:", expensesError)
         }
       }
     } else {
       // Créer une nouvelle régularisation
       const insertData = {
         lease_id: leaseId,
-        property_id: propertyId,
-        year: regularizationYear, // Utiliser la colonne 'year' (integer)
-        regularization_year: regularizationYear.toString(), // Garder aussi en text
-        regularization_date: regularizationDate,
-        total_provisions_collected: totalProvisionsCollected?.toString(),
-        provisions_period_start: provisionsPeriodStart,
-        provisions_period_end: provisionsPeriodEnd,
-        total_real_charges: totalRealCharges?.toString(),
-        recoverable_charges: recoverableCharges?.toString(),
-        non_recoverable_charges: nonRecoverableCharges?.toString(),
-        tenant_balance: tenantBalance?.toString(),
-        balance_type: balanceType,
+        year: regularizationYear,
+        days_occupied: 0, // Sera calculé côté frontend
+        total_provisions: totalProvisionsCollected || 0,
+        total_quote_part: recoverableCharges || 0,
+        balance: tenantBalance || 0,
         calculation_method: calculationMethod,
-        calculation_notes: calculationNotes,
+        notes: calculationNotes,
+        status: 'draft',
         created_by: user.id,
-        // Ajouter les colonnes obligatoires
-        total_charges_paid: totalProvisionsCollected || 0,
-        actual_charges: totalRealCharges || 0,
-        difference: tenantBalance || 0,
-        type: balanceType,
-        status: 'calculated',
-        // Ajouter updated_at manuellement
         updated_at: new Date().toISOString()
       }
 
       const { data: newRegularization, error: insertError } = await supabaseAdmin
-        .from('charge_regularizations')
+        .from('charge_regularizations_v2')
         .insert(insertData)
         .select()
         .single()
@@ -264,57 +220,24 @@ export async function POST(request: NextRequest) {
       }
 
       regularization = newRegularization
-    }
 
-    // Créer le détail des charges
-    console.log('📊 ChargeBreakdown reçu:', chargeBreakdown)
-    console.log('📊 Type de chargeBreakdown:', typeof chargeBreakdown)
-    console.log('📊 Longueur de chargeBreakdown:', chargeBreakdown?.length)
-    console.log('📊 ChargeBreakdown est un array:', Array.isArray(chargeBreakdown))
-    if (chargeBreakdown && chargeBreakdown.length > 0) {
-      console.log('📊 Premier élément:', chargeBreakdown[0])
-      console.log('📊 Tous les éléments:', chargeBreakdown)
-    } else {
-      console.log('❌ Aucune donnée de chargeBreakdown reçue ou tableau vide')
-    }
-    
-    if (chargeBreakdown && chargeBreakdown.length > 0) {
-      console.log('📊 Sauvegarde du détail des charges:', chargeBreakdown)
-      
-      const breakdownData = chargeBreakdown.map((charge: any) => {
-        const provisionAmount = charge.provisionAmount || charge.provision_amount || 0
-        const realAmount = charge.realAmount || charge.real_amount || 0
-        const difference = realAmount - provisionAmount
-        
-        const mappedCharge = {
+      // Créer les dépenses
+      if (chargeBreakdown && chargeBreakdown.length > 0) {
+        const expensesData = chargeBreakdown.map((charge: any) => ({
           regularization_id: regularization.id,
-          charge_category: charge.category || charge.charge_category || 'charge',
-          charge_name: charge.category || charge.charge_name || 'Charge',
-          provision_amount: provisionAmount,
-          real_amount: realAmount,
-          difference: difference,
-          is_recoverable: charge.isRecoverable !== undefined ? charge.isRecoverable : (charge.is_recoverable !== undefined ? charge.is_recoverable : true),
-          is_exceptional: charge.isExceptional || charge.is_exceptional || false,
-          supporting_documents: charge.supporting_documents || [],
-          justification_file_url: charge.justificationFileUrl || charge.justification_file_url,
+          category: charge.category,
+          amount: charge.realAmount || 0,
+          is_recoverable: charge.isRecoverable !== undefined ? charge.isRecoverable : true,
           notes: charge.notes || ''
+        }))
+
+        const { error: expensesError } = await supabaseAdmin
+          .from('charge_expenses')
+          .insert(expensesData)
+
+        if (expensesError) {
+          console.error("Erreur création dépenses:", expensesError)
         }
-        
-        console.log('📊 Charge mappée:', mappedCharge)
-        return mappedCharge
-      })
-
-      console.log('📊 Données formatées pour charge_breakdown:', breakdownData)
-
-      const { error: breakdownError } = await supabaseAdmin
-        .from('charge_breakdown')
-        .insert(breakdownData)
-
-      if (breakdownError) {
-        console.error("Erreur création détail charges:", breakdownError)
-        // Ne pas faire échouer la création de la régularisation
-      } else {
-        console.log('✅ Détail des charges sauvegardé avec succès')
       }
     }
 

@@ -509,7 +509,7 @@ export default function ChargeRegularizationPageV2() {
           recoverableCharges: regularization.expenses.filter(expense => expense.is_recoverable).reduce((sum, expense) => sum + expense.amount, 0),
           nonRecoverableCharges: regularization.expenses.filter(expense => !expense.is_recoverable).reduce((sum, expense) => sum + expense.amount, 0),
           tenantBalance: Math.abs(regularization.balance),
-          balanceType: regularization.balance >= 0 ? 'complement' : 'overpayment',
+          balanceType: regularization.balance >= 0 ? 'additional_payment' : 'refund',
           calculationMethod: regularization.calculation_method,
           calculationNotes: regularization.notes,
           chargeBreakdown: regularization.expenses.map(expense => ({
