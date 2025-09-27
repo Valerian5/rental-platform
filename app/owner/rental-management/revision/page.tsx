@@ -498,15 +498,29 @@ export default function ChargeRegularizationPageV2() {
           'Authorization': `Bearer ${sessionData.session.access_token}`
         },
         body: JSON.stringify({
-          lease_id: selectedLease.id,
-          year: selectedYear,
-          days_occupied: regularization.days_occupied,
-          total_provisions: regularization.total_provisions,
-          total_quote_part: regularization.total_quote_part,
-          balance: regularization.balance,
-          calculation_method: regularization.calculation_method,
-          notes: regularization.notes,
-          expenses: regularization.expenses
+          leaseId: selectedLease.id,
+          propertyId: selectedPropertyId,
+          regularizationYear: selectedYear,
+          regularizationDate: new Date().toISOString(),
+          totalProvisionsCollected: regularization.total_provisions,
+          provisionsPeriodStart: new Date(Math.max(new Date(selectedLease.start_date).getTime(), new Date(selectedYear, 0, 1).getTime())).toISOString(),
+          provisionsPeriodEnd: new Date(Math.min(new Date(selectedLease.end_date).getTime(), new Date(selectedYear, 11, 31).getTime())).toISOString(),
+          totalRealCharges: regularization.expenses.reduce((sum, expense) => sum + expense.amount, 0),
+          recoverableCharges: regularization.expenses.filter(expense => expense.is_recoverable).reduce((sum, expense) => sum + expense.amount, 0),
+          nonRecoverableCharges: regularization.expenses.filter(expense => !expense.is_recoverable).reduce((sum, expense) => sum + expense.amount, 0),
+          tenantBalance: Math.abs(regularization.balance),
+          balanceType: regularization.balance >= 0 ? 'complement' : 'overpayment',
+          calculationMethod: regularization.calculation_method,
+          calculationNotes: regularization.notes,
+          chargeBreakdown: regularization.expenses.map(expense => ({
+            category: expense.category,
+            provisionAmount: 0, // Pas de provisions pour les dépenses réelles
+            realAmount: expense.amount,
+            isRecoverable: expense.is_recoverable,
+            isExceptional: false,
+            supporting_documents: expense.supporting_documents,
+            notes: expense.notes || ''
+          }))
         })
       })
 
@@ -542,9 +556,9 @@ export default function ChargeRegularizationPageV2() {
           'Authorization': `Bearer ${sessionData.session.access_token}`
         },
         body: JSON.stringify({
-          lease_id: selectedLease.id,
-          year: selectedYear,
-          regularization_data: regularization
+          regularizationId: regularization.id,
+          leaseId: selectedLease.id,
+          year: selectedYear
         })
       })
 
@@ -589,9 +603,9 @@ export default function ChargeRegularizationPageV2() {
           'Authorization': `Bearer ${sessionData.session.access_token}`
         },
         body: JSON.stringify({
-          lease_id: selectedLease.id,
-          year: selectedYear,
-          regularization_data: regularization
+          regularizationId: regularization.id,
+          leaseId: selectedLease.id,
+          year: selectedYear
         })
       })
 
@@ -874,40 +888,28 @@ export default function ChargeRegularizationPageV2() {
                 )
               })}
               
-              {/* Totaux */}
-              <div className="grid grid-cols-6 gap-4 p-3 bg-blue-50 rounded-lg font-medium">
-                <div>Total dépenses</div>
-                <div className="text-blue-600 font-bold">
-                  {regularization.expenses.reduce((sum, expense) => sum + expense.amount, 0).toFixed(2)} €
+              {/* Totaux - Style comme la photo */}
+              <div className="grid grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg font-medium">
+                <div className="text-center">
+                  <div className="text-sm text-gray-600 mb-1">Total dépenses</div>
+                  <div className="text-lg font-bold text-gray-900">
+                    {regularization.expenses.reduce((sum: number, expense: ChargeExpense) => sum + expense.amount, 0).toFixed(2)} €
+                  </div>
                 </div>
-                <div></div>
-                <div></div>
-                <div></div>
-                <div></div>
-              </div>
-              
-              <div className="grid grid-cols-6 gap-4 p-3 bg-green-50 rounded-lg font-medium">
-                <div>Total récupérable</div>
-                <div className="text-green-600 font-bold">
-                  {regularization.expenses
-                    .filter(expense => expense.is_recoverable)
-                    .reduce((sum: number, expense: ChargeExpense) => sum + expense.amount, 0).toFixed(2)} €
+                <div className="text-center">
+                  <div className="text-sm text-gray-600 mb-1">Total récupérable</div>
+                  <div className="text-lg font-bold text-blue-600">
+                    {regularization.expenses
+                      .filter(expense => expense.is_recoverable)
+                      .reduce((sum: number, expense: ChargeExpense) => sum + expense.amount, 0).toFixed(2)} €
+                  </div>
                 </div>
-                <div></div>
-                <div></div>
-                <div></div>
-                <div></div>
-              </div>
-              
-              <div className="grid grid-cols-6 gap-4 p-3 bg-orange-50 rounded-lg font-medium">
-                <div>Quote-part locataire</div>
-                <div></div>
-                <div></div>
-                <div className="text-orange-600 font-bold">
-                  {regularization.total_quote_part.toFixed(2)} €
+                <div className="text-center">
+                  <div className="text-sm text-gray-600 mb-1">Quote-part locataire</div>
+                  <div className="text-lg font-bold text-green-600">
+                    {regularization.total_quote_part.toFixed(2)} €
+                  </div>
                 </div>
-                <div></div>
-                <div></div>
               </div>
             </div>
           )}
