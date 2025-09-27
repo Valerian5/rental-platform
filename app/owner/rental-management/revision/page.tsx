@@ -135,7 +135,7 @@ export default function ChargeRegularizationPageV2() {
       if (error) throw error
 
       // Transformer les données pour inclure has_lease et le bail actif
-      const transformedProperties = propertiesData.map(property => {
+      const transformedProperties = propertiesData.map((property: any) => {
         const leases = property.leases || []
         const activeLease = leases.find((lease: any) => lease.status === 'active')
         return {
@@ -152,24 +152,25 @@ export default function ChargeRegularizationPageV2() {
       setProperties(transformedProperties)
 
       // Sélectionner automatiquement la première propriété si aucune n'est sélectionnée
-      if (!selectedPropertyId && transformedProperties.length > 0) {
-        setSelectedPropertyId(transformedProperties[0].id)
-      }
+      setSelectedPropertyId((prev: string | null) => {
+        if (!prev && transformedProperties.length > 0) {
+          return transformedProperties[0].id
+        }
+        return prev
+      })
     } catch (error) {
       console.error('Erreur chargement propriétés:', error)
       toast.error('Erreur lors du chargement des propriétés')
     }
-  }, [selectedPropertyId])
+  }, [])
 
   // Charger le bail pour la propriété sélectionnée
-  const loadLease = useCallback(async () => {
-    if (!selectedPropertyId) return
-
+  const loadLease = useCallback(async (propertyId: string) => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      console.log('🔍 loadLease - Recherche bail pour property_id:', selectedPropertyId)
+      console.log('🔍 loadLease - Recherche bail pour property_id:', propertyId)
 
       const { data: leases, error } = await supabase
         .from('leases')
@@ -190,7 +191,7 @@ export default function ChargeRegularizationPageV2() {
             email
           )
         `)
-        .eq('property_id', selectedPropertyId)
+        .eq('property_id', propertyId)
         .eq('status', 'active')
 
       console.log('🔍 loadLease - Résultat:', { leases, error })
@@ -212,16 +213,11 @@ export default function ChargeRegularizationPageV2() {
       toast.error('Erreur lors du chargement du bail')
       setSelectedLease(null)
     }
-  }, [selectedPropertyId])
+  }, [])
 
   // Charger la régularisation pour l'année sélectionnée
-  const loadRegularization = useCallback(async () => {
-    if (!selectedLease) {
-      console.log('🔍 loadRegularization - Pas de bail sélectionné')
-      return
-    }
-
-    console.log('🔍 loadRegularization - Bail sélectionné:', selectedLease.id, 'Année:', selectedYear)
+  const loadRegularization = useCallback(async (lease: Lease, year: number) => {
+    console.log('🔍 loadRegularization - Bail sélectionné:', lease.id, 'Année:', year)
     setLoading(true)
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -231,14 +227,14 @@ export default function ChargeRegularizationPageV2() {
       console.log('🔍 loadRegularization - Création d\'une nouvelle régularisation')
       
       const daysOccupied = calculateDaysInYear(
-        new Date(selectedLease.start_date),
-        new Date(selectedLease.end_date),
-        selectedYear
+        new Date(lease.start_date),
+        new Date(lease.end_date),
+        year
       )
 
       const newRegularization: ChargeRegularization = {
         id: `temp-${Date.now()}`,
-        year: selectedYear,
+        year: year,
         days_occupied: daysOccupied,
         total_provisions: 0,
         total_quote_part: 0,
@@ -258,28 +254,26 @@ export default function ChargeRegularizationPageV2() {
     } finally {
       setLoading(false)
     }
-  }, [selectedLease, selectedYear])
+  }, [])
 
   // Calculer les provisions pour l'année (sans prorata)
-  const calculateProvisions = useCallback(async (): Promise<number> => {
-    if (!selectedLease) return 0
-
+  const calculateProvisions = useCallback(async (lease: Lease, year: number): Promise<number> => {
     try {
-      const leaseStartDate = new Date(selectedLease.start_date)
-      const leaseEndDate = new Date(selectedLease.end_date)
-      const yearStart = new Date(selectedYear, 0, 1)
-      const yearEnd = new Date(selectedYear, 11, 31)
+      const leaseStartDate = new Date(lease.start_date)
+      const leaseEndDate = new Date(lease.end_date)
+      const yearStart = new Date(year, 0, 1)
+      const yearEnd = new Date(year, 11, 31)
 
       // Période effective d'occupation dans l'année
       const effectiveStart = leaseStartDate > yearStart ? leaseStartDate : yearStart
       const effectiveEnd = leaseEndDate < yearEnd ? leaseEndDate : yearEnd
 
       let totalProvisions = 0
-      const monthlyCharges = selectedLease.charges || 0
+      const monthlyCharges = lease.charges || 0
 
       // Calculer les provisions mois par mois (sans prorata)
       for (let month = 1; month <= 12; month++) {
-        const monthStart = new Date(selectedYear, month - 1, 1)
+        const monthStart = new Date(year, month - 1, 1)
 
         // Vérifier si le mois est dans la période d'occupation
         if (monthStart >= effectiveStart && monthStart <= effectiveEnd) {
@@ -293,17 +287,15 @@ export default function ChargeRegularizationPageV2() {
       console.error('Erreur calcul provisions:', error)
       return 0
     }
-  }, [selectedLease, selectedYear])
+  }, [])
 
   // Mettre à jour les calculs
-  const updateCalculations = useCallback(async () => {
-    if (!regularization) return
-
-    const totalProvisions = await calculateProvisions()
-    const totalQuotePart = regularization.expenses
+  const updateCalculations = useCallback(async (regularizationData: ChargeRegularization, lease: Lease, year: number) => {
+    const totalProvisions = await calculateProvisions(lease, year)
+    const totalQuotePart = regularizationData.expenses
       .filter((expense: ChargeExpense) => expense.is_recoverable)
       .reduce((sum: number, expense: ChargeExpense) => {
-        const quotePart = expense.amount * (regularization.days_occupied / 365)
+        const quotePart = expense.amount * (regularizationData.days_occupied / 365)
         return sum + quotePart
       }, 0)
 
@@ -315,25 +307,34 @@ export default function ChargeRegularizationPageV2() {
       total_quote_part: totalQuotePart,
       balance: balance
     } : null)
-  }, [regularization, calculateProvisions])
+  }, [calculateProvisions])
 
   // Gérer les changements de propriété
   const handlePropertyChange = (propertyId: string | null) => {
     setSelectedPropertyId(propertyId)
     setSelectedLease(null)
     setRegularization(null)
+    if (propertyId) {
+      loadLease(propertyId)
+    }
   }
 
   // Gérer les changements d'année
   const handleYearChange = (year: number) => {
     setSelectedYear(year)
+    if (selectedLease) {
+      loadRegularization(selectedLease, year)
+    }
   }
 
   // Gérer les changements de dépenses
   const handleExpensesChange = (expenses: ChargeExpense[]) => {
     console.log('🔍 Page - handleExpensesChange appelé:', expenses)
     try {
-      setRegularization((prev: ChargeRegularization | null) => prev ? { ...prev, expenses } : null)
+      setRegularization((prev: ChargeRegularization | null) => {
+        if (!prev) return null
+        return { ...prev, expenses }
+      })
       console.log('🔍 Page - État regularization mis à jour')
     } catch (error) {
       console.error('❌ Page - Erreur handleExpensesChange:', error)
@@ -384,7 +385,7 @@ export default function ChargeRegularizationPageV2() {
 
   const handleDeleteExpense = (expenseId: string) => {
     if (!regularization) return
-    const updatedExpenses = regularization.expenses.filter(expense => expense.id !== expenseId)
+    const updatedExpenses = regularization.expenses.filter((expense: ChargeExpense) => expense.id !== expenseId)
     handleExpensesChange(updatedExpenses)
     toast.success('Dépense supprimée')
   }
@@ -408,7 +409,7 @@ export default function ChargeRegularizationPageV2() {
 
     if (editingExpense) {
       // Modifier
-      const updatedExpenses = regularization.expenses.map(expense =>
+      const updatedExpenses = regularization.expenses.map((expense: ChargeExpense) =>
         expense.id === editingExpense.id ? expenseData : expense
       )
       handleExpensesChange(updatedExpenses)
@@ -441,24 +442,30 @@ export default function ChargeRegularizationPageV2() {
     } finally {
       setSaving(false)
     }
-  }, [regularization, selectedLease, selectedYear])
+  }, [])
 
   // Effets
   useEffect(() => {
     loadProperties()
-  }, [loadProperties])
+  }, []) // Exécuté au montage une seule fois
 
   useEffect(() => {
-    loadLease()
-  }, [loadLease])
+    if (selectedPropertyId) {
+      loadLease(selectedPropertyId)
+    }
+  }, [selectedPropertyId, loadLease]) // Exécuté seulement quand selectedPropertyId change
 
   useEffect(() => {
-    loadRegularization()
-  }, [loadRegularization])
+    if (selectedLease) {
+      loadRegularization(selectedLease, selectedYear)
+    }
+  }, [selectedLease, selectedYear, loadRegularization]) // Exécuté quand selectedLease ou selectedYear changent
 
   useEffect(() => {
-    updateCalculations()
-  }, [updateCalculations])
+    if (regularization && selectedLease) {
+      updateCalculations(regularization, selectedLease, selectedYear)
+    }
+  }, [regularization?.expenses, selectedLease, selectedYear, updateCalculations]) // Exécuté quand regularization.expenses, selectedLease ou selectedYear changent
 
   if (properties.length === 0) {
     return (
@@ -472,11 +479,11 @@ export default function ChargeRegularizationPageV2() {
   }
 
   if (!selectedPropertyId) {
-    return (
-      <div className="space-y-6">
+  return (
+    <div className="space-y-6">
         {/* En-tête */}
-        <div className="flex items-center justify-between">
-          <div>
+      <div className="flex items-center justify-between">
+        <div>
             <h1 className="text-2xl font-bold text-gray-900">Régularisation des charges</h1>
             <p className="text-gray-600">Gestion des charges locatives par année</p>
           </div>
@@ -491,19 +498,19 @@ export default function ChargeRegularizationPageV2() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
+              <div>
               <label className="text-sm font-medium text-gray-700 mb-2 block">
                 Propriété
               </label>
-              <Select
+                <Select
                 value={selectedPropertyId || ""}
                 onValueChange={handlePropertyChange}
-              >
-                <SelectTrigger>
+                >
+                  <SelectTrigger>
                   <SelectValue placeholder="Sélectionnez une propriété" />
-                </SelectTrigger>
-                <SelectContent>
-                  {properties.map((property) => (
+                  </SelectTrigger>
+                  <SelectContent>
+                  {properties.map((property: Property) => (
                     <SelectItem key={property.id} value={property.id}>
                       <div className="flex items-center justify-between w-full">
                         <div className="flex items-center space-x-2">
@@ -541,8 +548,8 @@ export default function ChargeRegularizationPageV2() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Régularisation des charges</h1>
             <p className="text-gray-600">Gestion des charges locatives par année</p>
-          </div>
-        </div>
+              </div>
+            </div>
 
         {/* Sélecteur de propriété */}
         <Card>
@@ -583,14 +590,14 @@ export default function ChargeRegularizationPageV2() {
                             </Badge>
                           )}
                         </div>
-                      </div>
+            </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </CardContent>
+      </Card>
 
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
@@ -673,7 +680,7 @@ export default function ChargeRegularizationPageV2() {
                     <MapPin className="h-4 w-4 mr-1" />
                     {properties.find(p => p.id === selectedPropertyId)?.address}, {properties.find(p => p.id === selectedPropertyId)?.city} {properties.find(p => p.id === selectedPropertyId)?.postal_code}
                   </div>
-                </div>
+                        </div>
                 <div className="flex items-center space-x-2">
                   {properties.find(p => p.id === selectedPropertyId)?.has_lease ? (
                     <Badge className="text-xs">
@@ -684,20 +691,20 @@ export default function ChargeRegularizationPageV2() {
                       Sans bail
                     </Badge>
                   )}
-                </div>
-              </div>
+                        </div>
+                        </div>
 
               {selectedLease && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t border-gray-200">
                   <div className="flex items-center space-x-2">
                     <User className="h-4 w-4 text-gray-400" />
-                    <div>
+                        <div>
                       <div className="text-xs text-gray-500">Locataire</div>
                       <div className="text-sm font-medium">
                         {selectedLease.tenant.first_name} {selectedLease.tenant.last_name}
                       </div>
                     </div>
-                  </div>
+                        </div>
                   <div className="flex items-center space-x-2">
                     <Calendar className="h-4 w-4 text-gray-400" />
                     <div>
@@ -705,9 +712,9 @@ export default function ChargeRegularizationPageV2() {
                       <div className="text-sm font-medium">
                         {new Date(selectedLease.start_date).toLocaleDateString('fr-FR')} - {new Date(selectedLease.end_date).toLocaleDateString('fr-FR')}
                       </div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2">
                     <Euro className="h-4 w-4 text-gray-400" />
                     <div>
                       <div className="text-xs text-gray-500">Loyer + Charges</div>
@@ -718,8 +725,8 @@ export default function ChargeRegularizationPageV2() {
                   </div>
                 </div>
               )}
-            </div>
-          )}
+              </div>
+            )}
         </CardContent>
       </Card>
 
@@ -732,7 +739,7 @@ export default function ChargeRegularizationPageV2() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Select value={selectedYear.toString()} onValueChange={(value) => handleYearChange(parseInt(value))}>
+          <Select value={selectedYear.toString()} onValueChange={(value: string) => handleYearChange(parseInt(value))}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -822,7 +829,7 @@ export default function ChargeRegularizationPageV2() {
                   </div>
                 </div>
               ))}
-            </div>
+              </div>
           )}
 
           {/* Dialog d'ajout/modification */}
@@ -865,7 +872,7 @@ export default function ChargeRegularizationPageV2() {
                     onCheckedChange={(checked) => setFormData({ ...formData, is_recoverable: !!checked })}
                   />
                   <Label htmlFor="recoverable">Charge récupérable</Label>
-                </div>
+              </div>
                 <div>
                   <Label htmlFor="notes">Notes (optionnel)</Label>
                   <Textarea
