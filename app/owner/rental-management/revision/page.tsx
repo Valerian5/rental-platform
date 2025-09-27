@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -76,13 +76,20 @@ interface Lease {
   }
 }
 
+interface SupportingDocument {
+  name: string
+  path: string
+  size: number
+  type: string
+}
+
 interface ChargeExpense {
   id: string
   category: string
   amount: number
   is_recoverable: boolean
   notes?: string
-  supporting_documents: any[]
+  supporting_documents: SupportingDocument[]
 }
 
 interface ChargeRegularization {
@@ -116,6 +123,7 @@ export default function ChargeRegularizationPageV2() {
     is_recoverable: true,
     notes: ''
   })
+  const [uploadingFiles, setUploadingFiles] = useState(false)
 
   // Charger les propriétés du propriétaire avec leurs baux
   const loadProperties = useCallback(async () => {
@@ -241,7 +249,7 @@ export default function ChargeRegularizationPageV2() {
         days_occupied: daysOccupied,
         total_provisions: totalProvisions,
         total_quote_part: 0,
-        balance: totalProvisions, // Balance positive = trop-perçu
+        balance: -totalProvisions, // Balance négative = trop-perçu initial
         calculation_method: 'Prorata jour exact',
         notes: '',
         status: 'draft',
@@ -261,34 +269,29 @@ export default function ChargeRegularizationPageV2() {
   // Calculer les provisions pour l'année
   const calculateProvisions = useCallback(async (lease: Lease, year: number): Promise<number> => {
     try {
-      const { data: receipts, error } = await supabase
-        .from('receipts')
-        .select('month, year, charges_amount')
-        .eq('lease_id', lease.id)
-        .eq('year', year)
+      // Calculer la période effective d'occupation pour l'année
+      const startDate = new Date(lease.start_date)
+      const endDate = new Date(lease.end_date)
+      const yearStart = new Date(year, 0, 1)
+      const yearEnd = new Date(year, 11, 31)
+      
+      // Période effective = intersection entre bail et année
+      const effectiveStart = startDate > yearStart ? startDate : yearStart
+      const effectiveEnd = endDate < yearEnd ? endDate : yearEnd
+      
+      if (effectiveStart > effectiveEnd) {
+        return 0 // Pas d'occupation cette année
+      }
 
-      if (error) throw error
+      // Calculer le prorata pour l'année incomplète
+      const daysInYear = 365
+      const daysOccupied = Math.ceil((effectiveEnd.getTime() - effectiveStart.getTime()) / (1000 * 60 * 60 * 24)) + 1
+      const prorata = daysOccupied / daysInYear
 
-      const totalProvisions = receipts?.reduce((sum, receipt) => {
-        const monthNumber = typeof receipt.month === 'string' 
-          ? parseInt(receipt.month.split('-')[1] || receipt.month, 10)
-          : receipt.month
+      // Provisions théoriques = charges du bail * prorata
+      const theoreticalProvisions = lease.charges * 12 * prorata
 
-        if (isNaN(monthNumber) || monthNumber < 1 || monthNumber > 12) return sum
-
-        const receiptDate = new Date(year, monthNumber - 1, 1)
-        const startDate = new Date(lease.start_date)
-        const endDate = new Date(lease.end_date)
-
-        // Vérifier si la quittance est dans la période d'occupation
-        if (receiptDate >= startDate && receiptDate <= endDate) {
-          return sum + (receipt.charges_amount || 0)
-        }
-
-        return sum
-      }, 0) || 0
-
-      return totalProvisions
+      return theoreticalProvisions
     } catch (error) {
       console.error('Erreur calcul provisions:', error)
       return 0
@@ -305,9 +308,10 @@ export default function ChargeRegularizationPageV2() {
         return sum + quotePart
       }, 0)
 
-    const balance = totalProvisions - totalQuotePart
+    // Balance = Quote-part - Provisions (positif = complément à réclamer, négatif = trop-perçu)
+    const balance = totalQuotePart - totalProvisions
 
-    setRegularization(prev => prev ? {
+    setRegularization((prev: ChargeRegularization | null) => prev ? {
       ...prev,
       total_provisions: totalProvisions,
       total_quote_part: totalQuotePart,
@@ -335,7 +339,7 @@ export default function ChargeRegularizationPageV2() {
 
   // Gérer les changements de dépenses
   const handleExpensesChange = (expenses: ChargeExpense[]) => {
-    setRegularization(prev => {
+    setRegularization((prev: ChargeRegularization | null) => {
       if (!prev) return null
       const updated = { ...prev, expenses }
       
@@ -350,14 +354,14 @@ export default function ChargeRegularizationPageV2() {
       return {
         ...updated,
         total_quote_part: totalQuotePart,
-        balance: updated.total_provisions - totalQuotePart
+        balance: totalQuotePart - updated.total_provisions
       }
     })
   }
 
   // Gérer les changements de notes
   const handleNotesChange = (notes: string) => {
-    setRegularization(prev => prev ? { ...prev, notes } : null)
+    setRegularization((prev: ChargeRegularization | null) => prev ? { ...prev, notes } : null)
   }
 
   // Fonctions pour le popup d'ajout de dépense
@@ -388,6 +392,58 @@ export default function ChargeRegularizationPageV2() {
     const updatedExpenses = regularization.expenses.filter((expense: ChargeExpense) => expense.id !== expenseId)
     handleExpensesChange(updatedExpenses)
     toast.success('Dépense supprimée')
+  }
+
+  // Gérer l'upload de justificatifs
+  const handleFileUpload = async (expenseId: string, files: FileList) => {
+    if (!regularization) return
+
+    setUploadingFiles(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Utilisateur non authentifié')
+
+      const uploadedFiles: SupportingDocument[] = []
+      
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        const fileExt = file.name.split('.').pop()
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
+        const filePath = `charge-documents/${user.id}/${fileName}`
+
+        const { error: uploadError } = await supabase.storage
+          .from('documents')
+          .upload(filePath, file)
+
+        if (uploadError) throw uploadError
+
+        uploadedFiles.push({
+          name: file.name,
+          path: filePath,
+          size: file.size,
+          type: file.type
+        })
+      }
+
+      // Mettre à jour la dépense avec les nouveaux justificatifs
+      const updatedExpenses = regularization.expenses.map((expense: ChargeExpense) => {
+        if (expense.id === expenseId) {
+          return {
+            ...expense,
+            supporting_documents: [...(expense.supporting_documents || []), ...uploadedFiles]
+          }
+        }
+        return expense
+      })
+
+      handleExpensesChange(updatedExpenses)
+      toast.success(`${uploadedFiles.length} justificatif(s) ajouté(s)`)
+    } catch (error) {
+      console.error('Erreur upload:', error)
+      toast.error('Erreur lors de l\'upload des justificatifs')
+    } finally {
+      setUploadingFiles(false)
+    }
   }
 
   const handleSaveExpense = () => {
@@ -429,10 +485,17 @@ export default function ChargeRegularizationPageV2() {
 
     setSaving(true)
     try {
+      // Récupérer le token d'authentification
+      const { data: sessionData } = await supabase.auth.getSession()
+      if (!sessionData.session?.access_token) {
+        throw new Error('Token d\'authentification requis')
+      }
+
       const response = await fetch('/api/revisions/charges', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`
         },
         body: JSON.stringify({
           lease_id: selectedLease.id,
@@ -466,10 +529,17 @@ export default function ChargeRegularizationPageV2() {
     if (!regularization || !selectedLease) return
 
     try {
+      // Récupérer le token d'authentification
+      const { data: sessionData } = await supabase.auth.getSession()
+      if (!sessionData.session?.access_token) {
+        throw new Error('Token d\'authentification requis')
+      }
+
       const response = await fetch('/api/regularizations/pdf', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`
         },
         body: JSON.stringify({
           lease_id: selectedLease.id,
@@ -506,10 +576,17 @@ export default function ChargeRegularizationPageV2() {
     if (!regularization || !selectedLease) return
 
     try {
+      // Récupérer le token d'authentification
+      const { data: sessionData } = await supabase.auth.getSession()
+      if (!sessionData.session?.access_token) {
+        throw new Error('Token d\'authentification requis')
+      }
+
       const response = await fetch('/api/regularizations/send', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`
         },
         body: JSON.stringify({
           lease_id: selectedLease.id,
@@ -759,7 +836,21 @@ export default function ChargeRegularizationPageV2() {
                       <span className="text-sm text-gray-500">
                         {expense.supporting_documents?.length || 0}
                       </span>
-                      <Button variant="ghost" size="sm">
+                      <input
+                        type="file"
+                        multiple
+                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => e.target.files && handleFileUpload(expense.id, e.target.files)}
+                        className="hidden"
+                        id={`upload-${expense.id}`}
+                        disabled={uploadingFiles}
+                      />
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => document.getElementById(`upload-${expense.id}`)?.click()}
+                        disabled={uploadingFiles}
+                      >
                         <Upload className="h-4 w-4" />
                       </Button>
                     </div>
@@ -800,7 +891,7 @@ export default function ChargeRegularizationPageV2() {
                 <div className="text-green-600 font-bold">
                   {regularization.expenses
                     .filter(expense => expense.is_recoverable)
-                    .reduce((sum, expense) => sum + expense.amount, 0).toFixed(2)} €
+                    .reduce((sum: number, expense: ChargeExpense) => sum + expense.amount, 0).toFixed(2)} €
                 </div>
                 <div></div>
                 <div></div>
@@ -891,7 +982,15 @@ export default function ChargeRegularizationPageV2() {
         <CardHeader>
           <CardTitle>€ Résumé de la régularisation</CardTitle>
           <CardDescription>
-            Calcul basé sur {regularization?.days_occupied || 0} jours d'occupation ({regularization ? ((regularization.days_occupied / 365) * 100).toFixed(1) : '0'}% de l'année)
+            {selectedLease && regularization ? (
+              <>
+                Période de calcul : {new Date(Math.max(new Date(selectedLease.start_date).getTime(), new Date(selectedYear, 0, 1).getTime())).toLocaleDateString('fr-FR')} au {new Date(Math.min(new Date(selectedLease.end_date).getTime(), new Date(selectedYear, 11, 31).getTime())).toLocaleDateString('fr-FR')}
+                <br />
+                Calcul basé sur {regularization.days_occupied} jours d'occupation ({((regularization.days_occupied / 365) * 100).toFixed(1)}% de l'année)
+              </>
+            ) : (
+              'Calcul basé sur 0 jours d\'occupation (0% de l\'année)'
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -909,8 +1008,12 @@ export default function ChargeRegularizationPageV2() {
             </div>
             <div className="text-center">
               <div className="text-sm text-gray-500 mb-2">Balance</div>
-              <div className="text-2xl font-bold text-red-600">{Math.abs(regularization?.balance || 0).toFixed(2)} €</div>
-              <div className="text-xs text-gray-500 mt-1">Complément à réclamer</div>
+              <div className={`text-2xl font-bold ${(regularization?.balance || 0) >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                {Math.abs(regularization?.balance || 0).toFixed(2)} €
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                {(regularization?.balance || 0) >= 0 ? 'Complément à réclamer' : 'Trop-perçu'}
+              </div>
             </div>
           </div>
 
@@ -924,24 +1027,32 @@ export default function ChargeRegularizationPageV2() {
               </div>
               <div className="flex justify-between">
                 <span>Quote-part locataire :</span>
-                <span className="font-medium text-blue-600">-{regularization?.total_quote_part.toFixed(2) || '0.00'} €</span>
+                <span className="font-medium text-blue-600">{regularization?.total_quote_part.toFixed(2) || '0.00'} €</span>
               </div>
               <div className="flex justify-between border-t pt-2 font-semibold">
                 <span>Balance :</span>
-                <span className="text-red-600">-{Math.abs(regularization?.balance || 0).toFixed(2)} €</span>
+                <span className={`${(regularization?.balance || 0) >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  {(regularization?.balance || 0) >= 0 ? '+' : ''}{regularization?.balance.toFixed(2) || '0.00'} €
+                </span>
               </div>
             </div>
             
             {/* Message explicatif */}
-            <div className="mt-4 p-4 bg-red-50 rounded-lg">
-              <Button className="w-full bg-red-600 hover:bg-red-700 text-white mb-2">
-                <Check className="h-4 w-4 mr-2" />
-                Complément à réclamer
-              </Button>
-              <p className="text-sm text-red-800 text-center">
-                <strong>Complément à réclamer :</strong> Le locataire doit verser {Math.abs(regularization?.balance || 0).toFixed(2)} € en complément des provisions déjà payées.
-              </p>
-            </div>
+            {(regularization?.balance || 0) !== 0 && (
+              <div className={`mt-4 p-4 rounded-lg ${(regularization?.balance || 0) >= 0 ? 'bg-red-50' : 'bg-green-50'}`}>
+                <Button className={`w-full text-white mb-2 ${(regularization?.balance || 0) >= 0 ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}>
+                  <Check className="h-4 w-4 mr-2" />
+                  {(regularization?.balance || 0) >= 0 ? 'Complément à réclamer' : 'Trop-perçu'}
+                </Button>
+                <p className={`text-sm text-center ${(regularization?.balance || 0) >= 0 ? 'text-red-800' : 'text-green-800'}`}>
+                  <strong>{(regularization?.balance || 0) >= 0 ? 'Complément à réclamer :' : 'Trop-perçu :'}</strong> 
+                  {(regularization?.balance || 0) >= 0 
+                    ? ` Le locataire doit verser ${Math.abs(regularization?.balance || 0).toFixed(2)} € en complément des provisions déjà payées.`
+                    : ` Le locataire a payé ${Math.abs(regularization?.balance || 0).toFixed(2)} € de trop.`
+                  }
+                </p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
