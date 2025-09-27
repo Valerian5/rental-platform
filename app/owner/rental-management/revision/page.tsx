@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Building, User, Euro, FileText, Send, RefreshCw } from "lucide-react"
+import { Calendar, Building, User, Euro, Plus, FileText, Send, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
 import { calculateDaysInYear } from "@/lib/date-utils"
