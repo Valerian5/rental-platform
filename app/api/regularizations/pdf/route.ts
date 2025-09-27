@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (regularizationError || !regularization) {
+      console.log('Régularisation non trouvée:', regularizationError)
       return NextResponse.json({ error: "Régularisation non trouvée" }, { status: 404 })
     }
 
@@ -79,11 +80,16 @@ export async function POST(request: NextRequest) {
         )
       `)
       .eq('id', leaseId)
-      .eq('owner_id', user.id)
       .single()
 
     if (leaseError || !lease) {
+      console.log('Bail non trouvé:', leaseError)
       return NextResponse.json({ error: "Bail non trouvé" }, { status: 404 })
+    }
+
+    // Vérifier que l'utilisateur est propriétaire
+    if (lease.owner_id !== user.id) {
+      return NextResponse.json({ error: "Non autorisé" }, { status: 403 })
     }
 
     // Générer le PDF

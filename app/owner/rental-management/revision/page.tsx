@@ -35,7 +35,25 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
-import { calculateDaysInYear } from "@/lib/date-utils"
+// Fonction utilitaire pour calculer les jours d'occupation dans une année
+const calculateDaysInYear = (startDate: Date, endDate: Date, year: number): number => {
+  const yearStart = new Date(year, 0, 1)
+  const yearEnd = new Date(year, 11, 31)
+  
+  // Période effective = intersection entre bail et année
+  const effectiveStart = startDate > yearStart ? startDate : yearStart
+  const effectiveEnd = endDate < yearEnd ? endDate : yearEnd
+  
+  if (effectiveStart > effectiveEnd) {
+    return 0 // Pas d'occupation cette année
+  }
+
+  // Calculer le nombre de jours
+  const timeDiff = effectiveEnd.getTime() - effectiveStart.getTime()
+  const daysDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24)) + 1
+  
+  return daysDiff
+}
 
 interface Property {
   id: string
@@ -233,30 +251,69 @@ export default function ChargeRegularizationPageV2() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Pour l'instant, créer directement une nouvelle régularisation
-      const daysOccupied = calculateDaysInYear(
-        new Date(lease.start_date),
-        new Date(lease.end_date),
-        year
-      )
+      // Essayer de charger une régularisation existante
+      const { data: existingRegularization, error: loadError } = await supabase
+        .from('charge_regularizations_v2')
+        .select(`
+          *,
+          expenses:charge_expenses(
+            *,
+            supporting_documents:charge_supporting_documents(*)
+          )
+        `)
+        .eq('lease_id', lease.id)
+        .eq('year', year)
+        .eq('created_by', user.id)
+        .single()
 
-      // Calculer les provisions pour cette année
-      const totalProvisions = await calculateProvisions(lease, year)
+      if (existingRegularization && !loadError) {
+        // Charger la régularisation existante
+        const loadedRegularization: ChargeRegularization = {
+          id: existingRegularization.id,
+          year: existingRegularization.year,
+          days_occupied: existingRegularization.days_occupied,
+          total_provisions: existingRegularization.total_provisions,
+          total_quote_part: existingRegularization.total_quote_part,
+          balance: existingRegularization.balance,
+          calculation_method: existingRegularization.calculation_method || 'Prorata jour exact',
+          notes: existingRegularization.notes || '',
+          status: existingRegularization.status,
+          expenses: existingRegularization.expenses?.map((expense: any) => ({
+            id: expense.id,
+            category: expense.category,
+            amount: expense.amount,
+            is_recoverable: expense.is_recoverable,
+            notes: expense.notes,
+            supporting_documents: expense.supporting_documents || []
+          })) || []
+        }
+        setRegularization(loadedRegularization)
+      } else {
+        // Créer une nouvelle régularisation
+        const daysOccupied = calculateDaysInYear(
+          new Date(lease.start_date),
+          new Date(lease.end_date),
+          year
+        )
 
-      const newRegularization: ChargeRegularization = {
-        id: `temp-${Date.now()}`,
-        year: year,
-        days_occupied: daysOccupied,
-        total_provisions: totalProvisions,
-        total_quote_part: 0,
-        balance: -totalProvisions, // Balance négative = trop-perçu initial
-        calculation_method: 'Prorata jour exact',
-        notes: '',
-        status: 'draft',
-        expenses: []
+        // Calculer les provisions pour cette année
+        const totalProvisions = await calculateProvisions(lease, year)
+
+        const newRegularization: ChargeRegularization = {
+          id: `temp-${Date.now()}`,
+          year: year,
+          days_occupied: daysOccupied,
+          total_provisions: totalProvisions,
+          total_quote_part: 0,
+          balance: -totalProvisions, // Balance négative = trop-perçu initial
+          calculation_method: 'Prorata jour exact',
+          notes: '',
+          status: 'draft',
+          expenses: []
+        }
+
+        setRegularization(newRegularization)
       }
-
-      setRegularization(newRegularization)
       
     } catch (error) {
       console.error('Erreur chargement régularisation:', error)
@@ -527,6 +584,16 @@ export default function ChargeRegularizationPageV2() {
       if (!response.ok) {
         const errorData = await response.json()
         throw new Error(errorData.error || 'Erreur lors de la sauvegarde')
+      }
+
+      const result = await response.json()
+      
+      // Mettre à jour l'ID de la régularisation avec l'ID réel de la base
+      if (result.regularization && regularization.id.startsWith('temp-')) {
+        setRegularization(prev => prev ? {
+          ...prev,
+          id: result.regularization.id
+        } : null)
       }
 
       toast.success('Régularisation sauvegardée avec succès')
