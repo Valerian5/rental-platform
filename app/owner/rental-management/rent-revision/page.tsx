@@ -232,8 +232,10 @@ export default function RentRevisionPage() {
       }
 
       if (revisionData) {
+        console.log('🔍 Révision existante trouvée:', revisionData)
         setRevision(revisionData)
       } else {
+        console.log('🔍 Aucune révision existante, création d\'une nouvelle')
         // Récupérer l'indice IRL de référence
         const referenceIRLValue = selectedLease?.trimestre_reference_irl 
           ? await getReferenceIRLValue(selectedLease.trimestre_reference_irl)
@@ -254,6 +256,7 @@ export default function RentRevisionPage() {
           rent_increase_percentage: 0,
           status: 'draft'
         }
+        console.log('🔍 Nouvelle révision créée:', newRevision)
         setRevision(newRevision)
       }
     } catch (error) {
