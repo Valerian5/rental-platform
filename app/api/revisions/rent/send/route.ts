@@ -105,30 +105,32 @@ export async function POST(request: NextRequest) {
       .from('documents')
       .getPublicUrl(filePath)
 
-    // Créer une notification pour le locataire
-    console.log('🔔 Création notification révision pour locataire:', revision.lease.tenant.id)
-    const { data: notificationData, error: notificationError } = await supabaseAdmin
-      .from('notifications')
-      .insert({
-        user_id: revision.lease.tenant.id,
-        type: 'rent_revision',
-        title: `Révision de loyer ${year}`,
-        message: `Votre propriétaire vous a envoyé la révision de loyer pour l'année ${year}.`,
-        data: {
-          revision_id: revisionId,
-          lease_id: leaseId,
-          year: year,
-          pdf_url: publicUrl,
-          old_rent: revision.old_rent,
-          new_rent: revision.new_rent,
-          increase: revision.increase,
-          increase_percentage: revision.increase_percentage
-        },
-        read: false
-      })
-      .select()
+      // Créer une notification pour le locataire
+      console.log('🔔 Création notification révision pour locataire:', revision.lease.tenant.id)
+      const notificationData = {
+        revision_id: revisionId,
+        lease_id: leaseId,
+        year: year,
+        pdf_url: publicUrl,
+        old_rent: revision.old_rent,
+        new_rent: revision.new_rent,
+        increase: revision.increase,
+        increase_percentage: revision.increase_percentage
+      }
+      
+      const { data: notificationDataResult, error: notificationError } = await supabaseAdmin
+        .from('notifications')
+        .insert({
+          user_id: revision.lease.tenant.id,
+          type: 'rent_revision',
+          title: `Révision de loyer ${year}`,
+          content: `Votre propriétaire vous a envoyé la révision de loyer pour l'année ${year}.`,
+          action_url: `${publicUrl}?data=${encodeURIComponent(JSON.stringify(notificationData))}`,
+          read: false
+        })
+        .select()
 
-    console.log('🔔 Notification révision créée:', notificationData)
+    console.log('🔔 Notification révision créée:', notificationDataResult)
     if (notificationError) {
       console.error('❌ Erreur création notification révision:', notificationError)
     } else {

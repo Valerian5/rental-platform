@@ -24,7 +24,8 @@ SELECT
     user_id,
     type,
     title,
-    data,
+    content,
+    action_url,
     created_at
 FROM notifications 
 WHERE type IN ('charge_regularization', 'rent_revision')

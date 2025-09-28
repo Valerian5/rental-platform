@@ -120,28 +120,30 @@ export async function POST(request: NextRequest) {
       .from('documents')
       .getPublicUrl(filePath)
 
-    // Créer une notification pour le locataire
-    console.log('🔔 Création notification pour locataire:', lease.tenant.id)
-    const { data: notificationData, error: notificationError } = await supabaseAdmin
-      .from('notifications')
-      .insert({
-        user_id: lease.tenant.id,
-        type: 'charge_regularization',
-        title: `Régularisation des charges ${year}`,
-        message: `Votre propriétaire vous a envoyé la régularisation des charges pour l'année ${year}.`,
-        data: {
-          regularization_id: regularizationId,
-          lease_id: leaseId,
-          year: year,
-          pdf_url: publicUrl,
-          balance: regularization.balance,
-          balance_type: regularization.balance >= 0 ? 'refund' : 'additional_payment'
-        },
-        read: false
-      })
-      .select()
+      // Créer une notification pour le locataire
+      console.log('🔔 Création notification pour locataire:', lease.tenant.id)
+      const notificationData = {
+        regularization_id: regularizationId,
+        lease_id: leaseId,
+        year: year,
+        pdf_url: publicUrl,
+        balance: regularization.balance,
+        balance_type: regularization.balance >= 0 ? 'refund' : 'additional_payment'
+      }
+      
+      const { data: notificationDataResult, error: notificationError } = await supabaseAdmin
+        .from('notifications')
+        .insert({
+          user_id: lease.tenant.id,
+          type: 'charge_regularization',
+          title: `Régularisation des charges ${year}`,
+          content: `Votre propriétaire vous a envoyé la régularisation des charges pour l'année ${year}.`,
+          action_url: `${publicUrl}?data=${encodeURIComponent(JSON.stringify(notificationData))}`,
+          read: false
+        })
+        .select()
 
-    console.log('🔔 Notification créée:', notificationData)
+    console.log('🔔 Notification créée:', notificationDataResult)
     if (notificationError) {
       console.error('❌ Erreur création notification:', notificationError)
     } else {

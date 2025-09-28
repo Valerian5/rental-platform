@@ -35,23 +35,28 @@ export async function GET(
 
     // Transformer les notifications en documents
     const documents = notifications.map(notification => {
-      const data = notification.data || {}
+      // Extraire les données de l'action_url ou du content
+      let data = {}
+      try {
+        if (notification.action_url) {
+          // Si action_url contient des données JSON
+          const url = new URL(notification.action_url)
+          const dataParam = url.searchParams.get('data')
+          if (dataParam) {
+            data = JSON.parse(decodeURIComponent(dataParam))
+          }
+        }
+      } catch (error) {
+        console.log('Erreur parsing action_url:', error)
+      }
       
-      let title = ''
-      let description = ''
+      let title = notification.title
+      let description = notification.content
       let type: 'charge_regularization' | 'rent_revision' | 'lease' | 'other' = 'other'
 
       if (notification.type === 'charge_regularization') {
-        title = `Régularisation des charges ${data.year || ''}`
-        description = data.balance_type === 'refund' 
-          ? `Remboursement de ${Math.abs(data.balance || 0).toFixed(2)} €`
-          : `Complément de ${Math.abs(data.balance || 0).toFixed(2)} € à payer`
         type = 'charge_regularization'
       } else if (notification.type === 'rent_revision') {
-        title = `Révision de loyer ${data.year || ''}`
-        description = data.increase > 0 
-          ? `Augmentation de ${data.increase?.toFixed(2)} € (${data.increase_percentage?.toFixed(2)}%)`
-          : `Diminution de ${Math.abs(data.increase || 0).toFixed(2)} € (${data.increase_percentage?.toFixed(2)}%)`
         type = 'rent_revision'
       }
 
@@ -67,7 +72,7 @@ export async function GET(
         new_rent: data.new_rent,
         increase: data.increase,
         increase_percentage: data.increase_percentage,
-        pdf_url: data.pdf_url,
+        pdf_url: data.pdf_url || notification.action_url,
         created_at: notification.created_at,
         data: data
       }
