@@ -27,6 +27,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { authService } from "@/lib/auth-service"
 import { notificationsService } from "@/lib/notifications-service"
 import { LeaseServiceClient } from "@/lib/lease-service-client"
+import { ReceiptServiceClient } from "@/lib/receipt-service-client"
+import { MaintenanceServiceClient } from "@/lib/maintenance-service-client"
+import { DocumentServiceClient } from "@/lib/document-service-client"
 import { toast } from "sonner"
 
 interface Lease {
@@ -111,6 +114,7 @@ export default function TenantRentalManagementPage() {
   const [rentReceipts, setRentReceipts] = useState<RentReceipt[]>([])
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [documents, setDocuments] = useState<Document[]>([])
+  const [maintenanceWorks, setMaintenanceWorks] = useState<any[]>([])
   const [notifications, setNotifications] = useState<any[]>([])
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
   const [isLoading, setIsLoading] = useState(true)
@@ -135,11 +139,13 @@ export default function TenantRentalManagementPage() {
             setActiveLease(activeLease)
             console.log('🏠 Bail actif chargé:', activeLease.id)
 
-            // Récupérer les quittances
-            const receiptsResponse = await fetch(`/api/rent-receipts/lease/${activeLease.id}`)
-            const receiptsData = await receiptsResponse.json()
-            if (receiptsData.success) {
-              setRentReceipts(receiptsData.receipts || [])
+            // Récupérer les quittances (côté client)
+            try {
+              const receipts = await ReceiptServiceClient.getLeaseReceipts(activeLease.id)
+              setRentReceipts(receipts)
+              console.log('🧾 Quittances chargées:', receipts.length)
+            } catch (error) {
+              console.error("❌ Erreur récupération quittances:", error)
             }
           }
         } catch (error) {
@@ -153,11 +159,22 @@ export default function TenantRentalManagementPage() {
           setIncidents(incidentsData.incidents || [])
         }
 
-        // Récupérer les documents
-        const documentsResponse = await fetch(`/api/tenant/documents/${user.id}`)
-        const documentsData = await documentsResponse.json()
-        if (documentsData.success) {
-          setDocuments(documentsData.documents || [])
+        // Récupérer les documents (côté client)
+        try {
+          const documents = await DocumentServiceClient.getTenantDocuments(user.id)
+          setDocuments(documents)
+          console.log('📄 Documents chargés:', documents.length)
+        } catch (error) {
+          console.error("❌ Erreur récupération documents:", error)
+        }
+
+        // Récupérer les travaux (côté client)
+        try {
+          const works = await MaintenanceServiceClient.getTenantMaintenanceWorks(user.id)
+          setMaintenanceWorks(works)
+          console.log('🔧 Travaux chargés:', works.length)
+        } catch (error) {
+          console.error("❌ Erreur récupération travaux:", error)
         }
 
         // Récupérer les notifications
@@ -811,10 +828,55 @@ export default function TenantRentalManagementPage() {
               <CardDescription>Suivez l'état des travaux dans votre logement</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-8">
-                <AlertTriangle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">Aucun travail en cours pour le moment</p>
-              </div>
+              {maintenanceWorks.length === 0 ? (
+                <div className="text-center py-8">
+                  <AlertTriangle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">Aucun travail en cours pour le moment</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {maintenanceWorks.map((work) => (
+                    <div key={work.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
+                      <div className="flex items-center space-x-4">
+                        <AlertTriangle className="h-8 w-8 text-muted-foreground" />
+                        <div>
+                          <p className="font-medium">{work.title}</p>
+                          <p className="text-sm text-muted-foreground">{work.description}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {work.property.title} - {work.property.address}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Badge 
+                          variant={
+                            work.status === "completed" 
+                              ? "default" 
+                              : work.status === "in_progress" 
+                                ? "secondary" 
+                                : "outline"
+                          }
+                        >
+                          {work.status === "completed" ? "Terminé" : 
+                           work.status === "in_progress" ? "En cours" : "Planifié"}
+                        </Badge>
+                        <Badge 
+                          variant={
+                            work.priority === "urgent" 
+                              ? "destructive" 
+                              : work.priority === "high" 
+                                ? "secondary" 
+                                : "outline"
+                          }
+                        >
+                          {work.priority === "urgent" ? "Urgent" : 
+                           work.priority === "high" ? "Élevée" : "Normale"}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -844,39 +906,55 @@ export default function TenantRentalManagementPage() {
                   </Button>
                 </div>
 
-                {/* Documents de régularisation */}
-                {documents.map((doc) => (
-                  <div key={doc.id} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="flex items-center space-x-4">
-                      <FileText className="h-8 w-8 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">{doc.title}</p>
-                        <p className="text-sm text-muted-foreground">{doc.description}</p>
-                        {doc.year && (
-                          <p className="text-xs text-muted-foreground">Année {doc.year}</p>
-                        )}
-                        {doc.amount && (
-                          <p className="text-xs text-muted-foreground">
-                            {doc.balance_type === 'refund' ? 'Remboursement' : 'Complément'}: {doc.amount.toFixed(2)} €
+                {/* Documents de régularisation et révision */}
+                {documents.length === 0 ? (
+                  <div className="text-center py-8">
+                    <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">Aucun document disponible pour le moment</p>
+                  </div>
+                ) : (
+                  documents.map((doc) => (
+                    <div key={doc.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
+                      <div className="flex items-center space-x-4">
+                        <FileText className="h-8 w-8 text-muted-foreground" />
+                        <div>
+                          <p className="font-medium">{doc.title}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {doc.type === 'charge_regularization' ? 'Régularisation des charges' : 'Révision de loyer'}
                           </p>
-                        )}
-                        {doc.increase && (
-                          <p className="text-xs text-muted-foreground">
-                            {doc.increase > 0 ? 'Augmentation' : 'Diminution'}: {doc.increase.toFixed(2)} € ({doc.increase_percentage?.toFixed(2)}%)
-                          </p>
-                        )}
+                          {doc.metadata?.year && (
+                            <p className="text-xs text-muted-foreground">Année {doc.metadata.year}</p>
+                          )}
+                          {doc.metadata?.balance !== undefined && (
+                            <p className="text-xs text-muted-foreground">
+                              {doc.metadata.balance_type === 'refund' ? 'Remboursement' : 'Complément'}: {Math.abs(doc.metadata.balance).toFixed(2)} €
+                            </p>
+                          )}
+                          {doc.metadata?.new_rent && (
+                            <p className="text-xs text-muted-foreground">
+                              Nouveau loyer: {doc.metadata.new_rent.toFixed(2)} €
+                            </p>
+                          )}
+                          {doc.metadata?.increase_percentage && (
+                            <p className="text-xs text-muted-foreground">
+                              Augmentation: {doc.metadata.increase_percentage.toFixed(2)}%
+                            </p>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Button size="sm" variant="outline" asChild>
-                        <a href={doc.pdf_url} target="_blank" rel="noopener noreferrer">
+                      <div className="flex items-center space-x-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => window.open(doc.url, '_blank')}
+                        >
                           <Download className="h-4 w-4 mr-2" />
                           Télécharger
-                        </a>
-                      </Button>
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
 
                 {/* État des lieux d'entrée */}
                 <div className="flex items-center justify-between p-4 border rounded-lg">
