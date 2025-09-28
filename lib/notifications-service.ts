@@ -103,11 +103,16 @@ export const notificationsService = {
     }
   },
 
-  async markAsRead(notificationId: string, userId: string): Promise<{ success: boolean; error?: string }> {
+  async markAsRead(notificationId: string, userId: string, accessToken?: string): Promise<{ success: boolean; error?: string }> {
     console.log("🔔 NotificationsService.markAsRead", { notificationId, userId })
 
     try {
-      const { error } = await supabase
+      // Utiliser le client avec token si fourni, sinon le client public
+      const client = accessToken ? 
+        (await import('./supabase-server-client')).createClientWithToken(accessToken) : 
+        supabase
+
+      const { error } = await client
         .from("notifications")
         .update({ read: true })
         .eq("id", notificationId)

@@ -81,8 +81,11 @@ export async function PATCH(request: NextRequest) {
 
     console.log("🔔 API Notifications PATCH", { userId: user.id, notificationId })
 
+    // Récupérer le token pour l'utiliser avec le service
+    const token = authHeader.replace('Bearer ', '')
+    
     // Marquer la notification comme lue
-    const result = await notificationsService.markAsRead(notificationId, user.id)
+    const result = await notificationsService.markAsRead(notificationId, user.id, token)
 
     if (!result.success) {
       return NextResponse.json(

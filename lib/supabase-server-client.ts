@@ -1,11 +1,10 @@
 /**
  * Client Supabase côté serveur sécurisé
- * Utilise les cookies de session et le service role de manière sécurisée
+ * Utilise les tokens JWT et le service role de manière sécurisée
  */
 
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest } from 'next/server'
-import { cookies } from 'next/headers'
 
 // Client public pour le frontend
 export const supabase = createClient(
@@ -26,39 +25,34 @@ export const supabaseAdmin = createClient(
 )
 
 /**
- * Crée un client Supabase lié à la requête (utilise les cookies de session)
- * Utilise createServerClient pour récupérer l'utilisateur authentifié
+ * Crée un client Supabase avec un token JWT spécifique
+ * Utilisé pour les requêtes authentifiées côté serveur
  */
-export async function createServerClient(request: NextRequest) {
-  const cookieStore = cookies()
-  
+export function createClientWithToken(accessToken: string) {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-      },
+      global: {
+        headers: {
+          Authorization: `Bearer ${accessToken}`
+        }
+      }
     }
   )
 }
 
 /**
- * Récupère l'utilisateur authentifié depuis la requête
- * Utilise les cookies de session Supabase
+ * Récupère l'utilisateur authentifié depuis l'Authorization header
+ * Utilise le token JWT dans l'en-tête
  */
 export async function getAuthenticatedUser(request: NextRequest) {
-  const supabase = await createServerClient(request)
-  
-  const { data: { user }, error } = await supabase.auth.getUser()
-  
-  if (error || !user) {
-    throw new Error('Utilisateur non authentifié')
+  const authHeader = request.headers.get('authorization')
+  if (!authHeader) {
+    throw new Error('Token d\'authentification requis')
   }
-  
-  return user
+
+  return getAuthenticatedUserFromToken(authHeader)
 }
 
 /**
@@ -68,7 +62,9 @@ export async function getAuthenticatedUser(request: NextRequest) {
 export async function getAuthenticatedUserFromToken(authHeader: string) {
   const token = authHeader.replace('Bearer ', '')
   
-  const { data: { user }, error } = await supabase.auth.getUser(token)
+  // Créer un client avec le token pour vérifier l'utilisateur
+  const client = createClientWithToken(token)
+  const { data: { user }, error } = await client.auth.getUser()
   
   if (error || !user) {
     throw new Error('Token invalide ou utilisateur non authentifié')
