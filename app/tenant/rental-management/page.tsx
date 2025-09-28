@@ -25,6 +25,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { authService } from "@/lib/auth-service"
+import { notificationsService } from "@/lib/notifications-service"
+import { LeaseServiceClient } from "@/lib/lease-service-client"
 import { toast } from "sonner"
 
 interface Lease {
@@ -109,6 +111,7 @@ export default function TenantRentalManagementPage() {
   const [rentReceipts, setRentReceipts] = useState<RentReceipt[]>([])
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [documents, setDocuments] = useState<Document[]>([])
+  const [notifications, setNotifications] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("overview")
 
@@ -124,19 +127,22 @@ export default function TenantRentalManagementPage() {
 
         setCurrentUser(user)
 
-        // Récupérer le bail actif
-        const leaseResponse = await fetch(`/api/leases/tenant/${user.id}/active`)
-        const leaseData = await leaseResponse.json()
+        // Récupérer le bail actif (côté client)
+        try {
+          const activeLease = await LeaseServiceClient.getActiveTenantLease(user.id)
+          if (activeLease) {
+            setActiveLease(activeLease)
+            console.log('🏠 Bail actif chargé:', activeLease.id)
 
-        if (leaseData.success && leaseData.lease) {
-          setActiveLease(leaseData.lease)
-
-          // Récupérer les quittances
-          const receiptsResponse = await fetch(`/api/rent-receipts/lease/${leaseData.lease.id}`)
-          const receiptsData = await receiptsResponse.json()
-          if (receiptsData.success) {
-            setRentReceipts(receiptsData.receipts || [])
+            // Récupérer les quittances
+            const receiptsResponse = await fetch(`/api/rent-receipts/lease/${activeLease.id}`)
+            const receiptsData = await receiptsResponse.json()
+            if (receiptsData.success) {
+              setRentReceipts(receiptsData.receipts || [])
+            }
           }
+        } catch (error) {
+          console.error("❌ Erreur récupération bail actif:", error)
         }
 
         // Récupérer les incidents
@@ -151,6 +157,15 @@ export default function TenantRentalManagementPage() {
         const documentsData = await documentsResponse.json()
         if (documentsData.success) {
           setDocuments(documentsData.documents || [])
+        }
+
+        // Récupérer les notifications
+        try {
+          const userNotifications = await notificationsService.getUserNotifications(user.id)
+          setNotifications(userNotifications)
+          console.log('🔔 Notifications chargées:', userNotifications.length)
+        } catch (error) {
+          console.error('❌ Erreur chargement notifications:', error)
         }
       } catch (error) {
         console.error("Erreur:", error)
@@ -294,7 +309,7 @@ export default function TenantRentalManagementPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
           <TabsTrigger value="payments">
             Paiements
@@ -310,6 +325,14 @@ export default function TenantRentalManagementPage() {
             {openIncidents.length > 0 && (
               <Badge variant="secondary" className="ml-2">
                 {openIncidents.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="notifications">
+            Notifications
+            {notifications.filter(n => !n.read).length > 0 && (
+              <Badge variant="destructive" className="ml-2">
+                {notifications.filter(n => !n.read).length}
               </Badge>
             )}
           </TabsTrigger>
@@ -742,6 +765,61 @@ export default function TenantRentalManagementPage() {
               ))}
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="notifications" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Mes notifications</CardTitle>
+              <CardDescription>Restez informé des dernières mises à jour</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {notifications.length === 0 ? (
+                <div className="text-center py-8">
+                  <Bell className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">Aucune notification pour le moment</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {notifications.map((notification) => (
+                    <div
+                      key={notification.id}
+                      className={`flex items-start space-x-4 p-4 border rounded-lg ${
+                        !notification.read ? 'bg-blue-50 border-blue-200' : 'bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex-shrink-0">
+                        <Bell className={`h-5 w-5 ${!notification.read ? 'text-blue-600' : 'text-gray-400'}`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <p className={`text-sm font-medium ${!notification.read ? 'text-blue-900' : 'text-gray-900'}`}>
+                            {notification.title}
+                          </p>
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(notification.created_at).toLocaleDateString('fr-FR')}
+                          </span>
+                        </div>
+                        <p className={`text-sm ${!notification.read ? 'text-blue-700' : 'text-gray-600'} mt-1`}>
+                          {notification.content}
+                        </p>
+                        {notification.action_url && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="mt-2"
+                            onClick={() => window.open(notification.action_url, '_blank')}
+                          >
+                            Voir le document
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="documents" className="space-y-6">

@@ -47,7 +47,15 @@ WHERE schemaname = 'public'
 AND tablename IN ('leases', 'notifications', 'charge_regularizations_v2', 'lease_revisions', 'charge_expenses', 'charge_supporting_documents')
 ORDER BY tablename;
 
--- 6. Tester l'insertion d'une notification avec service role
+-- 6. Vérifier les utilisateurs existants
+SELECT 
+    'Utilisateurs existants' as type,
+    COUNT(*) as total_users,
+    MIN(id::text) as first_user_id,
+    MAX(id::text) as last_user_id
+FROM users;
+
+-- 7. Tester l'insertion d'une notification avec service role
 -- (Simuler ce que fait l'API backend)
 DO $$
 DECLARE
@@ -58,6 +66,8 @@ BEGIN
     SELECT id INTO test_user_id FROM users LIMIT 1;
     
     IF test_user_id IS NOT NULL THEN
+        RAISE NOTICE 'Utilisateur de test trouvé: %', test_user_id;
+        
         -- Insérer une notification de test
         INSERT INTO notifications (
             user_id,

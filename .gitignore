@@ -85,3 +85,11 @@ scripts/check-revision-tables.js
 scripts/create-exec-sql-function.sql
 scripts/run-lease-charge-settings-migration.js
 scripts/setup-revision-system.js
+scripts/debug-leases-access.sql
+scripts/fix-all-rls-policies-final.sql
+scripts/test-complete-workflow-debug.sql
+scripts/test-final-workflow.sql
+scripts/test-notification-insertion.sql
+scripts/test-tenant-access-simple.sql
+scripts/test-workflow-complete-final.sql
+scripts/test-complete-workflow-debug.sql

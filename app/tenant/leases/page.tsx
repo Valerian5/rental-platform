@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { authService } from "@/lib/auth-service"
+import { LeaseServiceClient } from "@/lib/lease-service-client"
 import { toast } from "sonner"
 import { Lease as LeaseType, LEASE_STATUS_CONFIG, leaseStatusUtils } from "@/lib/lease-types"
 
@@ -56,14 +57,13 @@ export default function TenantLeasesPage() {
 
         setCurrentUser(user)
 
-        // Récupérer les baux du locataire
-        const response = await fetch(`/api/leases/tenant/${user.id}`)
-        const data = await response.json()
-
-        if (data.success) {
-          setLeases(data.leases || [])
-        } else {
-          console.error("Erreur récupération baux:", data.error)
+        // Récupérer les baux du locataire (côté client)
+        try {
+          const tenantLeases = await LeaseServiceClient.getTenantLeases(user.id)
+          setLeases(tenantLeases)
+          console.log('🏠 Baux chargés:', tenantLeases.length)
+        } catch (error) {
+          console.error("❌ Erreur récupération baux:", error)
           setLeases([])
         }
       } catch (error) {
