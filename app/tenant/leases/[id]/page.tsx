@@ -579,14 +579,10 @@ export default function TenantLeaseDetailPage() {
                       signedDocument={lease.signed_document}
                     />
                   ) : (
-                    <UnifiedSignatureManager
-                      leaseId={leaseId}
-                      leaseStatus={lease.status}
-                      userType="tenant"
-                      onStatusChange={(newStatus) => {
-                        setLease((prev) => (prev ? { ...prev, status: newStatus } : null))
-                      }}
-                    />
+                    <div className="text-center py-8">
+                      <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-muted-foreground">Signature non disponible pour ce bail</p>
+                    </div>
                   )}
                 </CardContent>
               </Card>

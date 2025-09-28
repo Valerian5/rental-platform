@@ -112,6 +112,7 @@ export default function TenantRentalManagementPage() {
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [documents, setDocuments] = useState<Document[]>([])
   const [notifications, setNotifications] = useState<any[]>([])
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("overview")
 
@@ -309,7 +310,7 @@ export default function TenantRentalManagementPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-7">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
           <TabsTrigger value="payments">
             Paiements
@@ -328,16 +329,8 @@ export default function TenantRentalManagementPage() {
               </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="notifications">
-            Notifications
-            {notifications.filter(n => !n.read).length > 0 && (
-              <Badge variant="destructive" className="ml-2">
-                {notifications.filter(n => !n.read).length}
-              </Badge>
-            )}
-          </TabsTrigger>
+          <TabsTrigger value="maintenance">Travaux</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
-          <TabsTrigger value="contact">Contact</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -586,35 +579,79 @@ export default function TenantRentalManagementPage() {
               <CardDescription>Téléchargez et consultez toutes vos quittances</CardDescription>
             </CardHeader>
             <CardContent>
+              {/* Filtre par année */}
+              <div className="mb-6">
+                <label className="text-sm font-medium mb-2 block">Filtrer par année :</label>
+                <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(Number(e.target.value))}
+                  className="px-3 py-2 border rounded-md"
+                >
+                  {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="space-y-4">
-                {rentReceipts.map((receipt) => (
-                  <div key={receipt.id} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="flex items-center space-x-4">
-                      <Receipt className="h-8 w-8 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">
-                          Quittance {receipt.month}/{receipt.year}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          Loyer: {receipt.rent_amount}€ + Charges: {receipt.charges_amount}€ = {receipt.total_amount}€
-                        </p>
+                {rentReceipts
+                  .filter(receipt => receipt.year === selectedYear)
+                  .map((receipt) => (
+                    <div key={receipt.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
+                      <div className="flex items-center space-x-4">
+                        <Receipt className="h-8 w-8 text-muted-foreground" />
+                        <div>
+                          <p className="font-medium">
+                            Quittance {receipt.month.toString().padStart(2, '0')}/{receipt.year}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            Loyer: {receipt.rent_amount}€ + Charges: {receipt.charges_amount}€ = {receipt.total_amount}€
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {receipt.payment_date 
+                              ? `Payé le ${new Date(receipt.payment_date).toLocaleDateString("fr-FR")}`
+                              : "En attente de paiement"
+                            }
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Badge 
+                          variant={
+                            receipt.status === "paid" 
+                              ? "default" 
+                              : receipt.status === "overdue" 
+                                ? "destructive" 
+                                : "secondary"
+                          }
+                        >
+                          {receipt.status === "paid" ? "Payé" : 
+                           receipt.status === "overdue" ? "En retard" : "En attente"}
+                        </Badge>
+                        {receipt.receipt_url ? (
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => window.open(receipt.receipt_url, '_blank')}
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            Télécharger
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="outline" disabled>
+                            Non disponible
+                          </Button>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      {receipt.status === "paid" && <Badge className="bg-green-600">Payé</Badge>}
-                      {receipt.receipt_url ? (
-                        <Button size="sm" variant="outline">
-                          <Download className="h-4 w-4 mr-2" />
-                          Télécharger
-                        </Button>
-                      ) : (
-                        <Button size="sm" variant="outline" disabled>
-                          Non disponible
-                        </Button>
-                      )}
-                    </div>
+                  ))}
+                
+                {rentReceipts.filter(receipt => receipt.year === selectedYear).length === 0 && (
+                  <div className="text-center py-8">
+                    <Receipt className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">Aucune quittance pour l'année {selectedYear}</p>
                   </div>
-                ))}
+                )}
               </div>
             </CardContent>
           </Card>
@@ -767,57 +804,17 @@ export default function TenantRentalManagementPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="notifications" className="space-y-6">
+        <TabsContent value="maintenance" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Mes notifications</CardTitle>
-              <CardDescription>Restez informé des dernières mises à jour</CardDescription>
+              <CardTitle>Travaux et maintenance</CardTitle>
+              <CardDescription>Suivez l'état des travaux dans votre logement</CardDescription>
             </CardHeader>
             <CardContent>
-              {notifications.length === 0 ? (
-                <div className="text-center py-8">
-                  <Bell className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">Aucune notification pour le moment</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {notifications.map((notification) => (
-                    <div
-                      key={notification.id}
-                      className={`flex items-start space-x-4 p-4 border rounded-lg ${
-                        !notification.read ? 'bg-blue-50 border-blue-200' : 'bg-gray-50'
-                      }`}
-                    >
-                      <div className="flex-shrink-0">
-                        <Bell className={`h-5 w-5 ${!notification.read ? 'text-blue-600' : 'text-gray-400'}`} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <p className={`text-sm font-medium ${!notification.read ? 'text-blue-900' : 'text-gray-900'}`}>
-                            {notification.title}
-                          </p>
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(notification.created_at).toLocaleDateString('fr-FR')}
-                          </span>
-                        </div>
-                        <p className={`text-sm ${!notification.read ? 'text-blue-700' : 'text-gray-600'} mt-1`}>
-                          {notification.content}
-                        </p>
-                        {notification.action_url && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="mt-2"
-                            onClick={() => window.open(notification.action_url, '_blank')}
-                          >
-                            Voir le document
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div className="text-center py-8">
+                <AlertTriangle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">Aucun travail en cours pour le moment</p>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
