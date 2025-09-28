@@ -131,6 +131,7 @@ export async function POST(request: NextRequest) {
         balance_type: regularization.balance >= 0 ? 'refund' : 'additional_payment'
       }
       
+      // Utiliser le service role pour contourner RLS
       const { data: notificationDataResult, error: notificationError } = await supabaseAdmin
         .from('notifications')
         .insert({
@@ -146,6 +147,7 @@ export async function POST(request: NextRequest) {
     console.log('🔔 Notification créée:', notificationDataResult)
     if (notificationError) {
       console.error('❌ Erreur création notification:', notificationError)
+      // Ne pas échouer si la notification échoue
     } else {
       console.log('✅ Notification créée avec succès')
     }

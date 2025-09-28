@@ -118,6 +118,7 @@ export async function POST(request: NextRequest) {
         increase_percentage: revision.increase_percentage
       }
       
+      // Utiliser le service role pour contourner RLS
       const { data: notificationDataResult, error: notificationError } = await supabaseAdmin
         .from('notifications')
         .insert({
@@ -133,6 +134,7 @@ export async function POST(request: NextRequest) {
     console.log('🔔 Notification révision créée:', notificationDataResult)
     if (notificationError) {
       console.error('❌ Erreur création notification révision:', notificationError)
+      // Ne pas échouer si la notification échoue
     } else {
       console.log('✅ Notification révision créée avec succès')
     }
