@@ -118,11 +118,11 @@ export async function POST(request: NextRequest) {
         increase_percentage: revision.increase_percentage
       }
       
-      // Utiliser le service de notifications
+      // Utiliser le service de notifications côté serveur
       try {
         const { notificationsService } = await import('@/lib/notifications-service')
         
-        const notification = await notificationsService.createRentRevisionNotification(
+        const notification = await notificationsService.createRentRevisionNotificationServer(
           revision.lease.tenant.id,
           year,
           revision.new_rent,

@@ -1,4 +1,5 @@
 import { supabase } from "./supabase"
+import { supabaseAdmin } from "./supabase-server-client"
 
 export interface Notification {
   id: string
@@ -102,24 +103,28 @@ export const notificationsService = {
     }
   },
 
-  async markAsRead(notificationId: string): Promise<void> {
-    console.log("🔔 NotificationsService.markAsRead", notificationId)
+  async markAsRead(notificationId: string, userId: string): Promise<{ success: boolean; error?: string }> {
+    console.log("🔔 NotificationsService.markAsRead", { notificationId, userId })
 
-try {
-    const { error } = await supabase
-      .from("notifications")
-      .update({ read: true })
-      .eq("id", id)
-      .eq("user_id", userId) // 🔒 sécurité supplémentaire
+    try {
+      const { error } = await supabase
+        .from("notifications")
+        .update({ read: true })
+        .eq("id", notificationId)
+        .eq("user_id", userId) // 🔒 sécurité supplémentaire
 
-    if (error) throw error
+      if (error) {
+        console.error("❌ Erreur marquage notification:", error)
+        return { success: false, error: error.message }
+      }
 
-    return { success: true }
-  } catch (error) {
-    console.error("Erreur lors du marquage de la notification comme lue:", error)
-    return { success: false, error: "Impossible de marquer la notification comme lue" }
-  }
-},
+      console.log("✅ Notification marquée comme lue")
+      return { success: true }
+    } catch (error) {
+      console.error("❌ Erreur dans markAsRead:", error)
+      return { success: false, error: "Erreur lors du marquage de la notification" }
+    }
+  },
 
   async markAllAsRead(userId: string): Promise<void> {
     console.log("🔔 NotificationsService.markAllAsRead", userId)
@@ -161,14 +166,60 @@ try {
     }
   },
 
-  // Méthodes spécifiques pour les régularisations et révisions
-  async createChargeRegularizationNotification(
+  // Méthodes côté serveur (utilisent service_role)
+  async createNotificationServer(
+    userId: string,
+    title: string,
+    content: string,
+    type: string,
+    actionUrl?: string
+  ): Promise<Notification> {
+    console.log("🔔 NotificationsService.createNotificationServer", { userId, title, type })
+
+    try {
+      // Vérifier que l'utilisateur existe
+      const { verifyUserExists } = await import('./supabase-server-client')
+      const userExists = await verifyUserExists(userId)
+      
+      if (!userExists) {
+        throw new Error('Utilisateur non trouvé')
+      }
+
+      const { data, error } = await supabaseAdmin
+        .from('notifications')
+        .insert({
+          user_id: userId,
+          title,
+          content,
+          type,
+          action_url: actionUrl || null,
+          read: false,
+          created_at: new Date().toISOString(),
+        })
+        .select()
+        .single()
+
+      if (error) {
+        console.error("❌ Erreur création notification serveur:", error)
+        throw new Error(`Erreur création: ${error.message}`)
+      }
+
+      console.log("✅ Notification serveur créée:", data.id)
+      return data as Notification
+    } catch (error) {
+      console.error("❌ Erreur dans createNotificationServer:", error)
+      throw error
+    }
+  },
+
+  // Méthodes spécifiques pour les régularisations et révisions (côté serveur)
+  async createChargeRegularizationNotificationServer(
     tenantId: string, 
     year: number, 
     balance: number, 
     pdfUrl: string
   ): Promise<Notification> {
-    console.log("🔔 NotificationsService.createChargeRegularizationNotification", { tenantId, year, balance })
+    console.log("🔔 NotificationsService.createChargeRegularizationNotificationServer", { tenantId, year, balance })
 
     const balanceType = balance >= 0 ? 'refund' : 'additional_payment'
     const notificationData = {
@@ -179,22 +230,23 @@ try {
       balance_type: balanceType
     }
 
-    return this.createNotification(tenantId, {
-      type: 'charge_regularization',
-      title: `Régularisation des charges ${year}`,
-      content: `Votre propriétaire vous a envoyé la régularisation des charges pour l'année ${year}.`,
-      action_url: `${pdfUrl}?data=${encodeURIComponent(JSON.stringify(notificationData))}`
-    })
+    return this.createNotificationServer(
+      tenantId,
+      `Régularisation des charges ${year}`,
+      `Votre propriétaire vous a envoyé la régularisation des charges pour l'année ${year}.`,
+      'charge_regularization',
+      `${pdfUrl}?data=${encodeURIComponent(JSON.stringify(notificationData))}`
+    )
   },
 
-  async createRentRevisionNotification(
+  async createRentRevisionNotificationServer(
     tenantId: string, 
     year: number, 
     newRent: number, 
     increasePercentage: number, 
     pdfUrl: string
   ): Promise<Notification> {
-    console.log("🔔 NotificationsService.createRentRevisionNotification", { tenantId, year, newRent, increasePercentage })
+    console.log("🔔 NotificationsService.createRentRevisionNotificationServer", { tenantId, year, newRent, increasePercentage })
 
     const notificationData = {
       revision_id: 'temp', // Sera remplacé par l'ID réel
@@ -204,12 +256,13 @@ try {
       increase_percentage: increasePercentage
     }
 
-    return this.createNotification(tenantId, {
-      type: 'rent_revision',
-      title: `Révision de loyer ${year}`,
-      content: `Votre propriétaire vous a envoyé la révision de loyer pour l'année ${year}.`,
-      action_url: `${pdfUrl}?data=${encodeURIComponent(JSON.stringify(notificationData))}`
-    })
+    return this.createNotificationServer(
+      tenantId,
+      `Révision de loyer ${year}`,
+      `Votre propriétaire vous a envoyé la révision de loyer pour l'année ${year}.`,
+      'rent_revision',
+      `${pdfUrl}?data=${encodeURIComponent(JSON.stringify(notificationData))}`
+    )
   },
 
   // Notifications pour les candidatures
