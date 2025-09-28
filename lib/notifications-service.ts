@@ -160,6 +160,57 @@ export const notificationsService = {
     }
   },
 
+  // Méthodes spécifiques pour les régularisations et révisions
+  async createChargeRegularizationNotification(
+    tenantId: string, 
+    year: number, 
+    balance: number, 
+    pdfUrl: string
+  ): Promise<Notification> {
+    console.log("🔔 NotificationsService.createChargeRegularizationNotification", { tenantId, year, balance })
+
+    const balanceType = balance >= 0 ? 'refund' : 'additional_payment'
+    const notificationData = {
+      regularization_id: 'temp', // Sera remplacé par l'ID réel
+      year: year,
+      pdf_url: pdfUrl,
+      balance: balance,
+      balance_type: balanceType
+    }
+
+    return this.createNotification(tenantId, {
+      type: 'charge_regularization',
+      title: `Régularisation des charges ${year}`,
+      content: `Votre propriétaire vous a envoyé la régularisation des charges pour l'année ${year}.`,
+      action_url: `${pdfUrl}?data=${encodeURIComponent(JSON.stringify(notificationData))}`
+    })
+  },
+
+  async createRentRevisionNotification(
+    tenantId: string, 
+    year: number, 
+    newRent: number, 
+    increasePercentage: number, 
+    pdfUrl: string
+  ): Promise<Notification> {
+    console.log("🔔 NotificationsService.createRentRevisionNotification", { tenantId, year, newRent, increasePercentage })
+
+    const notificationData = {
+      revision_id: 'temp', // Sera remplacé par l'ID réel
+      year: year,
+      pdf_url: pdfUrl,
+      new_rent: newRent,
+      increase_percentage: increasePercentage
+    }
+
+    return this.createNotification(tenantId, {
+      type: 'rent_revision',
+      title: `Révision de loyer ${year}`,
+      content: `Votre propriétaire vous a envoyé la révision de loyer pour l'année ${year}.`,
+      action_url: `${pdfUrl}?data=${encodeURIComponent(JSON.stringify(notificationData))}`
+    })
+  },
+
   // Notifications pour les candidatures
   async notifyNewApplication(applicationData: any, propertyData: any, tenantData: any, ownerData: any) {
     console.log("🔔 Notification nouvelle candidature")

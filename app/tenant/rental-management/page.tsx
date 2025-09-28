@@ -618,9 +618,9 @@ export default function TenantRentalManagementPage() {
                       <div className="flex items-center space-x-4">
                         <Receipt className="h-8 w-8 text-muted-foreground" />
                         <div>
-                          <p className="font-medium">
-                            Quittance {receipt.month.toString().padStart(2, '0')}/{receipt.year}
-                          </p>
+                        <p className="font-medium">
+                          Quittance {receipt.month}
+                        </p>
                           <p className="text-sm text-muted-foreground">
                             Loyer: {receipt.rent_amount}€ + Charges: {receipt.charges_amount}€ = {receipt.total_amount}€
                           </p>

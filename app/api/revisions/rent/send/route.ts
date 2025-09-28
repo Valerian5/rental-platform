@@ -118,26 +118,23 @@ export async function POST(request: NextRequest) {
         increase_percentage: revision.increase_percentage
       }
       
-      // Utiliser le service role pour contourner RLS
-      const { data: notificationDataResult, error: notificationError } = await supabaseAdmin
-        .from('notifications')
-        .insert({
-          user_id: revision.lease.tenant.id,
-          type: 'rent_revision',
-          title: `Révision de loyer ${year}`,
-          content: `Votre propriétaire vous a envoyé la révision de loyer pour l'année ${year}.`,
-          action_url: `${publicUrl}?data=${encodeURIComponent(JSON.stringify(notificationData))}`,
-          read: false
-        })
-        .select()
-
-    console.log('🔔 Notification révision créée:', notificationDataResult)
-    if (notificationError) {
-      console.error('❌ Erreur création notification révision:', notificationError)
-      // Ne pas échouer si la notification échoue
-    } else {
-      console.log('✅ Notification révision créée avec succès')
-    }
+      // Utiliser le service de notifications
+      try {
+        const { notificationsService } = await import('@/lib/notifications-service')
+        
+        const notification = await notificationsService.createRentRevisionNotification(
+          revision.lease.tenant.id,
+          year,
+          revision.new_rent,
+          revision.increase_percentage,
+          publicUrl
+        )
+        
+        console.log('✅ Notification révision créée avec succès:', notification.id)
+      } catch (notificationError) {
+        console.error('❌ Erreur création notification révision:', notificationError)
+        // Ne pas échouer si la notification échoue
+      }
 
     // Mettre à jour le statut de la révision
     const { error: updateError } = await supabaseAdmin

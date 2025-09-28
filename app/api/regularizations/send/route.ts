@@ -131,26 +131,22 @@ export async function POST(request: NextRequest) {
         balance_type: regularization.balance >= 0 ? 'refund' : 'additional_payment'
       }
       
-      // Utiliser le service role pour contourner RLS
-      const { data: notificationDataResult, error: notificationError } = await supabaseAdmin
-        .from('notifications')
-        .insert({
-          user_id: lease.tenant.id,
-          type: 'charge_regularization',
-          title: `Régularisation des charges ${year}`,
-          content: `Votre propriétaire vous a envoyé la régularisation des charges pour l'année ${year}.`,
-          action_url: `${publicUrl}?data=${encodeURIComponent(JSON.stringify(notificationData))}`,
-          read: false
-        })
-        .select()
-
-    console.log('🔔 Notification créée:', notificationDataResult)
-    if (notificationError) {
-      console.error('❌ Erreur création notification:', notificationError)
-      // Ne pas échouer si la notification échoue
-    } else {
-      console.log('✅ Notification créée avec succès')
-    }
+      // Utiliser le service de notifications
+      try {
+        const { notificationsService } = await import('@/lib/notifications-service')
+        
+        const notification = await notificationsService.createChargeRegularizationNotification(
+          lease.tenant.id,
+          year,
+          regularization.balance,
+          publicUrl
+        )
+        
+        console.log('✅ Notification créée avec succès:', notification.id)
+      } catch (notificationError) {
+        console.error('❌ Erreur création notification:', notificationError)
+        // Ne pas échouer si la notification échoue
+      }
 
     // Mettre à jour le statut de la régularisation
     const { error: updateError } = await supabaseAdmin
