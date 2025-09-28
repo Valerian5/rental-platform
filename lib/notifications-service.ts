@@ -105,20 +105,21 @@ export const notificationsService = {
   async markAsRead(notificationId: string): Promise<void> {
     console.log("🔔 NotificationsService.markAsRead", notificationId)
 
-    try {
-      const { error } = await supabase.from("notifications").update({ read: true }).eq("id", notificationId)
+try {
+    const { error } = await supabase
+      .from("notifications")
+      .update({ read: true })
+      .eq("id", id)
+      .eq("user_id", userId) // 🔒 sécurité supplémentaire
 
-      if (error) {
-        console.error("❌ Erreur marquage notification:", error)
-        throw new Error(`Erreur marquage: ${error.message}`)
-      }
+    if (error) throw error
 
-      console.log("✅ Notification marquée comme lue")
-    } catch (error) {
-      console.error("❌ Erreur dans markAsRead:", error)
-      throw error
-    }
-  },
+    return { success: true }
+  } catch (error) {
+    console.error("Erreur lors du marquage de la notification comme lue:", error)
+    return { success: false, error: "Impossible de marquer la notification comme lue" }
+  }
+},
 
   async markAllAsRead(userId: string): Promise<void> {
     console.log("🔔 NotificationsService.markAllAsRead", userId)

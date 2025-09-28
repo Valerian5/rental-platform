@@ -1,126 +1,57 @@
-import { type NextRequest, NextResponse } from "next/server"
+// app/api/notifications/route.ts
+import { NextRequest, NextResponse } from "next/server"
+import { createApiSupabaseClient } from "@/lib/supabase-server-client"
 import { notificationsService } from "@/lib/notifications-service"
 
 export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url)
-    const userId = searchParams.get("user_id")
-    const unreadOnly = searchParams.get("unread_only") === "true"
+  const supabase = createApiSupabaseClient(request)
 
-    console.log("🔔 API Notifications GET - userId:", userId, "unreadOnly:", unreadOnly)
+  // Récupérer l'utilisateur connecté depuis le token
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
 
-    if (!userId) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "user_id requis",
-        },
-        { status: 400 },
-      )
-    }
-
-    // Récupérer les notifications
-    const notifications = await notificationsService.getUserNotifications(userId, unreadOnly)
-
-    // Récupérer le nombre de notifications non lues
-    const unreadCount = await notificationsService.getUnreadCount(userId)
-
-    console.log("✅ API Notifications - Récupérées:", notifications.length, "notifications, non lues:", unreadCount)
-
-    return NextResponse.json({
-      success: true,
-      notifications,
-      unreadCount,
-    })
-  } catch (error: any) {
-    console.error("❌ Erreur API notifications:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message || "Erreur interne du serveur",
-        notifications: [],
-        unreadCount: 0,
-      },
-      { status: 500 },
-    )
+  if (userError || !user) {
+    return NextResponse.json({ success: false, error: "Utilisateur non authentifié" }, { status: 401 })
   }
-}
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json()
-    const { user_id, title, content, type, action_url } = body
+  const { searchParams } = new URL(request.url)
+  const unreadOnly = searchParams.get("unreadOnly") === "true"
 
-    console.log("🔔 API Notifications POST - Création notification:", { user_id, title, type })
+  const result = await notificationsService.getUserNotifications(user.id, unreadOnly)
 
-    if (!user_id || !title || !content || !type) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Données manquantes (user_id, title, content, type requis)",
-        },
-        { status: 400 },
-      )
-    }
-
-    const notification = await notificationsService.createNotification(user_id, {
-      title,
-      content,
-      type,
-      action_url,
-    })
-
-    console.log("✅ API Notifications - Notification créée:", notification.id)
-
-    return NextResponse.json({
-      success: true,
-      notification,
-    })
-  } catch (error: any) {
-    console.error("❌ Erreur création notification:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message || "Erreur lors de la création",
-      },
-      { status: 500 },
-    )
+  if (!result.success) {
+    return NextResponse.json(result, { status: 500 })
   }
+
+  return NextResponse.json(result)
 }
 
 export async function PATCH(request: NextRequest) {
-  try {
-    const body = await request.json()
-    const { notificationId, read } = body
+  const supabase = createApiSupabaseClient(request)
 
-    console.log("🔔 API Notifications PATCH - Marquage notification:", notificationId, "read:", read)
+  // Récupérer l'utilisateur connecté
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
 
-    if (!notificationId) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "notificationId requis",
-        },
-        { status: 400 },
-      )
-    }
-
-    await notificationsService.markAsRead(notificationId)
-
-    console.log("✅ API Notifications - Notification marquée comme lue")
-
-    return NextResponse.json({
-      success: true,
-      message: "Notification marquée comme lue",
-    })
-  } catch (error: any) {
-    console.error("❌ Erreur marquage notification:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message || "Erreur lors du marquage",
-      },
-      { status: 500 },
-    )
+  if (userError || !user) {
+    return NextResponse.json({ success: false, error: "Utilisateur non authentifié" }, { status: 401 })
   }
+
+  const { id } = await request.json()
+
+  if (!id) {
+    return NextResponse.json({ success: false, error: "ID de notification manquant" }, { status: 400 })
+  }
+
+  const result = await notificationsService.markNotificationAsRead(id, user.id)
+
+  if (!result.success) {
+    return NextResponse.json(result, { status: 500 })
+  }
+
+  return NextResponse.json(result)
 }
