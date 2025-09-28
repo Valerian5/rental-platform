@@ -1,13 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Bell, AlertCircle, MessageSquare, Calendar, CreditCard, Home } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Separator } from "@/components/ui/separator"
-import { useNotifications } from "@/hooks/useNotifications"
 
 interface Notification {
   id: string
@@ -79,26 +78,93 @@ const isFutureVisit = (notification: Notification): boolean => {
 }
 
 export function NotificationCenter() {
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
-  const { 
-    notifications, 
-    unreadCount, 
-    loading, 
-    error, 
-    markAsRead 
-  } = useNotifications()
+  const [error, setError] = useState<string | null>(null)
 
-  const handleMarkAsRead = async (notificationId: string) => {
-    const success = await markAsRead(notificationId)
-    if (success) {
-      console.log('✅ Notification marquée comme lue')
+  useEffect(() => {
+    loadNotifications()
+    const interval = setInterval(loadNotifications, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const loadNotifications = async () => {
+    try {
+      setError(null)
+      const userStr = localStorage.getItem("user")
+      if (!userStr) {
+        setLoading(false)
+        setError("Utilisateur non connecté")
+        return
+      }
+
+      const user = JSON.parse(userStr)
+      if (!user.id) {
+        setLoading(false)
+        setError("ID utilisateur manquant")
+        return
+      }
+
+      const response = await fetch(`/api/notifications?user_id=${user.id}`)
+      if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+
+      const data = await response.json()
+      if (data.success) {
+        // Filtrer les notifications pour ne garder que les visites futures et autres notifications
+        const filteredNotifications = (data.notifications || []).filter(isFutureVisit)
+        
+        setNotifications(filteredNotifications)
+        setUnreadCount(filteredNotifications.filter(n => !n.read).length)
+      } else {
+        setError(data.error || "Erreur lors du chargement")
+        setNotifications([])
+        setUnreadCount(0)
+      }
+    } catch (error: any) {
+      setError(error.message || "Erreur de connexion")
+      setNotifications([])
+      setUnreadCount(0)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const markAsRead = async (notificationId: string) => {
+    try {
+      const response = await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notificationId, read: true }),
+      })
+
+      const result = await response.json()
+      if (result.success) {
+        setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, read: true } : n))
+        setUnreadCount(prev => Math.max(0, prev - 1))
+      }
+    } catch (error) {
+      console.error("Erreur marquage notification:", error)
     }
   }
 
   const markAllAsRead = async () => {
-    const unreadNotifications = notifications.filter(n => !n.read)
-    for (const notification of unreadNotifications) {
-      await handleMarkAsRead(notification.id)
+    try {
+      const unreadNotifications = notifications.filter(n => !n.read)
+      await Promise.all(
+        unreadNotifications.map(n =>
+          fetch("/api/notifications", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ notificationId: n.id, read: true }),
+          })
+        )
+      )
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+      setUnreadCount(0)
+    } catch (error) {
+      console.error("Erreur marquage toutes notifications:", error)
     }
   }
 

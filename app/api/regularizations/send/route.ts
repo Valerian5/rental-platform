@@ -131,11 +131,11 @@ export async function POST(request: NextRequest) {
         balance_type: regularization.balance >= 0 ? 'refund' : 'additional_payment'
       }
       
-      // Utiliser le service de notifications côté serveur
+      // Utiliser le service de notifications
       try {
         const { notificationsService } = await import('@/lib/notifications-service')
         
-        const notification = await notificationsService.createChargeRegularizationNotificationServer(
+        const notification = await notificationsService.createChargeRegularizationNotification(
           lease.tenant.id,
           year,
           regularization.balance,
