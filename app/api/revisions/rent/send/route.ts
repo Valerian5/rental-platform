@@ -168,10 +168,10 @@ export async function POST(request: NextRequest) {
           address: revision.lease.property.address
         },
         year,
-        revision.old_rent,
-        revision.new_rent,
-        revision.increase,
-        revision.increase_percentage,
+        revision.old_rent_amount,
+        revision.new_rent_amount,
+        revision.rent_increase_amount,
+        revision.rent_increase_percentage,
         publicUrl
       )
       
