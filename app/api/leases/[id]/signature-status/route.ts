@@ -15,7 +15,16 @@ export async function GET(
     // Optionnellement rafraîchir depuis DocuSign
     if (refresh) {
       try {
-        await docuSignService.checkSignatureStatus(leaseId)
+        // Ne tente un refresh que si l'enveloppe existe
+        const { data: exists } = await server
+          .from("leases")
+          .select("docusign_envelope_id")
+          .eq("id", leaseId)
+          .is("docusign_envelope_id", null)
+          .maybeSingle()
+        if (!exists) {
+          await docuSignService.checkSignatureStatus(leaseId)
+        }
       } catch (e) {
         console.warn("⚠️ Rafraîchissement DocuSign échoué (non bloquant):", e)
       }

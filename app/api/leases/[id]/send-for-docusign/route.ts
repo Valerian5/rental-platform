@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { createServerClient } from "@/lib/supabase"
 import { docuSignService } from "@/lib/docusign-service"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
@@ -8,8 +8,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     console.log("📤 [SEND-DOCUSIGN] Envoi du bail pour signature DocuSign:", leaseId)
 
-    // Vérifier que le bail existe et a un document généré
-    const { data: lease, error: leaseError } = await supabase
+    const db = createServerClient()
+
+    // Vérifier que le bail existe et a un document généré (bypass RLS via service role)
+    const { data: lease, error: leaseError } = await db
       .from("leases")
       .select(`
         *,
@@ -67,7 +69,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     console.log("✅ [SEND-DOCUSIGN] Résultat DocuSign:", result)
 
     // Mettre à jour le statut du bail (ne pas stocker d'URLs de signature éphémères)
-	const { error: updateError } = await supabase
+	const { error: updateError } = await db
 	  .from("leases")
 	  .update({
 		status: "sent_to_tenant",

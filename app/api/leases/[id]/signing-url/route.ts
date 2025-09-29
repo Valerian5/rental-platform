@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { docuSignService } from "@/lib/docusign-service"
-import { supabase } from "@/lib/supabase"
+import { createServerClient } from "@/lib/supabase"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -8,7 +8,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const { searchParams } = new URL(request.url)
     const role = searchParams.get("role") // "owner" ou "tenant"
 
-    const { data: lease, error } = await supabase
+    const db = createServerClient()
+    const { data: lease, error } = await db
       .from("leases")
       .select(`
         id,
