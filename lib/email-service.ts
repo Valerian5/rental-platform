@@ -32,6 +32,12 @@ import SignatureCompletedEmail from "@/components/emails/signature-completed-ema
 import LeaseFullySignedEmail from "@/components/emails/lease-fully-signed-email"
 import ChargeRegularizationEmail from "@/components/emails/charge-regularization-email"
 import RentRevisionEmail from "@/components/emails/rent-revision-email"
+import LeaseTenantReadyToSignEmail from "@/components/emails/lease-tenant-ready-to-sign"
+import LeaseOwnerReadyToSignEmail from "@/components/emails/lease-owner-ready-to-sign"
+import LeaseTenantOwnerSignedEmail from "@/components/emails/lease-tenant-owner-signed"
+import LeaseOwnerTenantSignedEmail from "@/components/emails/lease-owner-tenant-signed"
+import LeaseTenantFinalizedEmail from "@/components/emails/lease-tenant-finalized"
+import LeaseOwnerFinalizedEmail from "@/components/emails/lease-owner-finalized"
 
 
 // --- CONFIG EXPÉDITEUR ---
@@ -727,6 +733,62 @@ export async function sendLeaseFullySignedEmail(
       leaseUrl,
       logoUrl,
     })
+  )
+}
+
+// --- EMAILS BAIL / SIGNATURES DÉDIÉS ---
+
+export async function sendLeaseTenantReadyToSignEmail(tenant: User, property: Property, leaseId: string) {
+  await sendEmail(
+    tenant,
+    NotificationType.DOCUSIGN_SIGNATURE_REQUEST,
+    "Votre bail est prêt à être signé",
+    LeaseTenantReadyToSignEmail({ tenantName: tenant.name || "", propertyTitle: property.title, leaseId }),
+  )
+}
+
+export async function sendLeaseOwnerReadyToSignEmail(owner: User, property: Property, leaseId: string) {
+  await sendEmail(
+    owner,
+    NotificationType.DOCUSIGN_SIGNATURE_REQUEST,
+    "Votre bail est prêt à être signé",
+    LeaseOwnerReadyToSignEmail({ ownerName: owner.name || "", propertyTitle: property.title, leaseId }),
+  )
+}
+
+export async function sendLeaseTenantOwnerSignedEmail(tenant: User, property: Property, leaseId: string) {
+  await sendEmail(
+    tenant,
+    NotificationType.DOCUSIGN_SIGNATURE_REQUEST,
+    "Le propriétaire a signé le bail",
+    LeaseTenantOwnerSignedEmail({ tenantName: tenant.name || "", propertyTitle: property.title, leaseId }),
+  )
+}
+
+export async function sendLeaseOwnerTenantSignedEmail(owner: User, property: Property, leaseId: string) {
+  await sendEmail(
+    owner,
+    NotificationType.DOCUSIGN_SIGNATURE_REQUEST,
+    "Le locataire a signé le bail",
+    LeaseOwnerTenantSignedEmail({ ownerName: owner.name || "", propertyTitle: property.title, leaseId }),
+  )
+}
+
+export async function sendLeaseTenantFinalizedEmail(tenant: User, property: Property, leaseId: string) {
+  await sendEmail(
+    tenant,
+    NotificationType.DOCUSIGN_COMPLETED,
+    "Votre bail signé est disponible",
+    LeaseTenantFinalizedEmail({ tenantName: tenant.name || "", propertyTitle: property.title, leaseId }),
+  )
+}
+
+export async function sendLeaseOwnerFinalizedEmail(owner: User, property: Property, leaseId: string) {
+  await sendEmail(
+    owner,
+    NotificationType.DOCUSIGN_COMPLETED,
+    "Votre bail signé est disponible",
+    LeaseOwnerFinalizedEmail({ ownerName: owner.name || "", propertyTitle: property.title, leaseId }),
   )
 }
 

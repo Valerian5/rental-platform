@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase-server-client"
 import { NotificationsService } from "@/lib/notifications-service"
+import { sendLeaseOwnerFinalizedEmail, sendLeaseTenantFinalizedEmail } from "@/lib/email-service"
 import xml2js from "xml2js"
 
 // Configuration du parser XML
@@ -88,6 +89,28 @@ export async function POST(req: NextRequest) {
       } catch (emailError) {
         console.error("❌ Erreur envoi notification email:", emailError)
         // Ne pas faire échouer le webhook si l'email échoue
+      }
+    }
+
+    // Emails de finalisation si Completed
+    if (status === "Completed") {
+      try {
+        // Récupérer infos minimales pour emails (propriété, emails) si disponibles
+        const { data: fullLease } = await supabase
+          .from("leases")
+          .select("id, owner:users!owner_id(email, first_name, last_name), tenant:users!tenant_id(email, first_name, last_name), property:properties(id, title, address)")
+          .eq("docusign_envelope_id", envelopeId)
+          .single()
+
+        if (fullLease?.owner?.email && fullLease?.tenant?.email) {
+          const property = { id: fullLease.property?.id || "", title: fullLease.property?.title || "", address: fullLease.property?.address || "" }
+          await Promise.all([
+            sendLeaseOwnerFinalizedEmail({ email: fullLease.owner.email, name: `${fullLease.owner.first_name} ${fullLease.owner.last_name}` }, property as any, fullLease.id),
+            sendLeaseTenantFinalizedEmail({ email: fullLease.tenant.email, name: `${fullLease.tenant.first_name} ${fullLease.tenant.last_name}` }, property as any, fullLease.id),
+          ])
+        }
+      } catch (e) {
+        console.warn("⚠️ Erreur envoi emails finalized:", e)
       }
     }
 

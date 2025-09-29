@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
+import { sendLeaseOwnerTenantSignedEmail } from "@/lib/email-service"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -41,6 +42,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     console.log("✅ [SIGN-TENANT] Bail signé par le locataire")
+
+    // Notifier le propriétaire que le locataire a signé
+    try {
+      const property = { id: lease.property_id || "", title: lease.property_title || "", address: lease.property_address || "" }
+      await sendLeaseOwnerTenantSignedEmail({ email: lease.owner_email, name: lease.owner_name }, property as any, leaseId)
+    } catch (e) {
+      console.warn("⚠️ [SIGN-TENANT] Echec email propriétaire locataire a signé:", e)
+    }
 
     return NextResponse.json({
       success: true,

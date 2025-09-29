@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
 import { docuSignService } from "@/lib/docusign-service"
+import { sendLeaseOwnerReadyToSignEmail, sendLeaseTenantReadyToSignEmail } from "@/lib/email-service"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -92,6 +93,17 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     console.log("✅ [SEND-DOCUSIGN] Statut mis à jour vers sent_to_tenant")
+
+    // Envoi d'emails "bail prêt à être signé" aux deux parties
+    try {
+      const property = { id: lease.property_id || "", title: lease.property?.title || "", address: lease.property?.address || "" }
+      await Promise.all([
+        sendLeaseOwnerReadyToSignEmail({ email: lease.owner.email, name: `${lease.owner.first_name} ${lease.owner.last_name}` }, property, leaseId),
+        sendLeaseTenantReadyToSignEmail({ email: lease.tenant.email, name: `${lease.tenant.first_name} ${lease.tenant.last_name}` }, property, leaseId),
+      ])
+    } catch (e) {
+      console.warn("⚠️ [SEND-DOCUSIGN] Echec envoi emails ready-to-sign:", e)
+    }
 
     return NextResponse.json({
       success: true,
