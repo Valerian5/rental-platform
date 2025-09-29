@@ -17,10 +17,10 @@ const navigationItems = [
     description: "Tableau de bord général",
   },
   {
-    href: "/owner/rental-management/receipts",
-    label: "Quittances",
+    href: "/owner/rental-management",
+    label: "Paiements",
     icon: Receipt,
-    description: "Gestion des quittances de loyer",
+    description: "Gestion des paiements et quittances",
   },
   {
     href: "/owner/rental-management/incidents",
@@ -41,14 +41,20 @@ const navigationItems = [
     description: "Documents annuels obligatoires",
   },
   {
-    href: "/owner/rental-management/revision",
+    href: "/owner/rental-management/rent-revision",
     label: "Révision loyer",
     icon: TrendingUp,
     description: "Calcul selon indice INSEE",
   },
   {
+    href: "/owner/rental-management/revision",
+    label: "Révision Charges",
+    icon: Calculator,
+    description: "Régularisation annuelle des charges",
+  },
+  {
     href: "/owner/rental-management/fiscal",
-    label: "Bilan fiscal",
+    label: "Bilan Fiscal",
     icon: Calculator,
     description: "Déclaration d'impôts",
   },
@@ -87,7 +93,8 @@ export default function RentalManagementLayout({ children }: { children: React.R
       {/* Navigation */}
       <Card className="mb-6">
         <CardContent className="p-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
+          <div className="w-full overflow-x-auto">
+            <div className="flex gap-2 min-w-max md:grid md:grid-cols-4 lg:grid-cols-8 md:min-w-0">
             {navigationItems.map((item) => {
               const Icon = item.icon
               const isActive = pathname === item.href
@@ -95,7 +102,7 @@ export default function RentalManagementLayout({ children }: { children: React.R
                 <Link key={item.href} href={item.href}>
                   <Button
                     variant={isActive ? "default" : "ghost"}
-                    className={`w-full h-auto p-3 flex flex-col items-center space-y-1 ${
+                      className={`w-full h-auto p-3 flex flex-col items-center space-y-1 min-w-[140px] ${
                       isActive ? "bg-blue-600 text-white" : "hover:bg-gray-100"
                     }`}
                   >
@@ -105,6 +112,7 @@ export default function RentalManagementLayout({ children }: { children: React.R
                 </Link>
               )
             })}
+            </div>
           </div>
         </CardContent>
       </Card>
