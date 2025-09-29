@@ -579,10 +579,7 @@ export default function TenantLeaseDetailPage() {
                       signedDocument={lease.signed_document}
                     />
                   ) : (
-                    <div className="text-center py-8">
-                      <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <p className="text-muted-foreground">Signature non disponible pour ce bail</p>
-                    </div>
+                    <SignatureMethodSelector leaseId={leaseId} userType="tenant" />
                   )}
                 </CardContent>
               </Card>
