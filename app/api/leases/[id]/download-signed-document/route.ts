@@ -2,25 +2,46 @@ import { NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
 import { docuSignService } from "@/lib/docusign-service"
 
+export const dynamic = "force-dynamic"
+
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const leaseId = params.id
+    console.log("📥 [DOWNLOAD-SIGNED] Request for lease:", leaseId)
     const db = createServerClient()
 
     // Lire les infos nécessaires (bypass RLS)
     const { data: lease, error } = await db
       .from("leases")
-      .select("id, docusign_envelope_id, docusign_status, signed_document_url")
+      .select("id, docusign_envelope_id, docusign_status, signed_document_url, signed_document")
       .eq("id", leaseId)
       .single()
 
     if (error || !lease) {
+      console.error("❌ [DOWNLOAD-SIGNED] Lease not found:", error)
       return NextResponse.json({ error: "Bail non trouvé" }, { status: 404 })
     }
 
     // Si déjà stocké (URL storage), on redirige vers le fichier
     if (lease.signed_document_url) {
       return NextResponse.redirect(lease.signed_document_url)
+    }
+
+    // Fallback legacy: si un chemin de fichier est stocké dans signed_document (Storage path), servir le fichier
+    if (lease.signed_document) {
+      const { data: fileData, error: fileError } = await db.storage.from("documents").download(lease.signed_document)
+      if (fileError || !fileData) {
+        console.error("❌ [DOWNLOAD-SIGNED] Storage download error:", fileError)
+        return NextResponse.json({ error: "Document signé introuvable dans le stockage" }, { status: 404 })
+      }
+      const buffer = await fileData.arrayBuffer()
+      return new NextResponse(buffer, {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="bail-signe-${leaseId}.pdf"`,
+          "Cache-Control": "no-cache",
+        },
+      })
     }
 
     // Si DocuSign est complété, télécharger et stocker
