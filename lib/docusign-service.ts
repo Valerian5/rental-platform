@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken"
-import { supabase } from "./supabase"
+import { createServerClient } from "./supabase"
 
 // --- Types ---
 export interface DocuSignEnvelope {
@@ -285,7 +285,8 @@ class DocuSignService {
       returnUrl,
     )
 
-    await supabase
+    const db = createServerClient()
+    await db
       .from("leases")
       .update({
         docusign_envelope_id: envelope.envelopeId,
@@ -315,9 +316,10 @@ class DocuSignService {
     tenantSigned: boolean
     completedDocument?: Blob
   }> {
-    const { data: lease, error } = await supabase
+    const db = createServerClient()
+    const { data: lease, error } = await db
       .from("leases")
-      .select("docusign_envelope_id")
+      .select("id, status, docusign_envelope_id")
       .eq("id", leaseId)
       .single()
 
@@ -361,7 +363,7 @@ class DocuSignService {
         updateData.status = newStatus
       }
 
-      await supabase
+      await db
         .from("leases")
         .update(updateData)
         .eq("id", leaseId)
