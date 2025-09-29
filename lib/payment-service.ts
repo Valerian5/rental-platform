@@ -172,57 +172,34 @@ class PaymentService {
   // Valider un paiement (marquer comme payé ou impayé)
   async validatePayment(input: PaymentValidationInput): Promise<PaymentValidationOutput> {
     try {
-      let result
-      
-      if (input.status === 'paid') {
-        // Marquer comme payé
-        const { data, error } = await supabase
-          .rpc('mark_payment_as_paid', {
-            payment_id_param: input.payment_id,
-            payment_date_param: input.payment_date || new Date().toISOString(),
-            payment_method_param: input.payment_method || 'virement'
-          })
-
-        if (error) {
-          console.error('Erreur marquage payé:', error)
-          throw new Error('Erreur lors de la validation du paiement')
-        }
-
-        result = data
-
-        // Générer la quittance automatiquement
-        try {
-          console.log('Génération de quittance pour le paiement:', input.payment_id)
-          const { data: receipt, error: receiptError } = await supabase
-            .rpc('generate_receipt_for_payment', {
-              payment_id_param: input.payment_id
-            })
-
-          if (receiptError) {
-            console.error('Erreur génération quittance:', receiptError)
-            // Ne pas faire échouer la validation si la quittance échoue
-          } else {
-            console.log('Quittance générée avec succès:', receipt)
-          }
-        } catch (receiptError) {
-          console.error('Erreur génération quittance:', receiptError)
-          // Ne pas faire échouer la validation si la quittance échoue
-        }
-      } else {
-        // Marquer comme impayé
-        const { data, error } = await supabase
-          .rpc('mark_payment_as_unpaid', {
-            payment_id_param: input.payment_id,
-            notes_param: input.notes
-          })
-
-        if (error) {
-          console.error('Erreur marquage impayé:', error)
-          throw new Error('Erreur lors de la validation du paiement')
-        }
-
-        result = data
+      // Appeler l'API serveur pour valider + générer quittance + notifier
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!token) {
+        throw new Error('Session expirée, veuillez vous reconnecter')
       }
+
+      const response = await fetch(`${this.baseUrl}/payments/validate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          payment_id: input.payment_id,
+          status: input.status,
+          payment_date: input.payment_date,
+          payment_method: input.payment_method,
+          notes: input.notes
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Erreur lors de la validation du paiement')
+      }
+
+      const result = await response.json()
 
       // Récupérer l'historique complet
       const history = await this.getPaymentHistory(input.payment_id)
@@ -230,7 +207,7 @@ class PaymentService {
       return {
         payment: history.payment,
         receipt: history.receipt,
-        notification_sent: false, // TODO: Implémenter les notifications
+        notification_sent: true,
         history
       }
     } catch (error) {

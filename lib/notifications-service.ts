@@ -1,4 +1,4 @@
-import { supabase } from "./supabase"
+import { supabase, createServerClient } from "./supabase"
 
 export interface Notification {
   id: string
@@ -16,7 +16,8 @@ export const notificationsService = {
     console.log("🔔 NotificationsService.getUserNotifications", { userId, unreadOnly })
 
     try {
-      let query = supabase
+      const db = typeof window === "undefined" ? createServerClient() : supabase
+      let query = db
         .from("notifications")
         .select("*")
         .eq("user_id", userId)
@@ -52,7 +53,8 @@ export const notificationsService = {
     console.log("🔔 NotificationsService.getUnreadCount", userId)
 
     try {
-      const { count, error } = await supabase
+      const db = typeof window === "undefined" ? createServerClient() : supabase
+      const { count, error } = await db
         .from("notifications")
         .select("id", { count: "exact", head: true })
         .eq("user_id", userId)
@@ -75,7 +77,8 @@ export const notificationsService = {
     console.log("🔔 NotificationsService.createNotification", { userId, notificationData })
 
     try {
-      const { data, error } = await supabase
+      const db = typeof window === "undefined" ? createServerClient() : supabase
+      const { data, error } = await db
         .from("notifications")
         .insert({
           user_id: userId,
@@ -106,7 +109,8 @@ export const notificationsService = {
     console.log("🔔 NotificationsService.markAsRead", notificationId)
 
     try {
-      const { error } = await supabase
+      const db = typeof window === "undefined" ? createServerClient() : supabase
+      const { error } = await db
         .from("notifications")
         .update({ read: true })
         .eq("id", notificationId)
@@ -127,7 +131,8 @@ export const notificationsService = {
     console.log("🔔 NotificationsService.markAllAsRead", userId)
 
     try {
-      const { error } = await supabase
+      const db = typeof window === "undefined" ? createServerClient() : supabase
+      const { error } = await db
         .from("notifications")
         .update({ read: true })
         .eq("user_id", userId)
@@ -149,7 +154,8 @@ export const notificationsService = {
     console.log("🔔 NotificationsService.deleteNotification", notificationId)
 
     try {
-      const { error } = await supabase.from("notifications").delete().eq("id", notificationId)
+      const db = typeof window === "undefined" ? createServerClient() : supabase
+      const { error } = await db.from("notifications").delete().eq("id", notificationId)
 
       if (error) {
         console.error("❌ Erreur suppression notification:", error)
@@ -172,7 +178,7 @@ export const notificationsService = {
   ): Promise<Notification> {
     console.log("🔔 NotificationsService.createChargeRegularizationNotification", { tenantId, year, balance })
 
-    const balanceType = balance >= 0 ? 'refund' : 'additional_payment'
+    const balanceType = balance >= 0 ? 'additional_payment' : 'refund'
     const notificationData = {
       regularization_id: 'temp', // Sera remplacé par l'ID réel
       year: year,
