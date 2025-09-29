@@ -39,6 +39,7 @@ interface Lease {
   property_id: string
   tenant_id: string
   start_date: string
+  date_revision_loyer?: string
   end_date: string
   monthly_rent: number
   charges: number
@@ -50,6 +51,7 @@ interface Lease {
     email: string
   }
   owner: {
+    id?: string
     first_name: string
     last_name: string
     email: string
@@ -157,6 +159,7 @@ export default function RentRevisionPage() {
           property_id,
           tenant_id,
           start_date,
+          date_revision_loyer,
           end_date,
           monthly_rent,
           charges,
@@ -176,6 +179,7 @@ export default function RentRevisionPage() {
             email
           ),
           owner:users!leases_owner_id_fkey(
+            id,
             first_name,
             last_name,
             email
@@ -328,22 +332,15 @@ export default function RentRevisionPage() {
     }
   }, [])
   const getAnchorDateForYear = useCallback((lease: Lease, year: number) => {
-    const leaseStart = new Date(lease.start_date)
-    if (revisionPolicy === "anniversary") {
-      return new Date(year, leaseStart.getMonth(), leaseStart.getDate())
-    }
-    if (revisionPolicy === "next_month_first") {
-      const anniv = new Date(year, leaseStart.getMonth(), leaseStart.getDate())
-      return new Date(anniv.getFullYear(), anniv.getMonth() + 1, 1)
-    }
-    if (revisionPolicy === "jan_1") {
-      return new Date(year, 0, 1)
-    }
-    if (customAnchorDate) {
-      return new Date(customAnchorDate)
-    }
-    return new Date()
-  }, [revisionPolicy, customAnchorDate])
+    // La base vient du bail: date_revision_loyer (si absente, on prend l'anniversaire du bail)
+    const start = new Date(lease.start_date)
+    const base = lease.date_revision_loyer ? new Date(lease.date_revision_loyer) : start
+    const anchor = new Date(year, base.getMonth(), base.getDate())
+    // Première révision uniquement après 1 an depuis le début
+    const firstEligible = new Date(start)
+    firstEligible.setFullYear(firstEligible.getFullYear() + 1)
+    return anchor < firstEligible ? firstEligible : anchor
+  }, [])
   const getWindowEndDate = (anchor: Date) => {
     const end = new Date(anchor)
     end.setFullYear(end.getFullYear() + 1)
@@ -712,25 +709,28 @@ export default function RentRevisionPage() {
                 {/* Base de révision */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label>Base de révision</Label>
-                    <Select value={revisionPolicy} onValueChange={(v) => setRevisionPolicy(v as any)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="anniversary">Date anniversaire du bail</SelectItem>
-                        <SelectItem value="next_month_first">1er du mois suivant l'anniversaire</SelectItem>
-                        <SelectItem value="jan_1">1er janvier</SelectItem>
-                        <SelectItem value="custom">Autre</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {revisionPolicy === "custom" && (
-                    <div>
-                      <Label>Date personnalisée</Label>
-                      <Input type="date" value={customAnchorDate} onChange={(e) => setCustomAnchorDate(e.target.value)} />
+                    <Label>Date d'ancrage (contrat)</Label>
+                    <div className="text-sm text-gray-700">
+                      {selectedLease.date_revision_loyer
+                        ? new Date(selectedLease.date_revision_loyer).toLocaleDateString('fr-FR')
+                        : new Date(selectedLease.start_date).toLocaleDateString('fr-FR')}
                     </div>
-                  )}
+                    <div className="text-xs text-gray-500 mt-1">
+                      Définie dans le bail (non modifiable ici)
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Première date éligible</Label>
+                    <div className="text-sm text-gray-700">
+                      {(() => {
+                        const anchor = getAnchorDateForYear(selectedLease, selectedYear)
+                        return anchor.toLocaleDateString('fr-FR')
+                      })()}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      Selon la règle: révision possible après 1 an
+                    </div>
+                  </div>
                 </div>
 
                 {/* Loyer actuel */}
@@ -859,6 +859,45 @@ export default function RentRevisionPage() {
                     {saving ? 'Sauvegarde...' : 'Sauvegarder'}
                   </Button>
                   <Button 
+                    onClick={async () => {
+                      if (!selectedLease?.owner?.id) return
+                      try {
+                        await fetch('/api/notifications', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            user_id: selectedLease.owner.id,
+                            title: 'Révision de loyer possible',
+                            content: "Vous pouvez réviser le loyer pour ce bail.",
+                            type: 'rent_revision',
+                            action_url: '/owner/rental-management/rent-revision'
+                          })
+                        })
+                      } catch (e) {}
+                      try {
+                        await fetch('/api/revisions/notifications', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            leaseId: selectedLease.id,
+                            propertyId: selectedLease.property_id,
+                            notificationType: 'reminder',
+                            title: 'Rappel révision de loyer',
+                            message: 'La date de révision de loyer est atteinte ou approche.',
+                            recipientType: 'owner',
+                            recipientId: selectedLease.owner.id,
+                            recipientEmail: selectedLease.owner.email,
+                            metadata: {}
+                          })
+                        })
+                      } catch (e) {}
+                    }}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    Envoyer un rappel (test)
+                  </Button>
+                  <Button 
                     onClick={() => {
                       // Appeler applyToLease via un eval local pour éviter gros refacto ici
                       (async () => {
@@ -923,6 +962,26 @@ export default function RentRevisionPage() {
           </div>
         </>
       )}
-    </div>
+    {/* Historique des révisions */}
+    {selectedLease && history.length > 0 && (
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Historique des révisions</CardTitle>
+          <CardDescription>Par année pour ce bail</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {history.map((h: any) => (
+              <div key={h.id} className="p-3 border rounded-lg">
+                <div className="text-sm text-gray-500">Année {h.revision_year}</div>
+                <div className="font-medium">Demande: {new Date(h.revision_date).toLocaleDateString('fr-FR')}</div>
+                <div className="text-sm">Ancien: {h.old_rent_amount}€ → Nouveau: {h.new_rent_amount}€</div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    )}
+  </div>
   )
 }
