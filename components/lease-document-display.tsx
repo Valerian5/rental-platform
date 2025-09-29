@@ -155,30 +155,7 @@ export function LeaseDocumentDisplay({ document, leaseId, generatedAt }: LeaseDo
         </CardContent>
       </Card>
 
-      {/* Section signatures */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Signatures</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-              <h4 className="font-medium mb-2">Signature du bailleur</h4>
-              <div className="h-20 flex items-center justify-center text-gray-400">
-                <p className="text-sm">Espace réservé à la signature</p>
-              </div>
-              <p className="text-xs text-gray-500 mt-2">Date et lieu :</p>
-            </div>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-              <h4 className="font-medium mb-2">Signature du locataire</h4>
-              <div className="h-20 flex items-center justify-center text-gray-400">
-                <p className="text-sm">Espace réservé à la signature</p>
-              </div>
-              <p className="text-xs text-gray-500 mt-2">Date et lieu :</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Section signatures retirée: la signature est gérée via DocuSign / document signé */}
     </div>
   )
 }
