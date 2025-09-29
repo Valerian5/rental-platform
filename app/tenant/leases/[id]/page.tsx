@@ -570,14 +570,27 @@ export default function TenantLeaseDetailPage() {
                 </CardHeader>
                 <CardContent>
                   {lease.status === "active" && lease.signed_by_owner && lease.signed_by_tenant ? (
-                    <SignatureStatusDisplay
-                      leaseId={leaseId}
-                      ownerSigned={lease.signed_by_owner}
-                      tenantSigned={lease.signed_by_tenant}
-                      ownerSignatureDate={lease.owner_signature_date}
-                      tenantSignatureDate={lease.tenant_signature_date}
-                      signedDocument={lease.signed_document}
-                    />
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2 text-green-700">
+                        <CheckCircle className="h-5 w-5" />
+                        <span>Contrat signé par les deux parties</span>
+                      </div>
+                      <div className="flex items-center gap-4 text-sm text-gray-600">
+                        <div>
+                          Propriétaire: <span className="font-medium">{new Date(lease.owner_signature_date!).toLocaleDateString("fr-FR")}</span>
+                        </div>
+                        <div>
+                          Locataire: <span className="font-medium">{new Date(lease.tenant_signature_date!).toLocaleDateString("fr-FR")}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <Button variant="outline" asChild>
+                          <a href={`/api/leases/${leaseId}/download-signed-document`} target="_blank" rel="noopener noreferrer">
+                            <Download className="h-4 w-4 mr-2" /> Télécharger le bail signé
+                          </a>
+                        </Button>
+                      </div>
+                    </div>
                   ) : (
                     <SignatureMethodSelector leaseId={leaseId} userType="tenant" />
                   )}
