@@ -13,7 +13,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     // Lire les infos nécessaires (bypass RLS)
     const { data: lease, error } = await db
       .from("leases")
-      .select("id, docusign_envelope_id, docusign_status, signed_document_url, signed_document")
+      .select("id, docusign_envelope_id, docusign_status, signed_document")
       .eq("id", leaseId)
       .single()
 
@@ -22,12 +22,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Bail non trouvé" }, { status: 404 })
     }
 
-    // Si déjà stocké (URL storage), on redirige vers le fichier
-    if (lease.signed_document_url) {
-      return NextResponse.redirect(lease.signed_document_url)
-    }
-
-    // Fallback legacy: si un chemin de fichier est stocké dans signed_document (Storage path), servir le fichier
+    // Si un chemin de fichier est stocké dans signed_document (Storage path), servir le fichier
     if (lease.signed_document) {
       const { data: fileData, error: fileError } = await db.storage.from("documents").download(lease.signed_document)
       if (fileError || !fileData) {
@@ -60,15 +55,20 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         return NextResponse.json({ error: "Erreur stockage document signé" }, { status: 500 })
       }
 
-      const { data: publicUrl } = db.storage.from("documents").getPublicUrl(filePath)
-
-      // Mémoriser l'URL
+      // Mémoriser le chemin de fichier
       await db
         .from("leases")
-        .update({ signed_document_url: publicUrl.publicUrl, updated_at: new Date().toISOString() })
+        .update({ signed_document: filePath, updated_at: new Date().toISOString() })
         .eq("id", leaseId)
 
-      return NextResponse.redirect(publicUrl.publicUrl)
+      // Retourner le PDF directement
+      return new NextResponse(buffer, {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="bail-signe-${leaseId}.pdf"`,
+          "Cache-Control": "no-cache",
+        },
+      })
     }
 
     return NextResponse.json({ error: "Document signé indisponible" }, { status: 400 })
