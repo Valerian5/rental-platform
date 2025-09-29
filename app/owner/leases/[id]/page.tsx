@@ -709,6 +709,17 @@ export default function LeaseDetailPage() {
                     )}
                   </div>
                 </div>
+
+                {/* Bouton de téléchargement du bail signé quand les deux signatures sont présentes */}
+                {ownerIsSigned && tenantIsSigned && (
+                  <div className="pt-4">
+                    <Button variant="outline" asChild>
+                      <a href={`/api/leases/${leaseId}/download-signed-document`} target="_blank" rel="noopener noreferrer">
+                        <Download className="h-4 w-4 mr-2" /> Télécharger le bail signé
+                      </a>
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
