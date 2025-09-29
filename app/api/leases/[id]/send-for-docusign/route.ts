@@ -66,15 +66,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     console.log("✅ [SEND-DOCUSIGN] Résultat DocuSign:", result)
 
-    // Mettre à jour le statut du bail
+    // Mettre à jour le statut du bail (ne pas stocker d'URLs de signature éphémères)
 	const { error: updateError } = await supabase
 	  .from("leases")
 	  .update({
 		status: "sent_to_tenant",
 		docusign_envelope_id: result.envelopeId,
 		docusign_status: "sent",
-		owner_signed_document_url: result.signingUrls.owner,
-		tenant_signed_document_url: result.signingUrls.tenant,
 		sent_to_tenant_at: new Date().toISOString(),
 		updated_at: new Date().toISOString(),
 	  })
@@ -97,7 +95,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       success: true,
       message: "Bail envoyé pour signature via DocuSign",
       envelopeId: result.envelopeId,
-      signingUrls: result.signingUrls,
     })
   } catch (error) {
     console.error("❌ [SEND-DOCUSIGN] Erreur:", error)

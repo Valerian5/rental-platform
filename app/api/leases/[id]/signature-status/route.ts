@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
+import { docuSignService } from "@/lib/docusign-service"
 
 export async function GET(
   request: NextRequest,
@@ -8,6 +9,17 @@ export async function GET(
   try {
     const leaseId = params.id
     const server = createServerClient()
+    const { searchParams } = new URL(request.url)
+    const refresh = searchParams.get("refresh") === "true"
+
+    // Optionnellement rafraîchir depuis DocuSign
+    if (refresh) {
+      try {
+        await docuSignService.checkSignatureStatus(leaseId)
+      } catch (e) {
+        console.warn("⚠️ Rafraîchissement DocuSign échoué (non bloquant):", e)
+      }
+    }
 
     // Récupérer le bail avec les informations de signature
     const { data: lease, error } = await server

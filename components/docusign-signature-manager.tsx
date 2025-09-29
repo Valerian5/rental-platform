@@ -10,12 +10,13 @@ import { toast } from "sonner"
 
 interface DocuSignSignatureManagerProps {
   leaseId: string
-  leaseStatus: string
+  leaseStatus?: string
   onStatusChange?: (newStatus: string) => void
 }
 
 interface SignatureStatus {
-  status: string
+  status: string // business status fallback
+  envelopeStatus?: string | null // DocuSign envelope status
   ownerSigned: boolean
   tenantSigned: boolean
 }
@@ -24,7 +25,7 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
   const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
   const [signatureStatus, setSignatureStatus] = useState<SignatureStatus | null>(null)
-  const [signingUrls, setSigningUrls] = useState<{ owner: string; tenant: string } | null>(null)
+  const [signingUrls, setSigningUrls] = useState<{ owner?: string | null; tenant?: string | null } | null>(null)
   const [hasDocuSignEnvelope, setHasDocuSignEnvelope] = useState(false)
 
   // Fonction pour envoyer le bail pour signature
@@ -34,7 +35,8 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
       const response = await fetch(`/api/leases/${leaseId}/send-for-docusign`, { method: "POST" })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || "Erreur lors de l'envoi")
-      setSigningUrls(data.signingUrls)
+      // On ne dépend plus du stockage d'URLs en base. On pourra générer à la demande.
+      setSigningUrls(null)
       setHasDocuSignEnvelope(true)
       toast.success("Bail envoyé pour signature via DocuSign")
       onStatusChange?.("sent_to_tenant")
@@ -52,7 +54,7 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
   const checkSignatureStatus = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/leases/${leaseId}/signature-status`)
+      const response = await fetch(`/api/leases/${leaseId}/signature-status?refresh=true`)
       if (!response.ok) return
       const data = await response.json()
   
@@ -61,17 +63,12 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
   
       setSignatureStatus({
         status: data.lease.status,
+        envelopeStatus: data.lease.docusign_status || null,
         ownerSigned: data.lease.signed_by_owner,
         tenantSigned: data.lease.signed_by_tenant,
       })
   
-      // On récupère les URLs existantes en base si elles sont présentes
-      if (hasEnvelope) {
-        setSigningUrls({
-          owner: data.lease.owner_signed_document_url || null,
-          tenant: data.lease.tenant_signed_document_url || null,
-        })
-      }
+      // On ne lit plus d'URLs temporaires en base
     } catch (error) {
       console.error("Erreur vérification statut:", error)
     } finally {
@@ -81,17 +78,33 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
   
   
 
+  // Génère et ouvre l'URL de signature à la demande pour le rôle donné
+  const openSigningUrl = async (role: "owner" | "tenant") => {
+    try {
+      const res = await fetch(`/api/leases/${leaseId}/signing-url?role=${role}`)
+      const data = await res.json()
+      if (!res.ok || !data?.url) throw new Error(data?.error || "Impossible de générer l'URL de signature")
+      if (!signingUrls) setSigningUrls({ [role]: data.url })
+      else setSigningUrls({ ...signingUrls, [role]: data.url })
+      window.open(data.url, "_blank")
+    } catch (e) {
+      console.error("Erreur génération URL signature:", e)
+      toast.error(e instanceof Error ? e.message : "Erreur génération URL de signature")
+    }
+  }
+
   useEffect(() => {
     // Vérifier le statut au chargement
     checkSignatureStatus()
   }, [leaseId])
 
   useEffect(() => {
-    if (leaseStatus === "sent_to_tenant") {
+    // Poll si une enveloppe existe et que tout n'est pas encore signé
+    if (hasDocuSignEnvelope && !(signatureStatus?.ownerSigned && signatureStatus?.tenantSigned)) {
       const interval = setInterval(checkSignatureStatus, 30000)
       return () => clearInterval(interval)
     }
-  }, [leaseStatus])
+  }, [hasDocuSignEnvelope, signatureStatus?.ownerSigned, signatureStatus?.tenantSigned])
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -142,7 +155,7 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
     )
   }
 
-  // Sinon, affiche le statut et les liens de signature
+  // Sinon, affiche le statut et les liens de signature (toujours affichés tant que non signés)
   return (
     <Card>
       <CardHeader>
@@ -165,7 +178,7 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
           <>
             <div className="flex items-center justify-between">
               <span className="font-medium">Statut de l'enveloppe:</span>
-              {getStatusBadge(signatureStatus.status)}
+              {getStatusBadge(signatureStatus.envelopeStatus || signatureStatus.status)}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -188,8 +201,8 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
                     )}
                   </div>
                 </div>
-                {signingUrls?.owner && !signatureStatus.ownerSigned && (
-                  <Button size="sm" variant="outline" onClick={() => window.open(signingUrls.owner, "_blank")}>
+                {!signatureStatus.ownerSigned && (
+                  <Button size="sm" variant="outline" onClick={() => openSigningUrl("owner")}>
                     <ExternalLink className="h-4 w-4" />
                   </Button>
                 )}
@@ -214,8 +227,8 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
                     )}
                   </div>
                 </div>
-                {signingUrls?.tenant && !signatureStatus.tenantSigned && (
-                  <Button size="sm" variant="outline" onClick={() => window.open(signingUrls.tenant, "_blank")}>
+                {!signatureStatus.tenantSigned && (
+                  <Button size="sm" variant="outline" onClick={() => openSigningUrl("tenant")}>
                     <ExternalLink className="h-4 w-4" />
                   </Button>
                 )}
