@@ -135,6 +135,72 @@ export function EtatDesLieuxDownloadSection({ leaseId, propertyId, propertyData,
     }
   }
 
+  const downloadDocument = async (document: EtatDesLieuxDocument) => {
+    try {
+      if (document.file_url) {
+        // Télécharger le document
+        const response = await fetch(document.file_url)
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = `etat-des-lieux-${document.type}-${document.id}.pdf`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+        toast.success("Document téléchargé avec succès")
+      } else {
+        toast.error("Document non disponible")
+      }
+    } catch (error) {
+      console.error("Erreur téléchargement:", error)
+      toast.error("Erreur lors du téléchargement")
+    }
+  }
+
+  const viewDocument = async (document: EtatDesLieuxDocument) => {
+    try {
+      if (document.file_url) {
+        // Ouvrir le document dans un nouvel onglet
+        window.open(document.file_url, '_blank')
+      } else {
+        toast.error("Document non disponible")
+      }
+    } catch (error) {
+      console.error("Erreur visualisation:", error)
+      toast.error("Erreur lors de l'ouverture du document")
+    }
+  }
+
+  const generatePDF = async (document: EtatDesLieuxDocument) => {
+    try {
+      const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux/pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: document.type }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Erreur lors de la génération")
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `etat-des-lieux-${document.type}-${document.id}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      toast.success("PDF généré avec succès")
+    } catch (error) {
+      console.error("Erreur génération PDF:", error)
+      toast.error("Erreur lors de la génération du PDF")
+    }
+  }
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "completed":
@@ -248,11 +314,33 @@ export function EtatDesLieuxDownloadSection({ leaseId, propertyId, propertyData,
                   </div>
                   <div className="flex items-center gap-2">
                     {getStatusBadge(doc.status)}
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => generatePDF(doc)}
+                    >
+                      <FileText className="h-4 w-4 mr-2" />
+                      Générer PDF
+                    </Button>
                     {doc.file_url && (
-                      <Button variant="outline" size="sm">
-                        <Eye className="h-4 w-4 mr-2" />
-                        Voir
-                      </Button>
+                      <>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => viewDocument(doc)}
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          Voir
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => downloadDocument(doc)}
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          Télécharger
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
