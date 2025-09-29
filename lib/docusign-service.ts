@@ -319,7 +319,7 @@ class DocuSignService {
     const db = createServerClient()
     const { data: lease, error } = await db
       .from("leases")
-      .select("id, status, docusign_envelope_id")
+      .select("id, status, docusign_envelope_id, docusign_status")
       .eq("id", leaseId)
       .single()
 
@@ -346,10 +346,13 @@ class DocuSignService {
     }
 
     // Mettre à jour la base de données si nécessaire
-    if (ownerSigned || tenantSigned || envelope.status === "completed") {
+    const envelopeStatus = (envelope.status || "").toString()
+    const shouldUpdateStatusOnly = envelopeStatus && envelopeStatus !== lease.docusign_status
+    if (ownerSigned || tenantSigned || envelope.status === "completed" || shouldUpdateStatusOnly) {
       const updateData: any = {
         signed_by_owner: ownerSigned,
         signed_by_tenant: tenantSigned,
+        docusign_status: envelopeStatus,
         updated_at: new Date().toISOString(),
       }
 

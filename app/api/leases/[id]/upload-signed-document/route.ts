@@ -30,11 +30,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ success: false, error: "Bail non trouvé" }, { status: 404 })
     }
 
-    const uploadResult = await SupabaseStorageService.uploadFile(file, "lease-documents", `signed-documents/${leaseId}`)
+    const uploadResult = await SupabaseStorageService.uploadFile(file, "documents", `signed-leases/${leaseId}`)
 
     // Mettre à jour le bail avec le document signé
     const updateData: any = {
       updated_at: new Date().toISOString(),
+      signed_document: uploadResult.path,
     }
 
     if (signerType === "owner") {

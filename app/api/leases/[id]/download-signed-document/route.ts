@@ -39,8 +39,26 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       })
     }
 
+    // Rafraîchir DocuSign si une enveloppe existe mais statut non completed
+    if (lease.docusign_envelope_id && (lease.docusign_status || "").toLowerCase() !== "completed") {
+      try {
+        await docuSignService.checkSignatureStatus(leaseId)
+        const refreshed = await db
+          .from("leases")
+          .select("docusign_status")
+          .eq("id", leaseId)
+          .single()
+        if ((refreshed.data?.docusign_status || "").toLowerCase() !== "completed") {
+          return NextResponse.json({ error: "Document signé indisponible" }, { status: 400 })
+        }
+      } catch (e) {
+        console.warn("⚠️ [DOWNLOAD-SIGNED] Refresh DocuSign a échoué:", e)
+        return NextResponse.json({ error: "Document signé indisponible" }, { status: 400 })
+      }
+    }
+
     // Si DocuSign est complété, télécharger et stocker
-    if (lease.docusign_envelope_id && (lease.docusign_status || "").toLowerCase() === "completed") {
+    if (lease.docusign_envelope_id) {
       const pdfBlob = await docuSignService.downloadCompletedDocument(lease.docusign_envelope_id)
       const arrayBuffer = await pdfBlob.arrayBuffer()
       const buffer = Buffer.from(arrayBuffer)
