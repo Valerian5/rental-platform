@@ -1386,7 +1386,7 @@ export function EtatDesLieuxDigitalSection({
       </div>
 
       {/* Sidebar */}
-      <div className="space-y-6 sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto z-10">
+      <div className="space-y-6 lg:sticky lg:top-6 lg:self-start z-10">
         <Card>
           <CardHeader>
             <CardTitle className="text-sm">Aperçu de l'état des lieux</CardTitle>
