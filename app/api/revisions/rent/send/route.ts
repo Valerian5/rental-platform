@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServerClient } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase'
+import { createServiceSupabaseClient } from '@/lib/supabase-server-client'
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 })
     }
 
-    const supabaseAdmin = createServerClient()
+    const supabaseAdmin = createServiceSupabaseClient()
 
     // Récupérer les données complètes
     const { data: revision, error: revisionError } = await supabaseAdmin
