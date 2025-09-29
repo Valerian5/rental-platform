@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { createServerClient } from "@/lib/supabase"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -9,8 +9,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     console.log("✍️ [SIGN-TENANT] Signature locataire pour bail:", leaseId)
 
-    // Vérifier que le bail existe et appartient au locataire
-    const { data: lease, error: leaseError } = await supabase.from("leases").select("*").eq("id", leaseId).single()
+    const db = createServerClient()
+
+    // Vérifier que le bail existe et appartient au locataire (bypass RLS)
+    const { data: lease, error: leaseError } = await db.from("leases").select("*").eq("id", leaseId).single()
 
     if (leaseError || !lease) {
       console.error("❌ [SIGN-TENANT] Bail non trouvé:", leaseError)
@@ -22,7 +24,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     // Mettre à jour la signature du locataire
-    const { error: updateError } = await supabase
+    const { error: updateError } = await db
       .from("leases")
       .update({
         signed_by_tenant: true,

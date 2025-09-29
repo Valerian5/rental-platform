@@ -120,8 +120,10 @@ export default function TenantLeasesPage() {
   )
   const pendingLeases = leases.filter(
     (lease) =>
-      lease.status === "sent_to_tenant" &&
-      !lease.signed_by_tenant
+      (
+        lease.status === "sent_to_tenant" ||
+        lease.status === "signed_by_owner"
+      ) && !lease.signed_by_tenant
   )
   const draftLeases = leases.filter((lease) => lease.status === "draft")
   const historicalLeases = leases.filter((lease) => lease.status === "terminated" || lease.status === "expired")
