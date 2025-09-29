@@ -11,6 +11,7 @@ import { toast } from "sonner"
 interface DocuSignSignatureManagerProps {
   leaseId: string
   leaseStatus?: string
+  userType?: "owner" | "tenant"
   onStatusChange?: (newStatus: string) => void
 }
 
@@ -21,7 +22,7 @@ interface SignatureStatus {
   tenantSigned: boolean
 }
 
-export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange }: DocuSignSignatureManagerProps) {
+export function DocuSignSignatureManager({ leaseId, leaseStatus, userType, onStatusChange }: DocuSignSignatureManagerProps) {
   const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
   const [signatureStatus, setSignatureStatus] = useState<SignatureStatus | null>(null)
@@ -81,6 +82,10 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
   // Génère et ouvre l'URL de signature à la demande pour le rôle donné
   const openSigningUrl = async (role: "owner" | "tenant") => {
     try {
+      if (!hasDocuSignEnvelope) {
+        toast.error("Aucune enveloppe DocuSign. Envoyez d'abord pour signature.")
+        return
+      }
       const res = await fetch(`/api/leases/${leaseId}/signing-url?role=${role}`)
       const data = await res.json()
       if (!res.ok || !data?.url) throw new Error(data?.error || "Impossible de générer l'URL de signature")
@@ -121,8 +126,8 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
     }
   }
 
-  // Affiche le bouton seulement si draft ET pas d'enveloppe
-  if (leaseStatus === "draft" && !hasDocuSignEnvelope) {
+  // Affiche le bouton d'envoi tant qu'il n'y a pas d'enveloppe
+  if (!hasDocuSignEnvelope) {
     return (
       <Card>
         <CardHeader>
@@ -201,7 +206,8 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
                     )}
                   </div>
                 </div>
-                {!signatureStatus.ownerSigned && (
+                {/* Le bailleur ne voit le bouton que s'il est le rôle courant */}
+                {!signatureStatus.ownerSigned && userType === "owner" && (
                   <Button size="sm" variant="outline" onClick={() => openSigningUrl("owner")}>
                     <ExternalLink className="h-4 w-4" />
                   </Button>
@@ -227,7 +233,8 @@ export function DocuSignSignatureManager({ leaseId, leaseStatus, onStatusChange 
                     )}
                   </div>
                 </div>
-                {!signatureStatus.tenantSigned && (
+                {/* Le locataire ne voit le bouton que s'il est le rôle courant */}
+                {!signatureStatus.tenantSigned && userType === "tenant" && (
                   <Button size="sm" variant="outline" onClick={() => openSigningUrl("tenant")}>
                     <ExternalLink className="h-4 w-4" />
                   </Button>

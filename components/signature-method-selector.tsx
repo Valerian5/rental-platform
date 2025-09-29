@@ -136,7 +136,7 @@ export function SignatureMethodSelector({ leaseId, userType }: SignatureMethodSe
 
           <TabsContent value="electronic" className="space-y-4">
             {isElectronicEnabled ? (
-              <DocuSignSignatureManager leaseId={leaseId} />
+              <DocuSignSignatureManager leaseId={leaseId} userType={userType} />
             ) : (
               <Alert className="bg-orange-50 border-orange-200">
                 <Crown className="h-4 w-4 text-orange-600" />
