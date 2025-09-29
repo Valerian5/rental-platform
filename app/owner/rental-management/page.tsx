@@ -316,13 +316,16 @@ export default function RentalManagementPage() {
 
       {selectedLease && (
         <Tabs defaultValue="payments" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="payments">Paiements</TabsTrigger>
-            <TabsTrigger value="incidents">Incidents</TabsTrigger>
-            <TabsTrigger value="maintenance">Travaux</TabsTrigger>
-            <TabsTrigger value="documents">Documents</TabsTrigger>
-            <TabsTrigger value="fiscal">Fiscal</TabsTrigger>
-          </TabsList>
+          {/* Responsive: défilement horizontal sur mobile, grille sur md+ */}
+          <div className="w-full overflow-x-auto">
+            <TabsList className="flex md:grid md:grid-cols-5 min-w-max md:min-w-0 gap-1">
+              <TabsTrigger value="payments">Paiements</TabsTrigger>
+              <TabsTrigger value="incidents">Incidents</TabsTrigger>
+              <TabsTrigger value="maintenance">Travaux</TabsTrigger>
+              <TabsTrigger value="documents">Documents</TabsTrigger>
+              <TabsTrigger value="fiscal">Fiscal</TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* ONGLET PAIEMENTS */}
           <TabsContent value="payments">

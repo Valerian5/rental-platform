@@ -103,7 +103,7 @@ export default function RentRevisionPage() {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  // Charger les propriétés
+  // Charger les propriétés (aligné avec la page de régularisation)
   const loadProperties = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -475,7 +475,7 @@ export default function RentRevisionPage() {
         </Badge>
       </div>
 
-      {/* Sélection du bail */}
+      {/* Sélection du bail - même UX que la page de régularisation */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -502,7 +502,7 @@ export default function RentRevisionPage() {
               </SelectContent>
             </Select>
           </div>
-          
+
           {selectedPropertyId && (
             <div>
               <Label htmlFor="lease-select">Bail</Label>
