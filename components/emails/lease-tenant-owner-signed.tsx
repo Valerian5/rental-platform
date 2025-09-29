@@ -1,8 +1,9 @@
 import * as React from "react"
+import EmailLayout from "./email-layout"
 
 export default function LeaseTenantOwnerSignedEmail({ tenantName, propertyTitle, leaseId }: { tenantName: string; propertyTitle?: string; leaseId: string }) {
   return (
-    <div style={{ fontFamily: "Arial, sans-serif", color: "#111", lineHeight: 1.5 }}>
+    <EmailLayout>
       <h2 style={{ color: "#16a34a" }}>Le propriétaire a signé</h2>
       <p>Bonjour {tenantName},</p>
       <p>Le propriétaire a signé le bail {propertyTitle ? `« ${propertyTitle} »` : ""}. Votre signature est requise.</p>
@@ -11,7 +12,7 @@ export default function LeaseTenantOwnerSignedEmail({ tenantName, propertyTitle,
       </p>
       <p style={{ color: "#555" }}>Merci,</p>
       <p style={{ color: "#555" }}>Louer Ici</p>
-    </div>
+    </EmailLayout>
   )
 }
 

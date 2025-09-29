@@ -1,8 +1,9 @@
 import * as React from "react"
+import EmailLayout from "./email-layout"
 
 export default function LeaseTenantFinalizedEmail({ tenantName, propertyTitle, leaseId }: { tenantName: string; propertyTitle?: string; leaseId: string }) {
   return (
-    <div style={{ fontFamily: "Arial, sans-serif", color: "#111", lineHeight: 1.5 }}>
+    <EmailLayout>
       <h2 style={{ color: "#2563eb" }}>Votre bail signé est disponible</h2>
       <p>Bonjour {tenantName},</p>
       <p>
@@ -13,7 +14,7 @@ export default function LeaseTenantFinalizedEmail({ tenantName, propertyTitle, l
       </p>
       <p style={{ color: "#555" }}>Merci,</p>
       <p style={{ color: "#555" }}>Louer Ici</p>
-    </div>
+    </EmailLayout>
   )
 }
 
