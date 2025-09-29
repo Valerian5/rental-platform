@@ -1,5 +1,5 @@
 import React from "react"
-import { EmailLayout } from "./email-layout"
+import EmailLayout from "./email-layout"
 
 interface RentRevisionEmailProps {
   tenantName: string | null
