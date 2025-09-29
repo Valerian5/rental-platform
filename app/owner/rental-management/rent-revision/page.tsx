@@ -19,7 +19,8 @@ import {
   Send,
   Calendar,
   AlertTriangle,
-  CheckCircle
+  CheckCircle,
+  MapPin
 } from "lucide-react"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
@@ -29,6 +30,8 @@ interface Property {
   title: string
   address: string
   city: string
+  postal_code?: string
+  has_lease?: boolean
 }
 
 interface Lease {
@@ -103,7 +106,7 @@ export default function RentRevisionPage() {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  // Charger les propriétés (aligné avec la page de régularisation)
+  // Charger les propriétés (avec info de bail pour badge)
   const loadProperties = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -111,12 +114,27 @@ export default function RentRevisionPage() {
 
       const { data: propertiesData, error } = await supabase
         .from('properties')
-        .select('id, title, address, city')
+        .select(`
+          id,
+          title,
+          address,
+          city,
+          postal_code,
+          leases(id, status)
+        `)
         .eq('owner_id', user.id)
         .order('title')
 
       if (error) throw error
-      setProperties(propertiesData || [])
+      const transformed: Property[] = (propertiesData as any[] || []).map((p: any) => ({
+        id: p.id,
+        title: p.title,
+        address: p.address,
+        city: p.city,
+        postal_code: p.postal_code,
+        has_lease: Array.isArray(p.leases) && p.leases.length > 0,
+      }))
+      setProperties(transformed)
     } catch (error) {
       console.error('Erreur chargement propriétés:', error)
       toast.error('Erreur lors du chargement des propriétés')
@@ -165,6 +183,14 @@ export default function RentRevisionPage() {
 
       if (error) throw error
       setLeases(leasesData || [])
+      // sélectionner automatiquement le premier bail actif
+      if (leasesData && leasesData.length > 0) {
+        setSelectedLeaseId(leasesData[0].id)
+        setSelectedLease(leasesData[0] as Lease)
+      } else {
+        setSelectedLeaseId("")
+        setSelectedLease(null)
+      }
     } catch (error) {
       console.error('Erreur chargement baux:', error)
       toast.error('Erreur lors du chargement des baux')
@@ -475,51 +501,100 @@ export default function RentRevisionPage() {
         </Badge>
       </div>
 
-      {/* Sélection du bail - même UX que la page de régularisation */}
+      {/* Sélection du bien */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Building className="h-5 w-5" />
-            Sélection du bail
+            Sélection du bien
           </CardTitle>
           <CardDescription>
-            Choisissez d'abord un logement, puis sélectionnez le bail correspondant
+            Choisissez le bien pour lequel effectuer la révision
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <Label htmlFor="property-select">Logement</Label>
+            <Label htmlFor="property-select">Propriété</Label>
             <Select value={selectedPropertyId} onValueChange={setSelectedPropertyId}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Sélectionner un logement" />
+                <SelectValue placeholder="Sélectionnez une propriété" />
               </SelectTrigger>
               <SelectContent>
-                {properties.map(property => (
+                {properties.map((property: Property) => (
                   <SelectItem key={property.id} value={property.id}>
-                    {property.title} - {property.address}
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex items-center space-x-2">
+                        <Building className="h-4 w-4" />
+                        <span>{property.title}</span>
+                      </div>
+                      <div className="flex items-center space-x-2 ml-4">
+                        {property.has_lease ? (
+                          <Badge className="text-xs">Bail</Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-xs">Sans bail</Badge>
+                        )}
+                      </div>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          {selectedPropertyId && (
-            <div>
-              <Label htmlFor="lease-select">Bail</Label>
-              <Select value={selectedLeaseId} onValueChange={setSelectedLeaseId}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Sélectionner un bail" />
-                </SelectTrigger>
-                <SelectContent>
-                  {leases.map(lease => (
-                    <SelectItem key={lease.id} value={lease.id}>
-                      {lease.tenant.first_name} {lease.tenant.last_name} - {lease.monthly_rent}€/mois
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          {selectedPropertyId && selectedLease && (
+            <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <h3 className="font-medium text-gray-900">
+                    {properties.find(p => p.id === selectedPropertyId)?.title}
+                  </h3>
+                  <div className="flex items-center text-sm text-gray-600">
+                    <MapPin className="h-4 w-4 mr-1" />
+                    {properties.find(p => p.id === selectedPropertyId)?.address}, {properties.find(p => p.id === selectedPropertyId)?.city}{properties.find(p => p.id === selectedPropertyId)?.postal_code ? ` ${properties.find(p => p.id === selectedPropertyId)?.postal_code}` : ''}
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  {properties.find(p => p.id === selectedPropertyId)?.has_lease ? (
+                    <Badge className="text-xs">Bail actif</Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-xs">Sans bail</Badge>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t border-gray-200">
+                <div className="flex items-center space-x-2">
+                  <User className="h-4 w-4 text-gray-400" />
+                  <div>
+                    <div className="text-xs text-gray-500">Locataire</div>
+                    <div className="text-sm font-medium">
+                      {selectedLease.tenant.first_name} {selectedLease.tenant.last_name}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Calendar className="h-4 w-4 text-gray-400" />
+                  <div>
+                    <div className="text-xs text-gray-500">Période</div>
+                    <div className="text-sm font-medium">
+                      {new Date(selectedLease.start_date).toLocaleDateString('fr-FR')} - {new Date(selectedLease.end_date).toLocaleDateString('fr-FR')}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Euro className="h-4 w-4 text-gray-400" />
+                  <div>
+                    <div className="text-xs text-gray-500">Loyer + Charges</div>
+                    <div className="text-sm font-medium">
+                      {selectedLease.monthly_rent.toFixed(2)} € + {selectedLease.charges.toFixed(2)} €
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
+
+          {/* Pas de sélecteur de bail ici pour rester aligné avec la page revision */}
         </CardContent>
       </Card>
 
