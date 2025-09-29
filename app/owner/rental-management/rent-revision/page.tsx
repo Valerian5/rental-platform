@@ -105,6 +105,10 @@ export default function RentRevisionPage() {
   const [revision, setRevision] = useState<RentRevision | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [applying, setApplying] = useState(false)
+  const [revisionPolicy, setRevisionPolicy] = useState<"anniversary" | "next_month_first" | "jan_1" | "custom">("anniversary")
+  const [customAnchorDate, setCustomAnchorDate] = useState<string>("")
+  const [history, setHistory] = useState<any[]>([])
 
   // Charger les propriétés (avec info de bail pour badge)
   const loadProperties = useCallback(async () => {
@@ -213,6 +217,19 @@ export default function RentRevisionPage() {
       toast.error('Erreur lors du chargement des indices IRL')
     }
   }, [])
+  const loadRevisionsHistory = useCallback(async (leaseId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('lease_revisions')
+        .select('*')
+        .eq('lease_id', leaseId)
+        .order('revision_year', { ascending: false })
+      if (error) throw error
+      setHistory(data || [])
+    } catch (error) {
+      console.error('Erreur chargement historique révisions:', error)
+    }
+  }, [])
 
   // Récupérer l'indice IRL de référence depuis le bail
   const getReferenceIRLValue = useCallback(async (trimestreReference: string) => {
@@ -310,6 +327,36 @@ export default function RentRevisionPage() {
       increasePercentage: Math.round(increasePercentage * 100) / 100
     }
   }, [])
+  const getAnchorDateForYear = useCallback((lease: Lease, year: number) => {
+    const leaseStart = new Date(lease.start_date)
+    if (revisionPolicy === "anniversary") {
+      return new Date(year, leaseStart.getMonth(), leaseStart.getDate())
+    }
+    if (revisionPolicy === "next_month_first") {
+      const anniv = new Date(year, leaseStart.getMonth(), leaseStart.getDate())
+      return new Date(anniv.getFullYear(), anniv.getMonth() + 1, 1)
+    }
+    if (revisionPolicy === "jan_1") {
+      return new Date(year, 0, 1)
+    }
+    if (customAnchorDate) {
+      return new Date(customAnchorDate)
+    }
+    return new Date()
+  }, [revisionPolicy, customAnchorDate])
+  const getWindowEndDate = (anchor: Date) => {
+    const end = new Date(anchor)
+    end.setFullYear(end.getFullYear() + 1)
+    end.setDate(end.getDate() - 1)
+    return end
+  }
+  const isRevisionDateValid = useCallback((lease: Lease | null, year: number, revDateISO: string) => {
+    if (!lease || !revDateISO) return false
+    const anchor = getAnchorDateForYear(lease, year)
+    const windowEnd = getWindowEndDate(anchor)
+    const revDate = new Date(revDateISO)
+    return revDate >= anchor && revDate <= windowEnd
+  }, [getAnchorDateForYear])
 
   // Sauvegarder la révision
   const saveRevision = useCallback(async () => {
@@ -460,8 +507,9 @@ export default function RentRevisionPage() {
   useEffect(() => {
     if (selectedLeaseId && selectedYear) {
       loadExistingRevision(selectedLeaseId, selectedYear)
+      loadRevisionsHistory(selectedLeaseId)
     }
-  }, [selectedLeaseId, selectedYear, loadExistingRevision])
+  }, [selectedLeaseId, selectedYear, loadExistingRevision, loadRevisionsHistory])
 
   // Mise à jour du calcul automatique
   useEffect(() => {
@@ -661,6 +709,30 @@ export default function RentRevisionPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Base de révision */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Base de révision</Label>
+                    <Select value={revisionPolicy} onValueChange={(v) => setRevisionPolicy(v as any)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="anniversary">Date anniversaire du bail</SelectItem>
+                        <SelectItem value="next_month_first">1er du mois suivant l'anniversaire</SelectItem>
+                        <SelectItem value="jan_1">1er janvier</SelectItem>
+                        <SelectItem value="custom">Autre</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {revisionPolicy === "custom" && (
+                    <div>
+                      <Label>Date personnalisée</Label>
+                      <Input type="date" value={customAnchorDate} onChange={(e) => setCustomAnchorDate(e.target.value)} />
+                    </div>
+                  )}
+                </div>
+
                 {/* Loyer actuel */}
                 <div className="bg-blue-50 p-4 rounded-lg">
                   <h3 className="font-medium mb-2">Loyer actuel</h3>
@@ -725,7 +797,7 @@ export default function RentRevisionPage() {
 
                 {/* Date de révision */}
                 <div>
-                  <Label htmlFor="revision-date">Date de révision</Label>
+                  <Label htmlFor="revision-date">Date de révision (date de demande)</Label>
                   <Input
                     id="revision-date"
                     type="date"
@@ -735,6 +807,19 @@ export default function RentRevisionPage() {
                       revision_date: e.target.value 
                     } : null)}
                   />
+                  {selectedLease && revision?.revision_date && (() => {
+                    const anchor = getAnchorDateForYear(selectedLease, selectedYear)
+                    const end = getWindowEndDate(anchor)
+                    const valid = isRevisionDateValid(selectedLease, selectedYear, revision.revision_date)
+                    return (
+                      <div className="text-xs mt-1">
+                        <div>Fenêtre légale: du {anchor.toLocaleDateString('fr-FR')} au {end.toLocaleDateString('fr-FR')}</div>
+                        {!valid && (
+                          <div className="text-red-600">La date doit être dans la fenêtre légale et n'est pas rétroactive.</div>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
               </CardContent>
             </Card>
@@ -772,6 +857,37 @@ export default function RentRevisionPage() {
                   >
                     <CheckCircle className="h-4 w-4 mr-2" />
                     {saving ? 'Sauvegarde...' : 'Sauvegarder'}
+                  </Button>
+                  <Button 
+                    onClick={() => {
+                      // Appeler applyToLease via un eval local pour éviter gros refacto ici
+                      (async () => {
+                        const valid = isRevisionDateValid(selectedLease, selectedYear, revision!.revision_date)
+                        if (!valid) {
+                          toast.error("La date de demande doit être dans l'année suivant la date de révision")
+                          return
+                        }
+                        if (!revision?.new_rent_amount || revision.new_rent_amount <= 0) {
+                          toast.error("Calculez d'abord un nouveau loyer valide")
+                          return
+                        }
+                        try {
+                          const { error } = await supabase
+                            .from('leases')
+                            .update({ monthly_rent: revision.new_rent_amount })
+                            .eq('id', selectedLease!.id)
+                          if (error) throw error
+                          toast.success('Loyer mensuel mis à jour sur le bail')
+                        } catch (e) {
+                          toast.error("Impossible d'appliquer la révision au bail")
+                        }
+                      })()
+                    }}
+                    className="w-full"
+                    variant="outline"
+                    disabled={!revision?.new_rent_amount}
+                  >
+                    Appliquer au bail
                   </Button>
 
                   <Button 
