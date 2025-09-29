@@ -48,11 +48,13 @@ export async function POST(request: NextRequest) {
         lease:leases(
           *,
           property:properties(
+            id,
             title,
             address,
             city
           ),
           tenant:users!leases_tenant_id_fkey(
+            id,
             first_name,
             last_name,
             email
@@ -113,10 +115,10 @@ export async function POST(request: NextRequest) {
         lease_id: leaseId,
         year: year,
         pdf_url: publicUrl,
-        old_rent: revision.old_rent,
-        new_rent: revision.new_rent,
-        increase: revision.increase,
-        increase_percentage: revision.increase_percentage
+        old_rent: revision.old_rent_amount,
+        new_rent: revision.new_rent_amount,
+        increase: revision.rent_increase_amount,
+        increase_percentage: revision.rent_increase_percentage
       }
       
       // Utiliser le service de notifications
@@ -126,8 +128,8 @@ export async function POST(request: NextRequest) {
         const notification = await notificationsService.createRentRevisionNotification(
           revision.lease.tenant.id,
           year,
-          revision.new_rent,
-          revision.increase_percentage,
+          revision.new_rent_amount,
+          revision.rent_increase_percentage,
           publicUrl
         )
         

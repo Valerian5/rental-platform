@@ -64,11 +64,13 @@ export async function POST(request: NextRequest) {
       .select(`
         *,
         property:properties(
+          id,
           title,
           address,
           city
         ),
         tenant:users!leases_tenant_id_fkey(
+          id,
           first_name,
           last_name,
           email
