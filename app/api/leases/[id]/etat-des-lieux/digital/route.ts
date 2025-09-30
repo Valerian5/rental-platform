@@ -145,16 +145,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     // Si validé et signatures présentes, générer le PDF via la route dédiée (design unifié) et le stocker
     if (validated && owner_signature && tenant_signature) {
       try {
-        const origin = new URL(request.url).origin
-        const resp = await fetch(`${origin}/api/leases/${leaseId}/etat-des-lieux/pdf`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type: docType }),
-        })
+        // Génération native (pas d'appel HTTP) => évite 401 et problèmes d’auth
+        const { generateAndStoreEdlPdf } = await import("@/lib/edl-pdf")
+        const publicUrl = await generateAndStoreEdlPdf(leaseId, docType as any)
 
-        // Même si la réponse n'est pas utilisée côté client ici, la route PDF s'occupe d'uploader et de mettre à jour file_url
-        if (!resp.ok) {
-          console.warn("Génération PDF (route PDF) a échoué, code:", resp.status)
+        if (!publicUrl) {
+          console.warn("Génération PDF (lib) a échoué: pas d'URL publique")
         } else {
           // Marquer le document comme signé (file_url sera déjà mis à jour par la route PDF)
           await server
@@ -163,19 +159,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             .eq("id", document.id)
 
           // Récupérer l'URL publique stockée pour l'email (avec retries car upload peut être asynchrone)
-          let updatedDoc: any = null
-          for (let i = 0; i < 5; i++) {
-            const { data } = await server
-              .from("etat_des_lieux_documents")
-              .select("file_url")
-              .eq("id", document.id)
-              .single()
-            if (data?.file_url) {
-              updatedDoc = data
-              break
-            }
-            await new Promise((r) => setTimeout(r, 300))
-          }
+          const updatedDoc = { file_url: publicUrl }
 
           // Notification in-app + Email au locataire (bypass RLS via server client déjà utilisé ici)
           try {
@@ -209,7 +193,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
                   await sendEdlTenantFinalizedEmail(
                     { id: tenantUser.id, name: `${tenantUser.first_name || ""} ${tenantUser.last_name || ""}`.trim(), email: tenantUser.email },
                     { id: property?.id || lease.property_id, title: property?.title || "Votre logement", address: property?.address || "" },
-                    updatedDoc?.file_url || `${origin}/tenant/leases/${leaseId}`,
+                    updatedDoc.file_url,
                     leaseId,
                   )
                 }
