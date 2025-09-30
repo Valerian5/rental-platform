@@ -86,6 +86,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     let error: any = null
 
     if (existing?.id) {
+      // Protection: si déjà signé/complet et pas de nouvelle version -> bloquer modifications
+      const { data: existingRow } = await server
+        .from("etat_des_lieux_documents")
+        .select("status")
+        .eq("id", existing.id)
+        .single()
+      if ((existingRow?.status === "signed" || existingRow?.status === "completed") && !validated && !new_version) {
+        return NextResponse.json({ error: "Document finalisé - création d'une nouvelle version requise" }, { status: 403 })
+      }
       const { data, error: updateError } = await server
         .from("etat_des_lieux_documents")
         .update({

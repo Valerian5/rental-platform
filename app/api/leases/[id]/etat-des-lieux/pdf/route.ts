@@ -24,6 +24,22 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .single()
     if (leaseErr || !lease) return NextResponse.json({ error: "Bail non trouvé" }, { status: 404 })
 
+    // Si un fichier final existe déjà, le servir directement
+    if (document.file_url) {
+      try {
+        const existing = await fetch(document.file_url)
+        if (existing.ok) {
+          const buf = await existing.arrayBuffer()
+          return new NextResponse(Buffer.from(buf), {
+            headers: {
+              "Content-Type": document.mime_type || "application/pdf",
+              "Content-Disposition": `attachment; filename="${document.file_name || `etat-des-lieux-${type}-${leaseId}.pdf`}"`,
+            },
+          })
+        }
+      } catch {}
+    }
+
     const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib")
     const pdfDoc = await PDFDocument.create()
     const pageWidth = 595.28
