@@ -717,10 +717,19 @@ export default function TenantLeaseDetailPage() {
           </TabsContent>
 
         </Tabs>
+
+        {/* Modale de confirmation de préavis */}
+        <TenantNoticeDialog
+          isOpen={noticeDialogOpen}
+          onClose={() => setNoticeDialogOpen(false)}
+          leaseId={leaseId}
+          onSent={(notice) => {
+            setLastNotice(notice)
+            setNoticeDialogOpen(false)
+            toast.success("Préavis envoyé avec succès")
+          }}
+        />
       </div>
     </div>
   )
 }
-
-// Dialog monté à la racine pour éviter l'overflow des tabs
-;(() => {})
