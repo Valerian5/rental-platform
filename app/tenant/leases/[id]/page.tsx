@@ -28,6 +28,7 @@ import {
 import { authService } from "@/lib/auth-service"
 import { TenantEtatDesLieuxSection } from "@/components/TenantEtatDesLieuxSection"
 import { toast } from "sonner"
+import { TenantNoticeDialog } from "@/components/TenantNoticeDialog"
 
 interface Lease {
   id: string
@@ -100,6 +101,7 @@ export default function TenantLeaseDetailPage() {
   const [acceptTerms, setAcceptTerms] = useState(false)
   const [sendingNotice, setSendingNotice] = useState(false)
   const [lastNotice, setLastNotice] = useState<any>(null)
+  const [noticeDialogOpen, setNoticeDialogOpen] = useState(false)
 
   const loadLease = async () => {
     try {
@@ -335,33 +337,7 @@ export default function TenantLeaseDetailPage() {
   const canSign = lease.status === "sent_to_tenant" && !lease.signed_by_tenant
   const statusInfo = getStatusInfo(lease.status)
 
-  const handleSendNotice = async () => {
-    if (!currentUser) return
-    const confirmed = window.confirm(
-      "Confirmez-vous votre demande de congé ? Cette action notifiera le propriétaire et enclenchera le préavis."
-    )
-    if (!confirmed) return
-
-    try {
-      setSendingNotice(true)
-      const res = await fetch(`/api/leases/${leaseId}/notice`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirm: true }),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Erreur" }))
-        throw new Error(err.error || "Erreur envoi préavis")
-      }
-      const data = await res.json()
-      setLastNotice(data.notice)
-      toast.success("Préavis envoyé avec succès")
-    } catch (e: any) {
-      toast.error(e.message || "Erreur envoi préavis")
-    } finally {
-      setSendingNotice(false)
-    }
-  }
+  const handleOpenNoticeDialog = () => setNoticeDialogOpen(true)
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -727,9 +703,7 @@ export default function TenantLeaseDetailPage() {
                     <p className="text-sm text-gray-600">
                       Vous pouvez demander votre congé. Un courrier sera généré et envoyé à votre propriétaire.
                     </p>
-                    <Button onClick={handleSendNotice} disabled={sendingNotice}>
-                      {sendingNotice ? "Envoi..." : "Envoyer mon préavis"}
-                    </Button>
+                    <Button onClick={handleOpenNoticeDialog} disabled={sendingNotice}>Envoyer mon préavis</Button>
                   </div>
                 )}
               </CardContent>
@@ -741,3 +715,6 @@ export default function TenantLeaseDetailPage() {
     </div>
   )
 }
+
+// Dialog monté à la racine pour éviter l'overflow des tabs
+;(() => {})

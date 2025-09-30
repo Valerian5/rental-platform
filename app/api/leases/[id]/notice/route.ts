@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { createServerClient } from "@/lib/supabase"
+import { createServerClient } from "@/lib/supabase-server-client"
 
 function addMonths(date: Date, months: number): Date {
   const d = new Date(date)
@@ -51,7 +51,7 @@ function buildNoticeLetterHtml(args: {
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const leaseId = params.id
-  const supabase = createServerClient()
+  const supabase = createServerClient(request)
 
   try {
     const { data: { user }, error: userError } = await supabase.auth.getUser()
@@ -180,9 +180,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
 }
 
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   const leaseId = params.id
-  const supabase = createServerClient()
+  const supabase = createServerClient(request)
 
   try {
     const { data: { user } } = await supabase.auth.getUser()
