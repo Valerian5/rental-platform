@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useRef, useEffect } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -49,6 +49,11 @@ export function TenantNoticeDialog({
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const [desiredMoveOut, setDesiredMoveOut] = useState<string>("")
+  const [signatureMode, setSignatureMode] = useState<"online" | "upload">("online")
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null)
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const isDrawingRef = useRef(false)
 
   const infoText = useMemo(() => {
     const furnished = leaseType === "furnished"
@@ -61,6 +66,64 @@ export function TenantNoticeDialog({
     const start = new Date()
     return addMonths(start, months)
   }, [months])
+
+  // Canvas signature pad when online mode
+  useEffect(() => {
+    if (step !== 3 || signatureMode !== "online") return
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+    ctx.lineCap = "round"
+    ctx.lineJoin = "round"
+    ctx.lineWidth = 2
+    ctx.strokeStyle = "#111827"
+
+    const getPos = (e: MouseEvent | TouchEvent) => {
+      const rect = canvas.getBoundingClientRect()
+      if (e instanceof TouchEvent) {
+        const t = e.touches[0]
+        return { x: t.clientX - rect.left, y: t.clientY - rect.top }
+      }
+      const m = e as MouseEvent
+      return { x: m.clientX - rect.left, y: m.clientY - rect.top }
+    }
+
+    const onDown = (e: any) => {
+      isDrawingRef.current = true
+      const { x, y } = getPos(e)
+      ctx.beginPath()
+      ctx.moveTo(x, y)
+    }
+    const onMove = (e: any) => {
+      if (!isDrawingRef.current) return
+      const { x, y } = getPos(e)
+      ctx.lineTo(x, y)
+      ctx.stroke()
+    }
+    const onUp = () => {
+      if (!isDrawingRef.current) return
+      isDrawingRef.current = false
+      try {
+        setSignatureDataUrl(canvas.toDataURL("image/png"))
+      } catch {}
+    }
+
+    canvas.addEventListener("mousedown", onDown)
+    canvas.addEventListener("mousemove", onMove)
+    window.addEventListener("mouseup", onUp)
+    canvas.addEventListener("touchstart", onDown, { passive: true } as any)
+    canvas.addEventListener("touchmove", onMove, { passive: true } as any)
+    window.addEventListener("touchend", onUp)
+    return () => {
+      canvas.removeEventListener("mousedown", onDown)
+      canvas.removeEventListener("mousemove", onMove)
+      window.removeEventListener("mouseup", onUp)
+      canvas.removeEventListener("touchstart", onDown as any)
+      canvas.removeEventListener("touchmove", onMove as any)
+      window.removeEventListener("touchend", onUp)
+    }
+  }, [step, signatureMode])
 
   const handleGeneratePreview = async () => {
     try {
@@ -145,6 +208,19 @@ export function TenantNoticeDialog({
           )}
         </DialogHeader>
 
+        {/* Stepper */}
+        {step !== 4 && (
+          <div className="flex items-center justify-between text-xs text-gray-600 mb-2">
+            <div className={`flex-1 text-center ${step >= 1 ? "font-semibold text-gray-800" : ""}`}>1. Infos</div>
+            <div className="w-6 h-px bg-gray-300 mx-2" />
+            <div className={`flex-1 text-center ${step >= 2 ? "font-semibold text-gray-800" : ""}`}>2. Document</div>
+            <div className="w-6 h-px bg-gray-300 mx-2" />
+            <div className={`flex-1 text-center ${step >= 3 ? "font-semibold text-gray-800" : ""}`}>3. Signature</div>
+            <div className="w-6 h-px bg-gray-300 mx-2" />
+            <div className={`flex-1 text-center ${step >= 4 ? "font-semibold text-gray-800" : ""}`}>4. Confirmation</div>
+          </div>
+        )}
+
         {/* Steps content */}
         {step === 1 && (
           <div className="space-y-4">
@@ -176,6 +252,12 @@ export function TenantNoticeDialog({
               Votre préavis est de <strong>{months} mois</strong>. La date de fin effective estimée est le
               {" "}
               <strong>{legalEndDate.toLocaleDateString("fr-FR")}</strong>.
+            </div>
+
+            <div className="text-xs text-gray-600">
+              Conformément à la loi, vous êtes redevable du loyer et des charges jusqu'au {legalEndDate.toLocaleDateString("fr-FR")}.
+              {" "}
+              <a className="underline" href="https://www.service-public.fr/particuliers/vosdroits/F1168" target="_blank" rel="noreferrer">En savoir plus</a>
             </div>
 
             <div className="space-y-2">
@@ -222,9 +304,38 @@ export function TenantNoticeDialog({
 
         {step === 3 && (
           <div className="space-y-4">
-            <div className="text-sm text-gray-700">
-              Signature électronique simplifiée. Cochez la case ci-dessous pour confirmer votre intention.
+            <div className="space-y-2">
+              <Label>Méthode de signature</Label>
+              <div className="flex gap-3 text-sm">
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="sigmode" checked={signatureMode === "online"} onChange={() => setSignatureMode("online")} />
+                  Signer en ligne
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="sigmode" checked={signatureMode === "upload"} onChange={() => setSignatureMode("upload")} />
+                  Téléverser un PDF signé
+                </label>
+              </div>
             </div>
+
+            {signatureMode === "online" ? (
+              <div className="space-y-2">
+                <Label>Tracez votre signature</Label>
+                <div className="border rounded bg-white">
+                  <canvas ref={canvasRef} width={600} height={180} className="w-full h-40 touch-none" />
+                </div>
+                <div className="flex gap-2 text-xs">
+                  <Button variant="outline" onClick={() => { const c = canvasRef.current; if (c) { const ctx = c.getContext("2d"); if (ctx) { ctx.clearRect(0,0,c.width,c.height); setSignatureDataUrl(null) } } }}>Effacer</Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label>PDF signé</Label>
+                <input type="file" accept="application/pdf" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
+                <div className="text-xs text-gray-600">Optionnel: si vous préférez signer hors ligne, téléversez votre PDF signé.</div>
+              </div>
+            )}
+
             <div className="flex items-center gap-2">
               <Checkbox id="confirm" checked={confirm} onCheckedChange={(v) => setConfirm(!!v)} />
               <Label htmlFor="confirm">Je confirme vouloir notifier la résiliation de mon bail</Label>
@@ -249,6 +360,12 @@ export function TenantNoticeDialog({
               Date d'envoi: {new Date().toLocaleDateString("fr-FR")}<br />
               Date de fin effective estimée: <strong>{legalEndDate.toLocaleDateString("fr-FR")}</strong>
             </div>
+            <ul className="text-sm text-gray-700 space-y-1">
+              <li>✅ Préavis généré</li>
+              <li>✅ Signature confirmée</li>
+              <li>✅ Envoi au propriétaire</li>
+              <li>⏳ En attente de validation</li>
+            </ul>
             <div className="flex gap-2">
               <Button variant="outline" onClick={handleDownload} disabled={!previewHtml}>
                 <Download className="h-4 w-4 mr-2" /> Télécharger le document
