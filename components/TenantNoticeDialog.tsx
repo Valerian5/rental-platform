@@ -276,7 +276,7 @@ export function TenantNoticeDialog({
 
             <div className="flex justify-between">
               <Button variant="outline" onClick={onClose}>Annuler</Button>
-              <Button onClick={handleGeneratePreview}>Notifier mon départ</Button>
+              <Button onClick={() => setStep(2)}>Continuer</Button>
             </div>
           </div>
         )}
@@ -293,11 +293,12 @@ export function TenantNoticeDialog({
                 <div className="text-sm text-gray-600">Le document sera généré automatiquement.</div>
               )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={handleGeneratePreview}>Générer l'aperçu</Button>
               <Button variant="outline" onClick={handleDownload} disabled={!previewHtml}>
                 <Download className="h-4 w-4 mr-2" /> Télécharger
               </Button>
-              <Button onClick={() => setStep(3)}>Continuer</Button>
+              <Button onClick={() => setStep(3)} disabled={!previewHtml}>Continuer</Button>
             </div>
           </div>
         )}
@@ -344,7 +345,7 @@ export function TenantNoticeDialog({
             <div className="flex justify-between">
               <Button variant="outline" onClick={() => setStep(2)}>Retour</Button>
               <Button onClick={handleConfirmSend} disabled={!confirm || sending}>
-                {sending ? "Envoi..." : "Valider et envoyer au propriétaire"}
+                {sending ? "Envoi..." : "Notifier mon départ"}
               </Button>
             </div>
           </div>
