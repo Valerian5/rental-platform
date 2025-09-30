@@ -32,23 +32,17 @@ export function TenantNoticeDialog({ isOpen, onClose, leaseId, isTenseZone = tru
 
   const handleGeneratePreview = async () => {
     try {
-      let res = await fetch(`/api/leases/${leaseId}/notice`, {
+      const { supabase } = await import("@/lib/supabase")
+      const { data } = await supabase.auth.getSession()
+      const token = data.session?.access_token
+      const headers: Record<string, string> = { "Content-Type": "application/json" }
+      if (token) headers["Authorization"] = `Bearer ${token}`
+
+      const res = await fetch(`/api/leases/${leaseId}/notice`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ confirm: true, isTenseZone, noticePeriodMonths: months })
       })
-      if (res.status === 401) {
-        const { supabase } = await import("@/lib/supabase")
-        const { data } = await supabase.auth.getSession()
-        const token = data.session?.access_token
-        if (token) {
-          res = await fetch(`/api/leases/${leaseId}/notice`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ confirm: true, isTenseZone, noticePeriodMonths: months })
-          })
-        }
-      }
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Erreur" }))
         throw new Error(err.error || "Erreur génération du courrier")
@@ -65,23 +59,17 @@ export function TenantNoticeDialog({ isOpen, onClose, leaseId, isTenseZone = tru
     if (!confirm) return
     try {
       setSending(true)
-      let res = await fetch(`/api/leases/${leaseId}/notice`, {
+      const { supabase } = await import("@/lib/supabase")
+      const { data } = await supabase.auth.getSession()
+      const token = data.session?.access_token
+      const headers: Record<string, string> = { "Content-Type": "application/json" }
+      if (token) headers["Authorization"] = `Bearer ${token}`
+
+      const res = await fetch(`/api/leases/${leaseId}/notice`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ confirm: true, isTenseZone, noticePeriodMonths: months })
       })
-      if (res.status === 401) {
-        const { supabase } = await import("@/lib/supabase")
-        const { data } = await supabase.auth.getSession()
-        const token = data.session?.access_token
-        if (token) {
-          res = await fetch(`/api/leases/${leaseId}/notice`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ confirm: true, isTenseZone, noticePeriodMonths: months })
-          })
-        }
-      }
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Erreur" }))
         throw new Error(err.error || "Erreur envoi préavis")
