@@ -294,7 +294,34 @@ export function TenantNoticeDialog({
               )}
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={handleGeneratePreview}>Générer l'aperçu</Button>
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  // Appel en mode previewOnly: ne crée rien, ne notifie pas
+                  try {
+                    const { supabase } = await import("@/lib/supabase")
+                    const { data: sessionData } = await supabase.auth.getSession()
+                    const token = sessionData.session?.access_token
+                    const headers: Record<string, string> = { "Content-Type": "application/json" }
+                    if (token) headers["Authorization"] = `Bearer ${token}`
+                    const res = await fetch(`/api/leases/${leaseId}/notice`, {
+                      method: "POST",
+                      headers,
+                      body: JSON.stringify({ previewOnly: true, isTenseZone, noticePeriodMonths: months })
+                    })
+                    if (!res.ok) {
+                      const err = await res.json().catch(() => ({ error: "Erreur" }))
+                      throw new Error(err.error || "Erreur génération de l'aperçu")
+                    }
+                    const resp = await res.json()
+                    setPreviewHtml(resp.letterHtml)
+                  } catch {
+                    // noop
+                  }
+                }}
+              >
+                Générer l'aperçu
+              </Button>
               <Button variant="outline" onClick={handleDownload} disabled={!previewHtml}>
                 <Download className="h-4 w-4 mr-2" /> Télécharger
               </Button>

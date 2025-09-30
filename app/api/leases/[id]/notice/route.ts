@@ -81,9 +81,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       isTenseZone = true,
       noticePeriodMonths,
       confirm,
+      previewOnly,
     } = body || {}
 
-    if (!confirm) {
+    if (!previewOnly && !confirm) {
       return NextResponse.json({ error: "Confirmation requise" }, { status: 400 })
     }
 
@@ -131,6 +132,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       moveOutDate,
       noticeMonths: months,
     })
+
+    // Mode aperçu uniquement: aucune écriture/notification
+    if (previewOnly) {
+      console.log("[NOTICE][POST] previewOnly response")
+      return NextResponse.json({ success: true, letterHtml, moveOutDate: moveOutDate.toISOString() })
+    }
 
     // Enregistrer le préavis
     const { data: notice, error: noticeError } = await supabase
