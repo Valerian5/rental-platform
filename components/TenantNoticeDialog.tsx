@@ -7,28 +7,60 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Download } from "lucide-react"
+import { Download, CheckCircle, FileText, Calendar, MapPin } from "lucide-react"
 
 interface TenantNoticeDialogProps {
   isOpen: boolean
   onClose: () => void
   leaseId: string
+  onSent: (notice: any) => void
+  // Contexte d'affichage
+  propertyTitle?: string
+  propertyAddress?: string
+  leaseStartDate?: string
+  leaseType?: string // unfurnished | furnished | commercial
   isTenseZone?: boolean
   defaultMonths?: 1 | 2 | 3
-  onSent: (notice: any) => void
 }
 
-export function TenantNoticeDialog({ isOpen, onClose, leaseId, isTenseZone = true, defaultMonths, onSent }: TenantNoticeDialogProps) {
+function addMonths(date: Date, months: number): Date {
+  const d = new Date(date)
+  const day = d.getDate()
+  d.setMonth(d.getMonth() + months)
+  if (d.getDate() < day) d.setDate(0)
+  return d
+}
+
+export function TenantNoticeDialog({
+  isOpen,
+  onClose,
+  leaseId,
+  onSent,
+  propertyTitle,
+  propertyAddress,
+  leaseStartDate,
+  leaseType,
+  isTenseZone = true,
+  defaultMonths,
+}: TenantNoticeDialogProps) {
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
   const [months, setMonths] = useState<1 | 2 | 3>(defaultMonths || (isTenseZone ? 1 : 3))
   const [confirm, setConfirm] = useState(false)
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
+  const [desiredMoveOut, setDesiredMoveOut] = useState<string>("")
 
   const infoText = useMemo(() => {
-    return isTenseZone
-      ? "Le logement est en zone tendue. Le préavis applicable est d'un mois."
-      : "Le logement n'est pas en zone tendue. Le préavis applicable est de trois mois (sauf cas de réduction légale)."
-  }, [isTenseZone])
+    const furnished = leaseType === "furnished"
+    // Règle simple: meublé => 1 mois, vide => zone tendue 1, sinon 3
+    const computed = furnished ? 1 : (isTenseZone ? 1 : 3)
+    return `Préavis légal estimé: ${computed} mois${furnished ? " (logement meublé)" : isTenseZone ? " (zone tendue)" : ""}.`
+  }, [isTenseZone, leaseType])
+
+  const legalEndDate = useMemo(() => {
+    const start = new Date()
+    return addMonths(start, months)
+  }, [months])
 
   const handleGeneratePreview = async () => {
     try {
@@ -50,6 +82,7 @@ export function TenantNoticeDialog({ isOpen, onClose, leaseId, isTenseZone = tru
       const resp = await res.json()
       setPreviewHtml(resp.letterHtml)
       onSent(resp.notice)
+      setStep(2)
     } catch (e) {
       // Fallback: rien
     }
@@ -76,7 +109,7 @@ export function TenantNoticeDialog({ isOpen, onClose, leaseId, isTenseZone = tru
       }
       const resp = await res.json()
       onSent(resp.notice)
-      onClose()
+      setStep(4)
     } catch (e) {
       // TODO: gérer erreurs via toast externe
     } finally {
@@ -101,56 +134,129 @@ export function TenantNoticeDialog({ isOpen, onClose, leaseId, isTenseZone = tru
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Confirmer l'envoi du préavis</DialogTitle>
-          <DialogDescription>
-            {infoText}
-          </DialogDescription>
+          <DialogTitle>
+            {step === 1 && "Quitter le logement"}
+            {step === 2 && "Prévisualisation du courrier"}
+            {step === 3 && "Signature et confirmation"}
+            {step === 4 && "Préavis envoyé"}
+          </DialogTitle>
+          {step !== 4 && (
+            <DialogDescription>{infoText}</DialogDescription>
+          )}
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Durée de préavis</Label>
-            <Select value={String(months)} onValueChange={(v) => setMonths(Number(v) as 1 | 2 | 3)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1">1 mois</SelectItem>
-                <SelectItem value="2">2 mois</SelectItem>
-                <SelectItem value="3">3 mois</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        {/* Steps content */}
+        {step === 1 && (
+          <div className="space-y-4">
+            <div className="bg-gray-50 p-3 rounded border">
+              <div className="flex items-center gap-2 text-sm text-gray-700">
+                <MapPin className="h-4 w-4" />
+                <span className="font-medium">{propertyTitle || "Votre logement"}</span>
+              </div>
+              <div className="text-sm text-gray-600 ml-6">{propertyAddress}</div>
+              {leaseStartDate && (
+                <div className="flex items-center gap-2 text-sm text-gray-600 mt-1 ml-6">
+                  <Calendar className="h-4 w-4" />
+                  Entrée dans le logement: {new Date(leaseStartDate).toLocaleDateString("fr-FR")}
+                </div>
+              )}
+            </div>
 
-          <div className="space-y-2">
-            <Label>Prévisualisation du courrier</Label>
+            <div className="space-y-2">
+              <Label>Date de départ souhaitée</Label>
+              <input
+                type="date"
+                className="w-full border rounded px-3 py-2"
+                value={desiredMoveOut}
+                onChange={(e) => setDesiredMoveOut(e.target.value)}
+              />
+            </div>
+
+            <div className="text-sm text-gray-700">
+              Votre préavis est de <strong>{months} mois</strong>. La date de fin effective estimée est le
+              {" "}
+              <strong>{legalEndDate.toLocaleDateString("fr-FR")}</strong>.
+            </div>
+
+            <div className="space-y-2">
+              <Label>Durée de préavis (ajustable si motif)</Label>
+              <Select value={String(months)} onValueChange={(v) => setMonths(Number(v) as 1 | 2 | 3)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">1 mois</SelectItem>
+                  <SelectItem value="2">2 mois</SelectItem>
+                  <SelectItem value="3">3 mois</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={onClose}>Annuler</Button>
+              <Button onClick={handleGeneratePreview}>Notifier mon départ</Button>
+            </div>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <FileText className="h-4 w-4" /> Aperçu du courrier
+            </div>
             <div className="bg-gray-50 border rounded p-3 max-h-72 overflow-auto">
               {previewHtml ? (
                 <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: previewHtml }} />
               ) : (
-                <div className="text-sm text-gray-600">Cliquez sur "Générer l'aperçu" pour voir le courrier.</div>
+                <div className="text-sm text-gray-600">Le document sera généré automatiquement.</div>
               )}
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={handleGeneratePreview}>Générer l'aperçu</Button>
               <Button variant="outline" onClick={handleDownload} disabled={!previewHtml}>
                 <Download className="h-4 w-4 mr-2" /> Télécharger
               </Button>
+              <Button onClick={() => setStep(3)}>Continuer</Button>
             </div>
           </div>
+        )}
 
-          <div className="flex items-center gap-2">
-            <Checkbox id="confirm" checked={confirm} onCheckedChange={(v) => setConfirm(!!v)} />
-            <Label htmlFor="confirm">Je confirme vouloir envoyer ce préavis à mon propriétaire</Label>
+        {step === 3 && (
+          <div className="space-y-4">
+            <div className="text-sm text-gray-700">
+              Signature électronique simplifiée. Cochez la case ci-dessous pour confirmer votre intention.
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox id="confirm" checked={confirm} onCheckedChange={(v) => setConfirm(!!v)} />
+              <Label htmlFor="confirm">Je confirme vouloir notifier la résiliation de mon bail</Label>
+            </div>
+
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={() => setStep(2)}>Retour</Button>
+              <Button onClick={handleConfirmSend} disabled={!confirm || sending}>
+                {sending ? "Envoi..." : "Valider et envoyer au propriétaire"}
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
 
-        <DialogFooter className="flex gap-2">
-          <Button variant="outline" onClick={onClose}>Annuler</Button>
-          <Button onClick={handleConfirmSend} disabled={!confirm || sending}>
-            {sending ? "Envoi..." : "Envoyer au propriétaire"}
-          </Button>
-        </DialogFooter>
+        {step === 4 && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-green-700">
+              <CheckCircle className="h-5 w-5" />
+              <span className="font-semibold">Votre préavis a été envoyé au propriétaire.</span>
+            </div>
+            <div className="text-sm text-gray-700">
+              Date d'envoi: {new Date().toLocaleDateString("fr-FR")}<br />
+              Date de fin effective estimée: <strong>{legalEndDate.toLocaleDateString("fr-FR")}</strong>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleDownload} disabled={!previewHtml}>
+                <Download className="h-4 w-4 mr-2" /> Télécharger le document
+              </Button>
+              <Button onClick={onClose}>Fermer</Button>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )

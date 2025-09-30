@@ -723,6 +723,10 @@ export default function TenantLeaseDetailPage() {
           isOpen={noticeDialogOpen}
           onClose={() => setNoticeDialogOpen(false)}
           leaseId={leaseId}
+          propertyTitle={lease.property?.address || lease.adresse_logement}
+          propertyAddress={lease.adresse_logement || `${lease.property?.address || ""} ${lease.property?.city || ""}`.trim()}
+          leaseStartDate={lease.date_prise_effet}
+          leaseType={lease.lease_type}
           onSent={(notice) => {
             setLastNotice(notice)
             setNoticeDialogOpen(false)
