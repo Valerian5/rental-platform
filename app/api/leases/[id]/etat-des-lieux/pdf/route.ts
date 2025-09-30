@@ -47,6 +47,23 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const drawText = (p: any, text: string, x: number, y: number, size = 12, isBold = false, color = rgb(0,0,0)) => {
       p.drawText(text, { x, y, size, font: isBold ? bold : font, color })
     }
+    const stateToLabel = (code?: string) => {
+      switch ((code || '').toUpperCase()) {
+        case 'ABSENT':
+        case 'A':
+          return "Élément absent"
+        case 'M':
+          return "Mauvais état"
+        case 'P':
+          return "État passable"
+        case 'B':
+          return "Bon état"
+        case 'TB':
+          return "Très bon état"
+        default:
+          return code || ''
+      }
+    }
 
     const addLine = (p: any, yPos: number) => {
       p.drawLine({ start: { x: 40, y: yPos }, end: { x: pageWidth - 40, y: yPos }, thickness: 0.5 })
@@ -149,6 +166,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       y -= 14
     }
 
+    // Espacement entre sections
+    y -= 6
+
     // Autres informations (Chauffage / Eau chaude)
     if (y < 120) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60 }
     drawText(page, "Autres informations", 40, y, 12, true, colorHeader)
@@ -168,6 +188,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       drawText(page, l, 40, y, 10)
       y -= 14
     }
+
+    // Espacement entre sections
+    y -= 6
 
     // Compteurs (Électricité / Gaz / Eau)
     if (y < 140) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60 }
@@ -198,6 +221,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     drawText(page, `Relevé : ${meters?.water?.reading || "Non renseigné"}`, 40, y, 10)
     y -= 18
 
+    // Espacement entre sections
+    y -= 6
+
     // Clés
     if (y < 140) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60 }
     drawText(page, "Clés", 40, y, 12, true, colorHeader)
@@ -217,6 +243,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       drawText(page, l, 40, y, 10)
       y -= 14
     }
+
+    // Espacement entre sections
+    y -= 6
 
     // Commentaire général
     const generalComment = general?.general_comment || ""
@@ -280,11 +309,25 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         const el = room.elements[key] || {}
         const label = key.charAt(0).toUpperCase() + key.slice(1)
         if (isExit) {
-          drawRow(page, y, columns, [label, el.state_entree || el.state || "", el.state_sortie || "", el.comment || ""]) 
+          drawRow(page, y, columns, [label, stateToLabel(el.state_entree || el.state), stateToLabel(el.state_sortie), el.comment || ""]) 
         } else {
-          drawRow(page, y, columns, [label, el.state || "", el.comment || ""]) 
+          drawRow(page, y, columns, [label, stateToLabel(el.state), el.comment || ""]) 
         }
         y -= rowHeight
+      }
+
+      // Commentaire sur la pièce
+      if (room.comment) {
+        if (y < 110) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60 }
+        y -= 6
+        drawText(page, "Commentaire de la pièce", 40, y, 11, true, colorHeader)
+        y -= 8
+        const lines = (room.comment as string).match(/.{1,110}(\s|$)/g) || [room.comment]
+        for (const line of lines) {
+          if (y < 80) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60 }
+          drawText(page, line.trim(), 40, y, 10, false, colorMuted)
+          y -= 14
+        }
       }
 
       // Marge avant la section photos
