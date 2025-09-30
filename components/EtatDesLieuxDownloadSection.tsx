@@ -135,20 +135,20 @@ export function EtatDesLieuxDownloadSection({ leaseId, propertyId, propertyData,
     }
   }
 
-  const downloadDocument = async (document: EtatDesLieuxDocument) => {
+  const downloadDocument = async (edlDoc: EtatDesLieuxDocument) => {
     try {
-      if (document.file_url) {
+      if (edlDoc.file_url) {
         // Télécharger le document
-        const response = await fetch(document.file_url)
+        const response = await fetch(edlDoc.file_url)
         const blob = await response.blob()
         const url = window.URL.createObjectURL(blob)
-        const a = document.createElement("a")
+        const a = window.document.createElement("a")
         a.href = url
-        a.download = `etat-des-lieux-${document.type}-${document.id}.pdf`
-        document.body.appendChild(a)
+        a.download = `etat-des-lieux-${edlDoc.type}-${edlDoc.id}.pdf`
+        window.document.body.appendChild(a)
         a.click()
         window.URL.revokeObjectURL(url)
-        document.body.removeChild(a)
+        window.document.body.removeChild(a)
         toast.success("Document téléchargé avec succès")
       } else {
         toast.error("Document non disponible")
@@ -159,11 +159,11 @@ export function EtatDesLieuxDownloadSection({ leaseId, propertyId, propertyData,
     }
   }
 
-  const viewDocument = async (document: EtatDesLieuxDocument) => {
+  const viewDocument = async (edlDoc: EtatDesLieuxDocument) => {
     try {
-      if (document.file_url) {
+      if (edlDoc.file_url) {
         // Ouvrir le document dans un nouvel onglet
-        window.open(document.file_url, '_blank')
+        window.open(edlDoc.file_url, '_blank')
       } else {
         toast.error("Document non disponible")
       }
@@ -173,12 +173,12 @@ export function EtatDesLieuxDownloadSection({ leaseId, propertyId, propertyData,
     }
   }
 
-  const generatePDF = async (document: EtatDesLieuxDocument) => {
+  const generatePDF = async (edlDoc: EtatDesLieuxDocument) => {
     try {
       const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux/pdf`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: document.type }),
+        body: JSON.stringify({ type: edlDoc.type }),
       })
 
       if (!response.ok) {
@@ -187,13 +187,13 @@ export function EtatDesLieuxDownloadSection({ leaseId, propertyId, propertyData,
 
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
-      const a = document.createElement("a")
+      const a = window.document.createElement("a")
       a.href = url
-      a.download = `etat-des-lieux-${document.type}-${document.id}.pdf`
-      document.body.appendChild(a)
+      a.download = `etat-des-lieux-${edlDoc.type}-${edlDoc.id}.pdf`
+      window.document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
+      window.document.body.removeChild(a)
       toast.success("PDF généré avec succès")
     } catch (error) {
       console.error("Erreur génération PDF:", error)
