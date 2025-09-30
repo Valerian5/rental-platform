@@ -204,6 +204,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         y -= rowHeight
       }
 
+      // Marge avant la section photos
+      y -= 20
+
       // Photos
       const photos: string[] = Array.isArray(room.photos) ? room.photos : []
       if (photos.length > 0) {
