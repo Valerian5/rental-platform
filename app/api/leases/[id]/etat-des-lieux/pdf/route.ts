@@ -30,7 +30,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: "Bail non trouvé" }, { status: 404 })
     }
 
-    // Génération avec pdf-lib (structure alignée à la preview)
+    // Génération avec pdf-lib
     const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib")
     const pdfDoc = await PDFDocument.create()
     const pageWidth = 595.28
@@ -39,15 +39,89 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
     const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
 
-    // Palette (branding proche UI)
+    // Palette
     const colorPrimary = rgb(59 / 255, 130 / 255, 246 / 255) // #3B82F6
     const colorMuted = rgb(107 / 255, 114 / 255, 128 / 255)  // slate-500
-    const colorHeader = rgb(30 / 255, 41 / 255, 59 / 255)     // slate-800
+    const colorHeader = rgb(30 / 255, 41 / 255, 59 / 255)    // slate-800
 
     const drawText = (p: any, text: string, x: number, y: number, size = 12, isBold = false, color = rgb(0,0,0)) => {
       p.drawText(text, { x, y, size, font: isBold ? bold : font, color })
     }
 
+    const addLine = (p: any, yPos: number) => {
+      p.drawLine({ start: { x: 40, y: yPos }, end: { x: pageWidth - 40, y: yPos }, thickness: 0.5 })
+    }
+
+    // --- Fonction générique pour les grilles d'images ---
+    async function drawImagesGrid(
+      pdfDoc: any,
+      page: any,
+      startX: number,
+      startY: number,
+      photos: string[],
+      options?: {
+        cellW?: number
+        cellH?: number
+        gap?: number
+        maxPerRow?: number
+        pageWidth?: number
+        pageHeight?: number
+      }
+    ): Promise<{ page: any, y: number }> {
+      const {
+        cellW = 150,
+        cellH = 100,
+        gap = 16,
+        maxPerRow = 3,
+        pageWidth = 595.28,
+        pageHeight = 841.89,
+      } = options || {}
+
+      let px = startX
+      let py = startY
+      let rowMaxHeight = 0
+
+      for (let i = 0; i < photos.length; i++) {
+        try {
+          const url = photos[i]
+          const resp = await fetch(url)
+          if (resp.ok) {
+            const arr = await resp.arrayBuffer()
+            const contentType = resp.headers.get("content-type") || ""
+            const bytes = new Uint8Array(arr)
+            const img = contentType.includes("png")
+              ? await pdfDoc.embedPng(bytes)
+              : await pdfDoc.embedJpg(bytes)
+
+            const scale = Math.min(cellW / img.width, cellH / img.height)
+            const w = img.width * scale
+            const h = img.height * scale
+
+            page.drawImage(img, { x: px, y: py - h, width: w, height: h })
+            rowMaxHeight = Math.max(rowMaxHeight, h)
+          }
+        } catch {}
+
+        px += cellW + gap
+
+        // fin de ligne ou dernière image
+        if ((i + 1) % maxPerRow === 0 || i === photos.length - 1) {
+          py -= rowMaxHeight + gap
+          px = startX
+          rowMaxHeight = 0
+
+          // saut de page si plus de place
+          if (py < 100 && i < photos.length - 1) {
+            page = pdfDoc.addPage([pageWidth, pageHeight])
+            py = pageHeight - 80
+          }
+        }
+      }
+
+      return { page, y: py - 20 }
+    }
+
+    // --- Données ---
     const data = document.digital_data || {}
     const general = data.general_info || {}
     const rooms = Array.isArray(data.rooms) ? data.rooms : []
@@ -57,10 +131,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     y -= 22
     drawText(page, general.type === "sortie" ? "DE SORTIE" : "D'ENTRÉE", 40, y, 14, true, colorPrimary)
     y -= 18
-
-    const addLine = (p: any, yPos: number) => {
-      p.drawLine({ start: { x: 40, y: yPos }, end: { x: pageWidth - 40, y: yPos }, thickness: 0.5 })
-    }
 
     // Informations générales
     drawText(page, "Informations générales", 40, y, 12, true, colorHeader)
@@ -79,10 +149,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       y -= 14
     }
 
-    // Tableau par pièce + photos sous la pièce
+    // Tableau par pièce + photos
     const headerHeight = 20
     const rowHeight = 16
-    const tableWidth = pageWidth - 80
     const isExit = (general.type || "entree") === "sortie"
 
     const drawTableHeader = (p: any, yStart: number) => {
@@ -135,52 +204,29 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         y -= rowHeight
       }
 
-      // Photos sous la pièce (section dédiée)
-      try {
-        const photos: string[] = Array.isArray(room.photos) ? room.photos : []
-        if (photos.length > 0) {
-          // Forcer une marge confortable, sinon nouvelle page
-          if (y < 220) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60 }
-          drawText(page, "Photos", 40, y, 11, true, colorHeader)
-          y -= 6; addLine(page, y); y -= 10
-          let px = 40
-          let py = y
-          const cellW = 150
-          const cellH = 100
-          const gap = 16
-          const maxPerRow = 3
-          const toBytes = (b: ArrayBuffer) => new Uint8Array(b)
-          for (let i = 0; i < Math.min(photos.length, 6); i++) {
-            const url = photos[i]
-            try {
-              const resp = await fetch(url)
-              if (resp.ok) {
-                const arr = await resp.arrayBuffer()
-                const contentType = resp.headers.get("content-type") || ""
-                const bytes = toBytes(arr)
-                const img = contentType.includes("png") ? await pdfDoc.embedPng(bytes) : await pdfDoc.embedJpg(bytes)
-                const scale = Math.min(cellW / img.width, cellH / img.height)
-                const w = img.width * scale
-                const h = img.height * scale
-                page.drawImage(img, { x: px, y: py - h, width: w, height: h })
-              }
-            } catch {}
-            px += cellW + gap
-            if ((i + 1) % maxPerRow === 0) { px = 40; py -= cellH + gap }
-            // Si plus de place sur la page pour la rangée suivante
-            if ((i + 1) % maxPerRow === 0 && py - (cellH + gap) < 80 && i + 1 < Math.min(photos.length, 6)) {
-              page = pdfDoc.addPage([pageWidth, pageHeight]);
-              px = 40; py = pageHeight - 80
-            }
-          }
-          y = py - 20
-        }
-      } catch {}
+      // Photos
+      const photos: string[] = Array.isArray(room.photos) ? room.photos : []
+      if (photos.length > 0) {
+        if (y < 220) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60 }
+        drawText(page, "Photos", 40, y, 11, true, colorHeader)
+        y -= 6; addLine(page, y); y -= 10
+
+        const result = await drawImagesGrid(pdfDoc, page, 40, y, photos, {
+          cellW: 150,
+          cellH: 100,
+          maxPerRow: 3,
+          gap: 16,
+          pageWidth,
+          pageHeight,
+        })
+        page = result.page
+        y = result.y
+      }
 
       y -= 12
     }
 
-    // Signatures en fin de document
+    // Signatures
     if (data?.signatures?.owner && data?.signatures?.tenant) {
       if (y < 140) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60 }
       drawText(page, "Signatures", 40, y, 12, true, colorHeader)
@@ -197,7 +243,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       } catch {}
     }
 
-    // Pagination (numéros de page)
+    // Pagination
     const pages = pdfDoc.getPages()
     const total = pages.length
     for (let i = 0; i < total; i++) {
