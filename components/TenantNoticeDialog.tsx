@@ -33,8 +33,8 @@ export function TenantNoticeDialog({ isOpen, onClose, leaseId, isTenseZone = tru
   const handleGeneratePreview = async () => {
     try {
       const { supabase } = await import("@/lib/supabase")
-      const { data } = await supabase.auth.getSession()
-      const token = data.session?.access_token
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
       const headers: Record<string, string> = { "Content-Type": "application/json" }
       if (token) headers["Authorization"] = `Bearer ${token}`
 
@@ -47,9 +47,9 @@ export function TenantNoticeDialog({ isOpen, onClose, leaseId, isTenseZone = tru
         const err = await res.json().catch(() => ({ error: "Erreur" }))
         throw new Error(err.error || "Erreur génération du courrier")
       }
-      const data = await res.json()
-      setPreviewHtml(data.letterHtml)
-      onSent(data.notice)
+      const resp = await res.json()
+      setPreviewHtml(resp.letterHtml)
+      onSent(resp.notice)
     } catch (e) {
       // Fallback: rien
     }
@@ -60,8 +60,8 @@ export function TenantNoticeDialog({ isOpen, onClose, leaseId, isTenseZone = tru
     try {
       setSending(true)
       const { supabase } = await import("@/lib/supabase")
-      const { data } = await supabase.auth.getSession()
-      const token = data.session?.access_token
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
       const headers: Record<string, string> = { "Content-Type": "application/json" }
       if (token) headers["Authorization"] = `Bearer ${token}`
 
@@ -74,8 +74,8 @@ export function TenantNoticeDialog({ isOpen, onClose, leaseId, isTenseZone = tru
         const err = await res.json().catch(() => ({ error: "Erreur" }))
         throw new Error(err.error || "Erreur envoi préavis")
       }
-      const data = await res.json()
-      onSent(data.notice)
+      const resp = await res.json()
+      onSent(resp.notice)
       onClose()
     } catch (e) {
       // TODO: gérer erreurs via toast externe
