@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createServerClient } from "@/lib/supabase-server-client"
+import { createClient } from "@/lib/supabase"
 
 function addMonths(date: Date, months: number): Date {
   const d = new Date(date)
@@ -51,10 +52,17 @@ function buildNoticeLetterHtml(args: {
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const leaseId = params.id
-  const supabase = createServerClient(request)
+  const authHeader = request.headers.get("authorization") || ""
+  const hasBearer = authHeader.toLowerCase().startsWith("bearer ")
+  const token = hasBearer ? authHeader.slice(7) : null
+  const supabase = hasBearer
+    ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      })
+    : createServerClient(request)
 
   try {
-    console.log("[NOTICE][POST] start", { leaseId })
+    console.log("[NOTICE][POST] start", { leaseId, mode: hasBearer ? "bearer" : "cookies" })
     console.log("[NOTICE][POST] cookies", {
       hasAuthToken: !!request.cookies.get("sb-access-token"),
       cookieNames: request.cookies.getAll().map((c) => c.name),
@@ -197,10 +205,17 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   const leaseId = params.id
-  const supabase = createServerClient(request)
+  const authHeader = request.headers.get("authorization") || ""
+  const hasBearer = authHeader.toLowerCase().startsWith("bearer ")
+  const token = hasBearer ? authHeader.slice(7) : null
+  const supabase = hasBearer
+    ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      })
+    : createServerClient(request)
 
   try {
-    console.log("[NOTICE][GET] start", { leaseId })
+    console.log("[NOTICE][GET] start", { leaseId, mode: hasBearer ? "bearer" : "cookies" })
     console.log("[NOTICE][GET] cookies", {
       hasAuthToken: !!request.cookies.get("sb-access-token"),
       cookieNames: request.cookies.getAll().map((c) => c.name),

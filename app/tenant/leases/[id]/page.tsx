@@ -134,7 +134,19 @@ export default function TenantLeaseDetailPage() {
 
   const loadLastNotice = async () => {
     try {
-      const res = await fetch(`/api/leases/${leaseId}/notice`)
+      let res = await fetch(`/api/leases/${leaseId}/notice`)
+      if (res.status === 401) {
+        try {
+          const { supabase } = await import("@/lib/supabase")
+          const { data } = await supabase.auth.getSession()
+          const token = data.session?.access_token
+          if (token) {
+            res = await fetch(`/api/leases/${leaseId}/notice`, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+          }
+        } catch (_) {}
+      }
       if (res.ok) {
         const data = await res.json()
         setLastNotice(data.notice || null)

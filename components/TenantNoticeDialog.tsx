@@ -31,13 +31,24 @@ export function TenantNoticeDialog({ isOpen, onClose, leaseId, isTenseZone = tru
   }, [isTenseZone])
 
   const handleGeneratePreview = async () => {
-    // Génère un aperçu local côté client en demandant au serveur de calculer et renvoyer le HTML sans enregistrer
     try {
-      const res = await fetch(`/api/leases/${leaseId}/notice`, {
+      let res = await fetch(`/api/leases/${leaseId}/notice`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirm: true, isTenseZone, noticePeriodMonths: months })
       })
+      if (res.status === 401) {
+        const { supabase } = await import("@/lib/supabase")
+        const { data } = await supabase.auth.getSession()
+        const token = data.session?.access_token
+        if (token) {
+          res = await fetch(`/api/leases/${leaseId}/notice`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ confirm: true, isTenseZone, noticePeriodMonths: months })
+          })
+        }
+      }
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Erreur" }))
         throw new Error(err.error || "Erreur génération du courrier")
@@ -54,11 +65,23 @@ export function TenantNoticeDialog({ isOpen, onClose, leaseId, isTenseZone = tru
     if (!confirm) return
     try {
       setSending(true)
-      const res = await fetch(`/api/leases/${leaseId}/notice`, {
+      let res = await fetch(`/api/leases/${leaseId}/notice`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirm: true, isTenseZone, noticePeriodMonths: months })
       })
+      if (res.status === 401) {
+        const { supabase } = await import("@/lib/supabase")
+        const { data } = await supabase.auth.getSession()
+        const token = data.session?.access_token
+        if (token) {
+          res = await fetch(`/api/leases/${leaseId}/notice`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ confirm: true, isTenseZone, noticePeriodMonths: months })
+          })
+        }
+      }
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Erreur" }))
         throw new Error(err.error || "Erreur envoi préavis")
