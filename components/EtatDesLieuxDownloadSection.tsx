@@ -36,6 +36,7 @@ interface EtatDesLieuxDownloadSectionProps {
   propertyId: string
   propertyData?: PropertyData
   leaseData: LeaseData
+  mode?: "manual" | "documents"
 }
 
 interface EtatDesLieuxDocument {
@@ -48,7 +49,7 @@ interface EtatDesLieuxDocument {
   digital_data?: any
 }
 
-export function EtatDesLieuxDownloadSection({ leaseId, propertyId, propertyData, leaseData }: EtatDesLieuxDownloadSectionProps) {
+export function EtatDesLieuxDownloadSection({ leaseId, propertyId, propertyData, leaseData, mode = "manual" }: EtatDesLieuxDownloadSectionProps) {
   const [documents, setDocuments] = useState<EtatDesLieuxDocument[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -225,68 +226,51 @@ export function EtatDesLieuxDownloadSection({ leaseId, propertyId, propertyData,
 
   return (
     <div className="space-y-6">
-      {/* Actions principales */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Télécharger un modèle</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-gray-600">
-              Téléchargez un modèle PDF adapté à votre logement ({roomCount} pièce{roomCount > 1 ? "s" : ""})
-            </p>
-            <div className="flex gap-2">
-              <Button onClick={() => downloadTemplate("entree")} variant="outline" className="flex-1">
-                <Download className="h-4 w-4 mr-2" />
-                Entrée
-              </Button>
-              <Button onClick={() => downloadTemplate("sortie")} variant="outline" className="flex-1">
-                <Download className="h-4 w-4 mr-2" />
-                Sortie
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+      {mode === "manual" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Télécharger un modèle</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Téléchargez un modèle PDF adapté à votre logement ({roomCount} pièce{roomCount > 1 ? "s" : ""})
+              </p>
+              <div className="flex gap-2">
+                <Button onClick={() => downloadTemplate("entree")} variant="outline" className="flex-1">
+                  <Download className="h-4 w-4 mr-2" />
+                  Entrée
+                </Button>
+                <Button onClick={() => downloadTemplate("sortie")} variant="outline" className="flex-1">
+                  <Download className="h-4 w-4 mr-2" />
+                  Sortie
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Uploader un document</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-gray-600">
-              Uploadez un état des lieux complété et signé
-            </p>
-            <div className="space-y-2">
-              <Label htmlFor="entree-upload">État des lieux d'entrée</Label>
-              <Input
-                id="entree-upload"
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) uploadDocument(file, "entree")
-                }}
-                disabled={uploading}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="sortie-upload">État des lieux de sortie</Label>
-              <Input
-                id="sortie-upload"
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) uploadDocument(file, "sortie")
-                }}
-                disabled={uploading}
-              />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Uploader un document</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Uploadez un état des lieux complété et signé
+              </p>
+              <div className="space-y-2">
+                <Label htmlFor="entree-upload">État des lieux d'entrée</Label>
+                <Input id="entree-upload" type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e)=>{ const f=e.target.files?.[0]; if(f) uploadDocument(f,"entree") }} disabled={uploading} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="sortie-upload">État des lieux de sortie</Label>
+                <Input id="sortie-upload" type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e)=>{ const f=e.target.files?.[0]; if(f) uploadDocument(f,"sortie") }} disabled={uploading} />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
-      {/* Liste des documents */}
+      {mode === "documents" && (
       <Card>
         <CardHeader>
           <CardTitle>Documents d'état des lieux</CardTitle>
@@ -314,25 +298,10 @@ export function EtatDesLieuxDownloadSection({ leaseId, propertyId, propertyData,
                   </div>
                   <div className="flex items-center gap-2">
                     {getStatusBadge(doc.status)}
-                    {doc.file_url ? (
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => downloadDocument(doc)}
-                      >
-                        <Download className="h-4 w-4 mr-2" />
-                        Télécharger PDF
-                      </Button>
-                    ) : (
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => generatePDF(doc)}
-                      >
-                        <FileText className="h-4 w-4 mr-2" />
-                        Générer PDF
-                      </Button>
-                    )}
+                    <Button variant="outline" size="sm" onClick={() => generatePDF(doc)}>
+                      <Download className="h-4 w-4 mr-2" />
+                      Télécharger PDF
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -340,6 +309,7 @@ export function EtatDesLieuxDownloadSection({ leaseId, propertyId, propertyData,
           )}
         </CardContent>
       </Card>
+      )}
     </div>
   )
 }

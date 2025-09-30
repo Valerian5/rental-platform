@@ -78,6 +78,19 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .eq("type", docType)
       .maybeSingle()
 
+    // Interdiction: si un document signé existe déjà pour ce bail/type, interdire la création d'une nouvelle version
+    if (new_version) {
+      const { count } = await server
+        .from("etat_des_lieux_documents")
+        .select("id", { count: "exact", head: true })
+        .eq("lease_id", leaseId)
+        .eq("type", docType)
+        .eq("status", "signed")
+      if ((count || 0) > 0) {
+        return NextResponse.json({ error: "Un état des lieux signé existe déjà" }, { status: 403 })
+      }
+    }
+
     if (findError) {
       console.error("Erreur recherche document existant:", findError)
     }

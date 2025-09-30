@@ -255,7 +255,18 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     for(let i=0;i<total;i++){ const p=pages[i]; const footer=`Page ${i+1} / ${total}`; p.drawText(footer,{x: pageWidth/2-(footer.length*2), y:24, size:9, font, color: colorMuted}) }
 
     const pdfBytes = await pdfDoc.save()
-    return new NextResponse(Buffer.from(pdfBytes), { headers: { "Content-Type":"application/pdf", "Content-Disposition":`attachment; filename="etat-des-lieux-${type}-${leaseId}.pdf"` }})
+
+    // Upload et memorisation si non present
+    try{
+      const filePath = `etat-des-lieux/${leaseId}-${type}.pdf`
+      const { error: upErr } = await db.storage.from("documents").upload(filePath, Buffer.from(pdfBytes), { upsert:true, contentType:"application/pdf" })
+      if(!upErr){
+        const { data: pub } = db.storage.from("documents").getPublicUrl(filePath)
+        await db.from("etat_des_lieux_documents").update({ file_url: pub.publicUrl, file_name: `${leaseId}-${type}.pdf`, mime_type: "application/pdf", updated_at: new Date().toISOString() }).eq("id", document.id)
+      }
+    }catch{}
+
+    return new NextResponse(Buffer.from(pdfBytes), { headers: { "Content-Type":"application/pdf", "Content-Disposition":`attachment; filename=\"etat-des-lieux-${type}-${leaseId}.pdf\"` }})
   }catch(e){
     console.error("Erreur génération PDF état des lieux:",e)
     return NextResponse.json({ error:"Erreur lors de la génération du PDF" },{status:500})

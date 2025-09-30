@@ -97,6 +97,7 @@ export function EtatDesLieuxSection({ leaseId, propertyId, propertyData, leaseDa
             propertyId={propertyId}
             propertyData={propertyData}
             leaseData={leaseData}
+            mode="manual"
           />
         </TabsContent>
 
@@ -106,6 +107,7 @@ export function EtatDesLieuxSection({ leaseId, propertyId, propertyData, leaseDa
             propertyId={propertyId}
             propertyData={propertyData}
             leaseData={leaseData}
+            mode="documents"
           />
         </TabsContent>
 
