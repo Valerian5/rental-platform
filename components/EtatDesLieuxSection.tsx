@@ -84,11 +84,21 @@ export function EtatDesLieuxSection({ leaseId, propertyId, propertyData, leaseDa
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="documents" className="space-y-6">
+      <Tabs defaultValue="manual" className="space-y-6">
         <TabsList className="bg-white">
+          <TabsTrigger value="manual">État des lieux manuel</TabsTrigger>
+          <TabsTrigger value="digital">État des lieux digital</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
-          <TabsTrigger value="digital">État numérique</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="manual" className="space-y-6">
+          <EtatDesLieuxDownloadSection
+            leaseId={leaseId}
+            propertyId={propertyId}
+            propertyData={propertyData}
+            leaseData={leaseData}
+          />
+        </TabsContent>
 
         <TabsContent value="documents" className="space-y-6">
           <EtatDesLieuxDownloadSection

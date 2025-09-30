@@ -24,10 +24,10 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 
     if (!document) {
-      return NextResponse.json({ general_info: null, rooms: [] })
+      return NextResponse.json({ data: { general_info: null, rooms: [] }, status: "draft" })
     }
 
-    return NextResponse.json(document.digital_data || { general_info: null, rooms: [] })
+    return NextResponse.json({ data: document.digital_data || { general_info: null, rooms: [] }, status: document.status })
   } catch (error) {
     console.error("Erreur GET digital etat-des-lieux:", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const leaseId = params.id
-    const { general_info, rooms, property_data, lease_data, owner_signature, tenant_signature, validated } = await request.json()
+    const { general_info, rooms, property_data, lease_data, owner_signature, tenant_signature, validated, new_version } = await request.json()
     const server = createServerClient()
 
     // Vérifier que le bail existe
@@ -68,8 +68,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     const docType = (general_info?.type || "entree") as string
 
-    // Chercher un document existant (évite besoin d'unique index pour onConflict)
-    const { data: existing, error: findError } = await server
+    // Chercher un document existant (sauf si on force une nouvelle version)
+    const { data: existing, error: findError } = new_version
+      ? { data: null as any, error: null as any }
+      : await server
       .from("etat_des_lieux_documents")
       .select("id")
       .eq("lease_id", leaseId)

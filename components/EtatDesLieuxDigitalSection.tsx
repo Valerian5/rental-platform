@@ -358,7 +358,9 @@ export function EtatDesLieuxDigitalSection({
       // Essayer de charger l'état d'entrée d'abord
       const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux/digital?type=entree`)
       if (response.ok) {
-        const data = await response.json()
+        const payload = await response.json()
+        const data = payload.data || payload
+        const status = payload.status || "draft"
         if (data.general_info || (data.rooms && data.rooms.length > 0)) {
           // Il y a des données d'entrée
           setHasExistingData(true)
@@ -367,6 +369,10 @@ export function EtatDesLieuxDigitalSection({
           }
           if (data.rooms && data.rooms.length > 0) {
             setRooms(data.rooms)
+          }
+          // Si signé/finalisé, passer en lecture seule
+          if (status === "signed" || status === "completed") {
+            setIsValidated(true)
           }
         } else {
           // Pas de données d'entrée - vérifier s'il y a un état de sortie
@@ -391,7 +397,9 @@ export function EtatDesLieuxDigitalSection({
     try {
       const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux/digital?type=sortie`)
       if (response.ok) {
-        const data = await response.json()
+        const payload = await response.json()
+        const data = payload.data || payload
+        const status = payload.status || "draft"
         if (data.general_info || (data.rooms && data.rooms.length > 0)) {
           // Il y a des données de sortie
           setHasExistingData(true)
@@ -400,6 +408,9 @@ export function EtatDesLieuxDigitalSection({
           }
           if (data.rooms && data.rooms.length > 0) {
             setRooms(data.rooms)
+          }
+          if (status === "signed" || status === "completed") {
+            setIsValidated(true)
           }
         }
       }
@@ -561,6 +572,7 @@ export function EtatDesLieuxDigitalSection({
           owner_signature: ownerSignature,
           tenant_signature: tenantSignature,
           validated: true,
+          new_version: false,
         }),
       })
 

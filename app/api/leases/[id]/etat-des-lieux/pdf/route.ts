@@ -196,9 +196,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         y-=rowHeight
         if(y<120){ page=pdfDoc.addPage([pageWidth,pageHeight]); y=pageHeight-60; drawText(page,`Pièce: ${room.name||room.id||""}`,40,y,12,true,colorHeader); y-=18; drawTableHeader(page,y); y-=headerHeight }
       }
+
+      // Marge avant commentaire ou photos
+      y-=10
+
       // Commentaire de la pièce
       if(room.comment){
-        y-=10
         drawText(page,"Commentaire de la pièce",40,y,11,true,colorHeader); y-=8; addLine(page,y); y-=10
         const lines=(room.comment as string).match(/.{1,110}(\s|$)/g)||[room.comment]
         lines.forEach(line=>{ if(y<80){ page=pdfDoc.addPage([pageWidth,pageHeight]); y=pageHeight-60 } drawText(page,line.trim(),40,y,10,false,colorMuted); y-=14 })
@@ -208,10 +211,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       // Photos
       const photos:Array<string> = Array.isArray(room.photos)?room.photos:[]
       if(photos.length>0){
+        if(y<220){ page=pdfDoc.addPage([pageWidth,pageHeight]); y=pageHeight-60 }
         drawText(page,"Photos",40,y,11,true,colorHeader); y-=6; addLine(page,y); y-=10
-        const result = await drawImagesGrid(pdfDoc,page,40,y,photos,{cellW:150,cellH:100,maxPerRow:3,pageWidth,pageHeight})
-        page = result.page
-        y = result.y
+        const result = await drawImagesGrid(pdfDoc,page,40,y,photos)
+        page = result.page; y = result.y
       }
     }
 
@@ -232,13 +235,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     // Pagination
-    const pages = pdfDoc.getPages()
-    const total = pages.length
-    for(let i=0;i<total;i++){
-      const p=pages[i]
-      const footer=`Page ${i+1} / ${total}`
-      p.drawText(footer,{ x: pageWidth/2-(footer.length*2), y:24, size:9, font, color: colorMuted })
-    }
+    const pages = pdfDoc.getPages(); const total = pages.length
+    for(let i=0;i<total;i++){ const p=pages[i]; const footer=`Page ${i+1} / ${total}`; p.drawText(footer,{x: pageWidth/2-(footer.length*2), y:24, size:9, font, color: colorMuted}) }
 
     const pdfBytes = await pdfDoc.save()
     return new NextResponse(Buffer.from(pdfBytes), { headers: { "Content-Type":"application/pdf", "Content-Disposition":`attachment; filename="etat-des-lieux-${type}-${leaseId}.pdf"` }})

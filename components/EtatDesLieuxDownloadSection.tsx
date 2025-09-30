@@ -314,33 +314,24 @@ export function EtatDesLieuxDownloadSection({ leaseId, propertyId, propertyData,
                   </div>
                   <div className="flex items-center gap-2">
                     {getStatusBadge(doc.status)}
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => generatePDF(doc)}
-                    >
-                      <FileText className="h-4 w-4 mr-2" />
-                      Générer PDF
-                    </Button>
-                    {doc.file_url && (
-                      <>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => viewDocument(doc)}
-                        >
-                          <Eye className="h-4 w-4 mr-2" />
-                          Voir
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => downloadDocument(doc)}
-                        >
-                          <Download className="h-4 w-4 mr-2" />
-                          Télécharger
-                        </Button>
-                      </>
+                    {doc.file_url ? (
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => downloadDocument(doc)}
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Télécharger PDF
+                      </Button>
+                    ) : (
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => generatePDF(doc)}
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Générer PDF
+                      </Button>
                     )}
                   </div>
                 </div>
