@@ -112,6 +112,9 @@ export default function LeaseDetailPage() {
   const [sending, setSending] = useState(false)
   const [signing, setSigning] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [lastNotice, setLastNotice] = useState<any>(null)
+  const [preparingExit, setPreparingExit] = useState(false)
+  const [creatingFinalReceipt, setCreatingFinalReceipt] = useState(false)
 
   /** --- Nouvel état : statut DocuSign par signataire --- */
   const [sigLoading, setSigLoading] = useState(false)
@@ -143,6 +146,18 @@ export default function LeaseDetailPage() {
       setError(error instanceof Error ? error.message : "Erreur inconnue")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadLastNotice = async () => {
+    try {
+      const res = await fetch(`/api/leases/${leaseId}/notice`)
+      if (res.ok) {
+        const data = await res.json()
+        setLastNotice(data.notice || null)
+      }
+    } catch (e) {
+      console.error("Erreur chargement préavis:", e)
     }
   }
 
@@ -336,8 +351,44 @@ export default function LeaseDetailPage() {
       loadLease()
       loadSignatureStatus({ silent: true })
     }
+    if (leaseId) {
+      loadLastNotice()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leaseId])
+
+  const handlePrepareExitEdl = async () => {
+    try {
+      setPreparingExit(true)
+      const res = await fetch(`/api/leases/${leaseId}/etat-des-lieux/prepare-exit`, { method: "POST" })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Erreur" }))
+        throw new Error(err.error || "Erreur création EDL de sortie")
+      }
+      toast.success("État des lieux de sortie créé")
+    } catch (e: any) {
+      toast.error(e.message || "Erreur")
+    } finally {
+      setPreparingExit(false)
+    }
+  }
+
+  const handleCreateFinalReceipt = async () => {
+    try {
+      setCreatingFinalReceipt(true)
+      const res = await fetch(`/api/leases/${leaseId}/final-receipt`, { method: "POST" })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Erreur" }))
+        throw new Error(err.error || "Erreur création quittance finale")
+      }
+      const data = await res.json()
+      toast.success(`Quittance finale créée (${data.totalDue} €)`) 
+    } catch (e: any) {
+      toast.error(e.message || "Erreur")
+    } finally {
+      setCreatingFinalReceipt(false)
+    }
+  }
 
   /** --- Helpers d'affichage / mapping DocuSign -> UI --- */
   const ownerRecipient = useMemo(
@@ -556,6 +607,7 @@ export default function LeaseDetailPage() {
             <TabsTrigger value="cautionnement">Acte de cautionnement</TabsTrigger>
             <TabsTrigger value="etat-des-lieux">État des lieux</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
+            <TabsTrigger value="notice">Préavis</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
@@ -821,6 +873,39 @@ export default function LeaseDetailPage() {
           <TabsContent value="documents" className="space-y-6">
             {/* Utilise le même composant que la page properties pour la cohérence */}
             {lease && <PropertyDocumentsManager propertyId={lease.property_id} />}
+          </TabsContent>
+
+          <TabsContent value="notice" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Préavis du locataire
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {lastNotice ? (
+                  <>
+                    <p className="text-sm text-gray-600">
+                      Reçu le {new Date(lastNotice.notice_date).toLocaleDateString("fr-FR")} • Départ prévu le {new Date(lastNotice.move_out_date).toLocaleDateString("fr-FR")}
+                    </p>
+                    <div className="bg-white border rounded p-4 max-h-80 overflow-auto">
+                      <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: lastNotice.letter_html }} />
+                    </div>
+                    <div className="flex gap-3">
+                      <Button onClick={handlePrepareExitEdl} disabled={preparingExit}>
+                        {preparingExit ? "Création..." : "Créer EDL de sortie"}
+                      </Button>
+                      <Button variant="outline" onClick={handleCreateFinalReceipt} disabled={creatingFinalReceipt}>
+                        {creatingFinalReceipt ? "Calcul..." : "Générer quittance finale (prorata)"}
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-600">Aucun préavis reçu pour ce bail.</p>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>

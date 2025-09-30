@@ -98,6 +98,8 @@ export default function TenantLeaseDetailPage() {
   const [signing, setSigning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [acceptTerms, setAcceptTerms] = useState(false)
+  const [sendingNotice, setSendingNotice] = useState(false)
+  const [lastNotice, setLastNotice] = useState<any>(null)
 
   const loadLease = async () => {
     try {
@@ -125,6 +127,18 @@ export default function TenantLeaseDetailPage() {
       setError(error instanceof Error ? error.message : "Erreur inconnue")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadLastNotice = async () => {
+    try {
+      const res = await fetch(`/api/leases/${leaseId}/notice`)
+      if (res.ok) {
+        const data = await res.json()
+        setLastNotice(data.notice || null)
+      }
+    } catch (e) {
+      console.error("Erreur chargement préavis:", e)
     }
   }
 
@@ -205,7 +219,7 @@ export default function TenantLeaseDetailPage() {
         setCurrentUser(user)
 
         if (leaseId) {
-          await Promise.all([loadLease(), loadAnnexes()])
+          await Promise.all([loadLease(), loadAnnexes(), loadLastNotice()])
         }
       } catch (error) {
         console.error("Erreur initialisation:", error)
@@ -321,6 +335,34 @@ export default function TenantLeaseDetailPage() {
   const canSign = lease.status === "sent_to_tenant" && !lease.signed_by_tenant
   const statusInfo = getStatusInfo(lease.status)
 
+  const handleSendNotice = async () => {
+    if (!currentUser) return
+    const confirmed = window.confirm(
+      "Confirmez-vous votre demande de congé ? Cette action notifiera le propriétaire et enclenchera le préavis."
+    )
+    if (!confirmed) return
+
+    try {
+      setSendingNotice(true)
+      const res = await fetch(`/api/leases/${leaseId}/notice`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: true }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Erreur" }))
+        throw new Error(err.error || "Erreur envoi préavis")
+      }
+      const data = await res.json()
+      setLastNotice(data.notice)
+      toast.success("Préavis envoyé avec succès")
+    } catch (e: any) {
+      toast.error(e.message || "Erreur envoi préavis")
+    } finally {
+      setSendingNotice(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto p-6 space-y-6">
@@ -376,6 +418,7 @@ export default function TenantLeaseDetailPage() {
             <TabsTrigger value="document">Bail</TabsTrigger>
             <TabsTrigger value="annexes">Annexes</TabsTrigger>
             <TabsTrigger value="etat-des-lieux">État des lieux</TabsTrigger>
+            <TabsTrigger value="notice">Préavis</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
@@ -659,6 +702,38 @@ export default function TenantLeaseDetailPage() {
                 date_prise_effet: lease.date_prise_effet,
               }}
             />
+          </TabsContent>
+
+          <TabsContent value="notice" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Demande de congé (préavis)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {lastNotice ? (
+                  <div className="space-y-3">
+                    <p className="text-sm text-gray-600">
+                      Préavis envoyé le {new Date(lastNotice.notice_date).toLocaleDateString("fr-FR")} • Départ prévu le {new Date(lastNotice.move_out_date).toLocaleDateString("fr-FR")}
+                    </p>
+                    <div className="bg-white border rounded p-4 max-h-80 overflow-auto">
+                      <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: lastNotice.letter_html }} />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-sm text-gray-600">
+                      Vous pouvez demander votre congé. Un courrier sera généré et envoyé à votre propriétaire.
+                    </p>
+                    <Button onClick={handleSendNotice} disabled={sendingNotice}>
+                      {sendingNotice ? "Envoi..." : "Envoyer mon préavis"}
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
         </Tabs>
