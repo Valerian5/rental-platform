@@ -149,6 +149,89 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       y -= 14
     }
 
+    // Autres informations (Chauffage / Eau chaude)
+    if (y < 120) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60 }
+    drawText(page, "Autres informations", 40, y, 12, true, colorHeader)
+    y -= 8; addLine(page, y); y -= 10
+    const heatingType = general?.heating?.type || "Non renseigné"
+    const heatingFuel = general?.heating?.fuel_type || "Non renseigné"
+    const hotType = general?.hot_water?.type || "Non renseigné"
+    const hotFuel = general?.hot_water?.fuel_type || "Non renseigné"
+    const otherLines = [
+      `Type de chauffage : ${heatingType}`,
+      `Type de combustible : ${heatingFuel}`,
+      `Type d'eau chaude : ${hotType}`,
+      `Type de combustible : ${hotFuel}`,
+    ]
+    for (const l of otherLines) {
+      if (y < 80) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60 }
+      drawText(page, l, 40, y, 10)
+      y -= 14
+    }
+
+    // Compteurs (Électricité / Gaz / Eau)
+    if (y < 140) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60 }
+    drawText(page, "Compteurs", 40, y, 12, true, colorHeader)
+    y -= 8; addLine(page, y); y -= 10
+    const meters = general?.meters || {}
+    // Électricité
+    drawText(page, "Compteur électrique", 40, y, 11, true)
+    y -= 14
+    drawText(page, `N° du compteur : ${meters?.electricity?.number || "Non renseigné"}`, 40, y, 10)
+    y -= 12
+    drawText(page, `Relevé heure pleine : ${meters?.electricity?.full_hour || "Non renseigné"}`, 40, y, 10)
+    y -= 12
+    drawText(page, `Relevé heure creuse : ${meters?.electricity?.off_peak || "Non renseigné"}`, 40, y, 10)
+    y -= 16
+    // Gaz
+    drawText(page, "Compteur gaz", 40, y, 11, true)
+    y -= 14
+    drawText(page, `N° du compteur : ${meters?.gas?.number || "Non renseigné"}`, 40, y, 10)
+    y -= 12
+    drawText(page, `Relevé : ${meters?.gas?.reading || "Non renseigné"}`, 40, y, 10)
+    y -= 16
+    // Eau
+    drawText(page, "Compteur eau", 40, y, 11, true)
+    y -= 14
+    drawText(page, `N° du compteur : ${meters?.water?.number || "Non renseigné"}`, 40, y, 10)
+    y -= 12
+    drawText(page, `Relevé : ${meters?.water?.reading || "Non renseigné"}`, 40, y, 10)
+    y -= 18
+
+    // Clés
+    if (y < 140) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60 }
+    drawText(page, "Clés", 40, y, 12, true, colorHeader)
+    y -= 8; addLine(page, y); y -= 10
+    const keys = general?.keys || {}
+    const keyLines = [
+      `Clés d'entrée : ${keys?.entrance ?? 0}`,
+      `Clés immeuble/portail : ${keys?.building ?? 0}`,
+      `Clés parking : ${keys?.parking ?? 0}`,
+      `Clés boîte aux lettres : ${keys?.mailbox ?? 0}`,
+      `Clés cave : ${keys?.cellar ?? 0}`,
+      `Autre type de clés : ${keys?.other ?? 0}`,
+      `Type d'autre clé : ${keys?.other_type || "Non renseigné"}`,
+    ]
+    for (const l of keyLines) {
+      if (y < 80) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60 }
+      drawText(page, l, 40, y, 10)
+      y -= 14
+    }
+
+    // Commentaire général
+    const generalComment = general?.general_comment || ""
+    if (generalComment) {
+      if (y < 120) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60 }
+      drawText(page, "Commentaire général", 40, y, 12, true, colorHeader)
+      y -= 8; addLine(page, y); y -= 10
+      const wrapped = generalComment.match(/.{1,110}(\s|$)/g) || [generalComment]
+      for (const line of wrapped) {
+        if (y < 80) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60 }
+        drawText(page, line.trim(), 40, y, 10, false, colorMuted)
+        y -= 14
+      }
+    }
+
     // Tableau par pièce + photos
     const headerHeight = 20
     const rowHeight = 16
