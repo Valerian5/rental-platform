@@ -659,6 +659,12 @@ export function EtatDesLieuxDigitalSection({
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Contenu principal */}
       <div className="lg:col-span-2 space-y-6">
+        {isValidated && (
+          <div className="p-3 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+            Document finalisé: lecture seule. Le bouton "Valider et signer" est désactivé.
+          </div>
+        )}
+        <div style={{ pointerEvents: isValidated ? 'none' as any : undefined, opacity: isValidated ? 0.7 : 1 }}>
         {/* Section Informations */}
         <Card>
           <CardHeader>
@@ -836,7 +842,7 @@ export function EtatDesLieuxDigitalSection({
         <Home className="h-5 w-5" />
         Pièces du logement
       </CardTitle>
-      <Button onClick={() => setShowAddRoomDialog(true)}>
+      <Button onClick={() => setShowAddRoomDialog(true)} disabled={isValidated}>
         <Plus className="h-4 w-4 mr-2" />
         Ajouter une pièce
       </Button>
@@ -1395,6 +1401,7 @@ export function EtatDesLieuxDigitalSection({
             </div>
           </CardContent>
         </Card>
+        </div>
       </div>
 
       {/* Sidebar */}
@@ -1695,7 +1702,7 @@ export function EtatDesLieuxDigitalSection({
             <CardTitle className="text-sm">Actions</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <Button onClick={saveDigitalState} className="w-full">
+            <Button onClick={saveDigitalState} className="w-full" disabled={isValidated}>
               <CheckCircle className="h-4 w-4 mr-2" />
               Sauvegarder
             </Button>
@@ -1703,6 +1710,7 @@ export function EtatDesLieuxDigitalSection({
               onClick={() => setShowValidation(true)} 
               className="w-full"
               variant="outline"
+              disabled={isValidated}
             >
               <FileCheck className="h-4 w-4 mr-2" />
               Valider et signer

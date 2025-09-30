@@ -298,9 +298,9 @@ export function EtatDesLieuxDownloadSection({ leaseId, propertyId, propertyData,
                   </div>
                   <div className="flex items-center gap-2">
                     {getStatusBadge(doc.status)}
-                    <Button variant="outline" size="sm" onClick={() => generatePDF(doc)}>
+                    <Button variant="outline" size="sm" onClick={() => downloadDocument(doc)}>
                       <Download className="h-4 w-4 mr-2" />
-                      Télécharger PDF
+                      Télécharger
                     </Button>
                   </div>
                 </div>
