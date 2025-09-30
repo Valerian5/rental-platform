@@ -39,8 +39,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
     const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
 
-    const drawText = (p: any, text: string, x: number, y: number, size = 12, isBold = false) => {
-      p.drawText(text, { x, y, size, font: isBold ? bold : font, color: rgb(0, 0, 0) })
+    // Palette (branding proche UI)
+    const colorPrimary = rgb(59 / 255, 130 / 255, 246 / 255) // #3B82F6
+    const colorMuted = rgb(107 / 255, 114 / 255, 128 / 255)  // slate-500
+    const colorHeader = rgb(30 / 255, 41 / 255, 59 / 255)     // slate-800
+
+    const drawText = (p: any, text: string, x: number, y: number, size = 12, isBold = false, color = rgb(0,0,0)) => {
+      p.drawText(text, { x, y, size, font: isBold ? bold : font, color })
     }
 
     const data = document.digital_data || {}
@@ -48,9 +53,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const rooms = Array.isArray(data.rooms) ? data.rooms : []
 
     let y = pageHeight - 40
-    drawText(page, "État des lieux", 40, y, 18, true)
+    drawText(page, "État des lieux", 40, y, 18, true, colorHeader)
     y -= 22
-    drawText(page, general.type === "sortie" ? "DE SORTIE" : "D'ENTRÉE", 40, y, 14, true)
+    drawText(page, general.type === "sortie" ? "DE SORTIE" : "D'ENTRÉE", 40, y, 14, true, colorPrimary)
     y -= 18
 
     const addLine = (p: any, yPos: number) => {
@@ -58,7 +63,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     // Informations générales
-    drawText(page, "Informations générales", 40, y, 12, true)
+    drawText(page, "Informations générales", 40, y, 12, true, colorHeader)
     y -= 10
     addLine(page, y)
     y -= 12
@@ -105,7 +110,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     for (const room of rooms) {
       if (y < 140) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60 }
-      drawText(page, `Pièce: ${room.name || room.id || ""}`.slice(0, 60), 40, y, 12, true)
+      drawText(page, `Pièce: ${room.name || room.id || ""}`.slice(0, 60), 40, y, 12, true, colorHeader)
       y -= 8
       addLine(page, y)
       y -= 8
@@ -116,7 +121,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       for (const key of elements) {
         if (y < 80) {
           page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60
-          drawText(page, `Pièce: ${room.name || room.id || ""}`.slice(0, 60), 40, y, 12, true)
+          drawText(page, `Pièce: ${room.name || room.id || ""}`.slice(0, 60), 40, y, 12, true, colorHeader)
           y -= 8; addLine(page, y); y -= 8
           drawTableHeader(page, y); y -= headerHeight
         }
@@ -130,13 +135,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         y -= rowHeight
       }
 
-      // Photos sous la pièce
+      // Photos sous la pièce (section dédiée)
       try {
         const photos: string[] = Array.isArray(room.photos) ? room.photos : []
         if (photos.length > 0) {
-          if (y < 160) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60 }
-          drawText(page, "Photos", 40, y, 11, true)
-          y -= 12
+          // Forcer une marge confortable, sinon nouvelle page
+          if (y < 220) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60 }
+          drawText(page, "Photos", 40, y, 11, true, colorHeader)
+          y -= 6; addLine(page, y); y -= 10
           let px = 40
           let py = y
           const cellW = 150
@@ -161,6 +167,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             } catch {}
             px += cellW + gap
             if ((i + 1) % maxPerRow === 0) { px = 40; py -= cellH + gap }
+            // Si plus de place sur la page pour la rangée suivante
+            if ((i + 1) % maxPerRow === 0 && py - (cellH + gap) < 80 && i + 1 < Math.min(photos.length, 6)) {
+              page = pdfDoc.addPage([pageWidth, pageHeight]);
+              px = 40; py = pageHeight - 80
+            }
           }
           y = py - 20
         }
@@ -172,7 +183,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     // Signatures en fin de document
     if (data?.signatures?.owner && data?.signatures?.tenant) {
       if (y < 140) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60 }
-      drawText(page, "Signatures", 40, y, 12, true)
+      drawText(page, "Signatures", 40, y, 12, true, colorHeader)
       y -= 8; addLine(page, y); y -= 8
       const toBytesFromDataUrl = (dataUrl: string) => Buffer.from((dataUrl.split(",")[1] || ""), "base64")
       try {
@@ -184,6 +195,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         drawText(page, "Locataire:", 320, y, 10, true)
         page.drawImage(tenantPng, { x: 320, y: y - sigHeight - 6, width: sigWidth, height: sigHeight })
       } catch {}
+    }
+
+    // Pagination (numéros de page)
+    const pages = pdfDoc.getPages()
+    const total = pages.length
+    for (let i = 0; i < total; i++) {
+      const p = pages[i]
+      const footer = `Page ${i + 1} / ${total}`
+      p.drawText(footer, { x: pageWidth / 2 - (footer.length * 2), y: 24, size: 9, font, color: colorMuted })
     }
 
     const pdfBytes = await pdfDoc.save()
