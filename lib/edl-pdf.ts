@@ -39,6 +39,44 @@ export async function generateAndStoreEdlPdf(leaseId: string, type: "entree" | "
   const data = document.digital_data || {}
   const general = data.general_info || {}
   const rooms = Array.isArray(data.rooms) ? data.rooms : []
+  const stateToLabel = (code?: string) => {
+    switch ((code || '').toUpperCase()) {
+      case 'ABSENT': case 'A': return 'Élément absent'
+      case 'M': return 'Mauvais état'
+      case 'P': return 'État passable'
+      case 'B': return 'Bon état'
+      case 'TB': return 'Très bon état'
+      default: return code || ''
+    }
+  }
+  async function drawImagesGrid(pdfDoc: any, page: any, startX: number, startY: number, photos: string[], options?: { cellW?: number, cellH?: number, gap?: number, maxPerRow?: number, pageWidth?: number, pageHeight?: number }): Promise<{ page: any, y: number }> {
+    const { cellW = 150, cellH = 100, gap = 16, maxPerRow = 3, pageWidth = 595.28, pageHeight = 841.89 } = options || {}
+    let px = startX, py = startY, rowMaxHeight = 0
+    for (let i = 0; i < photos.length; i++) {
+      try {
+        const url = photos[i]
+        const resp = await fetch(url)
+        if (!resp.ok) continue
+        const arr = await resp.arrayBuffer()
+        const contentType = resp.headers.get('content-type') || ''
+        const bytes = new Uint8Array(arr)
+        const img = contentType.includes('png') ? await pdfDoc.embedPng(bytes) : await pdfDoc.embedJpg(bytes)
+        const scale = Math.min(cellW / img.width, cellH / img.height)
+        const w = img.width * scale, h = img.height * scale
+        page.drawRectangle({ x: px - 2, y: py - h - 2, width: w + 4, height: h + 4, borderColor: colorMuted, borderWidth: 0.5 })
+        page.drawImage(img, { x: px, y: py - h, width: w, height: h })
+        rowMaxHeight = Math.max(rowMaxHeight, h)
+      } catch {}
+      px += cellW + gap
+      if ((i + 1) % maxPerRow === 0 || i === photos.length - 1) {
+        py -= rowMaxHeight + gap
+        px = startX
+        rowMaxHeight = 0
+        if (py < 100 && i < photos.length - 1) { page = pdfDoc.addPage([pageWidth, pageHeight]); py = pageHeight - 80 }
+      }
+    }
+    return { page, y: py - 20 }
+  }
 
   let page = pdfDoc.addPage([pageWidth, pageHeight])
   let y = pageHeight - 60
@@ -96,6 +134,42 @@ export async function generateAndStoreEdlPdf(leaseId: string, type: "entree" | "
   drawMeter("Compteur eau", meters?.water)
   y -= 10
 
+  // Autres informations (chauffage / eau chaude)
+  drawSection('Autres informations')
+  const heatingType = general?.heating?.type || 'Non renseigné'
+  const heatingFuel = general?.heating?.fuel_type || 'Non renseigné'
+  const hotType = general?.hot_water?.type || 'Non renseigné'
+  const hotFuel = general?.hot_water?.fuel_type || 'Non renseigné'
+  ;[
+    `Type de chauffage : ${heatingType}`,
+    `Type de combustible : ${heatingFuel}`,
+    `Type d'eau chaude : ${hotType}`,
+    `Type de combustible : ${hotFuel}`,
+  ].forEach((line) => { drawText(page, line, 40, y, 10); y -= 14 })
+  y -= 10
+
+  // Clés
+  drawSection('Clés')
+  const keys = general?.keys || {}
+  ;[
+    `Clés d'entrée : ${keys?.entrance ?? 0}`,
+    `Clés immeuble/portail : ${keys?.building ?? 0}`,
+    `Clés parking : ${keys?.parking ?? 0}`,
+    `Clés boîte aux lettres : ${keys?.mailbox ?? 0}`,
+    `Clés cave : ${keys?.cellar ?? 0}`,
+    `Autre type de clés : ${keys?.other ?? 0}`,
+    `Type d'autre clé : ${keys?.other_type || 'Non renseigné'}`,
+  ].forEach((line) => { drawText(page, line, 40, y, 10); y -= 14 })
+  y -= 10
+
+  // Commentaire général
+  if (general?.general_comment) {
+    drawSection('Commentaire général')
+    const wrapped = (general.general_comment as string).match(/.{1,110}(\s|$)/g) || [general.general_comment]
+    wrapped.forEach((line) => { if (y < 80) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60 } drawText(page, line.trim(), 40, y, 10, false, colorMuted); y -= 14 })
+    y -= 10
+  }
+
   const headerHeight = 20,
     rowHeight = 16
   const isExit = (general.type || "entree") === "sortie"
@@ -143,10 +217,33 @@ export async function generateAndStoreEdlPdf(leaseId: string, type: "entree" | "
       const el = room.elements[key] || {}
       const label = key.charAt(0).toUpperCase() + key.slice(1)
       const values = isExit
-        ? [label, el.state_entree || el.state || "", el.state_sortie || "", el.comment || ""]
-        : [label, el.state || "", el.comment || ""]
+        ? [label, stateToLabel(el.state_entree || el.state), stateToLabel(el.state_sortie), el.comment || ""]
+        : [label, stateToLabel(el.state), el.comment || ""]
       drawRow(page, y, columns, values, i)
       y -= rowHeight
+    }
+
+    // Commentaire de la pièce
+    if (room.comment) {
+      y -= 10
+      drawText(page, 'Commentaire de la pièce', 40, y, 11, true, colorHeader)
+      y -= 8
+      addLine(page, y)
+      y -= 10
+      const lines = (room.comment as string).match(/.{1,110}(\s|$)/g) || [room.comment]
+      lines.forEach((line: string) => { if (y < 80) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60 } drawText(page, line.trim(), 40, y, 10, false, colorMuted); y -= 14 })
+    }
+
+    // Photos de la pièce
+    const photos: string[] = Array.isArray(room.photos) ? room.photos : []
+    if (photos.length > 0) {
+      if (y < 220) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60 }
+      drawText(page, 'Photos', 40, y, 11, true, colorHeader)
+      y -= 6
+      addLine(page, y)
+      y -= 10
+      const result = await drawImagesGrid(pdfDoc, page, 40, y, photos)
+      page = result.page; y = result.y
     }
   }
 
@@ -168,6 +265,14 @@ export async function generateAndStoreEdlPdf(leaseId: string, type: "entree" | "
       drawText(page, "Locataire:", 320, y, 10, true)
       page.drawImage(tenantPng, { x: 320, y: y - sigHeight - 6, width: sigWidth, height: sigHeight })
     } catch {}
+  }
+
+  // Pagination
+  const pages = pdfDoc.getPages(); const total = pages.length
+  for (let i = 0; i < total; i++) {
+    const p = pages[i]
+    const footer = `Page ${i + 1} / ${total}`
+    p.drawText(footer, { x: pageWidth / 2 - (footer.length * 2), y: 24, size: 9, font, color: colorMuted })
   }
 
   const pdfBytes = await pdfDoc.save()
