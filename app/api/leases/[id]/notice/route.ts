@@ -54,7 +54,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   const supabase = createServerClient(request)
 
   try {
+    console.log("[NOTICE][POST] start", { leaseId })
+    console.log("[NOTICE][POST] cookies", {
+      hasAuthToken: !!request.cookies.get("sb-access-token"),
+      cookieNames: request.cookies.getAll().map((c) => c.name),
+      origin: request.headers.get("origin"),
+      referer: request.headers.get("referer"),
+    })
     const { data: { user }, error: userError } = await supabase.auth.getUser()
+    console.log("[NOTICE][POST] auth.getUser", { userId: user?.id, userError })
     if (userError || !user) {
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
     }
@@ -84,11 +92,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .eq("id", leaseId)
       .single()
 
+    console.log("[NOTICE][POST] lease", { leaseError, found: !!lease })
     if (leaseError || !lease) {
       return NextResponse.json({ error: "Bail introuvable" }, { status: 404 })
     }
 
     if (lease.tenant_id !== user.id) {
+      console.log("[NOTICE][POST] forbidden", { tenantId: lease.tenant_id, userId: user.id })
       return NextResponse.json({ error: "Accès interdit" }, { status: 403 })
     }
 
@@ -133,15 +143,19 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .select("*")
       .single()
 
+    console.log("[NOTICE][POST] notice insert", { noticeId: notice?.id, noticeError })
     if (noticeError) {
       return NextResponse.json({ error: "Erreur enregistrement préavis" }, { status: 500 })
     }
 
     // Mettre à jour la propriété: date de dispo = moveOutDate, disponible = true (post-départ)
-    await supabase
+    const { error: updatePropError } = await supabase
       .from("properties")
       .update({ availability_date: moveOutDate.toISOString().slice(0,10) })
       .eq("id", lease.property_id)
+    if (updatePropError) {
+      console.warn("[NOTICE][POST] property update error", updatePropError)
+    }
 
     // Notifications in-app
     try {
@@ -173,6 +187,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       console.warn("Email owner (préavis) échoué:", e)
     }
 
+    console.log("[NOTICE][POST] success", { noticeId: notice.id })
     return NextResponse.json({ success: true, notice, moveOutDate: moveOutDate.toISOString(), letterHtml })
   } catch (error: any) {
     console.error("❌ Erreur création préavis:", error)
@@ -185,13 +200,23 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   const supabase = createServerClient(request)
 
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    console.log("[NOTICE][GET] start", { leaseId })
+    console.log("[NOTICE][GET] cookies", {
+      hasAuthToken: !!request.cookies.get("sb-access-token"),
+      cookieNames: request.cookies.getAll().map((c) => c.name),
+      origin: request.headers.get("origin"),
+      referer: request.headers.get("referer"),
+    })
+    const { data: { user }, error } = await supabase.auth.getUser()
+    console.log("[NOTICE][GET] auth.getUser", { userId: user?.id, error })
     if (!user) return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
 
     const { data: lease } = await supabase.from("leases").select("tenant_id, owner_id").eq("id", leaseId).single()
+    console.log("[NOTICE][GET] lease fetched", { found: !!lease })
     if (!lease) return NextResponse.json({ error: "Bail introuvable" }, { status: 404 })
 
     if (user.id !== lease.tenant_id && user.id !== lease.owner_id) {
+      console.log("[NOTICE][GET] forbidden", { userId: user.id })
       return NextResponse.json({ error: "Accès interdit" }, { status: 403 })
     }
 
@@ -202,6 +227,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       .order("created_at", { ascending: false })
       .limit(1)
 
+    console.log("[NOTICE][GET] success", { hasNotice: !!(notices && notices[0]) })
     return NextResponse.json({ success: true, notice: notices?.[0] || null })
   } catch (error: any) {
     console.error("❌ Erreur récupération préavis:", error)
