@@ -145,7 +145,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     // Si validé et signatures présentes, générer le PDF via la route dédiée (design unifié) et le stocker
     if (validated && owner_signature && tenant_signature) {
       try {
-        const resp = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ''}/api/leases/${leaseId}/etat-des-lieux/pdf`, {
+        const origin = new URL(request.url).origin
+        const resp = await fetch(`${origin}/api/leases/${leaseId}/etat-des-lieux/pdf`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ type: docType }),
@@ -161,12 +162,20 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             .update({ status: "signed", updated_at: new Date().toISOString() })
             .eq("id", document.id)
 
-          // Récupérer l'URL publique stockée pour l'email
-          const { data: updatedDoc } = await server
-            .from("etat_des_lieux_documents")
-            .select("file_url")
-            .eq("id", document.id)
-            .single()
+          // Récupérer l'URL publique stockée pour l'email (avec retries car upload peut être asynchrone)
+          let updatedDoc: any = null
+          for (let i = 0; i < 5; i++) {
+            const { data } = await server
+              .from("etat_des_lieux_documents")
+              .select("file_url")
+              .eq("id", document.id)
+              .single()
+            if (data?.file_url) {
+              updatedDoc = data
+              break
+            }
+            await new Promise((r) => setTimeout(r, 300))
+          }
 
           // Notification in-app + Email au locataire (bypass RLS via server client déjà utilisé ici)
           try {
@@ -195,12 +204,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
               // Email avec template EDL
               try {
-                if (tenantUser?.email && updatedDoc?.file_url) {
+                if (tenantUser?.email) {
                   const { sendEdlTenantFinalizedEmail } = await import("@/lib/email-service")
                   await sendEdlTenantFinalizedEmail(
                     { id: tenantUser.id, name: `${tenantUser.first_name || ""} ${tenantUser.last_name || ""}`.trim(), email: tenantUser.email },
                     { id: property?.id || lease.property_id, title: property?.title || "Votre logement", address: property?.address || "" },
-                    updatedDoc.file_url,
+                    updatedDoc?.file_url || `${origin}/tenant/leases/${leaseId}`,
                     leaseId,
                   )
                 }
