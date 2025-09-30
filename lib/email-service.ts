@@ -38,6 +38,7 @@ import LeaseTenantOwnerSignedEmail from "@/components/emails/lease-tenant-owner-
 import LeaseOwnerTenantSignedEmail from "@/components/emails/lease-owner-tenant-signed"
 import LeaseTenantFinalizedEmail from "@/components/emails/lease-tenant-finalized"
 import LeaseOwnerFinalizedEmail from "@/components/emails/lease-owner-finalized"
+import EdlTenantFinalizedEmail from "@/components/emails/edl-tenant-finalized"
 
 
 // --- CONFIG EXPÉDITEUR ---
@@ -789,6 +790,22 @@ export async function sendLeaseOwnerFinalizedEmail(owner: User, property: Proper
     NotificationType.DOCUSIGN_COMPLETED,
     "Votre bail signé est disponible",
     LeaseOwnerFinalizedEmail({ ownerName: owner.name || "", propertyTitle: property.title, leaseId }),
+  )
+}
+
+// --- EMAIL EDL SIGNÉ ---
+export async function sendEdlTenantFinalizedEmail(
+  tenant: User,
+  property: Property,
+  documentUrl: string,
+  leaseId: string,
+  logoUrl?: string,
+) {
+  await sendEmail(
+    tenant,
+    NotificationType.DOCUSIGN_COMPLETED,
+    "Votre état des lieux signé est disponible",
+    EdlTenantFinalizedEmail({ tenantName: tenant.name || "", propertyTitle: property.title, leaseId, documentUrl }),
   )
 }
 

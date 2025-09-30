@@ -160,6 +160,57 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             .from("etat_des_lieux_documents")
             .update({ status: "signed", updated_at: new Date().toISOString() })
             .eq("id", document.id)
+
+          // Récupérer l'URL publique stockée pour l'email
+          const { data: updatedDoc } = await server
+            .from("etat_des_lieux_documents")
+            .select("file_url")
+            .eq("id", document.id)
+            .single()
+
+          // Notification in-app + Email au locataire (bypass RLS via server client déjà utilisé ici)
+          try {
+            const { data: leaseRow } = await server
+              .from("leases")
+              .select("id, tenant:users!leases_tenant_id_fkey(id, first_name, last_name, email), property:properties(id, title, address)")
+              .eq("id", leaseId)
+              .maybeSingle()
+
+            const tenantUser = (leaseRow as any)?.tenant
+            const property = (leaseRow as any)?.property
+
+            if (tenantUser?.id) {
+              // Notification classique
+              try {
+                const { notificationsService } = await import("@/lib/notifications-service")
+                await notificationsService.createNotification(tenantUser.id, {
+                  type: "etat_des_lieux_signed",
+                  title: "État des lieux signé disponible",
+                  content: "Votre état des lieux signé est disponible au téléchargement.",
+                  action_url: `/tenant/leases/${leaseId}`,
+                })
+              } catch (e) {
+                console.warn("Notification EDL tenant échouée:", e)
+              }
+
+              // Email avec template EDL
+              try {
+                if (tenantUser?.email && updatedDoc?.file_url) {
+                  const { sendEdlTenantFinalizedEmail } = await import("@/lib/email-service")
+                  await sendEdlTenantFinalizedEmail(
+                    { id: tenantUser.id, name: `${tenantUser.first_name || ""} ${tenantUser.last_name || ""}`.trim(), email: tenantUser.email },
+                    { id: property?.id || lease.property_id, title: property?.title || "Votre logement", address: property?.address || "" },
+                    updatedDoc.file_url,
+                    leaseId,
+                  )
+                }
+              } catch (e) {
+                console.warn("Email EDL tenant échoué:", e)
+              }
+            }
+          } catch (e) {
+            console.warn("Notifications/Emails EDL échoués:", e)
+          }
         }
       } catch (e) {
         console.error("Erreur appel route PDF pour EDL:", e)
