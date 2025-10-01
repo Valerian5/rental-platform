@@ -370,7 +370,26 @@ export function TenantNoticeDialog({
             </div>
 
             <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setStep(2)}>Retour</Button>
+              <Button variant="outline" onClick={async () => {
+                // Au retour vers l'étape 2, régénérer l'aperçu avec signature si disponible
+                try {
+                  const { supabase } = await import("@/lib/supabase")
+                  const { data: sessionData } = await supabase.auth.getSession()
+                  const token = sessionData.session?.access_token
+                  const headers: Record<string, string> = { "Content-Type": "application/json" }
+                  if (token) headers["Authorization"] = `Bearer ${token}`
+                  const res = await fetch(`/api/leases/${leaseId}/notice`, {
+                    method: "POST",
+                    headers,
+                    body: JSON.stringify({ previewOnly: true, isTenseZone, noticePeriodMonths: months, signatureDataUrl })
+                  })
+                  if (res.ok) {
+                    const j = await res.json()
+                    setPreviewHtml(j.letterHtml)
+                  }
+                } catch {}
+                setStep(2)
+              }}>Retour</Button>
               <Button onClick={handleConfirmSend} disabled={!confirm || sending}>
                 {sending ? "Envoi..." : "Notifier mon départ"}
               </Button>

@@ -160,14 +160,20 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       noticeMonths: months,
     })
 
-    // Injecter la signature si fournie
-    const signedLetterHtml = signatureDataUrl
-      ? `${letterHtml}
-        <div style="margin-top:24px">
-          <div style="font-weight:bold;margin-bottom:6px">Signature du locataire</div>
-          <img alt="signature" src="${signatureDataUrl}" style="height:80px;" />
-        </div>`
-      : letterHtml
+    // Injecter la signature si fournie : image juste sous le nom du locataire
+    let signedLetterHtml = letterHtml
+    if (signatureDataUrl) {
+      // Chercher le bloc final contenant le nom du locataire et injecter l'image juste après
+      const tenantNameBlock = `<p>${tenantName}</p>`
+      if (signedLetterHtml.includes(tenantNameBlock)) {
+        signedLetterHtml = signedLetterHtml.replace(
+          tenantNameBlock,
+          `${tenantNameBlock}\n<img alt="signature" src="${signatureDataUrl}" style="height:80px; margin-top:6px;" />`
+        )
+      } else {
+        signedLetterHtml = `${signedLetterHtml}\n<p style="margin-bottom:4px">${tenantName}</p><img alt="signature" src="${signatureDataUrl}" style="height:80px; margin-top:6px;" />`
+      }
+    }
 
     // Mode aperçu uniquement: aucune écriture/notification
     if (previewOnly) {
