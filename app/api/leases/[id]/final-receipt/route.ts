@@ -56,6 +56,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     // 1) Créer un paiement minimal (stub) pour respecter la FK
     const dueDate = new Date(year, monthIdx0, dayOfMonth)
+    const monthStr = (monthIdx0 + 1).toString().padStart(2, '0')
     const paymentInsert = {
       lease_id: leaseId,
       amount_due: totalDue,
@@ -78,7 +79,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     // 2) Créer la quittance finale reliée au paiement
-    const monthStr = (monthIdx0 + 1).toString().padStart(2, '0')
     const { data: receipt, error: receiptError } = await supabase
       .from("receipts")
       .insert({

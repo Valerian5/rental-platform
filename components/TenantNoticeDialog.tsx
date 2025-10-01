@@ -136,7 +136,7 @@ export function TenantNoticeDialog({
       const res = await fetch(`/api/leases/${leaseId}/notice`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ confirm: true, isTenseZone, noticePeriodMonths: months, signatureDataUrl })
+        body: JSON.stringify({ previewOnly: true, isTenseZone, noticePeriodMonths: months, signatureDataUrl })
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Erreur" }))
@@ -144,7 +144,6 @@ export function TenantNoticeDialog({
       }
       const resp = await res.json()
       setPreviewHtml(resp.letterHtml)
-      onSent(resp.notice)
       setStep(2)
     } catch (e) {
       // Fallback: rien
@@ -164,7 +163,7 @@ export function TenantNoticeDialog({
       const res = await fetch(`/api/leases/${leaseId}/notice`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ confirm: true, isTenseZone, noticePeriodMonths: months })
+        body: JSON.stringify({ confirm: true, isTenseZone, noticePeriodMonths: months, signatureDataUrl })
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Erreur" }))

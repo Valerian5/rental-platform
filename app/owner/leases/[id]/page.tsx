@@ -898,7 +898,24 @@ export default function LeaseDetailPage() {
                     <div className="bg-white border rounded p-4 max-h-80 overflow-auto">
                       <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: lastNotice.letter_html }} />
                     </div>
-                    <div className="flex gap-3">
+                        <div className="flex gap-3">
+                          <Button variant="outline" onClick={() => {
+                            try {
+                              const blob = new Blob([lastNotice.letter_html || ""], { type: "text/html;charset=utf-8" })
+                              const url = URL.createObjectURL(blob)
+                              const a = document.createElement("a")
+                              a.href = url
+                              a.download = `preavis-${leaseId}.html`
+                              document.body.appendChild(a)
+                              a.click()
+                              document.body.removeChild(a)
+                              URL.revokeObjectURL(url)
+                            } catch (e) {
+                              toast.error("Téléchargement impossible")
+                            }
+                          }}>
+                            <Download className="h-4 w-4 mr-2" /> Télécharger le préavis
+                          </Button>
                       <Button onClick={async () => {
                         try {
                           setPreparingExit(true)
