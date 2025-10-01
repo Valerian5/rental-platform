@@ -136,7 +136,7 @@ export function TenantNoticeDialog({
       const res = await fetch(`/api/leases/${leaseId}/notice`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ confirm: true, isTenseZone, noticePeriodMonths: months })
+        body: JSON.stringify({ confirm: true, isTenseZone, noticePeriodMonths: months, signatureDataUrl })
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Erreur" }))
