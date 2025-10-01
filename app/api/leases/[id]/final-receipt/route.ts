@@ -18,6 +18,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     : createServerClient(request)
 
   try {
+    const body = await request.json().catch(() => ({}))
+    const previewOnly = !!body?.previewOnly
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
 
@@ -70,10 +72,23 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       payment_date: null,
       status: 'pending',
       payment_method: null,
-      reference: `Solde - ${monthName.charAt(0).toUpperCase()}${monthName.slice(1)}`,
+      reference: `${monthName.charAt(0).toUpperCase()}${monthName.slice(1)} ${year}`,
       receipt_id: null,
-      notes: 'Paiement généré automatiquement pour quittance finale (prorata)'
+      notes: 'Solde prorata départ: paiement généré automatiquement (1er -> jour de départ)'
     } as any
+
+    if (previewOnly) {
+      const documentHtml = `
+        <div style="font-family: Arial, sans-serif; color:#111; padding:24px; max-width:720px; margin:auto;">
+          <h2 style="margin:0 0 12px;">Solde à demander - ${monthName} ${year}</h2>
+          <p style="margin:0 0 8px;">Montant dû (prorata): <strong>${totalDue} €</strong></p>
+          <p style=\"margin:0 0 8px;\">Détail: Loyer ${rentDue} € + Charges ${chargesDue} € jusqu'au ${dayOfMonth} ${monthName}.</p>
+          <p style=\"margin:12px 0 0; font-size:12px; color:#555;\">Ce document informe du solde à régler. La quittance finale sera émise après confirmation du paiement par le propriétaire.</p>
+          <p style=\"margin:8px 0 0; font-size:12px; color:#555;\"><em>Les charges du logement que vous quittez étant à payer par provision, le calcul définitif de ce que vous devez pour votre dernière année de location (même si elle est incomplète), ne pourra être fait qu'après la régularisation annuelle des charges.</em></p>
+        </div>
+      `
+      return NextResponse.json({ success: true, preview: { prorata, rentDue, chargesDue, totalDue, month: monthStr, monthName, year, documentHtml } })
+    }
 
     const { data: payment, error: paymentError } = await supabase
       .from('payments')

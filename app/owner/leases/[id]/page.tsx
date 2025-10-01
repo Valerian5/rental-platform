@@ -899,23 +899,11 @@ export default function LeaseDetailPage() {
                       <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: lastNotice.letter_html }} />
                     </div>
                         <div className="flex gap-3">
-                          <Button variant="outline" onClick={() => {
-                            try {
-                              const blob = new Blob([lastNotice.letter_html || ""], { type: "text/html;charset=utf-8" })
-                              const url = URL.createObjectURL(blob)
-                              const a = document.createElement("a")
-                              a.href = url
-                              a.download = `preavis-${leaseId}.html`
-                              document.body.appendChild(a)
-                              a.click()
-                              document.body.removeChild(a)
-                              URL.revokeObjectURL(url)
-                            } catch (e) {
-                              toast.error("Téléchargement impossible")
-                            }
-                          }}>
-                            <Download className="h-4 w-4 mr-2" /> Télécharger le préavis
-                          </Button>
+                      <Button variant="outline" asChild>
+                        <a href={`/api/leases/${leaseId}/notice/pdf`} target="_blank" rel="noopener noreferrer">
+                          <Download className="h-4 w-4 mr-2" /> Télécharger le préavis (PDF)
+                        </a>
+                      </Button>
                       <Button onClick={async () => {
                         try {
                           setPreparingExit(true)
@@ -944,46 +932,64 @@ export default function LeaseDetailPage() {
                           const token = data.session?.access_token
                           const res = await fetch(`/api/leases/${leaseId}/final-receipt`, {
                             method: "POST",
-                            headers: token ? { Authorization: `Bearer ${token}` } : {},
+                            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                            body: JSON.stringify({ previewOnly: true })
                           })
-                          if (!res.ok) throw new Error("Erreur création paiement de solde")
+                          if (!res.ok) throw new Error("Erreur calcul solde")
                           const j = await res.json()
-                          toast.success(`Solde créé (${j.totalDue} €)`) 
+                          const monthName = j.preview?.monthName || ''
+                          const year = j.preview?.year || ''
+                          const totalDue = j.preview?.totalDue || 0
+                          const rentDue = j.preview?.rentDue || 0
+                          const chargesDue = j.preview?.chargesDue || 0
+                          const dayOfMonth = new Date().getDate()
+                          const previewHtml = j.preview?.documentHtml || ''
+
+                          const modalHtml = `<!DOCTYPE html><html><head><meta charset=\"utf-8\" /><title>Solde - Aperçu</title></head><body>${previewHtml}
+                            <div style=\"padding:16px; font-family:Arial\">
+                              <label style=\"display:flex;align-items:center;gap:8px;margin:8px 0;\">
+                                <input id=\"nocharge\" type=\"checkbox\" /> Ne pas facturer le solde (information seule)
+                              </label>
+                              <button id=\"send\" style=\"padding:8px 12px;\">Envoyer au locataire</button>
+                            </div>
+                            <script>
+                              (function(){
+                                const send = document.getElementById('send');
+                                send.addEventListener('click', async () => {
+                                  const nocharge = document.getElementById('nocharge').checked;
+                                  try {
+                                    if (nocharge) {
+                                      const resp = await fetch('${`/api/leases/${leaseId}/final-balance/notify`}', {
+                                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ monthName: '${'${monthName}'}', year: '${'${year}'}', totalDue: ${'${totalDue}'}, rentDue: ${'${rentDue}'}, chargesDue: ${'${chargesDue}'}, dayOfMonth: ${'${dayOfMonth}'}, documentHtml: `${'${previewHtml.replace(/`/g, '\\`')}'}` })
+                                      });
+                                      if (!resp.ok) throw new Error('Erreur notification');
+                                    } else {
+                                      const create = await fetch('${`/api/leases/${leaseId}/final-receipt`}', {
+                                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({})
+                                      });
+                                      if (!create.ok) throw new Error('Erreur création paiement');
+                                    }
+                                    alert('Envoyé au locataire');
+                                    window.close();
+                                  } catch(e) { alert('Erreur: ' + (e && e.message ? e.message : e)); }
+                                });
+                              })();
+                            </script>
+                          </body></html>`
+                          const w = window.open('', '_blank')
+                          if (!w) throw new Error('Popup bloquée')
+                          w.document.write(modalHtml)
+                          w.document.close()
                         } catch (e: any) {
                           toast.error(e.message || "Erreur")
                         } finally {
                           setCreatingFinalReceipt(false)
                         }
                       }} disabled={creatingFinalReceipt}>
-                        {creatingFinalReceipt ? "Calcul..." : "Créer paiement de solde (prorata)"}
+                        {creatingFinalReceipt ? "Calcul..." : "Calculer le solde à demander"}
                       </Button>
-                      <Button onClick={async () => {
-                        try {
-                          const { supabase } = await import("@/lib/supabase")
-                          const { data } = await supabase.auth.getSession()
-                          const token = data.session?.access_token
-                          // Récupérer le dernier paiement de solde en attente
-                          const payRes = await fetch(`/api/leases/${leaseId}/final-balance`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-                          if (!payRes.ok) throw new Error("Erreur chargement solde")
-                          const pj = await payRes.json()
-                          const payment = pj.payment
-                          if (!payment) {
-                            toast.error("Aucun solde en attente")
-                            return
-                          }
-                          const conf = await fetch(`/api/leases/${leaseId}/final-receipt/confirm`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                            body: JSON.stringify({ paymentId: payment.id })
-                          })
-                          if (!conf.ok) throw new Error("Erreur confirmation paiement")
-                          toast.success("Paiement confirmé et quittance générée")
-                        } catch (e: any) {
-                          toast.error(e.message || "Erreur")
-                        }
-                      }}>
-                        Confirmer paiement du solde
-                      </Button>
+                      {/* Bouton supprimé: confirmation paiement gérée depuis la page payments */}
                     </div>
                   </>
                 ) : (

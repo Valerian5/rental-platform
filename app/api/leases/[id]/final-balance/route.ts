@@ -46,7 +46,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         <p style="margin:0 0 8px;">Référence: ${payment.reference}</p>
         <p style="margin:0 0 8px;">Montant dû: <strong>${payment.amount_due} €</strong></p>
         <p style="margin:0 0 8px;">Détail: Loyer ${payment.rent_amount} € + Charges ${payment.charges_amount} €</p>
-        <p style="margin:16px 0 0; font-size:12px; color:#555;">Ce document informe du solde à régler. La quittance finale sera émise après confirmation du paiement par le propriétaire.</p>
+        <p style="margin:12px 0 0; font-size:12px; color:#555;">Ce document informe du solde à régler. La quittance finale sera émise après confirmation du paiement par le propriétaire.</p>
+        <p style="margin:8px 0 0; font-size:12px; color:#555;"><em>Les charges du logement que vous quittez étant à payer par provision, le calcul définitif de ce que vous devez pour votre dernière année de location (même si elle est incomplète), ne pourra être fait qu'après la régularisation annuelle des charges.</em></p>
       </div>
     `
 
