@@ -54,14 +54,37 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const chargesDue = Math.round(((lease.charges || 0) * prorata) * 100) / 100
     const totalDue = Math.round((rentDue + chargesDue) * 100) / 100
 
-    // Créer une quittance finale (table receipts ou rent_receipts selon installation)
+    // 1) Créer un paiement minimal (stub) pour respecter la FK
+    const dueDate = new Date(year, monthIdx0, dayOfMonth)
+    const paymentInsert = {
+      lease_id: leaseId,
+      amount_due: totalDue,
+      amount_paid: 0,
+      due_date: dueDate.toISOString().slice(0,10),
+      status: 'pending',
+      reference: `FINAL-${year}-${monthStr}`,
+      notes: 'Paiement généré automatiquement pour quittance finale (prorata)'
+    } as any
+
+    const { data: payment, error: paymentError } = await supabase
+      .from('payments')
+      .insert(paymentInsert)
+      .select('*')
+      .single()
+
+    if (paymentError || !payment) {
+      console.error('❌ create payment stub error:', paymentError)
+      return NextResponse.json({ error: 'Erreur création paiement' }, { status: 500 })
+    }
+
+    // 2) Créer la quittance finale reliée au paiement
     const monthStr = (monthIdx0 + 1).toString().padStart(2, '0')
     const { data: receipt, error: receiptError } = await supabase
       .from("receipts")
       .insert({
-        payment_id: crypto.randomUUID ? crypto.randomUUID() : undefined, // placeholder si contrainte NOT NULL
+        payment_id: payment.id,
         lease_id: leaseId,
-        reference: `FINAL-${year}-${monthStr}`,
+        receipt_number: `FINAL-${year}-${monthStr}`,
         month: monthStr,
         year,
         rent_amount: rentDue,
