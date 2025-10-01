@@ -102,6 +102,8 @@ export default function TenantLeaseDetailPage() {
   const [sendingNotice, setSendingNotice] = useState(false)
   const [lastNotice, setLastNotice] = useState<any>(null)
   const [noticeDialogOpen, setNoticeDialogOpen] = useState(false)
+  const [finalBalance, setFinalBalance] = useState<any>(null)
+  const [finalBalanceLoading, setFinalBalanceLoading] = useState(false)
 
   const loadLease = async () => {
     try {
@@ -147,6 +149,26 @@ export default function TenantLeaseDetailPage() {
       }
     } catch (e) {
       console.error("Erreur chargement préavis:", e)
+    }
+  }
+
+  const loadFinalBalance = async () => {
+    try {
+      setFinalBalanceLoading(true)
+      const { supabase } = await import("@/lib/supabase")
+      const { data } = await supabase.auth.getSession()
+      const token = data.session?.access_token
+      const headers: Record<string, string> = {}
+      if (token) headers["Authorization"] = `Bearer ${token}`
+      const res = await fetch(`/api/leases/${leaseId}/final-balance`, { headers })
+      if (res.ok) {
+        const j = await res.json()
+        setFinalBalance(j.payment ? j : null)
+      }
+    } catch (e) {
+      // noop
+    } finally {
+      setFinalBalanceLoading(false)
     }
   }
 
@@ -227,7 +249,7 @@ export default function TenantLeaseDetailPage() {
         setCurrentUser(user)
 
         if (leaseId) {
-          await Promise.all([loadLease(), loadAnnexes(), loadLastNotice()])
+          await Promise.all([loadLease(), loadAnnexes(), loadLastNotice(), loadFinalBalance()])
         }
       } catch (error) {
         console.error("Erreur initialisation:", error)
@@ -400,7 +422,7 @@ export default function TenantLeaseDetailPage() {
             <TabsTrigger value="document">Bail</TabsTrigger>
             <TabsTrigger value="annexes">Annexes</TabsTrigger>
             <TabsTrigger value="etat-des-lieux">État des lieux</TabsTrigger>
-            <TabsTrigger value="notice">Préavis</TabsTrigger>
+            <TabsTrigger value="notice">Quitter mon logement</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
@@ -691,7 +713,7 @@ export default function TenantLeaseDetailPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="h-5 w-5" />
-                  Demande de congé (préavis)
+                  Quitter mon logement
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -712,6 +734,66 @@ export default function TenantLeaseDetailPage() {
                     <Button onClick={handleOpenNoticeDialog} disabled={sendingNotice}>Envoyer mon préavis</Button>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            {/* Encart Solde à payer et préparation EDL de sortie */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Solde à payer et prochaines étapes
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {finalBalanceLoading ? (
+                  <p className="text-sm text-gray-600">Chargement du solde...</p>
+                ) : finalBalance ? (
+                  <>
+                    <div className="p-3 bg-yellow-50 border border-yellow-200 rounded">
+                      <p className="text-sm text-yellow-900">
+                        Montant du solde à régler: <strong>{finalBalance.payment.amount_due} €</strong>
+                      </p>
+                      <p className="text-xs text-yellow-800 mt-1">
+                        Détail du calcul (prorata): loyer {finalBalance.payment.rent_amount} € + charges {finalBalance.payment.charges_amount} € jusqu'au {new Date(finalBalance.payment.due_date).getDate()} {finalBalance.payment.month_name}.
+                      </p>
+                    </div>
+                    <div className="bg-white border rounded p-4 max-h-64 overflow-auto">
+                      <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: finalBalance.documentHtml }} />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" onClick={() => {
+                        try {
+                          const html = finalBalance.documentHtml as string
+                          const blob = new Blob([html || ""], { type: "text/html;charset=utf-8" })
+                          const url = URL.createObjectURL(blob)
+                          const a = document.createElement("a")
+                          a.href = url
+                          a.download = `solde-${leaseId}.html`
+                          document.body.appendChild(a)
+                          a.click()
+                          document.body.removeChild(a)
+                          URL.revokeObjectURL(url)
+                        } catch {}
+                      }}>
+                        <Download className="h-4 w-4 mr-2" /> Télécharger le document de solde
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-600">Aucun solde en attente pour le moment.</p>
+                )}
+
+                <div className="mt-2 p-3 bg-gray-50 border rounded">
+                  <p className="text-sm font-medium text-gray-800">Comment préparer l'état des lieux de sortie ?</p>
+                  <ul className="list-disc ml-5 mt-1 text-sm text-gray-700 space-y-1">
+                    <li>Nettoyez soigneusement le logement (sols, sanitaires, cuisine).</li>
+                    <li>Réalisez les petites réparations (ampoules, siphons, rebouchage de trous si nécessaire).</li>
+                    <li>Rassemblez les clés et badges remis à l'entrée.</li>
+                    <li>Relevez les compteurs (eau, gaz, électricité) le jour du départ.</li>
+                    <li>Préparez vos justificatifs (assurances, attestations si besoin).</li>
+                  </ul>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

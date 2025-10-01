@@ -70,7 +70,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       payment_date: null,
       status: 'pending',
       payment_method: null,
-      reference: `FINAL-${year}-${monthStr}`,
+      reference: `Solde - ${monthName.charAt(0).toUpperCase()}${monthName.slice(1)}`,
       receipt_id: null,
       notes: 'Paiement généré automatiquement pour quittance finale (prorata)'
     } as any
@@ -86,33 +86,21 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: 'Erreur création paiement' }, { status: 500 })
     }
 
-    // 2) Créer la quittance finale reliée au paiement
-    const { data: receipt, error: receiptError } = await supabase
-      .from("receipts")
-      .insert({
-        payment_id: payment.id,
-        lease_id: leaseId,
-        receipt_number: `FINAL-${year}-${monthStr}`,
-        month: monthStr,
-        year,
-        rent_amount: rentDue,
-        charges_amount: chargesDue,
-        total_amount: totalDue,
-      } as any)
-      .select("*")
-      .single()
-
-    if (receiptError) {
-      return NextResponse.json({ error: "Erreur création quittance finale" }, { status: 500 })
+    // 2) Notifier le locataire avec le solde à payer (pas de quittance immédiate)
+    try {
+      const { notificationsService } = await import("@/lib/notifications-service")
+      await notificationsService.createNotification(lease.tenant_id, {
+        type: 'final_balance_due',
+        title: `Solde à régler - ${monthName}`,
+        content: `Un solde de ${totalDue} € est à régler pour la période jusqu'au ${dayOfMonth} ${monthName}.`,
+        action_url: `/tenant/leases/${leaseId}`,
+        metadata: { lease_id: leaseId, payment_id: payment.id, month: monthStr, year }
+      })
+    } catch (e) {
+      console.warn('Notification solde locataire échouée:', e)
     }
 
-    // 3) Lier le paiement à la quittance (FK payments.receipt_id)
-    await supabase
-      .from('payments')
-      .update({ receipt_id: receipt.id })
-      .eq('id', payment.id)
-
-    return NextResponse.json({ success: true, receipt, prorata, rentDue, chargesDue, totalDue })
+    return NextResponse.json({ success: true, payment, prorata, rentDue, chargesDue, totalDue, month: monthStr, monthName, year })
   } catch (error: any) {
     console.error("❌ final-receipt:", error)
     return NextResponse.json({ error: error.message || "Erreur serveur" }, { status: 500 })

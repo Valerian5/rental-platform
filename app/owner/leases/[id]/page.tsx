@@ -946,16 +946,43 @@ export default function LeaseDetailPage() {
                             method: "POST",
                             headers: token ? { Authorization: `Bearer ${token}` } : {},
                           })
-                          if (!res.ok) throw new Error("Erreur création quittance finale")
+                          if (!res.ok) throw new Error("Erreur création paiement de solde")
                           const j = await res.json()
-                          toast.success(`Quittance finale créée (${j.totalDue} €)`) 
+                          toast.success(`Solde créé (${j.totalDue} €)`) 
                         } catch (e: any) {
                           toast.error(e.message || "Erreur")
                         } finally {
                           setCreatingFinalReceipt(false)
                         }
                       }} disabled={creatingFinalReceipt}>
-                        {creatingFinalReceipt ? "Calcul..." : "Générer quittance finale (prorata)"}
+                        {creatingFinalReceipt ? "Calcul..." : "Créer paiement de solde (prorata)"}
+                      </Button>
+                      <Button onClick={async () => {
+                        try {
+                          const { supabase } = await import("@/lib/supabase")
+                          const { data } = await supabase.auth.getSession()
+                          const token = data.session?.access_token
+                          // Récupérer le dernier paiement de solde en attente
+                          const payRes = await fetch(`/api/leases/${leaseId}/final-balance`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+                          if (!payRes.ok) throw new Error("Erreur chargement solde")
+                          const pj = await payRes.json()
+                          const payment = pj.payment
+                          if (!payment) {
+                            toast.error("Aucun solde en attente")
+                            return
+                          }
+                          const conf = await fetch(`/api/leases/${leaseId}/final-receipt/confirm`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                            body: JSON.stringify({ paymentId: payment.id })
+                          })
+                          if (!conf.ok) throw new Error("Erreur confirmation paiement")
+                          toast.success("Paiement confirmé et quittance générée")
+                        } catch (e: any) {
+                          toast.error(e.message || "Erreur")
+                        }
+                      }}>
+                        Confirmer paiement du solde
                       </Button>
                     </div>
                   </>
