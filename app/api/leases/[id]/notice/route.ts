@@ -26,29 +26,55 @@ function buildNoticeLetterHtml(args: {
   noticeMonths: number
 }): string {
   const { tenantName, ownerName, propertyAddress, noticeDate, moveOutDate, noticeMonths } = args
+
   return `
-    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111;">
-      <p>${formatFr(noticeDate)}</p>
-      <p><strong>À l'attention de ${ownerName}</strong></p>
-      <p><strong>Objet: Notification de congé - ${propertyAddress}</strong></p>
-      <p>Madame, Monsieur,</p>
-      <p>
-        Je, soussigné(e) ${tenantName}, vous informe par la présente de mon souhait de mettre fin au bail
-        relatif au logement situé au ${propertyAddress}.
-      </p>
-      <p>
-        Conformément aux dispositions légales, le présent congé prend effet après un délai de préavis de
-        ${noticeMonths} mois, soit jusqu'au ${formatFr(moveOutDate)} (inclus).
-      </p>
-      <p>
-        Je vous remercie de bien vouloir me confirmer la bonne réception de ce courrier et nous pourrons
-        convenir d'une date pour l'état des lieux de sortie.
-      </p>
-      <p>Veuillez agréer, Madame, Monsieur, l'expression de mes salutations distinguées.</p>
-      <p>${tenantName}</p>
+  <div style="font-family: 'Times New Roman', serif; font-size: 14px; line-height: 1.6; color: #111; padding: 40px; max-width: 700px; margin: auto;">
+    
+    <!-- Coordonnées en haut -->
+    <div style="display: flex; justify-content: space-between; margin-bottom: 50px;">
+      <div>
+        <p><strong>${tenantName}</strong></p>
+        <p>${propertyAddress}</p>
+      </div>
+      <div style="text-align: right;">
+        <p><strong>À l'attention de</strong></p>
+        <p>${ownerName}</p>
+      </div>
     </div>
+
+    <!-- Date -->
+    <p style="text-align: right;">${formatFr(noticeDate)}</p>
+
+    <!-- Objet -->
+    <p style="margin-top: 40px;"><strong>Objet : Notification de congé – ${propertyAddress}</strong></p>
+
+    <!-- Corps du courrier -->
+    <p>Madame, Monsieur,</p>
+    <p>
+      Je, soussigné(e) <strong>${tenantName}</strong>, vous informe par la présente de mon souhait de mettre fin au bail
+      relatif au logement situé au <strong>${propertyAddress}</strong>.
+    </p>
+    <p>
+      Conformément aux dispositions légales, le présent congé prend effet après un délai de préavis de
+      <strong>${noticeMonths} mois</strong>, soit jusqu’au <strong>${formatFr(moveOutDate)}</strong> (inclus).
+    </p>
+    <p>
+      Je vous remercie de bien vouloir me confirmer la bonne réception de ce courrier. Nous pourrons
+      convenir ensemble d'une date pour l’état des lieux de sortie et la remise des clés.
+    </p>
+    <p>Veuillez agréer, Madame, Monsieur, l’expression de mes salutations distinguées.</p>
+
+    <!-- Signature -->
+    <div style="margin-top: 60px;">
+      <p><strong>${tenantName}</strong></p>
+      <div style="height: 60px; border-bottom: 1px solid #000; width: 250px; margin-top: 10px;"></div>
+      <p style="font-size: 12px; color: #555;">Signature</p>
+    </div>
+
+  </div>
   `
 }
+
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const leaseId = params.id
