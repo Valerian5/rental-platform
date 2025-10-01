@@ -151,7 +151,13 @@ export default function LeaseDetailPage() {
 
   const loadLastNotice = async () => {
     try {
-      const res = await fetch(`/api/leases/${leaseId}/notice`)
+      const { supabase } = await import("@/lib/supabase")
+      const { data } = await supabase.auth.getSession()
+      const token = data.session?.access_token
+      const headers: Record<string, string> = {}
+      if (token) headers["Authorization"] = `Bearer ${token}`
+
+      const res = await fetch(`/api/leases/${leaseId}/notice`, { headers })
       if (res.ok) {
         const data = await res.json()
         setLastNotice(data.notice || null)
