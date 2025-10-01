@@ -374,6 +374,31 @@ export async function sendNewIncidentAlertToOwner(
   )
 }
 
+// --- Préavis de départ (email propriétaire) ---
+export async function sendTenantNoticeToOwnerEmail(
+  owner: User,
+  tenant: User,
+  property: Property,
+  moveOutDate: string,
+  previewHtml?: string,
+  logoUrl?: string,
+) {
+  const ReactEmail = (await import("@/components/emails/TenantNoticeToOwnerEmail")).default
+  await sendEmail(
+    owner,
+    NotificationType.INCIDENT_REPORTED, // TODO: créer un type spécifique si nécessaire
+    `Préavis de départ reçu - ${property.title}`,
+    React.createElement(ReactEmail, {
+      ownerName: owner.name,
+      tenantName: tenant.name,
+      propertyTitle: property.title,
+      propertyAddress: property.address,
+      moveOutDate: new Date(moveOutDate).toLocaleDateString('fr-FR'),
+      previewSnippet: previewHtml,
+    }),
+  )
+}
+
 export async function sendInviteUserEmail(email: string, agencyName: string, inviteLink: string, logoUrl?: string) {
   await sendEmail(
     { email },

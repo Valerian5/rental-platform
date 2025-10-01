@@ -215,13 +215,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     // Email au propriétaire
     try {
       if (lease.owner?.email) {
-        const { sendNewIncidentAlertToOwner } = await import("@/lib/email-service")
-        // Réutilisation rapide d'un sender; idéalement créer un template dédié
-        await sendNewIncidentAlertToOwner(
-          { id: lease.owner_id, name: ownerName, email: lease.owner.email },
-          { id: lease.tenant_id, name: tenantName, email: lease.tenant?.email || "" },
-          { id: lease.property_id, title: address, address },
-          "Préavis de départ du locataire",
+        const { sendTenantNoticeToOwnerEmail } = await import("@/lib/email-service")
+        await sendTenantNoticeToOwnerEmail(
+          { id: lease.owner_id, name: ownerName, email: lease.owner.email } as any,
+          { id: lease.tenant_id, name: tenantName, email: lease.tenant?.email || "" } as any,
+          { id: lease.property_id, title: address, address } as any,
+          moveOutDate.toISOString(),
+          letterHtml,
         )
       }
     } catch (e) {

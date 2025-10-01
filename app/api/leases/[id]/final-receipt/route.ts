@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { createServerClient } from "@/lib/supabase"
+import { createServerClient } from "@/lib/supabase-server-client"
+import { createClient } from "@/lib/supabase"
 
 function daysInMonth(year: number, monthIdx0: number): number {
   return new Date(year, monthIdx0 + 1, 0).getDate()
@@ -7,7 +8,14 @@ function daysInMonth(year: number, monthIdx0: number): number {
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const leaseId = params.id
-  const supabase = createServerClient()
+  const authHeader = request.headers.get("authorization") || ""
+  const hasBearer = authHeader.toLowerCase().startsWith("bearer ")
+  const token = hasBearer ? authHeader.slice(7) : null
+  const supabase = hasBearer
+    ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      })
+    : createServerClient(request)
 
   try {
     const { data: { user } } = await supabase.auth.getUser()
