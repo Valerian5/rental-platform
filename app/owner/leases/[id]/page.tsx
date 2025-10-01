@@ -899,10 +899,45 @@ export default function LeaseDetailPage() {
                       <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: lastNotice.letter_html }} />
                     </div>
                     <div className="flex gap-3">
-                      <Button onClick={handlePrepareExitEdl} disabled={preparingExit}>
+                      <Button onClick={async () => {
+                        try {
+                          setPreparingExit(true)
+                          const { supabase } = await import("@/lib/supabase")
+                          const { data } = await supabase.auth.getSession()
+                          const token = data.session?.access_token
+                          const res = await fetch(`/api/leases/${leaseId}/etat-des-lieux/prepare-exit`, {
+                            method: "POST",
+                            headers: token ? { Authorization: `Bearer ${token}` } : {},
+                          })
+                          if (!res.ok) throw new Error("Erreur création EDL de sortie")
+                          toast.success("État des lieux de sortie créé")
+                        } catch (e: any) {
+                          toast.error(e.message || "Erreur")
+                        } finally {
+                          setPreparingExit(false)
+                        }
+                      }} disabled={preparingExit}>
                         {preparingExit ? "Création..." : "Créer EDL de sortie"}
                       </Button>
-                      <Button variant="outline" onClick={handleCreateFinalReceipt} disabled={creatingFinalReceipt}>
+                      <Button variant="outline" onClick={async () => {
+                        try {
+                          setCreatingFinalReceipt(true)
+                          const { supabase } = await import("@/lib/supabase")
+                          const { data } = await supabase.auth.getSession()
+                          const token = data.session?.access_token
+                          const res = await fetch(`/api/leases/${leaseId}/final-receipt`, {
+                            method: "POST",
+                            headers: token ? { Authorization: `Bearer ${token}` } : {},
+                          })
+                          if (!res.ok) throw new Error("Erreur création quittance finale")
+                          const j = await res.json()
+                          toast.success(`Quittance finale créée (${j.totalDue} €)`) 
+                        } catch (e: any) {
+                          toast.error(e.message || "Erreur")
+                        } finally {
+                          setCreatingFinalReceipt(false)
+                        }
+                      }} disabled={creatingFinalReceipt}>
                         {creatingFinalReceipt ? "Calcul..." : "Générer quittance finale (prorata)"}
                       </Button>
                     </div>

@@ -108,6 +108,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       noticePeriodMonths,
       confirm,
       previewOnly,
+      signatureDataUrl,
     } = body || {}
 
     if (!previewOnly && !confirm) {
@@ -159,10 +160,19 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       noticeMonths: months,
     })
 
+    // Injecter la signature si fournie
+    const signedLetterHtml = signatureDataUrl
+      ? `${letterHtml}
+        <div style="margin-top:24px">
+          <div style="font-weight:bold;margin-bottom:6px">Signature du locataire</div>
+          <img alt="signature" src="${signatureDataUrl}" style="height:80px;" />
+        </div>`
+      : letterHtml
+
     // Mode aperçu uniquement: aucune écriture/notification
     if (previewOnly) {
       console.log("[NOTICE][POST] previewOnly response")
-      return NextResponse.json({ success: true, letterHtml, moveOutDate: moveOutDate.toISOString() })
+      return NextResponse.json({ success: true, letterHtml: signedLetterHtml, moveOutDate: moveOutDate.toISOString() })
     }
 
     // Enregistrer le préavis
@@ -177,7 +187,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         notice_period_months: months,
         is_tense_zone: tenseFlag,
         move_out_date: moveOutDate.toISOString().slice(0,10),
-        letter_html: letterHtml,
+        letter_html: signedLetterHtml,
         status: "sent",
         metadata: {},
       })
