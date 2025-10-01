@@ -57,13 +57,21 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     // 1) Créer un paiement minimal (stub) pour respecter la FK
     const dueDate = new Date(year, monthIdx0, dayOfMonth)
     const monthStr = (monthIdx0 + 1).toString().padStart(2, '0')
+    const monthName = moveOut.toLocaleString('fr-FR', { month: 'long' })
     const paymentInsert = {
       lease_id: leaseId,
+      month: monthStr,
+      year,
+      month_name: monthName,
       amount_due: totalDue,
-      amount_paid: 0,
-      due_date: dueDate.toISOString().slice(0,10),
+      rent_amount: rentDue,
+      charges_amount: chargesDue,
+      due_date: dueDate.toISOString(),
+      payment_date: null,
       status: 'pending',
+      payment_method: null,
       reference: `FINAL-${year}-${monthStr}`,
+      receipt_id: null,
       notes: 'Paiement généré automatiquement pour quittance finale (prorata)'
     } as any
 
@@ -97,6 +105,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     if (receiptError) {
       return NextResponse.json({ error: "Erreur création quittance finale" }, { status: 500 })
     }
+
+    // 3) Lier le paiement à la quittance (FK payments.receipt_id)
+    await supabase
+      .from('payments')
+      .update({ receipt_id: receipt.id })
+      .eq('id', payment.id)
 
     return NextResponse.json({ success: true, receipt, prorata, rentDue, chargesDue, totalDue })
   } catch (error: any) {
