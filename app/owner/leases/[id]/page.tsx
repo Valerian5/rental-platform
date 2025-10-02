@@ -485,11 +485,11 @@ export default function LeaseDetailPage() {
     const config = LEASE_STATUS_CONFIG[status as keyof typeof LEASE_STATUS_CONFIG]
     
     if (!config) {
-        return {
+      return {
         badge: <Badge variant="outline">{status}</Badge>,
         description: "Statut inconnu",
-          color: "gray",
-        }
+        color: "gray",
+      }
     }
 
     // Mapping des icônes selon le statut
@@ -507,13 +507,13 @@ export default function LeaseDetailPage() {
       }
     }
 
-        return {
-          badge: (
+    return {
+      badge: (
         <Badge className={config.color}>
           {getIcon(status)}
           {config.label}
-            </Badge>
-          ),
+        </Badge>
+      ),
       description: config.description,
       color: config.color.includes("green") ? "green" : 
              config.color.includes("blue") ? "blue" : 
