@@ -945,38 +945,49 @@ export default function LeaseDetailPage() {
                           const dayOfMonth = new Date().getDate()
                           const previewHtml = j.preview?.documentHtml || ''
 
-                          const modalHtml = `<!DOCTYPE html><html><head><meta charset=\"utf-8\" /><title>Solde - Aperçu</title></head><body>${previewHtml}
-                            <div style=\"padding:16px; font-family:Arial\">
-                              <label style=\"display:flex;align-items:center;gap:8px;margin:8px 0;\">
-                                <input id=\"nocharge\" type=\"checkbox\" /> Ne pas facturer le solde (information seule)
-                              </label>
-                              <button id=\"send\" style=\"padding:8px 12px;\">Envoyer au locataire</button>
-                            </div>
-                            <script>
-                              (function(){
-                                const send = document.getElementById('send');
-                                send.addEventListener('click', async () => {
-                                  const nocharge = document.getElementById('nocharge').checked;
-                                  try {
-                                    if (nocharge) {
-                                      const resp = await fetch('${`/api/leases/${leaseId}/final-balance/notify`}', {
-                                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ monthName: '${'${monthName}'}', year: '${'${year}'}', totalDue: ${'${totalDue}'}, rentDue: ${'${rentDue}'}, chargesDue: ${'${chargesDue}'}, dayOfMonth: ${'${dayOfMonth}'}, documentHtml: `${'${previewHtml.replace(/`/g, '\\`')}'}` })
-                                      });
-                                      if (!resp.ok) throw new Error('Erreur notification');
-                                    } else {
-                                      const create = await fetch('${`/api/leases/${leaseId}/final-receipt`}', {
-                                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({})
-                                      });
-                                      if (!create.ok) throw new Error('Erreur création paiement');
-                                    }
-                                    alert('Envoyé au locataire');
-                                    window.close();
-                                  } catch(e) { alert('Erreur: ' + (e && e.message ? e.message : e)); }
-                                });
-                              })();
-                            </script>
-                          </body></html>`
+                          const payload = {
+                            monthName,
+                            year,
+                            totalDue,
+                            rentDue,
+                            chargesDue,
+                            dayOfMonth,
+                            documentHtml: previewHtml,
+                          }
+                          const modalHtml = '<!DOCTYPE html><html><head><meta charset="utf-8" /><title>Solde - Aperçu</title></head><body>' +
+                            previewHtml +
+                            '<div style="padding:16px; font-family:Arial">' +
+                            '<label style="display:flex;align-items:center;gap:8px;margin:8px 0;">' +
+                            '<input id="nocharge" type="checkbox" /> Ne pas facturer le solde (information seule)' +
+                            '</label>' +
+                            '<button id="send" style="padding:8px 12px;">Envoyer au locataire</button>' +
+                            '</div>' +
+                            '<script>' +
+                            '(function(){' +
+                            'const send = document.getElementById("send");' +
+                            'const payload = ' + JSON.stringify(payload).replace(/</g, '\u003c') + ';' +
+                            'send.addEventListener("click", async function () {' +
+                            '  const nocharge = document.getElementById("nocharge").checked;' +
+                            '  try {' +
+                            '    if (nocharge) {' +
+                            '      const resp = await fetch("/api/leases/' + leaseId + '/final-balance/notify", {' +
+                            '        method: "POST", headers: { "Content-Type": "application/json" },' +
+                            '        body: JSON.stringify(payload)' +
+                            '      });' +
+                            '      if (!resp.ok) throw new Error("Erreur notification");' +
+                            '    } else {' +
+                            '      const create = await fetch("/api/leases/' + leaseId + '/final-receipt", {' +
+                            '        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({})' +
+                            '      });' +
+                            '      if (!create.ok) throw new Error("Erreur création paiement");' +
+                            '    }' +
+                            '    alert("Envoyé au locataire");' +
+                            '    window.close();' +
+                            '  } catch(e) { alert("Erreur: " + (e && e.message ? e.message : e)); }' +
+                            '});' +
+                            '})();' +
+                            '</script>' +
+                            '</body></html>'
                           const w = window.open('', '_blank')
                           if (!w) throw new Error('Popup bloquée')
                           w.document.write(modalHtml)
