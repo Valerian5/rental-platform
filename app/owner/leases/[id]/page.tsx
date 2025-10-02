@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -115,6 +116,9 @@ export default function LeaseDetailPage() {
   const [lastNotice, setLastNotice] = useState<any>(null)
   const [preparingExit, setPreparingExit] = useState(false)
   const [creatingFinalReceipt, setCreatingFinalReceipt] = useState(false)
+  const [finalBalanceOpen, setFinalBalanceOpen] = useState(false)
+  const [finalBalancePreviewHtml, setFinalBalancePreviewHtml] = useState<string>("")
+  const [finalBalanceNoCharge, setFinalBalanceNoCharge] = useState(false)
 
   /** --- Nouvel état : statut DocuSign par signataire --- */
   const [sigLoading, setSigLoading] = useState(false)
@@ -948,61 +952,10 @@ export default function LeaseDetailPage() {
                           })
                           if (!res.ok) throw new Error("Erreur calcul solde")
                           const j = await res.json()
-                          const monthName = j.preview?.monthName || ''
-                          const year = j.preview?.year || ''
-                          const totalDue = j.preview?.totalDue || 0
-                          const rentDue = j.preview?.rentDue || 0
-                          const chargesDue = j.preview?.chargesDue || 0
-                          const dayOfMonth = new Date().getDate()
                           const previewHtml = j.preview?.documentHtml || ''
-
-                          const payload = {
-                            monthName,
-                            year,
-                            totalDue,
-                            rentDue,
-                            chargesDue,
-                            dayOfMonth,
-                            documentHtml: previewHtml,
-                          }
-                          const modalHtml = '<!DOCTYPE html><html><head><meta charset="utf-8" /><title>Solde - Aperçu</title></head><body>' +
-                            previewHtml +
-                            '<div style="padding:16px; font-family:Arial">' +
-                            '<label style="display:flex;align-items:center;gap:8px;margin:8px 0;">' +
-                            '<input id="nocharge" type="checkbox" /> Ne pas facturer le solde (information seule)' +
-                            '</label>' +
-                            '<button id="send" style="padding:8px 12px;">Envoyer au locataire</button>' +
-                            '</div>' +
-                            '<script>' +
-                            '(function(){' +
-                            'const send = document.getElementById("send");' +
-                            'const payload = ' + JSON.stringify(payload).replace(/</g, '\u003c') + ';' +
-                            'send.addEventListener("click", async function () {' +
-                            '  const nocharge = document.getElementById("nocharge").checked;' +
-                            '  try {' +
-                            '    if (nocharge) {' +
-                            '      const resp = await fetch("/api/leases/' + leaseId + '/final-balance/notify", {' +
-                            '        method: "POST", headers: { "Content-Type": "application/json" },' +
-                            '        body: JSON.stringify(payload)' +
-                            '      });' +
-                            '      if (!resp.ok) throw new Error("Erreur notification");' +
-                            '    } else {' +
-                            '      const create = await fetch("/api/leases/' + leaseId + '/final-receipt", {' +
-                            '        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({})' +
-                            '      });' +
-                            '      if (!create.ok) throw new Error("Erreur création paiement");' +
-                            '    }' +
-                            '    alert("Envoyé au locataire");' +
-                            '    window.close();' +
-                            '  } catch(e) { alert("Erreur: " + (e && e.message ? e.message : e)); }' +
-                            '});' +
-                            '})();' +
-                            '</script>' +
-                            '</body></html>'
-                          const w = window.open('', '_blank')
-                          if (!w) throw new Error('Popup bloquée')
-                          w.document.write(modalHtml)
-                          w.document.close()
+                          setFinalBalancePreviewHtml(previewHtml)
+                          setFinalBalanceNoCharge(false)
+                          setFinalBalanceOpen(true)
                         } catch (e: any) {
                           toast.error(e.message || "Erreur")
                         } finally {
@@ -1025,3 +978,44 @@ export default function LeaseDetailPage() {
     </div>
   )
 }
+
+{/* Modale de solde final (aperçu + envoi) */}
+<Dialog open={finalBalanceOpen} onOpenChange={setFinalBalanceOpen}>
+  <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+    <DialogHeader>
+      <DialogTitle>Solde de tout compte - Aperçu</DialogTitle>
+      <DialogDescription>Vérifiez le document puis envoyez-le au locataire.</DialogDescription>
+    </DialogHeader>
+    <div className="bg-white border rounded p-4 max-h-[60vh] overflow-auto">
+      <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: finalBalancePreviewHtml }} />
+    </div>
+    <div className="flex items-center gap-2 text-sm">
+      <input id="nocharge" type="checkbox" checked={finalBalanceNoCharge} onChange={(e) => setFinalBalanceNoCharge(e.target.checked)} />
+      <label htmlFor="nocharge">Ne pas facturer le solde (information seule)</label>
+    </div>
+    <DialogFooter>
+      <Button variant="outline" onClick={() => setFinalBalanceOpen(false)}>Fermer</Button>
+      <Button onClick={async () => {
+        try {
+          const { supabase } = await import("@/lib/supabase")
+          const { data } = await supabase.auth.getSession()
+          const token = data.session?.access_token
+          if (finalBalanceNoCharge) {
+            const resp = await fetch(`/api/leases/${leaseId}/final-balance/notify`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+              body: JSON.stringify({ documentHtml: finalBalancePreviewHtml })
+            })
+            if (!resp.ok) throw new Error('Erreur notification')
+          } else {
+            const create = await fetch(`/api/leases/${leaseId}/final-receipt`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({})
+            })
+            if (!create.ok) throw new Error('Erreur création paiement')
+          }
+          toast.success('Envoyé au locataire')
+          setFinalBalanceOpen(false)
+        } catch (e: any) { toast.error(e.message || 'Erreur') }
+      }}>Envoyer au locataire</Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
