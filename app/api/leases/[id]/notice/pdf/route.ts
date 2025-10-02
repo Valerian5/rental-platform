@@ -69,20 +69,36 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
     wrap(plain, 90).forEach((ln) => { if (y < 80) { page.drawText('... (suite)', { x: marginX, y, size: 10, font }); y = 780 } page.drawText(ln, { x: marginX, y, size: 11, font }); y -= 14 })
 
-    // Tenter d'intégrer une signature image (data URL) si présente dans le HTML
+    // Préparer la signature locataire en bas de page
+    let signatureImg: any | null = null
     try {
       const match = (notice.letter_html || '').match(/<img[^>]+src=\"(data:image\/(png|jpeg)[^\"]+)\"/i)
       if (match && match[1]) {
         const dataUrl = match[1]
         const bytes = Buffer.from(dataUrl.split(',')[1], 'base64')
-        const img = dataUrl.includes('png') ? await pdfDoc.embedPng(bytes) : await pdfDoc.embedJpg(bytes)
-        const dims = img.scale(0.5)
-        if (y < 150) { y = 220 }
-        page.drawImage(img, { x: marginX, y: y - dims.height, width: dims.width, height: dims.height })
-        y -= dims.height + 10
-        drawText('Signature du locataire', { size: 10 })
+        signatureImg = dataUrl.includes('png') ? await pdfDoc.embedPng(bytes) : await pdfDoc.embedJpg(bytes)
       }
     } catch {}
+
+    // Espace signature en bas: image (si présente) au-dessus du libellé puis ligne
+    const bottomMargin = 60
+    const lineWidth = 250
+    const lineY = bottomMargin + 20
+    if (signatureImg) {
+      const targetHeight = 60
+      const scale = targetHeight / signatureImg.height
+      const targetWidth = signatureImg.width * scale
+      page.drawImage(signatureImg, {
+        x: marginX,
+        y: lineY + 24,
+        width: targetWidth,
+        height: targetHeight,
+      })
+    }
+    // Libellé "Signature du locataire" juste au-dessus de la ligne
+    page.drawText('Signature du locataire', { x: marginX, y: lineY + 12, size: 10, font })
+    // Ligne de signature
+    page.drawRectangle({ x: marginX, y: lineY, width: lineWidth, height: 1, color: rgb(0,0,0) })
 
     const pdfBytes = await pdfDoc.save()
     return new NextResponse(Buffer.from(pdfBytes), {

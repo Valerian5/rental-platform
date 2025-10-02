@@ -725,6 +725,21 @@ export default function TenantLeaseDetailPage() {
                     <div className="bg-white border rounded p-4 max-h-80 overflow-auto">
                       <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: lastNotice.letter_html }} />
                     </div>
+                    <div className="flex gap-3">
+                      {lastNotice.document_url ? (
+                        <Button variant="outline" asChild>
+                          <a href={lastNotice.document_url} target="_blank" rel="noopener noreferrer">
+                            <Download className="h-4 w-4 mr-2" /> Télécharger le préavis (PDF)
+                          </a>
+                        </Button>
+                      ) : (
+                        <Button variant="outline" asChild>
+                          <a href={`/api/leases/${leaseId}/notice/pdf`} target="_blank" rel="noopener noreferrer">
+                            <Download className="h-4 w-4 mr-2" /> Télécharger le préavis (PDF)
+                          </a>
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-3">
