@@ -481,6 +481,8 @@ export default function LeaseDetailPage() {
     )
   }
 
+  const statusInfo = getStatusInfo(lease.status)
+
   const getStatusInfo = (status: string) => {
     const config = LEASE_STATUS_CONFIG[status as keyof typeof LEASE_STATUS_CONFIG]
     
@@ -534,8 +536,6 @@ export default function LeaseDetailPage() {
         return <Badge variant="secondary">{type}</Badge>
     }
   }
-
-  const statusInfo = getStatusInfo(lease.status)
 
   return (
     <div className="min-h-screen bg-gray-50">
