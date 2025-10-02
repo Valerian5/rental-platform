@@ -448,45 +448,6 @@ export default function LeaseDetailPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="container mx-auto p-6">
-          <div className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Chargement du bail...</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (error || !lease) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="container mx-auto p-6">
-          <Card>
-            <CardContent className="p-6">
-              <div className="text-center">
-                <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-                <h2 className="text-xl font-semibold mb-2">Erreur</h2>
-                <p className="text-gray-600 mb-4">{error || "Bail non trouvé"}</p>
-                <Button onClick={() => router.push("/owner/leases")}>
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Retour aux baux
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    )
-  }
-
-  const statusInfo = getStatusInfo(lease.status)
-
   const getStatusInfo = (status: string) => {
     const config = LEASE_STATUS_CONFIG[status as keyof typeof LEASE_STATUS_CONFIG]
     
@@ -527,6 +488,45 @@ export default function LeaseDetailPage() {
              config.color.includes("red") ? "red" : "gray",
     }
   }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="container mx-auto p-6">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Chargement du bail...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !lease) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="container mx-auto p-6">
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-center">
+                <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+                <h2 className="text-xl font-semibold mb-2">Erreur</h2>
+                <p className="text-gray-600 mb-4">{error || "Bail non trouvé"}</p>
+                <Button onClick={() => router.push("/owner/leases")}>
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Retour aux baux
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  const statusInfo = getStatusInfo(lease.status)
 
   const getLeaseTypeBadge = (type: string) => {
     switch (type) {
@@ -974,48 +974,47 @@ export default function LeaseDetailPage() {
             </Card>
           </TabsContent>
         </Tabs>
+        {/* Modale de solde final (aperçu + envoi) */}
+        <Dialog open={finalBalanceOpen} onOpenChange={setFinalBalanceOpen}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Solde de tout compte - Aperçu</DialogTitle>
+              <DialogDescription>Vérifiez le document puis envoyez-le au locataire.</DialogDescription>
+            </DialogHeader>
+            <div className="bg-white border rounded p-4 max-h-[60vh] overflow-auto">
+              <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: finalBalancePreviewHtml }} />
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <input id="nocharge" type="checkbox" checked={finalBalanceNoCharge} onChange={(e) => setFinalBalanceNoCharge(e.target.checked)} />
+              <label htmlFor="nocharge">Ne pas facturer le solde (information seule)</label>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setFinalBalanceOpen(false)}>Fermer</Button>
+              <Button onClick={async () => {
+                try {
+                  const { supabase } = await import("@/lib/supabase")
+                  const { data } = await supabase.auth.getSession()
+                  const token = data.session?.access_token
+                  if (finalBalanceNoCharge) {
+                    const resp = await fetch(`/api/leases/${leaseId}/final-balance/notify`, {
+                      method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                      body: JSON.stringify({ documentHtml: finalBalancePreviewHtml })
+                    })
+                    if (!resp.ok) throw new Error('Erreur notification')
+                  } else {
+                    const create = await fetch(`/api/leases/${leaseId}/final-receipt`, {
+                      method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({})
+                    })
+                    if (!create.ok) throw new Error('Erreur création paiement')
+                  }
+                  toast.success('Envoyé au locataire')
+                  setFinalBalanceOpen(false)
+                } catch (e: any) { toast.error(e.message || 'Erreur') }
+              }}>Envoyer au locataire</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )
 }
-
-{/* Modale de solde final (aperçu + envoi) */}
-<Dialog open={finalBalanceOpen} onOpenChange={setFinalBalanceOpen}>
-  <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-    <DialogHeader>
-      <DialogTitle>Solde de tout compte - Aperçu</DialogTitle>
-      <DialogDescription>Vérifiez le document puis envoyez-le au locataire.</DialogDescription>
-    </DialogHeader>
-    <div className="bg-white border rounded p-4 max-h-[60vh] overflow-auto">
-      <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: finalBalancePreviewHtml }} />
-    </div>
-    <div className="flex items-center gap-2 text-sm">
-      <input id="nocharge" type="checkbox" checked={finalBalanceNoCharge} onChange={(e) => setFinalBalanceNoCharge(e.target.checked)} />
-      <label htmlFor="nocharge">Ne pas facturer le solde (information seule)</label>
-    </div>
-    <DialogFooter>
-      <Button variant="outline" onClick={() => setFinalBalanceOpen(false)}>Fermer</Button>
-      <Button onClick={async () => {
-        try {
-          const { supabase } = await import("@/lib/supabase")
-          const { data } = await supabase.auth.getSession()
-          const token = data.session?.access_token
-          if (finalBalanceNoCharge) {
-            const resp = await fetch(`/api/leases/${leaseId}/final-balance/notify`, {
-              method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-              body: JSON.stringify({ documentHtml: finalBalancePreviewHtml })
-            })
-            if (!resp.ok) throw new Error('Erreur notification')
-          } else {
-            const create = await fetch(`/api/leases/${leaseId}/final-receipt`, {
-              method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({})
-            })
-            if (!create.ok) throw new Error('Erreur création paiement')
-          }
-          toast.success('Envoyé au locataire')
-          setFinalBalanceOpen(false)
-        } catch (e: any) { toast.error(e.message || 'Erreur') }
-      }}>Envoyer au locataire</Button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
