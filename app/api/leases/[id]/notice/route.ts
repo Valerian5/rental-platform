@@ -228,6 +228,27 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       console.warn("Notification in-app owner (préavis) échouée:", e)
     }
 
+    // Générer un PDF et l'uploader (stockage)
+    let pdfUrl: string | null = null
+    try {
+      const site = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || ''
+      const { createServiceSupabaseClient } = await import('@/lib/supabase-server-client')
+      const admin = createServiceSupabaseClient()
+      const pdfRes = await fetch(`${site}/api/leases/${leaseId}/notice/pdf`, { headers: { Authorization: `Bearer ${token || ''}` } as any })
+      if (pdfRes.ok) {
+        const buf = Buffer.from(await pdfRes.arrayBuffer())
+        const path = `tenant-notices/${leaseId}/preavis-${Date.now()}.pdf`
+        const { error: upErr } = await admin.storage.from('documents').upload(path, buf, { contentType: 'application/pdf', upsert: true })
+        if (!upErr) {
+          const { data: { publicUrl } } = admin.storage.from('documents').getPublicUrl(path)
+          pdfUrl = publicUrl
+          await supabase.from('lease_notices').update({ document_url: pdfUrl }).eq('id', notice.id)
+        }
+      }
+    } catch (e) {
+      console.warn('[NOTICE] PDF upload error', e)
+    }
+
     // Email au propriétaire
     try {
       if (lease.owner?.email) {
@@ -237,7 +258,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           { id: lease.tenant_id, name: tenantName, email: lease.tenant?.email || "" } as any,
           { id: lease.property_id, title: address, address } as any,
           moveOutDate.toISOString(),
-          letterHtml,
+          pdfUrl ? undefined : signedLetterHtml,
         )
       }
     } catch (e) {

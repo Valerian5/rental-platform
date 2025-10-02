@@ -895,15 +895,26 @@ export default function LeaseDetailPage() {
                     <p className="text-sm text-gray-600">
                       Reçu le {new Date(lastNotice.notice_date).toLocaleDateString("fr-FR")} • Départ prévu le {new Date(lastNotice.move_out_date).toLocaleDateString("fr-FR")}
                     </p>
-                    <div className="bg-white border rounded p-4 max-h-80 overflow-auto">
-                      <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: lastNotice.letter_html }} />
-                    </div>
+                    {lastNotice.document_url ? (
+                      <div className="border rounded overflow-hidden" style={{ height: 520 }}>
+                        <iframe
+                          src={`${lastNotice.document_url}#toolbar=1&navpanes=0&scrollbar=1`}
+                          className="w-full h-full"
+                        />
+                      </div>
+                    ) : (
+                      <div className="bg-white border rounded p-4 max-h-80 overflow-auto">
+                        <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: lastNotice.letter_html }} />
+                      </div>
+                    )}
                         <div className="flex gap-3">
-                      <Button variant="outline" asChild>
-                        <a href={`/api/leases/${leaseId}/notice/pdf`} target="_blank" rel="noopener noreferrer">
-                          <Download className="h-4 w-4 mr-2" /> Télécharger le préavis (PDF)
-                        </a>
-                      </Button>
+                      {lastNotice.document_url && (
+                        <Button variant="outline" asChild>
+                          <a href={lastNotice.document_url} target="_blank" rel="noopener noreferrer">
+                            <Download className="h-4 w-4 mr-2" /> Télécharger le préavis (PDF)
+                          </a>
+                        </Button>
+                      )}
                       <Button onClick={async () => {
                         try {
                           setPreparingExit(true)
