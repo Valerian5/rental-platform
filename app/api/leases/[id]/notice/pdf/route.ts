@@ -37,20 +37,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       .maybeSingle()
     if (!notice) return NextResponse.json({ error: 'Aucun préavis' }, { status: 404 })
 
-    const { generatePdfFromHtml } = await import('@/lib/pdf-utils')
-    const html = `<!DOCTYPE html>
-      <html lang="fr">
-      <head>
-        <meta charSet="utf-8" />
-        <title>Préavis</title>
-        <style>
-          @page { size: A4; margin: 1.5cm; }
-          body { font-family: Arial, Helvetica, sans-serif; color: #111; }
-        </style>
-      </head>
-      <body>${notice.letter_html || ''}</body>
-      </html>`
-    const pdfBuffer = await generatePdfFromHtml(html)
+    const { generateNoticePDF } = await import('@/lib/notice-pdf-generator')
+    const pdf = generateNoticePDF(notice.letter_html || '')
+    const pdfBuffer = Buffer.from(pdf.output('arraybuffer'))
     return new NextResponse(Buffer.from(pdfBuffer), {
       headers: {
         'Content-Type': 'application/pdf',
