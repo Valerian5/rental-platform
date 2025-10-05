@@ -7,9 +7,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   const authHeader = request.headers.get("authorization") || ""
   const hasBearer = authHeader.toLowerCase().startsWith("bearer ")
   const token = hasBearer ? authHeader.slice(7) : null
-  const supabase = hasBearer
+  const url = new URL(request.url)
+  const tokenFromQuery = url.searchParams.get('token')
+  const effectiveToken = token || tokenFromQuery || null
+  const supabase = effectiveToken
     ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
-        global: { headers: { Authorization: `Bearer ${token}` } },
+        global: { headers: { Authorization: `Bearer ${effectiveToken}` } },
       })
     : createServerClient(request)
 

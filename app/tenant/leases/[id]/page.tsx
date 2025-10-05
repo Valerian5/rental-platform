@@ -733,10 +733,19 @@ export default function TenantLeaseDetailPage() {
                           </a>
                         </Button>
                       ) : (
-                        <Button variant="outline" asChild>
-                          <a href={`/api/leases/${leaseId}/notice/pdf`} target="_blank" rel="noopener noreferrer">
-                            <Download className="h-4 w-4 mr-2" /> Télécharger le préavis (PDF)
-                          </a>
+                        <Button
+                          variant="outline"
+                          onClick={async () => {
+                            try {
+                              const { supabase } = await import("@/lib/supabase")
+                              const { data } = await supabase.auth.getSession()
+                              const token = data.session?.access_token || ""
+                              const url = `/api/leases/${leaseId}/notice/pdf${token ? `?token=${encodeURIComponent(token)}` : ""}`
+                              window.open(url, "_blank", "noopener,noreferrer")
+                            } catch {}
+                          }}
+                        >
+                          <Download className="h-4 w-4 mr-2" /> Télécharger le préavis (PDF)
                         </Button>
                       )}
                     </div>
