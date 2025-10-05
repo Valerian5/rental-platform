@@ -75,7 +75,6 @@ function buildNoticeLetterHtml(args: {
   `
 }
 
-
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const leaseId = params.id
   const authHeader = request.headers.get("authorization") || ""
@@ -89,14 +88,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
   try {
     console.log("[NOTICE][POST] start", { leaseId, mode: hasBearer ? "bearer" : "cookies" })
-    console.log("[NOTICE][POST] cookies", {
-      hasAuthToken: !!request.cookies.get("sb-access-token"),
-      cookieNames: request.cookies.getAll().map((c) => c.name),
-      origin: request.headers.get("origin"),
-      referer: request.headers.get("referer"),
-    })
     const { data: { user }, error: userError } = await supabase.auth.getUser()
-    console.log("[NOTICE][POST] auth.getUser", { userId: user?.id, userError })
     if (userError || !user) {
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
     }
@@ -115,7 +107,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: "Confirmation requise" }, { status: 400 })
     }
 
-    // Charger le bail + propriété + users
+    // Charger le bail
     const { data: lease, error: leaseError } = await supabase
       .from("leases")
       .select(`
@@ -128,21 +120,21 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .eq("id", leaseId)
       .single()
 
-    console.log("[NOTICE][POST] lease", { leaseError, found: !!lease })
     if (leaseError || !lease) {
       return NextResponse.json({ error: "Bail introuvable" }, { status: 404 })
     }
 
     if (lease.tenant_id !== user.id) {
-      console.log("[NOTICE][POST] forbidden", { tenantId: lease.tenant_id, userId: user.id })
       return NextResponse.json({ error: "Accès interdit" }, { status: 403 })
     }
 
-    // Déterminer le nombre de mois de préavis
     const tenseFlag = typeof isTenseZone === "boolean" ? isTenseZone : !!lease.properties?.rent_control_zone
-    const months = typeof noticePeriodMonths === "number" && [1,2,3].includes(noticePeriodMonths)
-      ? noticePeriodMonths
-      : (tenseFlag ? 1 : 3)
+    const months =
+      typeof noticePeriodMonths === "number" && [1, 2, 3].includes(noticePeriodMonths)
+        ? noticePeriodMonths
+        : tenseFlag
+        ? 1
+        : 3
 
     const noticeDate = noticeDateStr ? new Date(noticeDateStr) : new Date()
     const moveOutDate = addMonths(noticeDate, months)
@@ -160,26 +152,33 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       noticeMonths: months,
     })
 
-    // Injecter la signature si fournie : image en bas, juste au-dessus du libellé "Signature"
+    // 🖋️ Signature au-dessus de la ligne
     let signedLetterHtml = letterHtml
     if (signatureDataUrl) {
-      const signatureLabel = `<p style="font-size: 12px; color: #555;">Signature</p>`
-      const imgTag = `<img alt="signature" src="${signatureDataUrl}" style="height:80px; margin-top:6px;" />`
-      if (signedLetterHtml.includes(signatureLabel)) {
-        signedLetterHtml = signedLetterHtml.replace(signatureLabel, `${imgTag}\n${signatureLabel}`)
-      } else {
-        // Fallback: à défaut, on ajoute l'image tout à la fin
-        signedLetterHtml = `${signedLetterHtml}\n${imgTag}`
-      }
+      const signatureBlock = `
+        <div style="margin-top: 60px;">
+          <p><strong>${tenantName}</strong></p>
+          <img alt="signature" src="${signatureDataUrl}" style="height:80px; margin: 10px 0;" />
+          <div style="height: 60px; border-bottom: 1px solid #000; width: 250px; margin-top: 10px;"></div>
+          <p style="font-size: 12px; color: #555;">Signature</p>
+        </div>
+      `
+
+      signedLetterHtml = signedLetterHtml.replace(
+        /<div style="margin-top: 60px;">[\s\S]*?<p style="font-size: 12px; color: #555;">Signature<\/p>\s*<\/div>/,
+        signatureBlock
+      )
     }
 
-    // Mode aperçu uniquement: aucune écriture/notification
     if (previewOnly) {
-      console.log("[NOTICE][POST] previewOnly response")
-      return NextResponse.json({ success: true, letterHtml: signedLetterHtml, moveOutDate: moveOutDate.toISOString() })
+      return NextResponse.json({
+        success: true,
+        letterHtml: signedLetterHtml,
+        moveOutDate: moveOutDate.toISOString(),
+      })
     }
 
-    // Enregistrer le préavis
+    // Enregistrement du préavis
     const { data: notice, error: noticeError } = await supabase
       .from("lease_notices")
       .insert({
@@ -187,10 +186,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         tenant_id: lease.tenant_id,
         owner_id: lease.owner_id,
         property_id: lease.property_id,
-        notice_date: noticeDate.toISOString().slice(0,10),
+        notice_date: noticeDate.toISOString().slice(0, 10),
         notice_period_months: months,
         is_tense_zone: tenseFlag,
-        move_out_date: moveOutDate.toISOString().slice(0,10),
+        move_out_date: moveOutDate.toISOString().slice(0, 10),
         letter_html: signedLetterHtml,
         status: "sent",
         metadata: {},
@@ -198,21 +197,18 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .select("*")
       .single()
 
-    console.log("[NOTICE][POST] notice insert", { noticeId: notice?.id, noticeError })
     if (noticeError) {
       return NextResponse.json({ error: "Erreur enregistrement préavis" }, { status: 500 })
     }
 
-    // Mettre à jour la propriété: date de dispo = moveOutDate, disponible = true (post-départ)
+    // Mettre à jour la disponibilité de la propriété
     const { error: updatePropError } = await supabase
       .from("properties")
-      .update({ availability_date: moveOutDate.toISOString().slice(0,10) })
+      .update({ availability_date: moveOutDate.toISOString().slice(0, 10) })
       .eq("id", lease.property_id)
-    if (updatePropError) {
-      console.warn("[NOTICE][POST] property update error", updatePropError)
-    }
+    if (updatePropError) console.warn("[NOTICE][POST] property update error", updatePropError)
 
-    // Notifications in-app
+    // Notification in-app
     try {
       const { notificationsService } = await import("@/lib/notifications-service")
       await notificationsService.createNotification(lease.owner_id, {
@@ -226,13 +222,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       console.warn("Notification in-app owner (préavis) échouée:", e)
     }
 
-    // Générer un PDF et l'uploader (stockage)
+    // Génération PDF et upload
     let pdfUrl: string | null = null
     try {
       const site = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || ''
       const { createServiceSupabaseClient } = await import('@/lib/supabase-server-client')
       const admin = createServiceSupabaseClient()
-      const pdfRes = await fetch(`${site}/api/leases/${leaseId}/notice/pdf`, { headers: { Authorization: `Bearer ${token || ''}` } as any })
+      const pdfRes = await fetch(`${site}/api/leases/${leaseId}/notice/pdf`, {
+        headers: { Authorization: `Bearer ${token || ''}` } as any,
+      })
       if (pdfRes.ok) {
         const buf = Buffer.from(await pdfRes.arrayBuffer())
         const path = `tenant-notices/${leaseId}/preavis-${Date.now()}.pdf`
@@ -263,7 +261,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       console.warn("Email owner (préavis) échoué:", e)
     }
 
-    console.log("[NOTICE][POST] success", { noticeId: notice.id })
     return NextResponse.json({ success: true, notice, moveOutDate: moveOutDate.toISOString(), letterHtml })
   } catch (error: any) {
     console.error("❌ Erreur création préavis:", error)
@@ -283,23 +280,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     : createServerClient(request)
 
   try {
-    console.log("[NOTICE][GET] start", { leaseId, mode: hasBearer ? "bearer" : "cookies" })
-    console.log("[NOTICE][GET] cookies", {
-      hasAuthToken: !!request.cookies.get("sb-access-token"),
-      cookieNames: request.cookies.getAll().map((c) => c.name),
-      origin: request.headers.get("origin"),
-      referer: request.headers.get("referer"),
-    })
     const { data: { user }, error } = await supabase.auth.getUser()
-    console.log("[NOTICE][GET] auth.getUser", { userId: user?.id, error })
     if (!user) return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
 
     const { data: lease } = await supabase.from("leases").select("tenant_id, owner_id").eq("id", leaseId).single()
-    console.log("[NOTICE][GET] lease fetched", { found: !!lease })
     if (!lease) return NextResponse.json({ error: "Bail introuvable" }, { status: 404 })
 
     if (user.id !== lease.tenant_id && user.id !== lease.owner_id) {
-      console.log("[NOTICE][GET] forbidden", { userId: user.id })
       return NextResponse.json({ error: "Accès interdit" }, { status: 403 })
     }
 
@@ -310,12 +297,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       .order("created_at", { ascending: false })
       .limit(1)
 
-    console.log("[NOTICE][GET] success", { hasNotice: !!(notices && notices[0]) })
     return NextResponse.json({ success: true, notice: notices?.[0] || null })
   } catch (error: any) {
     console.error("❌ Erreur récupération préavis:", error)
     return NextResponse.json({ error: error.message || "Erreur serveur" }, { status: 500 })
   }
 }
-
-
