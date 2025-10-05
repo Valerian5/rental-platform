@@ -163,15 +163,20 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     // Injecter la signature si fournie : image juste sous le nom du locataire
     let signedLetterHtml = letterHtml
     if (signatureDataUrl) {
-      // Chercher le bloc final contenant le nom du locataire et injecter l'image juste après
-      const tenantNameBlock = `<p>${tenantName}</p>`
-      if (signedLetterHtml.includes(tenantNameBlock)) {
-        signedLetterHtml = signedLetterHtml.replace(
-          tenantNameBlock,
-          `${tenantNameBlock}\n<img alt="signature" src="${signatureDataUrl}" style="height:80px; margin-top:6px;" />`
-        )
+      // Chercher le paragraphe contenant le nom en gras et injecter l'image juste après
+      const tenantNameBlockStrong = `<p><strong>${tenantName}</strong></p>`
+      const imgTag = `<img alt="signature" src="${signatureDataUrl}" style="height:80px; margin-top:6px;" />`
+      if (signedLetterHtml.includes(tenantNameBlockStrong)) {
+        signedLetterHtml = signedLetterHtml.replace(tenantNameBlockStrong, `${tenantNameBlockStrong}\n${imgTag}`)
       } else {
-        signedLetterHtml = `${signedLetterHtml}\n<p style="margin-bottom:4px">${tenantName}</p><img alt="signature" src="${signatureDataUrl}" style="height:80px; margin-top:6px;" />`
+        // Fallback: tenter sans <strong>
+        const tenantNameBlock = `<p>${tenantName}</p>`
+        if (signedLetterHtml.includes(tenantNameBlock)) {
+          signedLetterHtml = signedLetterHtml.replace(tenantNameBlock, `${tenantNameBlock}\n${imgTag}`)
+        } else {
+          // Fallback final: ajouter en bas
+          signedLetterHtml = `${signedLetterHtml}\n<p style="margin-bottom:4px"><strong>${tenantName}</strong></p>${imgTag}`
+        }
       }
     }
 
