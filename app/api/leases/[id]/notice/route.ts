@@ -160,23 +160,16 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       noticeMonths: months,
     })
 
-    // Injecter la signature si fournie : image juste sous le nom du locataire
+    // Injecter la signature si fournie : image en bas, juste au-dessus du libellé "Signature"
     let signedLetterHtml = letterHtml
     if (signatureDataUrl) {
-      // Chercher le paragraphe contenant le nom en gras et injecter l'image juste après
-      const tenantNameBlockStrong = `<p><strong>${tenantName}</strong></p>`
+      const signatureLabel = `<p style="font-size: 12px; color: #555;">Signature</p>`
       const imgTag = `<img alt="signature" src="${signatureDataUrl}" style="height:80px; margin-top:6px;" />`
-      if (signedLetterHtml.includes(tenantNameBlockStrong)) {
-        signedLetterHtml = signedLetterHtml.replace(tenantNameBlockStrong, `${tenantNameBlockStrong}\n${imgTag}`)
+      if (signedLetterHtml.includes(signatureLabel)) {
+        signedLetterHtml = signedLetterHtml.replace(signatureLabel, `${imgTag}\n${signatureLabel}`)
       } else {
-        // Fallback: tenter sans <strong>
-        const tenantNameBlock = `<p>${tenantName}</p>`
-        if (signedLetterHtml.includes(tenantNameBlock)) {
-          signedLetterHtml = signedLetterHtml.replace(tenantNameBlock, `${tenantNameBlock}\n${imgTag}`)
-        } else {
-          // Fallback final: ajouter en bas
-          signedLetterHtml = `${signedLetterHtml}\n<p style="margin-bottom:4px"><strong>${tenantName}</strong></p>${imgTag}`
-        }
+        // Fallback: à défaut, on ajoute l'image tout à la fin
+        signedLetterHtml = `${signedLetterHtml}\n${imgTag}`
       }
     }
 
