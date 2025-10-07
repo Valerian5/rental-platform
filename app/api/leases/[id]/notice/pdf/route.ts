@@ -40,7 +40,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     const { data: notice } = await supabase
       .from("lease_notices")
-      .select(`notice_date, move_out_date, notice_period_months, metadata`)
+      .select(`notice_date, move_out_date, notice_period_months, metadata, letter_html`)
       .eq("lease_id", leaseId)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -49,6 +49,14 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     // ✅ Générer via template dédié (une page) sans parser le HTML
     const { generateNoticeTemplatePdfBuffer } = await import("@/lib/notice-template-generator")
+    // Fallback: extraire l'image de signature depuis le HTML si absente des metadata
+    let signatureDataUrl = notice.metadata?.signatureDataUrl || null
+    if (!signatureDataUrl && notice.letter_html) {
+      try {
+        const match = (notice.letter_html as string).match(/<img[^>]+src=\"(data:image\/(png|jpeg)[^\"]+)\"/i)
+        if (match && match[1]) signatureDataUrl = match[1]
+      } catch {}
+    }
     const pdfBuffer = generateNoticeTemplatePdfBuffer({
       tenantName: `${lease?.tenant?.first_name || ""} ${lease?.tenant?.last_name || ""}`.trim() || "Locataire",
       ownerName: `${lease?.owner?.first_name || ""} ${lease?.owner?.last_name || ""}`.trim() || "Propriétaire",
@@ -56,7 +64,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       noticeDate: notice.notice_date || new Date().toISOString(),
       moveOutDate: notice.move_out_date || new Date().toISOString(),
       noticeMonths: notice.notice_period_months || 1,
-      signatureDataUrl: notice.metadata?.signatureDataUrl || null,
+      signatureDataUrl,
     })
 
     return new NextResponse(pdfBuffer, {
