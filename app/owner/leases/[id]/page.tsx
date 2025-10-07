@@ -934,6 +934,74 @@ export default function LeaseDetailPage() {
                           <Download className="h-4 w-4 mr-2" /> Télécharger le préavis (PDF)
                         </Button>
                       )}
+                      <Button
+                        variant="outline"
+                        onClick={async () => {
+                          try {
+                            const { supabase } = await import("@/lib/supabase")
+                            const { data } = await supabase.auth.getSession()
+                            const token = data.session?.access_token || ""
+                            const url = `/api/leases/${leaseId}/notice/ack${token ? `?token=${encodeURIComponent(token)}` : ""}`
+                            window.open(url, "_blank", "noopener,noreferrer")
+                          } catch {}
+                        }}
+                      >
+                        Accusé de réception
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={async () => {
+                          try {
+                            const { supabase } = await import("@/lib/supabase")
+                            const { data } = await supabase.auth.getSession()
+                            const token = data.session?.access_token || ""
+                            const res = await fetch(`/api/leases/${leaseId}/deposit-letter`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                              body: JSON.stringify({ depositAmount: 0, retainedAmount: 0, retainedReasons: [], calculationDetails: '' })
+                            })
+                            if (!res.ok) throw new Error('Erreur lettre dépôt')
+                            const blob = await res.blob()
+                            const url = window.URL.createObjectURL(blob)
+                            const a = document.createElement('a')
+                            a.href = url
+                            a.download = `depot-${leaseId}.pdf`
+                            document.body.appendChild(a)
+                            a.click()
+                            document.body.removeChild(a)
+                            window.URL.revokeObjectURL(url)
+                          } catch {}
+                        }}
+                      >
+                        Lettre de dépôt
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={async () => {
+                          try {
+                            const { supabase } = await import("@/lib/supabase")
+                            const { data } = await supabase.auth.getSession()
+                            const token = data.session?.access_token || ""
+                            const res = await fetch(`/api/leases/${leaseId}/keys-handover`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                              body: JSON.stringify({ date: new Date().toISOString(), keysCount: 0, badgesCount: 0, notes: '' })
+                            })
+                            if (!res.ok) throw new Error('Erreur attestation clés')
+                            const blob = await res.blob()
+                            const url = window.URL.createObjectURL(blob)
+                            const a = document.createElement('a')
+                            a.href = url
+                            a.download = `attestation-cles-${leaseId}.pdf`
+                            document.body.appendChild(a)
+                            a.click()
+                            document.body.removeChild(a)
+                            window.URL.revokeObjectURL(url)
+                          } catch {}
+                        }}
+                      >
+                        Attestation de remise des clés
+                      </Button>
                       <Button onClick={async () => {
                         try {
                           setPreparingExit(true)
