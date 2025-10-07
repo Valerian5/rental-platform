@@ -2,10 +2,10 @@ import { jsPDF } from "jspdf"
 import { JSDOM } from "jsdom"
 
 /**
- * Génère un PDF propre et fidèle à la lettre HTML
- * - Style proche du rendu preview
+ * Génération fidèle du PDF à partir du HTML stocké.
+ * - Pas de texte dupliqué ni superposé
+ * - Respect du format du courrier
  * - Signature au-dessus de la ligne
- * - Pas de contenu dupliqué
  */
 export async function generateNoticePDFServer(letterHtml: string): Promise<Buffer> {
   const doc = new jsPDF({ unit: "pt", format: "a4" })
@@ -14,86 +14,92 @@ export async function generateNoticePDFServer(letterHtml: string): Promise<Buffe
   const margin = 50
   let y = margin
 
-  // Parse le HTML
+  // Parse du HTML propre
   const dom = new JSDOM(letterHtml)
   const body = dom.window.document.body
 
-  const addText = (text: string, fontSize = 12, bold = false, align: "left" | "center" | "right" = "left", extraY = 16) => {
+  doc.setFont("times", "normal")
+  doc.setFontSize(12)
+
+  const contentWidth = pageWidth - margin * 2
+
+  // Fonction helper pour ajouter du texte
+  const addParagraph = (text: string, opts?: { bold?: boolean; align?: "left" | "right" | "center"; spacing?: number }) => {
     if (!text.trim()) return
-    if (y > pageHeight - 80) {
-      doc.addPage()
-      y = margin
-    }
+    const { bold = false, align = "left", spacing = 14 } = opts || {}
     doc.setFont("times", bold ? "bold" : "normal")
-    doc.setFontSize(fontSize)
-    const x =
-      align === "center" ? pageWidth / 2 : align === "right" ? pageWidth - margin : margin
-    doc.text(text.trim(), x, y, { align })
-    y += extraY
+    const lines = doc.splitTextToSize(text.trim(), contentWidth)
+    lines.forEach((line) => {
+      if (y > pageHeight - 80) {
+        doc.addPage()
+        y = margin
+      }
+      const x =
+        align === "center"
+          ? pageWidth / 2
+          : align === "right"
+          ? pageWidth - margin
+          : margin
+      doc.text(line, x, y, { align })
+      y += spacing
+    })
   }
 
-  // ---- 1️⃣ En-têtes (coordonnées)
-  const paragraphs = Array.from(body.querySelectorAll("div, p"))
-    .map((el) => el.textContent?.trim() || "")
-    .filter((txt) => !!txt)
+  // 🔹 Extraire proprement le contenu visible (sans doublons)
+  const paragraphs: { text: string; align?: "left" | "right" | "center"; bold?: boolean }[] = []
 
-  // On sépare en blocs logiques : coordonnées locataire / proprio / corps / signature
-  const tenantBlock = paragraphs.slice(0, 2) // nom + adresse
-  const ownerBlock = paragraphs.slice(2, 4) // à l'attention de + nom
-  const rest = paragraphs.slice(4)
-
-  // Locataire à gauche
-  tenantBlock.forEach((p) => addText(p, 12, true, "left"))
-  y -= 10
-
-  // Propriétaire à droite
-  ownerBlock.forEach((p) => addText(p, 12, false, "right"))
-  y += 10
-
-  // ---- 2️⃣ Corps principal
-  let currentBold = false
-  rest.forEach((line) => {
-    // Gestion des titres et objets
-    if (line.toLowerCase().includes("objet :")) {
-      y += 10
-      addText(line, 13, true)
-      y += 4
-    } else if (line.match(/madame|monsieur/i)) {
-      addText(line, 12, false)
-    } else if (line.match(/salutations/i)) {
-      y += 8
-      addText(line, 12, false)
+  const divs = Array.from(body.children) as HTMLElement[]
+  for (const el of divs) {
+    // Coordonnées hautes (gauche/droite)
+    if (el.tagName === "DIV" && el.style.display?.includes("flex")) {
+      const subDivs = el.querySelectorAll("div")
+      if (subDivs.length >= 2) {
+        const left = subDivs[0].textContent?.trim()
+        const right = subDivs[1].textContent?.trim()
+        if (left) paragraphs.push({ text: left, align: "left" })
+        if (right) paragraphs.push({ text: right, align: "right" })
+      }
     } else {
-      // Paragraphes classiques
-      const lines = doc.splitTextToSize(line, pageWidth - margin * 2)
-      lines.forEach((ln) => {
-        if (y > pageHeight - 80) {
-          doc.addPage()
-          y = margin
-        }
-        doc.text(ln, margin, y)
-        y += 16
-      })
-      y += 8
+      const text = el.textContent?.trim()
+      if (text) paragraphs.push({ text })
     }
-  })
+  }
 
-  // ---- 3️⃣ Signature
-  y += 20
+  // 🔹 Supprimer doublons exacts éventuels
+  const uniqueParagraphs = paragraphs.filter(
+    (p, i, arr) => i === arr.findIndex((x) => x.text === p.text)
+  )
 
+  // 🔹 Impression du contenu
+  for (const p of uniqueParagraphs) {
+    const t = p.text
+    if (t.startsWith("Objet")) {
+      y += 10
+      addParagraph(t, { bold: true })
+      y += 4
+    } else if (t.match(/^Signature$/i)) {
+      // Ignore le mot "Signature" (on gère plus bas)
+      continue
+    } else {
+      addParagraph(t, { align: p.align || "left" })
+      y += 4
+    }
+  }
+
+  // 🔹 Signature image
   const img = body.querySelector("img[src^='data:image']")
   if (img && img.getAttribute("src")) {
-    const imgData = img.getAttribute("src")!
+    y += 10
     try {
-      doc.addImage(imgData, "PNG", margin, y, 100, 40)
+      doc.addImage(img.getAttribute("src")!, "PNG", margin, y, 100, 40)
       y += 60
     } catch (err) {
-      console.warn("⚠️ Impossible d’ajouter la signature:", err)
+      console.warn("⚠️ Erreur image signature:", err)
       y += 40
     }
   }
 
-  // Ligne + libellé
+  // 🔹 Ligne et label signature
   doc.line(margin, y, margin + 150, y)
   y += 16
   doc.setFont("times", "normal")
