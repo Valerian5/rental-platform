@@ -24,7 +24,14 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     const { data: lease } = await supabase
       .from("leases")
-      .select("id, owner_id, tenant_id")
+      .select(`
+        id,
+        owner_id,
+        tenant_id,
+        properties:properties(address),
+        tenant:users!leases_tenant_id_fkey(first_name,last_name),
+        owner:users!leases_owner_id_fkey(first_name,last_name)
+      `)
       .eq("id", leaseId)
       .single()
     if (!lease) return NextResponse.json({ error: "Bail introuvable" }, { status: 404 })
@@ -33,15 +40,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     const { data: notice } = await supabase
       .from("lease_notices")
-      .select(`
-        notice_date,
-        move_out_date,
-        notice_period_months,
-        metadata,
-        tenant:users!lease_notices_tenant_id_fkey(first_name,last_name),
-        owner:users!lease_notices_owner_id_fkey(first_name,last_name),
-        property:properties(address)
-      `)
+      .select(`notice_date, move_out_date, notice_period_months, metadata`)
       .eq("lease_id", leaseId)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -51,9 +50,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     // ✅ Générer via template dédié (une page) sans parser le HTML
     const { generateNoticeTemplatePdfBuffer } = await import("@/lib/notice-template-generator")
     const pdfBuffer = generateNoticeTemplatePdfBuffer({
-      tenantName: `${notice.tenant?.first_name || ""} ${notice.tenant?.last_name || ""}`.trim() || "Locataire",
-      ownerName: `${notice.owner?.first_name || ""} ${notice.owner?.last_name || ""}`.trim() || "Propriétaire",
-      propertyAddress: notice.property?.address || "Votre logement",
+      tenantName: `${lease?.tenant?.first_name || ""} ${lease?.tenant?.last_name || ""}`.trim() || "Locataire",
+      ownerName: `${lease?.owner?.first_name || ""} ${lease?.owner?.last_name || ""}`.trim() || "Propriétaire",
+      propertyAddress: lease?.properties?.address || "Votre logement",
       noticeDate: notice.notice_date || new Date().toISOString(),
       moveOutDate: notice.move_out_date || new Date().toISOString(),
       noticeMonths: notice.notice_period_months || 1,
