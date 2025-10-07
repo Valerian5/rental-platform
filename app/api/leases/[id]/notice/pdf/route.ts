@@ -33,15 +33,32 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     const { data: notice } = await supabase
       .from("lease_notices")
-      .select("letter_html")
+      .select(`
+        notice_date,
+        move_out_date,
+        notice_period_months,
+        metadata,
+        tenant:users!lease_notices_tenant_id_fkey(first_name,last_name),
+        owner:users!lease_notices_owner_id_fkey(first_name,last_name),
+        property:properties(address)
+      `)
       .eq("lease_id", leaseId)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle()
     if (!notice) return NextResponse.json({ error: "Aucun préavis" }, { status: 404 })
 
-    // ✅ Génération du PDF côté serveur (pas de html2canvas)
-    const pdfBuffer = await generateNoticePDFServer(notice.letter_html || "")
+    // ✅ Générer via template dédié (une page) sans parser le HTML
+    const { generateNoticeTemplatePdfBuffer } = await import("@/lib/notice-template-generator")
+    const pdfBuffer = generateNoticeTemplatePdfBuffer({
+      tenantName: `${notice.tenant?.first_name || ""} ${notice.tenant?.last_name || ""}`.trim() || "Locataire",
+      ownerName: `${notice.owner?.first_name || ""} ${notice.owner?.last_name || ""}`.trim() || "Propriétaire",
+      propertyAddress: notice.property?.address || "Votre logement",
+      noticeDate: notice.notice_date || new Date().toISOString(),
+      moveOutDate: notice.move_out_date || new Date().toISOString(),
+      noticeMonths: notice.notice_period_months || 1,
+      signatureDataUrl: notice.metadata?.signatureDataUrl || null,
+    })
 
     return new NextResponse(pdfBuffer, {
       headers: {
