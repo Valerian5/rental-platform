@@ -192,7 +192,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         move_out_date: moveOutDate.toISOString().slice(0, 10),
         letter_html: signedLetterHtml,
         status: "sent",
-        metadata: {},
+        metadata: { signatureDataUrl: signatureDataUrl || null },
       })
       .select("*")
       .single()
