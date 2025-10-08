@@ -29,6 +29,7 @@ import { authService } from "@/lib/auth-service"
 import { TenantEtatDesLieuxSection } from "@/components/TenantEtatDesLieuxSection"
 import { toast } from "sonner"
 import { TenantNoticeDialog } from "@/components/TenantNoticeDialog"
+import { Input } from "@/components/ui/input"
 
 interface Lease {
   id: string
@@ -104,6 +105,8 @@ export default function TenantLeaseDetailPage() {
   const [noticeDialogOpen, setNoticeDialogOpen] = useState(false)
   const [finalBalance, setFinalBalance] = useState<any>(null)
   const [finalBalanceLoading, setFinalBalanceLoading] = useState(false)
+  const [iban, setIban] = useState("")
+  const [bic, setBic] = useState("")
 
   const loadLease = async () => {
     try {
@@ -169,6 +172,24 @@ export default function TenantLeaseDetailPage() {
       // noop
     } finally {
       setFinalBalanceLoading(false)
+    }
+  }
+
+  const submitRib = async () => {
+    try {
+      const { supabase } = await import("@/lib/supabase")
+      const { data } = await supabase.auth.getSession()
+      const token = data.session?.access_token
+      const res = await fetch(`/api/leases/${leaseId}/rib`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ iban, bic })
+      })
+      if (!res.ok) throw new Error('Erreur envoi RIB')
+      toast.success('RIB transmis au bailleur')
+      setIban("")
+      setBic("")
+    } catch (e: any) {
+      toast.error(e.message || 'Erreur RIB')
     }
   }
 
@@ -423,6 +444,7 @@ export default function TenantLeaseDetailPage() {
             <TabsTrigger value="annexes">Annexes</TabsTrigger>
             <TabsTrigger value="etat-des-lieux">État des lieux</TabsTrigger>
             <TabsTrigger value="notice">Quitter mon logement</TabsTrigger>
+            <TabsTrigger value="deposit-refund">Dépôt de garantie</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
@@ -644,6 +666,37 @@ export default function TenantLeaseDetailPage() {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+
+          {/* Dépôt de garantie - RIB */}
+          <TabsContent value="deposit-refund" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Restitution du dépôt de garantie
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="text-sm text-gray-700">
+                  Transmettez vos coordonnées bancaires pour permettre le remboursement. Votre IBAN sera visible par votre bailleur.
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-sm block mb-1">IBAN</label>
+                    <Input value={iban} onChange={(e) => setIban(e.target.value)} placeholder="FR76 XXXX ..." />
+                  </div>
+                  <div>
+                    <label className="text-sm block mb-1">BIC (optionnel)</label>
+                    <Input value={bic} onChange={(e) => setBic(e.target.value)} placeholder="XXXXXXXX" />
+                  </div>
+                  <div className="flex items-end">
+                    <Button onClick={submitRib} disabled={!iban}>Envoyer</Button>
+                  </div>
+                </div>
+                <div className="text-xs text-gray-500">Vos données sont stockées de manière sécurisée et uniquement partagées avec votre bailleur pour cette restitution.</div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="annexes" className="space-y-6">

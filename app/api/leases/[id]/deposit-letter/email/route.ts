@@ -78,6 +78,20 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       console.warn("Email restitution dépôt échoué:", e)
     }
 
+    // Notification in-app au locataire
+    try {
+      const { notificationsService } = await import("@/lib/notifications-service")
+      await notificationsService.createNotification(lease.tenant_id, {
+        type: 'deposit_restitution',
+        title: 'Lettre de restitution du dépôt de garantie',
+        content: 'Votre propriétaire a généré la lettre de restitution du dépôt de garantie.',
+        action_url: `/tenant/leases/${leaseId}`,
+        metadata: { lease_id: leaseId, document_url: publicUrl }
+      })
+    } catch (e) {
+      console.warn('Notification locataire (restitution) échouée:', e)
+    }
+
     return NextResponse.json({ success: true, url: publicUrl })
   } catch (e: any) {
     console.error("deposit-letter email:", e)

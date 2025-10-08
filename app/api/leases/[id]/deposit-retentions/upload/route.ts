@@ -41,6 +41,20 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 })
     const { data: { publicUrl } } = admin.storage.from("documents").getPublicUrl(path)
 
+    // Notification in-app au locataire pour nouvelle pièce jointe
+    try {
+      const { notificationsService } = await import("@/lib/notifications-service")
+      await notificationsService.createNotification((lease as any).tenant_id || null, {
+        type: 'deposit_attachment',
+        title: 'Nouveau justificatif sur la restitution du dépôt',
+        content: 'Une pièce jointe a été ajoutée par votre propriétaire.',
+        action_url: `/tenant/leases/${leaseId}`,
+        metadata: { lease_id: leaseId, attachment_url: publicUrl }
+      })
+    } catch (e) {
+      console.warn('Notification locataire (pièce jointe) échouée:', e)
+    }
+
     return NextResponse.json({ success: true, publicUrl, path })
   } catch (e: any) {
     console.error("deposit-retentions upload:", e)
