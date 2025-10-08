@@ -33,6 +33,7 @@ import { CautionnementSection } from "@/components/CautionnementSection"
 import { EtatDesLieuxSection } from "@/components/EtatDesLieuxSection"
 import { toast } from "sonner"
 import { Lease as LeaseType, LeaseStatus, LEASE_STATUS_CONFIG, leaseStatusUtils } from "@/lib/lease-types"
+import { DepositRetentionManager } from "@/components/DepositRetentionManager"
 
 /** --- Types DocuSign (statut par signataire) --- */
 type RecipientStatus =
@@ -119,6 +120,7 @@ export default function LeaseDetailPage() {
   const [finalBalanceOpen, setFinalBalanceOpen] = useState(false)
   const [finalBalancePreviewHtml, setFinalBalancePreviewHtml] = useState<string>("")
   const [finalBalanceNoCharge, setFinalBalanceNoCharge] = useState(false)
+  const [depositDialogOpen, setDepositDialogOpen] = useState(false)
 
   /** --- Nouvel état : statut DocuSign par signataire --- */
   const [sigLoading, setSigLoading] = useState(false)
@@ -948,32 +950,8 @@ export default function LeaseDetailPage() {
                       >
                         Accusé de réception
                       </Button>
-                      <Button
-                        variant="outline"
-                        onClick={async () => {
-                          try {
-                            const { supabase } = await import("@/lib/supabase")
-                            const { data } = await supabase.auth.getSession()
-                            const token = data.session?.access_token || ""
-                            const res = await fetch(`/api/leases/${leaseId}/deposit-letter`, {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                              body: JSON.stringify({ depositAmount: 0, retainedAmount: 0, retainedReasons: [], calculationDetails: '' })
-                            })
-                            if (!res.ok) throw new Error('Erreur lettre dépôt')
-                            const blob = await res.blob()
-                            const url = window.URL.createObjectURL(blob)
-                            const a = document.createElement('a')
-                            a.href = url
-                            a.download = `depot-${leaseId}.pdf`
-                            document.body.appendChild(a)
-                            a.click()
-                            document.body.removeChild(a)
-                            window.URL.revokeObjectURL(url)
-                          } catch {}
-                        }}
-                      >
-                        Lettre de dépôt
+                      <Button variant="outline" onClick={() => setDepositDialogOpen(true)}>
+                        Restitution du dépôt de garantie
                       </Button>
                       <Button
                         variant="outline"
@@ -1094,6 +1072,26 @@ export default function LeaseDetailPage() {
                   setFinalBalanceOpen(false)
                 } catch (e: any) { toast.error(e.message || 'Erreur') }
               }}>Envoyer au locataire</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        {/* Dialog restitution dépôt */}
+        <Dialog open={depositDialogOpen} onOpenChange={setDepositDialogOpen}>
+          <DialogContent className="max-w-4xl">
+            <DialogHeader>
+              <DialogTitle>Restitution du dépôt de garantie</DialogTitle>
+              <DialogDescription>Gérez les retenues, générez la lettre et envoyez-la au locataire.</DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[75vh] overflow-y-auto">
+              <DepositRetentionManager
+                leaseId={lease.id}
+                depositAmount={0}
+                moveOutDate={lastNotice?.move_out_date}
+                moveOutHasDifferences={false}
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDepositDialogOpen(false)}>Fermer</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
