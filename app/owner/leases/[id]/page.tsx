@@ -1083,12 +1083,24 @@ export default function LeaseDetailPage() {
               <DialogDescription>Gérez les retenues, générez la lettre et envoyez-la au locataire.</DialogDescription>
             </DialogHeader>
             <div className="max-h-[75vh] overflow-y-auto">
+              {(() => {
+                const depositAmount = Number(
+                  (lease as any)?.deposit_amount ??
+                  (lease as any)?.deposit ??
+                  (lease as any)?.security_deposit ??
+                  (lease as any)?.depot_garantie ??
+                  (lease as any)?.montant_depot_garantie ??
+                  0
+                ) || 0
+                return (
               <DepositRetentionManager
                 leaseId={lease.id}
-                depositAmount={0}
+                depositAmount={depositAmount}
                 moveOutDate={lastNotice?.move_out_date}
                 moveOutHasDifferences={false}
               />
+                )
+              })()}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDepositDialogOpen(false)}>Fermer</Button>
