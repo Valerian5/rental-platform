@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -181,7 +181,7 @@ export function DepositRetentionManager({ leaseId, depositAmount, moveOutDate, m
 
           <Alert>
             <Info className="h-4 w-4" />
-            <AlertTitle>Rappels légaux</AlertTitle>
+            <div className="font-medium mb-1">Rappels légaux</div>
             <AlertDescription>
               Le bailleur peut retenir une partie du dépôt uniquement pour couvrir des loyers ou charges impayés, des dégradations constatées à l'état des lieux de sortie, ou un solde de régularisation de charges. Toute retenue doit être justifiée par un devis, une facture ou un décompte. <a className="underline" href="https://www.legifrance.gouv.fr/loda/article_lc/LEGIARTI000006470289" target="_blank" rel="noreferrer">Voir l’article 22 de la loi du 6 juillet 1989</a>.
             </AlertDescription>
