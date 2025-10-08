@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Checkbox } from "@/components/ui/checkbox"
 import { Euro, FileText, Info, PlusCircle, Trash, Download, Mail, Save } from "lucide-react"
 import { toast } from "sonner"
+import { ChargeProvisionManager } from "./ChargeProvisionManager"
 
 type RetentionCategory = "degradations" | "unpaid_rent" | "charges" | "provisional_charges" | "other"
 
@@ -74,8 +75,7 @@ export function DepositRetentionManager({ leaseId, depositAmount, moveOutDate, m
   }, [lines.length, hasProvisionalCharges, totalRetained])
 
   // Charger les données existantes
-  useEffect(() => {
-    const loadExistingData = async () => {
+  const loadExistingData = async () => {
       try {
         const { supabase } = await import("@/lib/supabase")
         const { data } = await supabase.auth.getSession()
@@ -119,6 +119,7 @@ export function DepositRetentionManager({ leaseId, depositAmount, moveOutDate, m
       }
     }
     
+  useEffect(() => {
     loadExistingData()
   }, [leaseId])
 
@@ -431,6 +432,20 @@ export function DepositRetentionManager({ leaseId, depositAmount, moveOutDate, m
               )}
             </CardContent>
           </Card>
+
+          {/* Gestion des provisions de charges */}
+          <ChargeProvisionManager 
+            leaseId={leaseId}
+            depositAmount={depositAmount}
+            onProvisionCreated={() => {
+              // Recharger les données pour mettre à jour les totaux
+              loadExistingData()
+            }}
+            onProvisionFinalized={() => {
+              // Recharger les données pour mettre à jour les totaux
+              loadExistingData()
+            }}
+          />
 
           {/* Bank details and summary */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
