@@ -93,3 +93,4 @@ scripts/test-notification-insertion.sql
 scripts/test-tenant-access-simple.sql
 scripts/test-workflow-complete-final.sql
 scripts/test-complete-workflow-debug.sql
+scripts/create-deposit-retentions-table.sql

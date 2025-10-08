@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,10 +10,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Euro, FileText, Info, PlusCircle, Trash, Download, Mail } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Euro, FileText, Info, PlusCircle, Trash, Download, Mail, Save } from "lucide-react"
 import { toast } from "sonner"
 
-type RetentionCategory = "degradations" | "unpaid_rent" | "charges" | "other"
+type RetentionCategory = "degradations" | "unpaid_rent" | "charges" | "provisional_charges" | "other"
 
 interface RetentionLine {
   id: string
@@ -22,6 +23,13 @@ interface RetentionLine {
   amount: number
   attachmentUrl?: string
   attachmentName?: string
+}
+
+interface ProvisionalCharges {
+  amount: number
+  justificationNotes: string
+  expectedFinalizationDate: string
+  supportingDocuments: string[]
 }
 
 interface Props {
@@ -38,17 +46,81 @@ export function DepositRetentionManager({ leaseId, depositAmount, moveOutDate, m
   const [bic, setBic] = useState("")
   const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [provisionalCharges, setProvisionalCharges] = useState<ProvisionalCharges>({
+    amount: 0,
+    justificationNotes: "",
+    expectedFinalizationDate: "",
+    supportingDocuments: []
+  })
+  const [hasProvisionalCharges, setHasProvisionalCharges] = useState(false)
 
   const deadlineDays = useMemo(() => (moveOutHasDifferences ? 60 : 30), [moveOutHasDifferences])
 
-  const totalRetained = useMemo(() => lines.reduce((s, l) => s + (Number.isFinite(l.amount) ? l.amount : 0), 0), [lines])
+  const totalRetained = useMemo(() => {
+    const linesTotal = lines.reduce((s, l) => s + (Number.isFinite(l.amount) ? l.amount : 0), 0)
+    const provisionalTotal = hasProvisionalCharges ? provisionalCharges.amount : 0
+    return linesTotal + provisionalTotal
+  }, [lines, hasProvisionalCharges, provisionalCharges.amount])
+  
   const toRefund = useMemo(() => Math.max(0, (depositAmount || 0) - (totalRetained || 0)), [depositAmount, totalRetained])
+  
+  const maxProvisionalAmount = useMemo(() => (depositAmount || 0) * 0.2, [depositAmount])
 
   const statusLabel = useMemo(() => {
-    if (lines.length === 0) return { text: "En cours de calcul", tone: "secondary" as const }
+    if (lines.length === 0 && !hasProvisionalCharges) return { text: "En cours de calcul", tone: "secondary" as const }
     if (totalRetained > 0) return { text: "Retenue en attente", tone: "warning" as const }
     return { text: "Restitué", tone: "success" as const }
-  }, [lines.length, totalRetained])
+  }, [lines.length, hasProvisionalCharges, totalRetained])
+
+  // Charger les données existantes
+  useEffect(() => {
+    const loadExistingData = async () => {
+      try {
+        const { supabase } = await import("@/lib/supabase")
+        const { data } = await supabase.auth.getSession()
+        const token = data.session?.access_token
+        
+        const res = await fetch(`/api/leases/${leaseId}/deposit-retentions`, {
+          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+        })
+        
+        if (res.ok) {
+          const { retention } = await res.json()
+          if (retention) {
+            setIban(retention.bank_iban || "")
+            setBic(retention.bank_bic || "")
+            
+            if (retention.lines) {
+              setLines(retention.lines.map((line: any) => ({
+                id: line.id,
+                category: line.category,
+                description: line.description,
+                amount: line.amount,
+                attachmentUrl: line.attachment_url,
+                attachmentName: line.attachment_name
+              })))
+            }
+            
+            if (retention.provisions && retention.provisions.length > 0) {
+              const provision = retention.provisions[0]
+              setHasProvisionalCharges(true)
+              setProvisionalCharges({
+                amount: provision.provision_amount,
+                justificationNotes: provision.justification_notes || "",
+                expectedFinalizationDate: provision.expected_finalization_date || "",
+                supportingDocuments: provision.supporting_documents || []
+              })
+            }
+          }
+        }
+      } catch (error) {
+        console.warn("Erreur chargement données existantes:", error)
+      }
+    }
+    
+    loadExistingData()
+  }, [leaseId])
 
   const addLine = () => {
     setLines((prev) => [
@@ -86,11 +158,57 @@ export function DepositRetentionManager({ leaseId, depositAmount, moveOutDate, m
     }
   }
 
+  const saveData = async () => {
+    setSaving(true)
+    try {
+      const { supabase } = await import("@/lib/supabase")
+      const { data } = await supabase.auth.getSession()
+      const token = data.session?.access_token
+      
+      const body = {
+        depositAmount,
+        moveOutDate,
+        restitutionDeadlineDays: deadlineDays,
+        bankIban: iban,
+        bankBic: bic,
+        lines,
+        provisionalCharges: hasProvisionalCharges ? provisionalCharges : null
+      }
+      
+      const res = await fetch(`/api/leases/${leaseId}/deposit-retentions`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(body)
+      })
+      
+      if (res.ok) {
+        toast.success("Données sauvegardées")
+      } else {
+        const error = await res.json()
+        toast.error(error.error || "Erreur sauvegarde")
+      }
+    } catch (error) {
+      toast.error("Erreur sauvegarde")
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const calculationDetails = useMemo(() => {
-    if (lines.length === 0) return "Aucune retenue. Restitution intégrale."
-    const items = lines.map((l) => `- ${labelFor(l.category)}: ${l.description || "(sans détail)"} – ${(l.amount || 0).toFixed(2)} €`).join("\n")
+    if (lines.length === 0 && !hasProvisionalCharges) return "Aucune retenue. Restitution intégrale."
+    
+    let items = lines.map((l) => `- ${labelFor(l.category)}: ${l.description || "(sans détail)"} – ${(l.amount || 0).toFixed(2)} €`).join("\n")
+    
+    if (hasProvisionalCharges) {
+      if (items) items += "\n"
+      items += `- Provision charges: ${provisionalCharges.justificationNotes || "En attente de régularisation"} – ${provisionalCharges.amount.toFixed(2)} €`
+    }
+    
     return `${items}\nTotal retenu: ${totalRetained.toFixed(2)} €\nSolde à restituer: ${toRefund.toFixed(2)} €`
-  }, [lines, totalRetained, toRefund])
+  }, [lines, hasProvisionalCharges, provisionalCharges, totalRetained, toRefund])
 
   const generatePdf = async () => {
     try {
@@ -212,6 +330,7 @@ export function DepositRetentionManager({ leaseId, depositAmount, moveOutDate, m
                       <SelectItem value="degradations">Dégradations</SelectItem>
                       <SelectItem value="unpaid_rent">Loyers impayés</SelectItem>
                       <SelectItem value="charges">Charges</SelectItem>
+                      <SelectItem value="provisional_charges">Provision charges</SelectItem>
                       <SelectItem value="other">Autre</SelectItem>
                     </SelectContent>
                   </Select>
@@ -238,6 +357,80 @@ export function DepositRetentionManager({ leaseId, depositAmount, moveOutDate, m
               <Button variant="outline" onClick={addLine}><PlusCircle className="h-4 w-4 mr-2" />Ajouter une retenue</Button>
             </div>
           </div>
+
+          {/* Section provision de charges */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Info className="h-4 w-4" />
+                Provision de charges (optionnel)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Alert>
+                <Info className="h-4 w-4" />
+                <div className="font-medium mb-1">Provision légale</div>
+                <AlertDescription>
+                  Le propriétaire peut conserver une provision pour charges jusqu'à l'arrêté annuel des comptes de l'immeuble. 
+                  Le montant ne doit pas dépasser <strong>20% du dépôt de garantie</strong> (soit {maxProvisionalAmount.toFixed(2)}€ maximum).
+                </AlertDescription>
+              </Alert>
+              
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="hasProvisionalCharges" 
+                  checked={hasProvisionalCharges}
+                  onCheckedChange={setHasProvisionalCharges}
+                />
+                <Label htmlFor="hasProvisionalCharges">Retenir une provision pour charges</Label>
+              </div>
+
+              {hasProvisionalCharges && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Montant de la provision (€)</Label>
+                    <Input 
+                      type="number" 
+                      step="0.01"
+                      value={provisionalCharges.amount || ""}
+                      onChange={(e) => setProvisionalCharges(prev => ({ 
+                        ...prev, 
+                        amount: parseFloat(e.target.value) || 0 
+                      }))}
+                      max={maxProvisionalAmount}
+                    />
+                    <div className="text-xs text-gray-600 mt-1">
+                      Maximum: {maxProvisionalAmount.toFixed(2)}€ (20% du dépôt)
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <Label>Date prévue d'approbation des comptes</Label>
+                    <Input 
+                      type="date"
+                      value={provisionalCharges.expectedFinalizationDate}
+                      onChange={(e) => setProvisionalCharges(prev => ({ 
+                        ...prev, 
+                        expectedFinalizationDate: e.target.value 
+                      }))}
+                    />
+                  </div>
+                  
+                  <div className="md:col-span-2">
+                    <Label>Justification de la provision</Label>
+                    <Input 
+                      placeholder="Ex: En attente de l'arrêté des comptes 2024, régularisation prévue en juin 2025"
+                      value={provisionalCharges.justificationNotes}
+                      onChange={(e) => setProvisionalCharges(prev => ({ 
+                        ...prev, 
+                        justificationNotes: e.target.value 
+                      }))}
+                    />
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Bank details and summary */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
@@ -270,6 +463,10 @@ export function DepositRetentionManager({ leaseId, depositAmount, moveOutDate, m
           </div>
 
           <div className="flex flex-wrap gap-2 justify-end">
+            <Button variant="outline" onClick={saveData} disabled={saving}>
+              <Save className="h-4 w-4 mr-2" />
+              {saving ? "Sauvegarde..." : "Sauvegarder"}
+            </Button>
             <Button variant="outline" onClick={generatePdf} disabled={loading}><FileText className="h-4 w-4 mr-2" />Générer la lettre de restitution</Button>
             <Button onClick={sendEmail} disabled={sending}><Mail className="h-4 w-4 mr-2" />Envoyer au locataire</Button>
           </div>
@@ -293,6 +490,7 @@ function labelFor(c: RetentionCategory): string {
     case "degradations": return "Dégradations"
     case "unpaid_rent": return "Loyers impayés"
     case "charges": return "Charges"
+    case "provisional_charges": return "Provision charges"
     default: return "Autre"
   }
 }
