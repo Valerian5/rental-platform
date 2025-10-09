@@ -219,8 +219,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     if (updatePropError) console.warn("[NOTICE][POST] property update error", updatePropError)
 
     // Mettre à jour la date de fin effective du bail pour les calculs (provisions, etc.)
+    // Utiliser le client service pour contourner les contraintes RLS côté locataire
     try {
-      const { error: leaseUpdateErr } = await supabase
+      const { createServiceSupabaseClient } = await import("@/lib/supabase-server-client")
+      const admin = createServiceSupabaseClient()
+      const { error: leaseUpdateErr } = await admin
         .from("leases")
         .update({ end_date: moveOutDate.toISOString().slice(0, 10) })
         .eq("id", lease.id)
