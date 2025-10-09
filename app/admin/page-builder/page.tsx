@@ -396,18 +396,32 @@ function PageBuilder() {
                 <X className="h-4 w-4" />
               </Button>
             </div>
-            <div className="p-4">
-              <BlockContentEditor
-                block={editingBlock}
-                onChange={(updatedBlock) => {
-                  setPage((p) => ({
-                    ...p,
-                    blocks: p.blocks.map((b) => (b.id === updatedBlock.id ? updatedBlock : b)),
-                  }))
-                  setEditingBlock(updatedBlock)
-                }}
-              />
-            </div>
+                        <div className="p-4">
+                          <BlockContentEditor
+                            block={editingBlock}
+                            onChange={(updatedBlock) => {
+                              setPage((p) => ({
+                                ...p,
+                                blocks: p.blocks.map((b) => {
+                                  if (b.id === updatedBlock.id) {
+                                    return updatedBlock
+                                  }
+                                  // Si c'est une section, chercher dans les colonnes
+                                  if (b.type === "section") {
+                                    const updatedColumns = (b as any).columns.map((col: BlockType[]) =>
+                                      col.map((subBlock: BlockType) =>
+                                        subBlock.id === updatedBlock.id ? updatedBlock : subBlock
+                                      )
+                                    )
+                                    return { ...b, columns: updatedColumns }
+                                  }
+                                  return b
+                                }),
+                              }))
+                              setEditingBlock(updatedBlock)
+                            }}
+                          />
+                        </div>
             <div className="p-4 border-t flex justify-end gap-2">
               <Button variant="outline" onClick={() => setEditingBlock(null)}>
                 Annuler
@@ -794,17 +808,92 @@ function BlockContentEditor({ block, onChange }: { block: BlockType; onChange: (
                       size="sm"
                       variant="outline"
                       onClick={() => {
-                        const newColumns = [...block.columns]
-                        newColumns[idx] = [...newColumns[idx], {
+                        // Ajouter une section vide
+                        const newSection: BlockType = {
                           id: crypto.randomUUID(),
-                          type: "paragraph",
-                          html: "<p>Nouveau contenu</p>"
-                        } as BlockType]
+                          type: "section",
+                          columns: [[]],
+                          style: {},
+                          layout: {
+                            columns: 1,
+                            gap: "1rem",
+                            padding: "1rem",
+                            margin: "0",
+                            maxWidth: "100%",
+                            alignment: "left",
+                            responsive: {
+                              mobile: { columns: 1, gap: "0.5rem" },
+                              tablet: { columns: 1, gap: "1rem" },
+                              desktop: { columns: 1, gap: "1rem" }
+                            }
+                          }
+                        }
+                        const newColumns = [...block.columns]
+                        newColumns[idx] = [...newColumns[idx], newSection]
                         onChange({ ...block, columns: newColumns })
                       }}
                     >
-                      <Plus className="h-3 w-3" />
+                      <Columns className="h-3 w-3" />
                     </Button>
+                    <Select onValueChange={(blockType) => {
+                      let newBlock: BlockType
+                      switch (blockType) {
+                        case "heading":
+                          newBlock = {
+                            id: crypto.randomUUID(),
+                            type: "heading",
+                            level: 2,
+                            text: "Nouveau titre"
+                          }
+                          break
+                        case "paragraph":
+                          newBlock = {
+                            id: crypto.randomUUID(),
+                            type: "paragraph",
+                            html: "<p>Nouveau paragraphe</p>"
+                          }
+                          break
+                        case "image":
+                          newBlock = {
+                            id: crypto.randomUUID(),
+                            type: "image",
+                            url: "",
+                            alt: ""
+                          }
+                          break
+                        case "video":
+                          newBlock = {
+                            id: crypto.randomUUID(),
+                            type: "video",
+                            url: ""
+                          }
+                          break
+                        case "button":
+                          newBlock = {
+                            id: crypto.randomUUID(),
+                            type: "button",
+                            label: "Nouveau bouton",
+                            href: "#"
+                          }
+                          break
+                        default:
+                          return
+                      }
+                      const newColumns = [...block.columns]
+                      newColumns[idx] = [...newColumns[idx], newBlock]
+                      onChange({ ...block, columns: newColumns })
+                    }}>
+                      <SelectTrigger className="w-32 h-8">
+                        <SelectValue placeholder="Ajouter" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="heading">Titre</SelectItem>
+                        <SelectItem value="paragraph">Paragraphe</SelectItem>
+                        <SelectItem value="image">Image</SelectItem>
+                        <SelectItem value="video">Vidéo</SelectItem>
+                        <SelectItem value="button">Bouton</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <Button
                       size="sm"
                       variant="outline"
@@ -824,12 +913,42 @@ function BlockContentEditor({ block, onChange }: { block: BlockType; onChange: (
                 {col.length > 0 && (
                   <div className="mt-2 space-y-1">
                     {col.map((subBlock, subIdx) => (
-                      <div key={subBlock.id} className="text-xs p-2 bg-background rounded border">
-                        {subBlock.type === "heading" ? `Titre: ${(subBlock as any).text}` :
-                         subBlock.type === "paragraph" ? "Paragraphe" :
-                         subBlock.type === "image" ? "Image" :
-                         subBlock.type === "button" ? `Bouton: ${(subBlock as any).label}` :
-                         subBlock.type}
+                      <div 
+                        key={subBlock.id} 
+                        className="text-xs p-2 bg-background rounded border cursor-pointer hover:bg-muted transition-colors flex items-center justify-between group"
+                        onClick={() => {
+                          // Éditer le bloc dans la colonne
+                          setEditingBlock(subBlock)
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          {subBlock.type === "heading" && <Type className="h-3 w-3" />}
+                          {subBlock.type === "paragraph" && <Square className="h-3 w-3" />}
+                          {subBlock.type === "image" && <Image className="h-3 w-3" />}
+                          {subBlock.type === "video" && <Video className="h-3 w-3" />}
+                          {subBlock.type === "button" && <Square className="h-3 w-3" />}
+                          <span>
+                            {subBlock.type === "heading" ? `Titre: ${(subBlock as any).text}` :
+                             subBlock.type === "paragraph" ? "Paragraphe" :
+                             subBlock.type === "image" ? "Image" :
+                             subBlock.type === "video" ? "Vidéo" :
+                             subBlock.type === "button" ? `Bouton: ${(subBlock as any).label}` :
+                             subBlock.type}
+                          </span>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const newColumns = [...block.columns]
+                            newColumns[idx] = newColumns[idx].filter((_, i) => i !== subIdx)
+                            onChange({ ...block, columns: newColumns })
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
                       </div>
                     ))}
                   </div>
