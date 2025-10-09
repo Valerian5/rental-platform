@@ -40,7 +40,8 @@ import {
   Quote,
   X,
   FileText,
-  Layout
+  Layout,
+  ImageIcon
 } from "lucide-react"
 import { toast } from "sonner"
 import { RichTextEditor } from "@/components/rich-text-editor"
@@ -138,7 +139,7 @@ function PageBuilder() {
       const method = page.id ? "PUT" : "POST"
       const res = await fetch("/api/admin/cms-pages", {
         method,
-        headers: { "content-type": "application/json", authorization: await authService.getAuthHeader() },
+        headers: { "content-type": "application/json", authorization: `Bearer ${await authService.getAuthToken()}` },
         body: JSON.stringify(payload),
       })
       const json = await res.json()
@@ -757,6 +758,90 @@ function BlockContentEditor({ block, onChange }: { block: BlockType; onChange: (
     )
   }
 
+  if (block.type === "section") {
+    return (
+      <div className="space-y-4">
+        <div>
+          <label className="text-sm font-medium">Nombre de colonnes</label>
+          <div className="flex gap-2 mt-1">
+            {[1, 2, 3, 4].map((num) => (
+              <Button
+                key={num}
+                variant={block.columns.length === num ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  const newColumns = Array(num).fill(null).map((_, idx) => 
+                    idx < block.columns.length ? block.columns[idx] : []
+                  )
+                  onChange({ ...block, columns: newColumns })
+                }}
+              >
+                {num}
+              </Button>
+            ))}
+          </div>
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium">Colonnes ({block.columns.length})</label>
+          <div className="space-y-2 mt-1">
+            {block.columns.map((col, idx) => (
+              <div key={idx} className="p-3 border rounded bg-muted/50">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs text-muted-foreground">Colonne {idx + 1}</div>
+                  <div className="flex gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const newColumns = [...block.columns]
+                        newColumns[idx] = [...newColumns[idx], {
+                          id: crypto.randomUUID(),
+                          type: "paragraph",
+                          html: "<p>Nouveau contenu</p>"
+                        } as BlockType]
+                        onChange({ ...block, columns: newColumns })
+                      }}
+                    >
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const newColumns = [...block.columns]
+                        newColumns.splice(idx, 1)
+                        onChange({ ...block, columns: newColumns })
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="text-sm">
+                  {col.length === 0 ? "Vide" : `${col.length} bloc${col.length > 1 ? 's' : ''}`}
+                </div>
+                {col.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {col.map((subBlock, subIdx) => (
+                      <div key={subBlock.id} className="text-xs p-2 bg-background rounded border">
+                        {subBlock.type === "heading" ? `Titre: ${(subBlock as any).text}` :
+                         subBlock.type === "paragraph" ? "Paragraphe" :
+                         subBlock.type === "image" ? "Image" :
+                         subBlock.type === "button" ? `Bouton: ${(subBlock as any).label}` :
+                         subBlock.type}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return <div>Type de bloc non supporté pour l'édition</div>
 }
 
@@ -995,7 +1080,22 @@ function StyleInspector({ block, onChange }: { block?: any; onChange: (style: an
         <div className="space-y-3">
           <h4 className="text-sm font-medium">Typographie</h4>
           <div className="grid grid-cols-2 gap-2">
-            <Input placeholder="Police" value={style.fontFamily || ""} onChange={(e) => onChange({ fontFamily: e.target.value })} />
+            <Select value={style.fontFamily || ""} onValueChange={(v) => onChange({ fontFamily: v })}>
+              <SelectTrigger><SelectValue placeholder="Police" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Police par défaut</SelectItem>
+                <SelectItem value="Inter, sans-serif">Inter</SelectItem>
+                <SelectItem value="Arial, sans-serif">Arial</SelectItem>
+                <SelectItem value="Helvetica, sans-serif">Helvetica</SelectItem>
+                <SelectItem value="Georgia, serif">Georgia</SelectItem>
+                <SelectItem value="Times New Roman, serif">Times New Roman</SelectItem>
+                <SelectItem value="Courier New, monospace">Courier New</SelectItem>
+                <SelectItem value="Verdana, sans-serif">Verdana</SelectItem>
+                <SelectItem value="Trebuchet MS, sans-serif">Trebuchet MS</SelectItem>
+                <SelectItem value="Impact, sans-serif">Impact</SelectItem>
+                <SelectItem value="Comic Sans MS, cursive">Comic Sans MS</SelectItem>
+              </SelectContent>
+            </Select>
             <Input placeholder="Taille" value={style.fontSize || ""} onChange={(e) => onChange({ fontSize: e.target.value })} />
           </div>
           <div className="grid grid-cols-2 gap-2">
