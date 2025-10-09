@@ -384,19 +384,19 @@ function PageBuilder() {
         </div>
       </div>
 
-      {/* Block Content Editor Modal */}
-      {editingBlock && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg shadow-lg w-full max-w-2xl max-h-[80vh] overflow-hidden">
-            <div className="p-4 border-b flex items-center justify-between">
-              <h3 className="text-lg font-semibold">
-                Éditer {editingBlock.type === "heading" ? "le titre" : editingBlock.type === "paragraph" ? "le paragraphe" : "le contenu"}
-              </h3>
-              <Button variant="ghost" size="sm" onClick={() => setEditingBlock(null)}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-                        <div className="p-4">
+                  {/* Block Content Editor Modal */}
+                  {editingBlock && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                      <div className="bg-background rounded-lg shadow-lg w-full max-w-2xl max-h-[80vh] flex flex-col">
+                        <div className="p-4 border-b flex items-center justify-between flex-shrink-0">
+                          <h3 className="text-lg font-semibold">
+                            Éditer {editingBlock.type === "heading" ? "le titre" : editingBlock.type === "paragraph" ? "le paragraphe" : "le contenu"}
+                          </h3>
+                          <Button variant="ghost" size="sm" onClick={() => setEditingBlock(null)}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="p-4 flex-1 overflow-y-auto">
                           <BlockContentEditor
                             block={editingBlock}
                             onChange={(updatedBlock) => {
@@ -420,19 +420,23 @@ function PageBuilder() {
                               }))
                               setEditingBlock(updatedBlock)
                             }}
+                            onOpenMediaLibrary={(type) => {
+                              setMediaLibraryType(type)
+                              setMediaLibraryOpen(true)
+                            }}
                           />
                         </div>
-            <div className="p-4 border-t flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setEditingBlock(null)}>
-                Annuler
-              </Button>
-              <Button onClick={() => setEditingBlock(null)}>
-                Sauvegarder
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+                        <div className="p-4 border-t flex justify-end gap-2 flex-shrink-0">
+                          <Button variant="outline" onClick={() => setEditingBlock(null)}>
+                            Annuler
+                          </Button>
+                          <Button onClick={() => setEditingBlock(null)}>
+                            Sauvegarder
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
       {/* Media Library */}
       <MediaLibrary
@@ -609,7 +613,7 @@ function PreviewRenderer({ blocks }: { blocks: BlockType[] }) {
   )
 }
 
-function BlockContentEditor({ block, onChange }: { block: BlockType; onChange: (b: BlockType) => void }) {
+function BlockContentEditor({ block, onChange, onOpenMediaLibrary }: { block: BlockType; onChange: (b: BlockType) => void; onOpenMediaLibrary?: (type: "image" | "video" | "all") => void }) {
   if (block.type === "heading") {
     return (
       <div className="space-y-4">
@@ -669,10 +673,7 @@ function BlockContentEditor({ block, onChange }: { block: BlockType; onChange: (
             />
             <Button 
               variant="outline" 
-              onClick={() => {
-                setMediaLibraryType("image")
-                setMediaLibraryOpen(true)
-              }}
+              onClick={() => onOpenMediaLibrary?.("image")}
             >
               <ImageIcon className="h-4 w-4 mr-2" />
               Bibliothèque
@@ -714,10 +715,7 @@ function BlockContentEditor({ block, onChange }: { block: BlockType; onChange: (
             />
             <Button 
               variant="outline" 
-              onClick={() => {
-                setMediaLibraryType("video")
-                setMediaLibraryOpen(true)
-              }}
+              onClick={() => onOpenMediaLibrary?.("video")}
             >
               <Video className="h-4 w-4 mr-2" />
               Bibliothèque
