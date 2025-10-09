@@ -208,6 +208,19 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .eq("id", lease.property_id)
     if (updatePropError) console.warn("[NOTICE][POST] property update error", updatePropError)
 
+    // Mettre à jour la date de fin effective du bail pour les calculs (provisions, etc.)
+    try {
+      const { error: leaseUpdateErr } = await supabase
+        .from("leases")
+        .update({ end_date: moveOutDate.toISOString().slice(0, 10) })
+        .eq("id", lease.id)
+      if (leaseUpdateErr) {
+        console.warn("[NOTICE][POST] lease end_date update error", leaseUpdateErr)
+      }
+    } catch (e) {
+      console.warn("[NOTICE][POST] lease end_date update exception", e)
+    }
+
     // Notification in-app
     try {
       const { notificationsService } = await import("@/lib/notifications-service")
