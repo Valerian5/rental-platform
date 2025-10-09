@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import React, { useEffect, useMemo, useState, useCallback } from "react"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { authService } from "@/lib/auth-service"
@@ -9,6 +9,36 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { 
+  Type, 
+  Image, 
+  Video, 
+  Square, 
+  Columns, 
+  Palette, 
+  Settings, 
+  Eye, 
+  Save, 
+  Upload,
+  Copy,
+  Trash2,
+  Move,
+  Plus,
+  GripVertical,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Bold,
+  Italic,
+  Underline,
+  Link,
+  List,
+  Quote
+} from "lucide-react"
 import { toast } from "sonner"
 
 type BlockType =
@@ -35,6 +65,9 @@ function PageBuilder() {
   const [saving, setSaving] = useState(false)
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
   const [page, setPage] = useState<CmsPageDraft>({ slug: "", title: "", description: "", blocks: [], seo: {}, status: "draft" })
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const [isPreview, setIsPreview] = useState(false)
+  const [editingBlock, setEditingBlock] = useState<BlockType | null>(null)
 
   useEffect(() => {
     ;(async () => {
@@ -47,24 +80,23 @@ function PageBuilder() {
 
   const seoScore = useMemo(() => computeSeoScore(page), [page])
 
-  const addBlock = (type: BlockType["type"]) => {
+  const addBlock = useCallback((type: BlockType["type"]) => {
     const id = crypto.randomUUID()
     const newBlock: BlockType =
       type === "heading"
-        ? { id, type, level: 1, text: "Titre" }
+        ? { id, type, level: 1, text: "Nouveau titre" }
         : type === "paragraph"
-          ? { id, type, html: "Paragraphe" }
+          ? { id, type, html: "<p>Nouveau paragraphe</p>" }
           : type === "image"
             ? { id, type, url: "", alt: "" }
             : type === "video"
               ? { id, type, url: "" }
               : type === "button"
-                ? { id, type, label: "Bouton", href: "#" }
+                ? { id, type, label: "Nouveau bouton", href: "#" }
                 : { id, type: "section", columns: [[]] }
     setPage((p) => ({ ...p, blocks: [...p.blocks, newBlock] }))
-  }
-
-  const [dragIndex, setDragIndex] = useState<number | null>(null)
+    setSelectedBlockId(id)
+  }, [])
 
   const onDragStart = (index: number) => setDragIndex(index)
   const onDragOver = (e: React.DragEvent) => e.preventDefault()
@@ -78,6 +110,17 @@ function PageBuilder() {
     })
     setDragIndex(null)
   }
+
+  const duplicateBlock = useCallback((block: BlockType) => {
+    const newBlock = { ...block, id: crypto.randomUUID() }
+    setPage((p) => {
+      const index = p.blocks.findIndex(b => b.id === block.id)
+      const newBlocks = [...p.blocks]
+      newBlocks.splice(index + 1, 0, newBlock)
+      return { ...p, blocks: newBlocks }
+    })
+    setSelectedBlockId(newBlock.id)
+  }, [])
 
   const save = async (publish = false) => {
     try {
@@ -103,78 +146,194 @@ function PageBuilder() {
   if (loading) return <div className="p-6">Chargement…</div>
 
   return (
-    <div className="p-6 grid grid-cols-4 gap-6">
-      <div className="col-span-3 space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Éditeur de page</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-3 gap-2">
-              <Button variant="secondary" onClick={() => addBlock("heading")}>Titre</Button>
-              <Button variant="secondary" onClick={() => addBlock("paragraph")}>Texte</Button>
-              <Button variant="secondary" onClick={() => addBlock("image")}>Image</Button>
-              <Button variant="secondary" onClick={() => addBlock("video")}>Vidéo</Button>
-              <Button variant="secondary" onClick={() => addBlock("button")}>Bouton</Button>
-              <Button variant="secondary" onClick={() => addBlock("section")}>Section</Button>
-            </div>
+    <div className="h-screen flex flex-col bg-background">
+      {/* Top Toolbar */}
+      <div className="h-16 border-b bg-card flex items-center justify-between px-4">
+        <div className="flex items-center gap-4">
+          <h1 className="text-lg font-semibold">Page Builder</h1>
+          <Badge variant={page.status === "published" ? "default" : "secondary"}>
+            {page.status === "published" ? "Publié" : "Brouillon"}
+          </Badge>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setIsPreview(!isPreview)}>
+            <Eye className="h-4 w-4 mr-2" />
+            {isPreview ? "Éditer" : "Aperçu"}
+          </Button>
+          <Button onClick={() => save(false)} disabled={saving}>
+            <Save className="h-4 w-4 mr-2" />
+            Sauvegarder
+          </Button>
+          <Button onClick={() => save(true)} disabled={saving} variant="default">
+            Publier
+          </Button>
+        </div>
+      </div>
 
-            <div className="space-y-3">
-              {page.blocks.map((b, i) => (
-                <div key={b.id} draggable onDragStart={() => onDragStart(i)} onDragOver={onDragOver} onDrop={() => onDrop(i)} className="border rounded">
-                  <div className="flex items-center justify-between px-3 py-1 text-xs text-muted-foreground bg-muted cursor-move">
-                    <span>Bloc {i + 1} · {b.type}</span>
-                    <span>⋮⋮</span>
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Sidebar - Blocks Library */}
+        <div className="w-80 border-r bg-card flex flex-col">
+          <div className="p-4 border-b">
+            <h2 className="font-medium mb-3">Blocs</h2>
+            <div className="grid grid-cols-2 gap-2">
+              <BlockButton icon={Type} label="Titre" onClick={() => addBlock("heading")} />
+              <BlockButton icon={Square} label="Texte" onClick={() => addBlock("paragraph")} />
+              <BlockButton icon={Image} label="Image" onClick={() => addBlock("image")} />
+              <BlockButton icon={Video} label="Vidéo" onClick={() => addBlock("video")} />
+              <BlockButton icon={Square} label="Bouton" onClick={() => addBlock("button")} />
+              <BlockButton icon={Columns} label="Section" onClick={() => addBlock("section")} />
+            </div>
+          </div>
+          
+          <ScrollArea className="flex-1 p-4">
+            <Tabs defaultValue="blocks" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="blocks">Blocs</TabsTrigger>
+                <TabsTrigger value="templates">Modèles</TabsTrigger>
+              </TabsList>
+              <TabsContent value="blocks" className="mt-4">
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium text-muted-foreground">Contenu</h3>
+                  <div className="space-y-1">
+                    <BlockTemplate name="Titre principal" description="H1 avec style" onClick={() => addBlock("heading")} />
+                    <BlockTemplate name="Paragraphe" description="Texte formaté" onClick={() => addBlock("paragraph")} />
+                    <BlockTemplate name="Image" description="Image avec légende" onClick={() => addBlock("image")} />
+                    <BlockTemplate name="Bouton CTA" description="Call-to-action" onClick={() => addBlock("button")} />
                   </div>
-                  <BlockEditor
-                    block={b}
-                    onChange={(nb) => setPage((p) => ({ ...p, blocks: p.blocks.map((x) => (x.id === nb.id ? nb : x)) }))}
-                    onDelete={() => setPage((p) => ({ ...p, blocks: p.blocks.filter((x) => x.id !== b.id) }))}
-                    onSelect={() => setSelectedBlockId(b.id)}
-                    isSelected={selectedBlockId === b.id}
-                  />
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-      <div className="col-span-1 space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Paramètres</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Input placeholder="Slug" value={page.slug} onChange={(e) => setPage({ ...page, slug: e.target.value })} />
-            <Input placeholder="Meta title" value={page.title} onChange={(e) => setPage({ ...page, title: e.target.value })} />
-            <Textarea placeholder="Meta description" value={page.description} onChange={(e) => setPage({ ...page, description: e.target.value })} />
-            <Select onValueChange={(v) => setPage({ ...page, status: v as any })} value={page.status}>
-              <SelectTrigger>
-                <SelectValue placeholder="Statut" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="draft">Brouillon</SelectItem>
-                <SelectItem value="published">Publié</SelectItem>
-              </SelectContent>
-            </Select>
-            <div className="text-sm">SEO: <span className={seoScore.color === "green" ? "text-green-600" : seoScore.color === "orange" ? "text-orange-600" : "text-red-600"}>{seoScore.score}/100</span></div>
-            <div className="flex gap-2">
-              <Button onClick={() => save(false)} disabled={saving}>Sauvegarder</Button>
-              <Button onClick={() => save(true)} disabled={saving} variant="default">Publier</Button>
-            </div>
-          </CardContent>
-        </Card>
+              </TabsContent>
+              <TabsContent value="templates" className="mt-4">
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium text-muted-foreground">Modèles de page</h3>
+                  <div className="space-y-1">
+                    <BlockTemplate name="Page d'accueil" description="Hero + sections" onClick={() => {}} />
+                    <BlockTemplate name="À propos" description="Texte + images" onClick={() => {}} />
+                    <BlockTemplate name="Contact" description="Formulaire + infos" onClick={() => {}} />
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </ScrollArea>
+        </div>
 
-        <StyleInspector
-          block={page.blocks.find((b) => b.id === selectedBlockId)}
-          onChange={(style) =>
-            setPage((p) => ({
-              ...p,
-              blocks: p.blocks.map((b) => (b.id === selectedBlockId ? ({ ...b, style: { ...(b as any).style, ...style } } as any) : b)),
-            }))
-          }
-        />
+        {/* Main Canvas */}
+        <div className="flex-1 flex flex-col">
+          <div className="p-4 border-b bg-muted/50">
+            <div className="flex items-center gap-4">
+              <Input 
+                placeholder="Titre de la page" 
+                value={page.title} 
+                onChange={(e) => setPage({ ...page, title: e.target.value })}
+                className="max-w-md"
+              />
+              <Input 
+                placeholder="Slug" 
+                value={page.slug} 
+                onChange={(e) => setPage({ ...page, slug: e.target.value })}
+                className="max-w-xs"
+              />
+            </div>
+          </div>
+          
+          <div className="flex-1 overflow-auto bg-gray-50">
+            <div className="min-h-full p-8">
+              <div className="max-w-4xl mx-auto">
+                {isPreview ? (
+                  <PreviewRenderer blocks={page.blocks} />
+                ) : (
+                  <Canvas
+                    blocks={page.blocks}
+                    selectedBlockId={selectedBlockId}
+                    onSelectBlock={setSelectedBlockId}
+                    onUpdateBlock={(block) => setPage((p) => ({ ...p, blocks: p.blocks.map((b) => (b.id === block.id ? block : b)) }))}
+                    onDeleteBlock={(id) => setPage((p) => ({ ...p, blocks: p.blocks.filter((b) => b.id !== id) }))}
+                    onDuplicateBlock={duplicateBlock}
+                    onEditBlock={setEditingBlock}
+                    onDragStart={onDragStart}
+                    onDragOver={onDragOver}
+                    onDrop={onDrop}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Sidebar - Inspector */}
+        <div className="w-80 border-l bg-card">
+          <ScrollArea className="h-full">
+            <div className="p-4 space-y-6">
+              <div>
+                <h2 className="font-medium mb-3">Paramètres de page</h2>
+                <div className="space-y-3">
+                  <Input placeholder="Meta title" value={page.title} onChange={(e) => setPage({ ...page, title: e.target.value })} />
+                  <Textarea placeholder="Meta description" value={page.description} onChange={(e) => setPage({ ...page, description: e.target.value })} />
+                  <Select onValueChange={(v) => setPage({ ...page, status: v as any })} value={page.status}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Statut" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="draft">Brouillon</SelectItem>
+                      <SelectItem value="published">Publié</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div className="text-sm">
+                    SEO: <span className={seoScore.color === "green" ? "text-green-600" : seoScore.color === "orange" ? "text-orange-600" : "text-red-600"}>{seoScore.score}/100</span>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              <StyleInspector
+                block={page.blocks.find((b) => b.id === selectedBlockId)}
+                onChange={(style) =>
+                  setPage((p) => ({
+                    ...p,
+                    blocks: p.blocks.map((b) => (b.id === selectedBlockId ? ({ ...b, style: { ...(b as any).style, ...style } } as any) : b)),
+                  }))
+                }
+              />
+            </div>
+          </ScrollArea>
+        </div>
       </div>
+
+      {/* Block Content Editor Modal */}
+      {editingBlock && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background rounded-lg shadow-lg w-full max-w-2xl max-h-[80vh] overflow-hidden">
+            <div className="p-4 border-b flex items-center justify-between">
+              <h3 className="text-lg font-semibold">
+                Éditer {editingBlock.type === "heading" ? "le titre" : editingBlock.type === "paragraph" ? "le paragraphe" : "le contenu"}
+              </h3>
+              <Button variant="ghost" size="sm" onClick={() => setEditingBlock(null)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="p-4">
+              <BlockContentEditor
+                block={editingBlock}
+                onChange={(updatedBlock) => {
+                  setPage((p) => ({
+                    ...p,
+                    blocks: p.blocks.map((b) => (b.id === updatedBlock.id ? updatedBlock : b)),
+                  }))
+                  setEditingBlock(updatedBlock)
+                }}
+              />
+            </div>
+            <div className="p-4 border-t flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setEditingBlock(null)}>
+                Annuler
+              </Button>
+              <Button onClick={() => setEditingBlock(null)}>
+                Sauvegarder
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -196,84 +355,466 @@ function applyStyle(style?: any): React.CSSProperties {
   return css
 }
 
-function BlockEditor({ block, onChange, onDelete, onSelect, isSelected }: { block: BlockType; onChange: (b: BlockType) => void; onDelete: () => void; onSelect: () => void; isSelected: boolean }) {
+// Helper Components
+function BlockButton({ icon: Icon, label, onClick }: { icon: any; label: string; onClick: () => void }) {
+  return (
+    <Button variant="outline" className="h-20 flex flex-col gap-2" onClick={onClick}>
+      <Icon className="h-6 w-6" />
+      <span className="text-xs">{label}</span>
+    </Button>
+  )
+}
+
+function BlockTemplate({ name, description, onClick }: { name: string; description: string; onClick: () => void }) {
+  return (
+    <div className="p-3 border rounded cursor-pointer hover:bg-muted" onClick={onClick}>
+      <div className="font-medium text-sm">{name}</div>
+      <div className="text-xs text-muted-foreground">{description}</div>
+    </div>
+  )
+}
+
+function Canvas({ 
+  blocks, 
+  selectedBlockId, 
+  onSelectBlock, 
+  onUpdateBlock, 
+  onDeleteBlock, 
+  onDuplicateBlock,
+  onEditBlock,
+  onDragStart,
+  onDragOver,
+  onDrop
+}: {
+  blocks: BlockType[]
+  selectedBlockId: string | null
+  onSelectBlock: (id: string) => void
+  onUpdateBlock: (block: BlockType) => void
+  onDeleteBlock: (id: string) => void
+  onDuplicateBlock: (block: BlockType) => void
+  onEditBlock: (block: BlockType) => void
+  onDragStart: (index: number) => void
+  onDragOver: (e: React.DragEvent) => void
+  onDrop: (index: number) => void
+}) {
+  return (
+    <div className="space-y-4">
+      {blocks.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <div className="text-lg font-medium mb-2">Commencez à construire votre page</div>
+          <div className="text-sm">Glissez des blocs depuis la barre latérale</div>
+        </div>
+      ) : (
+        blocks.map((block, index) => (
+          <div
+            key={block.id}
+            draggable
+            onDragStart={() => onDragStart(index)}
+            onDragOver={onDragOver}
+            onDrop={() => onDrop(index)}
+            className={`relative group ${selectedBlockId === block.id ? 'ring-2 ring-primary' : ''}`}
+          >
+            <div className="absolute -left-8 top-0 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex flex-col gap-1">
+                <Button size="sm" variant="outline" className="h-6 w-6 p-0">
+                  <GripVertical className="h-3 w-3" />
+                </Button>
+                <Button size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => onDuplicateBlock(block)}>
+                  <Copy className="h-3 w-3" />
+                </Button>
+                <Button size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => onDeleteBlock(block.id)}>
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+            <BlockEditor
+              block={block}
+              onChange={onUpdateBlock}
+              onDelete={() => onDeleteBlock(block.id)}
+              onSelect={() => onSelectBlock(block.id)}
+              onEdit={() => onEditBlock(block)}
+              isSelected={selectedBlockId === block.id}
+            />
+          </div>
+        ))
+      )}
+    </div>
+  )
+}
+
+function PreviewRenderer({ blocks }: { blocks: BlockType[] }) {
+  return (
+    <div className="bg-white rounded-lg shadow-sm border p-8">
+      <div className="space-y-6">
+        {blocks.map((block) => (
+          <div key={block.id} style={applyStyle((block as any).style)}>
+            {block.type === "heading" && (
+              <div className={`font-bold ${block.level === 1 ? 'text-4xl' : block.level === 2 ? 'text-3xl' : block.level === 3 ? 'text-2xl' : 'text-xl'}`}>
+                {block.text}
+              </div>
+            )}
+            {block.type === "paragraph" && (
+              <div dangerouslySetInnerHTML={{ __html: block.html }} />
+            )}
+            {block.type === "image" && block.url && (
+              <img src={block.url} alt={block.alt || ""} className="max-w-full h-auto" />
+            )}
+            {block.type === "video" && block.url && (
+              <video controls src={block.url} className="max-w-full h-auto" />
+            )}
+            {block.type === "button" && (
+              <a href={block.href} className="inline-block bg-primary text-primary-foreground px-6 py-3 rounded">
+                {block.label}
+              </a>
+            )}
+            {block.type === "section" && (
+              <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${block.columns.length}, minmax(0, 1fr))` }}>
+                {block.columns.map((col, idx) => (
+                  <div key={idx} className="space-y-4">
+                    <PreviewRenderer blocks={col} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function BlockContentEditor({ block, onChange }: { block: BlockType; onChange: (b: BlockType) => void }) {
   if (block.type === "heading") {
     return (
-      <Card onClick={onSelect} className={isSelected ? "ring-2 ring-primary" : ""}>
-        <CardContent className="p-4 space-y-2" style={applyStyle((block as any).style)}>
-          <div className="flex gap-2">
+      <div className="space-y-4">
+        <div>
+          <label className="text-sm font-medium">Niveau du titre</label>
+          <Select value={String(block.level)} onValueChange={(v) => onChange({ ...block, level: Number(v) as any })}>
+            <SelectTrigger className="mt-1">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[1, 2, 3, 4, 5, 6].map((l) => (
+                <SelectItem key={l} value={String(l)}>Titre {l} (H{l})</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <label className="text-sm font-medium">Texte du titre</label>
+          <Input 
+            value={block.text} 
+            onChange={(e) => onChange({ ...block, text: e.target.value })} 
+            className="mt-1"
+            placeholder="Entrez le titre"
+          />
+        </div>
+      </div>
+    )
+  }
+
+  if (block.type === "paragraph") {
+    return (
+      <div className="space-y-4">
+        <div>
+          <label className="text-sm font-medium">Contenu du paragraphe</label>
+          <Textarea 
+            value={block.html} 
+            onChange={(e) => onChange({ ...block, html: e.target.value })} 
+            className="mt-1 min-h-[200px]"
+            placeholder="Entrez le contenu du paragraphe"
+          />
+          <div className="text-xs text-muted-foreground mt-1">
+            Vous pouvez utiliser du HTML simple (balises p, strong, em, br, etc.)
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (block.type === "image") {
+    return (
+      <div className="space-y-4">
+        <div>
+          <label className="text-sm font-medium">URL de l'image</label>
+          <Input 
+            value={block.url} 
+            onChange={(e) => onChange({ ...block, url: e.target.value })} 
+            className="mt-1"
+            placeholder="https://example.com/image.jpg"
+          />
+        </div>
+        <div>
+          <label className="text-sm font-medium">Texte alternatif (alt)</label>
+          <Input 
+            value={block.alt || ""} 
+            onChange={(e) => onChange({ ...block, alt: e.target.value })} 
+            className="mt-1"
+            placeholder="Description de l'image"
+          />
+        </div>
+        {block.url && (
+          <div>
+            <label className="text-sm font-medium">Aperçu</label>
+            <div className="mt-1">
+              <img src={block.url} alt={block.alt || ""} className="max-w-full h-auto rounded border" />
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (block.type === "video") {
+    return (
+      <div className="space-y-4">
+        <div>
+          <label className="text-sm font-medium">URL de la vidéo</label>
+          <Input 
+            value={block.url} 
+            onChange={(e) => onChange({ ...block, url: e.target.value })} 
+            className="mt-1"
+            placeholder="https://example.com/video.mp4 ou URL YouTube/Vimeo"
+          />
+        </div>
+        {block.url && (
+          <div>
+            <label className="text-sm font-medium">Aperçu</label>
+            <div className="mt-1">
+              <video controls src={block.url} className="max-w-full h-auto rounded border" />
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (block.type === "button") {
+    return (
+      <div className="space-y-4">
+        <div>
+          <label className="text-sm font-medium">Texte du bouton</label>
+          <Input 
+            value={block.label} 
+            onChange={(e) => onChange({ ...block, label: e.target.value })} 
+            className="mt-1"
+            placeholder="Texte du bouton"
+          />
+        </div>
+        <div>
+          <label className="text-sm font-medium">Lien (URL)</label>
+          <Input 
+            value={block.href} 
+            onChange={(e) => onChange({ ...block, href: e.target.value })} 
+            className="mt-1"
+            placeholder="https://example.com ou #section"
+          />
+        </div>
+        <div>
+          <label className="text-sm font-medium">Aperçu</label>
+          <div className="mt-1">
+            <a 
+              href={block.href} 
+              className="inline-flex items-center bg-primary text-primary-foreground px-6 py-3 rounded hover:bg-primary/90 transition-colors"
+            >
+              {block.label || "Nouveau bouton"}
+            </a>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return <div>Type de bloc non supporté pour l'édition</div>
+}
+
+function BlockEditor({ block, onChange, onDelete, onSelect, onEdit, isSelected }: { block: BlockType; onChange: (b: BlockType) => void; onDelete: () => void; onSelect: () => void; onEdit: () => void; isSelected: boolean }) {
+  if (block.type === "heading") {
+    return (
+      <div 
+        onClick={onSelect} 
+        onDoubleClick={onEdit}
+        className={`relative group cursor-pointer ${isSelected ? 'ring-2 ring-primary' : ''}`}
+        style={applyStyle((block as any).style)}
+      >
+        <div className="p-4 border-2 border-dashed border-transparent hover:border-primary/50 rounded-lg transition-colors">
+          <div className="flex items-center gap-2 mb-2">
             <Select value={String(block.level)} onValueChange={(v) => onChange({ ...block, level: Number(v) as any })}>
-              <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-20 h-8">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 {[1, 2, 3, 4, 5, 6].map((l) => (
                   <SelectItem key={l} value={String(l)}>H{l}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Input value={block.text} onChange={(e) => onChange({ ...block, text: e.target.value })} className="flex-1" />
-            <Button variant="destructive" onClick={onDelete}>Supprimer</Button>
+            <div className="text-xs text-muted-foreground">Titre</div>
           </div>
-        </CardContent>
-      </Card>
+          <div className={`font-bold ${block.level === 1 ? 'text-4xl' : block.level === 2 ? 'text-3xl' : block.level === 3 ? 'text-2xl' : 'text-xl'}`}>
+            {block.text || "Cliquez pour éditer le titre"}
+          </div>
+        </div>
+        {isSelected && (
+          <div className="absolute -top-2 -right-2">
+            <Button size="sm" variant="destructive" className="h-6 w-6 p-0" onClick={onDelete}>
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </div>
+        )}
+      </div>
     )
   }
 
   if (block.type === "paragraph") {
     return (
-      <Card onClick={onSelect} className={isSelected ? "ring-2 ring-primary" : ""}>
-        <CardContent className="p-4 space-y-2" style={applyStyle((block as any).style)}>
-          <Textarea value={block.html} onChange={(e) => onChange({ ...block, html: e.target.value })} rows={4} />
-          <div className="text-right"><Button variant="destructive" onClick={onDelete}>Supprimer</Button></div>
-        </CardContent>
-      </Card>
+      <div 
+        onClick={onSelect} 
+        onDoubleClick={onEdit}
+        className={`relative group cursor-pointer ${isSelected ? 'ring-2 ring-primary' : ''}`}
+        style={applyStyle((block as any).style)}
+      >
+        <div className="p-4 border-2 border-dashed border-transparent hover:border-primary/50 rounded-lg transition-colors">
+          <div className="text-xs text-muted-foreground mb-2">Paragraphe</div>
+          <div className="min-h-[60px]">
+            {block.html ? (
+              <div dangerouslySetInnerHTML={{ __html: block.html }} />
+            ) : (
+              <div className="text-muted-foreground italic">Cliquez pour éditer le paragraphe</div>
+            )}
+          </div>
+        </div>
+        {isSelected && (
+          <div className="absolute -top-2 -right-2">
+            <Button size="sm" variant="destructive" className="h-6 w-6 p-0" onClick={onDelete}>
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </div>
+        )}
+      </div>
     )
   }
 
   if (block.type === "image") {
     return (
-      <Card onClick={onSelect} className={isSelected ? "ring-2 ring-primary" : ""}>
-        <CardContent className="p-4 space-y-2" style={applyStyle((block as any).style)}>
-          <Input placeholder="URL de l'image" value={block.url} onChange={(e) => onChange({ ...block, url: e.target.value })} />
-          <Input placeholder="Alt" value={block.alt || ""} onChange={(e) => onChange({ ...block, alt: e.target.value })} />
-          <div className="text-right"><Button variant="destructive" onClick={onDelete}>Supprimer</Button></div>
-        </CardContent>
-      </Card>
+      <div 
+        onClick={onSelect} 
+        onDoubleClick={onEdit}
+        className={`relative group cursor-pointer ${isSelected ? 'ring-2 ring-primary' : ''}`}
+        style={applyStyle((block as any).style)}
+      >
+        <div className="p-4 border-2 border-dashed border-transparent hover:border-primary/50 rounded-lg transition-colors">
+          <div className="text-xs text-muted-foreground mb-2">Image</div>
+          {block.url ? (
+            <img src={block.url} alt={block.alt || ""} className="max-w-full h-auto rounded" />
+          ) : (
+            <div className="h-32 bg-muted rounded flex items-center justify-center">
+              <div className="text-center">
+                <Image className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                <div className="text-sm text-muted-foreground">Cliquez pour ajouter une image</div>
+              </div>
+            </div>
+          )}
+        </div>
+        {isSelected && (
+          <div className="absolute -top-2 -right-2">
+            <Button size="sm" variant="destructive" className="h-6 w-6 p-0" onClick={onDelete}>
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </div>
+        )}
+      </div>
     )
   }
 
   if (block.type === "video") {
     return (
-      <Card onClick={onSelect} className={isSelected ? "ring-2 ring-primary" : ""}>
-        <CardContent className="p-4 space-y-2" style={applyStyle((block as any).style)}>
-          <Input placeholder="URL vidéo (YouTube, Vimeo, fichier)" value={block.url} onChange={(e) => onChange({ ...block, url: e.target.value })} />
-          <div className="text-right"><Button variant="destructive" onClick={onDelete}>Supprimer</Button></div>
-        </CardContent>
-      </Card>
+      <div 
+        onClick={onSelect} 
+        onDoubleClick={onEdit}
+        className={`relative group cursor-pointer ${isSelected ? 'ring-2 ring-primary' : ''}`}
+        style={applyStyle((block as any).style)}
+      >
+        <div className="p-4 border-2 border-dashed border-transparent hover:border-primary/50 rounded-lg transition-colors">
+          <div className="text-xs text-muted-foreground mb-2">Vidéo</div>
+          {block.url ? (
+            <video controls src={block.url} className="max-w-full h-auto rounded" />
+          ) : (
+            <div className="h-32 bg-muted rounded flex items-center justify-center">
+              <div className="text-center">
+                <Video className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                <div className="text-sm text-muted-foreground">Cliquez pour ajouter une vidéo</div>
+              </div>
+            </div>
+          )}
+        </div>
+        {isSelected && (
+          <div className="absolute -top-2 -right-2">
+            <Button size="sm" variant="destructive" className="h-6 w-6 p-0" onClick={onDelete}>
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </div>
+        )}
+      </div>
     )
   }
 
   if (block.type === "button") {
     return (
-      <Card onClick={onSelect} className={isSelected ? "ring-2 ring-primary" : ""}>
-        <CardContent className="p-4 space-y-2" style={applyStyle((block as any).style)}>
-          <div className="grid grid-cols-2 gap-2">
-            <Input placeholder="Label" value={block.label} onChange={(e) => onChange({ ...block, label: e.target.value })} />
-            <Input placeholder="Lien" value={block.href} onChange={(e) => onChange({ ...block, href: e.target.value })} />
+      <div 
+        onClick={onSelect} 
+        onDoubleClick={onEdit}
+        className={`relative group cursor-pointer ${isSelected ? 'ring-2 ring-primary' : ''}`}
+        style={applyStyle((block as any).style)}
+      >
+        <div className="p-4 border-2 border-dashed border-transparent hover:border-primary/50 rounded-lg transition-colors">
+          <div className="text-xs text-muted-foreground mb-2">Bouton</div>
+          <div className="inline-block">
+            <a 
+              href={block.href} 
+              className="inline-flex items-center bg-primary text-primary-foreground px-6 py-3 rounded hover:bg-primary/90 transition-colors"
+            >
+              {block.label || "Nouveau bouton"}
+            </a>
           </div>
-          <div className="text-right"><Button variant="destructive" onClick={onDelete}>Supprimer</Button></div>
-        </CardContent>
-      </Card>
+        </div>
+        {isSelected && (
+          <div className="absolute -top-2 -right-2">
+            <Button size="sm" variant="destructive" className="h-6 w-6 p-0" onClick={onDelete}>
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </div>
+        )}
+      </div>
     )
   }
 
   if (block.type === "section") {
     return (
-      <Card onClick={onSelect} className={isSelected ? "ring-2 ring-primary" : ""}>
-        <CardContent className="p-4 space-y-2" style={applyStyle((block as any).style)}>
-          <div className="text-sm text-muted-foreground">Section avec {block.columns.length} colonne(s)</div>
-          <div className="text-right"><Button variant="destructive" onClick={onDelete}>Supprimer</Button></div>
-        </CardContent>
-      </Card>
+      <div 
+        onClick={onSelect} 
+        onDoubleClick={onEdit}
+        className={`relative group cursor-pointer ${isSelected ? 'ring-2 ring-primary' : ''}`}
+        style={applyStyle((block as any).style)}
+      >
+        <div className="p-4 border-2 border-dashed border-transparent hover:border-primary/50 rounded-lg transition-colors">
+          <div className="text-xs text-muted-foreground mb-2">Section ({block.columns.length} colonnes)</div>
+          <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${block.columns.length}, minmax(0, 1fr))` }}>
+            {block.columns.map((col, idx) => (
+              <div key={idx} className="min-h-[100px] bg-muted/50 rounded p-4 text-center text-sm text-muted-foreground">
+                Colonne {idx + 1}
+              </div>
+            ))}
+          </div>
+        </div>
+        {isSelected && (
+          <div className="absolute -top-2 -right-2">
+            <Button size="sm" variant="destructive" className="h-6 w-6 p-0" onClick={onDelete}>
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </div>
+        )}
+      </div>
     )
   }
 
@@ -281,35 +822,131 @@ function BlockEditor({ block, onChange, onDelete, onSelect, isSelected }: { bloc
 }
 
 function StyleInspector({ block, onChange }: { block?: any; onChange: (style: any) => void }) {
-  if (!block) return null
+  if (!block) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Palette className="h-4 w-4" />
+            Style du bloc
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-sm text-muted-foreground text-center py-8">
+            Sélectionnez un bloc pour modifier son style
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
   const style = block.style || {}
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Style du bloc</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <Palette className="h-4 w-4" />
+          Style du bloc
+        </CardTitle>
+        <div className="text-xs text-muted-foreground">
+          {block.type === "heading" && "Titre"}
+          {block.type === "paragraph" && "Paragraphe"}
+          {block.type === "image" && "Image"}
+          {block.type === "video" && "Vidéo"}
+          {block.type === "button" && "Bouton"}
+          {block.type === "section" && "Section"}
+        </div>
       </CardHeader>
-      <CardContent className="space-y-3">
-        <Input placeholder="Police (ex: Inter, Arial)" value={style.fontFamily || ""} onChange={(e) => onChange({ fontFamily: e.target.value })} />
-        <Input placeholder="Taille (ex: 16px, 1.25rem)" value={style.fontSize || ""} onChange={(e) => onChange({ fontSize: e.target.value })} />
-        <Select value={style.fontWeight || ""} onValueChange={(v) => onChange({ fontWeight: v })}>
-          <SelectTrigger><SelectValue placeholder="Graisse" /></SelectTrigger>
-          <SelectContent>
-            {["300","400","500","600","700","800"].map((w) => <SelectItem key={w} value={w}>{w}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Input type="color" value={style.color || "#000000"} onChange={(e) => onChange({ color: e.target.value })} />
-        <Select value={style.textAlign || ""} onValueChange={(v) => onChange({ textAlign: v })}>
-          <SelectTrigger><SelectValue placeholder="Alignement" /></SelectTrigger>
-          <SelectContent>
-            {(["left","center","right","justify"] as const).map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Input placeholder="Fond (ex: #f5f5f5)" value={style.backgroundColor || ""} onChange={(e) => onChange({ backgroundColor: e.target.value })} />
-        <Input placeholder="Padding (ex: 16px 24px)" value={style.padding || ""} onChange={(e) => onChange({ padding: e.target.value })} />
-        <Input placeholder="Margin (ex: 24px 0)" value={style.margin || ""} onChange={(e) => onChange({ margin: e.target.value })} />
-        <Input placeholder="Bordure (ex: 1px solid #ddd)" value={style.border || ""} onChange={(e) => onChange({ border: e.target.value })} />
-        <Input placeholder="Rayon (ex: 8px)" value={style.borderRadius || ""} onChange={(e) => onChange({ borderRadius: e.target.value })} />
-        <Input placeholder="Ombre (ex: 0 2px 8px rgba(0,0,0,.1))" value={style.boxShadow || ""} onChange={(e) => onChange({ boxShadow: e.target.value })} />
+      <CardContent className="space-y-4">
+        {/* Typography */}
+        <div className="space-y-3">
+          <h4 className="text-sm font-medium">Typographie</h4>
+          <div className="grid grid-cols-2 gap-2">
+            <Input placeholder="Police" value={style.fontFamily || ""} onChange={(e) => onChange({ fontFamily: e.target.value })} />
+            <Input placeholder="Taille" value={style.fontSize || ""} onChange={(e) => onChange({ fontSize: e.target.value })} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Select value={style.fontWeight || ""} onValueChange={(v) => onChange({ fontWeight: v })}>
+              <SelectTrigger><SelectValue placeholder="Graisse" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="300">Light</SelectItem>
+                <SelectItem value="400">Normal</SelectItem>
+                <SelectItem value="500">Medium</SelectItem>
+                <SelectItem value="600">Semi-bold</SelectItem>
+                <SelectItem value="700">Bold</SelectItem>
+                <SelectItem value="800">Extra-bold</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={style.textAlign || ""} onValueChange={(v) => onChange({ textAlign: v })}>
+              <SelectTrigger><SelectValue placeholder="Alignement" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="left">Gauche</SelectItem>
+                <SelectItem value="center">Centre</SelectItem>
+                <SelectItem value="right">Droite</SelectItem>
+                <SelectItem value="justify">Justifié</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            <Input type="color" value={style.color || "#000000"} onChange={(e) => onChange({ color: e.target.value })} className="w-12 h-8" />
+            <Input placeholder="Couleur du texte" value={style.color || ""} onChange={(e) => onChange({ color: e.target.value })} className="flex-1" />
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Spacing */}
+        <div className="space-y-3">
+          <h4 className="text-sm font-medium">Espacement</h4>
+          <div className="grid grid-cols-2 gap-2">
+            <Input placeholder="Padding" value={style.padding || ""} onChange={(e) => onChange({ padding: e.target.value })} />
+            <Input placeholder="Margin" value={style.margin || ""} onChange={(e) => onChange({ margin: e.target.value })} />
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Background & Border */}
+        <div className="space-y-3">
+          <h4 className="text-sm font-medium">Apparence</h4>
+          <div className="flex items-center gap-2">
+            <Input type="color" value={style.backgroundColor || "#ffffff"} onChange={(e) => onChange({ backgroundColor: e.target.value })} className="w-12 h-8" />
+            <Input placeholder="Couleur de fond" value={style.backgroundColor || ""} onChange={(e) => onChange({ backgroundColor: e.target.value })} className="flex-1" />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Input placeholder="Bordure" value={style.border || ""} onChange={(e) => onChange({ border: e.target.value })} />
+            <Input placeholder="Rayon" value={style.borderRadius || ""} onChange={(e) => onChange({ borderRadius: e.target.value })} />
+          </div>
+          <Input placeholder="Ombre" value={style.boxShadow || ""} onChange={(e) => onChange({ boxShadow: e.target.value })} />
+        </div>
+
+        <Separator />
+
+        {/* Quick Actions */}
+        <div className="space-y-2">
+          <h4 className="text-sm font-medium">Actions rapides</h4>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="outline" size="sm" onClick={() => onChange({})}>
+              Réinitialiser
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => onChange({
+              fontFamily: "Inter, sans-serif",
+              fontSize: "16px",
+              fontWeight: "400",
+              color: "#000000",
+              textAlign: "left",
+              backgroundColor: "transparent",
+              padding: "0",
+              margin: "0",
+              border: "none",
+              borderRadius: "0",
+              boxShadow: "none"
+            })}>
+              Style par défaut
+            </Button>
+          </div>
+        </div>
       </CardContent>
     </Card>
   )
