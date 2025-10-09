@@ -67,6 +67,13 @@ export function TenantNoticeDialog({
     return addMonths(start, months)
   }, [months])
 
+  const toInputDate = (d: Date) => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, "0")
+    const day = String(d.getDate()).padStart(2, "0")
+    return `${y}-${m}-${day}`
+  }
+
   // Canvas signature pad when online mode
   useEffect(() => {
     if (step !== 3 || signatureMode !== "online") return
@@ -136,7 +143,13 @@ export function TenantNoticeDialog({
       const res = await fetch(`/api/leases/${leaseId}/notice`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ previewOnly: true, isTenseZone, noticePeriodMonths: months, signatureDataUrl })
+        body: JSON.stringify({ 
+          previewOnly: true, 
+          isTenseZone, 
+          noticePeriodMonths: months, 
+          signatureDataUrl,
+          desiredMoveOut: desiredMoveOut || null
+        })
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Erreur" }))
@@ -163,7 +176,13 @@ export function TenantNoticeDialog({
       const res = await fetch(`/api/leases/${leaseId}/notice`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ confirm: true, isTenseZone, noticePeriodMonths: months, signatureDataUrl })
+        body: JSON.stringify({ 
+          confirm: true, 
+          isTenseZone, 
+          noticePeriodMonths: months, 
+          signatureDataUrl,
+          desiredMoveOut: desiredMoveOut || null
+        })
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Erreur" }))
@@ -242,8 +261,18 @@ export function TenantNoticeDialog({
               <input
                 type="date"
                 className="w-full border rounded px-3 py-2"
+                min={toInputDate(legalEndDate)}
                 value={desiredMoveOut}
-                onChange={(e) => setDesiredMoveOut(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value
+                  if (!v) { setDesiredMoveOut(""); return }
+                  const chosen = new Date(v)
+                  if (chosen < legalEndDate) {
+                    setDesiredMoveOut(toInputDate(legalEndDate))
+                  } else {
+                    setDesiredMoveOut(v)
+                  }
+                }}
               />
             </div>
 

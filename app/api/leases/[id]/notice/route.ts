@@ -101,6 +101,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       confirm,
       previewOnly,
       signatureDataUrl,
+      desiredMoveOut: desiredMoveOutStr,
     } = body || {}
 
     if (!previewOnly && !confirm) {
@@ -137,7 +138,16 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         : 3
 
     const noticeDate = noticeDateStr ? new Date(noticeDateStr) : new Date()
-    const moveOutDate = addMonths(noticeDate, months)
+    const legalEnd = addMonths(noticeDate, months)
+    // Si le locataire a saisi une date souhaitée, on la prend en compte
+    // mais on s'assure qu'elle n'est pas avant la date légale minimale
+    let moveOutDate = legalEnd
+    if (desiredMoveOutStr) {
+      const desired = new Date(desiredMoveOutStr)
+      if (!isNaN(desired.getTime())) {
+        moveOutDate = desired < legalEnd ? legalEnd : desired
+      }
+    }
 
     const tenantName = `${lease.tenant?.first_name || ""} ${lease.tenant?.last_name || ""}`.trim() || "Locataire"
     const ownerName = `${lease.owner?.first_name || ""} ${lease.owner?.last_name || ""}`.trim() || "Propriétaire"
