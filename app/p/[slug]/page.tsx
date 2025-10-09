@@ -53,33 +53,50 @@ export default async function CmsPublicPage({ params }: { params: { slug: string
   )
 }
 
+function applyStyle(style?: any): React.CSSProperties {
+  if (!style) return {}
+  const css: React.CSSProperties = {}
+  if (style.fontFamily) css.fontFamily = style.fontFamily
+  if (style.fontSize) css.fontSize = style.fontSize
+  if (style.fontWeight) css.fontWeight = style.fontWeight as any
+  if (style.color) css.color = style.color
+  if (style.textAlign) css.textAlign = style.textAlign
+  if (style.backgroundColor) css.backgroundColor = style.backgroundColor
+  if (style.padding) css.padding = style.padding
+  if (style.margin) css.margin = style.margin
+  if (style.border) css.border = style.border
+  if (style.borderRadius) css.borderRadius = style.borderRadius
+  if (style.boxShadow) css.boxShadow = style.boxShadow
+  return css
+}
+
 function Renderer({ blocks }: { blocks: any[] }) {
   return (
     <div className="space-y-6">
       {blocks.map((b) => {
         if (b.type === "heading") {
           const Tag = (`h${b.level}` as unknown) as any
-          return <Tag key={b.id}>{b.text}</Tag>
+          return <Tag key={b.id} style={applyStyle(b.style)}>{b.text}</Tag>
         }
         if (b.type === "paragraph") {
-          return <div key={b.id} dangerouslySetInnerHTML={{ __html: b.html }} />
+          return <div key={b.id} style={applyStyle(b.style)} dangerouslySetInnerHTML={{ __html: b.html }} />
         }
         if (b.type === "image") {
-          return <img key={b.id} src={b.url} alt={b.alt || ""} />
+          return <img key={b.id} src={b.url} alt={b.alt || ""} style={applyStyle(b.style)} />
         }
         if (b.type === "video") {
-          return <video key={b.id} controls src={b.url} />
+          return <video key={b.id} controls src={b.url} style={applyStyle(b.style)} />
         }
         if (b.type === "button") {
           return (
-            <a key={b.id} href={b.href} className="inline-flex items-center rounded bg-primary px-4 py-2 text-white">
+            <a key={b.id} href={b.href} className="inline-flex items-center rounded bg-primary px-4 py-2 text-white" style={applyStyle(b.style)}>
               {b.label}
             </a>
           )
         }
         if (b.type === "section") {
           return (
-            <div key={b.id} className="grid gap-4" style={{ gridTemplateColumns: `repeat(${b.columns.length}, minmax(0, 1fr))` }}>
+            <div key={b.id} className="grid gap-4" style={{ gridTemplateColumns: `repeat(${b.columns.length}, minmax(0, 1fr))`, ...applyStyle(b.style) }}>
               {b.columns.map((col: any[], idx: number) => (
                 <div key={idx} className="space-y-4">
                   <Renderer blocks={col} />

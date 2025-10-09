@@ -62,6 +62,21 @@ export default function PageBuilder() {
     setPage((p) => ({ ...p, blocks: [...p.blocks, newBlock] }))
   }
 
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
+
+  const onDragStart = (index: number) => setDragIndex(index)
+  const onDragOver = (e: React.DragEvent) => e.preventDefault()
+  const onDrop = (index: number) => {
+    if (dragIndex === null || dragIndex === index) return
+    setPage((p) => {
+      const next = [...p.blocks]
+      const [moved] = next.splice(dragIndex, 1)
+      next.splice(index, 0, moved)
+      return { ...p, blocks: next }
+    })
+    setDragIndex(null)
+  }
+
   const save = async (publish = false) => {
     try {
       setSaving(true)
@@ -103,8 +118,20 @@ export default function PageBuilder() {
             </div>
 
             <div className="space-y-3">
-              {page.blocks.map((b) => (
-                <BlockEditor key={b.id} block={b} onChange={(nb) => setPage((p) => ({ ...p, blocks: p.blocks.map((x) => (x.id === nb.id ? nb : x)) }))} onDelete={() => setPage((p) => ({ ...p, blocks: p.blocks.filter((x) => x.id !== b.id) }))} />
+              {page.blocks.map((b, i) => (
+                <div key={b.id} draggable onDragStart={() => onDragStart(i)} onDragOver={onDragOver} onDrop={() => onDrop(i)} className="border rounded">
+                  <div className="flex items-center justify-between px-3 py-1 text-xs text-muted-foreground bg-muted cursor-move">
+                    <span>Bloc {i + 1} · {b.type}</span>
+                    <span>⋮⋮</span>
+                  </div>
+                  <BlockEditor
+                    block={b}
+                    onChange={(nb) => setPage((p) => ({ ...p, blocks: p.blocks.map((x) => (x.id === nb.id ? nb : x)) }))}
+                    onDelete={() => setPage((p) => ({ ...p, blocks: p.blocks.filter((x) => x.id !== b.id) }))}
+                    onSelect={() => setSelectedBlockId(b.id)}
+                    isSelected={selectedBlockId === b.id}
+                  />
+                </div>
               ))}
             </div>
           </CardContent>
@@ -135,16 +162,45 @@ export default function PageBuilder() {
             </div>
           </CardContent>
         </Card>
+
+        <StyleInspector
+          block={page.blocks.find((b) => b.id === selectedBlockId)}
+          onChange={(style) =>
+            setPage((p) => ({
+              ...p,
+              blocks: p.blocks.map((b) => (b.id === selectedBlockId ? ({ ...b, style: { ...(b as any).style, ...style } } as any) : b)),
+            }))
+          }
+        />
       </div>
     </div>
   )
 }
 
-function BlockEditor({ block, onChange, onDelete }: { block: BlockType; onChange: (b: BlockType) => void; onDelete: () => void }) {
+const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
+
+function applyStyle(style?: any): React.CSSProperties {
+  if (!style) return {}
+  const css: React.CSSProperties = {}
+  if (style.fontFamily) css.fontFamily = style.fontFamily
+  if (style.fontSize) css.fontSize = style.fontSize
+  if (style.fontWeight) css.fontWeight = style.fontWeight as any
+  if (style.color) css.color = style.color
+  if (style.textAlign) css.textAlign = style.textAlign
+  if (style.backgroundColor) css.backgroundColor = style.backgroundColor
+  if (style.padding) css.padding = style.padding
+  if (style.margin) css.margin = style.margin
+  if (style.border) css.border = style.border
+  if (style.borderRadius) css.borderRadius = style.borderRadius
+  if (style.boxShadow) css.boxShadow = style.boxShadow
+  return css
+}
+
+function BlockEditor({ block, onChange, onDelete, onSelect, isSelected }: { block: BlockType; onChange: (b: BlockType) => void; onDelete: () => void; onSelect: () => void; isSelected: boolean }) {
   if (block.type === "heading") {
     return (
-      <Card>
-        <CardContent className="p-4 space-y-2">
+      <Card onClick={onSelect} className={isSelected ? "ring-2 ring-primary" : ""}>
+        <CardContent className="p-4 space-y-2" style={applyStyle((block as any).style)}>
           <div className="flex gap-2">
             <Select value={String(block.level)} onValueChange={(v) => onChange({ ...block, level: Number(v) as any })}>
               <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
@@ -164,8 +220,8 @@ function BlockEditor({ block, onChange, onDelete }: { block: BlockType; onChange
 
   if (block.type === "paragraph") {
     return (
-      <Card>
-        <CardContent className="p-4 space-y-2">
+      <Card onClick={onSelect} className={isSelected ? "ring-2 ring-primary" : ""}>
+        <CardContent className="p-4 space-y-2" style={applyStyle((block as any).style)}>
           <Textarea value={block.html} onChange={(e) => onChange({ ...block, html: e.target.value })} rows={4} />
           <div className="text-right"><Button variant="destructive" onClick={onDelete}>Supprimer</Button></div>
         </CardContent>
@@ -175,8 +231,8 @@ function BlockEditor({ block, onChange, onDelete }: { block: BlockType; onChange
 
   if (block.type === "image") {
     return (
-      <Card>
-        <CardContent className="p-4 space-y-2">
+      <Card onClick={onSelect} className={isSelected ? "ring-2 ring-primary" : ""}>
+        <CardContent className="p-4 space-y-2" style={applyStyle((block as any).style)}>
           <Input placeholder="URL de l'image" value={block.url} onChange={(e) => onChange({ ...block, url: e.target.value })} />
           <Input placeholder="Alt" value={block.alt || ""} onChange={(e) => onChange({ ...block, alt: e.target.value })} />
           <div className="text-right"><Button variant="destructive" onClick={onDelete}>Supprimer</Button></div>
@@ -187,8 +243,8 @@ function BlockEditor({ block, onChange, onDelete }: { block: BlockType; onChange
 
   if (block.type === "video") {
     return (
-      <Card>
-        <CardContent className="p-4 space-y-2">
+      <Card onClick={onSelect} className={isSelected ? "ring-2 ring-primary" : ""}>
+        <CardContent className="p-4 space-y-2" style={applyStyle((block as any).style)}>
           <Input placeholder="URL vidéo (YouTube, Vimeo, fichier)" value={block.url} onChange={(e) => onChange({ ...block, url: e.target.value })} />
           <div className="text-right"><Button variant="destructive" onClick={onDelete}>Supprimer</Button></div>
         </CardContent>
@@ -198,8 +254,8 @@ function BlockEditor({ block, onChange, onDelete }: { block: BlockType; onChange
 
   if (block.type === "button") {
     return (
-      <Card>
-        <CardContent className="p-4 space-y-2">
+      <Card onClick={onSelect} className={isSelected ? "ring-2 ring-primary" : ""}>
+        <CardContent className="p-4 space-y-2" style={applyStyle((block as any).style)}>
           <div className="grid grid-cols-2 gap-2">
             <Input placeholder="Label" value={block.label} onChange={(e) => onChange({ ...block, label: e.target.value })} />
             <Input placeholder="Lien" value={block.href} onChange={(e) => onChange({ ...block, href: e.target.value })} />
@@ -212,8 +268,8 @@ function BlockEditor({ block, onChange, onDelete }: { block: BlockType; onChange
 
   if (block.type === "section") {
     return (
-      <Card>
-        <CardContent className="p-4 space-y-2">
+      <Card onClick={onSelect} className={isSelected ? "ring-2 ring-primary" : ""}>
+        <CardContent className="p-4 space-y-2" style={applyStyle((block as any).style)}>
           <div className="text-sm text-muted-foreground">Section avec {block.columns.length} colonne(s)</div>
           <div className="text-right"><Button variant="destructive" onClick={onDelete}>Supprimer</Button></div>
         </CardContent>
@@ -222,6 +278,41 @@ function BlockEditor({ block, onChange, onDelete }: { block: BlockType; onChange
   }
 
   return null
+}
+
+function StyleInspector({ block, onChange }: { block?: any; onChange: (style: any) => void }) {
+  if (!block) return null
+  const style = block.style || {}
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Style du bloc</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <Input placeholder="Police (ex: Inter, Arial)" value={style.fontFamily || ""} onChange={(e) => onChange({ fontFamily: e.target.value })} />
+        <Input placeholder="Taille (ex: 16px, 1.25rem)" value={style.fontSize || ""} onChange={(e) => onChange({ fontSize: e.target.value })} />
+        <Select value={style.fontWeight || ""} onValueChange={(v) => onChange({ fontWeight: v })}>
+          <SelectTrigger><SelectValue placeholder="Graisse" /></SelectTrigger>
+          <SelectContent>
+            {["300","400","500","600","700","800"].map((w) => <SelectItem key={w} value={w}>{w}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Input type="color" value={style.color || "#000000"} onChange={(e) => onChange({ color: e.target.value })} />
+        <Select value={style.textAlign || ""} onValueChange={(v) => onChange({ textAlign: v })}>
+          <SelectTrigger><SelectValue placeholder="Alignement" /></SelectTrigger>
+          <SelectContent>
+            {(["left","center","right","justify"] as const).map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Input placeholder="Fond (ex: #f5f5f5)" value={style.backgroundColor || ""} onChange={(e) => onChange({ backgroundColor: e.target.value })} />
+        <Input placeholder="Padding (ex: 16px 24px)" value={style.padding || ""} onChange={(e) => onChange({ padding: e.target.value })} />
+        <Input placeholder="Margin (ex: 24px 0)" value={style.margin || ""} onChange={(e) => onChange({ margin: e.target.value })} />
+        <Input placeholder="Bordure (ex: 1px solid #ddd)" value={style.border || ""} onChange={(e) => onChange({ border: e.target.value })} />
+        <Input placeholder="Rayon (ex: 8px)" value={style.borderRadius || ""} onChange={(e) => onChange({ borderRadius: e.target.value })} />
+        <Input placeholder="Ombre (ex: 0 2px 8px rgba(0,0,0,.1))" value={style.boxShadow || ""} onChange={(e) => onChange({ boxShadow: e.target.value })} />
+      </CardContent>
+    </Card>
+  )
 }
 
 function computeSeoScore(p: CmsPageDraft): { score: number; color: "green" | "orange" | "red" } {
