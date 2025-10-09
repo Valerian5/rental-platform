@@ -8,7 +8,6 @@ import { authService } from "@/lib/auth-service"
 import { Button } from "@/components/ui/button"
 import { Menu, X, LayoutDashboard, Building2, Settings, FileText, Layers, Boxes, LineChart, Wrench, Wand2, Shield } from "lucide-react"
 
-
 const adminNav = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/agencies", label: "Agences", icon: Building2 },
@@ -19,7 +18,8 @@ const adminNav = [
   { href: "/admin/lease-templates", label: "Modèles de bail", icon: Layers },
   { href: "/admin/surety-bond-templates", label: "Modèles de caution", icon: Shield },
   { href: "/admin/migrate", label: "Migration", icon: Wrench },
-  { href: "/admin/page-builder", label: "Page Builder", icon: FileText },
+  { href: "/admin/cms-pages", label: "Pages CMS", icon: FileText },
+  { href: "/admin/page-builder", label: "Page Builder", icon: Wand2 },
   { href: "/admin/settings", label: "Paramètres", icon: Settings },
 ]
 

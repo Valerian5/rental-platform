@@ -78,12 +78,38 @@ function PageBuilder() {
   const [editingBlock, setEditingBlock] = useState<BlockType | null>(null)
   const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false)
   const [mediaLibraryType, setMediaLibraryType] = useState<"image" | "video" | "all">("all")
+  const [editingBlockContext, setEditingBlockContext] = useState<{
+    sectionId?: string
+    columnIndex?: number
+    blockIndex?: number
+  } | null>(null)
 
   useEffect(() => {
     ;(async () => {
       const user = await authService.getCurrentUser()
       if (!user) return router.push("/login")
       if (user.user_type !== "admin") return router.push("/")
+      
+      // Charger une page existante si un ID est fourni
+      const urlParams = new URLSearchParams(window.location.search)
+      const pageId = urlParams.get('id')
+      
+      if (pageId) {
+        try {
+          const res = await fetch(`/api/admin/cms-pages?id=${pageId}`, {
+            headers: { authorization: `Bearer ${await authService.getAuthToken()}` }
+          })
+          const json = await res.json()
+          if (json.success) {
+            setPage(json.data)
+          } else {
+            toast.error("Erreur lors du chargement de la page")
+          }
+        } catch (error) {
+          toast.error("Erreur lors du chargement de la page")
+        }
+      }
+      
       setLoading(false)
     })()
   }, [router])
@@ -406,13 +432,14 @@ function PageBuilder() {
                                   if (b.id === updatedBlock.id) {
                                     return updatedBlock
                                   }
-                                  // Si c'est une section, chercher dans les colonnes
-                                  if (b.type === "section") {
-                                    const updatedColumns = (b as any).columns.map((col: BlockType[]) =>
-                                      col.map((subBlock: BlockType) =>
-                                        subBlock.id === updatedBlock.id ? updatedBlock : subBlock
+                                  // Si c'est une section et qu'on a le contexte
+                                  if (b.type === "section" && editingBlockContext?.sectionId === b.id) {
+                                    const updatedColumns = [...(b as any).columns]
+                                    if (editingBlockContext.columnIndex !== undefined && editingBlockContext.blockIndex !== undefined) {
+                                      updatedColumns[editingBlockContext.columnIndex] = updatedColumns[editingBlockContext.columnIndex].map((subBlock: BlockType, idx: number) =>
+                                        idx === editingBlockContext.blockIndex ? updatedBlock : subBlock
                                       )
-                                    )
+                                    }
                                     return { ...b, columns: updatedColumns }
                                   }
                                   return b
@@ -917,6 +944,11 @@ function BlockContentEditor({ block, onChange, onOpenMediaLibrary }: { block: Bl
                         onClick={() => {
                           // Éditer le bloc dans la colonne
                           setEditingBlock(subBlock)
+                          setEditingBlockContext({
+                            sectionId: block.id,
+                            columnIndex: idx,
+                            blockIndex: subIdx
+                          })
                         }}
                       >
                         <div className="flex items-center gap-2">
