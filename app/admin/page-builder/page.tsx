@@ -39,7 +39,8 @@ import {
   List,
   Quote,
   X,
-  FileText
+  FileText,
+  Layout
 } from "lucide-react"
 import { toast } from "sonner"
 import { RichTextEditor } from "@/components/rich-text-editor"
