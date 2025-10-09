@@ -1080,10 +1080,10 @@ function StyleInspector({ block, onChange }: { block?: any; onChange: (style: an
         <div className="space-y-3">
           <h4 className="text-sm font-medium">Typographie</h4>
           <div className="grid grid-cols-2 gap-2">
-            <Select value={style.fontFamily || ""} onValueChange={(v) => onChange({ fontFamily: v })}>
+            <Select value={style.fontFamily || "default"} onValueChange={(v) => onChange({ fontFamily: v === "default" ? "" : v })}>
               <SelectTrigger><SelectValue placeholder="Police" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Police par défaut</SelectItem>
+                <SelectItem value="default">Police par défaut</SelectItem>
                 <SelectItem value="Inter, sans-serif">Inter</SelectItem>
                 <SelectItem value="Arial, sans-serif">Arial</SelectItem>
                 <SelectItem value="Helvetica, sans-serif">Helvetica</SelectItem>
@@ -1099,7 +1099,7 @@ function StyleInspector({ block, onChange }: { block?: any; onChange: (style: an
             <Input placeholder="Taille" value={style.fontSize || ""} onChange={(e) => onChange({ fontSize: e.target.value })} />
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Select value={style.fontWeight || ""} onValueChange={(v) => onChange({ fontWeight: v })}>
+            <Select value={style.fontWeight || "400"} onValueChange={(v) => onChange({ fontWeight: v })}>
               <SelectTrigger><SelectValue placeholder="Graisse" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="300">Light</SelectItem>
@@ -1110,7 +1110,7 @@ function StyleInspector({ block, onChange }: { block?: any; onChange: (style: an
                 <SelectItem value="800">Extra-bold</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={style.textAlign || ""} onValueChange={(v) => onChange({ textAlign: v })}>
+            <Select value={style.textAlign || "left"} onValueChange={(v) => onChange({ textAlign: v })}>
               <SelectTrigger><SelectValue placeholder="Alignement" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="left">Gauche</SelectItem>
