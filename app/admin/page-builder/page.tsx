@@ -37,9 +37,15 @@ import {
   Underline,
   Link,
   List,
-  Quote
+  Quote,
+  X,
+  FileText
 } from "lucide-react"
 import { toast } from "sonner"
+import { RichTextEditor } from "@/components/rich-text-editor"
+import { MediaLibrary } from "@/components/media-library"
+import { LayoutControls } from "@/components/layout-controls"
+import { blockTemplates, pageTemplates, createBlockFromTemplate, createPageFromTemplate } from "@/lib/page-templates"
 
 type BlockType =
   | { id: string; type: "heading"; level: 1 | 2 | 3 | 4 | 5 | 6; text: string; style?: any }
@@ -47,7 +53,7 @@ type BlockType =
   | { id: string; type: "image"; url: string; alt?: string; style?: any }
   | { id: string; type: "video"; url: string; provider?: "youtube" | "vimeo" | "file"; style?: any }
   | { id: string; type: "button"; label: string; href: string; style?: any }
-  | { id: string; type: "section"; columns: BlockType[][]; style?: any }
+  | { id: string; type: "section"; columns: BlockType[][]; style?: any; layout?: any }
 
 interface CmsPageDraft {
   id?: string
@@ -68,6 +74,8 @@ function PageBuilder() {
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [isPreview, setIsPreview] = useState(false)
   const [editingBlock, setEditingBlock] = useState<BlockType | null>(null)
+  const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false)
+  const [mediaLibraryType, setMediaLibraryType] = useState<"image" | "video" | "all">("all")
 
   useEffect(() => {
     ;(async () => {
@@ -192,23 +200,75 @@ function PageBuilder() {
                 <TabsTrigger value="templates">Modèles</TabsTrigger>
               </TabsList>
               <TabsContent value="blocks" className="mt-4">
-                <div className="space-y-2">
-                  <h3 className="text-sm font-medium text-muted-foreground">Contenu</h3>
-                  <div className="space-y-1">
-                    <BlockTemplate name="Titre principal" description="H1 avec style" onClick={() => addBlock("heading")} />
-                    <BlockTemplate name="Paragraphe" description="Texte formaté" onClick={() => addBlock("paragraph")} />
-                    <BlockTemplate name="Image" description="Image avec légende" onClick={() => addBlock("image")} />
-                    <BlockTemplate name="Bouton CTA" description="Call-to-action" onClick={() => addBlock("button")} />
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium text-muted-foreground">Blocs de base</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    <BlockButton icon={Type} label="Titre" onClick={() => addBlock("heading")} />
+                    <BlockButton icon={Square} label="Texte" onClick={() => addBlock("paragraph")} />
+                    <BlockButton icon={Image} label="Image" onClick={() => addBlock("image")} />
+                    <BlockButton icon={Video} label="Vidéo" onClick={() => addBlock("video")} />
+                    <BlockButton icon={Square} label="Bouton" onClick={() => addBlock("button")} />
+                    <BlockButton icon={Columns} label="Section" onClick={() => addBlock("section")} />
+                  </div>
+                  
+                  <Separator />
+                  
+                  <h3 className="text-sm font-medium text-muted-foreground">Modèles de blocs</h3>
+                  <div className="space-y-2">
+                    {blockTemplates.map((template) => (
+                      <div
+                        key={template.id}
+                        className="p-3 border rounded cursor-pointer hover:bg-muted transition-colors"
+                        onClick={() => {
+                          const newBlock = createBlockFromTemplate(template)
+                          setPage((p) => ({ ...p, blocks: [...p.blocks, newBlock] }))
+                          setSelectedBlockId(newBlock.id)
+                        }}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="w-8 h-8 bg-muted rounded flex items-center justify-center">
+                            {template.category === "text" && <Type className="h-4 w-4" />}
+                            {template.category === "media" && <Image className="h-4 w-4" />}
+                            {template.category === "layout" && <Columns className="h-4 w-4" />}
+                            {template.category === "interactive" && <Square className="h-4 w-4" />}
+                          </div>
+                          <div className="font-medium text-sm">{template.name}</div>
+                        </div>
+                        <div className="text-xs text-muted-foreground">{template.description}</div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </TabsContent>
               <TabsContent value="templates" className="mt-4">
                 <div className="space-y-2">
                   <h3 className="text-sm font-medium text-muted-foreground">Modèles de page</h3>
-                  <div className="space-y-1">
-                    <BlockTemplate name="Page d'accueil" description="Hero + sections" onClick={() => {}} />
-                    <BlockTemplate name="À propos" description="Texte + images" onClick={() => {}} />
-                    <BlockTemplate name="Contact" description="Formulaire + infos" onClick={() => {}} />
+                  <div className="space-y-2">
+                    {pageTemplates.map((template) => (
+                      <div
+                        key={template.id}
+                        className="p-3 border rounded cursor-pointer hover:bg-muted transition-colors"
+                        onClick={() => {
+                          const newBlocks = createPageFromTemplate(template)
+                          setPage((p) => ({ ...p, blocks: [...p.blocks, ...newBlocks] }))
+                          toast.success(`Modèle "${template.name}" ajouté`)
+                        }}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="w-8 h-8 bg-muted rounded flex items-center justify-center">
+                            {template.category === "landing" && <Layout className="h-4 w-4" />}
+                            {template.category === "content" && <FileText className="h-4 w-4" />}
+                            {template.category === "marketing" && <Square className="h-4 w-4" />}
+                            {template.category === "ecommerce" && <Square className="h-4 w-4" />}
+                          </div>
+                          <div className="font-medium text-sm">{template.name}</div>
+                        </div>
+                        <div className="text-xs text-muted-foreground">{template.description}</div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {template.blocks.length} bloc{template.blocks.length > 1 ? 's' : ''}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </TabsContent>
@@ -294,6 +354,29 @@ function PageBuilder() {
                   }))
                 }
               />
+
+              {/* Layout Controls for Sections */}
+              {page.blocks.find((b) => b.id === selectedBlockId)?.type === "section" && (
+                <LayoutControls
+                  columns={(page.blocks.find((b) => b.id === selectedBlockId) as any)?.layout?.columns || 2}
+                  gap={(page.blocks.find((b) => b.id === selectedBlockId) as any)?.layout?.gap || "1rem"}
+                  padding={(page.blocks.find((b) => b.id === selectedBlockId) as any)?.layout?.padding || "1rem"}
+                  margin={(page.blocks.find((b) => b.id === selectedBlockId) as any)?.layout?.margin || "0"}
+                  maxWidth={(page.blocks.find((b) => b.id === selectedBlockId) as any)?.layout?.maxWidth || "100%"}
+                  alignment={(page.blocks.find((b) => b.id === selectedBlockId) as any)?.layout?.alignment || "left"}
+                  responsive={(page.blocks.find((b) => b.id === selectedBlockId) as any)?.layout?.responsive || {
+                    mobile: { columns: 1, gap: "0.5rem" },
+                    tablet: { columns: 2, gap: "1rem" },
+                    desktop: { columns: 3, gap: "1.5rem" }
+                  }}
+                  onChange={(layout) =>
+                    setPage((p) => ({
+                      ...p,
+                      blocks: p.blocks.map((b) => (b.id === selectedBlockId ? ({ ...b, layout: { ...(b as any).layout, ...layout } } as any) : b)),
+                    }))
+                  }
+                />
+              )}
             </div>
           </ScrollArea>
         </div>
@@ -334,6 +417,23 @@ function PageBuilder() {
           </div>
         </div>
       )}
+
+      {/* Media Library */}
+      <MediaLibrary
+        isOpen={mediaLibraryOpen}
+        onClose={() => setMediaLibraryOpen(false)}
+        onSelect={(item) => {
+          if (editingBlock) {
+            if (editingBlock.type === "image") {
+              setEditingBlock({ ...editingBlock, url: item.url, alt: item.alt || "" })
+            } else if (editingBlock.type === "video") {
+              setEditingBlock({ ...editingBlock, url: item.url })
+            }
+          }
+          setMediaLibraryOpen(false)
+        }}
+        type={mediaLibraryType}
+      />
     </div>
   )
 }
@@ -468,7 +568,17 @@ function PreviewRenderer({ blocks }: { blocks: BlockType[] }) {
               </a>
             )}
             {block.type === "section" && (
-              <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${block.columns.length}, minmax(0, 1fr))` }}>
+              <div 
+                className="grid gap-4" 
+                style={{ 
+                  gridTemplateColumns: `repeat(${block.columns.length}, minmax(0, 1fr))`,
+                  gap: (block as any).layout?.gap || "1rem",
+                  padding: (block as any).layout?.padding || "1rem",
+                  margin: (block as any).layout?.margin || "0",
+                  maxWidth: (block as any).layout?.maxWidth || "100%",
+                  textAlign: (block as any).layout?.alignment || "left"
+                }}
+              >
                 {block.columns.map((col, idx) => (
                   <div key={idx} className="space-y-4">
                     <PreviewRenderer blocks={col} />
@@ -518,15 +628,12 @@ function BlockContentEditor({ block, onChange }: { block: BlockType; onChange: (
       <div className="space-y-4">
         <div>
           <label className="text-sm font-medium">Contenu du paragraphe</label>
-          <Textarea 
-            value={block.html} 
-            onChange={(e) => onChange({ ...block, html: e.target.value })} 
-            className="mt-1 min-h-[200px]"
-            placeholder="Entrez le contenu du paragraphe"
+          <RichTextEditor
+            content={block.html}
+            onChange={(html) => onChange({ ...block, html })}
+            placeholder="Commencez à écrire votre contenu..."
+            className="mt-1"
           />
-          <div className="text-xs text-muted-foreground mt-1">
-            Vous pouvez utiliser du HTML simple (balises p, strong, em, br, etc.)
-          </div>
         </div>
       </div>
     )
@@ -536,13 +643,25 @@ function BlockContentEditor({ block, onChange }: { block: BlockType; onChange: (
     return (
       <div className="space-y-4">
         <div>
-          <label className="text-sm font-medium">URL de l'image</label>
-          <Input 
-            value={block.url} 
-            onChange={(e) => onChange({ ...block, url: e.target.value })} 
-            className="mt-1"
-            placeholder="https://example.com/image.jpg"
-          />
+          <label className="text-sm font-medium">Image</label>
+          <div className="flex gap-2 mt-1">
+            <Input 
+              value={block.url} 
+              onChange={(e) => onChange({ ...block, url: e.target.value })} 
+              placeholder="https://example.com/image.jpg"
+              className="flex-1"
+            />
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setMediaLibraryType("image")
+                setMediaLibraryOpen(true)
+              }}
+            >
+              <ImageIcon className="h-4 w-4 mr-2" />
+              Bibliothèque
+            </Button>
+          </div>
         </div>
         <div>
           <label className="text-sm font-medium">Texte alternatif (alt)</label>
@@ -569,13 +688,25 @@ function BlockContentEditor({ block, onChange }: { block: BlockType; onChange: (
     return (
       <div className="space-y-4">
         <div>
-          <label className="text-sm font-medium">URL de la vidéo</label>
-          <Input 
-            value={block.url} 
-            onChange={(e) => onChange({ ...block, url: e.target.value })} 
-            className="mt-1"
-            placeholder="https://example.com/video.mp4 ou URL YouTube/Vimeo"
-          />
+          <label className="text-sm font-medium">Vidéo</label>
+          <div className="flex gap-2 mt-1">
+            <Input 
+              value={block.url} 
+              onChange={(e) => onChange({ ...block, url: e.target.value })} 
+              placeholder="https://example.com/video.mp4 ou URL YouTube/Vimeo"
+              className="flex-1"
+            />
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setMediaLibraryType("video")
+                setMediaLibraryOpen(true)
+              }}
+            >
+              <Video className="h-4 w-4 mr-2" />
+              Bibliothèque
+            </Button>
+          </div>
         </div>
         {block.url && (
           <div>
