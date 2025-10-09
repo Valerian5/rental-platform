@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { authService } from "@/lib/auth-service"
 import { Button } from "@/components/ui/button"
@@ -28,10 +29,11 @@ interface CmsPageDraft {
   status: "draft" | "published"
 }
 
-export default function PageBuilder() {
+function PageBuilder() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
   const [page, setPage] = useState<CmsPageDraft>({ slug: "", title: "", description: "", blocks: [], seo: {}, status: "draft" })
 
   useEffect(() => {
@@ -176,8 +178,6 @@ export default function PageBuilder() {
     </div>
   )
 }
-
-const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
 
 function applyStyle(style?: any): React.CSSProperties {
   if (!style) return {}
@@ -327,5 +327,7 @@ function computeSeoScore(p: CmsPageDraft): { score: number; color: "green" | "or
   const color = score >= 80 ? "green" : score >= 50 ? "orange" : "red"
   return { score, color }
 }
+
+export default dynamic(() => Promise.resolve(PageBuilder), { ssr: false })
 
 
