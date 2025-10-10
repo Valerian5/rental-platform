@@ -466,6 +466,10 @@ function PageBuilder() {
                               setMediaLibraryType(type)
                               setMediaLibraryOpen(true)
                             }}
+                            onEditRequest={(b, ctx) => {
+                              setEditingBlock(b)
+                              setEditingBlockContext(ctx || null)
+                            }}
                           />
                         </div>
                         <div className="p-4 border-t flex justify-end gap-2 flex-shrink-0">
@@ -655,7 +659,7 @@ function PreviewRenderer({ blocks }: { blocks: BlockType[] }) {
   )
 }
 
-function BlockContentEditor({ block, onChange, onOpenMediaLibrary }: { block: BlockType; onChange: (b: BlockType) => void; onOpenMediaLibrary?: (type: "image" | "video" | "all") => void }) {
+function BlockContentEditor({ block, onChange, onOpenMediaLibrary, onEditRequest }: { block: BlockType; onChange: (b: BlockType) => void; onOpenMediaLibrary?: (type: "image" | "video" | "all") => void; onEditRequest?: (b: BlockType, ctx?: { sectionId?: string; columnIndex?: number; blockIndex?: number }) => void }) {
   if (block.type === "heading") {
     return (
       <div className="space-y-4">
@@ -957,12 +961,11 @@ function BlockContentEditor({ block, onChange, onOpenMediaLibrary }: { block: Bl
                         key={subBlock.id} 
                         className="text-xs p-2 bg-background rounded border cursor-pointer hover:bg-muted transition-colors flex items-center justify-between group"
                         onClick={() => {
-                          // Éditer le bloc dans la colonne
-                          setEditingBlock(subBlock)
-                          setEditingBlockContext({
+                          // Demander l'édition du bloc enfant au parent
+                          onEditRequest?.(subBlock, {
                             sectionId: block.id,
                             columnIndex: idx,
-                            blockIndex: subIdx
+                            blockIndex: subIdx,
                           })
                         }}
                       >
