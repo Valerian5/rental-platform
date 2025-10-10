@@ -101,7 +101,16 @@ function PageBuilder() {
           })
           const json = await res.json()
           if (json.success) {
-            setPage(json.data)
+            const d = json.data || {}
+            setPage({
+              id: d.id,
+              slug: d.slug || "",
+              title: d.title || "",
+              description: d.description || "",
+              blocks: Array.isArray(d.blocks) ? d.blocks : [],
+              seo: d.seo || {},
+              status: d.status || "draft",
+            })
           } else {
             toast.error("Erreur lors du chargement de la page")
           }
@@ -1337,9 +1346,10 @@ function computeSeoScore(p: CmsPageDraft): { score: number; color: "green" | "or
   let score = 0
   if (p.title && p.title.length >= 30 && p.title.length <= 60) score += 25
   if (p.description && p.description.length >= 70 && p.description.length <= 160) score += 25
-  const hasH1 = p.blocks.some((b) => b.type === "heading" && (b as any).level === 1)
+  const blocks = Array.isArray(p.blocks) ? p.blocks : []
+  const hasH1 = blocks.some((b) => b.type === "heading" && (b as any).level === 1)
   if (hasH1) score += 20
-  const hasAlt = p.blocks.filter((b) => b.type === "image").every((b: any) => !!b.alt)
+  const hasAlt = blocks.filter((b) => b.type === "image").every((b: any) => !!b.alt)
   if (hasAlt) score += 15
   if (p.slug && /^[a-z0-9-]+$/.test(p.slug)) score += 15
   const color = score >= 80 ? "green" : score >= 50 ? "orange" : "red"
