@@ -422,13 +422,12 @@ function PageBuilder() {
               <Separator />
 
               <StyleInspector
-                block={page.blocks.find((b) => b.id === selectedBlockId)}
-                onChange={(style) =>
-                  setPage((p) => ({
-                    ...p,
-                    blocks: p.blocks.map((b) => (b.id === selectedBlockId ? ({ ...b, style: { ...(b as any).style, ...style } } as any) : b)),
-                  }))
-                }
+                block={(selectedBlockId && (editingBlock || findBlockById(page.blocks, selectedBlockId))) || undefined}
+                onChange={(style) => {
+                  const targetId = editingBlock?.id || selectedBlockId
+                  if (!targetId) return
+                  updateBlockStyleById(targetId, style)
+                }}
               />
 
               {/* Layout Controls for Sections */}
@@ -1263,10 +1262,12 @@ function BlockEditor({ block, onChange, onDelete, onSelect, onEdit, isSelected }
                     )}
                     {child.type === "image" && (
                       <div style={applyStyle((child as any).style)}>
-                        {(child as any).url ? (
+                        {(child as any).url && (child as any).url.trim().length ? (
                           <img src={(child as any).url} alt={(child as any).alt || ""} className="max-w-full h-auto rounded" />
                         ) : (
-                          <div className="h-24 bg-muted rounded" />
+                          <div className="h-24 bg-muted rounded flex items-center justify-center text-xs text-muted-foreground">
+                            Aucune image
+                          </div>
                         )}
                       </div>
                     )}
