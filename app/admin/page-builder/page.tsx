@@ -102,12 +102,18 @@ function PageBuilder() {
           const json = await res.json()
           if (json.success) {
             const d = json.data || {}
+            // Ensure blocks is a parsed array even if stored as a JSON string
+            const parsedBlocks = Array.isArray(d.blocks)
+              ? d.blocks
+              : (typeof d.blocks === "string" && d.blocks.trim().length
+                ? (() => { try { return JSON.parse(d.blocks) } catch { return [] } })()
+                : [])
             setPage({
               id: d.id,
               slug: d.slug || "",
               title: d.title || "",
               description: d.description || "",
-              blocks: Array.isArray(d.blocks) ? d.blocks : [],
+              blocks: parsedBlocks,
               seo: d.seo || {},
               status: d.status || "draft",
             })
