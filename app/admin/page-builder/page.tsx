@@ -131,6 +131,39 @@ function PageBuilder() {
 
   const seoScore = useMemo(() => computeSeoScore(page), [page])
 
+  // Helpers to find and update a block anywhere (top-level or inside sections)
+  const findBlockById = useCallback((blocks: BlockType[], id: string): BlockType | undefined => {
+    for (const b of blocks) {
+      if (b.id === id) return b
+      if (b.type === "section") {
+        for (const col of (b as any).columns as BlockType[][]) {
+          for (const sub of col) {
+            if (sub.id === id) return sub
+          }
+        }
+      }
+    }
+    return undefined
+  }, [])
+
+  const updateBlockStyleById = useCallback((id: string, styleUpdates: any) => {
+    setPage((p) => ({
+      ...p,
+      blocks: p.blocks.map((b) => {
+        if (b.id === id) {
+          return ({ ...(b as any), style: { ...(b as any).style, ...styleUpdates } } as any)
+        }
+        if (b.type === "section") {
+          const updatedCols = (b as any).columns.map((col: BlockType[]) =>
+            col.map((sub) => (sub.id === id ? ({ ...(sub as any), style: { ...(sub as any).style, ...styleUpdates } } as any) : sub))
+          )
+          return ({ ...(b as any), columns: updatedCols } as any)
+        }
+        return b
+      }),
+    }))
+  }, [])
+
   const addBlock = useCallback((type: BlockType["type"]) => {
     const id = crypto.randomUUID()
     const newBlock: BlockType =
@@ -636,19 +669,37 @@ function PreviewRenderer({ blocks }: { blocks: BlockType[] }) {
             )}
             {block.type === "section" && (
               <div 
-                className="grid gap-4" 
+                className="grid"
                 style={{ 
                   gridTemplateColumns: `repeat(${block.columns.length}, minmax(0, 1fr))`,
                   gap: (block as any).layout?.gap || "1rem",
                   padding: (block as any).layout?.padding || "1rem",
                   margin: (block as any).layout?.margin || "0",
                   maxWidth: (block as any).layout?.maxWidth || "100%",
-                  textAlign: (block as any).layout?.alignment || "left"
+                  textAlign: (block as any).layout?.alignment || "left",
                 }}
               >
                 {block.columns.map((col, idx) => (
                   <div key={idx} className="space-y-4">
-                    <PreviewRenderer blocks={col} />
+                    {col.map((child) => (
+                      <BlockEditor
+                        key={child.id}
+                        block={child}
+                        onChange={(updated) => {
+                          const newCols = [...block.columns]
+                          newCols[idx] = newCols[idx].map((c) => (c.id === updated.id ? updated : c))
+                          onChange({ ...(block as any), columns: newCols } as any)
+                        }}
+                        onDelete={() => {
+                          const newCols = [...block.columns]
+                          newCols[idx] = newCols[idx].filter((c) => c.id !== child.id)
+                          onChange({ ...(block as any), columns: newCols } as any)
+                        }}
+                        onSelect={() => onSelect()}
+                        onEdit={() => onEdit()}
+                        isSelected={false}
+                      />
+                    ))}
                   </div>
                 ))}
               </div>
@@ -1184,10 +1235,59 @@ function BlockEditor({ block, onChange, onDelete, onSelect, onEdit, isSelected }
       >
         <div className="p-4 border-2 border-dashed border-transparent hover:border-primary/50 rounded-lg transition-colors">
           <div className="text-xs text-muted-foreground mb-2">Section ({block.columns.length} colonnes)</div>
-          <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${block.columns.length}, minmax(0, 1fr))` }}>
+          <div
+            className="grid"
+            style={{
+              gridTemplateColumns: `repeat(${block.columns.length}, minmax(0, 1fr))`,
+              gap: (block as any).layout?.gap || "1rem",
+              padding: (block as any).layout?.padding || "1rem",
+              margin: (block as any).layout?.margin || "0",
+              maxWidth: (block as any).layout?.maxWidth || "100%",
+              textAlign: (block as any).layout?.alignment || "left",
+            }}
+          >
             {block.columns.map((col, idx) => (
-              <div key={idx} className="min-h-[100px] bg-muted/50 rounded p-4 text-center text-sm text-muted-foreground">
-                Colonne {idx + 1}
+              <div key={idx} className="space-y-4">
+                {col.map((child) => (
+                  <div key={child.id}>
+                    {/* Render child block preview-like inside editor */}
+                    {child.type === "heading" && (
+                      <div style={applyStyle((child as any).style)}>
+                        <div className="font-bold">
+                          {(child as any).text || "Titre"}
+                        </div>
+                      </div>
+                    )}
+                    {child.type === "paragraph" && (
+                      <div style={applyStyle((child as any).style)} dangerouslySetInnerHTML={{ __html: (child as any).html || "" }} />
+                    )}
+                    {child.type === "image" && (
+                      <div style={applyStyle((child as any).style)}>
+                        {(child as any).url ? (
+                          <img src={(child as any).url} alt={(child as any).alt || ""} className="max-w-full h-auto rounded" />
+                        ) : (
+                          <div className="h-24 bg-muted rounded" />
+                        )}
+                      </div>
+                    )}
+                    {child.type === "video" && (
+                      <div style={applyStyle((child as any).style)}>
+                        {(child as any).url ? (
+                          <video src={(child as any).url} className="max-w-full h-auto rounded" />
+                        ) : (
+                          <div className="h-24 bg-muted rounded" />
+                        )}
+                      </div>
+                    )}
+                    {child.type === "button" && (
+                      <div style={applyStyle((child as any).style)}>
+                        <a href={(child as any).href} className="inline-flex items-center bg-primary text-primary-foreground px-4 py-2 rounded">
+                          {(child as any).label || "Bouton"}
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             ))}
           </div>
