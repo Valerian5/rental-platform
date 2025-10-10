@@ -126,7 +126,17 @@ function Renderer({ blocks }: { blocks: any[] }) {
           return (
             <div key={b.id} className="grid gap-4" style={{ gridTemplateColumns: `repeat(${b.columns.length}, minmax(0, 1fr))`, ...applyStyle(b.style) }}>
               {b.columns.map((col: any[], idx: number) => (
-                <div key={idx} className="space-y-4">
+                <div key={idx} className="space-y-4" style={{
+                  padding: b.columnsStyle?.[idx]?.padding,
+                  margin: b.columnsStyle?.[idx]?.margin,
+                  backgroundColor: b.columnsStyle?.[idx]?.backgroundColor,
+                  border: b.columnsStyle?.[idx]?.border,
+                  borderRadius: b.columnsStyle?.[idx]?.borderRadius,
+                  display: (b.columnsStyle?.[idx]?.verticalAlign || b.columnsStyle?.[idx]?.justifyContent) ? 'flex' : undefined,
+                  flexDirection: 'column',
+                  justifyContent: b.columnsStyle?.[idx]?.verticalAlign,
+                  alignItems: b.columnsStyle?.[idx]?.justifyContent,
+                }}>
                   <Renderer blocks={col} />
                 </div>
               ))}

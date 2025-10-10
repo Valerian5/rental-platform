@@ -1140,6 +1140,30 @@ function BlockContentEditor({ block, onChange, onOpenMediaLibrary, onEditRequest
                       onChange({ ...block, columnsStyle: next } as any)
                     }}
                   />
+                  <Select value={((block as any).columnsStyle?.[idx]?.justifyContent) || "start"} onValueChange={(v) => {
+                    const next = [ ...((block as any).columnsStyle || []) ]
+                    next[idx] = { ...(next[idx] || {}), justifyContent: v === 'start' ? 'flex-start' : v === 'center' ? 'center' : 'flex-end' }
+                    onChange({ ...block, columnsStyle: next } as any)
+                  }}>
+                    <SelectTrigger><SelectValue placeholder="Aligner horizontalement" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="start">Gauche</SelectItem>
+                      <SelectItem value="center">Centre</SelectItem>
+                      <SelectItem value="end">Droite</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={((block as any).columnsStyle?.[idx]?.verticalAlign) || "start"} onValueChange={(v) => {
+                    const next = [ ...((block as any).columnsStyle || []) ]
+                    next[idx] = { ...(next[idx] || {}), verticalAlign: v === 'start' ? 'flex-start' : v === 'center' ? 'center' : 'flex-end' }
+                    onChange({ ...block, columnsStyle: next } as any)
+                  }}>
+                    <SelectTrigger><SelectValue placeholder="Aligner verticalement" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="start">Haut</SelectItem>
+                      <SelectItem value="center">Milieu</SelectItem>
+                      <SelectItem value="end">Bas</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="text-sm">
                   {col.length === 0 ? "Vide" : `${col.length} bloc${col.length > 1 ? 's' : ''}`}
@@ -1390,7 +1414,7 @@ function BlockEditor({ block, onChange, onDelete, onSelect, onEdit, onSelectChil
                 borderRadius: (block as any).style?.borderRadius,
                 fontSize: (block as any).style?.fontSize,
                 fontWeight: (block as any).style?.fontWeight,
-                border: (block as any).style?.border || ((block as any).style?.borderColor ? `1px solid ${(block as any).style?.borderColor}` : undefined),
+                border: applyStyle((block as any).style)?.border,
                 boxShadow: (block as any).style?.boxShadow,
                 textDecoration: (block as any).style?.textDecoration,
                 display: 'inline-flex',
@@ -1435,7 +1459,13 @@ function BlockEditor({ block, onChange, onDelete, onSelect, onEdit, onSelectChil
             }}
           >
             {block.columns.map((col, idx) => (
-              <div key={idx} className="space-y-4" style={applyStyle(((block as any).columnsStyle && (block as any).columnsStyle[idx]) || undefined)}>
+              <div key={idx} className="space-y-4" style={{
+                ...applyStyle(((block as any).columnsStyle && (block as any).columnsStyle[idx]) || undefined),
+                display: ((block as any).columnsStyle?.[idx]?.verticalAlign || (block as any).columnsStyle?.[idx]?.justifyContent) ? 'flex' : undefined,
+                flexDirection: 'column',
+                justifyContent: (block as any).columnsStyle?.[idx]?.verticalAlign || undefined,
+                alignItems: (block as any).columnsStyle?.[idx]?.justifyContent || undefined,
+              }}>
                 {col.map((child, subIdx) => (
                   <div 
                     key={child.id}
@@ -1476,7 +1506,24 @@ function BlockEditor({ block, onChange, onDelete, onSelect, onEdit, onSelectChil
                     )}
                     {child.type === "button" && (
                       <div style={applyStyle((child as any).style)}>
-                        <a href={(child as any).href} className="inline-flex items-center bg-primary text-primary-foreground px-4 py-2 rounded">
+                        <a 
+                          href={(child as any).href} 
+                          className="inline-flex items-center"
+                          style={{
+                            backgroundColor: (child as any).style?.backgroundColor,
+                            color: (child as any).style?.color,
+                            padding: (child as any).style?.padding || '8px 16px',
+                            borderRadius: (child as any).style?.borderRadius,
+                            fontSize: (child as any).style?.fontSize,
+                            fontWeight: (child as any).style?.fontWeight,
+                            border: applyStyle((child as any).style)?.border,
+                            boxShadow: (child as any).style?.boxShadow,
+                            textDecoration: (child as any).style?.textDecoration,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            width: (child as any).style?.width,
+                          }}
+                        >
                           {(child as any).label || "Bouton"}
                         </a>
                       </div>
