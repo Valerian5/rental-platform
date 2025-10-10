@@ -164,7 +164,13 @@ export default async function CmsPage({ params }: { params: { slug: string } }) 
                 }}
               >
                 {block.columns.map((col: any[], colIdx: number) => (
-                  <div key={colIdx} className="space-y-4">
+                  <div key={colIdx} className="space-y-4" style={{
+                    padding: block.columnsStyle?.[colIdx]?.padding,
+                    margin: block.columnsStyle?.[colIdx]?.margin,
+                    backgroundColor: block.columnsStyle?.[colIdx]?.backgroundColor,
+                    border: block.columnsStyle?.[colIdx]?.border,
+                    borderRadius: block.columnsStyle?.[colIdx]?.borderRadius,
+                  }}>
                     {col.map((subBlock: any) => (
                       <div key={subBlock.id}>
                         {subBlock.type === "heading" && (

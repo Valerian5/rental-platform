@@ -55,7 +55,7 @@ type BlockType =
   | { id: string; type: "image"; url: string; alt?: string; style?: any }
   | { id: string; type: "video"; url: string; provider?: "youtube" | "vimeo" | "file"; style?: any }
   | { id: string; type: "button"; label: string; href: string; style?: any }
-  | { id: string; type: "section"; columns: BlockType[][]; style?: any; layout?: any }
+  | { id: string; type: "section"; columns: BlockType[][]; style?: any; layout?: any; columnsStyle?: any[] }
 
 interface CmsPageDraft {
   id?: string
@@ -177,7 +177,7 @@ function PageBuilder() {
               ? { id, type, url: "" }
               : type === "button"
                 ? { id, type, label: "Nouveau bouton", href: "#" }
-                : { id, type: "section", columns: [[]] }
+              : { id, type: "section", columns: [[]], style: {}, layout: {}, columnsStyle: [{}] as any }
     setPage((p) => ({ ...p, blocks: [...p.blocks, newBlock] }))
     setSelectedBlockId(id)
   }, [])
@@ -960,7 +960,11 @@ function BlockContentEditor({ block, onChange, onOpenMediaLibrary, onEditRequest
                   const newColumns = Array(num).fill(null).map((_, idx) => 
                     idx < block.columns.length ? block.columns[idx] : []
                   )
-                  onChange({ ...block, columns: newColumns })
+                  const currentColsStyle = (block as any).columnsStyle || []
+                  const newColumnsStyle = Array(num).fill(null).map((_, idx) =>
+                    idx < currentColsStyle.length ? currentColsStyle[idx] : {}
+                  )
+                  onChange({ ...block, columns: newColumns, columnsStyle: newColumnsStyle } as any)
                 }}
               >
                 {num}
@@ -1073,12 +1077,69 @@ function BlockContentEditor({ block, onChange, onOpenMediaLibrary, onEditRequest
                       onClick={() => {
                         const newColumns = [...block.columns]
                         newColumns.splice(idx, 1)
-                        onChange({ ...block, columns: newColumns })
+                        const colsStyle = [ ...((block as any).columnsStyle || []) ]
+                        if (idx < colsStyle.length) colsStyle.splice(idx, 1)
+                        onChange({ ...block, columns: newColumns, columnsStyle: colsStyle } as any)
                       }}
                     >
                       <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
+                </div>
+                {/* Column style controls */}
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <Input
+                    placeholder="Padding col"
+                    value={((block as any).columnsStyle?.[idx]?.padding) || ""}
+                    onChange={(e) => {
+                      const next = [ ...((block as any).columnsStyle || []) ]
+                      next[idx] = { ...(next[idx] || {}), padding: e.target.value }
+                      onChange({ ...block, columnsStyle: next } as any)
+                    }}
+                  />
+                  <Input
+                    placeholder="Margin col"
+                    value={((block as any).columnsStyle?.[idx]?.margin) || ""}
+                    onChange={(e) => {
+                      const next = [ ...((block as any).columnsStyle || []) ]
+                      next[idx] = { ...(next[idx] || {}), margin: e.target.value }
+                      onChange({ ...block, columnsStyle: next } as any)
+                    }}
+                  />
+                  <div className="flex items-center gap-2">
+                    <Input type="color" className="w-12 h-8" value={((block as any).columnsStyle?.[idx]?.backgroundColor) || "#ffffff"} onChange={(e) => {
+                      const next = [ ...((block as any).columnsStyle || []) ]
+                      next[idx] = { ...(next[idx] || {}), backgroundColor: e.target.value }
+                      onChange({ ...block, columnsStyle: next } as any)
+                    }} />
+                    <Input
+                      placeholder="Couleur de fond col"
+                      value={((block as any).columnsStyle?.[idx]?.backgroundColor) || ""}
+                      onChange={(e) => {
+                        const next = [ ...((block as any).columnsStyle || []) ]
+                        next[idx] = { ...(next[idx] || {}), backgroundColor: e.target.value }
+                        onChange({ ...block, columnsStyle: next } as any)
+                      }}
+                    />
+                  </div>
+                  <Input
+                    placeholder="Bordure col (ex: 1px solid #ccc)"
+                    value={((block as any).columnsStyle?.[idx]?.border) || ""}
+                    onChange={(e) => {
+                      const next = [ ...((block as any).columnsStyle || []) ]
+                      next[idx] = { ...(next[idx] || {}), border: e.target.value }
+                      onChange({ ...block, columnsStyle: next } as any)
+                    }}
+                  />
+                  <Input
+                    placeholder="Rayon col"
+                    value={((block as any).columnsStyle?.[idx]?.borderRadius) || ""}
+                    onChange={(e) => {
+                      const next = [ ...((block as any).columnsStyle || []) ]
+                      next[idx] = { ...(next[idx] || {}), borderRadius: e.target.value }
+                      onChange({ ...block, columnsStyle: next } as any)
+                    }}
+                  />
                 </div>
                 <div className="text-sm">
                   {col.length === 0 ? "Vide" : `${col.length} bloc${col.length > 1 ? 's' : ''}`}
@@ -1113,19 +1174,55 @@ function BlockContentEditor({ block, onChange, onOpenMediaLibrary, onEditRequest
                              subBlock.type}
                           </span>
                         </div>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            const newColumns = [...block.columns]
-                            newColumns[idx] = newColumns[idx].filter((_, i) => i !== subIdx)
-                            onChange({ ...block, columns: newColumns })
-                          }}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              const newColumns = [...block.columns]
+                              if (subIdx > 0) {
+                                const arr = [...newColumns[idx]]
+                                ;[arr[subIdx - 1], arr[subIdx]] = [arr[subIdx], arr[subIdx - 1]]
+                                newColumns[idx] = arr
+                                onChange({ ...block, columns: newColumns })
+                              }
+                            }}
+                          >
+                            ↑
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              const newColumns = [...block.columns]
+                              if (subIdx < newColumns[idx].length - 1) {
+                                const arr = [...newColumns[idx]]
+                                ;[arr[subIdx + 1], arr[subIdx]] = [arr[subIdx], arr[subIdx + 1]]
+                                newColumns[idx] = arr
+                                onChange({ ...block, columns: newColumns })
+                              }
+                            }}
+                          >
+                            ↓
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              const newColumns = [...block.columns]
+                              newColumns[idx] = newColumns[idx].filter((_, i) => i !== subIdx)
+                              onChange({ ...block, columns: newColumns })
+                            }}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1338,7 +1435,7 @@ function BlockEditor({ block, onChange, onDelete, onSelect, onEdit, onSelectChil
             }}
           >
             {block.columns.map((col, idx) => (
-              <div key={idx} className="space-y-4">
+              <div key={idx} className="space-y-4" style={applyStyle(((block as any).columnsStyle && (block as any).columnsStyle[idx]) || undefined)}>
                 {col.map((child, subIdx) => (
                   <div 
                     key={child.id}
@@ -1525,10 +1622,10 @@ function StyleInspector({ block, onChange }: { block?: any; onChange: (style: an
           </div>
           <div className="grid grid-cols-3 gap-2">
             <Input placeholder="Épaisseur (ex: 1px)" value={style.borderWidth || ""} onChange={(e) => onChange({ borderWidth: e.target.value })} />
-            <Select value={style.borderStyle || ""} onValueChange={(v) => onChange({ borderStyle: v })}>
+            <Select value={style.borderStyle ? String(style.borderStyle) : "auto"} onValueChange={(v) => onChange({ borderStyle: v === "auto" ? "" : v })}>
               <SelectTrigger><SelectValue placeholder="Style" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="">(auto)</SelectItem>
+                <SelectItem value="auto">(auto)</SelectItem>
                 <SelectItem value="solid">Solide</SelectItem>
                 <SelectItem value="dashed">Pointillé</SelectItem>
                 <SelectItem value="dotted">Pointé</SelectItem>
