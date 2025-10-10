@@ -571,8 +571,10 @@ function applyStyle(style?: any): React.CSSProperties {
   if (style.padding) css.padding = style.padding
   if (style.margin) css.margin = style.margin
   if (style.border) css.border = style.border
+  if (!style.border && style.borderColor) css.border = `1px solid ${style.borderColor}`
   if (style.borderRadius) css.borderRadius = style.borderRadius
   if (style.boxShadow) css.boxShadow = style.boxShadow
+  if (style.width) css.width = style.width
   return css
 }
 
