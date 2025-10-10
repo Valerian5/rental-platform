@@ -1222,14 +1222,27 @@ function BlockEditor({ block, onChange, onDelete, onSelect, onEdit, isSelected }
         onClick={onSelect} 
         onDoubleClick={onEdit}
         className={`relative group cursor-pointer ${isSelected ? 'ring-2 ring-primary' : ''}`}
-        style={applyStyle((block as any).style)}
+        style={applyStyle({ textAlign: (block as any).style?.textAlign, margin: (block as any).style?.margin })}
       >
         <div className="p-4 border-2 border-dashed border-transparent hover:border-primary/50 rounded-lg transition-colors">
           <div className="text-xs text-muted-foreground mb-2">Bouton</div>
           <div className="inline-block">
             <a 
               href={block.href} 
-              className="inline-flex items-center bg-primary text-primary-foreground px-6 py-3 rounded hover:bg-primary/90 transition-colors"
+              className="inline-flex items-center transition-colors"
+              style={{
+                backgroundColor: (block as any).style?.backgroundColor,
+                color: (block as any).style?.color,
+                padding: (block as any).style?.padding || '12px 24px',
+                borderRadius: (block as any).style?.borderRadius,
+                fontSize: (block as any).style?.fontSize,
+                fontWeight: (block as any).style?.fontWeight,
+                border: (block as any).style?.border,
+                boxShadow: (block as any).style?.boxShadow,
+                textDecoration: (block as any).style?.textDecoration,
+                display: 'inline-flex',
+                alignItems: 'center',
+              }}
             >
               {block.label || "Nouveau bouton"}
             </a>
