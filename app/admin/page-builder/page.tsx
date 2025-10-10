@@ -523,11 +523,30 @@ function PageBuilder() {
         onClose={() => setMediaLibraryOpen(false)}
         onSelect={(item) => {
           if (editingBlock) {
+            const updated: any = { ...editingBlock }
             if (editingBlock.type === "image") {
-              setEditingBlock({ ...editingBlock, url: item.url, alt: item.alt || "" })
+              updated.url = item.url
+              updated.alt = item.alt || ""
             } else if (editingBlock.type === "video") {
-              setEditingBlock({ ...editingBlock, url: item.url })
+              updated.url = item.url
             }
+            setEditingBlock(updated)
+            // Persist to page (handles nested via context)
+            setPage((p) => ({
+              ...p,
+              blocks: p.blocks.map((b) => {
+                if (b.id === updated.id) return updated
+                if (b.type === "section" && editingBlockContext?.sectionId === b.id) {
+                  const cols = (b as any).columns.map((col: BlockType[], cIdx: number) =>
+                    cIdx === (editingBlockContext?.columnIndex ?? -1)
+                      ? col.map((sub, sIdx) => (sIdx === (editingBlockContext?.blockIndex ?? -1) ? updated : sub))
+                      : col
+                  )
+                  return ({ ...(b as any), columns: cols } as any)
+                }
+                return b
+              })
+            }))
           }
           setMediaLibraryOpen(false)
         }}
