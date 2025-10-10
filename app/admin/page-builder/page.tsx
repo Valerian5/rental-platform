@@ -745,11 +745,12 @@ function PreviewRenderer({ blocks }: { blocks: BlockType[] }) {
                               borderRadius: (child as any).style?.borderRadius,
                               fontSize: (child as any).style?.fontSize,
                               fontWeight: (child as any).style?.fontWeight,
-                              border: (child as any).style?.border,
+                              border: (child as any).style?.border || ((child as any).style?.borderColor ? `1px solid ${(child as any).style?.borderColor}` : undefined),
                               boxShadow: (child as any).style?.boxShadow,
                               textDecoration: (child as any).style?.textDecoration,
                               display: 'inline-flex',
                               alignItems: 'center',
+                              width: (child as any).style?.width,
                             }}
                           >
                             {(child as any).label}
@@ -1273,11 +1274,12 @@ function BlockEditor({ block, onChange, onDelete, onSelect, onEdit, isSelected }
                 borderRadius: (block as any).style?.borderRadius,
                 fontSize: (block as any).style?.fontSize,
                 fontWeight: (block as any).style?.fontWeight,
-                border: (block as any).style?.border,
+                border: (block as any).style?.border || ((block as any).style?.borderColor ? `1px solid ${(block as any).style?.borderColor}` : undefined),
                 boxShadow: (block as any).style?.boxShadow,
                 textDecoration: (block as any).style?.textDecoration,
                 display: 'inline-flex',
                 alignItems: 'center',
+                width: (block as any).style?.width,
               }}
             >
               {block.label || "Nouveau bouton"}
@@ -1489,6 +1491,10 @@ function StyleInspector({ block, onChange }: { block?: any; onChange: (style: an
           <div className="grid grid-cols-2 gap-2">
             <Input placeholder="Bordure" value={style.border || ""} onChange={(e) => onChange({ border: e.target.value })} />
             <Input placeholder="Rayon" value={style.borderRadius || ""} onChange={(e) => onChange({ borderRadius: e.target.value })} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Input placeholder="Couleur de bordure" value={style.borderColor || ""} onChange={(e) => onChange({ borderColor: e.target.value })} />
+            <Input placeholder="Largeur (ex: auto, 200px)" value={style.width || ""} onChange={(e) => onChange({ width: e.target.value })} />
           </div>
           <Input placeholder="Ombre" value={style.boxShadow || ""} onChange={(e) => onChange({ boxShadow: e.target.value })} />
         </div>
