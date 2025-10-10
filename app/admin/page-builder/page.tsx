@@ -694,9 +694,9 @@ function PreviewRenderer({ blocks }: { blocks: BlockType[] }) {
                           newCols[idx] = newCols[idx].filter((c) => c.id !== child.id)
                           onChange({ ...(block as any), columns: newCols } as any)
                         }}
-                        onSelect={() => onSelect()}
+                        onSelect={() => onSelect(child.id)}
                         onEdit={() => onEdit()}
-                        isSelected={false}
+                        isSelected={selectedBlockId === child.id}
                       />
                     ))}
                   </div>
@@ -1262,8 +1262,8 @@ function BlockEditor({ block, onChange, onDelete, onSelect, onEdit, isSelected }
                     )}
                     {child.type === "image" && (
                       <div style={applyStyle((child as any).style)}>
-                        {(child as any).url && (child as any).url.trim().length ? (
-                          <img src={(child as any).url} alt={(child as any).alt || ""} className="max-w-full h-auto rounded" />
+                        {(child as any).url && String((child as any).url).trim().length ? (
+                          <img src={String((child as any).url)} alt={(child as any).alt || ""} className="max-w-full h-auto rounded" />
                         ) : (
                           <div className="h-24 bg-muted rounded flex items-center justify-center text-xs text-muted-foreground">
                             Aucune image
