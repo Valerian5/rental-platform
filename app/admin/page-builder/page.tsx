@@ -466,9 +466,10 @@ function PageBuilder() {
                               setMediaLibraryType(type)
                               setMediaLibraryOpen(true)
                             }}
-                            onEditRequest={(b, ctx) => {
+                        onEditRequest={(b, ctx) => {
                               setEditingBlock(b)
                               setEditingBlockContext(ctx || null)
+                              setSelectedBlockId(b.id)
                             }}
                           />
                         </div>
