@@ -684,7 +684,23 @@ function PreviewRenderer({ blocks }: { blocks: BlockType[] }) {
               <video controls src={block.url} className="max-w-full h-auto" />
             )}
             {block.type === "button" && (
-              <a href={block.href} className="inline-block bg-primary text-primary-foreground px-6 py-3 rounded">
+              <a
+                href={block.href}
+                className="inline-flex items-center"
+                style={{
+                  backgroundColor: (block as any).style?.backgroundColor,
+                  color: (block as any).style?.color,
+                  padding: (block as any).style?.padding || '12px 24px',
+                  borderRadius: (block as any).style?.borderRadius,
+                  fontSize: (block as any).style?.fontSize,
+                  fontWeight: (block as any).style?.fontWeight,
+                  border: (block as any).style?.border,
+                  boxShadow: (block as any).style?.boxShadow,
+                  textDecoration: (block as any).style?.textDecoration,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                }}
+              >
                 {block.label}
               </a>
             )}
@@ -703,23 +719,43 @@ function PreviewRenderer({ blocks }: { blocks: BlockType[] }) {
                 {block.columns.map((col, idx) => (
                   <div key={idx} className="space-y-4">
                     {col.map((child) => (
-                      <BlockEditor
-                        key={child.id}
-                        block={child}
-                        onChange={(updated) => {
-                          const newCols = [...block.columns]
-                          newCols[idx] = newCols[idx].map((c) => (c.id === updated.id ? updated : c))
-                          onChange({ ...(block as any), columns: newCols } as any)
-                        }}
-                        onDelete={() => {
-                          const newCols = [...block.columns]
-                          newCols[idx] = newCols[idx].filter((c) => c.id !== child.id)
-                          onChange({ ...(block as any), columns: newCols } as any)
-                        }}
-                        onSelect={() => onSelect(child.id)}
-                        onEdit={() => onEdit()}
-                        isSelected={false}
-                      />
+                      <div key={child.id} style={applyStyle((child as any).style)}>
+                        {child.type === 'heading' && (
+                          <div className={`font-bold ${child.level === 1 ? 'text-4xl' : child.level === 2 ? 'text-3xl' : child.level === 3 ? 'text-2xl' : 'text-xl'}`}>
+                            {(child as any).text}
+                          </div>
+                        )}
+                        {child.type === 'paragraph' && (
+                          <div dangerouslySetInnerHTML={{ __html: (child as any).html }} />
+                        )}
+                        {child.type === 'image' && (child as any).url && (
+                          <img src={(child as any).url} alt={(child as any).alt || ''} className="max-w-full h-auto" />
+                        )}
+                        {child.type === 'video' && (child as any).url && (
+                          <video controls src={(child as any).url} className="max-w-full h-auto" />
+                        )}
+                        {child.type === 'button' && (
+                          <a
+                            href={(child as any).href}
+                            className="inline-flex items-center"
+                            style={{
+                              backgroundColor: (child as any).style?.backgroundColor,
+                              color: (child as any).style?.color,
+                              padding: (child as any).style?.padding || '8px 16px',
+                              borderRadius: (child as any).style?.borderRadius,
+                              fontSize: (child as any).style?.fontSize,
+                              fontWeight: (child as any).style?.fontWeight,
+                              border: (child as any).style?.border,
+                              boxShadow: (child as any).style?.boxShadow,
+                              textDecoration: (child as any).style?.textDecoration,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                            }}
+                          >
+                            {(child as any).label}
+                          </a>
+                        )}
+                      </div>
                     ))}
                   </div>
                 ))}
