@@ -65,8 +65,17 @@ function applyStyle(style?: any): React.CSSProperties {
   if (style.padding) css.padding = style.padding
   if (style.margin) css.margin = style.margin
   if (style.border) css.border = style.border
+  const borderWidth = style.borderWidth
+  const borderStyle = style.borderStyle
+  const borderColor = style.borderColor
+  if (!css.border && (borderWidth || borderStyle || borderColor)) {
+    const widthStr = borderWidth || (borderColor ? "1px" : undefined)
+    const styleStr = borderStyle || (borderColor ? "solid" : undefined)
+    css.border = `${widthStr || ""} ${styleStr || ""} ${borderColor || ""}`.trim()
+  }
   if (style.borderRadius) css.borderRadius = style.borderRadius
   if (style.boxShadow) css.boxShadow = style.boxShadow
+  if (style.width) css.width = style.width
   return css
 }
 
@@ -88,8 +97,27 @@ function Renderer({ blocks }: { blocks: any[] }) {
           return <video key={b.id} controls src={b.url} style={applyStyle(b.style)} />
         }
         if (b.type === "button") {
+          const style = b.style || {}
           return (
-            <a key={b.id} href={b.href} className="inline-flex items-center rounded bg-primary px-4 py-2 text-white" style={applyStyle(b.style)}>
+            <a
+              key={b.id}
+              href={b.href}
+              className="inline-flex items-center"
+              style={{
+                backgroundColor: style.backgroundColor,
+                color: style.color,
+                padding: style.padding || '12px 24px',
+                borderRadius: style.borderRadius,
+                fontSize: style.fontSize,
+                fontWeight: style.fontWeight,
+                border: style.border,
+                boxShadow: style.boxShadow,
+                textDecoration: style.textDecoration,
+                display: 'inline-flex',
+                alignItems: 'center',
+                width: style.width,
+              }}
+            >
               {b.label}
             </a>
           )

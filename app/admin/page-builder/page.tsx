@@ -388,6 +388,11 @@ function PageBuilder() {
                     onDeleteBlock={(id) => setPage((p) => ({ ...p, blocks: p.blocks.filter((b) => b.id !== id) }))}
                     onDuplicateBlock={duplicateBlock}
                     onEditBlock={setEditingBlock}
+                  onEditChild={(b, ctx) => {
+                    setEditingBlock(b)
+                    setEditingBlockContext(ctx)
+                    setSelectedBlockId(b.id)
+                  }}
                     onDragStart={onDragStart}
                     onDragOver={onDragOver}
                     onDrop={onDrop}
@@ -571,7 +576,14 @@ function applyStyle(style?: any): React.CSSProperties {
   if (style.padding) css.padding = style.padding
   if (style.margin) css.margin = style.margin
   if (style.border) css.border = style.border
-  if (!style.border && style.borderColor) css.border = `1px solid ${style.borderColor}`
+  const borderWidth = style.borderWidth
+  const borderStyle = style.borderStyle
+  const borderColor = style.borderColor
+  if (!css.border && (borderWidth || borderStyle || borderColor)) {
+    const widthStr = borderWidth || (borderColor ? "1px" : undefined)
+    const styleStr = borderStyle || (borderColor ? "solid" : undefined)
+    css.border = `${widthStr || ""} ${styleStr || ""} ${borderColor || ""}`.trim()
+  }
   if (style.borderRadius) css.borderRadius = style.borderRadius
   if (style.boxShadow) css.boxShadow = style.boxShadow
   if (style.width) css.width = style.width
@@ -605,6 +617,7 @@ function Canvas({
   onDeleteBlock, 
   onDuplicateBlock,
   onEditBlock,
+  onEditChild,
   onDragStart,
   onDragOver,
   onDrop
@@ -616,6 +629,7 @@ function Canvas({
   onDeleteBlock: (id: string) => void
   onDuplicateBlock: (block: BlockType) => void
   onEditBlock: (block: BlockType) => void
+  onEditChild: (block: BlockType, ctx: { sectionId: string; columnIndex: number; blockIndex: number }) => void
   onDragStart: (index: number) => void
   onDragOver: (e: React.DragEvent) => void
   onDrop: (index: number) => void
@@ -656,6 +670,8 @@ function Canvas({
               onDelete={() => onDeleteBlock(block.id)}
               onSelect={() => onSelectBlock(block.id)}
               onEdit={() => onEditBlock(block)}
+              onSelectChild={(id) => onSelectBlock(id)}
+              onEditChild={(b, ctx) => onEditChild(b, ctx)}
               isSelected={selectedBlockId === block.id}
             />
           </div>
@@ -701,6 +717,7 @@ function PreviewRenderer({ blocks }: { blocks: BlockType[] }) {
                   textDecoration: (block as any).style?.textDecoration,
                   display: 'inline-flex',
                   alignItems: 'center',
+                  width: (block as any).style?.width,
                 }}
               >
                 {block.label}
@@ -1124,7 +1141,7 @@ function BlockContentEditor({ block, onChange, onOpenMediaLibrary, onEditRequest
   return <div>Type de bloc non supporté pour l'édition</div>
 }
 
-function BlockEditor({ block, onChange, onDelete, onSelect, onEdit, isSelected }: { block: BlockType; onChange: (b: BlockType) => void; onDelete: () => void; onSelect: () => void; onEdit: () => void; isSelected: boolean }) {
+function BlockEditor({ block, onChange, onDelete, onSelect, onEdit, onSelectChild, onEditChild, isSelected }: { block: BlockType; onChange: (b: BlockType) => void; onDelete: () => void; onSelect: () => void; onEdit: () => void; onSelectChild?: (id: string) => void; onEditChild?: (b: BlockType, ctx: { sectionId: string; columnIndex: number; blockIndex: number }) => void; isSelected: boolean }) {
   if (block.type === "heading") {
     return (
       <div 
@@ -1322,8 +1339,13 @@ function BlockEditor({ block, onChange, onDelete, onSelect, onEdit, isSelected }
           >
             {block.columns.map((col, idx) => (
               <div key={idx} className="space-y-4">
-                {col.map((child) => (
-                  <div key={child.id}>
+                {col.map((child, subIdx) => (
+                  <div 
+                    key={child.id}
+                    onClick={(e) => { e.stopPropagation(); onSelectChild?.(child.id) }}
+                    onDoubleClick={(e) => { e.stopPropagation(); onEditChild?.(child, { sectionId: block.id, columnIndex: idx, blockIndex: subIdx }) }}
+                    className="cursor-pointer"
+                  >
                     {/* Render child block preview-like inside editor */}
                     {child.type === "heading" && (
                       <div style={applyStyle((child as any).style)}>
@@ -1491,12 +1513,31 @@ function StyleInspector({ block, onChange }: { block?: any; onChange: (style: an
             <Input placeholder="Couleur de fond" value={style.backgroundColor || ""} onChange={(e) => onChange({ backgroundColor: e.target.value })} className="flex-1" />
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Input placeholder="Bordure" value={style.border || ""} onChange={(e) => onChange({ border: e.target.value })} />
+            <Input placeholder="Bordure (ex: 1px solid #000)" value={style.border || ""} onChange={(e) => onChange({ border: e.target.value })} />
             <Input placeholder="Rayon" value={style.borderRadius || ""} onChange={(e) => onChange({ borderRadius: e.target.value })} />
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Input placeholder="Couleur de bordure" value={style.borderColor || ""} onChange={(e) => onChange({ borderColor: e.target.value })} />
+            <div className="flex items-center gap-2">
+              <Input type="color" value={style.borderColor || "#000000"} onChange={(e) => onChange({ borderColor: e.target.value })} className="w-12 h-8" />
+              <Input placeholder="Couleur de bordure" value={style.borderColor || ""} onChange={(e) => onChange({ borderColor: e.target.value })} className="flex-1" />
+            </div>
             <Input placeholder="Largeur (ex: auto, 200px)" value={style.width || ""} onChange={(e) => onChange({ width: e.target.value })} />
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <Input placeholder="Épaisseur (ex: 1px)" value={style.borderWidth || ""} onChange={(e) => onChange({ borderWidth: e.target.value })} />
+            <Select value={style.borderStyle || ""} onValueChange={(v) => onChange({ borderStyle: v })}>
+              <SelectTrigger><SelectValue placeholder="Style" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">(auto)</SelectItem>
+                <SelectItem value="solid">Solide</SelectItem>
+                <SelectItem value="dashed">Pointillé</SelectItem>
+                <SelectItem value="dotted">Pointé</SelectItem>
+                <SelectItem value="double">Double</SelectItem>
+                <SelectItem value="groove">Groove</SelectItem>
+                <SelectItem value="ridge">Ridge</SelectItem>
+              </SelectContent>
+            </Select>
+            <div />
           </div>
           <Input placeholder="Ombre" value={style.boxShadow || ""} onChange={(e) => onChange({ boxShadow: e.target.value })} />
         </div>
