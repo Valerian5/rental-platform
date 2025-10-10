@@ -380,7 +380,10 @@ function PageBuilder() {
                   <Canvas
                     blocks={page.blocks}
                     selectedBlockId={selectedBlockId}
-                    onSelectBlock={setSelectedBlockId}
+                    onSelectBlock={(id) => {
+                      setSelectedBlockId(id)
+                      setEditingBlock(null)
+                    }}
                     onUpdateBlock={(block) => setPage((p) => ({ ...p, blocks: p.blocks.map((b) => (b.id === block.id ? block : b)) }))}
                     onDeleteBlock={(id) => setPage((p) => ({ ...p, blocks: p.blocks.filter((b) => b.id !== id) }))}
                     onDuplicateBlock={duplicateBlock}
@@ -715,7 +718,7 @@ function PreviewRenderer({ blocks }: { blocks: BlockType[] }) {
                         }}
                         onSelect={() => onSelect(child.id)}
                         onEdit={() => onEdit()}
-                        isSelected={selectedBlockId === child.id}
+                        isSelected={false}
                       />
                     ))}
                   </div>
