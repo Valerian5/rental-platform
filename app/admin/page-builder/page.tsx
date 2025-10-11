@@ -1492,6 +1492,32 @@ function BlockEditor({ block, onChange, onDelete, onSelect, onEdit, onSelectChil
     )
   }
 
+  if (block.type === "icon-text") {
+    return (
+      <div 
+        onClick={onSelect} 
+        onDoubleClick={onEdit}
+        className={`relative group cursor-pointer ${isSelected ? 'ring-2 ring-primary' : ''}`}
+        style={applyStyle((block as any).style)}
+      >
+        <div className="p-4 border-2 border-dashed border-transparent hover:border-primary/50 rounded-lg transition-colors">
+          <div className="text-xs text-muted-foreground mb-2">Icône + Texte</div>
+          <div className="inline-flex items-center gap-2">
+            <span className="text-2xl">{(block as any).icon || "⭐"}</span>
+            <span>{(block as any).text || "Cliquez pour éditer"}</span>
+          </div>
+        </div>
+        {isSelected && (
+          <div className="absolute -top-2 -right-2">
+            <Button size="sm" variant="destructive" className="h-6 w-6 p-0" onClick={onDelete}>
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   if (block.type === "section") {
     return (
       <div 
@@ -1643,6 +1669,7 @@ function StyleInspector({ block, onChange }: { block?: any; onChange: (style: an
           {block.type === "image" && "Image"}
           {block.type === "video" && "Vidéo"}
           {block.type === "button" && "Bouton"}
+          {block.type === "icon-text" && "Icône + Texte"}
           {block.type === "section" && "Section"}
         </div>
       </CardHeader>
