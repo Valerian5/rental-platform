@@ -122,6 +122,14 @@ function Renderer({ blocks }: { blocks: any[] }) {
             </a>
           )
         }
+        if (b.type === "icon-text") {
+          return (
+            <div key={b.id} className="inline-flex items-center gap-2" style={applyStyle(b.style)}>
+              <span className="text-2xl">{b.icon}</span>
+              <span>{b.text}</span>
+            </div>
+          )
+        }
         if (b.type === "section") {
           return (
             <div key={b.id} className="grid gap-4" style={{ gridTemplateColumns: `repeat(${b.columns.length}, minmax(0, 1fr))`, ...applyStyle(b.style) }}>

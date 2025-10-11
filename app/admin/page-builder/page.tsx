@@ -55,6 +55,7 @@ type BlockType =
   | { id: string; type: "image"; url: string; alt?: string; style?: any }
   | { id: string; type: "video"; url: string; provider?: "youtube" | "vimeo" | "file"; style?: any }
   | { id: string; type: "button"; label: string; href: string; style?: any }
+  | { id: string; type: "icon-text"; icon: string; text: string; style?: any }
   | { id: string; type: "section"; columns: BlockType[][]; style?: any; layout?: any; columnsStyle?: any[] }
 
 interface CmsPageDraft {
@@ -177,7 +178,9 @@ function PageBuilder() {
               ? { id, type, url: "" }
               : type === "button"
                 ? { id, type, label: "Nouveau bouton", href: "#" }
-              : { id, type: "section", columns: [[]], style: {}, layout: {}, columnsStyle: [{}] as any }
+                : type === "icon-text"
+                  ? { id, type, icon: "star", text: "Nouveau texte avec icône" }
+                  : { id, type: "section", columns: [[]], style: {}, layout: {}, columnsStyle: [{}] as any }
     setPage((p) => ({ ...p, blocks: [...p.blocks, newBlock] }))
     setSelectedBlockId(id)
   }, [])
@@ -256,7 +259,7 @@ function PageBuilder() {
 
       <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar - Blocks Library */}
-        <div className="w-80 border-r bg-card flex flex-col">
+        <div className="w-80 border-r bg-card flex flex-col hidden lg:flex">
           <div className="p-4 border-b">
             <h2 className="font-medium mb-3">Blocs</h2>
             <div className="grid grid-cols-2 gap-2">
@@ -265,6 +268,7 @@ function PageBuilder() {
               <BlockButton icon={Image} label="Image" onClick={() => addBlock("image")} />
               <BlockButton icon={Video} label="Vidéo" onClick={() => addBlock("video")} />
               <BlockButton icon={Square} label="Bouton" onClick={() => addBlock("button")} />
+              <BlockButton icon={Palette} label="Icône+Texte" onClick={() => addBlock("icon-text")} />
               <BlockButton icon={Columns} label="Section" onClick={() => addBlock("section")} />
             </div>
           </div>
@@ -284,6 +288,7 @@ function PageBuilder() {
                     <BlockButton icon={Image} label="Image" onClick={() => addBlock("image")} />
                     <BlockButton icon={Video} label="Vidéo" onClick={() => addBlock("video")} />
                     <BlockButton icon={Square} label="Bouton" onClick={() => addBlock("button")} />
+                    <BlockButton icon={Palette} label="Icône+Texte" onClick={() => addBlock("icon-text")} />
                     <BlockButton icon={Columns} label="Section" onClick={() => addBlock("section")} />
                   </div>
                   
@@ -372,7 +377,7 @@ function PageBuilder() {
           </div>
           
           <div className="flex-1 overflow-auto bg-gray-50">
-            <div className="min-h-full p-8">
+            <div className="min-h-full p-4 md:p-8">
               <div className="max-w-4xl mx-auto">
                 {isPreview ? (
                   <PreviewRenderer blocks={page.blocks} />
@@ -404,7 +409,7 @@ function PageBuilder() {
         </div>
 
         {/* Right Sidebar - Inspector */}
-        <div className="w-80 border-l bg-card">
+        <div className="w-80 border-l bg-card hidden lg:block">
           <ScrollArea className="h-full">
             <div className="p-4 space-y-6">
               <div>
@@ -587,6 +592,9 @@ function applyStyle(style?: any): React.CSSProperties {
   if (style.borderRadius) css.borderRadius = style.borderRadius
   if (style.boxShadow) css.boxShadow = style.boxShadow
   if (style.width) css.width = style.width
+  if (style.transition) css.transition = style.transition
+  if (style.transform) css.transform = style.transform
+  if (style.filter) css.filter = style.filter
   return css
 }
 
@@ -722,6 +730,12 @@ function PreviewRenderer({ blocks }: { blocks: BlockType[] }) {
               >
                 {block.label}
               </a>
+            )}
+            {block.type === "icon-text" && (
+              <div className="inline-flex items-center gap-2" style={applyStyle((block as any).style)}>
+                <span className="text-2xl">{(block as any).icon}</span>
+                <span>{(block as any).text}</span>
+              </div>
             )}
             {block.type === "section" && (
               <div 
@@ -939,6 +953,47 @@ function BlockContentEditor({ block, onChange, onOpenMediaLibrary, onEditRequest
             >
               {block.label || "Nouveau bouton"}
             </a>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (block.type === "icon-text") {
+    const icons = ["⭐", "❤️", "🔥", "💡", "🚀", "🎯", "✨", "🌟", "💎", "🎨", "🎭", "🎪", "🎨", "🎯", "🎪", "🎭", "🎨", "🎯", "🎪", "🎭"]
+    return (
+      <div className="space-y-4">
+        <div>
+          <label className="text-sm font-medium">Icône</label>
+          <div className="mt-1 grid grid-cols-5 gap-2">
+            {icons.map((icon) => (
+              <button
+                key={icon}
+                type="button"
+                className={`p-2 text-2xl border rounded hover:bg-muted ${(block as any).icon === icon ? 'bg-primary text-primary-foreground' : ''}`}
+                onClick={() => onChange({ ...block, icon })}
+              >
+                {icon}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <label className="text-sm font-medium">Texte</label>
+          <Input 
+            value={(block as any).text} 
+            onChange={(e) => onChange({ ...block, text: e.target.value })} 
+            className="mt-1"
+            placeholder="Texte avec icône"
+          />
+        </div>
+        <div>
+          <label className="text-sm font-medium">Aperçu</label>
+          <div className="mt-1">
+            <div className="inline-flex items-center gap-2">
+              <span className="text-2xl">{(block as any).icon}</span>
+              <span>{(block as any).text || "Nouveau texte avec icône"}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -1504,30 +1559,36 @@ function BlockEditor({ block, onChange, onDelete, onSelect, onEdit, onSelectChil
                         )}
                       </div>
                     )}
-                    {child.type === "button" && (
-                      <div style={applyStyle((child as any).style)}>
-                        <a 
-                          href={(child as any).href} 
-                          className="inline-flex items-center"
-                          style={{
-                            backgroundColor: (child as any).style?.backgroundColor,
-                            color: (child as any).style?.color,
-                            padding: (child as any).style?.padding || '8px 16px',
-                            borderRadius: (child as any).style?.borderRadius,
-                            fontSize: (child as any).style?.fontSize,
-                            fontWeight: (child as any).style?.fontWeight,
-                            border: applyStyle((child as any).style)?.border,
-                            boxShadow: (child as any).style?.boxShadow,
-                            textDecoration: (child as any).style?.textDecoration,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            width: (child as any).style?.width,
-                          }}
-                        >
-                          {(child as any).label || "Bouton"}
-                        </a>
-                      </div>
-                    )}
+                        {child.type === "button" && (
+                          <div style={applyStyle((child as any).style)}>
+                            <a 
+                              href={(child as any).href} 
+                              className="inline-flex items-center"
+                              style={{
+                                backgroundColor: (child as any).style?.backgroundColor,
+                                color: (child as any).style?.color,
+                                padding: (child as any).style?.padding || '8px 16px',
+                                borderRadius: (child as any).style?.borderRadius,
+                                fontSize: (child as any).style?.fontSize,
+                                fontWeight: (child as any).style?.fontWeight,
+                                border: applyStyle((child as any).style)?.border,
+                                boxShadow: (child as any).style?.boxShadow,
+                                textDecoration: (child as any).style?.textDecoration,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                width: (child as any).style?.width,
+                              }}
+                            >
+                              {(child as any).label || "Bouton"}
+                            </a>
+                          </div>
+                        )}
+                        {child.type === "icon-text" && (
+                          <div className="inline-flex items-center gap-2" style={applyStyle((child as any).style)}>
+                            <span className="text-2xl">{(child as any).icon}</span>
+                            <span>{(child as any).text}</span>
+                          </div>
+                        )}
                   </div>
                 ))}
               </div>
@@ -1683,7 +1744,34 @@ function StyleInspector({ block, onChange }: { block?: any; onChange: (style: an
             </Select>
             <div />
           </div>
-          <Input placeholder="Ombre" value={style.boxShadow || ""} onChange={(e) => onChange({ boxShadow: e.target.value })} />
+          <Input placeholder="Ombre (ex: 0 2px 4px rgba(0,0,0,0.1))" value={style.boxShadow || ""} onChange={(e) => onChange({ boxShadow: e.target.value })} />
+        </div>
+
+        <Separator />
+
+        {/* Effects */}
+        <div className="space-y-3">
+          <h4 className="text-sm font-medium">Effets</h4>
+          <div className="grid grid-cols-2 gap-2">
+            <Input placeholder="Transition (ex: all 0.3s ease)" value={style.transition || ""} onChange={(e) => onChange({ transition: e.target.value })} />
+            <Input placeholder="Transform (ex: scale(1.1))" value={style.transform || ""} onChange={(e) => onChange({ transform: e.target.value })} />
+          </div>
+          <Input placeholder="Filter (ex: brightness(1.2) blur(2px))" value={style.filter || ""} onChange={(e) => onChange({ filter: e.target.value })} />
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="outline" size="sm" onClick={() => onChange({ 
+              transition: "all 0.3s ease",
+              transform: "scale(1.05)",
+              filter: "brightness(1.1)"
+            })}>
+              Effet survol
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => onChange({ 
+              transition: "all 0.2s ease",
+              transform: "scale(0.95)"
+            })}>
+              Effet clic
+            </Button>
+          </div>
         </div>
 
         <Separator />
