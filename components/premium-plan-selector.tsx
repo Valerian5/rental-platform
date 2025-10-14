@@ -24,7 +24,7 @@ export function PremiumPlanSelector({ currentPlanId, onPlanSelect, showTrialOpti
 
   const fetchPlans = async () => {
     try {
-      const response = await fetch("/api/admin/premium/plans")
+      const response = await fetch("/api/premium/plans")
       const data = await response.json()
       if (data.success) {
         setPlans(data.plans)
@@ -125,18 +125,30 @@ export function PremiumPlanSelector({ currentPlanId, onPlanSelect, showTrialOpti
                   </div>
                 </div>
 
-                {/* Modules inclus */}
+                {/* Fonctionnalités incluses */}
                 <div className="space-y-2">
                   <h4 className="font-medium text-sm">Fonctionnalités incluses :</h4>
                   <div className="space-y-1">
-                    {plan.modules.slice(0, 5).map((module) => (
-                      <div key={module.id} className="flex items-center gap-2 text-sm">
-                        <Check className="w-4 h-4 text-green-500" />
-                        <span>{module.display_name}</span>
-                      </div>
-                    ))}
-                    {plan.modules.length > 5 && (
-                      <div className="text-xs text-gray-500">+{plan.modules.length - 5} autres fonctionnalités</div>
+                    {(() => {
+                      const features = (plan as any).features || []
+                      const featureLabels: Record<string, string> = {
+                        applications: "Candidatures",
+                        property_management: "Gestion locative",
+                        leases: "Baux",
+                        payments: "Paiements",
+                        scoring_customization: "Assistant configuration scoring",
+                        electronic_signature: "Signature électronique"
+                      }
+                      
+                      return features.slice(0, 5).map((feature: string) => (
+                        <div key={feature} className="flex items-center gap-2 text-sm">
+                          <Check className="w-4 h-4 text-green-500" />
+                          <span>{featureLabels[feature] || feature}</span>
+                        </div>
+                      ))
+                    })()}
+                    {((plan as any).features || []).length > 5 && (
+                      <div className="text-xs text-gray-500">+{((plan as any).features || []).length - 5} autres fonctionnalités</div>
                     )}
                   </div>
                 </div>
