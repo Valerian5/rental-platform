@@ -17,10 +17,49 @@ export async function POST(request: NextRequest) {
     const resolved = await resolveUserPlan(user.id)
     if (!resolved.planId) return NextResponse.json({ success: true, allowed: false })
 
-    // Vérifier l'inclusion module
-    const allowed = (resolved.plan?.plan_modules || []).some(
-      (pm: any) => pm.is_included && pm.premium_modules?.name === module_name,
-    )
+    // Vérifier l'inclusion selon les règles de page (stockées dans site_settings)
+    const supabase = createServerClient()
+    const { data: rules } = await supabase
+      .from("site_settings")
+      .select("setting_value")
+      .eq("setting_key", "page_module_access")
+      .single()
+    
+    const pageRules = rules?.setting_value || []
+    const rule = pageRules.find((r: any) => r.module_name === module_name)
+    
+    // Si pas de règle spécifique, utiliser les fonctionnalités par défaut du plan
+    let allowed = false
+    if (rule) {
+      // Logique basée sur les règles de page (à implémenter selon tes besoins)
+      allowed = true // Pour l'instant, on autorise si une règle existe
+    } else {
+      // Fonctionnalités par défaut selon le plan
+      const plan = resolved.plan
+      switch (module_name) {
+        case "applications":
+          allowed = true // Toujours accessible, mais limité par quota
+          break
+        case "property_management":
+          allowed = !plan.is_free
+          break
+        case "leases":
+          allowed = true
+          break
+        case "payments":
+          allowed = !plan.is_free
+          break
+        case "scoring_customization":
+          allowed = !plan.is_free
+          break
+        case "electronic_signature":
+          allowed = !plan.is_free
+          break
+        default:
+          allowed = false
+      }
+    }
+    
     return NextResponse.json({ success: true, allowed })
   } catch (e) {
     console.error("❌ Erreur premium access:", e)

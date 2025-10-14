@@ -5,9 +5,7 @@ export async function resolveUserPlan(userId: string): Promise<{ plan: any | nul
   // 1) Owner-level subscription if exists
   const { data: ownerSub } = await supabase
     .from("owner_subscriptions")
-    .select(
-      `*, pricing_plans ( *, plan_modules ( is_included, usage_limit, premium_modules ( name ) ) )`,
-    )
+    .select(`*, pricing_plans (*)`)
     .eq("owner_id", userId)
     .eq("status", "active")
     .maybeSingle()
@@ -22,9 +20,7 @@ export async function resolveUserPlan(userId: string): Promise<{ plan: any | nul
   if (agencyId) {
     const { data: agencySub } = await supabase
       .from("agency_subscriptions")
-      .select(
-        `*, pricing_plans ( *, plan_modules ( is_included, usage_limit, premium_modules ( name ) ) )`,
-      )
+      .select(`*, pricing_plans (*)`)
       .eq("agency_id", agencyId)
       .eq("status", "active")
       .maybeSingle()

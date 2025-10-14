@@ -140,21 +140,14 @@ export class PremiumService {
     try {
       const { data: plans } = await this.supabase
         .from("pricing_plans")
-        .select(`
-          *,
-          plan_modules (
-            is_included,
-            usage_limit,
-            premium_modules (*)
-          )
-        `)
+        .select("*")
         .eq("is_active", true)
         .order("sort_order")
 
       return (
         plans?.map((plan) => ({
           ...plan,
-          modules: plan.plan_modules.filter((pm: any) => pm.is_included).map((pm: any) => pm.premium_modules),
+          modules: [], // Plus de modules basés sur premium_modules
         })) || []
       )
     } catch (error) {
