@@ -96,6 +96,25 @@ export default function AdminPlansPage() {
                   onChange={(e) => updatePlan(plan.id, { price_yearly: Number(e.target.value) })}
                 />
               </div>
+              <div>
+                <Label>Nom du plan</Label>
+                <Input
+                  value={plan.display_name || ""}
+                  onChange={(e) => updatePlan(plan.id, { display_name: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Biens maximum</Label>
+                <Input
+                  type="number"
+                  value={plan.max_properties ?? ""}
+                  onChange={(e) =>
+                    updatePlan(plan.id, {
+                      max_properties: e.target.value ? Number(e.target.value) : null,
+                    })
+                  }
+                />
+              </div>
               <div className="col-span-2">
                 <Label>Stripe Product ID</Label>
                 <Input
