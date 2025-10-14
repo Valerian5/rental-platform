@@ -21,6 +21,7 @@ const adminNav = [
   { href: "/admin/cms-pages", label: "Pages CMS", icon: FileText },
   { href: "/admin/page-builder", label: "Page Builder", icon: Wand2 },
   { href: "/admin/settings", label: "Paramètres", icon: Settings },
+  { href: "/admin/settings/plans", label: "Plans & Stripe", icon: Settings },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

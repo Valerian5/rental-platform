@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createServerClient } from "@/lib/supabase-server-client"
 import { createClient } from "@/lib/supabase"
+import { hasAccessToModule } from "@/lib/feature-gating"
 
 function daysInMonth(year: number, monthIdx0: number): number {
   return new Date(year, monthIdx0 + 1, 0).getDate()
@@ -22,6 +23,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const previewOnly = !!body?.previewOnly
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
+
+    // Guard premium: exiger module "rent_receipts" actif
+    const allowed = await hasAccessToModule(user.id, "rent_receipts")
+    if (!allowed) return NextResponse.json({ error: "Fonctionnalité réservée aux plans supérieurs" }, { status: 403 })
 
     // Vérifier que l'appelant est le propriétaire du bail
     const { data: lease, error: leaseError } = await supabase

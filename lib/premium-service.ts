@@ -17,6 +17,9 @@ export interface PricingPlan {
   description: string
   price_monthly: number
   price_yearly: number
+  stripe_product_id?: string | null
+  stripe_price_monthly_id?: string | null
+  stripe_price_yearly_id?: string | null
   is_free: boolean
   is_popular: boolean
   max_properties: number | null

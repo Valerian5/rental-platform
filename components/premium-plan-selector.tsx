@@ -69,6 +69,8 @@ export function PremiumPlanSelector({ currentPlanId, onPlanSelect, showTrialOpti
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {plans.map((plan) => {
           const price = billingPeriod === "monthly" ? plan.price_monthly : plan.price_yearly
+          const priceId =
+            billingPeriod === "monthly" ? (plan as any).stripe_price_monthly_id : (plan as any).stripe_price_yearly_id
           const isCurrentPlan = currentPlanId === plan.id
           const yearlyDiscount = plan.price_yearly < plan.price_monthly * 12
 
@@ -149,7 +151,25 @@ export function PremiumPlanSelector({ currentPlanId, onPlanSelect, showTrialOpti
                   ) : (
                     <div className="space-y-2">
                       <Button
-                        onClick={() => onPlanSelect(plan.id)}
+                        onClick={async () => {
+                          if (!plan.is_free && priceId) {
+                            const resp = await fetch("/api/billing/checkout", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                mode: "subscription",
+                                priceId,
+                                plan_id: plan.id,
+                              }),
+                            })
+                            const data = await resp.json()
+                            if (data?.url) {
+                              window.location.href = data.url
+                              return
+                            }
+                          }
+                          onPlanSelect(plan.id)
+                        }}
                         className="w-full"
                         variant={plan.is_popular ? "default" : "outline"}
                       >
@@ -162,7 +182,26 @@ export function PremiumPlanSelector({ currentPlanId, onPlanSelect, showTrialOpti
                           variant="ghost"
                           size="sm"
                           className="w-full text-xs"
-                          onClick={() => onPlanSelect(plan.id + "_trial")}
+                          onClick={async () => {
+                            if (priceId) {
+                              const resp = await fetch("/api/billing/checkout", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  mode: "subscription",
+                                  priceId,
+                                  plan_id: plan.id,
+                                  metadata: { trial: "true" },
+                                }),
+                              })
+                              const data = await resp.json()
+                              if (data?.url) {
+                                window.location.href = data.url
+                                return
+                              }
+                            }
+                            onPlanSelect(plan.id + "_trial")
+                          }}
                         >
                           Essai gratuit 30 jours
                         </Button>
