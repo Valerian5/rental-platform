@@ -176,6 +176,7 @@ export function PremiumPlanSelector({ currentPlanId, onPlanSelect, showTrialOpti
                             const resp = await fetch("/api/billing/checkout", {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
+                              credentials: "include",
                               body: JSON.stringify({
                                 mode: "subscription",
                                 priceId,
@@ -207,6 +208,7 @@ export function PremiumPlanSelector({ currentPlanId, onPlanSelect, showTrialOpti
                               const resp = await fetch("/api/billing/checkout", {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
+                                credentials: "include",
                                 body: JSON.stringify({
                                   mode: "subscription",
                                   priceId,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getStripeServer, stripeConfig } from "@/lib/stripe"
-import { createServerClient } from "@/lib/supabase"
+import { createServerClient } from "@/lib/supabase-server-client"
 
 // Crée une session Checkout pour achat à l'acte d'un module (paiement unique)
 export async function POST(request: NextRequest) {
@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Paramètres requis: priceId, module_name" }, { status: 400 })
     }
 
-    const server = createServerClient()
+    const server = createServerClient(request)
     const {
       data: { user },
     } = await server.auth.getUser()

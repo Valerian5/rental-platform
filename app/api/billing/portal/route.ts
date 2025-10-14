@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getStripeServer, stripeConfig } from "@/lib/stripe"
-import { createServerClient } from "@/lib/supabase"
+import { createServerClient } from "@/lib/supabase-server-client"
 
 // Crée un lien vers le Billing Portal Stripe pour gérer l'abonnement
 export async function POST(request: NextRequest) {
   try {
-    const server = createServerClient()
+    const server = createServerClient(request)
     const {
       data: { user },
     } = await server.auth.getUser()
