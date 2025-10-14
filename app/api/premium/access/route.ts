@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
 import { premiumService } from "@/lib/premium-service"
+import { resolveUserPlan } from "@/lib/subscription-resolver"
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,12 +14,13 @@ export async function POST(request: NextRequest) {
     } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ success: false, error: "Non authentifié" }, { status: 401 })
 
-    // Récupérer agency_id de l'utilisateur
-    const { data: profile } = await supabase.from("users").select("agency_id").eq("id", user.id).maybeSingle()
-    const agencyId = profile?.agency_id
-    if (!agencyId) return NextResponse.json({ success: true, allowed: false })
+    const resolved = await resolveUserPlan(user.id)
+    if (!resolved.planId) return NextResponse.json({ success: true, allowed: false })
 
-    const allowed = await premiumService.hasModuleAccess(agencyId, module_name)
+    // Vérifier l'inclusion module
+    const allowed = (resolved.plan?.plan_modules || []).some(
+      (pm: any) => pm.is_included && pm.premium_modules?.name === module_name,
+    )
     return NextResponse.json({ success: true, allowed })
   } catch (e) {
     console.error("❌ Erreur premium access:", e)

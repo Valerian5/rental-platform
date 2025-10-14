@@ -142,10 +142,10 @@ export class PremiumService {
         .from("pricing_plans")
         .select(`
           *,
-          plan_modules!inner (
+          plan_modules (
             is_included,
             usage_limit,
-            premium_modules!inner (*)
+            premium_modules (*)
           )
         `)
         .eq("is_active", true)
