@@ -18,7 +18,6 @@ export async function POST(request: NextRequest) {
     if (!resolved.planId) return NextResponse.json({ success: true, allowed: false })
 
     // Vérifier l'inclusion selon les règles de page (stockées dans site_settings)
-    const supabase = createServerClient()
     const { data: rules } = await supabase
       .from("site_settings")
       .select("setting_value")
