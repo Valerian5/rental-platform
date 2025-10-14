@@ -16,6 +16,7 @@ import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { CircularScore } from "@/components/circular-score"
 import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
+import { PageAccessOverlay } from "@/components/page-access-overlay"
 import {
   Save,
   RefreshCw,
@@ -949,7 +950,7 @@ export default function ScoringPreferencesSimplePage() {
         </TabsContent>
 
         <TabsContent value="assistant" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative">
             {/* Configuration principale */}
             <div className="lg:col-span-2 space-y-6">
               <Card>
@@ -1719,6 +1720,18 @@ export default function ScoringPreferencesSimplePage() {
                 </CardContent>
               </Card>
             </div>
+            
+            {/* Overlay pour l'onglet Assistant seulement */}
+            {user && (
+              <PageAccessOverlay
+                userId={user.id}
+                moduleName="scoring_customization"
+                marketingTitle="Assistant de configuration réservé"
+                marketingDesc="L'Assistant de configuration personnalisée est disponible dans les plans supérieurs. Choisissez un modèle prédéfini ou passez à un plan payant pour personnaliser vos critères."
+                ctaText="Voir les plans"
+                showCondition={activeTab === "assistant"}
+              />
+            )}
           </div>
         </TabsContent>
       </Tabs>

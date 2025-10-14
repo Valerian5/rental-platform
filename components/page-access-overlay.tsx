@@ -14,10 +14,12 @@ interface PageAccessOverlayProps {
   onUpgrade?: () => void
   // Pour les modules achetables à l'acte (ex: signature électronique)
   oneOffPriceId?: string
+  // Condition d'affichage (ex: seulement sur un onglet spécifique)
+  showCondition?: boolean
 }
 
 export function PageAccessOverlay(props: PageAccessOverlayProps) {
-  const { userId, moduleName, marketingTitle, marketingDesc, ctaText = "Voir les plans", onUpgrade, oneOffPriceId } = props
+  const { userId, moduleName, marketingTitle, marketingDesc, ctaText = "Voir les plans", onUpgrade, oneOffPriceId, showCondition = true } = props
   const [allowed, setAllowed] = useState<boolean | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -44,6 +46,7 @@ export function PageAccessOverlay(props: PageAccessOverlayProps) {
 
   if (allowed == null) return null
   if (allowed) return null
+  if (!showCondition) return null
 
   const buyOneOff = async () => {
     if (!oneOffPriceId) return
