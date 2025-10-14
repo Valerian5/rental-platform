@@ -4,6 +4,25 @@ import { premiumService } from "@/lib/premium-service"
 
 export async function GET() {
   try {
+    const supabase = createServerClient()
+    
+    // Vérifier l'authentification
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json({ success: false, error: "Non authentifié" }, { status: 401 })
+    }
+
+    // Vérifier que l'utilisateur est admin
+    const { data: userData } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .single()
+    
+    if (userData?.role !== "admin") {
+      return NextResponse.json({ success: false, error: "Accès refusé" }, { status: 403 })
+    }
+
     const plans = await premiumService.getPricingPlans()
     return NextResponse.json({ success: true, plans })
   } catch (error) {
@@ -15,6 +34,24 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const supabase = createServerClient()
+    
+    // Vérifier l'authentification
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json({ success: false, error: "Non authentifié" }, { status: 401 })
+    }
+
+    // Vérifier que l'utilisateur est admin
+    const { data: userData } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .single()
+    
+    if (userData?.role !== "admin") {
+      return NextResponse.json({ success: false, error: "Accès refusé" }, { status: 403 })
+    }
+
     const data = await request.json()
 
     const { data: plan, error } = await supabase

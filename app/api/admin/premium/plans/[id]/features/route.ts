@@ -4,8 +4,24 @@ import { NextRequest, NextResponse } from "next/server"
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const supabase = createServerClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ success: false, error: "Non authentifié" }, { status: 401 })
+    
+    // Vérifier l'authentification via les cookies
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      console.error("❌ Erreur auth:", authError)
+      return NextResponse.json({ success: false, error: "Non authentifié" }, { status: 401 })
+    }
+
+    // Vérifier que l'utilisateur est admin
+    const { data: userData } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .single()
+    
+    if (userData?.role !== "admin") {
+      return NextResponse.json({ success: false, error: "Accès refusé" }, { status: 403 })
+    }
 
     const { features, quotas } = await request.json()
 

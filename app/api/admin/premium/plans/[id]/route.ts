@@ -4,6 +4,25 @@ import { createServerClient } from "@/lib/supabase"
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const supabase = createServerClient()
+    
+    // Vérifier l'authentification
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      console.error("❌ Erreur auth:", authError)
+      return NextResponse.json({ success: false, error: "Non authentifié" }, { status: 401 })
+    }
+
+    // Vérifier que l'utilisateur est admin
+    const { data: userData } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .single()
+    
+    if (userData?.role !== "admin") {
+      return NextResponse.json({ success: false, error: "Accès refusé" }, { status: 403 })
+    }
+
     const data = await request.json()
 
     const { error } = await supabase
