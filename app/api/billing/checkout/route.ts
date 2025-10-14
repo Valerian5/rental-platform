@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getStripeServer, stripeConfig } from "@/lib/stripe"
 import { createServerClient } from "@/lib/supabase-server-client"
+import { createClient } from "@supabase/supabase-js"
 
 // Crée une session Checkout pour abonnement (plan) ou achat à l'acte (module)
 export async function POST(request: NextRequest) {
@@ -23,7 +24,20 @@ export async function POST(request: NextRequest) {
     }
 
     console.log("🔐 [CHECKOUT] Tentative d'authentification...")
-    const server = createServerClient(request)
+    
+    // Gérer l'authentification comme les autres APIs (Bearer token ou cookies)
+    const authHeader = request.headers.get("authorization") || ""
+    const hasBearer = authHeader.toLowerCase().startsWith("bearer ")
+    const token = hasBearer ? authHeader.slice(7) : null
+    
+    console.log("🔑 [CHECKOUT] Mode auth:", { hasBearer, hasToken: !!token })
+    
+    const server = hasBearer
+      ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+          global: { headers: { Authorization: `Bearer ${token}` } },
+        })
+      : createServerClient(request)
+    
     const {
       data: { user },
       error: authError

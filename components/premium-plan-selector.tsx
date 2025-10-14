@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Check, Star, Zap } from "lucide-react"
 import type { PricingPlan } from "@/lib/premium-service"
+import { useSupabaseClient } from "@supabase/auth-helpers-react"
 
 interface PremiumPlanSelectorProps {
   currentPlanId?: string
@@ -17,6 +18,7 @@ export function PremiumPlanSelector({ currentPlanId, onPlanSelect, showTrialOpti
   const [plans, setPlans] = useState<PricingPlan[]>([])
   const [loading, setLoading] = useState(true)
   const [billingPeriod, setBillingPeriod] = useState<"monthly" | "yearly">("monthly")
+  const supabase = useSupabaseClient()
 
   useEffect(() => {
     fetchPlans()
@@ -180,9 +182,16 @@ export function PremiumPlanSelector({ currentPlanId, onPlanSelect, showTrialOpti
                             })
                             
                             try {
+                              // Obtenir le token d'authentification
+                              const { data: sessionData } = await supabase.auth.getSession()
+                              const token = sessionData.session?.access_token
+                              
+                              const headers: Record<string, string> = { "Content-Type": "application/json" }
+                              if (token) headers["Authorization"] = `Bearer ${token}`
+                              
                               const resp = await fetch("/api/billing/checkout", {
                                 method: "POST",
-                                headers: { "Content-Type": "application/json" },
+                                headers,
                                 credentials: "include",
                                 body: JSON.stringify({
                                   mode: "subscription",
@@ -233,9 +242,16 @@ export function PremiumPlanSelector({ currentPlanId, onPlanSelect, showTrialOpti
                               })
                               
                               try {
+                                // Obtenir le token d'authentification
+                                const { data: sessionData } = await supabase.auth.getSession()
+                                const token = sessionData.session?.access_token
+                                
+                                const headers: Record<string, string> = { "Content-Type": "application/json" }
+                                if (token) headers["Authorization"] = `Bearer ${token}`
+                                
                                 const resp = await fetch("/api/billing/checkout", {
                                   method: "POST",
-                                  headers: { "Content-Type": "application/json" },
+                                  headers,
                                   credentials: "include",
                                   body: JSON.stringify({
                                     mode: "subscription",
