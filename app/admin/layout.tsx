@@ -22,6 +22,8 @@ const adminNav = [
   { href: "/admin/page-builder", label: "Page Builder", icon: Wand2 },
   { href: "/admin/settings", label: "Paramètres", icon: Settings },
   { href: "/admin/settings/plans", label: "Plans & Stripe", icon: Settings },
+  { href: "/admin/settings/billing", label: "Facturation (global)", icon: Settings },
+  { href: "/admin/settings/page-access", label: "Accès par page", icon: Settings },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

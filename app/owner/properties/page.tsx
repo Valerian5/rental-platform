@@ -110,25 +110,29 @@ export default function PropertiesListPage() {
   return (
     <>
       <PageHeader title="Mes biens" description="Gérez vos annonces immobilières">
-        <Button
-          asChild
-          disabled={
-            !!(currentUser as any)?._planLimits?.maxProperties && properties.length >= (currentUser as any)?._planLimits?.maxProperties
+        {(() => {
+          const over = !!(currentUser as any)?._planLimits?.maxProperties &&
+            properties.length >= (currentUser as any)?._planLimits?.maxProperties
+          if (over) {
+            return (
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" disabled>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Limite atteinte
+                </Button>
+                <Button variant="outline" onClick={() => (window.location.href = "/owner/subscription")}>Voir les plans</Button>
+              </div>
+            )
           }
-          variant={
-            !!(currentUser as any)?._planLimits?.maxProperties && properties.length >= (currentUser as any)?._planLimits?.maxProperties
-              ? "secondary"
-              : "default"
-          }
-        >
-          <Link href="/owner/properties/new">
-            <Plus className="h-4 w-4 mr-2" />
-            {!(currentUser as any)?._planLimits?.maxProperties ||
-            properties.length < (currentUser as any)?._planLimits?.maxProperties
-              ? "Ajouter un bien"
-              : "Limite atteinte"}
-          </Link>
-        </Button>
+          return (
+            <Button asChild>
+              <Link href="/owner/properties/new">
+                <Plus className="h-4 w-4 mr-2" />
+                Ajouter un bien
+              </Link>
+            </Button>
+          )
+        })()}
       </PageHeader>
 
       {properties.length > 0 && (
