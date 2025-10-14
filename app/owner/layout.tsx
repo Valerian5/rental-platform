@@ -43,6 +43,7 @@ import {
 } from "lucide-react"
 import { authService } from "@/lib/auth-service"
 import { useToast } from "@/hooks/use-toast"
+import { PageAccessOverlay } from "@/components/page-access-overlay"
 
 const navigation = [
   { name: "Tableau de bord", href: "/owner/dashboard", icon: Home },
@@ -367,8 +368,28 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
-          <div className="max-w-full overflow-x-auto">{children}</div>
+        <main className="flex-1 overflow-y-auto p-4 lg:p-6 relative">
+          <div className="max-w-full overflow-x-auto relative">{children}
+            {(() => {
+              const pathToModule: Record<string, string> = {
+                "/owner/rental-management": "property_management",
+                "/owner/leases": "leases",
+                "/owner/applications": "applications",
+                "/owner/payments": "payments",
+                "/owner/scoring-preferences-simple": "scoring_customization",
+              }
+              const moduleName = pathToModule[pathname || ""]
+              if (!moduleName || !currentUser?.id) return null
+              return (
+                <PageAccessOverlay
+                  userId={currentUser.id}
+                  moduleName={moduleName}
+                  marketingTitle="Fonctionnalité réservée à un plan supérieur"
+                  marketingDesc="Prévisualisez la page puis passez au plan adapté pour l'utiliser."
+                />
+              )
+            })()}
+          </div>
         </main>
       </div>
     </div>

@@ -23,6 +23,20 @@ export function PageAccessOverlay(props: PageAccessOverlayProps) {
 
   useEffect(() => {
     ;(async () => {
+      try {
+        const res = await fetch("/api/premium/access", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ module_name: moduleName }),
+        })
+        if (res.ok) {
+          const data = await res.json()
+          setAllowed(!!data.allowed)
+          return
+        }
+      } catch {
+        // fallback local
+      }
       const ok = await hasAccessToModule(userId, moduleName)
       setAllowed(ok)
     })()
