@@ -173,20 +173,41 @@ export function PremiumPlanSelector({ currentPlanId, onPlanSelect, showTrialOpti
                       <Button
                         onClick={async () => {
                           if (!plan.is_free && priceId) {
-                            const resp = await fetch("/api/billing/checkout", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              credentials: "include",
-                              body: JSON.stringify({
-                                mode: "subscription",
-                                priceId,
-                                plan_id: plan.id,
-                              }),
+                            console.log("🚀 [CLIENT] Début checkout pour plan:", { 
+                              planId: plan.id, 
+                              planName: plan.name, 
+                              priceId 
                             })
-                            const data = await resp.json()
-                            if (data?.url) {
-                              window.location.href = data.url
-                              return
+                            
+                            try {
+                              const resp = await fetch("/api/billing/checkout", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                credentials: "include",
+                                body: JSON.stringify({
+                                  mode: "subscription",
+                                  priceId,
+                                  plan_id: plan.id,
+                                }),
+                              })
+                              
+                              console.log("📡 [CLIENT] Réponse checkout:", { 
+                                status: resp.status, 
+                                statusText: resp.statusText,
+                                ok: resp.ok 
+                              })
+                              
+                              const data = await resp.json()
+                              console.log("📦 [CLIENT] Données reçues:", data)
+                              
+                              if (data?.url) {
+                                console.log("✅ [CLIENT] Redirection vers:", data.url)
+                                window.location.href = data.url
+                                return
+                              }
+                              console.error("❌ [CLIENT] Erreur checkout:", data)
+                            } catch (error) {
+                              console.error("❌ [CLIENT] Erreur fetch:", error)
                             }
                           }
                           onPlanSelect(plan.id)
@@ -205,21 +226,42 @@ export function PremiumPlanSelector({ currentPlanId, onPlanSelect, showTrialOpti
                           className="w-full text-xs"
                           onClick={async () => {
                             if (priceId) {
-                              const resp = await fetch("/api/billing/checkout", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                credentials: "include",
-                                body: JSON.stringify({
-                                  mode: "subscription",
-                                  priceId,
-                                  plan_id: plan.id,
-                                  metadata: { trial: "true" },
-                                }),
+                              console.log("🚀 [CLIENT] Début essai gratuit pour plan:", { 
+                                planId: plan.id, 
+                                planName: plan.name, 
+                                priceId 
                               })
-                              const data = await resp.json()
-                              if (data?.url) {
-                                window.location.href = data.url
-                                return
+                              
+                              try {
+                                const resp = await fetch("/api/billing/checkout", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  credentials: "include",
+                                  body: JSON.stringify({
+                                    mode: "subscription",
+                                    priceId,
+                                    plan_id: plan.id,
+                                    metadata: { trial: "true" },
+                                  }),
+                                })
+                                
+                                console.log("📡 [CLIENT] Réponse essai gratuit:", { 
+                                  status: resp.status, 
+                                  statusText: resp.statusText,
+                                  ok: resp.ok 
+                                })
+                                
+                                const data = await resp.json()
+                                console.log("📦 [CLIENT] Données essai gratuit:", data)
+                                
+                                if (data?.url) {
+                                  console.log("✅ [CLIENT] Redirection essai gratuit vers:", data.url)
+                                  window.location.href = data.url
+                                  return
+                                }
+                                console.error("❌ [CLIENT] Erreur essai gratuit:", data)
+                              } catch (error) {
+                                console.error("❌ [CLIENT] Erreur fetch essai gratuit:", error)
                               }
                             }
                             onPlanSelect(plan.id + "_trial")
