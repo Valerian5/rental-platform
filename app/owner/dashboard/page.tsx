@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Building2, Users, Calendar, TrendingUp, AlertTriangle } from "lucide-react"
+import { FeatureLock } from "@/components/feature-lock"
 import { authService } from "@/lib/auth-service"
 import { useRouter } from "next/navigation"
 
@@ -135,6 +136,24 @@ export default function OwnerDashboard() {
             </p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Upsell: fonctionnalités premium */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <FeatureLock
+          title="Signature électronique"
+          description="Faites signer vos baux en ligne et suivez le statut en temps réel."
+          onUpgrade={async () => {
+            window.location.href = "/owner/subscription"
+          }}
+        />
+        <FeatureLock
+          title="Documents avancés"
+          description="Accédez à des modèles et clauses avancés pour vos contrats."
+          onUpgrade={async () => {
+            window.location.href = "/owner/subscription"
+          }}
+        />
       </div>
 
       {stats.properties === 0 && (

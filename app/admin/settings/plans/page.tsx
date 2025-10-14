@@ -11,12 +11,18 @@ export default function AdminPlansPage() {
   const [plans, setPlans] = useState<PricingPlan[]>([])
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [modules, setModules] = useState<any[]>([])
 
   useEffect(() => {
     ;(async () => {
-      const res = await fetch("/api/admin/premium/plans")
-      const data = await res.json()
-      if (data.success) setPlans(data.plans)
+      const [resPlans, resModules] = await Promise.all([
+        fetch("/api/admin/premium/plans"),
+        fetch("/api/admin/premium/modules"),
+      ])
+      const dataPlans = await resPlans.json()
+      const dataModules = await resModules.json()
+      if (dataPlans.success) setPlans(dataPlans.plans)
+      if (dataModules.success) setModules(dataModules.modules)
       setLoading(false)
     })()
   }, [])
@@ -46,6 +52,17 @@ export default function AdminPlansPage() {
           max_storage_gb: plan.max_storage_gb,
           sort_order: (plan as any).sort_order || 0,
         }),
+      })
+
+      // Sauvegarder modules inclus/quotas
+      const selected = (plan._modules || [])
+        .map((mid: string) => modules.find((m) => m.id === mid))
+        .filter(Boolean)
+        .map((m) => ({ id: m.id, is_included: true, usage_limit: m._usage_limit ?? null }))
+      await fetch(`/api/admin/premium/plans/${plan.id}/modules`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ modules: selected }),
       })
     } finally {
       setSavingId(null)
@@ -102,6 +119,41 @@ export default function AdminPlansPage() {
                   value={plan.stripe_price_yearly_id || ""}
                   onChange={(e) => updatePlan(plan.id, { stripe_price_yearly_id: e.target.value })}
                 />
+              </div>
+            </div>
+
+            {/* Modules inclus + quotas */}
+            <div className="space-y-2">
+              <div className="font-medium mt-2">Fonctionnalités incluses</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {modules.map((m) => {
+                  const checked = (plan._modules || []).includes(m.id)
+                  const usage = (m._usage_limit ?? "") as any
+                  return (
+                    <div key={m.id} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          const set = new Set(plan._modules || [])
+                          e.target.checked ? set.add(m.id) : set.delete(m.id)
+                          updatePlan(plan.id, { _modules: Array.from(set) })
+                        }}
+                      />
+                      <span className="text-sm flex-1">{m.display_name}</span>
+                      <Input
+                        placeholder="quota"
+                        value={usage}
+                        onChange={(e) => {
+                          const value = e.target.value ? Number(e.target.value) : ""
+                          const next = modules.map((x) => (x.id === m.id ? { ...x, _usage_limit: value } : x))
+                          setModules(next)
+                        }}
+                        className="w-24"
+                      />
+                    </div>
+                  )
+                })}
               </div>
             </div>
 
