@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { authService } from "@/lib/auth-service"
 
 export default function AdminPlansPage() {
   const [plans, setPlans] = useState<PricingPlan[]>([])
@@ -14,7 +15,9 @@ export default function AdminPlansPage() {
 
   useEffect(() => {
     ;(async () => {
-      const resPlans = await fetch("/api/admin/premium/plans")
+      const resPlans = await fetch("/api/admin/premium/plans", {
+        headers: { authorization: `Bearer ${await authService.getAuthToken()}` }
+      })
       const dataPlans = await resPlans.json()
       if (dataPlans.success) setPlans(dataPlans.plans)
       setLoading(false)
@@ -30,7 +33,10 @@ export default function AdminPlansPage() {
     try {
       await fetch(`/api/admin/premium/plans/${plan.id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          authorization: `Bearer ${await authService.getAuthToken()}`
+        },
         body: JSON.stringify({
           display_name: plan.display_name,
           description: plan.description,
@@ -51,7 +57,10 @@ export default function AdminPlansPage() {
       // Sauvegarder fonctionnalités incluses/quotas
       await fetch(`/api/admin/premium/plans/${plan.id}/features`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          authorization: `Bearer ${await authService.getAuthToken()}`
+        },
         body: JSON.stringify({ 
           features: plan._features || [], 
           quotas: plan._quotas || {} 
