@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Check, Star, Zap } from "lucide-react"
 import type { PricingPlan } from "@/lib/premium-service"
-import { useSupabaseClient } from "@supabase/auth-helpers-react"
 
 interface PremiumPlanSelectorProps {
   currentPlanId?: string
@@ -18,7 +17,6 @@ export function PremiumPlanSelector({ currentPlanId, onPlanSelect, showTrialOpti
   const [plans, setPlans] = useState<PricingPlan[]>([])
   const [loading, setLoading] = useState(true)
   const [billingPeriod, setBillingPeriod] = useState<"monthly" | "yearly">("monthly")
-  const supabase = useSupabaseClient()
 
   useEffect(() => {
     fetchPlans()
@@ -183,6 +181,7 @@ export function PremiumPlanSelector({ currentPlanId, onPlanSelect, showTrialOpti
                             
                             try {
                               // Obtenir le token d'authentification
+                              const { supabase } = await import("@/lib/supabase")
                               const { data: sessionData } = await supabase.auth.getSession()
                               const token = sessionData.session?.access_token
                               
@@ -243,6 +242,7 @@ export function PremiumPlanSelector({ currentPlanId, onPlanSelect, showTrialOpti
                               
                               try {
                                 // Obtenir le token d'authentification
+                                const { supabase } = await import("@/lib/supabase")
                                 const { data: sessionData } = await supabase.auth.getSession()
                                 const token = sessionData.session?.access_token
                                 
