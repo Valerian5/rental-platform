@@ -213,12 +213,30 @@ function PageBuilder() {
     try {
       setSaving(true)
       const payload = { ...page, status: publish ? "published" : page.status }
-      const method = page.id ? "PUT" : "POST"
-      const res = await fetch("/api/admin/cms-pages", {
+      let method: "POST" | "PUT" = page.id ? "PUT" : "POST"
+      let res = await fetch("/api/admin/cms-pages", {
         method,
         headers: { "content-type": "application/json", authorization: `Bearer ${await authService.getAuthToken()}` },
         body: JSON.stringify(payload),
       })
+      if (!res.ok && !page.id) {
+        const text = await res.text()
+        // Try to resolve duplicate slug by fetching existing page and updating it
+        if (/duplicate key.*slug/i.test(text)) {
+          const lookup = await fetch(`/api/admin/cms-pages?slug=${encodeURIComponent(page.slug)}`, {
+            headers: { authorization: `Bearer ${await authService.getAuthToken()}` },
+          })
+          const found = await lookup.json()
+          const existingId = found?.data?.id
+          if (existingId) {
+            res = await fetch("/api/admin/cms-pages", {
+              method: "PUT",
+              headers: { "content-type": "application/json", authorization: `Bearer ${await authService.getAuthToken()}` },
+              body: JSON.stringify({ ...payload, id: existingId }),
+            })
+          }
+        }
+      }
       const json = await res.json()
       if (!res.ok || !json.success) throw new Error(json.error || "Erreur sauvegarde")
       setPage(json.data)
@@ -260,18 +278,7 @@ function PageBuilder() {
       <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar - Blocks Library */}
         <div className="w-80 border-r bg-card flex flex-col hidden lg:flex">
-          <div className="p-4 border-b">
-            <h2 className="font-medium mb-3">Blocs</h2>
-            <div className="grid grid-cols-2 gap-2">
-              <BlockButton icon={Type} label="Titre" onClick={() => addBlock("heading")} />
-              <BlockButton icon={Square} label="Texte" onClick={() => addBlock("paragraph")} />
-              <BlockButton icon={Image} label="Image" onClick={() => addBlock("image")} />
-              <BlockButton icon={Video} label="Vidéo" onClick={() => addBlock("video")} />
-              <BlockButton icon={Square} label="Bouton" onClick={() => addBlock("button")} />
-              <BlockButton icon={Palette} label="Icône+Texte" onClick={() => addBlock("icon-text")} />
-              <BlockButton icon={Columns} label="Section" onClick={() => addBlock("section")} />
-            </div>
-          </div>
+          <div className="p-4 border-b" />
           
           <ScrollArea className="flex-1 p-4">
             <Tabs defaultValue="blocks" className="w-full">
@@ -580,6 +587,11 @@ function applyStyle(style?: any): React.CSSProperties {
   if (style.backgroundColor) css.backgroundColor = style.backgroundColor
   if (style.padding) css.padding = style.padding
   if (style.margin) css.margin = style.margin
+  if (style.gap) (css as any).gap = style.gap
+  if (style.display) css.display = style.display as any
+  if (style.flexDirection) (css as any).flexDirection = style.flexDirection
+  if (style.alignItems) (css as any).alignItems = style.alignItems
+  if (style.justifyContent) (css as any).justifyContent = style.justifyContent
   if (style.border) css.border = style.border
   const borderWidth = style.borderWidth
   const borderStyle = style.borderStyle
@@ -1827,6 +1839,69 @@ function StyleInspector({ block, onChange }: { block?: any; onChange: (style: an
             </Button>
           </div>
         </div>
+
+        {/* Icon-Text specific layout */}
+        {block.type === "icon-text" && (
+          <div className="space-y-3">
+            <h4 className="text-sm font-medium">Disposition icône + texte</h4>
+            <div className="grid grid-cols-2 gap-2">
+              <Select value={style.flexDirection || "row"} onValueChange={(v) => onChange({ display: "inline-flex", flexDirection: v })}>
+                <SelectTrigger><SelectValue placeholder="Direction" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="row">Icône gauche, texte droite</SelectItem>
+                  <SelectItem value="row-reverse">Icône droite, texte gauche</SelectItem>
+                  <SelectItem value="column">Icône haut, texte bas</SelectItem>
+                  <SelectItem value="column-reverse">Icône bas, texte haut</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input placeholder="Espace (ex: 0.5rem)" value={style.gap || ""} onChange={(e) => onChange({ gap: e.target.value, display: "inline-flex" })} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Select value={style.alignItems || "center"} onValueChange={(v) => onChange({ alignItems: v, display: "inline-flex" })}>
+                <SelectTrigger><SelectValue placeholder="Alignement croisé" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="flex-start">Haut/Gauche</SelectItem>
+                  <SelectItem value="center">Centre</SelectItem>
+                  <SelectItem value="flex-end">Bas/Droite</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={style.justifyContent || "flex-start"} onValueChange={(v) => onChange({ justifyContent: v, display: "inline-flex" })}>
+                <SelectTrigger><SelectValue placeholder="Alignement principal" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="flex-start">Début</SelectItem>
+                  <SelectItem value="center">Centre</SelectItem>
+                  <SelectItem value="flex-end">Fin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
+
+        {/* Button presets */}
+        {block.type === "button" && (
+          <div className="space-y-3">
+            <h4 className="text-sm font-medium">Taille du bouton</h4>
+            <div className="grid grid-cols-2 gap-2">
+              <Select value={style.width || "fit-content"} onValueChange={(v) => onChange({ width: v })}>
+                <SelectTrigger><SelectValue placeholder="Largeur" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Auto</SelectItem>
+                  <SelectItem value="fit-content">fit-content</SelectItem>
+                  <SelectItem value="max-content">max-content</SelectItem>
+                  <SelectItem value="100%">100%</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={style.padding || "12px 24px"} onValueChange={(v) => onChange({ padding: v })}>
+                <SelectTrigger><SelectValue placeholder="Padding" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="8px 12px">Petit</SelectItem>
+                  <SelectItem value="12px 24px">Moyen</SelectItem>
+                  <SelectItem value="16px 32px">Grand</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
