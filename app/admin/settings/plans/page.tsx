@@ -19,7 +19,15 @@ export default function AdminPlansPage() {
         headers: { authorization: `Bearer ${await authService.getAuthToken()}` }
       })
       const dataPlans = await resPlans.json()
-      if (dataPlans.success) setPlans(dataPlans.plans)
+      if (dataPlans.success) {
+        // Charger les fonctionnalités et quotas depuis la base
+        const plansWithFeatures = dataPlans.plans.map((plan: any) => ({
+          ...plan,
+          _features: plan.features || [],
+          _quotas: plan.quotas || {}
+        }))
+        setPlans(plansWithFeatures)
+      }
       setLoading(false)
     })()
   }, [])
@@ -149,10 +157,18 @@ export default function AdminPlansPage() {
               <div className="grid grid-cols-1 gap-2">
                 {[
                   { key: "applications", label: "Candidatures", quota: true },
+                  { key: "visits", label: "Visites", quota: false },
                   { key: "property_management", label: "Gestion locative", quota: false },
+                  { key: "rental_management_incidents", label: "Gestion locative - Incidents", quota: false },
+                  { key: "rental_management_maintenance", label: "Gestion locative - Maintenance", quota: false },
+                  { key: "rental_management_documents", label: "Gestion locative - Documents", quota: false },
+                  { key: "rental_management_rent_revision", label: "Gestion locative - Révision loyer", quota: false },
+                  { key: "rental_management_revision", label: "Gestion locative - Révision", quota: false },
+                  { key: "rental_management_fiscal", label: "Gestion locative - Fiscal", quota: false },
+                  { key: "rental_management_overview", label: "Gestion locative - Vue d'ensemble", quota: false },
                   { key: "leases", label: "Baux", quota: false },
                   { key: "payments", label: "Paiements", quota: false },
-                  { key: "scoring_customization", label: "Assistant configuration scoring", quota: false },
+                  { key: "scoring_customization", label: "Assistant configuration scoring (onglet Assistant)", quota: false },
                   { key: "electronic_signature", label: "Signature électronique", quota: false },
                 ].map((feature) => {
                   const checked = (plan._features || []).includes(feature.key)

@@ -133,7 +133,15 @@ export function PremiumPlanSelector({ currentPlanId, onPlanSelect, showTrialOpti
                       const features = (plan as any).features || []
                       const featureLabels: Record<string, string> = {
                         applications: "Candidatures",
+                        visits: "Visites",
                         property_management: "Gestion locative",
+                        rental_management_incidents: "Incidents",
+                        rental_management_maintenance: "Maintenance",
+                        rental_management_documents: "Documents",
+                        rental_management_rent_revision: "Révision loyer",
+                        rental_management_revision: "Révision",
+                        rental_management_fiscal: "Fiscal",
+                        rental_management_overview: "Vue d'ensemble",
                         leases: "Baux",
                         payments: "Paiements",
                         scoring_customization: "Assistant configuration scoring",

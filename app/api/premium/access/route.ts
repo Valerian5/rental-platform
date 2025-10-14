@@ -35,24 +35,50 @@ export async function POST(request: NextRequest) {
     } else {
       // Fonctionnalités par défaut selon le plan
       const plan = resolved.plan
+      const features = plan.features || []
+      
       switch (module_name) {
         case "applications":
           allowed = true // Toujours accessible, mais limité par quota
           break
+        case "visits":
+          allowed = features.includes("visits")
+          break
         case "property_management":
-          allowed = !plan.is_free
+          allowed = features.includes("property_management")
+          break
+        case "rental_management_incidents":
+          allowed = features.includes("rental_management_incidents")
+          break
+        case "rental_management_maintenance":
+          allowed = features.includes("rental_management_maintenance")
+          break
+        case "rental_management_documents":
+          allowed = features.includes("rental_management_documents")
+          break
+        case "rental_management_rent_revision":
+          allowed = features.includes("rental_management_rent_revision")
+          break
+        case "rental_management_revision":
+          allowed = features.includes("rental_management_revision")
+          break
+        case "rental_management_fiscal":
+          allowed = features.includes("rental_management_fiscal")
+          break
+        case "rental_management_overview":
+          allowed = features.includes("rental_management_overview")
           break
         case "leases":
           allowed = true
           break
         case "payments":
-          allowed = !plan.is_free
+          allowed = features.includes("payments")
           break
         case "scoring_customization":
-          allowed = !plan.is_free
+          allowed = features.includes("scoring_customization")
           break
         case "electronic_signature":
-          allowed = !plan.is_free
+          allowed = features.includes("electronic_signature")
           break
         default:
           allowed = false
