@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
       metadata: {
         user_id: user?.id || "",
         plan_id: plan_id || "",
+        subscription_type: mode === "subscription" ? "owner" : "agency", // Indique le type d'abonnement
         ...metadata,
       },
     })

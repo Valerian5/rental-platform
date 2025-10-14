@@ -55,16 +55,14 @@ async function handleCheckoutCompleted(event: any) {
     const customerId = session.customer
     const userId = session.metadata?.user_id
     const planId = session.metadata?.plan_id
+    const subscriptionType = session.metadata?.subscription_type || "agency" // "owner" ou "agency"
+    
     if (userId && subscriptionId) {
-      // Récupérer l'agence de l'utilisateur
-      const { data: user } = await server.from("users").select("agency_id").eq("id", userId).single()
-      const agencyId = user?.agency_id
-
-      if (agencyId) {
-        // Upsert de l'abonnement agence avec IDs Stripe
-        await server.from("agency_subscriptions").upsert(
+      if (subscriptionType === "owner") {
+        // Créer/mettre à jour l'abonnement OWNER
+        await server.from("owner_subscriptions").upsert(
           {
-            agency_id: agencyId,
+            owner_id: userId,
             plan_id: planId || null,
             status: "active",
             started_at: new Date().toISOString(),
@@ -75,8 +73,31 @@ async function handleCheckoutCompleted(event: any) {
             stripe_subscription_id: subscriptionId,
             stripe_status: "active",
           },
-          { onConflict: "agency_id" },
+          { onConflict: "owner_id" },
         )
+      } else {
+        // Récupérer l'agence de l'utilisateur
+        const { data: user } = await server.from("users").select("agency_id").eq("id", userId).single()
+        const agencyId = user?.agency_id
+
+        if (agencyId) {
+          // Upsert de l'abonnement agence avec IDs Stripe
+          await server.from("agency_subscriptions").upsert(
+            {
+              agency_id: agencyId,
+              plan_id: planId || null,
+              status: "active",
+              started_at: new Date().toISOString(),
+              expires_at: null,
+              is_trial: false,
+              trial_ends_at: null,
+              stripe_customer_id: customerId,
+              stripe_subscription_id: subscriptionId,
+              stripe_status: "active",
+            },
+            { onConflict: "agency_id" },
+          )
+        }
       }
 
       await server.from("billing_events").insert({ type: "checkout.session.completed", payload: session })
@@ -95,19 +116,33 @@ async function handleInvoicePaymentFailed(event: any) {
   const invoice = event.data.object
   await server.from("billing_events").insert({ type: "invoice.payment_failed", payload: invoice })
 
-  // Tenter de retrouver l'agence associée au customer
-  const { data: sub } = await server
+  // Tenter de retrouver l'agence ou l'owner associé au customer
+  const { data: agencySub } = await server
     .from("agency_subscriptions")
     .select("agency_id")
     .eq("stripe_customer_id", invoice.customer)
     .single()
 
-  if (sub?.agency_id) {
+  const { data: ownerSub } = await server
+    .from("owner_subscriptions")
+    .select("owner_id")
+    .eq("stripe_customer_id", invoice.customer)
+    .single()
+
+  if (agencySub?.agency_id) {
     // Marquer comme actif mais à surveiller, ou dégrader l'accès selon votre politique
     await server
       .from("agency_subscriptions")
       .update({ stripe_status: "past_due" })
-      .eq("agency_id", sub.agency_id)
+      .eq("agency_id", agencySub.agency_id)
+  }
+
+  if (ownerSub?.owner_id) {
+    // Marquer l'abonnement owner comme en échec
+    await server
+      .from("owner_subscriptions")
+      .update({ stripe_status: "past_due" })
+      .eq("owner_id", ownerSub.owner_id)
   }
 }
 
@@ -129,17 +164,31 @@ async function handleSubscriptionEvent(event: any) {
   const mapped = statusMap[subscription.status] || "cancelled"
 
   // Retrouver agency_id par stripe_subscription_id
-  const { data: sub } = await server
+  const { data: agencySub } = await server
     .from("agency_subscriptions")
     .select("agency_id")
     .eq("stripe_subscription_id", subscription.id)
     .single()
 
-  if (sub?.agency_id) {
+  // Retrouver owner_id par stripe_subscription_id
+  const { data: ownerSub } = await server
+    .from("owner_subscriptions")
+    .select("owner_id")
+    .eq("stripe_subscription_id", subscription.id)
+    .single()
+
+  if (agencySub?.agency_id) {
     await server
       .from("agency_subscriptions")
       .update({ status: mapped, stripe_status: subscription.status })
-      .eq("agency_id", sub.agency_id)
+      .eq("agency_id", agencySub.agency_id)
+  }
+
+  if (ownerSub?.owner_id) {
+    await server
+      .from("owner_subscriptions")
+      .update({ status: mapped, stripe_status: subscription.status })
+      .eq("owner_id", ownerSub.owner_id)
   }
 }
 
