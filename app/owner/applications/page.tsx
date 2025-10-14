@@ -14,6 +14,7 @@ import { VisitProposalManager } from "@/components/visit-proposal-manager"
 import { RefusalDialog } from "@/components/refusal-dialog"
 import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
 import { Search, Filter, SortAsc, Settings, Users, CheckCircle, XCircle, AlertTriangle } from "lucide-react"
+import { getOwnerPlanLimits } from "@/lib/quota-service"
 
 export default function ApplicationsPage() {
   const router = useRouter()
@@ -57,6 +58,7 @@ export default function ApplicationsPage() {
 
       setUser(currentUser)
       await Promise.all([loadApplications(currentUser.id), loadScoringPreferences(currentUser.id)])
+      ;(currentUser as any)._planLimits = await getOwnerPlanLimits(currentUser.id)
     } catch (error) {
       console.error("Erreur auth:", error)
       toast.error("Erreur d'authentification")
@@ -597,22 +599,36 @@ export default function ApplicationsPage() {
         {/* Liste des candidatures */}
         <div className="space-y-4">
           {filteredApplications.length > 0 ? (
-            filteredApplications.map((application) => (
-              <ModernApplicationCard
-                key={application.id}
-                application={application}
-                isSelected={selectedApplications.includes(application.id)}
-                onSelect={(selected) => {
-                  if (selected) {
-                    setSelectedApplications([...selectedApplications, application.id])
-                  } else {
-                    setSelectedApplications(selectedApplications.filter((id) => id !== application.id))
-                  }
-                }}
-                onAction={(action) => handleApplicationAction(application.id, action)}
-                scoringPreferences={scoringPreferences}
-              />
-            ))
+            filteredApplications.map((application, idx) => {
+              const limit = (user as any)?._planLimits?.applicationsLimit
+              const overQuota = limit != null && idx >= limit
+              return (
+                <div key={application.id} className="relative">
+                  <ModernApplicationCard
+                    application={application}
+                    isSelected={selectedApplications.includes(application.id)}
+                    onSelect={(selected) => {
+                      if (selected) {
+                        setSelectedApplications([...selectedApplications, application.id])
+                      } else {
+                        setSelectedApplications(selectedApplications.filter((id) => id !== application.id))
+                      }
+                    }}
+                    onAction={(action) => handleApplicationAction(application.id, action)}
+                    scoringPreferences={scoringPreferences}
+                  />
+                  {overQuota && (
+                    <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] flex items-center justify-center rounded-md">
+                      <div className="text-center text-sm">
+                        <div className="font-medium">Limite atteinte sur votre plan actuel</div>
+                        <div className="text-muted-foreground mb-2">Passez au plan supérieur pour voir plus de candidatures</div>
+                        <Button size="sm" onClick={() => (window.location.href = "/owner/subscription")}>Voir les plans</Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })
           ) : (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-10">

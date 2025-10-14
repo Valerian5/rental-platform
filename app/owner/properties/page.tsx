@@ -12,6 +12,7 @@ import { toast } from "sonner"
 import HorizontalPropertyCard from "@/components/horizontal-property-card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PageHeader } from "@/components/page-header"
+import { getOwnerPlanLimits } from "@/lib/quota-service"
 
 export default function PropertiesListPage() {
   const router = useRouter()
@@ -34,7 +35,11 @@ export default function PropertiesListPage() {
         setCurrentUser(user)
 
         // Simuler des données avec différents statuts
-        const userProperties = await propertyService.getOwnerProperties(user.id)
+        const [userProperties, limits] = await Promise.all([
+          propertyService.getOwnerProperties(user.id),
+          getOwnerPlanLimits(user.id),
+        ])
+        ;(user as any)._planLimits = limits
 
         // Supprimer cette partie artificielle :
         // const status = index % 3 === 0 ? "active" : index % 3 === 1 ? "rented" : "paused"
@@ -105,10 +110,23 @@ export default function PropertiesListPage() {
   return (
     <>
       <PageHeader title="Mes biens" description="Gérez vos annonces immobilières">
-        <Button asChild>
+        <Button
+          asChild
+          disabled={
+            !!(currentUser as any)?._planLimits?.maxProperties && properties.length >= (currentUser as any)?._planLimits?.maxProperties
+          }
+          variant={
+            !!(currentUser as any)?._planLimits?.maxProperties && properties.length >= (currentUser as any)?._planLimits?.maxProperties
+              ? "secondary"
+              : "default"
+          }
+        >
           <Link href="/owner/properties/new">
             <Plus className="h-4 w-4 mr-2" />
-            Ajouter un bien
+            {!(currentUser as any)?._planLimits?.maxProperties ||
+            properties.length < (currentUser as any)?._planLimits?.maxProperties
+              ? "Ajouter un bien"
+              : "Limite atteinte"}
           </Link>
         </Button>
       </PageHeader>
