@@ -371,27 +371,51 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
         <main className="flex-1 overflow-y-auto p-4 lg:p-6 relative">
           <div className="max-w-full overflow-x-auto relative">{children}
             {(() => {
-              const pathToModule: Record<string, string> = {
-                "/owner/rental-management": "property_management",
-                "/owner/leases": "leases",
-                "/owner/applications": "applications",
-                "/owner/payments": "payments",
-                "/owner/scoring-preferences-simple": "scoring_customization",
-              }
-              const moduleName = pathToModule[pathname || ""]
-              if (!moduleName || !currentUser?.id) return null
-              return (
-                <PageAccessOverlay
-                  userId={currentUser.id}
-                  moduleName={moduleName}
-                  marketingTitle="Fonctionnalité réservée à un plan supérieur"
-                  marketingDesc="Prévisualisez la page puis passez au plan adapté pour l'utiliser."
-                />
-              )
+              if (!currentUser?.id || !pathname) return null
+              // Fetch rule for this path and render overlay if rule exists and access denied
+              return <DynamicPageOverlay userId={currentUser.id} path={pathname} />
             })()}
           </div>
         </main>
       </div>
     </div>
+  )
+}
+
+function DynamicPageOverlay({ userId, path }: { userId: string; path: string }) {
+  const [rule, setRule] = useState<any | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/premium/page-access?path=${encodeURIComponent(path)}`)
+        const data = await res.json()
+        if (!cancelled && data?.success) {
+          setRule(data.rule || null)
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [path])
+
+  if (loading || !rule) return null
+  const moduleName = rule.module_name as string | undefined
+  if (!moduleName) return null
+
+  return (
+    <PageAccessOverlay
+      userId={userId}
+      moduleName={moduleName}
+      marketingTitle={rule.marketing_title || "Fonctionnalité réservée"}
+      marketingDesc={rule.marketing_text || undefined}
+      ctaText={rule.cta_text || "Voir les plans"}
+      oneOffPriceId={rule.one_off_price_id || undefined}
+    />
   )
 }
