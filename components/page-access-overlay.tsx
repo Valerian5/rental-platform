@@ -19,7 +19,19 @@ interface PageAccessOverlayProps {
 }
 
 export function PageAccessOverlay(props: PageAccessOverlayProps) {
-  const { userId, moduleName, marketingTitle, marketingDesc, ctaText = "Voir les plans", onUpgrade, oneOffPriceId, showCondition = true } = props
+  const {
+    userId,
+    moduleName,
+    marketingTitle,
+    marketingDesc,
+    ctaText = "Je découvre les offres",
+    onUpgrade,
+    oneOffPriceId,
+    showCondition = true,
+  } = props
+  const defaultTitle = "Débloquez cette fonctionnalité avec l'une de nos offres"
+  const defaultDesc =
+    "Accédez à tous les outils de gestion locative dès 9,90 € HT/mois et simplifiez la gestion de vos biens en toute autonomie.\n\nFaites des économies, gagnez du temps, et gardez le contrôle sur votre bien !\n\nJusqu’à 7 × moins cher qu’une agence, soit plus de 600 € économisés chaque année."
   const [allowed, setAllowed] = useState<boolean | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -75,9 +87,11 @@ export function PageAccessOverlay(props: PageAccessOverlayProps) {
       <div className="max-w-md text-center p-6 bg-background/60 rounded-lg border">
         <div className="flex items-center justify-center gap-2 text-lg font-semibold mb-2">
           <Lock className="h-4 w-4" />
-          {marketingTitle || "Fonctionnalité réservée"}
+          {marketingTitle || defaultTitle}
         </div>
-        {marketingDesc && <div className="text-sm text-muted-foreground mb-4">{marketingDesc}</div>}
+        <div className="text-sm text-muted-foreground mb-4" style={{ whiteSpace: "pre-line" }}>
+          {marketingDesc || defaultDesc}
+        </div>
         <div className="flex items-center justify-center gap-2">
           <Button size="sm" onClick={onUpgrade || (() => (window.location.href = "/owner/subscription"))}>{ctaText}</Button>
           {oneOffPriceId && (
