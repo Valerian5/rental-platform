@@ -26,9 +26,15 @@ export function PageAccessOverlay(props: PageAccessOverlayProps) {
   useEffect(() => {
     ;(async () => {
       try {
+        const { supabase } = await import("@/lib/supabase")
+        const { data: sessionData } = await supabase.auth.getSession()
+        const token = sessionData.session?.access_token
+        const headers: Record<string, string> = { "Content-Type": "application/json" }
+        if (token) headers["Authorization"] = `Bearer ${token}`
         const res = await fetch("/api/premium/access", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
+          credentials: "include",
           body: JSON.stringify({ module_name: moduleName }),
         })
         if (res.ok) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase"
+import { createServerClient } from "@/lib/supabase-server-client"
+import { createClient } from "@supabase/supabase-js"
 import { premiumService } from "@/lib/premium-service"
 import { resolveUserPlan } from "@/lib/subscription-resolver"
 
@@ -8,7 +9,14 @@ export async function POST(request: NextRequest) {
     const { module_name } = await request.json()
     if (!module_name) return NextResponse.json({ success: false, error: "module_name requis" }, { status: 400 })
 
-    const supabase = createServerClient()
+    const authHeader = request.headers.get("authorization") || ""
+    const hasBearer = authHeader.toLowerCase().startsWith("bearer ")
+    const token = hasBearer ? authHeader.slice(7) : null
+    const supabase = hasBearer
+      ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+          global: { headers: { Authorization: `Bearer ${token}` } },
+        })
+      : createServerClient(request)
     const {
       data: { user },
     } = await supabase.auth.getUser()
