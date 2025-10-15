@@ -1,258 +1,196 @@
-import { NextRequest, NextResponse } from "next/server"
-export const runtime = "nodejs"
-export const dynamic = "force-dynamic"
-import { getStripeServer } from "@/lib/stripe"
-import { createServerClient } from "@/lib/supabase"
+import { NextResponse } from "next/server";
+import Stripe from "stripe";
+import { Readable } from "node:stream";
+import { getStripeServer } from "@/lib/stripe";
+import { createServerClient } from "@/lib/supabase";
 
-// Stripe envoie du JSON signé (ou du raw) suivant config; Next 14 supporte req.text()
-export async function POST(request: NextRequest) {
-  const stripe = getStripeServer()
-  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET
+// ✅ Important : forcer le runtime Node.js (pas Edge)
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+// ✅ Désactiver le body parsing de Next.js (indispensable pour Stripe)
+export const config = {
+  api: { bodyParser: false },
+};
+
+// Helper : lire le corps brut de la requête
+async function buffer(readable: Readable) {
+  const chunks = [];
+  for await (const chunk of readable) {
+    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
+export async function POST(req: Request) {
+  const stripe = getStripeServer();
+  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  if (!endpointSecret) {
+    console.error("[STRIPE][WEBHOOK] STRIPE_WEBHOOK_SECRET manquant");
+    return NextResponse.json({ error: "Webhook non configuré" }, { status: 400 });
+  }
+
+  const signature = req.headers.get("stripe-signature");
+  if (!signature) {
+    console.error("[STRIPE][WEBHOOK] Signature manquante");
+    return NextResponse.json({ error: "Signature manquante" }, { status: 400 });
+  }
+
+  let event;
+  try {
+    // ⚠️ Stripe a besoin du corps brut exact (pas JSON, pas texte)
+    const rawBody = await buffer(req.body as any);
+    event = stripe.webhooks.constructEvent(rawBody, signature, endpointSecret);
+    console.log("[STRIPE][WEBHOOK] Event reçu:", event.type);
+  } catch (err: any) {
+    console.error("❌ Erreur de vérification Stripe:", err.message);
+    return NextResponse.json({ error: "Signature invalide" }, { status: 400 });
+  }
 
   try {
-    const rawBody = await request.text()
-    const signature = request.headers.get("stripe-signature")
-    if (!endpointSecret) {
-      console.error("[STRIPE][WEBHOOK] STRIPE_WEBHOOK_SECRET manquant")
-      return NextResponse.json({ error: "Webhook non configuré (secret manquant)" }, { status: 400 })
-    }
-    if (!signature) {
-      console.error("[STRIPE][WEBHOOK] En-tête stripe-signature manquant")
-      return NextResponse.json({ error: "Signature manquante" }, { status: 400 })
-    }
-
-    const event = stripe.webhooks.constructEvent(rawBody, signature, endpointSecret)
-    console.log("[STRIPE][WEBHOOK] Event reçu:", { type: event.type })
-
+    // --- ROUTAGE DES ÉVÉNEMENTS ---
     switch (event.type) {
       case "checkout.session.completed":
-        await handleCheckoutCompleted(event)
-        break
+        await handleCheckoutCompleted(event);
+        break;
       case "invoice.payment_succeeded":
-        await handleInvoicePaymentSucceeded(event)
-        break
+        await handleInvoicePaymentSucceeded(event);
+        break;
       case "invoice.payment_failed":
-        await handleInvoicePaymentFailed(event)
-        break
+        await handleInvoicePaymentFailed(event);
+        break;
       case "customer.subscription.created":
       case "customer.subscription.updated":
       case "customer.subscription.deleted":
-        await handleSubscriptionEvent(event)
-        break
+        await handleSubscriptionEvent(event);
+        break;
       case "payment_intent.succeeded":
-        await handleOneOffPayment(event)
-        break
+        await handleOneOffPayment(event);
+        break;
       default:
-        break
+        console.log("[STRIPE][WEBHOOK] Événement ignoré:", event.type);
     }
 
-    return NextResponse.json({ received: true })
+    return NextResponse.json({ received: true });
   } catch (err) {
-    console.error("❌ Erreur webhook Stripe:", err)
-    return NextResponse.json({ error: "Signature invalide ou erreur serveur" }, { status: 400 })
+    console.error("❌ Erreur traitement webhook:", err);
+    return NextResponse.json({ error: "Erreur interne" }, { status: 500 });
   }
 }
 
+// --- HANDLERS D’ÉVÉNEMENTS ---
+
 async function handleCheckoutCompleted(event: any) {
-  const server = createServerClient()
-  const session = event.data.object
-  console.log("[STRIPE][WEBHOOK] checkout.session.completed payload:", {
-    id: session?.id,
-    mode: session?.mode,
-    customer: session?.customer,
-    subscription: session?.subscription,
-    metadata: session?.metadata,
-  })
+  const server = createServerClient();
+  const session = event.data.object;
+  console.log("[STRIPE][WEBHOOK] checkout.session.completed:", session.id);
 
-  // Si abonnement, lier subscriptionId et customerId à l'utilisateur / agence
-  if (session.mode === "subscription") {
-    const subscriptionId = session.subscription
-    const customerId = session.customer
-    const userId = session.metadata?.user_id
-    const planId = session.metadata?.plan_id
-    const subscriptionType = session.metadata?.subscription_type || "agency" // "owner" ou "agency"
-    
-    if (userId && subscriptionId) {
-      if (subscriptionType === "owner") {
-        // Créer/mettre à jour l'abonnement OWNER
-        const { error: upsertError } = await server.from("owner_subscriptions").upsert(
-          {
-            owner_id: userId,
-            plan_id: planId || null,
-            status: "active",
-            started_at: new Date().toISOString(),
-            expires_at: null,
-            is_trial: false,
-            trial_ends_at: null,
-            stripe_customer_id: customerId,
-            stripe_subscription_id: subscriptionId,
-            stripe_status: "active",
-          },
-          { onConflict: "owner_id" },
-        )
-        if (upsertError) {
-          console.error("[STRIPE][WEBHOOK] owner_subscriptions upsert error:", upsertError)
-        } else {
-          console.log("[STRIPE][WEBHOOK] owner_subscriptions upsert OK", { owner_id: userId, plan_id: planId })
-        }
-      } else {
-        // Récupérer l'agence de l'utilisateur
-        const { data: user } = await server.from("users").select("agency_id").eq("id", userId).single()
-        const agencyId = user?.agency_id
+  if (session.mode !== "subscription") return;
 
-        if (agencyId) {
-          // Upsert de l'abonnement agence avec IDs Stripe
-          const { error: upsertError } = await server.from("agency_subscriptions").upsert(
-            {
-              agency_id: agencyId,
-              plan_id: planId || null,
-              status: "active",
-              started_at: new Date().toISOString(),
-              expires_at: null,
-              is_trial: false,
-              trial_ends_at: null,
-              stripe_customer_id: customerId,
-              stripe_subscription_id: subscriptionId,
-              stripe_status: "active",
-            },
-            { onConflict: "agency_id" },
-          )
-          if (upsertError) {
-            console.error("[STRIPE][WEBHOOK] agency_subscriptions upsert error:", upsertError)
-          } else {
-            console.log("[STRIPE][WEBHOOK] agency_subscriptions upsert OK", { agency_id: agencyId, plan_id: planId })
-          }
-        }
-      }
+  const userId = session.metadata?.user_id;
+  const planId = session.metadata?.plan_id;
+  const subscriptionId = session.subscription;
+  const customerId = session.customer;
+  const subscriptionType = session.metadata?.subscription_type || "agency";
 
-      const { error: insertEvtError } = await server.from("billing_events").insert({ type: "checkout.session.completed", payload: session })
-      if (insertEvtError) {
-        console.error("[STRIPE][WEBHOOK] billing_events insert error:", insertEvtError)
-      }
+  if (!userId || !subscriptionId) return;
+
+  if (subscriptionType === "owner") {
+    const { error } = await server.from("owner_subscriptions").upsert(
+      {
+        owner_id: userId,
+        plan_id: planId,
+        status: "active",
+        started_at: new Date().toISOString(),
+        stripe_customer_id: customerId,
+        stripe_subscription_id: subscriptionId,
+        stripe_status: "active",
+      },
+      { onConflict: "owner_id" }
+    );
+    if (error) console.error("[STRIPE][WEBHOOK] owner_subscriptions error:", error);
+  } else {
+    const { data: user } = await server.from("users").select("agency_id").eq("id", userId).single();
+    const agencyId = user?.agency_id;
+    if (agencyId) {
+      const { error } = await server.from("agency_subscriptions").upsert(
+        {
+          agency_id: agencyId,
+          plan_id: planId,
+          status: "active",
+          started_at: new Date().toISOString(),
+          stripe_customer_id: customerId,
+          stripe_subscription_id: subscriptionId,
+          stripe_status: "active",
+        },
+        { onConflict: "agency_id" }
+      );
+      if (error) console.error("[STRIPE][WEBHOOK] agency_subscriptions error:", error);
     }
   }
+
+  await server.from("billing_events").insert({ type: "checkout.session.completed", payload: session });
 }
 
 async function handleInvoicePaymentSucceeded(event: any) {
-  const server = createServerClient()
-  const invoice = event.data.object
-  await server.from("billing_events").insert({ type: "invoice.payment_succeeded", payload: invoice })
+  const server = createServerClient();
+  const invoice = event.data.object;
+  await server.from("billing_events").insert({ type: "invoice.payment_succeeded", payload: invoice });
 }
 
 async function handleInvoicePaymentFailed(event: any) {
-  const server = createServerClient()
-  const invoice = event.data.object
-  await server.from("billing_events").insert({ type: "invoice.payment_failed", payload: invoice })
-
-  // Tenter de retrouver l'agence ou l'owner associé au customer
-  const { data: agencySub } = await server
-    .from("agency_subscriptions")
-    .select("agency_id")
-    .eq("stripe_customer_id", invoice.customer)
-    .single()
-
-  const { data: ownerSub } = await server
-    .from("owner_subscriptions")
-    .select("owner_id")
-    .eq("stripe_customer_id", invoice.customer)
-    .single()
-
-  if (agencySub?.agency_id) {
-    // Marquer comme actif mais à surveiller, ou dégrader l'accès selon votre politique
-    await server
-      .from("agency_subscriptions")
-      .update({ stripe_status: "past_due" })
-      .eq("agency_id", agencySub.agency_id)
-  }
-
-  if (ownerSub?.owner_id) {
-    // Marquer l'abonnement owner comme en échec
-    await server
-      .from("owner_subscriptions")
-      .update({ stripe_status: "past_due" })
-      .eq("owner_id", ownerSub.owner_id)
-  }
+  const server = createServerClient();
+  const invoice = event.data.object;
+  await server.from("billing_events").insert({ type: "invoice.payment_failed", payload: invoice });
 }
 
 async function handleSubscriptionEvent(event: any) {
-  const server = createServerClient()
-  const subscription = event.data.object
-  const { error: insertEvtError } = await server.from("billing_events").insert({ type: event.type, payload: subscription })
-  if (insertEvtError) {
-    console.error("[STRIPE][WEBHOOK] billing_events insert error:", insertEvtError)
-  }
+  const server = createServerClient();
+  const subscription = event.data.object;
 
-  // Synchroniser agency_subscriptions.status selon subscription.status
+  await server.from("billing_events").insert({ type: event.type, payload: subscription });
+
   const statusMap: Record<string, string> = {
     active: "active",
     trialing: "trial",
-    past_due: "active", // accès conservé, à ajuster au besoin
+    past_due: "active",
     canceled: "cancelled",
     unpaid: "cancelled",
     incomplete: "cancelled",
     incomplete_expired: "cancelled",
-  }
-  const mapped = statusMap[subscription.status] || "cancelled"
+  };
+  const mapped = statusMap[subscription.status] || "cancelled";
 
-  // Retrouver agency_id par stripe_subscription_id
   const { data: agencySub } = await server
     .from("agency_subscriptions")
     .select("agency_id")
     .eq("stripe_subscription_id", subscription.id)
-    .single()
+    .maybeSingle();
 
-  // Retrouver owner_id par stripe_subscription_id
   const { data: ownerSub } = await server
     .from("owner_subscriptions")
     .select("owner_id")
     .eq("stripe_subscription_id", subscription.id)
-    .single()
+    .maybeSingle();
 
   if (agencySub?.agency_id) {
     await server
       .from("agency_subscriptions")
       .update({ status: mapped, stripe_status: subscription.status })
-      .eq("agency_id", agencySub.agency_id)
-    console.log("[STRIPE][WEBHOOK] agency_subscriptions status sync", { agency_id: agencySub.agency_id, status: mapped })
+      .eq("agency_id", agencySub.agency_id);
   }
 
   if (ownerSub?.owner_id) {
     await server
       .from("owner_subscriptions")
       .update({ status: mapped, stripe_status: subscription.status })
-      .eq("owner_id", ownerSub.owner_id)
-    console.log("[STRIPE][WEBHOOK] owner_subscriptions status sync", { owner_id: ownerSub.owner_id, status: mapped })
+      .eq("owner_id", ownerSub.owner_id);
   }
 }
 
 async function handleOneOffPayment(event: any) {
-  const server = createServerClient()
-  const intent = event.data.object
-  await server.from("billing_events").insert({ type: "payment_intent.succeeded", payload: intent })
-
-  // Débloquer le module acheté à l'acte pour l'utilisateur/agence
-  const userId = intent.metadata?.user_id
-  const moduleName = intent.metadata?.module_name
-  if (userId && moduleName) {
-    const { data: user } = await server.from("users").select("agency_id").eq("id", userId).single()
-    const agencyId = user?.agency_id
-    if (agencyId) {
-      // Enregistrer l'achat à l'acte
-      await server.from("one_off_purchases").insert({
-        user_id: userId,
-        module_id: (await getModuleId(server, moduleName)) || undefined,
-        stripe_payment_intent_id: intent.id,
-        amount_cents: intent.amount_received,
-        currency: intent.currency,
-        status: intent.status,
-      })
-    }
-  }
+  const server = createServerClient();
+  const intent = event.data.object;
+  await server.from("billing_events").insert({ type: "payment_intent.succeeded", payload: intent });
 }
-
-async function getModuleId(server: any, moduleName: string): Promise<string | null> {
-  const { data } = await server.from("premium_modules").select("id").eq("name", moduleName).maybeSingle()
-  return data?.id || null
-}
-
-
