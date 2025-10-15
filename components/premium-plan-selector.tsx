@@ -71,7 +71,7 @@ export function PremiumPlanSelector({ currentPlanId, onPlanSelect, showTrialOpti
           const price = billingPeriod === "monthly" ? plan.price_monthly : plan.price_yearly
           const priceId =
             billingPeriod === "monthly" ? (plan as any).stripe_price_monthly_id : (plan as any).stripe_price_yearly_id
-          const isCurrentPlan = currentPlanId === plan.id
+          const isCurrentPlan = (currentPlanId || "").trim() === (plan.id || "").trim()
           const yearlyDiscount = plan.price_yearly < plan.price_monthly * 12
 
           return (

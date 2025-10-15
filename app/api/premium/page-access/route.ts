@@ -17,8 +17,10 @@ export async function GET(request: NextRequest) {
 
     if (error) return NextResponse.json({ success: false, error: "DB error" }, { status: 500 })
 
-    const list = Array.isArray(data?.setting_value) ? data!.setting_value as any[] : []
-    const rule = list.find((r: any) => r?.path === path) || null
+    const list = Array.isArray(data?.setting_value) ? (data!.setting_value as any[]) : []
+    // Chercher la règle la plus spécifique dont le path est un préfixe du chemin demandé
+    const candidates = list.filter((r: any) => typeof r?.path === "string" && path.startsWith(r.path))
+    const rule = candidates.sort((a: any, b: any) => b.path.length - a.path.length)[0] || null
     return NextResponse.json({ success: true, rule })
   } catch (e) {
     return NextResponse.json({ success: false, error: "Server error" }, { status: 500 })

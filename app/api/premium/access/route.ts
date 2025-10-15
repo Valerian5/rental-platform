@@ -17,72 +17,33 @@ export async function POST(request: NextRequest) {
     const resolved = await resolveUserPlan(user.id)
     if (!resolved.planId) return NextResponse.json({ success: true, allowed: false })
 
-    // Vérifier l'inclusion selon les règles de page (stockées dans site_settings)
-    const { data: rules } = await supabase
-      .from("site_settings")
-      .select("setting_value")
-      .eq("setting_key", "page_module_access")
-      .single()
-    
-    const pageRules = rules?.setting_value || []
-    const rule = pageRules.find((r: any) => r.module_name === module_name)
-    
-    // Si pas de règle spécifique, utiliser les fonctionnalités par défaut du plan
+    // Décision d'accès basée UNIQUEMENT sur les features du plan résolu
+    const plan = resolved.plan || {}
+    const features: string[] = Array.isArray(plan.features) ? plan.features : []
     let allowed = false
-    if (rule) {
-      // Logique basée sur les règles de page (à implémenter selon tes besoins)
-      allowed = true // Pour l'instant, on autorise si une règle existe
-    } else {
-      // Fonctionnalités par défaut selon le plan
-      const plan = resolved.plan
-      const features = plan.features || []
-      
-      switch (module_name) {
-        case "applications":
-          allowed = true // Toujours accessible, mais limité par quota
-          break
-        case "visits":
-          allowed = features.includes("visits")
-          break
-        case "property_management":
-          allowed = features.includes("property_management")
-          break
-        case "rental_management_incidents":
-          allowed = features.includes("rental_management_incidents")
-          break
-        case "rental_management_maintenance":
-          allowed = features.includes("rental_management_maintenance")
-          break
-        case "rental_management_documents":
-          allowed = features.includes("rental_management_documents")
-          break
-        case "rental_management_rent_revision":
-          allowed = features.includes("rental_management_rent_revision")
-          break
-        case "rental_management_revision":
-          allowed = features.includes("rental_management_revision")
-          break
-        case "rental_management_fiscal":
-          allowed = features.includes("rental_management_fiscal")
-          break
-        case "rental_management_overview":
-          allowed = features.includes("rental_management_overview")
-          break
-        case "leases":
-          allowed = true
-          break
-        case "payments":
-          allowed = features.includes("payments")
-          break
-        case "scoring_customization":
-          allowed = features.includes("scoring_customization")
-          break
-        case "electronic_signature":
-          allowed = features.includes("electronic_signature")
-          break
-        default:
-          allowed = false
-      }
+    switch (module_name) {
+      case "applications":
+        allowed = true // Toujours accessible, quotas ailleurs
+        break
+      case "visits":
+      case "property_management":
+      case "rental_management_incidents":
+      case "rental_management_maintenance":
+      case "rental_management_documents":
+      case "rental_management_rent_revision":
+      case "rental_management_revision":
+      case "rental_management_fiscal":
+      case "rental_management_overview":
+      case "payments":
+      case "scoring_customization":
+      case "electronic_signature":
+        allowed = features.includes(module_name)
+        break
+      case "leases":
+        allowed = true
+        break
+      default:
+        allowed = false
     }
     
     return NextResponse.json({ success: true, allowed })
