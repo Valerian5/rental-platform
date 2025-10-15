@@ -1,21 +1,6 @@
-"use client"
-
-import { useEffect } from "react"
-import { useSearchParams } from "next/navigation"
 import Link from "next/link"
-
-export const dynamic = "force-dynamic"
-
-export default function BillingSuccessPage() {
-  const params = useSearchParams()
-  const sessionId = params.get("session_id")
-
-  useEffect(() => {
-    // Optionnel: Ping un endpoint pour enregistrer l'événement côté app si besoin
-    if (sessionId) {
-      console.log("[BILLING][SUCCESS] session_id:", sessionId)
-    }
-  }, [sessionId])
+export default function BillingSuccessPage({ searchParams }: { searchParams?: { [key: string]: string | string[] | undefined } }) {
+  const sessionId = (searchParams?.session_id as string) || undefined
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-12">
