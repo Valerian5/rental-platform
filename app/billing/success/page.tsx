@@ -4,6 +4,8 @@ import { useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 
+export const dynamic = "force-dynamic"
+
 export default function BillingSuccessPage() {
   const params = useSearchParams()
   const sessionId = params.get("session_id")
