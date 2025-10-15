@@ -404,18 +404,18 @@ function DynamicPageOverlay({ userId, path }: { userId: string; path: string }) 
     }
   }, [path])
 
-  if (loading || !rule) return null
-  const moduleName = rule.module_name as string | undefined
+  if (loading) return null
+  const moduleName = (rule?.module_name as string | undefined) || fallbackModuleFor(path)
   if (!moduleName) return null
 
   return (
     <PageAccessOverlay
       userId={userId}
-      moduleName={moduleName || fallbackModuleFor(path)}
-      marketingTitle={rule.marketing_title || "Fonctionnalité réservée"}
-      marketingDesc={rule.marketing_text || undefined}
-      ctaText={rule.cta_text || "Voir les plans"}
-      oneOffPriceId={rule.one_off_price_id || undefined}
+      moduleName={moduleName}
+      marketingTitle={rule?.marketing_title || "Fonctionnalité réservée"}
+      marketingDesc={rule?.marketing_text || undefined}
+      ctaText={rule?.cta_text || "Voir les plans"}
+      oneOffPriceId={rule?.one_off_price_id || undefined}
     />
   )
 }
