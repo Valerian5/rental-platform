@@ -72,6 +72,11 @@ export async function POST(req: Request) {
   }
 }
 
+// Health-check simple pour vérifier l'accessibilité publique de l'endpoint
+export async function GET(req: Request) {
+  return NextResponse.json({ ok: true, path: new URL(req.url).pathname })
+}
+
 // === HANDLERS (inchangés par rapport à ta version) ===
 
 async function handleCheckoutCompleted(event: any) {
