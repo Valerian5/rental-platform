@@ -15,6 +15,7 @@ export async function POST(request: NextRequest) {
     }
 
     const event = stripe.webhooks.constructEvent(rawBody, signature, endpointSecret)
+    console.log("[STRIPE][WEBHOOK] Event reçu:", { type: event.type })
 
     switch (event.type) {
       case "checkout.session.completed":
@@ -48,6 +49,13 @@ export async function POST(request: NextRequest) {
 async function handleCheckoutCompleted(event: any) {
   const server = createServerClient()
   const session = event.data.object
+  console.log("[STRIPE][WEBHOOK] checkout.session.completed payload:", {
+    id: session?.id,
+    mode: session?.mode,
+    customer: session?.customer,
+    subscription: session?.subscription,
+    metadata: session?.metadata,
+  })
 
   // Si abonnement, lier subscriptionId et customerId à l'utilisateur / agence
   if (session.mode === "subscription") {
@@ -60,7 +68,7 @@ async function handleCheckoutCompleted(event: any) {
     if (userId && subscriptionId) {
       if (subscriptionType === "owner") {
         // Créer/mettre à jour l'abonnement OWNER
-        await server.from("owner_subscriptions").upsert(
+        const { error: upsertError } = await server.from("owner_subscriptions").upsert(
           {
             owner_id: userId,
             plan_id: planId || null,
@@ -75,6 +83,11 @@ async function handleCheckoutCompleted(event: any) {
           },
           { onConflict: "owner_id" },
         )
+        if (upsertError) {
+          console.error("[STRIPE][WEBHOOK] owner_subscriptions upsert error:", upsertError)
+        } else {
+          console.log("[STRIPE][WEBHOOK] owner_subscriptions upsert OK", { owner_id: userId, plan_id: planId })
+        }
       } else {
         // Récupérer l'agence de l'utilisateur
         const { data: user } = await server.from("users").select("agency_id").eq("id", userId).single()
@@ -82,7 +95,7 @@ async function handleCheckoutCompleted(event: any) {
 
         if (agencyId) {
           // Upsert de l'abonnement agence avec IDs Stripe
-          await server.from("agency_subscriptions").upsert(
+          const { error: upsertError } = await server.from("agency_subscriptions").upsert(
             {
               agency_id: agencyId,
               plan_id: planId || null,
@@ -97,10 +110,18 @@ async function handleCheckoutCompleted(event: any) {
             },
             { onConflict: "agency_id" },
           )
+          if (upsertError) {
+            console.error("[STRIPE][WEBHOOK] agency_subscriptions upsert error:", upsertError)
+          } else {
+            console.log("[STRIPE][WEBHOOK] agency_subscriptions upsert OK", { agency_id: agencyId, plan_id: planId })
+          }
         }
       }
 
-      await server.from("billing_events").insert({ type: "checkout.session.completed", payload: session })
+      const { error: insertEvtError } = await server.from("billing_events").insert({ type: "checkout.session.completed", payload: session })
+      if (insertEvtError) {
+        console.error("[STRIPE][WEBHOOK] billing_events insert error:", insertEvtError)
+      }
     }
   }
 }
@@ -149,7 +170,10 @@ async function handleInvoicePaymentFailed(event: any) {
 async function handleSubscriptionEvent(event: any) {
   const server = createServerClient()
   const subscription = event.data.object
-  await server.from("billing_events").insert({ type: event.type, payload: subscription })
+  const { error: insertEvtError } = await server.from("billing_events").insert({ type: event.type, payload: subscription })
+  if (insertEvtError) {
+    console.error("[STRIPE][WEBHOOK] billing_events insert error:", insertEvtError)
+  }
 
   // Synchroniser agency_subscriptions.status selon subscription.status
   const statusMap: Record<string, string> = {
@@ -182,6 +206,7 @@ async function handleSubscriptionEvent(event: any) {
       .from("agency_subscriptions")
       .update({ status: mapped, stripe_status: subscription.status })
       .eq("agency_id", agencySub.agency_id)
+    console.log("[STRIPE][WEBHOOK] agency_subscriptions status sync", { agency_id: agencySub.agency_id, status: mapped })
   }
 
   if (ownerSub?.owner_id) {
@@ -189,6 +214,7 @@ async function handleSubscriptionEvent(event: any) {
       .from("owner_subscriptions")
       .update({ status: mapped, stripe_status: subscription.status })
       .eq("owner_id", ownerSub.owner_id)
+    console.log("[STRIPE][WEBHOOK] owner_subscriptions status sync", { owner_id: ownerSub.owner_id, status: mapped })
   }
 }
 
