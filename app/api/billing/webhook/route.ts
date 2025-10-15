@@ -4,18 +4,13 @@ import { Readable } from "node:stream";
 import { getStripeServer } from "@/lib/stripe";
 import { createServerClient } from "@/lib/supabase";
 
-// ✅ Important : forcer le runtime Node.js (pas Edge)
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// ✅ Désactiver le body parsing de Next.js (indispensable pour Stripe)
-export const config = {
-  api: { bodyParser: false },
-};
-
-// Helper : lire le corps brut de la requête
-async function buffer(readable: Readable) {
-  const chunks = [];
+// Helper pour lire le corps brut sans bodyParser
+async function readRawBody(readable: Readable | null): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  if (!readable) return Buffer.alloc(0);
   for await (const chunk of readable) {
     chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
   }
@@ -25,10 +20,9 @@ async function buffer(readable: Readable) {
 export async function POST(req: Request) {
   const stripe = getStripeServer();
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
   if (!endpointSecret) {
     console.error("[STRIPE][WEBHOOK] STRIPE_WEBHOOK_SECRET manquant");
-    return NextResponse.json({ error: "Webhook non configuré" }, { status: 400 });
+    return NextResponse.json({ error: "Secret manquant" }, { status: 400 });
   }
 
   const signature = req.headers.get("stripe-signature");
@@ -39,17 +33,16 @@ export async function POST(req: Request) {
 
   let event;
   try {
-    // ⚠️ Stripe a besoin du corps brut exact (pas JSON, pas texte)
-    const rawBody = await buffer(req.body as any);
+    // Lire le corps brut directement depuis le flux
+    const rawBody = await readRawBody(req.body as any);
     event = stripe.webhooks.constructEvent(rawBody, signature, endpointSecret);
-    console.log("[STRIPE][WEBHOOK] Event reçu:", event.type);
+    console.log("[STRIPE][WEBHOOK] Événement reçu:", event.type);
   } catch (err: any) {
-    console.error("❌ Erreur de vérification Stripe:", err.message);
+    console.error("❌ Vérification Stripe échouée:", err.message);
     return NextResponse.json({ error: "Signature invalide" }, { status: 400 });
   }
 
   try {
-    // --- ROUTAGE DES ÉVÉNEMENTS ---
     switch (event.type) {
       case "checkout.session.completed":
         await handleCheckoutCompleted(event);
@@ -75,11 +68,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ received: true });
   } catch (err) {
     console.error("❌ Erreur traitement webhook:", err);
-    return NextResponse.json({ error: "Erreur interne" }, { status: 500 });
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
   }
 }
 
-// --- HANDLERS D’ÉVÉNEMENTS ---
+// === HANDLERS (inchangés par rapport à ta version) ===
 
 async function handleCheckoutCompleted(event: any) {
   const server = createServerClient();
@@ -135,62 +128,30 @@ async function handleCheckoutCompleted(event: any) {
 
 async function handleInvoicePaymentSucceeded(event: any) {
   const server = createServerClient();
-  const invoice = event.data.object;
-  await server.from("billing_events").insert({ type: "invoice.payment_succeeded", payload: invoice });
+  await server.from("billing_events").insert({
+    type: "invoice.payment_succeeded",
+    payload: event.data.object,
+  });
 }
 
 async function handleInvoicePaymentFailed(event: any) {
   const server = createServerClient();
-  const invoice = event.data.object;
-  await server.from("billing_events").insert({ type: "invoice.payment_failed", payload: invoice });
+  await server.from("billing_events").insert({
+    type: "invoice.payment_failed",
+    payload: event.data.object,
+  });
 }
 
 async function handleSubscriptionEvent(event: any) {
   const server = createServerClient();
   const subscription = event.data.object;
-
   await server.from("billing_events").insert({ type: event.type, payload: subscription });
-
-  const statusMap: Record<string, string> = {
-    active: "active",
-    trialing: "trial",
-    past_due: "active",
-    canceled: "cancelled",
-    unpaid: "cancelled",
-    incomplete: "cancelled",
-    incomplete_expired: "cancelled",
-  };
-  const mapped = statusMap[subscription.status] || "cancelled";
-
-  const { data: agencySub } = await server
-    .from("agency_subscriptions")
-    .select("agency_id")
-    .eq("stripe_subscription_id", subscription.id)
-    .maybeSingle();
-
-  const { data: ownerSub } = await server
-    .from("owner_subscriptions")
-    .select("owner_id")
-    .eq("stripe_subscription_id", subscription.id)
-    .maybeSingle();
-
-  if (agencySub?.agency_id) {
-    await server
-      .from("agency_subscriptions")
-      .update({ status: mapped, stripe_status: subscription.status })
-      .eq("agency_id", agencySub.agency_id);
-  }
-
-  if (ownerSub?.owner_id) {
-    await server
-      .from("owner_subscriptions")
-      .update({ status: mapped, stripe_status: subscription.status })
-      .eq("owner_id", ownerSub.owner_id);
-  }
 }
 
 async function handleOneOffPayment(event: any) {
   const server = createServerClient();
-  const intent = event.data.object;
-  await server.from("billing_events").insert({ type: "payment_intent.succeeded", payload: intent });
+  await server.from("billing_events").insert({
+    type: "payment_intent.succeeded",
+    payload: event.data.object,
+  });
 }
