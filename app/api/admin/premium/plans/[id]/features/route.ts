@@ -10,8 +10,18 @@ async function requireAdmin(request: NextRequest) {
   const { data: tokenData, error: tokenError } = await admin.auth.getUser(token)
   if (tokenError || !tokenData.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const { data: userProfile } = await admin.from("users").select("user_type").eq("id", tokenData.user.id).single()
-  if (!userProfile || userProfile.user_type !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  // Check admin via DB profile first
+  const { data: userProfile } = await admin.from("users").select("user_type").eq("id", tokenData.user.id).maybeSingle()
+  const isAdminDb = !!userProfile && userProfile.user_type === "admin"
+
+  // Fallback: allow if user_metadata/app_metadata marks admin
+  const userMeta = (tokenData.user as any)?.user_metadata || {}
+  const appMeta = (tokenData.user as any)?.app_metadata || {}
+  const isAdminMeta = userMeta.user_type === "admin" || appMeta.user_type === "admin"
+
+  if (!isAdminDb && !isAdminMeta) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
   return null
 }
 

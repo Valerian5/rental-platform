@@ -1,9 +1,5 @@
 // generateRentRevisionPDF.ts
-import { jsPDF } from 'jspdf'
-import autoTable from 'jspdf-autotable'
-
-// injection manuelle pour compatibilité Next.js (ESM)
-autoTable(jsPDF)
+import type { jsPDF } from 'jspdf'
 
 export interface Lease {
   id: string
@@ -31,7 +27,11 @@ export interface RentRevision {
   compliance_notes?: string
 }
 
-export function generateRentRevisionPDF(lease: Lease, revision: RentRevision): jsPDF {
+export async function generateRentRevisionPDF(lease: Lease, revision: RentRevision): Promise<jsPDF> {
+  // Import dynamique pour éviter l’exécution côté serveur prématurée
+  const { jsPDF } = await import('jspdf')
+  const autoTable = (await import('jspdf-autotable')).default
+
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
@@ -61,7 +61,7 @@ export function generateRentRevisionPDF(lease: Lease, revision: RentRevision): j
     y += lines.length * lineHeight
   }
 
-  // --- En-tête : expéditeur gauche / destinataire droite ---
+  // --- En-tête expéditeur / destinataire ---
   const leftX = margin
   const rightX = pageWidth - margin
 
@@ -77,13 +77,11 @@ export function generateRentRevisionPDF(lease: Lease, revision: RentRevision): j
 
   y += 28
 
-  // --- Adresse et date ---
   setFont(9)
   doc.text(`${lease.property.address}, ${lease.property.city}`, leftX, y)
   doc.text(`Le ${new Date(revision.revision_date).toLocaleDateString('fr-FR')}`, rightX, y, { align: 'right' })
   y += 18
 
-  // --- Objet ---
   setFont(11, true)
   doc.text('Objet : Révision annuelle de loyer (indice IRL)', leftX, y)
   y += 8
@@ -91,7 +89,6 @@ export function generateRentRevisionPDF(lease: Lease, revision: RentRevision): j
   doc.line(margin, y, pageWidth - margin, y)
   y += 12
 
-  // --- Corps du courrier ---
   setFont(10)
   doc.text('Madame, Monsieur,', leftX, y)
   y += 12
@@ -105,7 +102,7 @@ export function generateRentRevisionPDF(lease: Lease, revision: RentRevision): j
   y += 4
 
   // --- Tableau de révision ---
-  ;(doc as any).autoTable({
+  autoTable(doc, {
     startY: y,
     theme: 'grid',
     head: [['Élément', 'Valeur']],
@@ -118,20 +115,12 @@ export function generateRentRevisionPDF(lease: Lease, revision: RentRevision): j
       ['Charges mensuelles', `${lease.charges.toFixed(2)} €`],
       ['Total mensuel (loyer + charges)', `${(revision.new_rent_amount + lease.charges).toFixed(2)} €`],
     ],
-    styles: {
-      fontSize: 9,
-      cellPadding: 3,
-      valign: 'middle'
-    },
-    headStyles: {
-      fillColor: [70, 130, 180],
-      textColor: [255, 255, 255],
-      fontStyle: 'bold'
-    },
+    styles: { fontSize: 9, cellPadding: 3 },
+    headStyles: { fillColor: [70, 130, 180], textColor: [255, 255, 255], fontStyle: 'bold' },
     columnStyles: {
       0: { cellWidth: contentWidth * 0.55 },
-      1: { halign: 'right', cellWidth: contentWidth * 0.45 }
-    }
+      1: { halign: 'right', cellWidth: contentWidth * 0.45 },
+    },
   })
 
   y = (doc as any).lastAutoTable.finalY + 10
@@ -170,7 +159,6 @@ export function generateRentRevisionPDF(lease: Lease, revision: RentRevision): j
     addMultiline(revision.compliance_notes, leftX, contentWidth, 8)
   }
 
-  // --- Pied de page ---
   const footerY = pageHeight - 36
   doc.setDrawColor(220)
   doc.line(margin, footerY, pageWidth - margin, footerY)
