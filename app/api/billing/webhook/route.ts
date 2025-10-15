@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 import { getStripeServer } from "@/lib/stripe"
 import { createServerClient } from "@/lib/supabase"
 
@@ -10,8 +12,13 @@ export async function POST(request: NextRequest) {
   try {
     const rawBody = await request.text()
     const signature = request.headers.get("stripe-signature")
-    if (!endpointSecret || !signature) {
-      return NextResponse.json({ error: "Webhook non configuré" }, { status: 400 })
+    if (!endpointSecret) {
+      console.error("[STRIPE][WEBHOOK] STRIPE_WEBHOOK_SECRET manquant")
+      return NextResponse.json({ error: "Webhook non configuré (secret manquant)" }, { status: 400 })
+    }
+    if (!signature) {
+      console.error("[STRIPE][WEBHOOK] En-tête stripe-signature manquant")
+      return NextResponse.json({ error: "Signature manquante" }, { status: 400 })
     }
 
     const event = stripe.webhooks.constructEvent(rawBody, signature, endpointSecret)
