@@ -411,11 +411,31 @@ function DynamicPageOverlay({ userId, path }: { userId: string; path: string }) 
   return (
     <PageAccessOverlay
       userId={userId}
-      moduleName={moduleName}
+      moduleName={moduleName || fallbackModuleFor(path)}
       marketingTitle={rule.marketing_title || "Fonctionnalité réservée"}
       marketingDesc={rule.marketing_text || undefined}
       ctaText={rule.cta_text || "Voir les plans"}
       oneOffPriceId={rule.one_off_price_id || undefined}
     />
   )
+}
+
+function fallbackModuleFor(path: string): string | undefined {
+  const map: Record<string, string> = {
+    "/owner/rental-management": "property_management",
+    "/owner/rental-management/incidents": "rental_management_incidents",
+    "/owner/rental-management/maintenance": "rental_management_maintenance",
+    "/owner/rental-management/documents": "rental_management_documents",
+    "/owner/rental-management/rent-revision": "rental_management_rent_revision",
+    "/owner/rental-management/revision": "rental_management_revision",
+    "/owner/rental-management/fiscal": "rental_management_fiscal",
+    "/owner/rental-management/overview": "rental_management_overview",
+    "/owner/leases": "leases",
+    "/owner/applications": "applications",
+    "/owner/payments": "payments",
+    "/owner/scoring-preferences-simple": "scoring_customization",
+  }
+  // Chercher la correspondance la plus spécifique par préfixe
+  const keys = Object.keys(map).filter((k) => path.startsWith(k)).sort((a, b) => b.length - a.length)
+  return keys[0] ? map[keys[0]] : undefined
 }
