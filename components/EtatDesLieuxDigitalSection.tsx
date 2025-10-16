@@ -42,66 +42,77 @@ interface RoomState {
     sols: { 
       state: "absent" | "M" | "P" | "B" | "TB"; 
       comment: string;
+      comment_entree?: string;
       state_entree?: "absent" | "M" | "P" | "B" | "TB";
       state_sortie?: "absent" | "M" | "P" | "B" | "TB";
     }
     murs: { 
       state: "absent" | "M" | "P" | "B" | "TB"; 
       comment: string;
+      comment_entree?: string;
       state_entree?: "absent" | "M" | "P" | "B" | "TB";
       state_sortie?: "absent" | "M" | "P" | "B" | "TB";
     }
     plafonds: { 
       state: "absent" | "M" | "P" | "B" | "TB"; 
       comment: string;
+      comment_entree?: string;
       state_entree?: "absent" | "M" | "P" | "B" | "TB";
       state_sortie?: "absent" | "M" | "P" | "B" | "TB";
     }
     portes: { 
       state: "absent" | "M" | "P" | "B" | "TB"; 
       comment: string;
+      comment_entree?: string;
       state_entree?: "absent" | "M" | "P" | "B" | "TB";
       state_sortie?: "absent" | "M" | "P" | "B" | "TB";
     }
     fenetres: { 
       state: "absent" | "M" | "P" | "B" | "TB"; 
       comment: string;
+      comment_entree?: string;
       state_entree?: "absent" | "M" | "P" | "B" | "TB";
       state_sortie?: "absent" | "M" | "P" | "B" | "TB";
     }
     volets: { 
       state: "absent" | "M" | "P" | "B" | "TB"; 
       comment: string;
+      comment_entree?: string;
       state_entree?: "absent" | "M" | "P" | "B" | "TB";
       state_sortie?: "absent" | "M" | "P" | "B" | "TB";
     }
     plinthes: { 
       state: "absent" | "M" | "P" | "B" | "TB"; 
       comment: string;
+      comment_entree?: string;
       state_entree?: "absent" | "M" | "P" | "B" | "TB";
       state_sortie?: "absent" | "M" | "P" | "B" | "TB";
     }
     radiateurs: { 
       state: "absent" | "M" | "P" | "B" | "TB"; 
       comment: string;
+      comment_entree?: string;
       state_entree?: "absent" | "M" | "P" | "B" | "TB";
       state_sortie?: "absent" | "M" | "P" | "B" | "TB";
     }
     interrupteurs: { 
       state: "absent" | "M" | "P" | "B" | "TB"; 
       comment: string;
+      comment_entree?: string;
       state_entree?: "absent" | "M" | "P" | "B" | "TB";
       state_sortie?: "absent" | "M" | "P" | "B" | "TB";
     }
     prises: { 
       state: "absent" | "M" | "P" | "B" | "TB"; 
       comment: string;
+      comment_entree?: string;
       state_entree?: "absent" | "M" | "P" | "B" | "TB";
       state_sortie?: "absent" | "M" | "P" | "B" | "TB";
     }
     eclairages: { 
       state: "absent" | "M" | "P" | "B" | "TB"; 
       comment: string;
+      comment_entree?: string;
       state_entree?: "absent" | "M" | "P" | "B" | "TB";
       state_sortie?: "absent" | "M" | "P" | "B" | "TB";
     }
@@ -474,7 +485,8 @@ export function EtatDesLieuxDigitalSection({
                         key,
                         {
                           ...room.elements[key as keyof typeof room.elements],
-                          state_entree: entryRoom.elements[key]?.state
+                          state_entree: entryRoom.elements[key]?.state,
+                          comment_entree: entryRoom.elements[key]?.comment || ""
                         }
                       ])
                     ) as RoomState["elements"]
@@ -1654,7 +1666,8 @@ export function EtatDesLieuxDigitalSection({
                               <thead>
                                 <tr className="border-b">
                                   <th className="text-left py-1">Élément</th>
-                                  <th className="text-left py-1">Commentaire</th>
+                                  <th className="text-left py-1">Commentaire Entrée</th>
+                                  <th className="text-left py-1">Commentaire Sortie</th>
                                   <th className="text-center py-1">État Entrée</th>
                                   <th className="text-center py-1">État Sortie</th>
                                 </tr>
@@ -1665,13 +1678,12 @@ export function EtatDesLieuxDigitalSection({
                                   return (
                                     <tr key={key} className="border-b">
                                       <td className="py-1 pr-2">{label}</td>
-                                      <td className="py-1 pr-2 text-gray-600">
-                                        {element.comment || "-"}
-                                      </td>
+                                      <td className="py-1 pr-2 text-gray-600">{element.comment_entree || "-"}</td>
+                                      <td className="py-1 pr-2 text-gray-600">{element.comment || "-"}</td>
                                       <td className="py-1 text-center">
-                                        {generalInfo.type === "entree" 
-                                          ? getStateBadge(element.state)
-                                          : (element.state_entree ? getStateBadge(element.state_entree) : "-")
+                                        {generalInfo.type === "sortie" 
+                                          ? (element.state_entree ? getStateBadge(element.state_entree) : "-")
+                                          : getStateBadge(element.state)
                                         }
                                       </td>
                                       <td className="py-1 text-center">
@@ -1882,7 +1894,8 @@ export function EtatDesLieuxDigitalSection({
                           <thead>
                             <tr className="border-b">
                               <th className="text-left py-1">Élément</th>
-                              <th className="text-left py-1">Commentaire</th>
+                              <th className="text-left py-1">Commentaire Entrée</th>
+                              <th className="text-left py-1">Commentaire Sortie</th>
                               <th className="text-center py-1">État Entrée</th>
                               <th className="text-center py-1">État Sortie</th>
                             </tr>
@@ -1893,13 +1906,12 @@ export function EtatDesLieuxDigitalSection({
                               return (
                                 <tr key={key} className="border-b">
                                   <td className="py-1 pr-2">{label}</td>
-                                  <td className="py-1 pr-2 text-gray-600">
-                                    {element.comment || "-"}
-                                  </td>
+                                  <td className="py-1 pr-2 text-gray-600">{element.comment_entree || "-"}</td>
+                                  <td className="py-1 pr-2 text-gray-600">{element.comment || "-"}</td>
                                   <td className="py-1 text-center">
-                                    {generalInfo.type === "entree" 
-                                      ? getStateBadge(element.state)
-                                      : (element.state_entree ? getStateBadge(element.state_entree) : "-")
+                                    {generalInfo.type === "sortie" 
+                                      ? (element.state_entree ? getStateBadge(element.state_entree) : "-")
+                                      : getStateBadge(element.state)
                                     }
                                   </td>
                                   <td className="py-1 text-center">
