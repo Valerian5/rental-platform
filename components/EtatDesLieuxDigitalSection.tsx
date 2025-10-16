@@ -391,7 +391,59 @@ export function EtatDesLieuxDigitalSection({
           },
           keys: { ...prev.keys, ...((dataExit.general_info || {}).keys || {}) },
         }))
-        setRooms(Array.isArray(dataExit.rooms) ? dataExit.rooms : [])
+        const exitRooms = Array.isArray(dataExit.rooms) ? dataExit.rooms : []
+        if (exitRooms.length > 0) {
+          setRooms(exitRooms)
+        } else {
+          // Aucune donnée sortie: préremplir depuis l'entrée
+          try {
+            const respEntry = await fetch(`/api/leases/${leaseId}/etat-des-lieux/digital?type=entree`)
+            if (respEntry.ok) {
+              const payloadEntry = await respEntry.json()
+              const entryData = payloadEntry.data || payloadEntry
+              const entryRooms = Array.isArray(entryData.rooms) ? entryData.rooms : []
+              if (entryRooms.length > 0) {
+                const outRooms = entryRooms.map((room: any) => {
+                  const elements = room?.elements || {}
+                  const outElements: Record<string, any> = {}
+                  Object.keys(elements).forEach((k) => {
+                    const el = elements[k] || {}
+                    outElements[k] = {
+                      state_entree: el.state || undefined,
+                      comment_entree: el.comment || "",
+                      state: el.state || "absent",
+                      comment: el.comment || "",
+                    }
+                  })
+                  return {
+                    id: room.id,
+                    name: room.name,
+                    type: room.type,
+                    elements: outElements,
+                    comment: room.comment || "",
+                    photos: Array.isArray(room.photos) ? room.photos : [],
+                  }
+                })
+                setRooms(outRooms as any)
+                // Préremplir chauffage/eau/compteurs/clés/adresse si vides
+                setGeneralInfo((prev) => ({
+                  ...prev,
+                  heating: Object.keys(prev.heating||{}).length ? prev.heating : (entryData.general_info?.heating || prev.heating),
+                  hot_water: Object.keys(prev.hot_water||{}).length ? prev.hot_water : (entryData.general_info?.hot_water || prev.hot_water),
+                  meters: prev.meters?.electricity?.number || prev.meters?.gas?.number || prev.meters?.water?.number
+                    ? prev.meters
+                    : {
+                        electricity: { number: entryData.general_info?.meters?.electricity?.number || "", full_hour: "", off_peak: "" },
+                        gas: { number: entryData.general_info?.meters?.gas?.number || "", reading: "" },
+                        water: { number: entryData.general_info?.meters?.water?.number || "", reading: "" },
+                      },
+                  keys: Object.keys(prev.keys||{}).length ? prev.keys : (entryData.general_info?.keys || prev.keys),
+                  general_comment: prev.general_comment || entryData.general_info?.general_comment || "",
+                }))
+              }
+            }
+          } catch {}
+        }
         setIsValidated(statusExit === "signed" || statusExit === "completed")
         setHasLoadedData(true)
         return
