@@ -361,9 +361,23 @@ export function EtatDesLieuxDigitalSection({
         const payloadExit = await responseExit.json()
         const dataExit = payloadExit.data || payloadExit
         const statusExit = payloadExit.status || "draft"
-        // Priorité ABSOLUE à la sortie: même si pas encore de digital_data, on initialise vide
+        // Priorité ABSOLUE à la sortie: même si pas encore de digital_data, on initialise en mergeant la structure par défaut
         setHasExistingData(true)
-        setGeneralInfo({ ...(dataExit.general_info || {}), type: "sortie" })
+        setGeneralInfo((prev) => ({
+          ...prev,
+          ...(dataExit.general_info || {}),
+          type: "sortie",
+          owner: { ...prev.owner, ...((dataExit.general_info || {}).owner || {}) },
+          tenant: { ...prev.tenant, ...((dataExit.general_info || {}).tenant || {}) },
+          heating: { ...prev.heating, ...((dataExit.general_info || {}).heating || {}) },
+          hot_water: { ...prev.hot_water, ...((dataExit.general_info || {}).hot_water || {}) },
+          meters: { 
+            electricity: { ...(prev.meters?.electricity||{}), ...(((dataExit.general_info||{}).meters||{}).electricity||{}) },
+            gas: { ...(prev.meters?.gas||{}), ...(((dataExit.general_info||{}).meters||{}).gas||{}) },
+            water: { ...(prev.meters?.water||{}), ...(((dataExit.general_info||{}).meters||{}).water||{}) },
+          },
+          keys: { ...prev.keys, ...((dataExit.general_info || {}).keys || {}) },
+        }))
         setRooms(Array.isArray(dataExit.rooms) ? dataExit.rooms : [])
         setIsValidated(statusExit === "signed" || statusExit === "completed")
         setHasLoadedData(true)
@@ -378,7 +392,21 @@ export function EtatDesLieuxDigitalSection({
         const status = payload.status || "draft"
         if (data.general_info || (data.rooms && data.rooms.length > 0)) {
           setHasExistingData(true)
-          if (data.general_info) setGeneralInfo({ ...data.general_info, type: "entree" })
+          if (data.general_info) setGeneralInfo((prev) => ({
+            ...prev,
+            ...(data.general_info || {}),
+            type: "entree",
+            owner: { ...prev.owner, ...((data.general_info || {}).owner || {}) },
+            tenant: { ...prev.tenant, ...((data.general_info || {}).tenant || {}) },
+            heating: { ...prev.heating, ...((data.general_info || {}).heating || {}) },
+            hot_water: { ...prev.hot_water, ...((data.general_info || {}).hot_water || {}) },
+            meters: { 
+              electricity: { ...(prev.meters?.electricity||{}), ...(((data.general_info||{}).meters||{}).electricity||{}) },
+              gas: { ...(prev.meters?.gas||{}), ...(((data.general_info||{}).meters||{}).gas||{}) },
+              water: { ...(prev.meters?.water||{}), ...(((data.general_info||{}).meters||{}).water||{}) },
+            },
+            keys: { ...prev.keys, ...((data.general_info || {}).keys || {}) },
+          }))
           if (data.rooms && data.rooms.length > 0) setRooms(data.rooms)
           setIsValidated(status === "signed" || status === "completed")
         } else {
