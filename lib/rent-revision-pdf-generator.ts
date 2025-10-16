@@ -1,37 +1,18 @@
-import jsPDF from 'jspdf'
-import 'jspdf-autotable'
+// generateRentRevisionPDF.ts
+import type { jsPDF } from 'jspdf'
 
-// Extend jsPDF type
-declare module 'jspdf' {
-  interface jsPDF {
-    autoTable: (options: any) => jsPDF
-  }
-}
-
-interface Lease {
+export interface Lease {
   id: string
-  property: {
-    title: string
-    address: string
-    city: string
-  }
-  tenant: {
-    first_name: string
-    last_name: string
-    email: string
-  }
-  owner: {
-    first_name: string
-    last_name: string
-    email: string
-  }
+  property: { title: string; address: string; city: string }
+  tenant: { first_name: string; last_name: string; email: string }
+  owner: { first_name: string; last_name: string; email: string }
   monthly_rent: number
   charges: number
   start_date: string
   end_date: string
 }
 
-interface RentRevision {
+export interface RentRevision {
   id: string
   revision_year: number
   revision_date: string
@@ -43,198 +24,148 @@ interface RentRevision {
   rent_increase_amount: number
   rent_increase_percentage: number
   status: string
-  calculation_method?: string
   compliance_notes?: string
 }
 
-export function generateRentRevisionPDF(
-  lease: Lease,
-  revision: RentRevision
-): jsPDF {
-  const doc = new jsPDF()
-  
-  // Configuration
+export async function generateRentRevisionPDF(lease: Lease, revision: RentRevision): Promise<jsPDF> {
+  // Import dynamique pour éviter l’exécution côté serveur prématurée
+  const { jsPDF } = await import('jspdf')
+  const autoTable = (await import('jspdf-autotable')).default
+
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' })
   const pageWidth = doc.internal.pageSize.getWidth()
-  const margin = 20
-  const contentWidth = pageWidth - (margin * 2)
-  
-  let yPosition = margin
-  
-  // Fonction pour ajouter du texte avec gestion de la pagination
-  const addText = (text: string, fontSize: number, isBold: boolean = false, color: string = '#000000', align: 'left' | 'center' | 'right' = 'left') => {
-    if (yPosition > doc.internal.pageSize.getHeight() - 30) {
-      doc.addPage()
-      yPosition = margin
-    }
-    
-    doc.setFontSize(fontSize)
-    doc.setFont('helvetica', isBold ? 'bold' : 'normal')
-    doc.setTextColor(color)
-    
-    let xPosition = margin
-    if (align === 'center') {
-      xPosition = pageWidth / 2
-    } else if (align === 'right') {
-      xPosition = pageWidth - margin
-    }
-    
-    doc.text(text, xPosition, yPosition, { align })
-    yPosition += fontSize + 2
+  const pageHeight = doc.internal.pageSize.getHeight()
+  const margin = 36
+  const contentWidth = pageWidth - margin * 2
+  let y = margin
+
+  const setFont = (size = 10, bold = false) => {
+    doc.setFont('helvetica', bold ? 'bold' : 'normal')
+    doc.setFontSize(size)
   }
-  
-  // Fonction pour ajouter une ligne
-  const addLine = () => {
-    if (yPosition > doc.internal.pageSize.getHeight() - 30) {
-      doc.addPage()
-      yPosition = margin
-    }
-    doc.setDrawColor(200, 200, 200)
-    doc.line(margin, yPosition, pageWidth - margin, yPosition)
-    yPosition += 10
-  }
-  
-  // Fonction pour ajouter un paragraphe
-  const addParagraph = (text: string, fontSize: number = 10) => {
-    const lines = doc.splitTextToSize(text, contentWidth)
-    lines.forEach((line: string) => {
-      addText(line, fontSize)
+
+  const addMultiline = (
+    text: string,
+    x: number,
+    maxWidth: number,
+    size = 9,
+    bold = false,
+    align: 'left' | 'right' | 'center' = 'left'
+  ) => {
+    setFont(size, bold)
+    const lines = doc.splitTextToSize(text, maxWidth)
+    const lineHeight = size + 2
+    lines.forEach((line: string, i: number) => {
+      doc.text(line, x, y + i * lineHeight, { align })
     })
-    yPosition += 5
+    y += lines.length * lineHeight
   }
-  
-  // En-tête du courrier
-  addText('AVENANT DE BAIL - RÉVISION DE LOYER', 18, true, '#2c3e50', 'center')
-  addText(`Année ${revision.revision_year}`, 14, true, '#7f8c8d', 'center')
-  yPosition += 15
-  
-  // Informations du propriétaire
-  addText('De :', 10, true)
-  addText(`${lease.owner.first_name} ${lease.owner.last_name}`, 10)
-  addText(lease.owner.email, 10, false, '#666666')
-  yPosition += 10
-  
-  // Informations du locataire
-  addText('À :', 10, true)
-  addText(`${lease.tenant.first_name} ${lease.tenant.last_name}`, 10)
-  addText(lease.tenant.email, 10, false, '#666666')
-  yPosition += 15
-  
-  // Date et objet
-  addText(`Le ${new Date(revision.revision_date).toLocaleDateString('fr-FR')}`, 10, false, '#666666', 'right')
-  yPosition += 5
-  addText('Objet : Révision de loyer selon indice IRL', 10, true)
-  addLine()
-  
-  // Paragraphe informatif
-  addText('Madame, Monsieur,', 10)
-  yPosition += 10
-  
-  addParagraph(
-    `Conformément aux dispositions de l'article 17-1 de la loi du 6 juillet 1989, je vous informe de la révision de votre loyer pour l'année ${revision.revision_year}.`,
-    10
-  )
-  
-  addParagraph(
-    `Cette révision est basée sur l'évolution de l'Indice de Référence des Loyers (IRL) publié par l'INSEE.`,
-    10
-  )
-  
-  yPosition += 10
-  
-  // Informations du bail
-  addText('INFORMATIONS DU BAIL', 14, true)
-  addText(`Logement : ${lease.property.title}`, 10)
-  addText(`Adresse : ${lease.property.address}, ${lease.property.city}`, 10)
-  addText(`Période : ${new Date(lease.start_date).toLocaleDateString('fr-FR')} → ${new Date(lease.end_date).toLocaleDateString('fr-FR')}`, 10)
-  addLine()
-  
-  // Détail de la révision
-  addText('DÉTAIL DE LA RÉVISION', 14, true)
-  
-  // Tableau de révision
-  const tableData = [
-    ['Loyer actuel', `${revision.old_rent_amount.toFixed(2)} €`],
-    ['Indice IRL de référence', `${revision.reference_irl_value} (${revision.irl_quarter})`],
-    ['Nouvel indice IRL', `${revision.new_irl_value}`],
-    ['Nouveau loyer', `${revision.new_rent_amount.toFixed(2)} €`],
-    ['Augmentation', `+${revision.rent_increase_amount.toFixed(2)} € (+${revision.rent_increase_percentage.toFixed(2)}%)`]
-  ]
-  
-  doc.autoTable({
-    startY: yPosition,
-    head: [['Élément', 'Valeur']],
-    body: tableData,
+
+  // --- En-tête expéditeur / destinataire ---
+  const leftX = margin
+  const rightX = pageWidth - margin
+
+  setFont(10, true)
+  doc.text(`${lease.owner.first_name} ${lease.owner.last_name}`, leftX, y)
+  setFont(9)
+  doc.text(lease.owner.email || '', leftX, y + 12)
+
+  setFont(10, true)
+  doc.text(`${lease.tenant.first_name} ${lease.tenant.last_name}`, rightX, y, { align: 'right' })
+  setFont(9)
+  doc.text(lease.tenant.email || '', rightX, y + 12, { align: 'right' })
+
+  y += 28
+
+  setFont(9)
+  doc.text(`${lease.property.address}, ${lease.property.city}`, leftX, y)
+  doc.text(`Le ${new Date(revision.revision_date).toLocaleDateString('fr-FR')}`, rightX, y, { align: 'right' })
+  y += 18
+
+  setFont(11, true)
+  doc.text('Objet : Révision annuelle de loyer (indice IRL)', leftX, y)
+  y += 8
+  doc.setDrawColor(200)
+  doc.line(margin, y, pageWidth - margin, y)
+  y += 12
+
+  setFont(10)
+  doc.text('Madame, Monsieur,', leftX, y)
+  y += 12
+
+  const p1 = `Conformément à l’article 17-1 de la loi du 6 juillet 1989, je vous informe de la révision annuelle du loyer du logement situé au ${lease.property.address}, ${lease.property.city}, pour l'année ${revision.revision_year}.`
+  addMultiline(p1, leftX, contentWidth, 9)
+
+  const p2 = `Cette révision est calculée sur la base de l'évolution de l'Indice de Référence des Loyers (IRL) publié par l’INSEE pour le ${revision.irl_quarter}.`
+  addMultiline(p2, leftX, contentWidth, 9)
+
+  y += 4
+
+  // --- Tableau de révision ---
+  autoTable(doc, {
+    startY: y,
     theme: 'grid',
-    headStyles: { 
-      fillColor: [52, 73, 94],
-      textColor: [255, 255, 255],
-      fontSize: 10
-    },
-    styles: { 
-      fontSize: 9,
-      cellPadding: 4
-    },
+    head: [['Élément', 'Valeur']],
+    body: [
+      ['Loyer actuel', `${revision.old_rent_amount.toFixed(2)} €`],
+      ['Indice IRL (référence)', `${revision.reference_irl_value}`],
+      ['Nouvel indice IRL', `${revision.new_irl_value}`],
+      ['Nouveau loyer', `${revision.new_rent_amount.toFixed(2)} €`],
+      ['Augmentation', `+${revision.rent_increase_amount.toFixed(2)} € (${revision.rent_increase_percentage.toFixed(2)}%)`],
+      ['Charges mensuelles', `${lease.charges.toFixed(2)} €`],
+      ['Total mensuel (loyer + charges)', `${(revision.new_rent_amount + lease.charges).toFixed(2)} €`],
+    ],
+    styles: { fontSize: 9, cellPadding: 3 },
+    headStyles: { fillColor: [70, 130, 180], textColor: [255, 255, 255], fontStyle: 'bold' },
     columnStyles: {
-      1: { halign: 'right' }
-    }
+      0: { cellWidth: contentWidth * 0.55 },
+      1: { halign: 'right', cellWidth: contentWidth * 0.45 },
+    },
   })
-  
-  yPosition = (doc as any).lastAutoTable.finalY + 10
-  addLine()
-  
-  // Calcul détaillé
-  addText('CALCUL DÉTAILLÉ', 12, true)
-  addParagraph(
-    `Nouveau loyer = Ancien loyer × (Nouvel indice IRL ÷ Indice IRL de référence)`,
-    10
+
+  y = (doc as any).lastAutoTable.finalY + 10
+
+  // --- Texte final ---
+  const calcLine = `Nouveau loyer = ${revision.old_rent_amount.toFixed(2)} € × (${revision.new_irl_value} ÷ ${revision.reference_irl_value}) = ${revision.new_rent_amount.toFixed(2)} €`
+  addMultiline(calcLine, leftX, contentWidth, 9)
+
+  addMultiline(
+    `Le nouveau loyer sera applicable à compter du ${new Date(revision.revision_date).toLocaleDateString('fr-FR')}.`,
+    leftX,
+    contentWidth,
+    9
   )
-  
-  addParagraph(
-    `Nouveau loyer = ${revision.old_rent_amount}€ × (${revision.new_irl_value} ÷ ${revision.reference_irl_value}) = ${revision.new_rent_amount.toFixed(2)}€`,
-    10
+
+  addMultiline(
+    `Vous disposez d’un délai de 30 jours pour contester cette révision si vous estimez qu’elle n’est pas conforme à la réglementation.`,
+    leftX,
+    contentWidth,
+    9
   )
-  
-  yPosition += 10
-  
-  // Informations sur les charges
-  addText('CHARGES LOCATIVES', 12, true)
-  addText(`Charges mensuelles : ${lease.charges.toFixed(2)} €`, 10)
-  addText(`Total mensuel (loyer + charges) : ${(revision.new_rent_amount + lease.charges).toFixed(2)} €`, 10, true)
-  
-  yPosition += 15
-  
-  // Conclusion
-  addParagraph(
-    `Le nouveau loyer de ${revision.new_rent_amount.toFixed(2)}€ sera applicable à compter du ${new Date(revision.revision_date).toLocaleDateString('fr-FR')}.`,
-    10
-  )
-  
-  addParagraph(
-    'Vous disposez d\'un délai de 30 jours pour contester cette révision si vous estimez qu\'elle n\'est pas conforme à la réglementation.',
-    10
-  )
-  
-  yPosition += 20
-  
-  // Signature
-  addText('Cordialement,', 10)
-  yPosition += 15
-  addText(`${lease.owner.first_name} ${lease.owner.last_name}`, 10, true)
-  addText('Propriétaire', 10, false, '#666666')
-  
-  yPosition += 20
-  
-  // Informations légales
+
+  y += 8
+  doc.text('Je vous prie d’agréer, Madame, Monsieur, l’expression de mes salutations distinguées.', leftX, y)
+  y += 20
+  setFont(10, true)
+  doc.text(`${lease.owner.first_name} ${lease.owner.last_name}`, leftX, y)
+  setFont(9)
+  doc.text('Propriétaire', leftX, y + 10)
+
   if (revision.compliance_notes) {
-    addText('INFORMATIONS LÉGALES', 12, true, '#7f8c8d')
-    addParagraph(revision.compliance_notes, 9)
-    yPosition += 10
+    y += 26
+    setFont(9, true)
+    doc.text('Informations légales :', leftX, y)
+    y += 10
+    addMultiline(revision.compliance_notes, leftX, contentWidth, 8)
   }
-  
-  // Pied de page
-  addLine()
-  addText(`Document généré le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}`, 8, false, '#95a5a6', 'center')
-  addText('Plateforme Louer-Ici - Gestion locative intelligente', 8, false, '#95a5a6', 'center')
-  
+
+  const footerY = pageHeight - 36
+  doc.setDrawColor(220)
+  doc.line(margin, footerY, pageWidth - margin, footerY)
+  setFont(8)
+  doc.setTextColor('#777')
+  doc.text(`Document généré le ${new Date().toLocaleDateString('fr-FR')}`, pageWidth / 2, footerY + 12, { align: 'center' })
+  doc.text('Louer-Ici – Gestion locative intelligente', pageWidth / 2, footerY + 24, { align: 'center' })
+
   return doc
 }
