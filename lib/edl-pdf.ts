@@ -195,13 +195,42 @@ export async function generateAndStoreEdlPdf(leaseId: string, type: "entree" | "
     return columns
   }
   const drawRow = (p: any, yRow: number, columns: any[], values: string[], rowIndex: number) => {
-    const wrapText = (text: string, maxChars: number) => {
-      if (!text) return [""]
-      const lines = text.toString().match(new RegExp(`.{1,${maxChars}}(\\s|$)`, 'g'))
-      return lines ? lines.map((l) => l.trim()) : [text.toString()]
+    const wrapByWidth = (text: string, maxWidth: number, size = 9) => {
+      const result: string[] = []
+      const content = (text || "").toString()
+      if (!content) {
+        return [""]
+      }
+      const words = content.split(/\s+/)
+      let line = ""
+      for (const word of words) {
+        const tentative = line ? `${line} ${word}` : word
+        if (font.widthOfTextAtSize(tentative, size) <= maxWidth) {
+          line = tentative
+        } else {
+          if (line) result.push(line)
+          if (font.widthOfTextAtSize(word, size) > maxWidth) {
+            let chunk = ""
+            for (const ch of word) {
+              const t2 = chunk + ch
+              if (font.widthOfTextAtSize(t2, size) <= maxWidth) {
+                chunk = t2
+              } else {
+                if (chunk) result.push(chunk)
+                chunk = ch
+              }
+            }
+            line = chunk
+          } else {
+            line = word
+          }
+        }
+      }
+      if (line) result.push(line)
+      return result
     }
-    const approxCharsPerLine = (w: number) => Math.max(10, Math.floor(w / 2.2))
-    const wrappedPerCol: string[][] = columns.map((c, idx) => wrapText(values[idx] || "", approxCharsPerLine(c.w)))
+    const paddingX = 4
+    const wrappedPerCol: string[][] = columns.map((c, idx) => wrapByWidth(values[idx] || "", c.w - paddingX * 2, 9))
     const maxLines = Math.max(...wrappedPerCol.map((l) => l.length))
     const computedRowHeight = 12 + maxLines * 12
     if (rowIndex % 2 === 0)

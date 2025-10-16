@@ -194,14 +194,41 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     const drawRow = (p:any,yRow:number,columns:any[],values:string[],rowIndex:number)=>{
-      const wrapText = (text:string, maxChars:number)=>{
-        if(!text) return [""]
-        const lines = text.toString().match(new RegExp(`.{1,${maxChars}}(\\s|$)`, 'g'))
-        return lines ? lines.map(l=>l.trim()) : [text.toString()]
+      const wrapByWidth = (text:string, maxWidth:number, size=9)=>{
+        const result:string[] = []
+        const content = (text||"").toString()
+        if(!content){ return [""] }
+        const words = content.split(/\s+/)
+        let line = ""
+        for(const word of words){
+          const tentative = line ? `${line} ${word}` : word
+          if (font.widthOfTextAtSize(tentative, size) <= maxWidth){
+            line = tentative
+          } else {
+            if(line) result.push(line)
+            // si un mot seul dépasse, couper caractère par caractère
+            if (font.widthOfTextAtSize(word, size) > maxWidth){
+              let chunk = ""
+              for (const ch of word){
+                const t2 = chunk + ch
+                if (font.widthOfTextAtSize(t2, size) <= maxWidth){
+                  chunk = t2
+                } else {
+                  if (chunk) result.push(chunk)
+                  chunk = ch
+                }
+              }
+              line = chunk
+            } else {
+              line = word
+            }
+          }
+        }
+        if(line) result.push(line)
+        return result
       }
-      // Approximation: nb caractères par ligne selon la largeur de colonne
-      const approxCharsPerLine = (w:number)=> Math.max(10, Math.floor(w/2.2))
-      const wrappedPerCol: string[][] = columns.map((c, idx)=> wrapText(values[idx]||"", approxCharsPerLine(c.w)))
+      const paddingX = 4
+      const wrappedPerCol: string[][] = columns.map((c, idx)=> wrapByWidth(values[idx]||"", c.w - paddingX*2, 9))
       const maxLines = Math.max(...wrappedPerCol.map(l=>l.length))
       const computedRowHeight = 12 + (maxLines * 12)
       if(rowIndex%2===0) p.drawRectangle({ x:40, y:yRow-computedRowHeight, width:pageWidth-80, height:computedRowHeight, color:colorAltRow })
@@ -226,10 +253,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         const key = elements[i], el=room.elements[key]||{}
         const label = key.charAt(0).toUpperCase()+key.slice(1)
         const values = isExit ? [label,stateToLabel(el.state_entree||el.state),stateToLabel(el.state_sortie),el.comment||""] : [label,stateToLabel(el.state),el.comment||""]
-        // Vérifier la place disponible avant de dessiner
-        const estimatedHeight = 36 // hauteur minimale estimée
-        if (y - estimatedHeight < 100) { page=pdfDoc.addPage([pageWidth,pageHeight]); y=pageHeight-60; drawText(page,`Pièce: ${room.name||room.id||""}`,40,y,12,true,colorHeader); y-=18; drawTableHeader(page,y); y-=headerHeight }
-        const used = drawRow(page,y,columns,values,i) || rowHeight
+        // Dessiner en mesurant la hauteur; si ça déborde, repaginer et redessiner
+        const tempHeight = drawRow(page,y,columns,values,i)
+        if (y - tempHeight < 80){
+          page=pdfDoc.addPage([pageWidth,pageHeight]); y=pageHeight-60; drawText(page,`Pièce: ${room.name||room.id||""}`,40,y,12,true,colorHeader); y-=18; drawTableHeader(page,y); y-=headerHeight
+          const used2 = drawRow(page,y,columns,values,i) || rowHeight
+          y -= used2
+          continue
+        }
+        const used = tempHeight || rowHeight
         y -= used
         if(y<120){ page=pdfDoc.addPage([pageWidth,pageHeight]); y=pageHeight-60; drawText(page,`Pièce: ${room.name||room.id||""}`,40,y,12,true,colorHeader); y-=18; drawTableHeader(page,y); y-=headerHeight }
       }
