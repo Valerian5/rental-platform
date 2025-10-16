@@ -41,12 +41,24 @@ export function EtatDesLieuxSection({ leaseId, propertyId, propertyData, leaseDa
   useEffect(() => {
     const checkExistingData = async () => {
       try {
-        const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux/digital`)
+        const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux/digital?type=sortie`)
         if (response.ok) {
-          const data = await response.json()
+          const payload = await response.json()
+          const data = payload.data || payload
           if (data.general_info || (data.rooms && data.rooms.length > 0)) {
             setHasExistingDigitalData(true)
-            setDigitalMode(true) // Afficher directement le mode digital
+            setDigitalMode(true)
+            return
+          }
+        }
+        // Fallback: vérifier l'entrée
+        const responseEntry = await fetch(`/api/leases/${leaseId}/etat-des-lieux/digital?type=entree`)
+        if (responseEntry.ok) {
+          const payload = await responseEntry.json()
+          const data = payload.data || payload
+          if (data.general_info || (data.rooms && data.rooms.length > 0)) {
+            setHasExistingDigitalData(true)
+            setDigitalMode(true)
           }
         }
       } catch (error) {

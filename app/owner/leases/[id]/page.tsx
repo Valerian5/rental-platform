@@ -34,6 +34,7 @@ import { EtatDesLieuxSection } from "@/components/EtatDesLieuxSection"
 import { toast } from "sonner"
 import { Lease as LeaseType, LeaseStatus, LEASE_STATUS_CONFIG, leaseStatusUtils } from "@/lib/lease-types"
 import { DepositRetentionManager } from "@/components/DepositRetentionManager"
+import { VisitScheduler } from "@/components/visit-scheduler"
 
 /** --- Types DocuSign (statut par signataire) --- */
 type RecipientStatus =
@@ -121,6 +122,8 @@ export default function LeaseDetailPage() {
   const [finalBalancePreviewHtml, setFinalBalancePreviewHtml] = useState<string>("")
   const [finalBalanceNoCharge, setFinalBalanceNoCharge] = useState(false)
   const [depositDialogOpen, setDepositDialogOpen] = useState(false)
+  const [edlSlotsDialogOpen, setEdlSlotsDialogOpen] = useState(false)
+  const [edlSlots, setEdlSlots] = useState<any[]>([])
 
   /** --- Nouvel état : statut DocuSign par signataire --- */
   const [sigLoading, setSigLoading] = useState(false)
@@ -992,6 +995,8 @@ export default function LeaseDetailPage() {
                           })
                           if (!res.ok) throw new Error("Erreur création EDL de sortie")
                           toast.success("État des lieux de sortie créé")
+                          // Ouvrir le planificateur de créneaux du jour d'EDL
+                          setEdlSlotsDialogOpen(true)
                         } catch (e: any) {
                           toast.error(e.message || "Erreur")
                         } finally {
@@ -1075,6 +1080,38 @@ export default function LeaseDetailPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+      {/* Dialog créneaux EDL de sortie (utilise le planificateur de visites) */}
+      <Dialog open={edlSlotsDialogOpen} onOpenChange={setEdlSlotsDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Disponibilités pour l'état des lieux de sortie</DialogTitle>
+            <DialogDescription>
+              Indiquez vos créneaux disponibles pour le jour de l'état des lieux. Ces plages seront proposées au locataire.
+            </DialogDescription>
+          </DialogHeader>
+          <VisitScheduler
+            visitSlots={edlSlots}
+            onSlotsChange={setEdlSlots}
+            mode="creation"
+            propertyId={lease.property_id}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEdlSlotsDialogOpen(false)}>Fermer</Button>
+            <Button onClick={async ()=>{
+              try{
+                const headers: Record<string,string> = { 'Content-Type':'application/json' }
+                const { supabase } = await import("@/lib/supabase")
+                const { data } = await supabase.auth.getSession()
+                const token = data.session?.access_token
+                if(token) headers['Authorization'] = `Bearer ${token}`
+                await fetch(`/api/leases/${leaseId}/etat-des-lieux/exit-slots`,{ method:'POST', headers, body: JSON.stringify({ slots: edlSlots }) })
+                setEdlSlotsDialogOpen(false)
+                toast.success('Créneaux EDL de sortie enregistrés')
+              }catch(e){ toast.error('Erreur enregistrement des créneaux') }
+            }}>Enregistrer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
         {/* Dialog restitution dépôt */}
         <Dialog open={depositDialogOpen} onOpenChange={setDepositDialogOpen}>
           <DialogContent className="max-w-4xl">
