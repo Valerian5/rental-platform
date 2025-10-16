@@ -35,6 +35,7 @@ interface EtatDesLieuxSectionProps {
 export function EtatDesLieuxSection({ leaseId, propertyId, propertyData, leaseData }: EtatDesLieuxSectionProps) {
   const [digitalMode, setDigitalMode] = useState(false)
   const [hasExistingDigitalData, setHasExistingDigitalData] = useState(false)
+  const [entrySigned, setEntrySigned] = useState(false)
   const roomCount = propertyData?.rooms || 1
 
   // Vérifier s'il y a des données existantes au chargement
@@ -56,6 +57,8 @@ export function EtatDesLieuxSection({ leaseId, propertyId, propertyData, leaseDa
         if (responseEntry.ok) {
           const payload = await responseEntry.json()
           const data = payload.data || payload
+          const status = payload.status || "draft"
+          setEntrySigned(status === "signed")
           if (data.general_info || (data.rooms && data.rooms.length > 0)) {
             setHasExistingDigitalData(true)
             setDigitalMode(true)
@@ -158,6 +161,7 @@ export function EtatDesLieuxSection({ leaseId, propertyId, propertyData, leaseDa
                 propertyId={propertyId}
                 propertyData={propertyData}
                 leaseData={leaseData}
+                entrySigned={entrySigned}
               />
             </div>
           )}

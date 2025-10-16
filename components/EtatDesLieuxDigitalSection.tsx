@@ -31,6 +31,7 @@ interface EtatDesLieuxDigitalSectionProps {
   propertyId: string
   propertyData?: PropertyData
   leaseData: LeaseData
+  entrySigned?: boolean
 }
 
 interface RoomState {
@@ -174,6 +175,7 @@ export function EtatDesLieuxDigitalSection({
   propertyId,
   propertyData,
   leaseData,
+  entrySigned = false,
 }: EtatDesLieuxDigitalSectionProps) {
   const [rooms, setRooms] = useState<RoomState[]>([])
   const [generalInfo, setGeneralInfo] = useState({
@@ -712,12 +714,13 @@ export function EtatDesLieuxDigitalSection({
                   onValueChange={(value: "entree" | "sortie") =>
                     setGeneralInfo({ ...generalInfo, type: value })
                   }
+                  disabled={entrySigned}
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="entree">Entrée</SelectItem>
+                    <SelectItem value="entree" disabled={entrySigned}>Entrée</SelectItem>
                     <SelectItem value="sortie">Sortie</SelectItem>
                   </SelectContent>
                 </Select>
