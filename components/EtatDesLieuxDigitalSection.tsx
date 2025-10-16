@@ -355,40 +355,50 @@ export function EtatDesLieuxDigitalSection({
 
   const loadDigitalState = async () => {
     try {
-      // Essayer de charger l'état d'entrée d'abord
-      const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux/digital?type=entree`)
-      if (response.ok) {
-        const payload = await response.json()
+      // Charger PRIORITAIREMENT l'état de SORTIE
+      const responseExit = await fetch(`/api/leases/${leaseId}/etat-des-lieux/digital?type=sortie`)
+      if (responseExit.ok) {
+        const payloadExit = await responseExit.json()
+        const dataExit = payloadExit.data || payloadExit
+        const statusExit = payloadExit.status || "draft"
+        if (dataExit.general_info || (dataExit.rooms && dataExit.rooms.length > 0)) {
+          setHasExistingData(true)
+          if (dataExit.general_info) {
+            // Forcer le type à "sortie"
+            setGeneralInfo({ ...dataExit.general_info, type: "sortie" })
+          }
+          if (dataExit.rooms && dataExit.rooms.length > 0) setRooms(dataExit.rooms)
+          // Mettre isValidated en fonction du statut
+          setIsValidated(statusExit === "signed" || statusExit === "completed")
+          setHasLoadedData(true)
+          return
+        }
+      }
+
+      // Sinon, tenter l'ENTRÉE en fallback
+      const responseEntry = await fetch(`/api/leases/${leaseId}/etat-des-lieux/digital?type=entree`)
+      if (responseEntry.ok) {
+        const payload = await responseEntry.json()
         const data = payload.data || payload
         const status = payload.status || "draft"
         if (data.general_info || (data.rooms && data.rooms.length > 0)) {
-          // Il y a des données d'entrée
           setHasExistingData(true)
-          if (data.general_info) {
-            setGeneralInfo(data.general_info)
-          }
-          if (data.rooms && data.rooms.length > 0) {
-            setRooms(data.rooms)
-          }
-          // Si signé/finalisé, passer en lecture seule
-          if (status === "signed" || status === "completed") {
-            setIsValidated(true)
-          }
+          if (data.general_info) setGeneralInfo({ ...data.general_info, type: "entree" })
+          if (data.rooms && data.rooms.length > 0) setRooms(data.rooms)
+          setIsValidated(status === "signed" || status === "completed")
         } else {
-          // Pas de données d'entrée - vérifier s'il y a un état de sortie
-          await loadExitStateIfNeeded()
           setHasExistingData(false)
+          setIsValidated(false)
         }
-        setHasLoadedData(true)
       } else {
-        // Pas de données d'entrée - vérifier s'il y a un état de sortie
-        await loadExitStateIfNeeded()
         setHasExistingData(false)
-        setHasLoadedData(true)
+        setIsValidated(false)
       }
+      setHasLoadedData(true)
     } catch (error) {
       console.error("Erreur chargement:", error)
       setHasExistingData(false)
+      setIsValidated(false)
       setHasLoadedData(true)
     }
   }
