@@ -20,11 +20,11 @@ export function PremiumPlanSelector({ currentPlanId, onPlanSelect, showTrialOpti
 
   useEffect(() => {
     fetchPlans()
-  }, [])
+  }, [billingPeriod])
 
   const fetchPlans = async () => {
     try {
-      const response = await fetch("/api/premium/plans")
+      const response = await fetch(`/api/premium/plans?ts=${Date.now()}`, { cache: "no-store" })
       const data = await response.json()
       if (data.success) {
         setPlans(data.plans)
