@@ -195,13 +195,27 @@ export async function generateAndStoreEdlPdf(leaseId: string, type: "entree" | "
     return columns
   }
   const drawRow = (p: any, yRow: number, columns: any[], values: string[], rowIndex: number) => {
-    if (rowIndex % 2 === 0) p.drawRectangle({ x: 40, y: yRow - rowHeight, width: pageWidth - 80, height: rowHeight, color: colorAltRow })
+    const wrapText = (text: string, maxChars: number) => {
+      if (!text) return [""]
+      const lines = text.toString().match(new RegExp(`.{1,${maxChars}}(\\s|$)`, 'g'))
+      return lines ? lines.map((l) => l.trim()) : [text.toString()]
+    }
+    const approxCharsPerLine = (w: number) => Math.max(10, Math.floor(w / 2.2))
+    const wrappedPerCol: string[][] = columns.map((c, idx) => wrapText(values[idx] || "", approxCharsPerLine(c.w)))
+    const maxLines = Math.max(...wrappedPerCol.map((l) => l.length))
+    const computedRowHeight = 12 + maxLines * 12
+    if (rowIndex % 2 === 0)
+      p.drawRectangle({ x: 40, y: yRow - computedRowHeight, width: pageWidth - 80, height: computedRowHeight, color: colorAltRow })
     let x = 40
     for (let i = 0; i < columns.length; i++) {
-      drawText(p, (values[i] || "").toString().slice(0, 80), x + 2, yRow - 12, 9)
+      const colLines = wrappedPerCol[i]
+      for (let li = 0; li < colLines.length; li++) {
+        drawText(p, colLines[li], x + 2, yRow - 12 - li * 12, 9)
+      }
       x += columns[i].w
     }
-    addLine(p, yRow - rowHeight)
+    addLine(p, yRow - computedRowHeight)
+    return computedRowHeight
   }
 
   for (const room of rooms) {
@@ -219,17 +233,17 @@ export async function generateAndStoreEdlPdf(leaseId: string, type: "entree" | "
       const values = isExit
         ? [label, stateToLabel(el.state_entree || el.state), stateToLabel(el.state_sortie), el.comment || ""]
         : [label, stateToLabel(el.state), el.comment || ""]
-      drawRow(page, y, columns, values, i)
-      y -= rowHeight
+      const used = drawRow(page, y, columns, values, i) || rowHeight
+      y -= used
     }
 
     // Commentaire de la pièce
     if (room.comment) {
-      y -= 10
+      y -= 18
       drawText(page, 'Commentaire de la pièce', 40, y, 11, true, colorHeader)
       y -= 8
       addLine(page, y)
-      y -= 10
+      y -= 14
       const lines = (room.comment as string).match(/.{1,110}(\s|$)/g) || [room.comment]
       lines.forEach((line: string) => { if (y < 80) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60 } drawText(page, line.trim(), 40, y, 10, false, colorMuted); y -= 14 })
     }
@@ -237,11 +251,11 @@ export async function generateAndStoreEdlPdf(leaseId: string, type: "entree" | "
     // Photos de la pièce
     const photos: string[] = Array.isArray(room.photos) ? room.photos : []
     if (photos.length > 0) {
-      if (y < 220) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60 }
+      if (y < 240) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - 60 }
       drawText(page, 'Photos', 40, y, 11, true, colorHeader)
       y -= 6
       addLine(page, y)
-      y -= 10
+      y -= 14
       const result = await drawImagesGrid(pdfDoc, page, 40, y, photos)
       page = result.page; y = result.y
     }

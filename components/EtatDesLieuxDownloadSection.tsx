@@ -138,22 +138,46 @@ export function EtatDesLieuxDownloadSection({ leaseId, propertyId, propertyData,
 
   const downloadDocument = async (edlDoc: EtatDesLieuxDocument) => {
     try {
+      // 1) Essayer d'utiliser l'URL existante si présente et valide
       if (edlDoc.file_url) {
-        // Télécharger le document
-        const response = await fetch(edlDoc.file_url)
-        const blob = await response.blob()
-        const url = window.URL.createObjectURL(blob)
-        const a = window.document.createElement("a")
-        a.href = url
-        a.download = `etat-des-lieux-${edlDoc.type}-${edlDoc.id}.pdf`
-        window.document.body.appendChild(a)
-        a.click()
-        window.URL.revokeObjectURL(url)
-        window.document.body.removeChild(a)
-        toast.success("Document téléchargé avec succès")
-      } else {
-        toast.error("Document non disponible")
+        const headResp = await fetch(edlDoc.file_url, { method: "HEAD" })
+        if (headResp.ok) {
+          const response = await fetch(edlDoc.file_url)
+          if (response.ok) {
+            const blob = await response.blob()
+            const url = window.URL.createObjectURL(blob)
+            const a = window.document.createElement("a")
+            a.href = url
+            a.download = `etat-des-lieux-${edlDoc.type}-${edlDoc.id}.pdf`
+            window.document.body.appendChild(a)
+            a.click()
+            window.URL.revokeObjectURL(url)
+            window.document.body.removeChild(a)
+            toast.success("Document téléchargé avec succès")
+            return
+          }
+        }
       }
+
+      // 2) Fallback: régénérer côté serveur (force: true)
+      const regen = await fetch(`/api/leases/${leaseId}/etat-des-lieux/pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: edlDoc.type, force: true }),
+      })
+
+      if (!regen.ok) throw new Error("Échec de la régénération du PDF")
+
+      const blob = await regen.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = window.document.createElement("a")
+      a.href = url
+      a.download = `etat-des-lieux-${edlDoc.type}-${edlDoc.id}.pdf`
+      window.document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      window.document.body.removeChild(a)
+      toast.success("PDF régénéré et téléchargé")
     } catch (error) {
       console.error("Erreur téléchargement:", error)
       toast.error("Erreur lors du téléchargement")
