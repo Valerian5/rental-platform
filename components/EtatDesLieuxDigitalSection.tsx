@@ -361,18 +361,13 @@ export function EtatDesLieuxDigitalSection({
         const payloadExit = await responseExit.json()
         const dataExit = payloadExit.data || payloadExit
         const statusExit = payloadExit.status || "draft"
-        if (dataExit.general_info || (dataExit.rooms && dataExit.rooms.length > 0)) {
-          setHasExistingData(true)
-          if (dataExit.general_info) {
-            // Forcer le type à "sortie"
-            setGeneralInfo({ ...dataExit.general_info, type: "sortie" })
-          }
-          if (dataExit.rooms && dataExit.rooms.length > 0) setRooms(dataExit.rooms)
-          // Mettre isValidated en fonction du statut
-          setIsValidated(statusExit === "signed" || statusExit === "completed")
-          setHasLoadedData(true)
-          return
-        }
+        // Priorité ABSOLUE à la sortie: même si pas encore de digital_data, on initialise vide
+        setHasExistingData(true)
+        setGeneralInfo({ ...(dataExit.general_info || {}), type: "sortie" })
+        setRooms(Array.isArray(dataExit.rooms) ? dataExit.rooms : [])
+        setIsValidated(statusExit === "signed" || statusExit === "completed")
+        setHasLoadedData(true)
+        return
       }
 
       // Sinon, tenter l'ENTRÉE en fallback
