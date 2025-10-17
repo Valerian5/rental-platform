@@ -186,11 +186,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const drawTableHeader = (p:any,yStart:number)=>{
       const columns = isExit
         ? [
-            { label: "Élément", w: 200 },
-            { label: "État Entrée", w: 85 },
-            { label: "État Sortie", w: 85 },
-            { label: "Commentaire Entrée", w: 70 },
-            { label: "Commentaire Sortie", w: 75 },
+            { label: "Élément", w: 260 },
+            { label: "État Entrée", w: 140 },
+            { label: "État Sortie", w: 195 },
           ]
         : [ {label:"Élément",w:260}, {label:"État",w:120}, {label:"Commentaire",w:155} ]
       let x=40
@@ -259,13 +257,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         const key = elements[i], el=room.elements[key]||{}
         const label = key.charAt(0).toUpperCase()+key.slice(1)
         const values = isExit
-          ? [
-              label,
-              stateToLabel(el.state_entree || ''),
-              stateToLabel(el.state || el.state_sortie || ''),
-              (el.comment_entree || ''),
-              (el.comment || ''),
-            ]
+          ? [ label, stateToLabel(el.state_entree || ''), stateToLabel(el.state || el.state_sortie || '') ]
           : [label, stateToLabel(el.state), el.comment || ""]
         // Dessiner en mesurant la hauteur; si ça déborde, repaginer et redessiner
         const tempHeight = drawRow(page,y,columns,values,i)

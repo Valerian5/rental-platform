@@ -1718,8 +1718,6 @@ export function EtatDesLieuxDigitalSection({
                               <thead>
                                 <tr className="border-b">
                                   <th className="text-left py-1">Élément</th>
-                                  <th className="text-left py-1">Commentaire Entrée</th>
-                                  <th className="text-left py-1">Commentaire Sortie</th>
                                   <th className="text-center py-1">État Entrée</th>
                                   <th className="text-center py-1">État Sortie</th>
                                 </tr>
@@ -1730,8 +1728,6 @@ export function EtatDesLieuxDigitalSection({
                                   return (
                                     <tr key={key} className="border-b">
                                       <td className="py-1 pr-2">{label}</td>
-                                      <td className="py-1 pr-2 text-gray-600">{element.comment_entree || "-"}</td>
-                                      <td className="py-1 pr-2 text-gray-600">{element.comment || "-"}</td>
                                       <td className="py-1 text-center">
                                         {generalInfo.type === "sortie" 
                                           ? (element.state_entree ? getStateBadge(element.state_entree) : "-")
@@ -1751,12 +1747,8 @@ export function EtatDesLieuxDigitalSection({
                             </table>
                           </div>
 
-                          {/* Commentaire de la pièce */}
-                          {room.comment && (
-                            <div className="mt-2 p-2 bg-gray-50 rounded text-xs">
-                              <strong>Commentaire :</strong> {room.comment}
-                            </div>
-                          )}
+                          {/* Pas de commentaire par pièce - commentaire général uniquement */}
+                          {/* Pas de commentaire par pièce - commentaire général uniquement */}
 
                           {/* Photos de la pièce */}
                           <div className="mt-2">
