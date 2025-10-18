@@ -1946,10 +1946,9 @@ export function EtatDesLieuxDigitalSection({
                           <thead>
                             <tr className="border-b">
                               <th className="text-left py-1">Élément</th>
-                              <th className="text-left py-1">Commentaire Entrée</th>
-                              <th className="text-left py-1">Commentaire Sortie</th>
                               <th className="text-center py-1">État Entrée</th>
                               <th className="text-center py-1">État Sortie</th>
+                              <th className="text-left py-1">Commentaire</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1958,8 +1957,6 @@ export function EtatDesLieuxDigitalSection({
                               return (
                                 <tr key={key} className="border-b">
                                   <td className="py-1 pr-2">{label}</td>
-                                  <td className="py-1 pr-2 text-gray-600">{element.comment_entree || "-"}</td>
-                                  <td className="py-1 pr-2 text-gray-600">{element.comment || "-"}</td>
                                   <td className="py-1 text-center">
                                     {generalInfo.type === "sortie" 
                                       ? (element.state_entree ? getStateBadge(element.state_entree) : "-")
@@ -1972,6 +1969,7 @@ export function EtatDesLieuxDigitalSection({
                                       : (element.state_sortie ? getStateBadge(element.state_sortie) : "-")
                                     }
                                   </td>
+                                  <td className="py-1 pr-2 text-gray-600">{element.comment || "-"}</td>
                                 </tr>
                               )
                             })}
