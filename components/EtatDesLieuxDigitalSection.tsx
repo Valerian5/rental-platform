@@ -412,7 +412,7 @@ export function EtatDesLieuxDigitalSection({
                       state_entree: el.state || undefined,
                       comment_entree: el.comment || "",
                       state: el.state || "absent",
-                      comment: el.comment || "",
+                      comment: el.comment || "", // Copier le commentaire de l'élément
                     }
                   })
                   return {
@@ -532,13 +532,15 @@ export function EtatDesLieuxDigitalSection({
                 if (entryRoom) {
                   return {
                     ...room,
+                    comment: entryRoom.comment || room.comment, // Copier le commentaire de la pièce
                     elements: Object.fromEntries(
                       Object.keys(room.elements).map(key => [
                         key,
                         {
                           ...room.elements[key as keyof typeof room.elements],
                           state_entree: entryRoom.elements[key]?.state,
-                          comment_entree: entryRoom.elements[key]?.comment || ""
+                          comment_entree: entryRoom.elements[key]?.comment || "",
+                          comment: entryRoom.elements[key]?.comment || room.elements[key as keyof typeof room.elements].comment || "" // Copier le commentaire de l'élément
                         }
                       ])
                     ) as RoomState["elements"]
@@ -1720,6 +1722,7 @@ export function EtatDesLieuxDigitalSection({
                                   <th className="text-left py-1">Élément</th>
                                   <th className="text-center py-1">État Entrée</th>
                                   <th className="text-center py-1">État Sortie</th>
+                                  <th className="text-left py-1">Commentaire</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -1740,6 +1743,7 @@ export function EtatDesLieuxDigitalSection({
                                           : (element.state_sortie ? getStateBadge(element.state_sortie) : "-")
                                         }
                                       </td>
+                                      <td className="py-1 pr-2 text-gray-600">{element.comment || "-"}</td>
                                     </tr>
                                   )
                                 })}
@@ -1747,8 +1751,12 @@ export function EtatDesLieuxDigitalSection({
                             </table>
                           </div>
 
-                          {/* Pas de commentaire par pièce - commentaire général uniquement */}
-                          {/* Pas de commentaire par pièce - commentaire général uniquement */}
+                          {/* Commentaire de la pièce */}
+                          {room.comment && (
+                            <div className="mt-2 p-2 bg-gray-50 rounded text-xs">
+                              <strong>Commentaire :</strong> {room.comment}
+                            </div>
+                          )}
 
                           {/* Photos de la pièce */}
                           <div className="mt-2">
