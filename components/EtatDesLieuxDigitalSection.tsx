@@ -1977,6 +1977,13 @@ export function EtatDesLieuxDigitalSection({
                         </table>
                       </div>
 
+                      {/* Commentaire de la pièce */}
+                      {room.comment && (
+                        <div className="mt-2 p-2 bg-gray-50 rounded text-xs">
+                          <strong>Commentaire :</strong> {room.comment}
+                        </div>
+                      )}
+
                       {/* Photos de la pièce */}
                       {room.photos.length > 0 && (
                         <div className="mt-2">
@@ -2002,6 +2009,74 @@ export function EtatDesLieuxDigitalSection({
                       )}
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+
+            {/* Informations générales */}
+            <div className="space-y-4">
+              <h3 className="font-medium">Informations générales</h3>
+              
+              {/* Chauffage et Eau chaude */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <h4 className="font-medium text-sm">Chauffage</h4>
+                  <div className="text-xs space-y-1">
+                    <div><strong>Type :</strong> {generalInfo.heating?.type || "-"}</div>
+                    <div><strong>Combustible :</strong> {generalInfo.heating?.fuel || "-"}</div>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <h4 className="font-medium text-sm">Eau chaude</h4>
+                  <div className="text-xs space-y-1">
+                    <div><strong>Type :</strong> {generalInfo.hot_water?.type || "-"}</div>
+                    <div><strong>Combustible :</strong> {generalInfo.hot_water?.fuel || "-"}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Compteurs */}
+              <div className="space-y-2">
+                <h4 className="font-medium text-sm">Compteurs</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                  <div>
+                    <strong>Électricité :</strong> {generalInfo.meters?.electricity?.number || "-"}
+                  </div>
+                  <div>
+                    <strong>Gaz :</strong> {generalInfo.meters?.gas?.number || "-"}
+                  </div>
+                  <div>
+                    <strong>Eau :</strong> {generalInfo.meters?.water?.number || "-"}
+                  </div>
+                </div>
+              </div>
+
+              {/* Clés */}
+              <div className="space-y-2">
+                <h4 className="font-medium text-sm">Clés</h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-xs">
+                  <div><strong>Entrée :</strong> {generalInfo.keys?.entry || "-"}</div>
+                  <div><strong>Immeuble/Portail :</strong> {generalInfo.keys?.building || "-"}</div>
+                  <div><strong>Parking :</strong> {generalInfo.keys?.parking || "-"}</div>
+                  <div><strong>Boîte aux lettres :</strong> {generalInfo.keys?.mailbox || "-"}</div>
+                  <div><strong>Cave :</strong> {generalInfo.keys?.basement || "-"}</div>
+                  <div><strong>Autre :</strong> {generalInfo.keys?.other || "-"}</div>
+                </div>
+                {generalInfo.keys?.other_type && (
+                  <div className="text-xs">
+                    <strong>Type d'autre clé :</strong> {generalInfo.keys.other_type}
+                  </div>
+                )}
+              </div>
+
+              {/* Commentaire général */}
+              {generalInfo.general_comment && (
+                <div className="space-y-2 text-xs">
+                  <div className="font-medium text-gray-700">Commentaire général</div>
+                  <div className="p-2 bg-gray-50 rounded text-gray-600">
+                    {generalInfo.general_comment}
+                  </div>
                 </div>
               )}
             </div>
