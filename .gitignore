@@ -96,3 +96,5 @@ scripts/test-complete-workflow-debug.sql
 scripts/create-deposit-retentions-table.sql
 scripts/setup-charge-provision-cron.sql
 scripts/20251009_create_cms_pages.sql
+scripts/create-incident-interventions.sql
+scripts/create-incidents-rls.sql

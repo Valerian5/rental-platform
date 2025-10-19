@@ -54,7 +54,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       .select(`
         id,
         message,
-        user_type,
+        author_type,
         attachments,
         created_at,
         user_id,
@@ -74,7 +74,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     // Combiner les données
     const incidentWithResponses = {
       ...incident,
-      responses: responses || [],
+      responses: (responses || []).map((r: any) => ({ ...r, user_type: r.author_type })),
     }
 
     return NextResponse.json({

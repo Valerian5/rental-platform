@@ -29,7 +29,6 @@ export default function NewIncidentPage() {
     title: "",
     description: "",
     category: "",
-    priority: "medium",
   })
 
   useEffect(() => {
@@ -139,18 +138,29 @@ export default function NewIncidentPage() {
         }
       }
 
-      // Créer l'incident
-      const incidentData = {
-        ...incident,
+      // Créer l'incident via l'API serveur (priorité non transmise côté tenant)
+      const payload = {
+        title: incident.title,
+        description: incident.description,
+        category: incident.category,
         property_id: activeLease.property.id,
         lease_id: activeLease.id,
         reported_by: currentUser.id,
         photos: photoUrls.length > 0 ? photoUrls : null,
       }
 
-      console.log("📝 Données incident:", incidentData)
+      console.log("📝 Données incident:", payload)
 
-      await rentalManagementService.reportIncident(incidentData)
+      const createRes = await fetch("/api/incidents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+
+      const createData = await createRes.json()
+      if (!createRes.ok || !createData.success) {
+        throw new Error(createData?.error || "Erreur création incident")
+      }
 
       toast.success("Incident signalé avec succès")
       router.push("/tenant/rental-management")
@@ -246,24 +256,7 @@ export default function NewIncidentPage() {
               </Select>
             </div>
 
-            {/* Priorité */}
-            <div className="space-y-2">
-              <Label htmlFor="priority">Priorité</Label>
-              <Select
-                value={incident.priority}
-                onValueChange={(value) => setIncident({ ...incident, priority: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Faible - Peut attendre</SelectItem>
-                  <SelectItem value="medium">Moyen - À traiter prochainement</SelectItem>
-                  <SelectItem value="high">Élevé - Urgent</SelectItem>
-                  <SelectItem value="urgent">Urgent - Intervention immédiate</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Priorité retirée côté tenant: gérée par le propriétaire */}
 
             {/* Description */}
             <div className="space-y-2">

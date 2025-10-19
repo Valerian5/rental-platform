@@ -6,47 +6,56 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
-    const file = formData.get("file") as File
+    const files = (formData.getAll("file") as File[]).filter(Boolean)
     const bucket = (formData.get("bucket") as string) || "documents"
     const folder = (formData.get("folder") as string) || "general"
 
-    if (!file) {
+    if (!files || files.length === 0) {
       return NextResponse.json({ error: "Aucun fichier fourni" }, { status: 400 })
     }
 
-    // Vérifier la taille (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      return NextResponse.json({ error: "Fichier trop volumineux (max 10MB)" }, { status: 400 })
+    // Vérifier la taille (max 10MB par fichier)
+    for (const f of files) {
+      if (f.size > 10 * 1024 * 1024) {
+        return NextResponse.json({ error: `Fichier trop volumineux (max 10MB): ${f.name}` }, { status: 400 })
+      }
     }
 
-    // Générer un nom unique pour éviter les doublons
-    const timestamp = Date.now()
-    const randomId = Math.random().toString(36).substring(2, 8)
-    const fileExtension = file.name.split(".").pop()
-    const fileName = `${folder}/${timestamp}_${randomId}.${fileExtension}`
+    const uploaded: { url: string; path: string }[] = []
 
-    console.log("📤 Upload vers Supabase:", fileName)
+    for (const file of files) {
+      // Générer un nom unique pour éviter les doublons
+      const timestamp = Date.now()
+      const randomId = Math.random().toString(36).substring(2, 8)
+      const fileExtension = file.name.split(".").pop()
+      const fileName = `${folder}/${timestamp}_${randomId}.${fileExtension}`
 
-    // Upload vers Supabase
-    const { data, error } = await supabase.storage.from(bucket).upload(fileName, file, {
-      cacheControl: "3600",
-      upsert: false, // Important: ne pas écraser
-    })
+      console.log("📤 Upload vers Supabase:", fileName)
 
-    if (error) {
-      console.error("❌ Erreur Supabase:", error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      // Upload vers Supabase
+      const { data, error } = await supabase.storage.from(bucket).upload(fileName, file, {
+        cacheControl: "3600",
+        upsert: false, // Important: ne pas écraser
+      })
+
+      if (error) {
+        console.error("❌ Erreur Supabase:", error)
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+
+      // Obtenir l'URL publique
+      const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(data.path)
+
+      console.log("✅ Upload réussi:", urlData.publicUrl)
+      uploaded.push({ url: urlData.publicUrl, path: data.path })
     }
-
-    // Obtenir l'URL publique
-    const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(data.path)
-
-    console.log("✅ Upload réussi:", urlData.publicUrl)
 
     return NextResponse.json({
       success: true,
-      url: urlData.publicUrl,
-      path: data.path,
+      url: uploaded[0]?.url,
+      path: uploaded[0]?.path,
+      urls: uploaded.map((u) => u.url),
+      files: uploaded,
     })
   } catch (error) {
     console.error("❌ Erreur upload:", error)

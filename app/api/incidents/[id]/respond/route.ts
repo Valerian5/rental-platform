@@ -21,7 +21,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         incident_id: incidentId,
         user_id: user_id,
         message: message,
-        user_type: user_type,
+        author_type: user_type, // aligner avec colonne NOT NULL en base
         attachments: attachments || [],
       })
       .select()
@@ -58,19 +58,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         const recipientData = isOwnerResponding ? incident.lease.tenant : incident.lease.owner
 
         if (recipientData) {
-          await emailService.sendEmail({
-            to: recipientData.email,
-            template: "incident_response",
-            data: {
-              recipientName: `${recipientData.first_name} ${recipientData.last_name}`,
-              responderName: `${responder.first_name} ${responder.last_name}`,
-              responderType: user_type === "owner" ? "propriétaire" : "locataire",
-              incidentTitle: incident.title,
-              propertyTitle: incident.property.title,
-              message: message,
-              incidentUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/${user_type === "owner" ? "tenant" : "owner"}/incidents/${incidentId}`,
-            },
-          })
+          await emailService.sendIncidentResponseEmail(
+            { id: recipientData.id, name: `${recipientData.first_name} ${recipientData.last_name}`, email: recipientData.email },
+            { id: responder.id, name: `${responder.first_name} ${responder.last_name}` },
+            { id: incident.id, title: incident.title },
+            { id: incident.property.id, title: incident.property.title },
+            message,
+            `${process.env.NEXT_PUBLIC_SITE_URL}/${user_type === "owner" ? "tenant" : "owner"}/incidents/${incidentId}`
+          )
         }
       }
     } catch (emailError) {

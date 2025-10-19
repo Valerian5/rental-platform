@@ -18,6 +18,8 @@ import PaymentConfirmationEmail from "@/components/emails/payment-confirmation-e
 import NewMessageNotificationEmail from "@/components/emails/new-message-notification-email"
 import IncidentConfirmationEmail from "@/components/emails/incident-confirmation-email"
 import IncidentResponseEmail from "@/components/emails/incident-response-email"
+import IncidentInterventionScheduledEmail from "@/components/emails/incident-intervention-scheduled-email"
+import IncidentCreatedNotificationEmail from "@/components/emails/incident-created-notification-email"
 import SavedSearchAlertEmail from "@/components/emails/saved-search-alert-email"
 import NewApplicationNotificationToOwnerEmail from "@/components/emails/new-application-notification-to-owner-email"
 import InviteUserEmail from "@/components/emails/invite-user-email"
@@ -941,5 +943,106 @@ export async function sendEdlExitSlotConfirmedEmail(
       leaseId: leaseId,
     }),
     logoUrl,
+  )
+}
+
+// ====================================
+// INCIDENTS - NOTIFICATIONS
+// ====================================
+
+export async function sendIncidentConfirmationEmail(
+  user: { id: string; name: string; email: string },
+  property: { id: string; title: string },
+  logoUrl?: string,
+) {
+  return await sendEmail(
+    user,
+    null,
+    "✅ Incident signalé avec succès",
+    React.createElement(IncidentConfirmationEmail, {
+      userName: user.name,
+      propertyTitle: property.title,
+      logoUrl,
+    }),
+  )
+}
+
+export async function sendIncidentCreatedNotificationEmail(
+  user: { id: string; name: string; email: string },
+  tenant: { id: string; name: string },
+  incident: { id: string; title: string; description: string; category: string },
+  property: { id: string; title: string },
+  incidentUrl: string,
+  logoUrl?: string,
+) {
+  return await sendEmail(
+    user,
+    null,
+    "🚨 Nouvel incident signalé",
+    React.createElement(IncidentCreatedNotificationEmail, {
+      ownerName: user.name,
+      tenantName: tenant.name,
+      incidentTitle: incident.title,
+      propertyTitle: property.title,
+      description: incident.description,
+      category: incident.category,
+      incidentUrl,
+      logoUrl,
+    }),
+  )
+}
+
+export async function sendIncidentResponseEmail(
+  user: { id: string; name: string; email: string },
+  responder: { id: string; name: string },
+  incident: { id: string; title: string },
+  property: { id: string; title: string },
+  message: string,
+  incidentUrl: string,
+  logoUrl?: string,
+) {
+  return await sendEmail(
+    user,
+    null,
+    "💬 Réponse à votre incident",
+    React.createElement(IncidentResponseEmail, {
+      userName: user.name,
+      responderName: responder.name,
+      incidentTitle: incident.title,
+      propertyTitle: property.title,
+      message,
+      logoUrl,
+    }),
+  )
+}
+
+export async function sendIncidentInterventionScheduledEmail(
+  user: { id: string; name: string; email: string },
+  incident: { id: string; title: string },
+  property: { id: string; title: string },
+  intervention: {
+    scheduledDate: string;
+    description: string;
+    providerName?: string;
+    providerContact?: string;
+  },
+  incidentUrl: string,
+  logoUrl?: string,
+) {
+  return await sendEmail(
+    user,
+    null,
+    "📅 Intervention programmée",
+    React.createElement(IncidentInterventionScheduledEmail, {
+      tenantName: user.name,
+      incidentTitle: incident.title,
+      propertyTitle: property.title,
+      scheduledDate: intervention.scheduledDate,
+      description: intervention.description,
+      providerName: intervention.providerName,
+      providerContact: intervention.providerContact,
+      incidentUrl,
+      logoUrl,
+    }),
   )
 }

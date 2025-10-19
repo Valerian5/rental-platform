@@ -45,6 +45,7 @@ export default function IncidentDetailPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [showResponseDialog, setShowResponseDialog] = useState(false)
   const [showInterventionDialog, setShowInterventionDialog] = useState(false)
+  const [showResolveDialog, setShowResolveDialog] = useState(false)
 
   // Formulaire réponse
   const [response, setResponse] = useState({
@@ -61,6 +62,15 @@ export default function IncidentDetailPage() {
     provider_name: "",
     provider_contact: "",
     estimated_cost: "",
+  })
+
+  // Formulaire résolution
+  const [resolveForm, setResolveForm] = useState({
+    amount: "",
+    date: new Date().toISOString().slice(0, 10),
+    description: "",
+    category: "repair",
+    file: null as File | null,
   })
 
   useEffect(() => {
@@ -154,27 +164,23 @@ export default function IncidentDetailPage() {
     }
 
     try {
-      const workData = {
-        property_id: incident.property_id,
-        lease_id: incident.lease_id,
-        title: `Intervention - ${incident.title}`,
-        description: intervention.description,
-        type: "corrective",
-        category: incident.category,
-        scheduled_date: intervention.scheduled_date,
-        cost: intervention.estimated_cost ? Number(intervention.estimated_cost) : 0,
-        provider_name: intervention.type === "professional" ? intervention.provider_name : null,
-        provider_contact: intervention.type === "professional" ? intervention.provider_contact : null,
+      const formData = new FormData()
+      formData.append('type', intervention.type)
+      formData.append('scheduled_date', intervention.scheduled_date)
+      formData.append('description', intervention.description)
+      if (intervention.provider_name) formData.append('provider_name', intervention.provider_name)
+      if (intervention.provider_contact) formData.append('provider_contact', intervention.provider_contact)
+      if (intervention.estimated_cost) formData.append('estimated_cost', intervention.estimated_cost)
+
+      const res = await fetch(`/api/incidents/${incident.id}/interventions`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        throw new Error(data?.error || 'Erreur programmation intervention')
       }
-
-      await rentalManagementService.scheduleMaintenanceWork(workData)
-
-      // Mettre à jour le statut de l'incident
-      await rentalManagementService.updateIncidentStatus(
-        incident.id,
-        "in_progress",
-        `Intervention programmée le ${new Date(intervention.scheduled_date).toLocaleDateString("fr-FR")}`,
-      )
 
       toast.success("Intervention programmée avec succès")
       setIntervention({
@@ -191,6 +197,45 @@ export default function IncidentDetailPage() {
       await loadIncidentData()
     } catch (error) {
       toast.error("Erreur lors de la programmation")
+    }
+  }
+
+  const handleResolveIncident = async () => {
+    if (!resolveForm.amount || !resolveForm.description) {
+      toast.error("Veuillez remplir les champs obligatoires")
+      return
+    }
+
+    try {
+      const formData = new FormData()
+      formData.append('amount', resolveForm.amount)
+      formData.append('date', resolveForm.date)
+      formData.append('description', resolveForm.description)
+      formData.append('category', resolveForm.category)
+      if (resolveForm.file) formData.append('file', resolveForm.file)
+
+      const res = await fetch(`/api/incidents/${incident.id}/resolve`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        throw new Error(data?.error || 'Erreur résolution incident')
+      }
+
+      toast.success("Incident résolu et dépense créée")
+      setResolveForm({
+        amount: "",
+        date: new Date().toISOString().slice(0, 10),
+        description: "",
+        category: "repair",
+        file: null,
+      })
+      setShowResolveDialog(false)
+      await loadIncidentData()
+    } catch (error) {
+      toast.error("Erreur lors de la résolution")
     }
   }
 
@@ -541,15 +586,7 @@ export default function IncidentDetailPage() {
                 <Button
                   variant="outline"
                   className="w-full justify-start bg-transparent"
-                  onClick={async () => {
-                    try {
-                      await rentalManagementService.updateIncidentStatus(incident.id, "resolved", "Incident résolu")
-                      toast.success("Incident marqué comme résolu")
-                      await loadIncidentData()
-                    } catch (error) {
-                      toast.error("Erreur lors de la mise à jour")
-                    }
-                  }}
+                  onClick={() => setShowResolveDialog(true)}
                 >
                   <CheckCircle className="h-4 w-4 mr-2" />
                   Marquer comme résolu
@@ -693,6 +730,77 @@ export default function IncidentDetailPage() {
                 Programmer
               </Button>
               <Button variant="outline" onClick={() => setShowInterventionDialog(false)}>
+                Annuler
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Résolution */}
+      <Dialog open={showResolveDialog} onOpenChange={setShowResolveDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Marquer comme résolu</DialogTitle>
+            <DialogDescription>Créer une dépense et marquer l'incident comme résolu</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Montant (€) *</label>
+              <Input
+                type="number"
+                value={resolveForm.amount}
+                onChange={(e) => setResolveForm({ ...resolveForm, amount: e.target.value })}
+                placeholder="Coût de la réparation"
+                required
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Date *</label>
+              <Input
+                type="date"
+                value={resolveForm.date}
+                onChange={(e) => setResolveForm({ ...resolveForm, date: e.target.value })}
+                required
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Type de dépense</label>
+              <Select value={resolveForm.category} onValueChange={(value) => setResolveForm({ ...resolveForm, category: value })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="repair">Réparation</SelectItem>
+                  <SelectItem value="maintenance">Maintenance</SelectItem>
+                  <SelectItem value="improvement">Amélioration</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Description *</label>
+              <Textarea
+                value={resolveForm.description}
+                onChange={(e) => setResolveForm({ ...resolveForm, description: e.target.value })}
+                placeholder="Description de la résolution"
+                rows={3}
+                required
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Justificatif (optionnel)</label>
+              <Input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                onChange={(e) => setResolveForm({ ...resolveForm, file: e.target.files?.[0] || null })}
+              />
+            </div>
+            <div className="flex gap-2 pt-4">
+              <Button onClick={handleResolveIncident} className="flex-1">
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Résoudre
+              </Button>
+              <Button variant="outline" onClick={() => setShowResolveDialog(false)}>
                 Annuler
               </Button>
             </div>
