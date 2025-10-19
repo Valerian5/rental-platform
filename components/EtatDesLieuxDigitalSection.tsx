@@ -2076,7 +2076,7 @@ export function EtatDesLieuxDigitalSection({
                   <div><strong>Immeuble/Portail :</strong> {generalInfo.keys?.building || "-"}</div>
                   <div><strong>Parking :</strong> {generalInfo.keys?.parking || "-"}</div>
                   <div><strong>Boîte aux lettres :</strong> {generalInfo.keys?.mailbox || "-"}</div>
-                  <div><strong>Cave :</strong> {generalInfo.keys?.basement || "-"}</div>
+                  <div><strong>Cave :</strong> {generalInfo.keys?.cellar || "-"}</div>
                   <div><strong>Autre :</strong> {generalInfo.keys?.other || "-"}</div>
                 </div>
                 {generalInfo.keys?.other_type && (
