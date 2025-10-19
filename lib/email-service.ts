@@ -283,28 +283,6 @@ export async function sendIncidentConfirmationEmail(user: User, property: Proper
   )
 }
 
-export async function sendIncidentResponseEmail(
-  user: User,
-  responderName: string,
-  incidentTitle: string,
-  propertyTitle: string,
-  message: string,
-  logoUrl?: string
-) {
-  await sendEmail(
-    user,
-    NotificationType.INCIDENT_RESPONSE,
-    `Réponse à votre incident "${incidentTitle}"`,
-    IncidentResponseEmail({
-      userName: user.name,
-      responderName,
-      incidentTitle,
-      propertyTitle,
-      message,
-      logoUrl
-    }),
-  )
-}
 
 export async function sendSavedSearchAlertEmail(user: User, newProperties: Property[], logoUrl?: string) {
   await sendEmail(
