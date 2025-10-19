@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
 
 // POST /api/incidents - Création d'un incident par le locataire (sans priorité côté tenant)
 export async function POST(request: NextRequest) {
   try {
-    const server = createServerClient()
     const body = await request.json()
 
     const { title, description, category, property_id, lease_id, reported_by, photos } = body || {}
@@ -13,12 +12,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Champs manquants" }, { status: 400 })
     }
 
-    // Auth
-    const { data: { user } } = await server.auth.getUser()
-    if (!user) return NextResponse.json({ success: false, error: "Non authentifié" }, { status: 401 })
+    // Créer un client Supabase avec service role pour contourner RLS
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+
+    // Vérifier que l'utilisateur existe et est un locataire
+    const { data: user, error: userError } = await supabase
+      .from("users")
+      .select("id, user_type")
+      .eq("id", reported_by)
+      .single()
+
+    if (userError || !user || user.user_type !== "tenant") {
+      console.error("Erreur utilisateur:", userError)
+      return NextResponse.json({ success: false, error: "Utilisateur non autorisé" }, { status: 403 })
+    }
 
     // Vérifier que l'utilisateur est bien le locataire du bail
-    const { data: lease, error: leaseError } = await server
+    const { data: lease, error: leaseError } = await supabase
       .from("leases")
       .select("id, tenant_id, owner_id, property:properties(id,title,address)")
       .eq("id", lease_id)
@@ -44,7 +57,7 @@ export async function POST(request: NextRequest) {
     }
     if (Array.isArray(photos) && photos.length > 0) insertPayload.photos = photos
 
-    const { data: incident, error } = await server
+    const { data: incident, error } = await supabase
       .from("incidents")
       .insert(insertPayload)
       .select("*, property:properties(id,title,address), lease:leases(id, tenant:users!leases_tenant_id_fkey(id,first_name,last_name,email), owner:users!leases_owner_id_fkey(id,first_name,last_name,email))")

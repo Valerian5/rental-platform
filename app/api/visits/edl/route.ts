@@ -7,9 +7,16 @@ export async function GET(request: NextRequest) {
   try {
     const server = createServerClient()
     
-    // Récupérer l'utilisateur connecté
-    const { data: { user }, error: userError } = await server.auth.getUser()
+    // Récupérer l'utilisateur connecté avec le token du header
+    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization')
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : undefined
+    
+    const { data: { user }, error: userError } = token
+      ? await server.auth.getUser(token)
+      : await server.auth.getUser()
+      
     if (userError || !user) {
+      console.error("[visits/edl] Auth error:", userError)
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
     }
 

@@ -321,7 +321,7 @@ export function TenantEtatDesLieuxSection({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {exitSlots.length > 0 ? (
+          {exitSlots.length > 0 && !selectedSlot ? (
             <EdlExitSlotsSelector
               leaseId={leaseId}
               slots={exitSlots}
@@ -330,6 +330,20 @@ export function TenantEtatDesLieuxSection({
                 loadExitSlots() // Recharger pour mettre à jour l'état
               }}
             />
+          ) : selectedSlot ? (
+            <div className="text-center py-8">
+              <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500" />
+              <p className="text-green-700 mb-2 font-medium">Créneau confirmé</p>
+              <p className="text-sm text-gray-600">
+                Vous avez sélectionné le {new Date(`${selectedSlot.date}T${selectedSlot.start_time}`).toLocaleDateString("fr-FR", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })} pour l'état des lieux de sortie.
+              </p>
+            </div>
           ) : (
             <div className="text-center py-8">
               <Calendar className="h-12 w-12 mx-auto mb-4 text-gray-400" />

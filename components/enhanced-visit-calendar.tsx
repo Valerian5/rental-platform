@@ -51,10 +51,21 @@ export function EnhancedVisitCalendar({ visits, userType, onVisitUpdate }: Props
     const loadEdlVisits = async () => {
       setLoadingEdl(true)
       try {
-        const response = await fetch('/api/visits/edl')
+        // Récupérer le token Supabase pour authentifier la requête
+        let headers: Record<string, string> = {}
+        try {
+          const { supabase } = await import("@/lib/supabase")
+          const { data } = await supabase.auth.getSession()
+          const token = data.session?.access_token
+          if (token) headers["Authorization"] = `Bearer ${token}`
+        } catch {}
+
+        const response = await fetch('/api/visits/edl', { headers })
         if (response.ok) {
           const data = await response.json()
           setEdlVisits(data.visits || [])
+        } else {
+          console.error('Erreur chargement visites EDL:', response.status, response.statusText)
         }
       } catch (error) {
         console.error('Erreur chargement visites EDL:', error)
