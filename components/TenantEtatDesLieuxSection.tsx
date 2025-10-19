@@ -92,15 +92,30 @@ export function TenantEtatDesLieuxSection({
         console.log("📄 Documents EDL récupérés:", data.documents)
         const exitDoc = data.documents?.find((doc: any) => doc.type === "sortie")
         console.log("📋 Document EDL sortie trouvé:", exitDoc)
-        if (exitDoc?.metadata?.exit_visit_slots) {
-          console.log("📅 Créneaux trouvés:", exitDoc.metadata.exit_visit_slots)
-          setExitSlots(exitDoc.metadata.exit_visit_slots)
+        // Supporter metadata en string ou objet et clés alternatives
+        const rawMeta = exitDoc?.metadata
+        let meta: any = {}
+        try {
+          meta = typeof rawMeta === 'string' ? JSON.parse(rawMeta) : (rawMeta || {})
+        } catch (e) {
+          console.warn('Impossible de parser metadata EDL sortie:', e)
+          meta = {}
+        }
+
+        const slots = meta.exit_visit_slots || meta.exit_slots || meta.slots || []
+        const selectedSlot = meta.selected_slot || meta.chosen_slot || null
+
+        if (Array.isArray(slots) && slots.length > 0) {
+          console.log("📅 Créneaux trouvés:", slots)
+          setExitSlots(slots)
         } else {
           console.log("❌ Aucun créneau trouvé dans les métadonnées")
+          setExitSlots([])
         }
-        if (exitDoc?.metadata?.selected_slot) {
-          console.log("✅ Créneau sélectionné trouvé:", exitDoc.metadata.selected_slot)
-          setSelectedSlot(exitDoc.metadata.selected_slot)
+
+        if (selectedSlot) {
+          console.log("✅ Créneau sélectionné trouvé:", selectedSlot)
+          setSelectedSlot(selectedSlot)
         }
       } else {
         console.error("❌ Erreur réponse API:", response.status, response.statusText)
