@@ -7,11 +7,18 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   try {
     const leaseId = params.id
     const { slot } = await request.json()
+    console.log("[EDL select-slot] START", { leaseId, slot })
     const server = createServerClient()
 
     // Vérifier l'authentification
+    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization')
+    console.log("[EDL select-slot] Authorization header present:", Boolean(authHeader))
+
     const { data: { user }, error: userError } = await server.auth.getUser()
+    if (userError) console.warn("[EDL select-slot] getUser error:", userError)
+    console.log("[EDL select-slot] user:", user ? { id: user.id } : null)
     if (userError || !user) {
+      console.warn("[EDL select-slot] Unauthorized: no user")
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
     }
 
@@ -29,10 +36,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .single()
 
     if (leaseError || !lease) {
+      console.error("[EDL select-slot] Lease fetch error:", leaseError)
       return NextResponse.json({ error: "Bail introuvable" }, { status: 404 })
     }
 
     if (lease.tenant_id !== user.id) {
+      console.warn("[EDL select-slot] Forbidden: user is not tenant of lease", { tenant_id: lease.tenant_id, user_id: user.id })
       return NextResponse.json({ error: "Accès non autorisé" }, { status: 403 })
     }
 
@@ -45,12 +54,21 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .single()
 
     if (edlError || !edlDoc) {
+      console.error("[EDL select-slot] EDL doc fetch error:", edlError)
       return NextResponse.json({ error: "EDL de sortie introuvable" }, { status: 404 })
     }
 
     // Vérifier que des créneaux sont disponibles
-    const slots = edlDoc.metadata?.exit_visit_slots || []
+    let meta: any = {}
+    try {
+      meta = typeof edlDoc.metadata === 'string' ? JSON.parse(edlDoc.metadata) : (edlDoc.metadata || {})
+    } catch (e) {
+      console.warn('[EDL select-slot] metadata parse error:', e)
+      meta = {}
+    }
+    const slots = meta.exit_visit_slots || meta.exit_slots || meta.slots || []
     if (slots.length === 0) {
+      console.warn("[EDL select-slot] No slots available in metadata")
       return NextResponse.json({ error: "Aucun créneau disponible" }, { status: 400 })
     }
 
@@ -67,7 +85,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     // Mettre à jour l'EDL avec le créneau sélectionné
     const updatedMetadata = {
-      ...edlDoc.metadata,
+      ...meta,
       selected_slot: selectedSlot,
       slot_selected_at: new Date().toISOString(),
       slot_selected_by: user.id
@@ -82,7 +100,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .eq("id", edlDoc.id)
 
     if (updateError) {
-      console.error("Erreur mise à jour EDL:", updateError)
+      console.error("[EDL select-slot] Update EDL error:", updateError)
       return NextResponse.json({ error: "Erreur lors de la sélection" }, { status: 500 })
     }
 
@@ -96,7 +114,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         action_url: `/owner/leases/${leaseId}`,
       })
     } catch (e) {
-      console.warn("Notification propriétaire EDL échouée:", e)
+      console.warn("[EDL select-slot] Notification owner failed:", e)
     }
 
     // Envoyer email au propriétaire
@@ -118,7 +136,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         leaseId,
       )
     } catch (e) {
-      console.warn("Email propriétaire EDL échoué:", e)
+      console.warn("[EDL select-slot] Email owner failed:", e)
     }
 
     return NextResponse.json({ 
@@ -128,7 +146,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     })
 
   } catch (e) {
-    console.error("Erreur select-slot EDL:", e)
+    console.error("[EDL select-slot] Unhandled error:", e)
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }
 }
