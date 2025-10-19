@@ -39,8 +39,8 @@ import LeaseOwnerTenantSignedEmail from "@/components/emails/lease-owner-tenant-
 import LeaseTenantFinalizedEmail from "@/components/emails/lease-tenant-finalized"
 import LeaseOwnerFinalizedEmail from "@/components/emails/lease-owner-finalized"
 import EdlTenantFinalizedEmail from "@/components/emails/edl-tenant-finalized"
-import EdlExitSlotsProposalEmail from "@/components/emails/edl-exit-slots-proposal-email"
-import EdlExitSlotConfirmedEmail from "@/components/emails/edl-exit-slot-confirmed-email"
+import EdlExitSlotsProposalEmailSimple from "@/components/emails/edl-exit-slots-proposal-email-simple"
+import EdlExitSlotConfirmedEmailSimple from "@/components/emails/edl-exit-slot-confirmed-email-simple"
 
 
 // --- CONFIG EXPÉDITEUR ---
@@ -906,7 +906,7 @@ export async function sendEdlExitSlotsProposalEmail(
     user,
     "edl_exit_slots_proposal",
     "🏠 Créneaux proposés pour l'état des lieux de sortie",
-    EdlExitSlotsProposalEmail({
+    React.createElement(EdlExitSlotsProposalEmailSimple, {
       tenantName: user.name,
       propertyTitle: property.title,
       propertyAddress: property.address,
@@ -932,7 +932,7 @@ export async function sendEdlExitSlotConfirmedEmail(
     user,
     "edl_exit_slot_confirmed",
     "✅ Créneau EDL de sortie confirmé",
-    EdlExitSlotConfirmedEmail({
+    React.createElement(EdlExitSlotConfirmedEmailSimple, {
       ownerName: user.name,
       tenantName: tenantName,
       propertyTitle: property.title,
