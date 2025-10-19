@@ -906,13 +906,13 @@ export async function sendEdlExitSlotsProposalEmail(
     user,
     "edl_exit_slots_proposal",
     "🏠 Créneaux proposés pour l'état des lieux de sortie",
-    <EdlExitSlotsProposalEmail
-      tenantName={user.name}
-      propertyTitle={property.title}
-      propertyAddress={property.address}
-      slots={slots}
-      leaseId={leaseId}
-    />,
+    EdlExitSlotsProposalEmail({
+      tenantName: user.name,
+      propertyTitle: property.title,
+      propertyAddress: property.address,
+      slots: slots,
+      leaseId: leaseId,
+    }),
     logoUrl,
   )
 }
@@ -932,14 +932,14 @@ export async function sendEdlExitSlotConfirmedEmail(
     user,
     "edl_exit_slot_confirmed",
     "✅ Créneau EDL de sortie confirmé",
-    <EdlExitSlotConfirmedEmail
-      ownerName={user.name}
-      tenantName={tenantName}
-      propertyTitle={property.title}
-      propertyAddress={property.address}
-      selectedSlot={selectedSlot}
-      leaseId={leaseId}
-    />,
+    EdlExitSlotConfirmedEmail({
+      ownerName: user.name,
+      tenantName: tenantName,
+      propertyTitle: property.title,
+      propertyAddress: property.address,
+      selectedSlot: selectedSlot,
+      leaseId: leaseId,
+    }),
     logoUrl,
   )
 }
