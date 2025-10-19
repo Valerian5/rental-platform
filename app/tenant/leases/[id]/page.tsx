@@ -107,6 +107,8 @@ export default function TenantLeaseDetailPage() {
   const [finalBalanceLoading, setFinalBalanceLoading] = useState(false)
   const [iban, setIban] = useState("")
   const [bic, setBic] = useState("")
+  const [edlExitSlots, setEdlExitSlots] = useState<any[]>([])
+  const [edlSelectedSlot, setEdlSelectedSlot] = useState<any>(null)
 
   const loadLease = async () => {
     try {
@@ -258,6 +260,24 @@ export default function TenantLeaseDetailPage() {
     }
   }
 
+  const loadEdlExitSlots = async () => {
+    try {
+      const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux`)
+      if (response.ok) {
+        const data = await response.json()
+        const exitDoc = data.documents?.find((doc: any) => doc.type === "sortie")
+        if (exitDoc?.metadata?.exit_visit_slots) {
+          setEdlExitSlots(exitDoc.metadata.exit_visit_slots)
+        }
+        if (exitDoc?.metadata?.selected_slot) {
+          setEdlSelectedSlot(exitDoc.metadata.selected_slot)
+        }
+      }
+    } catch (error) {
+      console.error("Erreur chargement créneaux EDL:", error)
+    }
+  }
+
   useEffect(() => {
     const initPage = async () => {
       try {
@@ -270,7 +290,7 @@ export default function TenantLeaseDetailPage() {
         setCurrentUser(user)
 
         if (leaseId) {
-          await Promise.all([loadLease(), loadAnnexes(), loadLastNotice(), loadFinalBalance()])
+          await Promise.all([loadLease(), loadAnnexes(), loadLastNotice(), loadFinalBalance(), loadEdlExitSlots()])
         }
       } catch (error) {
         console.error("Erreur initialisation:", error)
@@ -430,6 +450,59 @@ export default function TenantLeaseDetailPage() {
                   <h3 className="font-semibold text-blue-800">Action requise</h3>
                   <p className="text-blue-700 text-sm">
                     Ce bail est prêt à être signé. Veuillez consulter le document et procéder à la signature.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Créneaux EDL de sortie en attente */}
+        {edlExitSlots.length > 0 && !edlSelectedSlot && (
+          <Card className="border-orange-200 bg-orange-50">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <Calendar className="h-5 w-5 text-orange-600" />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-orange-800">Créneaux EDL de sortie proposés</h3>
+                  <p className="text-orange-700 text-sm">
+                    Votre propriétaire vous propose {edlExitSlots.length} créneau{edlExitSlots.length > 1 ? 'x' : ''} pour l'état des lieux de sortie.
+                  </p>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    // Faire défiler vers l'onglet EDL
+                    const etatDesLieuxTab = document.querySelector('[value="etat-des-lieux"]') as HTMLElement
+                    if (etatDesLieuxTab) {
+                      etatDesLieuxTab.click()
+                    }
+                  }}
+                >
+                  Choisir un créneau
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Créneau EDL sélectionné */}
+        {edlSelectedSlot && (
+          <Card className="border-green-200 bg-green-50">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <CheckCircle className="h-5 w-5 text-green-600" />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-green-800">Créneau EDL confirmé</h3>
+                  <p className="text-green-700 text-sm">
+                    Vous avez sélectionné le {new Date(`${edlSelectedSlot.date}T${edlSelectedSlot.start_time}`).toLocaleDateString("fr-FR", {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })} pour l'état des lieux de sortie.
                   </p>
                 </div>
               </div>

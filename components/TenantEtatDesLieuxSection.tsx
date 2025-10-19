@@ -85,19 +85,28 @@ export function TenantEtatDesLieuxSection({
 
   const loadExitSlots = async () => {
     try {
+      console.log("🔍 Chargement créneaux EDL pour leaseId:", leaseId)
       const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux`)
       if (response.ok) {
         const data = await response.json()
+        console.log("📄 Documents EDL récupérés:", data.documents)
         const exitDoc = data.documents?.find((doc: any) => doc.type === "sortie")
+        console.log("📋 Document EDL sortie trouvé:", exitDoc)
         if (exitDoc?.metadata?.exit_visit_slots) {
+          console.log("📅 Créneaux trouvés:", exitDoc.metadata.exit_visit_slots)
           setExitSlots(exitDoc.metadata.exit_visit_slots)
+        } else {
+          console.log("❌ Aucun créneau trouvé dans les métadonnées")
         }
         if (exitDoc?.metadata?.selected_slot) {
+          console.log("✅ Créneau sélectionné trouvé:", exitDoc.metadata.selected_slot)
           setSelectedSlot(exitDoc.metadata.selected_slot)
         }
+      } else {
+        console.error("❌ Erreur réponse API:", response.status, response.statusText)
       }
     } catch (error) {
-      console.error("Erreur chargement créneaux EDL:", error)
+      console.error("❌ Erreur chargement créneaux EDL:", error)
     }
   }
 
@@ -251,15 +260,15 @@ export function TenantEtatDesLieuxSection({
       </Card>
 
       {/* Créneaux EDL de sortie */}
-      {exitSlots.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              Créneaux proposés pour l'EDL de sortie
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
+            Créneaux proposés pour l'EDL de sortie
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {exitSlots.length > 0 ? (
             <EdlExitSlotsSelector
               leaseId={leaseId}
               slots={exitSlots}
@@ -268,9 +277,17 @@ export function TenantEtatDesLieuxSection({
                 loadExitSlots() // Recharger pour mettre à jour l'état
               }}
             />
-          </CardContent>
-        </Card>
-      )}
+          ) : (
+            <div className="text-center py-8">
+              <Calendar className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+              <p className="text-gray-500 mb-2">Aucun créneau proposé pour le moment</p>
+              <p className="text-sm text-gray-400">
+                Votre propriétaire vous proposera des créneaux pour l'état des lieux de sortie.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Informations sur l'état des lieux */}
       <Card>
