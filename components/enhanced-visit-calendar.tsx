@@ -30,6 +30,7 @@ type Visit = {
   tenant_interest?: "interested" | "not_interested"
   owner_feedback?: any
   tenant_feedback?: any
+  is_edl_exit?: boolean
 }
 
 interface Props {
@@ -202,6 +203,12 @@ export function EnhancedVisitCalendar({ visits, userType, onVisitUpdate }: Props
 
                         <div className="flex items-center gap-2 flex-shrink-0">
                           {statusBadge(v.status)}
+
+                          {v.is_edl_exit && (
+                            <Badge variant="secondary" className="bg-orange-100 text-orange-800 border-orange-200">
+                              EDL Sortie
+                            </Badge>
+                          )}
 
                           {v.application && (
                             <Button variant="outline" size="sm" asChild>

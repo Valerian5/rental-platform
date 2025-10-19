@@ -41,6 +41,57 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: "Erreur lors de l'enregistrement" }, { status: 500 })
     }
 
+    // Récupérer les informations du bail et du locataire pour les notifications
+    const { data: lease, error: leaseError } = await server
+      .from("leases")
+      .select(`
+        id,
+        tenant_id,
+        property_id,
+        property:properties(id, title, address),
+        tenant:users!leases_tenant_id_fkey(id, first_name, last_name, email)
+      `)
+      .eq("id", leaseId)
+      .single()
+
+    if (leaseError || !lease) {
+      console.warn("Impossible de récupérer les infos du bail pour les notifications")
+    } else {
+      // Notifier le locataire
+      try {
+        const { notificationsService } = await import("@/lib/notifications-service")
+        await notificationsService.createNotification(lease.tenant.id, {
+          type: "edl_exit_slots_proposed",
+          title: "Créneaux proposés pour l'EDL de sortie",
+          content: `Votre propriétaire vous propose ${slots.length} créneau${slots.length > 1 ? 'x' : ''} pour l'état des lieux de sortie.`,
+          action_url: `/tenant/leases/${leaseId}`,
+        })
+      } catch (e) {
+        console.warn("Notification locataire EDL échouée:", e)
+      }
+
+      // Envoyer email au locataire
+      try {
+        const { sendEdlExitSlotsProposalEmail } = await import("@/lib/email-service")
+        await sendEdlExitSlotsProposalEmail(
+          {
+            id: lease.tenant.id,
+            name: `${lease.tenant.first_name} ${lease.tenant.last_name}`,
+            email: lease.tenant.email,
+          },
+          {
+            id: lease.property.id,
+            title: lease.property.title,
+            address: lease.property.address,
+          },
+          slots,
+          leaseId,
+        )
+      } catch (e) {
+        console.warn("Email locataire EDL échoué:", e)
+      }
+    }
+
     return NextResponse.json({ success: true })
   } catch (e) {
     console.error('Erreur exit-slots:', e)

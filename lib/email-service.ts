@@ -39,6 +39,8 @@ import LeaseOwnerTenantSignedEmail from "@/components/emails/lease-owner-tenant-
 import LeaseTenantFinalizedEmail from "@/components/emails/lease-tenant-finalized"
 import LeaseOwnerFinalizedEmail from "@/components/emails/lease-owner-finalized"
 import EdlTenantFinalizedEmail from "@/components/emails/edl-tenant-finalized"
+import EdlExitSlotsProposalEmail from "@/components/emails/edl-exit-slots-proposal-email"
+import EdlExitSlotConfirmedEmail from "@/components/emails/edl-exit-slot-confirmed-email"
 
 
 // --- CONFIG EXPÉDITEUR ---
@@ -887,5 +889,57 @@ export async function sendRentRevisionEmail(
       pdfUrl,
       logoUrl,
     })
+  )
+}
+
+// ====================================
+// EDL DE SORTIE - PROPOSITION DE CRÉNEAUX
+// ====================================
+export async function sendEdlExitSlotsProposalEmail(
+  user: { id: string; name: string; email: string },
+  property: { id: string; title: string; address: string },
+  slots: Array<{ date: string; start_time: string; end_time: string }>,
+  leaseId: string,
+  logoUrl?: string,
+) {
+  return await sendEmail(
+    user,
+    "edl_exit_slots_proposal",
+    "🏠 Créneaux proposés pour l'état des lieux de sortie",
+    <EdlExitSlotsProposalEmail
+      tenantName={user.name}
+      propertyTitle={property.title}
+      propertyAddress={property.address}
+      slots={slots}
+      leaseId={leaseId}
+    />,
+    logoUrl,
+  )
+}
+
+// ====================================
+// EDL DE SORTIE - CRÉNEAU CONFIRMÉ
+// ====================================
+export async function sendEdlExitSlotConfirmedEmail(
+  user: { id: string; name: string; email: string },
+  tenantName: string,
+  property: { id: string; title: string; address: string },
+  selectedSlot: { date: string; start_time: string; end_time: string },
+  leaseId: string,
+  logoUrl?: string,
+) {
+  return await sendEmail(
+    user,
+    "edl_exit_slot_confirmed",
+    "✅ Créneau EDL de sortie confirmé",
+    <EdlExitSlotConfirmedEmail
+      ownerName={user.name}
+      tenantName={tenantName}
+      propertyTitle={property.title}
+      propertyAddress={property.address}
+      selectedSlot={selectedSlot}
+      leaseId={leaseId}
+    />,
+    logoUrl,
   )
 }

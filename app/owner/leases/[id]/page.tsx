@@ -124,6 +124,7 @@ export default function LeaseDetailPage() {
   const [depositDialogOpen, setDepositDialogOpen] = useState(false)
   const [edlSlotsDialogOpen, setEdlSlotsDialogOpen] = useState(false)
   const [edlSlots, setEdlSlots] = useState<any[]>([])
+  const [edlSlotsSent, setEdlSlotsSent] = useState(false)
 
   /** --- Nouvel état : statut DocuSign par signataire --- */
   const [sigLoading, setSigLoading] = useState(false)
@@ -365,12 +366,26 @@ export default function LeaseDetailPage() {
       // Charge le bail et le statut DocuSign (sans polling pour éviter trop d'appels)
       loadLease()
       loadSignatureStatus({ silent: true })
+      checkEdlSlotsSent()
     }
     if (leaseId) {
       loadLastNotice()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leaseId])
+
+  const checkEdlSlotsSent = async () => {
+    try {
+      const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux`)
+      if (response.ok) {
+        const data = await response.json()
+        const exitDoc = data.documents?.find((doc: any) => doc.type === "sortie")
+        setEdlSlotsSent(!!exitDoc?.metadata?.exit_visit_slots?.length)
+      }
+    } catch (error) {
+      console.error("Erreur vérification créneaux EDL:", error)
+    }
+  }
 
   const handlePrepareExitEdl = async () => {
     try {
@@ -1002,8 +1017,8 @@ export default function LeaseDetailPage() {
                         } finally {
                           setPreparingExit(false)
                         }
-                      }} disabled={preparingExit}>
-                        {preparingExit ? "Création..." : "Créer EDL de sortie"}
+                      }} disabled={preparingExit || edlSlotsSent}>
+                        {preparingExit ? "Création..." : edlSlotsSent ? "Créneaux envoyés" : "Créer EDL de sortie"}
                       </Button>
                       <Button variant="outline" onClick={async () => {
                         try {
@@ -1106,6 +1121,7 @@ export default function LeaseDetailPage() {
                 if(token) headers['Authorization'] = `Bearer ${token}`
                 await fetch(`/api/leases/${leaseId}/etat-des-lieux/exit-slots`,{ method:'POST', headers, body: JSON.stringify({ slots: edlSlots }) })
                 setEdlSlotsDialogOpen(false)
+                setEdlSlotsSent(true)
                 toast.success('Créneaux EDL de sortie enregistrés')
               }catch(e){ toast.error('Erreur enregistrement des créneaux') }
             }}>Enregistrer</Button>

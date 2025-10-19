@@ -12,8 +12,10 @@ import {
   CheckCircle,
   Clock,
   AlertCircle,
+  Calendar,
 } from "lucide-react"
 import { toast } from "sonner"
+import EdlExitSlotsSelector from "@/components/edl-exit-slots-selector"
 
 interface PropertyData {
   id: string
@@ -57,9 +59,12 @@ export function TenantEtatDesLieuxSection({
 }: TenantEtatDesLieuxSectionProps) {
   const [documents, setDocuments] = useState<EtatDesLieuxDocument[]>([])
   const [loading, setLoading] = useState(true)
+  const [exitSlots, setExitSlots] = useState<any[]>([])
+  const [selectedSlot, setSelectedSlot] = useState<any>(null)
 
   useEffect(() => {
     loadDocuments()
+    loadExitSlots()
   }, [leaseId])
 
   const loadDocuments = async () => {
@@ -75,6 +80,24 @@ export function TenantEtatDesLieuxSection({
       toast.error("Erreur lors du chargement des documents")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadExitSlots = async () => {
+    try {
+      const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux`)
+      if (response.ok) {
+        const data = await response.json()
+        const exitDoc = data.documents?.find((doc: any) => doc.type === "sortie")
+        if (exitDoc?.metadata?.exit_visit_slots) {
+          setExitSlots(exitDoc.metadata.exit_visit_slots)
+        }
+        if (exitDoc?.metadata?.selected_slot) {
+          setSelectedSlot(exitDoc.metadata.selected_slot)
+        }
+      }
+    } catch (error) {
+      console.error("Erreur chargement créneaux EDL:", error)
     }
   }
 
@@ -226,6 +249,28 @@ export function TenantEtatDesLieuxSection({
           )}
         </CardContent>
       </Card>
+
+      {/* Créneaux EDL de sortie */}
+      {exitSlots.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Créneaux proposés pour l'EDL de sortie
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <EdlExitSlotsSelector
+              leaseId={leaseId}
+              slots={exitSlots}
+              onSlotSelected={(slot) => {
+                setSelectedSlot(slot)
+                loadExitSlots() // Recharger pour mettre à jour l'état
+              }}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Informations sur l'état des lieux */}
       <Card>
