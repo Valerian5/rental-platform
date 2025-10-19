@@ -2023,7 +2023,13 @@ export function EtatDesLieuxDigitalSection({
                   <h4 className="font-medium text-sm">Chauffage</h4>
                   <div className="text-xs space-y-1">
                     <div><strong>Type :</strong> {generalInfo.heating?.type || "-"}</div>
-                    <div><strong>Combustible :</strong> {generalInfo.heating?.fuel || "-"}</div>
+                    <div><strong>Combustible :</strong> {
+                      generalInfo.heating?.fuel_type === "electrique" ? "Électrique" :
+                      generalInfo.heating?.fuel_type === "gaz" ? "Gaz" :
+                      generalInfo.heating?.fuel_type === "fioul" ? "Fioul" :
+                      generalInfo.heating?.fuel_type === "autre" ? generalInfo.heating?.other_type || "Autre" :
+                      "-"
+                    }</div>
                   </div>
                 </div>
                 
@@ -2031,7 +2037,13 @@ export function EtatDesLieuxDigitalSection({
                   <h4 className="font-medium text-sm">Eau chaude</h4>
                   <div className="text-xs space-y-1">
                     <div><strong>Type :</strong> {generalInfo.hot_water?.type || "-"}</div>
-                    <div><strong>Combustible :</strong> {generalInfo.hot_water?.fuel || "-"}</div>
+                    <div><strong>Combustible :</strong> {
+                      generalInfo.hot_water?.fuel_type === "electrique" ? "Électrique" :
+                      generalInfo.hot_water?.fuel_type === "gaz" ? "Gaz" :
+                      generalInfo.hot_water?.fuel_type === "fioul" ? "Fioul" :
+                      generalInfo.hot_water?.fuel_type === "autre" ? generalInfo.hot_water?.other_type || "Autre" :
+                      "-"
+                    }</div>
                   </div>
                 </div>
               </div>
@@ -2041,13 +2053,17 @@ export function EtatDesLieuxDigitalSection({
                 <h4 className="font-medium text-sm">Compteurs</h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                   <div>
-                    <strong>Électricité :</strong> {generalInfo.meters?.electricity?.number || "-"}
+                    <div><strong>Électricité :</strong> {generalInfo.meters?.electricity?.number || "-"}</div>
+                    <div><strong>Heures pleines :</strong> {generalInfo.meters?.electricity?.full_hour || "-"}</div>
+                    <div><strong>Heures creuses :</strong> {generalInfo.meters?.electricity?.off_peak || "-"}</div>
                   </div>
                   <div>
-                    <strong>Gaz :</strong> {generalInfo.meters?.gas?.number || "-"}
+                    <div><strong>Gaz :</strong> {generalInfo.meters?.gas?.number || "-"}</div>
+                    <div><strong>Relevé :</strong> {generalInfo.meters?.gas?.reading || "-"}</div>
                   </div>
                   <div>
-                    <strong>Eau :</strong> {generalInfo.meters?.water?.number || "-"}
+                    <div><strong>Eau :</strong> {generalInfo.meters?.water?.number || "-"}</div>
+                    <div><strong>Relevé :</strong> {generalInfo.meters?.water?.reading || "-"}</div>
                   </div>
                 </div>
               </div>
@@ -2056,7 +2072,7 @@ export function EtatDesLieuxDigitalSection({
               <div className="space-y-2">
                 <h4 className="font-medium text-sm">Clés</h4>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-xs">
-                  <div><strong>Entrée :</strong> {generalInfo.keys?.entry || "-"}</div>
+                  <div><strong>Entrée :</strong> {generalInfo.keys?.entrance || "-"}</div>
                   <div><strong>Immeuble/Portail :</strong> {generalInfo.keys?.building || "-"}</div>
                   <div><strong>Parking :</strong> {generalInfo.keys?.parking || "-"}</div>
                   <div><strong>Boîte aux lettres :</strong> {generalInfo.keys?.mailbox || "-"}</div>
