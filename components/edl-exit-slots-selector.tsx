@@ -68,6 +68,11 @@ export default function EdlExitSlotsSelector({
       if (onSlotSelected) {
         onSlotSelected(slot)
       }
+      
+      // Recharger la page pour mettre à jour l'état complet
+      setTimeout(() => {
+        window.location.reload()
+      }, 1000)
     } catch (error) {
       console.error("Erreur sélection créneau:", error)
       toast.error(error instanceof Error ? error.message : "Erreur lors de la sélection")

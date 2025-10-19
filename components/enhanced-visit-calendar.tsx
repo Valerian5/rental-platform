@@ -43,6 +43,33 @@ export function EnhancedVisitCalendar({ visits, userType, onVisitUpdate }: Props
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined)
   const [showOwnerFeedbackFor, setShowOwnerFeedbackFor] = useState<string | null>(null)
   const [showTenantFeedbackFor, setShowTenantFeedbackFor] = useState<string | null>(null)
+  const [edlVisits, setEdlVisits] = useState<Visit[]>([])
+  const [loadingEdl, setLoadingEdl] = useState(false)
+
+  // Charger les visites EDL
+  useEffect(() => {
+    const loadEdlVisits = async () => {
+      setLoadingEdl(true)
+      try {
+        const response = await fetch('/api/visits/edl')
+        if (response.ok) {
+          const data = await response.json()
+          setEdlVisits(data.visits || [])
+        }
+      } catch (error) {
+        console.error('Erreur chargement visites EDL:', error)
+      } finally {
+        setLoadingEdl(false)
+      }
+    }
+    
+    loadEdlVisits()
+  }, [])
+
+  // Fusionner les visites normales et EDL
+  const allVisits = useMemo(() => {
+    return [...visits, ...edlVisits]
+  }, [visits, edlVisits])
 
   const normalizeTime = (t?: string) => {
     if (!t) return "00:00"
@@ -88,15 +115,15 @@ export function EnhancedVisitCalendar({ visits, userType, onVisitUpdate }: Props
 
   // Marqueurs de calendrier
   const hasVisitsOnDate = (date: Date) =>
-    visits.some((v) => new Date(v.visit_date).toDateString() === date.toDateString())
+    allVisits.some((v) => new Date(v.visit_date).toDateString() === date.toDateString())
 
   const getVisitCountForDate = (date: Date) =>
-    visits.filter((v) => new Date(v.visit_date).toDateString() === date.toDateString()).length
+    allVisits.filter((v) => new Date(v.visit_date).toDateString() === date.toDateString()).length
 
   // Liste triée
   const sortedAll = useMemo(
     () =>
-      [...visits].sort((a, b) => {
+      [...allVisits].sort((a, b) => {
         const da = new Date(a.visit_date).getTime()
         const db = new Date(b.visit_date).getTime()
         if (da !== db) return da - db
