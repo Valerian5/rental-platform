@@ -41,9 +41,18 @@ export default function EdlExitSlotsSelector({
 
     setIsLoading(true)
     try {
+      // Récupérer le token Supabase pour authentifier la requête côté API
+      let headers: Record<string, string> = { "Content-Type": "application/json" }
+      try {
+        const { supabase } = await import("@/lib/supabase")
+        const { data } = await supabase.auth.getSession()
+        const token = data.session?.access_token
+        if (token) headers["Authorization"] = `Bearer ${token}`
+      } catch {}
+
       const response = await fetch(`/api/leases/${leaseId}/etat-des-lieux/select-slot`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ slot }),
       })
 

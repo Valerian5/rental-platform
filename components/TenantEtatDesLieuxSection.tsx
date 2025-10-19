@@ -174,6 +174,44 @@ export function TenantEtatDesLieuxSection({
 
   return (
     <div className="space-y-6">
+      {/* Bandeaux d'information EDL de sortie */}
+      {exitSlots.length > 0 && !selectedSlot && (
+        <Card className="border-orange-200 bg-orange-50">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <Calendar className="h-5 w-5 text-orange-600" />
+              <div className="flex-1">
+                <h3 className="font-semibold text-orange-800">Créneaux EDL de sortie proposés</h3>
+                <p className="text-orange-700 text-sm">
+                  Votre propriétaire vous propose {exitSlots.length} créneau{exitSlots.length > 1 ? 'x' : ''} pour l'état des lieux de sortie.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {selectedSlot && (
+        <Card className="border-green-200 bg-green-50">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              <div className="flex-1">
+                <h3 className="font-semibold text-green-800">Créneau EDL confirmé</h3>
+                <p className="text-green-700 text-sm">
+                  Vous avez sélectionné le {new Date(`${selectedSlot.date}T${selectedSlot.start_time}`).toLocaleDateString("fr-FR", {
+                    weekday: "long",
+                    day: "numeric",
+                    month: "long",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })} pour l'état des lieux de sortie.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       {/* En-tête */}
       <Card>
         <CardHeader>
