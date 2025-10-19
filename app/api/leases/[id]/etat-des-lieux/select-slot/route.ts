@@ -12,9 +12,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     // Vérifier l'authentification
     const authHeader = request.headers.get('authorization') || request.headers.get('Authorization')
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : undefined
     console.log("[EDL select-slot] Authorization header present:", Boolean(authHeader))
 
-    const { data: { user }, error: userError } = await server.auth.getUser()
+    // Supabase v2: côté serveur, on peut récupérer l'utilisateur via le JWT directement
+    const { data: { user }, error: userError } = token
+      ? await server.auth.getUser(token)
+      : await server.auth.getUser()
     if (userError) console.warn("[EDL select-slot] getUser error:", userError)
     console.log("[EDL select-slot] user:", user ? { id: user.id } : null)
     if (userError || !user) {
