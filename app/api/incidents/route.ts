@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import * as emailService from "@/lib/email-service"
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest) {
       description,
       category,
       status: "reported",
+      priority: null,
       property_id,
       lease_id,
       reported_by,

@@ -22,9 +22,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .from("incident_responses")
       .insert({
         incident_id: incidentId,
-        user_id: user_id,
+        author_id: user_id,
         message: message,
-        author_type: user_type, // aligner avec colonne NOT NULL en base
+        author_type: user_type,
         attachments: attachments || [],
       })
       .select()
