@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic'
+
 // POST /api/incidents/[id]/interventions - planifier une intervention (owner)
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
