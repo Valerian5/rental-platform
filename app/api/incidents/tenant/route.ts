@@ -61,13 +61,28 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Récupérer tous les incidents pour ce tenant
+    // Récupérer tous les incidents pour ce tenant (par reported_by)
+    const { data: allIncidentsByReporter, error: allIncidentsByReporterError } = await supabase
+      .from("incidents")
+      .select("*")
+      .eq("reported_by", tenantId)
+
+    console.log("🔍 [TENANT INCIDENTS] Tous les incidents par reported_by:", allIncidentsByReporter?.length || 0, allIncidentsByReporter)
+
+    // Récupérer tous les incidents pour ce tenant (par lease_id)
     const { data: allIncidents, error: allIncidentsError } = await supabase
       .from("incidents")
       .select("*")
       .in("lease_id", leases.map(l => l.id))
 
-    console.log("🔍 [TENANT INCIDENTS] Tous les incidents trouvés:", allIncidents?.length || 0, allIncidents)
+    console.log("🔍 [TENANT INCIDENTS] Tous les incidents par lease_id:", allIncidents?.length || 0, allIncidents)
+
+    // Récupérer TOUS les incidents de la base pour comparaison
+    const { data: allIncidentsInDB, error: allIncidentsInDBError } = await supabase
+      .from("incidents")
+      .select("*")
+
+    console.log("🔍 [TENANT INCIDENTS] TOUS les incidents en base:", allIncidentsInDB?.length || 0, allIncidentsInDB)
 
     if (allIncidentsError) {
       console.error("❌ [TENANT INCIDENTS] Erreur récupération incidents:", allIncidentsError)
