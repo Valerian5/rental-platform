@@ -153,10 +153,15 @@ export default function TenantRentalManagementPage() {
         }
 
         // Récupérer les incidents
-        const incidentsResponse = await fetch(`/api/incidents/tenant/${user.id}`)
+        console.log("🔍 [CLIENT] Récupération incidents pour user.id:", user.id)
+        const incidentsResponse = await fetch(`/api/incidents/tenant?tenantId=${user.id}`)
         const incidentsData = await incidentsResponse.json()
+        console.log("🔍 [CLIENT] Réponse incidents:", incidentsData)
         if (incidentsData.success) {
+          console.log("✅ [CLIENT] Incidents reçus:", incidentsData.incidents?.length || 0, incidentsData.incidents)
           setIncidents(incidentsData.incidents || [])
+        } else {
+          console.error("❌ [CLIENT] Erreur récupération incidents:", incidentsData.error)
         }
 
         // Récupérer les documents (côté client)
