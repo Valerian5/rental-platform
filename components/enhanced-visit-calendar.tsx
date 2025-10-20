@@ -140,7 +140,7 @@ export function EnhancedVisitCalendar({ visits, userType, onVisitUpdate }: Props
         if (da !== db) return da - db
         return startTime(a).localeCompare(startTime(b))
       }),
-    [visits],
+    [allVisits],
   )
 
   const dayMatches = (v: Visit, d: Date) =>
