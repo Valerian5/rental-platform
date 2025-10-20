@@ -17,12 +17,27 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ success: false, error: "Données manquantes" }, { status: 400 })
     }
 
+    // Récupérer le nom de l'utilisateur
+    const { data: user, error: userError } = await supabase
+      .from("users")
+      .select("first_name, last_name")
+      .eq("id", user_id)
+      .single()
+
+    if (userError || !user) {
+      console.error("Erreur récupération utilisateur:", userError)
+      return NextResponse.json({ success: false, error: "Utilisateur non trouvé" }, { status: 404 })
+    }
+
+    const authorName = `${user.first_name} ${user.last_name}`
+
     // Insérer la réponse
     const { data: response, error } = await supabase
       .from("incident_responses")
       .insert({
         incident_id: incidentId,
         author_id: user_id,
+        author_name: authorName,
         message: message,
         author_type: user_type,
         attachments: attachments || [],
