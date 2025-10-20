@@ -1,5 +1,5 @@
 import React from "react"
-import { EmailLayout } from "@/components/emails/email-layout"
+import EmailLayout from "@/components/emails/email-layout"
 
 interface EdlExitSlotsProposalEmailProps {
   tenantName: string

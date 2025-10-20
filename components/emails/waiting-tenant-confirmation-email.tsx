@@ -11,7 +11,7 @@ import {
   Text,
 } from "@react-email/components"
 import * as React from "react"
-import { EmailLayout } from "./email-layout"
+import EmailLayout from "./email-layout"
 
 interface WaitingTenantConfirmationEmailProps {
   tenantName?: string

@@ -34,7 +34,7 @@ import {
   ShowerHead,
   Bath,
   Toilet,
-  Soap,
+  Sparkles as Soap,
   
   // Équipements cuisine
   Utensils,
@@ -85,10 +85,10 @@ import {
   // Équipements meubles
   Sofa,
   Bed,
-  Chair,
+  Square as Chair,
   Table,
   Lamp,
-  Couch,
+  Sofa as Couch,
   Armchair,
   
   // Équipements sécurité

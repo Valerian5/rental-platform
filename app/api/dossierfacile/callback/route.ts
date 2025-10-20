@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase-server-utils"
 import { dossierFacileService } from "@/lib/dossierfacile-service"
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/dossierfacile/callback - Callback OAuth2 de DossierFacile Connect
 export async function GET(request: NextRequest) {
   try {

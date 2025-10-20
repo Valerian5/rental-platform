@@ -5,7 +5,7 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 const supabase = createClient(supabaseUrl, supabaseKey)
 
-export const SupabaseStorageService = {
+export const supabaseStorageService = {
   async uploadFile(file: File, bucket = "property-images", folder = "general") {
     console.log("📤 Upload vers Supabase:", file.name, "dans", bucket, folder)
     console.log("📄 Type MIME:", file.type, "Taille:", file.size)

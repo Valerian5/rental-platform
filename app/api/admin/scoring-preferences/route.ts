@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     // Récupérer les modèles système prédéfinis depuis le service

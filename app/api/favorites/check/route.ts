@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { getCurrentUserFromRequest } from "@/lib/auth-token-service"
 import { favoritesService } from "@/lib/favorites-service"
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/favorites/check?property_id=... - Vérifier si un bien est en favori
 export async function GET(request: NextRequest) {
   try {

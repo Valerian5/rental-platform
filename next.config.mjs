@@ -3,7 +3,7 @@ const nextConfig = {
   experimental: {
     // On ajoute '@sparticuz/chromium' pour s'assurer qu'il n'est pas "bundlé" par le serveur.
     // C'est la solution recommandée par Vercel.
-    serverComponentsExternalPackages: ['sharp', 'tesseract.js', '@sparticuz/chromium'],
+    serverComponentsExternalPackages: ['sharp', 'tesseract.js', '@sparticuz/chromium', 'handlebars'],
   },
   webpack: (config, { isServer }) => {
     // Configuration pour Tesseract.js
@@ -22,10 +22,17 @@ const nextConfig = {
       'pdfjs-dist/build/pdf.worker.entry': 'pdfjs-dist/build/pdf.worker.min.js',
     }
 
+    // Configuration pour Handlebars
+    config.module.rules.push({
+      test: /\.handlebars$/,
+      use: 'handlebars-loader'
+    })
+
     // Ignorer les warnings de modules
     config.ignoreWarnings = [
       { module: /node_modules\/tesseract\.js/ },
       { module: /node_modules\/pdfjs-dist/ },
+      { module: /node_modules\/handlebars/ },
     ]
 
     return config

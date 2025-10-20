@@ -23,6 +23,9 @@ export function createApiSupabaseClient(request: NextRequest) {
   return createServerClient(request)
 }
 
+// Export de createClient pour compatibilité
+export { createServerClient as createClient }
+
 // Client avec service role pour les opérations admin
 export function createServiceSupabaseClient() {
   return createSupabaseServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
