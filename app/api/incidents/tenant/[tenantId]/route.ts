@@ -4,18 +4,10 @@ import { createClient } from "@supabase/supabase-js"
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
 
-// GET /api/incidents/tenant?tenantId=... ou /api/incidents/tenant/[tenantId]
-export async function GET(request: NextRequest) {
+// GET /api/incidents/tenant/[tenantId]
+export async function GET(request: NextRequest, { params }: { params: { tenantId: string } }) {
   try {
-    const { searchParams, pathname } = new URL(request.url)
-    
-    // Extraire tenantId depuis query param ou pathname
-    let tenantId = searchParams.get("tenantId")
-    if (!tenantId) {
-      // Essayer d'extraire depuis le pathname /api/incidents/tenant/[tenantId]
-      const pathParts = pathname.split('/')
-      tenantId = pathParts[pathParts.length - 1]
-    }
+    const tenantId = params.tenantId
 
     if (!tenantId) {
       return NextResponse.json({ error: "Tenant ID requis" }, { status: 400 })
@@ -63,9 +55,7 @@ export async function GET(request: NextRequest) {
       incidents: incidents || [] 
     })
   } catch (error) {
-    console.error("Erreur GET /api/incidents/tenant:", error)
+    console.error("Erreur GET /api/incidents/tenant/[tenantId]:", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }
-
-

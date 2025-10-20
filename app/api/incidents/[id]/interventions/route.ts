@@ -9,8 +9,26 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   try {
     const server = createServerClient()
     const incidentId = params.id
-    const body = await request.json()
-    const { type = 'owner', scheduled_date, description, provider_name, provider_contact, estimated_cost } = body || {}
+    
+    // Gérer FormData ou JSON
+    let body: any = {}
+    const contentType = request.headers.get('content-type')
+    
+    if (contentType?.includes('multipart/form-data')) {
+      const formData = await request.formData()
+      body = {
+        type: formData.get('type') || 'owner',
+        scheduled_date: formData.get('scheduled_date'),
+        description: formData.get('description'),
+        provider_name: formData.get('provider_name'),
+        provider_contact: formData.get('provider_contact'),
+        estimated_cost: formData.get('estimated_cost'),
+      }
+    } else {
+      body = await request.json()
+    }
+    
+    const { type = 'owner', scheduled_date, description, provider_name, provider_contact, estimated_cost } = body
 
     // Auth
     const { data: { user } } = await server.auth.getUser()

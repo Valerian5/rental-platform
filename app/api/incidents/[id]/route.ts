@@ -55,10 +55,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         id,
         message,
         author_type,
+        author_name,
         attachments,
         created_at,
-        user_id,
-        user:users!incident_responses_user_id_fkey(
+        author_id,
+        user:users!incident_responses_author_id_fkey(
           id,
           first_name,
           last_name
@@ -74,7 +75,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     // Combiner les données
     const incidentWithResponses = {
       ...incident,
-      responses: (responses || []).map((r: any) => ({ ...r, user_type: r.author_type })),
+      responses: (responses || []).map((r: any) => ({ 
+        ...r, 
+        user_type: r.author_type,
+        user_id: r.author_id,
+        user_name: r.author_name || (r.user ? `${r.user.first_name} ${r.user.last_name}` : '')
+      })),
     }
 
     return NextResponse.json({
