@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 
     console.log("🔍 [TENANT INCIDENTS] Recherche incidents pour tenantId:", tenantId)
 
-    // Utiliser la même approche que l'API owner - récupérer les incidents directement par reported_by
+    // Aligner avec paiements: inclure (a) incidents reportés par le tenant OU (b) incidents liés à un bail où il est tenant
     const { data: incidents, error } = await supabase
       .from("incidents")
       .select(`
@@ -41,9 +41,14 @@ export async function GET(request: NextRequest) {
           postal_code,
           property_type,
           surface
+        ),
+        lease:leases!inner(
+          id,
+          tenant_id,
+          owner_id
         )
       `)
-      .eq("reported_by", tenantId)
+      .or(`reported_by.eq.${tenantId},leases.tenant_id.eq.${tenantId}`)
       .order("created_at", { ascending: false })
 
     console.log("🔍 [TENANT INCIDENTS] Incidents trouvés:", incidents?.length || 0, incidents)
@@ -74,7 +79,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ 
       success: true, 
       incidents: incidentsWithResponses || [] 
-    })
+    }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     console.error("Erreur GET /api/incidents/tenant:", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })

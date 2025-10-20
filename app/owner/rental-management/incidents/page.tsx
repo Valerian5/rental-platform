@@ -64,7 +64,7 @@ export default function OwnerIncidentsPage() {
 
   const loadIncidents = async (ownerId: string) => {
     try {
-      const res = await fetch(`/api/incidents/owner?ownerId=${ownerId}`)
+      const res = await fetch(`/api/incidents/owner?ownerId=${ownerId}`, { cache: 'no-store' })
       const data = await res.json()
 
       if (data.success) {

@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
 
     const propertyIds = properties.map((p) => p.id)
 
-    // Récupérer tous les incidents des propriétés du propriétaire
+    // Inclure incidents liés aux propriétés du propriétaire OU aux baux où il est owner
     const { data: incidents, error } = await supabase
       .from("incidents")
       .select(`
@@ -52,6 +52,11 @@ export async function GET(request: NextRequest) {
           property_type,
           surface
         ),
+        lease:leases!inner(
+          id,
+          owner_id,
+          tenant_id
+        ),
         reporter:users!incidents_reported_by_fkey(
           id,
           first_name,
@@ -60,7 +65,7 @@ export async function GET(request: NextRequest) {
           phone
         )
       `)
-      .in("property_id", propertyIds)
+      .or(`property_id.in.(${propertyIds.join(',')}),leases.owner_id.eq.${ownerId}`)
       .order("created_at", { ascending: false })
 
     if (error) {
@@ -112,7 +117,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       incidents: incidentsWithDetails,
-    })
+    }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     console.error("Erreur GET /api/incidents/owner:", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })

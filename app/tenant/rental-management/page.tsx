@@ -154,7 +154,7 @@ export default function TenantRentalManagementPage() {
 
         // Récupérer les incidents
         console.log("🔍 [CLIENT] Récupération incidents pour user.id:", user.id)
-        const incidentsResponse = await fetch(`/api/incidents/tenant?tenantId=${user.id}`)
+        const incidentsResponse = await fetch(`/api/incidents/tenant?tenantId=${user.id}`, { cache: 'no-store' })
         const incidentsData = await incidentsResponse.json()
         console.log("🔍 [CLIENT] Réponse incidents:", incidentsData)
         if (incidentsData.success) {
