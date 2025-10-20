@@ -11,7 +11,7 @@ export interface Notification {
   created_at: string
 }
 
-export const NotificationsService = {
+export const notificationsService = {
   async getUserNotifications(userId: string, unreadOnly = false): Promise<Notification[]> {
     console.log("🔔 NotificationsService.getUserNotifications", { userId, unreadOnly })
 
