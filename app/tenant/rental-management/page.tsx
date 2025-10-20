@@ -196,7 +196,7 @@ export default function TenantRentalManagementPage() {
     fetchData()
   }, [])
 
-  const getPriorityColor = (priority: string) => {
+  const getPriorityColor = (priority: string | null) => {
     switch (priority) {
       case "urgent":
         return "bg-red-100 text-red-800 border-red-200"
@@ -241,7 +241,7 @@ export default function TenantRentalManagementPage() {
     }
   }
 
-  const getPriorityLabel = (priority: string) => {
+  const getPriorityLabel = (priority: string | null) => {
     switch (priority) {
       case "urgent":
         return "Urgent"
@@ -252,7 +252,7 @@ export default function TenantRentalManagementPage() {
       case "low":
         return "Faible"
       default:
-        return priority
+        return priority || "Non définie"
     }
   }
 
@@ -713,9 +713,11 @@ export default function TenantRentalManagementPage() {
                       <div className="space-y-1">
                         <CardTitle className="text-lg">{incident.title}</CardTitle>
                         <div className="flex items-center space-x-2">
-                          <Badge className={getPriorityColor(incident.priority)}>
-                            {getPriorityLabel(incident.priority)}
-                          </Badge>
+                          {incident.priority && (
+                            <Badge className={getPriorityColor(incident.priority)}>
+                              {getPriorityLabel(incident.priority)}
+                            </Badge>
+                          )}
                           <Badge className={getStatusColor(incident.status)}>{getStatusLabel(incident.status)}</Badge>
                           <span className="text-sm text-muted-foreground">{getCategoryLabel(incident.category)}</span>
                         </div>
