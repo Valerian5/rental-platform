@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { createServerClient } from "@/lib/supabase"
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -7,10 +7,7 @@ export const dynamic = 'force-dynamic'
 // GET /api/incidents/tenant?tenantId=... ou /api/incidents/tenant/[tenantId]
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
+    const server = createServerClient()
     const { searchParams, pathname } = new URL(request.url)
     
     // Extraire tenantId depuis query param ou pathname
@@ -25,10 +22,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Tenant ID requis" }, { status: 400 })
     }
 
+    // Vérifier l'authentification
+    const { data: { user } } = await server.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
+    }
+
     console.log("🔍 [TENANT INCIDENTS] Recherche incidents pour tenantId:", tenantId)
 
-    // Utiliser service role (RLS désactivé)
-    const { data: incidents, error } = await supabase
+    // Utiliser la même stratégie que l'API payments
+    const { data: incidents, error } = await server
       .from("incidents")
       .select(`
         *,
