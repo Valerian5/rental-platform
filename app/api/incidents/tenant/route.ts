@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { createServerClient } from "@/lib/supabase"
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic'
 // GET /api/incidents/tenant?tenantId=... ou /api/incidents/tenant/[tenantId]
 export async function GET(request: NextRequest) {
   try {
+    const server = createServerClient()
     const { searchParams, pathname } = new URL(request.url)
     
     // Extraire tenantId depuis query param ou pathname
@@ -21,76 +22,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Tenant ID requis" }, { status: 400 })
     }
 
-    // Utiliser service role pour contourner RLS
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
-
-    // Vérifier que l'utilisateur existe et est un locataire
-    const { data: user, error: userError } = await supabase
-      .from("users")
-      .select("id, user_type")
-      .eq("id", tenantId)
-      .single()
-
-    if (userError || !user || user.user_type !== "tenant") {
-      return NextResponse.json({ error: "Utilisateur non autorisé" }, { status: 403 })
-    }
+    // Auth
+    const { data: { user } } = await server.auth.getUser()
+    if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
 
     console.log("🔍 [TENANT INCIDENTS] Recherche incidents pour tenantId:", tenantId)
 
-    // D'abord, vérifier les baux du locataire
-    const { data: leases, error: leasesError } = await supabase
-      .from("leases")
-      .select("id, tenant_id, property_id")
-      .eq("tenant_id", tenantId)
-
-    console.log("🔍 [TENANT INCIDENTS] Baux trouvés:", leases?.length || 0, leases)
-
-    if (leasesError) {
-      console.error("❌ [TENANT INCIDENTS] Erreur récupération baux:", leasesError)
-      return NextResponse.json({ error: "Erreur récupération baux" }, { status: 500 })
-    }
-
-    if (!leases || leases.length === 0) {
-      console.log("⚠️ [TENANT INCIDENTS] Aucun bail trouvé pour tenantId:", tenantId)
-      return NextResponse.json({ 
-        success: true, 
-        incidents: [] 
-      })
-    }
-
-    // Récupérer tous les incidents pour ce tenant (par reported_by)
-    const { data: allIncidentsByReporter, error: allIncidentsByReporterError } = await supabase
-      .from("incidents")
-      .select("*")
-      .eq("reported_by", tenantId)
-
-    console.log("🔍 [TENANT INCIDENTS] Tous les incidents par reported_by:", allIncidentsByReporter?.length || 0, allIncidentsByReporter)
-
-    // Récupérer tous les incidents pour ce tenant (par lease_id)
-    const { data: allIncidents, error: allIncidentsError } = await supabase
-      .from("incidents")
-      .select("*")
-      .in("lease_id", leases.map(l => l.id))
-
-    console.log("🔍 [TENANT INCIDENTS] Tous les incidents par lease_id:", allIncidents?.length || 0, allIncidents)
-
-    // Récupérer TOUS les incidents de la base pour comparaison
-    const { data: allIncidentsInDB, error: allIncidentsInDBError } = await supabase
-      .from("incidents")
-      .select("*")
-
-    console.log("🔍 [TENANT INCIDENTS] TOUS les incidents en base:", allIncidentsInDB?.length || 0, allIncidentsInDB)
-
-    if (allIncidentsError) {
-      console.error("❌ [TENANT INCIDENTS] Erreur récupération incidents:", allIncidentsError)
-      return NextResponse.json({ error: "Erreur récupération incidents" }, { status: 500 })
-    }
-
-    // Maintenant récupérer avec les relations
-    const { data: incidents, error } = await supabase
+    // Utiliser la même approche que l'API owner
+    const { data: incidents, error } = await server
       .from("incidents")
       .select(`
         *,
@@ -107,7 +46,7 @@ export async function GET(request: NextRequest) {
     console.log("🔍 [TENANT INCIDENTS] Incidents avec relations:", incidents?.length || 0, incidents)
 
     if (error) {
-      console.error("❌ [TENANT INCIDENTS] Erreur récupération incidents avec relations:", error)
+      console.error("❌ [TENANT INCIDENTS] Erreur récupération incidents:", error)
       return NextResponse.json({ error: "Erreur base de données" }, { status: 500 })
     }
 

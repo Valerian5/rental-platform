@@ -685,12 +685,20 @@ export default function TenantRentalManagementPage() {
               <h2 className="text-2xl font-bold">Mes incidents</h2>
               <p className="text-muted-foreground">Suivez l'état de vos signalements</p>
             </div>
-            <Button asChild>
-              <Link href="/tenant/incidents/new">
-                <Plus className="h-4 w-4 mr-2" />
-                Signaler un incident
-              </Link>
-            </Button>
+            <div className="flex gap-2">
+              <Button asChild variant="outline">
+                <Link href="/tenant/rental-management/incidents">
+                  <Eye className="h-4 w-4 mr-2" />
+                  Voir tous
+                </Link>
+              </Button>
+              <Button asChild>
+                <Link href="/tenant/incidents/new">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Signaler un incident
+                </Link>
+              </Button>
+            </div>
           </div>
 
           {incidents.length === 0 ? (
