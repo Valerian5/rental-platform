@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       title,
       description,
       category,
-      status: "open",
+      status: "reported",
       property_id,
       lease_id,
       reported_by,

@@ -82,19 +82,27 @@ export async function GET(request: NextRequest) {
       
       edlVisits.push({
         id: `edl-${doc.id}`,
-        property_id: doc.property_id,
-        property_title: lease.property.title,
-        property_address: lease.property.address,
         visit_date: visitDate.toISOString(),
         start_time: selectedSlot.start_time,
         end_time: selectedSlot.end_time,
         status: "confirmed",
         is_edl_exit: true,
         edl_type: "sortie",
+        property: {
+          id: lease.property.id,
+          title: lease.property.title,
+          address: lease.property.address,
+          city: "",
+          property_images: [],
+        },
+        application: undefined,
+        tenant_interest: undefined,
+        owner_feedback: undefined,
+        tenant_feedback: undefined,
         other_user: otherUser,
         created_at: doc.created_at,
-        updated_at: doc.updated_at
-      })
+        updated_at: doc.updated_at,
+      } as any)
     }
 
     // Trier par date de visite
