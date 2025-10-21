@@ -22,6 +22,7 @@ import {
   Receipt,
   Plus,
   Eye,
+  User,
 } from "lucide-react"
 import { authService } from "@/lib/auth-service"
 import { notificationsService } from "@/lib/notifications-service"
