@@ -49,7 +49,6 @@ export default function TenantIncidentsPage() {
           router.push("/login")
           return
         }
-
         setCurrentUser(user)
         await loadIncidents(user.id)
       } catch (error) {
@@ -59,28 +58,28 @@ export default function TenantIncidentsPage() {
         setIsLoading(false)
       }
     }
-
     initializeData()
   }, [router])
 
   const loadIncidents = async (tenantId: string) => {
     try {
       console.log("🔍 [TENANT INCIDENTS PAGE] Chargement incidents pour tenantId:", tenantId)
-      const res = await fetch(`/api/incidents/tenant?tenantId=${tenantId}`, { cache: 'no-store' })
+      const res = await fetch(`/api/incidents/tenant?tenantId=${tenantId}`, {
+        cache: "no-store",
+        next: { revalidate: 0 },
+        headers: { "Cache-Control": "no-store" },
+      })
       const data = await res.json()
       console.log("🔍 [TENANT INCIDENTS PAGE] Réponse API:", data)
 
       if (data.success) {
         const incidentsData = data.incidents || []
-        console.log("✅ [TENANT INCIDENTS PAGE] Incidents reçus:", incidentsData.length, incidentsData)
         setIncidents(incidentsData)
         setFilteredIncidents(incidentsData)
 
-        // Extraire les propriétés uniques
         const uniqueProperties = Array.from(
-          new Set(incidentsData.map((incident: any) => incident.property?.id))
-        ).map(id => incidentsData.find((incident: any) => incident.property?.id === id)?.property)
-
+          new Set(incidentsData.map((inc) => inc.property?.id))
+        ).map(id => incidentsData.find((inc) => inc.property?.id === id)?.property)
         setProperties(uniqueProperties.filter(Boolean))
       } else {
         console.error("❌ [TENANT INCIDENTS PAGE] Erreur API:", data.error)
@@ -91,6 +90,17 @@ export default function TenantIncidentsPage() {
       toast.error("Erreur lors du chargement des incidents")
     }
   }
+
+ // Rafraîchir à la visibilité (quand on revient sur la page)
+ useEffect(() => {
+  const handleVis = async () => {
+    if (document.visibilityState === "visible" && currentUser) {
+      await loadIncidents(currentUser.id)
+    }
+  }
+  document.addEventListener("visibilitychange", handleVis)
+  return () => document.removeEventListener("visibilitychange", handleVis)
+}, [currentUser]) 
 
   const getStatusColor = (status: string) => {
     switch (status) {

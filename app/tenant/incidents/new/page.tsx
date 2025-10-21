@@ -39,13 +39,14 @@ export default function NewIncidentPage() {
           router.push("/login")
           return
         }
-
         setCurrentUser(user)
 
-        // Récupérer le bail actif du locataire
-        const res = await fetch(`/api/leases/tenant/${user.id}/active`)
+        const res = await fetch(`/api/leases/tenant/${user.id}/active`, {
+          cache: "no-store",
+          next: { revalidate: 0 },
+          headers: { "Cache-Control": "no-store" },
+        })
         const data = await res.json()
-
         if (data.success && data.lease) {
           setActiveLease(data.lease)
         } else {
@@ -59,7 +60,6 @@ export default function NewIncidentPage() {
         setIsLoading(false)
       }
     }
-
     initializeData()
   }, [router])
 
@@ -102,43 +102,28 @@ export default function NewIncidentPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
     if (!incident.title || !incident.description || !incident.category) {
       toast.error("Veuillez remplir tous les champs obligatoires")
       return
     }
-
     setIsSubmitting(true)
-
     try {
-      // Upload des photos si nécessaire
       let photoUrls: string[] = []
       if (photos.length > 0) {
-        console.log("📸 Upload de", photos.length, "photos...")
-
         const formData = new FormData()
-        photos.forEach((photo) => {
-          formData.append("file", photo)
-        })
-
+        photos.forEach(photo => formData.append("file", photo))
         const uploadRes = await fetch("/api/upload-supabase", {
           method: "POST",
           body: formData,
         })
-
         const uploadData = await uploadRes.json()
-        console.log("📸 Résultat upload:", uploadData)
-
         if (uploadRes.ok && uploadData.success) {
           photoUrls = uploadData.urls || []
-          console.log("✅ Photos uploadées:", photoUrls)
         } else {
-          console.error("❌ Erreur upload photos:", uploadData)
           toast.error("Erreur lors de l'upload des photos")
         }
       }
 
-      // Créer l'incident via l'API serveur (priorité non transmise côté tenant)
       const payload = {
         title: incident.title,
         description: incident.description,
@@ -150,13 +135,13 @@ export default function NewIncidentPage() {
       }
 
       console.log("📝 Données incident:", payload)
-
       const createRes = await fetch("/api/incidents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        cache: "no-store",
+        next: { revalidate: 0 },
       })
-
       const createData = await createRes.json()
       if (!createRes.ok || !createData.success) {
         throw new Error(createData?.error || "Erreur création incident")
@@ -164,6 +149,8 @@ export default function NewIncidentPage() {
 
       toast.success("Incident signalé avec succès")
       router.push("/tenant/rental-management")
+      router.refresh()
+
     } catch (error) {
       console.error("Erreur signalement:", error)
       toast.error("Erreur lors du signalement")
@@ -171,6 +158,7 @@ export default function NewIncidentPage() {
       setIsSubmitting(false)
     }
   }
+  
 
   if (isLoading) {
     return (

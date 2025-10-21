@@ -1,27 +1,25 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 
-// Force dynamic rendering
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
+export const fetchCache = 'force-no-store'
 
-// GET /api/incidents/owner?ownerId=...
 export async function GET(request: NextRequest) {
   try {
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
-    
+
     const { searchParams } = new URL(request.url)
     const ownerId = searchParams.get("ownerId")
-
     if (!ownerId) {
       return NextResponse.json({ error: "Owner ID requis" }, { status: 400 })
     }
 
     console.log("🔍 [OWNER INCIDENTS] Recherche incidents pour ownerId:", ownerId)
 
-    // D'abord, récupérer les propriétés du propriétaire
     const { data: properties, error: propertiesError } = await supabase
       .from("properties")
       .select("id, title, address, city")
@@ -36,12 +34,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, incidents: [] })
     }
 
-    const propertyIds = properties.map((p) => p.id)
+    const propertyIds = properties.map(p => p.id)
 
-    // Récupérer les incidents de deux façons : (1) propriétés du owner, (2) baux où il est owner
-    console.log("🔍 [OWNER INCIDENTS] Recherche incidents via propriétés...")
-    
-    // 1. Incidents des propriétés du propriétaire
+    // Incidents sur les propriétés
     const { data: propertyIncidents, error: propertyError } = await supabase
       .from("incidents")
       .select(`
@@ -71,8 +66,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Erreur base de données" }, { status: 500 })
     }
 
-    // 2. Incidents liés aux baux du propriétaire
-    console.log("🔍 [OWNER INCIDENTS] Recherche incidents via baux...")
+    // Incidents via baux
     const { data: leaseIncidents, error: leaseError } = await supabase
       .from("incidents")
       .select(`
@@ -107,25 +101,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Erreur base de données" }, { status: 500 })
     }
 
-    // Combiner et dédupliquer les incidents
     const allIncidents = [...(propertyIncidents || []), ...(leaseIncidents || [])]
-    const uniqueIncidents = allIncidents.filter((incident, index, self) => 
+    const uniqueIncidents = allIncidents.filter((incident, index, self) =>
       index === self.findIndex(i => i.id === incident.id)
     )
 
-    console.log("🔍 [OWNER INCIDENTS] Incidents trouvés:", uniqueIncidents?.length || 0, uniqueIncidents)
+    console.log("🔍 [OWNER INCIDENTS] Incidents trouvés:", uniqueIncidents.length, uniqueIncidents)
 
-    // Pour chaque incident, récupérer les réponses et les informations du bail
     const incidentsWithDetails = await Promise.all(
-      (uniqueIncidents || []).map(async (incident) => {
-        // Récupérer les réponses
+      uniqueIncidents.map(async (incident) => {
         const { data: responses } = await supabase
           .from("incident_responses")
           .select("id, message, user_type, created_at")
           .eq("incident_id", incident.id)
           .order("created_at", { ascending: true })
 
-        // Récupérer les informations du bail si disponible
         let lease = null
         if (incident.lease_id) {
           const { data: leaseData } = await supabase
@@ -142,7 +132,6 @@ export async function GET(request: NextRequest) {
             `)
             .eq("id", incident.lease_id)
             .single()
-
           lease = leaseData
         }
 
@@ -151,19 +140,17 @@ export async function GET(request: NextRequest) {
           responses: responses || [],
           lease: lease,
         }
-      }),
+      })
     )
 
-    console.log("✅ [OWNER INCIDENTS] Retour de", incidentsWithDetails?.length || 0, "incidents")
+    console.log("✅ [OWNER INCIDENTS] Retour de", incidentsWithDetails.length, "incidents")
 
-    return NextResponse.json({
-      success: true,
-      incidents: incidentsWithDetails,
-    }, { headers: { 'Cache-Control': 'no-store' } })
+    return NextResponse.json(
+      { success: true, incidents: incidentsWithDetails },
+      { headers: { "Cache-Control": "no-store" } }
+    )
   } catch (error) {
     console.error("Erreur GET /api/incidents/owner:", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }
-
-

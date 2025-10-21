@@ -41,14 +41,13 @@ export default function OwnerIncidentsPage() {
   })
 
   useEffect(() => {
-    const initializeData = async () => {
+    const initialize = async () => {
       try {
         const user = await authService.getCurrentUser()
         if (!user || user.user_type !== "owner") {
           router.push("/login")
           return
         }
-
         setCurrentUser(user)
         await Promise.all([loadIncidents(user.id), loadProperties(user.id)])
       } catch (error) {
@@ -58,15 +57,17 @@ export default function OwnerIncidentsPage() {
         setIsLoading(false)
       }
     }
-
-    initializeData()
+    initialize()
   }, [router])
 
   const loadIncidents = async (ownerId: string) => {
     try {
-      const res = await fetch(`/api/incidents/owner?ownerId=${ownerId}`, { cache: 'no-store' })
+      const res = await fetch(`/api/incidents/owner?ownerId=${ownerId}`, {
+        cache: "no-store",
+        next: { revalidate: 0 },
+        headers: { "Cache-Control": "no-store" },
+      })
       const data = await res.json()
-
       if (data.success) {
         setIncidents(data.incidents)
         setFilteredIncidents(data.incidents)
@@ -91,6 +92,17 @@ export default function OwnerIncidentsPage() {
       console.error("Erreur chargement propriétés:", error)
     }
   }
+
+  // Rafraîchir à la visibilité
+  useEffect(() => {
+    const handleVis = async () => {
+      if (document.visibilityState === "visible" && currentUser) {
+        await loadIncidents(currentUser.id)
+      }
+    }
+    document.addEventListener("visibilitychange", handleVis)
+    return () => document.removeEventListener("visibilitychange", handleVis)
+  }, [currentUser])
 
   // Appliquer les filtres
   useEffect(() => {
