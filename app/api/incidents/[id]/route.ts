@@ -56,7 +56,9 @@ export async function GET(
       );
     }
 
-    // Récupérer les réponses associées
+    // Récupérer les réponses associées DIRECTEMENT depuis Supabase
+    console.log("🔍 [API GET INCIDENT] Récupération réponses pour incident:", incidentId, "à", new Date().toISOString())
+    
     const { data: responses, error: responsesError } = await supabase
       .from("incident_responses")
       .select(`
@@ -69,10 +71,17 @@ export async function GET(
         author_id
       `)
       .eq("incident_id", incidentId)
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: true })
+      .abortSignal(AbortSignal.timeout(10000)); // Timeout pour forcer le refresh
+
+    console.log("📊 [API GET INCIDENT] Réponses brutes depuis Supabase:", {
+      count: responses?.length || 0,
+      ids: responses?.map(r => r.id) || [],
+      messages: responses?.map(r => ({ id: r.id, message: r.message?.substring(0, 50), created_at: r.created_at })) || []
+    })
 
     if (responsesError) {
-      console.error("Erreur récupération réponses:", responsesError);
+      console.error("❌ [API GET INCIDENT] Erreur récupération réponses:", responsesError);
     }
 
     const mappedResponses = (responses || []).map((r: any) => ({
@@ -81,6 +90,8 @@ export async function GET(
       user_id: r.author_id,
       user_name: r.author_name || "Utilisateur",
     }));
+    
+    console.log("✅ [API GET INCIDENT] Réponses mappées à envoyer au client:", mappedResponses.length, "réponses")
 
     return NextResponse.json(
       {

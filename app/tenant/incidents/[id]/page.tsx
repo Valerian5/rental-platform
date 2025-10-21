@@ -110,17 +110,22 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
 
   const loadIncident = async (incidentId: string) => {
     try {
-      console.log("🔍 [TENANT INCIDENT DETAIL] Chargement incident:", incidentId)
-      const res = await fetch(`/api/incidents/${incidentId}?t=${Date.now()}`, { cache: 'no-store' })
+      const timestamp = Date.now()
+      console.log("🔍 [TENANT INCIDENT DETAIL] Chargement incident:", incidentId, "timestamp:", timestamp)
+      const res = await fetch(`/api/incidents/${incidentId}?t=${timestamp}`, { cache: 'no-store' })
       const data = await res.json()
 
-      console.log("🔍 [TENANT INCIDENT DETAIL] Réponse API:", data)
+      console.log("📊 [TENANT INCIDENT DETAIL] Réponse brute API:", {
+        timestamp: data.timestamp,
+        responseCount: data.incident?.responses?.length || 0,
+        responseIds: data.incident?.responses?.map((r: any) => r.id) || [],
+        responseMessages: data.incident?.responses?.map((r: any) => ({ id: r.id, message: r.message?.substring(0, 50), created_at: r.created_at })) || []
+      })
 
       if (data.success) {
+        console.log("✅ [TENANT INCIDENT DETAIL] Mise à jour état React avec", data.incident.responses?.length || 0, "réponses")
         setIncident(data.incident)
         setResponses(data.incident.responses || [])
-        console.log("✅ [TENANT INCIDENT DETAIL] Incidents chargé:", data.incident)
-        console.log("✅ [TENANT INCIDENT DETAIL] Réponses:", data.incident.responses?.length || 0, data.incident.responses)
       } else {
         console.error("❌ [TENANT INCIDENT DETAIL] Erreur API:", data.error)
         toast.error("Incident non trouvé")
@@ -158,11 +163,9 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
       setResponse({ message: "" })
       setShowResponseDialog(false)
 
-      // Recharger les données avec cache-busting
-      await loadIncident(params.id)
-      
-      // Recharger la page pour afficher la nouvelle réponse
-      router.refresh()
+      console.log("🔄 [TENANT INCIDENT DETAIL] Rechargement complet de la page...")
+      // Forcer un rechargement complet de la page pour éviter tout cache
+      window.location.reload()
     } catch (error) {
       toast.error("Erreur lors de l'envoi de la réponse")
     }
@@ -191,11 +194,9 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
       setPhotos(null)
       setShowPhotoDialog(false)
 
-      // Recharger les données
-      await loadIncident(params.id)
-      
-      // Recharger la page pour afficher les nouvelles photos
-      router.refresh()
+      console.log("🔄 [TENANT INCIDENT DETAIL] Rechargement complet de la page...")
+      // Forcer un rechargement complet de la page pour éviter tout cache
+      window.location.reload()
     } catch (error) {
       toast.error("Erreur lors de l'ajout des photos")
     }

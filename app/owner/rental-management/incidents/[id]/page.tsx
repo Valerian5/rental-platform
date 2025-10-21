@@ -87,10 +87,21 @@ export default function IncidentDetailPage() {
 
   const loadIncidentData = async () => {
     try {
-      const res = await fetch(`/api/incidents/${params.id}?t=${Date.now()}`, { cache: "no-store" })
+      const timestamp = Date.now()
+      console.log("🔍 [OWNER INCIDENT DETAIL] Chargement incident:", params.id, "timestamp:", timestamp)
+      const res = await fetch(`/api/incidents/${params.id}?t=${timestamp}`, { cache: "no-store" })
       if (!res.ok) throw new Error(`Erreur serveur: ${res.status}`)
       const data = await res.json()
+      
+      console.log("📊 [OWNER INCIDENT DETAIL] Réponse brute API:", {
+        timestamp: data.timestamp,
+        responseCount: data.incident?.responses?.length || 0,
+        responseIds: data.incident?.responses?.map((r: any) => r.id) || [],
+        responseMessages: data.incident?.responses?.map((r: any) => ({ id: r.id, message: r.message?.substring(0, 50), created_at: r.created_at })) || []
+      })
+      
       if (data.success) {
+        console.log("✅ [OWNER INCIDENT DETAIL] Mise à jour état React avec", data.incident.responses?.length || 0, "réponses")
         setIncident(data.incident)
         setResponses(data.incident.responses || [])
       } else {
@@ -133,7 +144,10 @@ export default function IncidentDetailPage() {
       toast.success("Réponse envoyée avec succès")
       setResponse({ message: "", status: "", cost: "" })
       setShowResponseDialog(false)
-      await loadIncidentData()
+      
+      console.log("🔄 [OWNER INCIDENT DETAIL] Rechargement complet de la page...")
+      // Forcer un rechargement complet de la page pour éviter tout cache
+      window.location.reload()
     } catch (error) {
       toast.error("Erreur lors de l'envoi de la réponse")
     }
@@ -159,7 +173,10 @@ export default function IncidentDetailPage() {
       toast.success("Intervention programmée avec succès")
       setIntervention({ type: "owner", scheduled_date: "", description: "", provider_name: "", provider_contact: "", estimated_cost: "" })
       setShowInterventionDialog(false)
-      await loadIncidentData()
+      
+      console.log("🔄 [OWNER INCIDENT DETAIL] Rechargement complet de la page...")
+      // Forcer un rechargement complet de la page pour éviter tout cache
+      window.location.reload()
     } catch (error) {
       toast.error("Erreur lors de la programmation")
     }
@@ -183,7 +200,10 @@ export default function IncidentDetailPage() {
       toast.success("Incident résolu et dépense créée")
       setResolveForm({ amount: "", date: new Date().toISOString().slice(0, 10), description: "", category: "repair", file: null })
       setShowResolveDialog(false)
-      await loadIncidentData()
+      
+      console.log("🔄 [OWNER INCIDENT DETAIL] Rechargement complet de la page...")
+      // Forcer un rechargement complet de la page pour éviter tout cache
+      window.location.reload()
     } catch (error) {
       toast.error("Erreur lors de la résolution")
     }
