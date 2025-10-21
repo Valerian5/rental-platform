@@ -109,40 +109,7 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
     initializeData()
   }, [params.id, router])
 
-  // Supabase Realtime pour les réponses en temps réel (simplifié comme le système de messagerie)
-  useEffect(() => {
-    if (!incident?.id) return
-
-    console.log("🔌 [TENANT REALTIME] Connexion Realtime pour incident:", incident.id)
-    
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-
-    const channel = supabase
-      .channel(`incident_responses_${incident.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'incident_responses',
-          filter: `incident_id=eq.${incident.id}`
-        },
-        (payload) => {
-          console.log("📡 [TENANT REALTIME] Nouvelle réponse détectée:", payload.new)
-          // Recharger les données comme dans le système de messagerie
-          loadIncident(incident.id)
-        }
-      )
-      .subscribe()
-
-    return () => {
-      console.log("🔌 [TENANT REALTIME] Déconnexion Realtime")
-      supabase.removeChannel(channel)
-    }
-  }, [incident?.id])
+  // Realtime supprimé - utiliser le système de messagerie dédié
 
   const loadIncident = async (incidentId: string) => {
     try {
@@ -368,6 +335,12 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
 
         {incident.status !== "resolved" && incident.status !== "closed" && (
           <div className="flex gap-2">
+            <Link href={`/tenant/incidents/${incident.id}/messaging`}>
+              <Button>
+                <MessageSquare className="h-4 w-4 mr-2" />
+                Messagerie
+              </Button>
+            </Link>
             <Dialog open={showResponseDialog} onOpenChange={setShowResponseDialog}>
               <DialogTrigger asChild>
                 <Button variant="outline">

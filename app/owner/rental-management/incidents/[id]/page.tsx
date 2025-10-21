@@ -155,40 +155,7 @@ export default function IncidentDetailPage() {
     return () => document.removeEventListener("visibilitychange", handleVisibility)
   }, [params.id])
 
-  // Supabase Realtime pour les réponses en temps réel (simplifié comme le système de messagerie)
-  useEffect(() => {
-    if (!incident?.id) return
-
-    console.log("🔌 [OWNER REALTIME] Connexion Realtime pour incident:", incident.id)
-    
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-
-    const channel = supabase
-      .channel(`incident_responses_${incident.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'incident_responses',
-          filter: `incident_id=eq.${incident.id}`
-        },
-        (payload) => {
-          console.log("📡 [OWNER REALTIME] Nouvelle réponse détectée:", payload.new)
-          // Recharger les données comme dans le système de messagerie
-          loadIncidentData()
-        }
-      )
-      .subscribe()
-
-    return () => {
-      console.log("🔌 [OWNER REALTIME] Déconnexion Realtime")
-      supabase.removeChannel(channel)
-    }
-  }, [incident?.id])
+  // Realtime supprimé - utiliser le système de messagerie dédié
 
   const handleSendResponse = async () => {
     if (!response.message) return toast.error("Veuillez saisir un message")
@@ -336,6 +303,12 @@ export default function IncidentDetailPage() {
 
         {incident.status !== "resolved" && incident.status !== "closed" && (
           <div className="flex gap-2">
+            <Link href={`/owner/rental-management/incidents/${incident.id}/messaging`}>
+              <Button>
+                <MessageSquare className="h-4 w-4 mr-2" />
+                Messagerie
+              </Button>
+            </Link>
             <Dialog open={showResponseDialog} onOpenChange={setShowResponseDialog}>
               <DialogTrigger asChild>
                 <Button variant="outline">
