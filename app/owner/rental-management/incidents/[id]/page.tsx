@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
+import { createClient } from "@supabase/supabase-js"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -122,7 +123,7 @@ export default function IncidentDetailPage() {
     }
   }
 
-  // Rafraîchir les données quand l’onglet redevient visible
+  // Rafraîchir les données quand l'onglet redevient visible
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === "visible") loadIncidentData()
@@ -130,6 +131,53 @@ export default function IncidentDetailPage() {
     document.addEventListener("visibilitychange", handleVisibility)
     return () => document.removeEventListener("visibilitychange", handleVisibility)
   }, [params.id])
+
+  // Supabase Realtime pour les réponses en temps réel
+  useEffect(() => {
+    if (!incident?.id) return
+
+    console.log("🔌 [OWNER REALTIME] Connexion Realtime pour incident:", incident.id)
+    
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+
+    const channel = supabase
+      .channel(`incident_responses_${incident.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'incident_responses',
+          filter: `incident_id=eq.${incident.id}`
+        },
+        (payload) => {
+          console.log("📡 [OWNER REALTIME] Changement détecté:", payload)
+          
+          if (payload.eventType === 'INSERT') {
+            console.log("✅ [OWNER REALTIME] Nouvelle réponse ajoutée:", payload.new)
+            // Recharger les données pour avoir la réponse complète
+            loadIncidentData()
+          } else if (payload.eventType === 'DELETE') {
+            console.log("🗑️ [OWNER REALTIME] Réponse supprimée:", payload.old)
+            // Recharger les données pour mettre à jour l'affichage
+            loadIncidentData()
+          } else if (payload.eventType === 'UPDATE') {
+            console.log("🔄 [OWNER REALTIME] Réponse mise à jour:", payload.new)
+            // Recharger les données pour avoir la réponse mise à jour
+            loadIncidentData()
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      console.log("🔌 [OWNER REALTIME] Déconnexion Realtime")
+      supabase.removeChannel(channel)
+    }
+  }, [incident?.id])
 
   const handleSendResponse = async () => {
     if (!response.message) return toast.error("Veuillez saisir un message")
@@ -153,9 +201,7 @@ export default function IncidentDetailPage() {
       setResponse({ message: "", status: "", cost: "" })
       setShowResponseDialog(false)
       
-      console.log("🔄 [OWNER INCIDENT DETAIL] Rechargement complet de la page...")
-      // Forcer un rechargement complet de la page pour éviter tout cache
-      window.location.reload()
+      console.log("✅ [OWNER INCIDENT DETAIL] Action effectuée - Realtime va mettre à jour l'affichage")
     } catch (error) {
       toast.error("Erreur lors de l'envoi de la réponse")
     }
@@ -182,9 +228,7 @@ export default function IncidentDetailPage() {
       setIntervention({ type: "owner", scheduled_date: "", description: "", provider_name: "", provider_contact: "", estimated_cost: "" })
       setShowInterventionDialog(false)
       
-      console.log("🔄 [OWNER INCIDENT DETAIL] Rechargement complet de la page...")
-      // Forcer un rechargement complet de la page pour éviter tout cache
-      window.location.reload()
+      console.log("✅ [OWNER INCIDENT DETAIL] Action effectuée - Realtime va mettre à jour l'affichage")
     } catch (error) {
       toast.error("Erreur lors de la programmation")
     }
@@ -209,9 +253,7 @@ export default function IncidentDetailPage() {
       setResolveForm({ amount: "", date: new Date().toISOString().slice(0, 10), description: "", category: "repair", file: null })
       setShowResolveDialog(false)
       
-      console.log("🔄 [OWNER INCIDENT DETAIL] Rechargement complet de la page...")
-      // Forcer un rechargement complet de la page pour éviter tout cache
-      window.location.reload()
+      console.log("✅ [OWNER INCIDENT DETAIL] Action effectuée - Realtime va mettre à jour l'affichage")
     } catch (error) {
       toast.error("Erreur lors de la résolution")
     }

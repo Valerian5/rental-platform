@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { createClient } from "@supabase/supabase-js"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -108,6 +109,53 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
     initializeData()
   }, [params.id, router])
 
+  // Supabase Realtime pour les réponses en temps réel
+  useEffect(() => {
+    if (!incident?.id) return
+
+    console.log("🔌 [TENANT REALTIME] Connexion Realtime pour incident:", incident.id)
+    
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+
+    const channel = supabase
+      .channel(`incident_responses_${incident.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'incident_responses',
+          filter: `incident_id=eq.${incident.id}`
+        },
+        (payload) => {
+          console.log("📡 [TENANT REALTIME] Changement détecté:", payload)
+          
+          if (payload.eventType === 'INSERT') {
+            console.log("✅ [TENANT REALTIME] Nouvelle réponse ajoutée:", payload.new)
+            // Recharger les données pour avoir la réponse complète
+            loadIncident(incident.id)
+          } else if (payload.eventType === 'DELETE') {
+            console.log("🗑️ [TENANT REALTIME] Réponse supprimée:", payload.old)
+            // Recharger les données pour mettre à jour l'affichage
+            loadIncident(incident.id)
+          } else if (payload.eventType === 'UPDATE') {
+            console.log("🔄 [TENANT REALTIME] Réponse mise à jour:", payload.new)
+            // Recharger les données pour avoir la réponse mise à jour
+            loadIncident(incident.id)
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      console.log("🔌 [TENANT REALTIME] Déconnexion Realtime")
+      supabase.removeChannel(channel)
+    }
+  }, [incident?.id])
+
   const loadIncident = async (incidentId: string) => {
     try {
       const timestamp = Date.now()
@@ -171,9 +219,7 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
       setResponse({ message: "" })
       setShowResponseDialog(false)
 
-      console.log("🔄 [TENANT INCIDENT DETAIL] Rechargement complet de la page...")
-      // Forcer un rechargement complet de la page pour éviter tout cache
-      window.location.reload()
+      console.log("✅ [TENANT INCIDENT DETAIL] Réponse envoyée - Realtime va mettre à jour l'affichage")
     } catch (error) {
       toast.error("Erreur lors de l'envoi de la réponse")
     }
@@ -202,9 +248,7 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
       setPhotos(null)
       setShowPhotoDialog(false)
 
-      console.log("🔄 [TENANT INCIDENT DETAIL] Rechargement complet de la page...")
-      // Forcer un rechargement complet de la page pour éviter tout cache
-      window.location.reload()
+      console.log("✅ [TENANT INCIDENT DETAIL] Réponse envoyée - Realtime va mettre à jour l'affichage")
     } catch (error) {
       toast.error("Erreur lors de l'ajout des photos")
     }
