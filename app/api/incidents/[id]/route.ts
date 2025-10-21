@@ -72,8 +72,29 @@ export async function GET(
     console.log("📊 [API GET INCIDENT] Réponses brutes depuis Supabase:", {
       count: responses?.length || 0,
       ids: responses?.map(r => r.id) || [],
-      messages: responses?.map(r => ({ id: r.id, message: r.message?.substring(0, 50), created_at: r.created_at })) || []
+      messages: responses?.map(r => ({ 
+        id: r.id, 
+        message: r.message?.substring(0, 50), 
+        created_at: r.created_at,
+        author_type: r.author_type,
+        author_name: r.author_name,
+        author_id: r.author_id
+      })) || []
     })
+    
+    // Log détaillé de chaque réponse
+    if (responses && responses.length > 0) {
+      console.log("🔍 [API GET INCIDENT] Détail de chaque réponse:")
+      responses.forEach((r, index) => {
+        console.log(`   ${index + 1}. ID: ${r.id}`)
+        console.log(`      Message: ${r.message}`)
+        console.log(`      Author Type: ${r.author_type}`)
+        console.log(`      Author Name: ${r.author_name}`)
+        console.log(`      Author ID: ${r.author_id}`)
+        console.log(`      Created At: ${r.created_at}`)
+        console.log(`      Attachments: ${r.attachments?.length || 0}`)
+      })
+    }
 
     if (responsesError) {
       console.error("❌ [API GET INCIDENT] Erreur récupération réponses:", responsesError);
@@ -101,6 +122,20 @@ export async function GET(
     }));
     
     console.log("✅ [API GET INCIDENT] Réponses mappées à envoyer au client:", mappedResponses.length, "réponses")
+    
+    // Log détaillé des réponses mappées
+    if (mappedResponses.length > 0) {
+      console.log("🔍 [API GET INCIDENT] Détail des réponses mappées:")
+      mappedResponses.forEach((mr, index) => {
+        console.log(`   ${index + 1}. ID: ${mr.id}`)
+        console.log(`      Message: ${mr.message}`)
+        console.log(`      User Type: ${mr.user_type}`)
+        console.log(`      User Name: ${mr.user_name}`)
+        console.log(`      User ID: ${mr.user_id}`)
+        console.log(`      Created At: ${mr.created_at}`)
+        console.log(`      Attachments: ${mr.attachments?.length || 0}`)
+      })
+    }
 
     return NextResponse.json(
       {

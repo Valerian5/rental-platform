@@ -117,6 +117,16 @@ export default function IncidentDetailPage() {
         // Vérification supplémentaire pour s'assurer que les réponses sont bien chargées
         if (data.incident.responses && data.incident.responses.length > 0) {
           console.log("✅ [OWNER INCIDENT DETAIL] Réponses chargées avec succès:", data.incident.responses.length)
+          
+          // Log détaillé de chaque réponse reçue
+          console.log("🔍 [OWNER INCIDENT DETAIL] Détail des réponses reçues:")
+          data.incident.responses.forEach((response, index) => {
+            console.log(`   ${index + 1}. ID: ${response.id}`)
+            console.log(`      Message: ${response.message}`)
+            console.log(`      User Type: ${response.user_type}`)
+            console.log(`      User Name: ${response.user_name}`)
+            console.log(`      Created At: ${response.created_at}`)
+          })
         } else {
           console.log("⚠️ [OWNER INCIDENT DETAIL] Aucune réponse trouvée")
         }
@@ -145,7 +155,7 @@ export default function IncidentDetailPage() {
     return () => document.removeEventListener("visibilitychange", handleVisibility)
   }, [params.id])
 
-  // Supabase Realtime pour les réponses en temps réel
+  // Supabase Realtime pour les réponses en temps réel (simplifié comme le système de messagerie)
   useEffect(() => {
     if (!incident?.id) return
 
@@ -161,53 +171,15 @@ export default function IncidentDetailPage() {
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT',
           schema: 'public',
           table: 'incident_responses',
           filter: `incident_id=eq.${incident.id}`
         },
         (payload) => {
-          console.log("📡 [OWNER REALTIME] Changement détecté:", payload)
-          
-          if (payload.eventType === 'INSERT') {
-            console.log("✅ [OWNER REALTIME] Nouvelle réponse ajoutée:", payload.new)
-            // Vérifier si la réponse existe déjà pour éviter les doublons
-            setResponses(prev => {
-              const exists = prev.some(r => r.id === payload.new.id)
-              if (exists) {
-                console.log("⚠️ [OWNER REALTIME] Réponse déjà présente, ignorée")
-                return prev
-              }
-              // Mettre à jour l'état local directement
-              const newResponse = {
-                id: payload.new.id,
-                message: payload.new.message,
-                user_type: payload.new.author_type,
-                user_id: payload.new.author_id,
-                user_name: payload.new.author_name || "Utilisateur",
-                created_at: payload.new.created_at,
-                attachments: payload.new.attachments || [],
-              }
-              return [...prev, newResponse]
-            })
-          } else if (payload.eventType === 'DELETE') {
-            console.log("🗑️ [OWNER REALTIME] Réponse supprimée:", payload.old)
-            // Supprimer de l'état local
-            setResponses(prev => prev.filter(r => r.id !== payload.old.id))
-          } else if (payload.eventType === 'UPDATE') {
-            console.log("🔄 [OWNER REALTIME] Réponse mise à jour:", payload.new)
-            // Mettre à jour dans l'état local
-            setResponses(prev => prev.map(r => 
-              r.id === payload.new.id 
-                ? {
-                    ...r,
-                    message: payload.new.message,
-                    user_name: payload.new.author_name || r.user_name,
-                    attachments: payload.new.attachments || r.attachments,
-                  }
-                : r
-            ))
-          }
+          console.log("📡 [OWNER REALTIME] Nouvelle réponse détectée:", payload.new)
+          // Recharger les données comme dans le système de messagerie
+          loadIncidentData()
         }
       )
       .subscribe()
@@ -231,9 +203,9 @@ export default function IncidentDetailPage() {
       
       const data = await res.json()
       
-      // Ne pas ajouter localement - laisser le Realtime s'en charger
-      // pour éviter les doublons
-      console.log("✅ [OWNER INCIDENT DETAIL] Réponse envoyée - Realtime va mettre à jour l'affichage")
+      // Recharger immédiatement les données comme dans le système de messagerie
+      console.log("✅ [OWNER INCIDENT DETAIL] Réponse envoyée - rechargement des données")
+      await loadIncidentData()
       
       if (response.status) {
         await rentalManagementService.updateIncidentStatus(
