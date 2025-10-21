@@ -219,16 +219,40 @@ export default function IncidentTicketing({
                       
                       {/* Pièces jointes */}
                       {ticket.attachments && ticket.attachments.length > 0 && (
-                        <div className="flex gap-2 mt-2">
-                          {ticket.attachments.map((attachment, index) => (
-                            <div
-                              key={index}
-                              className="flex items-center gap-1 text-xs opacity-80"
-                            >
-                              <Paperclip className="h-3 w-3" />
-                              <span>{attachment}</span>
-                            </div>
-                          ))}
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {ticket.attachments.map((attachment, index) => {
+                            const isImage = attachment.match(/\.(jpg|jpeg|png|gif|webp)$/i)
+                            const isPdf = attachment.match(/\.pdf$/i)
+                            
+                            return (
+                              <div
+                                key={index}
+                                className="flex items-center gap-1 text-xs bg-gray-100 px-2 py-1 rounded"
+                              >
+                                <Paperclip className="h-3 w-3" />
+                                {isImage ? (
+                                  <img
+                                    src={attachment.startsWith("http") ? attachment : `/api/documents/${attachment}`}
+                                    alt={`Pièce jointe ${index + 1}`}
+                                    className="w-16 h-16 object-cover rounded border cursor-pointer hover:opacity-80"
+                                    onClick={() => window.open(attachment.startsWith("http") ? attachment : `/api/documents/${attachment}`, "_blank")}
+                                    onError={(e) => {
+                                      e.currentTarget.src = "/placeholder.svg?height=64&width=64&text=Image+non+disponible"
+                                    }}
+                                  />
+                                ) : (
+                                  <a
+                                    href={attachment.startsWith("http") ? attachment : `/api/documents/${attachment}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:underline cursor-pointer"
+                                  >
+                                    {isPdf ? "📄 " : "📎 "}{attachment.split('/').pop()}
+                                  </a>
+                                )}
+                              </div>
+                            )
+                          })}
                         </div>
                       )}
                     </div>

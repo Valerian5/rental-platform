@@ -1,122 +1,172 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
-import { emailService } from "@/lib/email-service"
 
-// Force dynamic rendering
-export const dynamic = 'force-dynamic'
-
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-
-// POST /api/incidents/[id]/interventions - planifier une intervention (owner)
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const incidentId = params.id
-    
-    // Gérer FormData ou JSON
-    let body: any = {}
-    const contentType = request.headers.get('content-type')
-    
-    if (contentType?.includes('multipart/form-data')) {
-      const formData = await request.formData()
-      body = {
-        type: formData.get('type') || 'owner',
-        scheduled_date: formData.get('scheduled_date'),
-        description: formData.get('description'),
-        provider_name: formData.get('provider_name'),
-        provider_contact: formData.get('provider_contact'),
-        estimated_cost: formData.get('estimated_cost'),
-        user_id: formData.get('user_id'), // Ajouter user_id depuis le frontend
-      }
-    } else {
-      body = await request.json()
-    }
-    
-    const { type = 'owner', scheduled_date, description, provider_name, provider_contact, estimated_cost, user_id } = body
 
-    if (!user_id) {
-      console.error("❌ [API INTERVENTIONS] user_id manquant")
-      return NextResponse.json({ success: false, error: "user_id requis" }, { status: 400 })
-    }
+    console.log("🔧 [INTERVENTIONS API] Récupération interventions pour incident:", incidentId)
 
-    console.log("🔍 [API INTERVENTIONS] Création intervention pour user_id:", user_id)
+    const server = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
 
-    // Charger incident + bail
-    const { data: incident, error: incidentError } = await supabase
-      .from('incidents')
-      .select('id, title, lease:leases(id, owner_id, tenant:users!leases_tenant_id_fkey(id,email,first_name,last_name)), property:properties(id,title)')
-      .eq('id', incidentId)
-      .single()
-
-    if (incidentError || !incident) {
-      console.error("❌ [API INTERVENTIONS] Erreur récupération incident:", incidentError)
-      return NextResponse.json({ success: false, error: 'Incident introuvable' }, { status: 404 })
-    }
-
-    // Vérifier ownership
-    if (incident.lease?.owner_id !== user_id) {
-      console.error("❌ [API INTERVENTIONS] Accès refusé - user_id:", user_id, "owner_id:", incident.lease?.owner_id)
-      return NextResponse.json({ success: false, error: 'Accès refusé' }, { status: 403 })
-    }
-
-    // Créer intervention
-    const { data: intervention, error } = await supabase
-      .from('incident_interventions')
-      .insert({
-        incident_id: incidentId,
-        type,
-        scheduled_date: scheduled_date || null,
-        description: description || null,
-        provider_name: provider_name || null,
-        provider_contact: provider_contact || null,
-        estimated_cost: estimated_cost ?? null,
-        status: 'scheduled',
-      })
-      .select('*')
-      .single()
+    const { data: interventions, error } = await server
+      .from("incident_interventions")
+      .select("*")
+      .eq("incident_id", incidentId)
+      .order("created_at", { ascending: false })
 
     if (error) {
-      console.error('❌ [API INTERVENTIONS] Erreur création intervention:', error)
-      return NextResponse.json({ success: false, error: 'Erreur base de données' }, { status: 500 })
+      console.error("❌ [INTERVENTIONS API] Erreur récupération interventions:", error)
+      return NextResponse.json({ error: "Erreur lors du chargement des interventions" }, { status: 500 })
     }
 
-    console.log("✅ [API INTERVENTIONS] Intervention créée avec succès:", intervention.id)
-
-    // Notifier le locataire (email + classique)
-    try {
-      const tenant = incident.lease?.tenant
-      if (tenant?.email) {
-        await emailService.sendIncidentInterventionScheduledEmail(
-          { id: tenant.id, name: `${tenant.first_name} ${tenant.last_name}`, email: tenant.email },
-          { id: incident.id, title: incident.title },
-          { id: incident.property.id, title: incident.property.title },
-          {
-            scheduledDate: scheduled_date,
-            description: description,
-            providerName: provider_name,
-            providerContact: provider_contact,
-          },
-          `${process.env.NEXT_PUBLIC_SITE_URL}/tenant/incidents/${incidentId}`
-        )
-      }
-    } catch (e) {
-      console.warn('Alerte: échec email intervention:', e)
-    }
-
-    return NextResponse.json({ 
-      success: true, 
-      intervention,
-      timestamp: new Date().toISOString(),
-    }, {
-      headers: {
-        'Cache-Control': 'no-store, no-cache, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
-      },
-    })
+    console.log("✅ [INTERVENTIONS API] Interventions récupérées:", interventions?.length || 0)
+    return NextResponse.json({ success: true, interventions: interventions || [] })
   } catch (error) {
-    console.error('Erreur POST /api/incidents/[id]/interventions:', error)
-    return NextResponse.json({ success: false, error: 'Erreur serveur' }, { status: 500 })
+    console.error("❌ [INTERVENTIONS API] Erreur:", error)
+    return NextResponse.json({ error: "Erreur interne" }, { status: 500 })
   }
 }
 
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const incidentId = params.id
+    const body = await request.json()
+    const { 
+      type, 
+      scheduled_date, 
+      description, 
+      provider_name, 
+      provider_contact, 
+      estimated_cost,
+      user_id 
+    } = body
 
+    if (!incidentId || !type || !scheduled_date || !description || !user_id) {
+      return NextResponse.json({ error: "Données manquantes" }, { status: 400 })
+    }
+
+    console.log("🔧 [INTERVENTIONS API] Création intervention pour incident:", incidentId)
+
+    const server = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+
+    // Créer l'intervention
+    const { data: intervention, error } = await server
+      .from("incident_interventions")
+      .insert({
+        incident_id: incidentId,
+        type,
+        scheduled_date,
+        description,
+        provider_name: provider_name || null,
+        provider_contact: provider_contact || null,
+        estimated_cost: estimated_cost ? parseFloat(estimated_cost) : null,
+        status: "scheduled",
+        created_by: user_id
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error("❌ [INTERVENTIONS API] Erreur création intervention:", error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    // Mettre à jour le statut de l'incident
+    await server
+      .from("incidents")
+      .update({ 
+        status: "in_progress",
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", incidentId)
+
+    // Récupérer les informations de l'incident pour la notification
+    const { data: incident, error: incidentError } = await server
+      .from("incidents")
+      .select(`
+        *,
+        property:properties(id, title, address, city),
+        lease:leases(
+          id,
+          tenant:users!leases_tenant_id_fkey(id, first_name, last_name, email, phone),
+          owner:users!leases_owner_id_fkey(id, first_name, last_name, email, phone)
+        )
+      `)
+      .eq("id", incidentId)
+      .single()
+
+    if (!incidentError && incident) {
+      // Envoyer une notification au locataire
+      try {
+        const notificationResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/notifications`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            user_id: incident.lease?.tenant?.id,
+            type: "intervention_scheduled",
+            title: "Intervention programmée",
+            message: `Une intervention a été programmée pour l'incident "${incident.title}" le ${new Date(scheduled_date).toLocaleDateString("fr-FR")}`,
+            data: {
+              incident_id: incidentId,
+              intervention_id: intervention.id,
+              scheduled_date,
+              type
+            }
+          })
+        })
+
+        if (notificationResponse.ok) {
+          console.log("✅ [INTERVENTIONS API] Notification envoyée au locataire")
+        }
+      } catch (notificationError) {
+        console.error("❌ [INTERVENTIONS API] Erreur envoi notification:", notificationError)
+      }
+
+      // Envoyer un email au locataire
+      try {
+        const emailResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/emails`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            to: incident.lease?.tenant?.email,
+            subject: "Intervention programmée pour votre incident",
+            template: "intervention_scheduled",
+            data: {
+              tenant_name: `${incident.lease?.tenant?.first_name} ${incident.lease?.tenant?.last_name}`,
+              incident_title: incident.title,
+              scheduled_date: new Date(scheduled_date).toLocaleDateString("fr-FR"),
+              scheduled_time: new Date(scheduled_date).toLocaleTimeString("fr-FR"),
+              description,
+              type: type === "owner" ? "par le propriétaire" : "par un professionnel",
+              provider_name: provider_name || "Non spécifié",
+              property_address: incident.property?.address
+            }
+          })
+        })
+
+        if (emailResponse.ok) {
+          console.log("✅ [INTERVENTIONS API] Email envoyé au locataire")
+        }
+      } catch (emailError) {
+        console.error("❌ [INTERVENTIONS API] Erreur envoi email:", emailError)
+      }
+    }
+
+    console.log("✅ [INTERVENTIONS API] Intervention créée:", intervention.id)
+    return NextResponse.json({ success: true, intervention })
+  } catch (error) {
+    console.error("❌ [INTERVENTIONS API] Erreur:", error)
+    return NextResponse.json({ error: "Erreur interne" }, { status: 500 })
+  }
+}

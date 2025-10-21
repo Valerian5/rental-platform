@@ -36,6 +36,8 @@ import { authService } from "@/lib/auth-service"
 import { toast } from "sonner"
 import Link from "next/link"
 import IncidentTicketing from "@/components/incident-ticketing"
+import IncidentPriorityManager from "@/components/incident-priority-manager"
+import IncidentInterventionInfo from "@/components/incident-intervention-info"
 
 interface Incident {
   id: string
@@ -76,6 +78,7 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [incident, setIncident] = useState<Incident | null>(null)
   const [responses, setResponses] = useState<any[]>([])
+  const [interventions, setInterventions] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showPhotoDialog, setShowPhotoDialog] = useState(false)
 
@@ -92,7 +95,7 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
         }
 
         setCurrentUser(user)
-        await loadIncident(params.id)
+        await Promise.all([loadIncident(params.id), loadInterventions()])
       } catch (error) {
         console.error("Erreur initialisation:", error)
         toast.error("Erreur lors du chargement")
@@ -105,6 +108,18 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
   }, [params.id, router])
 
   // Realtime supprimé - utiliser le système de messagerie dédié
+
+  const loadInterventions = async () => {
+    try {
+      const response = await fetch(`/api/incidents/${params.id}/interventions`)
+      if (response.ok) {
+        const data = await response.json()
+        setInterventions(data.interventions || [])
+      }
+    } catch (error) {
+      console.error("❌ Erreur chargement interventions:", error)
+    }
+  }
 
   const loadIncident = async (incidentId: string) => {
     try {
@@ -348,6 +363,20 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
             </Card>
           )}
 
+          {/* Interventions programmées */}
+          {interventions.length > 0 && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Interventions programmées</h3>
+              {interventions.map((intervention) => (
+                <IncidentInterventionInfo
+                  key={intervention.id}
+                  intervention={intervention}
+                  isOwner={false}
+                />
+              ))}
+            </div>
+          )}
+
           {/* Système de ticketing */}
           <IncidentTicketing
             incidentId={incident.id}
@@ -355,8 +384,8 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
             onTicketSent={() => loadIncident(incident.id)}
           />
 
-          {/* Résolution */}
-          {incident.resolution_notes && (
+          {/* Résolution - Ne s'affiche que si l'incident est résolu */}
+          {incident.status === "resolved" && incident.resolution_notes && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-green-700">Résolution</CardTitle>
@@ -457,6 +486,14 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
               )}
             </CardContent>
           </Card>
+
+          {/* Priorité (lecture seule pour le tenant) */}
+          <IncidentPriorityManager
+            incidentId={incident.id}
+            currentPriority={incident.priority}
+            onPriorityChange={() => {}} // Pas de modification pour le tenant
+            isOwner={false}
+          />
 
           {/* Actions rapides */}
           {incident.status !== "resolved" && incident.status !== "closed" && (

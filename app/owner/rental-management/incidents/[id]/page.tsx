@@ -37,6 +37,8 @@ import { rentalManagementService } from "@/lib/rental-management-service"
 import { toast } from "sonner"
 import Link from "next/link"
 import IncidentTicketing from "@/components/incident-ticketing"
+import IncidentPriorityManager from "@/components/incident-priority-manager"
+import IncidentInterventionInfo from "@/components/incident-intervention-info"
 
 export default function IncidentDetailPage() {
   const params = useParams()
@@ -44,6 +46,7 @@ export default function IncidentDetailPage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [incident, setIncident] = useState<any>(null)
   const [responses, setResponses] = useState<any[]>([])
+  const [interventions, setInterventions] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showResponseDialog, setShowResponseDialog] = useState(false)
   const [showInterventionDialog, setShowInterventionDialog] = useState(false)
@@ -77,7 +80,7 @@ export default function IncidentDetailPage() {
           return
         }
         setCurrentUser(user)
-        await loadIncidentData()
+        await Promise.all([loadIncidentData(), loadInterventions()])
       } catch (error) {
         console.error("Erreur initialisation:", error)
         toast.error("Erreur lors du chargement")
@@ -159,6 +162,18 @@ export default function IncidentDetailPage() {
 
   // Realtime supprimé - utiliser le système de messagerie dédié
 
+  const loadInterventions = async () => {
+    try {
+      const response = await fetch(`/api/incidents/${params.id}/interventions`)
+      if (response.ok) {
+        const data = await response.json()
+        setInterventions(data.interventions || [])
+      }
+    } catch (error) {
+      console.error("❌ Erreur chargement interventions:", error)
+    }
+  }
+
 
   const handleSendResponse = async () => {
     if (!response.message) return toast.error("Veuillez saisir un message")
@@ -197,25 +212,33 @@ export default function IncidentDetailPage() {
     if (!intervention.scheduled_date || !intervention.description)
       return toast.error("Veuillez remplir les champs obligatoires")
     try {
-      const formData = new FormData()
-      formData.append('type', intervention.type)
-      formData.append('scheduled_date', intervention.scheduled_date)
-      formData.append('description', intervention.description)
-      formData.append('user_id', currentUser.id)
-      if (intervention.provider_name) formData.append('provider_name', intervention.provider_name)
-      if (intervention.provider_contact) formData.append('provider_contact', intervention.provider_contact)
-      if (intervention.estimated_cost) formData.append('estimated_cost', intervention.estimated_cost)
+      const response = await fetch(`/api/incidents/${incident.id}/interventions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          type: intervention.type,
+          scheduled_date: intervention.scheduled_date,
+          description: intervention.description,
+          provider_name: intervention.provider_name || null,
+          provider_contact: intervention.provider_contact || null,
+          estimated_cost: intervention.estimated_cost || null,
+          user_id: currentUser.id
+        })
+      })
 
-      const res = await fetch(`/api/incidents/${incident.id}/interventions`, { method: 'POST', body: formData })
-      const data = await res.json()
-      if (!res.ok || !data.success) throw new Error(data?.error || 'Erreur programmation intervention')
+      const data = await response.json()
+      if (!response.ok || !data.success) throw new Error(data?.error || 'Erreur programmation intervention')
 
-      toast.success("Intervention programmée avec succès")
+      toast.success("Intervention programmée avec succès - Le locataire a été notifié")
       setIntervention({ type: "owner", scheduled_date: "", description: "", provider_name: "", provider_contact: "", estimated_cost: "" })
       setShowInterventionDialog(false)
       
-      console.log("✅ [OWNER INCIDENT DETAIL] Action effectuée - Realtime va mettre à jour l'affichage")
+      // Recharger les interventions et les données de l'incident
+      await Promise.all([loadInterventions(), loadIncidentData()])
     } catch (error) {
+      console.error("❌ Erreur programmation intervention:", error)
       toast.error("Erreur lors de la programmation")
     }
   }
@@ -368,6 +391,20 @@ export default function IncidentDetailPage() {
             </Card>
           )}
 
+          {/* Interventions programmées */}
+          {interventions.length > 0 && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Interventions programmées</h3>
+              {interventions.map((intervention) => (
+                <IncidentInterventionInfo
+                  key={intervention.id}
+                  intervention={intervention}
+                  isOwner={true}
+                />
+              ))}
+            </div>
+          )}
+
           {/* Système de ticketing */}
           <IncidentTicketing
             incidentId={incident.id}
@@ -375,8 +412,8 @@ export default function IncidentDetailPage() {
             onTicketSent={loadIncidentData}
           />
 
-          {/* Résolution */}
-          {incident.resolution_notes && (
+          {/* Résolution - Ne s'affiche que si l'incident est résolu */}
+          {incident.status === "resolved" && incident.resolution_notes && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-green-700">Résolution</CardTitle>
@@ -477,6 +514,16 @@ export default function IncidentDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Gestion de la priorité */}
+          <IncidentPriorityManager
+            incidentId={incident.id}
+            currentPriority={incident.priority}
+            onPriorityChange={(newPriority) => {
+              setIncident(prev => ({ ...prev, priority: newPriority }))
+            }}
+            isOwner={true}
+          />
 
           {/* Actions rapides */}
           {incident.status !== "resolved" && incident.status !== "closed" && (
