@@ -208,6 +208,13 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
         console.log("✅ [TENANT INCIDENT DETAIL] Mise à jour état React avec", data.incident.responses?.length || 0, "réponses")
         setIncident(data.incident)
         setResponses(data.incident.responses || [])
+        
+        // Vérification supplémentaire pour s'assurer que les réponses sont bien chargées
+        if (data.incident.responses && data.incident.responses.length > 0) {
+          console.log("✅ [TENANT INCIDENT DETAIL] Réponses chargées avec succès:", data.incident.responses.length)
+        } else {
+          console.log("⚠️ [TENANT INCIDENT DETAIL] Aucune réponse trouvée")
+        }
       } else {
         console.error("❌ [TENANT INCIDENT DETAIL] Erreur API:", data.error)
         toast.error("Incident non trouvé")

@@ -113,12 +113,20 @@ export default function IncidentDetailPage() {
         console.log("✅ [OWNER INCIDENT DETAIL] Mise à jour état React avec", data.incident.responses?.length || 0, "réponses")
         setIncident(data.incident)
         setResponses(data.incident.responses || [])
+        
+        // Vérification supplémentaire pour s'assurer que les réponses sont bien chargées
+        if (data.incident.responses && data.incident.responses.length > 0) {
+          console.log("✅ [OWNER INCIDENT DETAIL] Réponses chargées avec succès:", data.incident.responses.length)
+        } else {
+          console.log("⚠️ [OWNER INCIDENT DETAIL] Aucune réponse trouvée")
+        }
       } else {
+        console.error("❌ [OWNER INCIDENT DETAIL] Erreur API:", data.error)
         toast.error("Incident non trouvé")
         router.push("/owner/rental-management/incidents")
       }
     } catch (error) {
-      console.error("Erreur chargement incident:", error)
+      console.error("❌ [OWNER INCIDENT DETAIL] Erreur chargement incident:", error)
       toast.error("Erreur lors du chargement")
     }
   }

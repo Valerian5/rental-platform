@@ -52,14 +52,10 @@ export async function GET(
       );
     }
 
-    // Récupérer les réponses associées DIRECTEMENT depuis Supabase avec cache-busting FORCÉ
-    const timestamp = Date.now()
-    console.log("🔍 [API GET INCIDENT] Récupération réponses pour incident:", incidentId, "à", new Date().toISOString(), "timestamp:", timestamp)
+    // Récupérer les réponses associées avec une requête simple et fiable
+    console.log("🔍 [API GET INCIDENT] Récupération réponses pour incident:", incidentId)
     
-    // Forcer un refresh complet en recréant la connexion Supabase
-    const freshServer = createServerClient()
-    
-    const { data: responses, error: responsesError } = await freshServer
+    const { data: responses, error: responsesError } = await server
       .from("incident_responses")
       .select(`
         id,
@@ -72,9 +68,6 @@ export async function GET(
       `)
       .eq("incident_id", incidentId)
       .order("created_at", { ascending: true })
-      .abortSignal(AbortSignal.timeout(10000)) // Timeout pour forcer le refresh
-      .neq("id", "00000000-0000-0000-0000-000000000000") // Force un scan complet de la table
-      .gte("created_at", "1970-01-01"); // Force un scan complet de la table
 
     console.log("📊 [API GET INCIDENT] Réponses brutes depuis Supabase:", {
       count: responses?.length || 0,
@@ -84,6 +77,17 @@ export async function GET(
 
     if (responsesError) {
       console.error("❌ [API GET INCIDENT] Erreur récupération réponses:", responsesError);
+      return NextResponse.json(
+        { success: false, error: "Erreur lors de la récupération des réponses" },
+        { status: 500 }
+      );
+    }
+
+    // Vérification supplémentaire pour s'assurer que les réponses sont bien récupérées
+    if (!responses || responses.length === 0) {
+      console.log("⚠️ [API GET INCIDENT] Aucune réponse trouvée pour l'incident:", incidentId)
+    } else {
+      console.log("✅ [API GET INCIDENT] Réponses récupérées avec succès:", responses.length)
     }
 
     const mappedResponses = (responses || []).map((r: any) => ({
