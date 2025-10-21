@@ -97,9 +97,12 @@ export default function IncidentDetailPage() {
 
   const loadIncidentData = async () => {
     try {
-      const res = await fetch(`/api/incidents/${params.id}`)
+      // ⚠️ Ajout du cache: "no-store"
+      const res = await fetch(`/api/incidents/${params.id}`, {
+        cache: "no-store",
+      })
       const data = await res.json()
-
+  
       if (data.success) {
         setIncident(data.incident)
         setResponses(data.incident.responses || [])
@@ -112,6 +115,17 @@ export default function IncidentDetailPage() {
       toast.error("Erreur lors du chargement")
     }
   }
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        loadIncidentData()
+      }
+    }
+  
+    document.addEventListener("visibilitychange", handleVisibility)
+    return () => document.removeEventListener("visibilitychange", handleVisibility)
+  }, [params.id])
 
   const handleSendResponse = async () => {
     if (!response.message) {
@@ -152,6 +166,9 @@ export default function IncidentDetailPage() {
 
       // Recharger les données
       await loadIncidentData()
+      
+      // Recharger la page pour afficher la nouvelle réponse
+      router.refresh()
     } catch (error) {
       toast.error("Erreur lors de l'envoi de la réponse")
     }
@@ -164,14 +181,17 @@ export default function IncidentDetailPage() {
     }
 
     try {
+      console.log("🔍 [OWNER INTERVENTION] Création intervention pour user:", currentUser.id)
       const formData = new FormData()
       formData.append('type', intervention.type)
       formData.append('scheduled_date', intervention.scheduled_date)
       formData.append('description', intervention.description)
+      formData.append('user_id', currentUser.id) // Ajouter user_id pour l'authentification
       if (intervention.provider_name) formData.append('provider_name', intervention.provider_name)
       if (intervention.provider_contact) formData.append('provider_contact', intervention.provider_contact)
       if (intervention.estimated_cost) formData.append('estimated_cost', intervention.estimated_cost)
 
+      console.log("🔍 [OWNER INTERVENTION] Envoi requête vers API...")
       const res = await fetch(`/api/incidents/${incident.id}/interventions`, {
         method: 'POST',
         body: formData,
@@ -195,6 +215,9 @@ export default function IncidentDetailPage() {
 
       // Recharger les données
       await loadIncidentData()
+      
+      // Recharger la page pour afficher les changements
+      router.refresh()
     } catch (error) {
       toast.error("Erreur lors de la programmation")
     }
@@ -234,6 +257,9 @@ export default function IncidentDetailPage() {
       })
       setShowResolveDialog(false)
       await loadIncidentData()
+      
+      // Recharger la page pour afficher les changements
+      router.refresh()
     } catch (error) {
       toast.error("Erreur lors de la résolution")
     }

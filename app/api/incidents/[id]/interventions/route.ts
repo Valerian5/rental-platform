@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
 import { emailService } from "@/lib/email-service"
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
 
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+
 // POST /api/incidents/[id]/interventions - planifier une intervention (owner)
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const server = createServerClient()
     const incidentId = params.id
     
     // Gérer FormData ou JSON
@@ -24,40 +25,41 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         provider_name: formData.get('provider_name'),
         provider_contact: formData.get('provider_contact'),
         estimated_cost: formData.get('estimated_cost'),
+        user_id: formData.get('user_id'), // Ajouter user_id depuis le frontend
       }
     } else {
       body = await request.json()
     }
     
-    const { type = 'owner', scheduled_date, description, provider_name, provider_contact, estimated_cost } = body
+    const { type = 'owner', scheduled_date, description, provider_name, provider_contact, estimated_cost, user_id } = body
 
-    // Auth
-    console.log("🔍 [API INTERVENTIONS] Vérification authentification...")
-    const { data: { user } } = await server.auth.getUser()
-    console.log("🔍 [API INTERVENTIONS] Utilisateur:", user?.id, user?.email)
-    if (!user) {
-      console.error("❌ [API INTERVENTIONS] Non authentifié")
-      return NextResponse.json({ success: false, error: "Non authentifié" }, { status: 401 })
+    if (!user_id) {
+      console.error("❌ [API INTERVENTIONS] user_id manquant")
+      return NextResponse.json({ success: false, error: "user_id requis" }, { status: 400 })
     }
 
+    console.log("🔍 [API INTERVENTIONS] Création intervention pour user_id:", user_id)
+
     // Charger incident + bail
-    const { data: incident, error: incidentError } = await server
+    const { data: incident, error: incidentError } = await supabase
       .from('incidents')
       .select('id, title, lease:leases(id, owner_id, tenant:users!leases_tenant_id_fkey(id,email,first_name,last_name)), property:properties(id,title)')
       .eq('id', incidentId)
       .single()
 
     if (incidentError || !incident) {
+      console.error("❌ [API INTERVENTIONS] Erreur récupération incident:", incidentError)
       return NextResponse.json({ success: false, error: 'Incident introuvable' }, { status: 404 })
     }
 
     // Vérifier ownership
-    if (incident.lease?.owner_id !== user.id) {
+    if (incident.lease?.owner_id !== user_id) {
+      console.error("❌ [API INTERVENTIONS] Accès refusé - user_id:", user_id, "owner_id:", incident.lease?.owner_id)
       return NextResponse.json({ success: false, error: 'Accès refusé' }, { status: 403 })
     }
 
     // Créer intervention
-    const { data: intervention, error } = await server
+    const { data: intervention, error } = await supabase
       .from('incident_interventions')
       .insert({
         incident_id: incidentId,
@@ -73,9 +75,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .single()
 
     if (error) {
-      console.error('Erreur création intervention:', error)
+      console.error('❌ [API INTERVENTIONS] Erreur création intervention:', error)
       return NextResponse.json({ success: false, error: 'Erreur base de données' }, { status: 500 })
     }
+
+    console.log("✅ [API INTERVENTIONS] Intervention créée avec succès:", intervention.id)
 
     // Notifier le locataire (email + classique)
     try {

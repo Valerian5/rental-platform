@@ -160,6 +160,9 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
 
       // Recharger les données avec cache-busting
       await loadIncident(params.id)
+      
+      // Recharger la page pour afficher la nouvelle réponse
+      router.refresh()
     } catch (error) {
       toast.error("Erreur lors de l'envoi de la réponse")
     }
@@ -190,6 +193,9 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
 
       // Recharger les données
       await loadIncident(params.id)
+      
+      // Recharger la page pour afficher les nouvelles photos
+      router.refresh()
     } catch (error) {
       toast.error("Erreur lors de l'ajout des photos")
     }
