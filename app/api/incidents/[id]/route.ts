@@ -87,10 +87,13 @@ export async function GET(
     }
 
     const mappedResponses = (responses || []).map((r: any) => ({
-      ...r,
+      id: r.id,
+      message: r.message,
       user_type: r.author_type,
       user_id: r.author_id,
       user_name: r.author_name || "Utilisateur",
+      created_at: r.created_at,
+      attachments: r.attachments || [],
     }));
     
     console.log("✅ [API GET INCIDENT] Réponses mappées à envoyer au client:", mappedResponses.length, "réponses")
@@ -130,7 +133,8 @@ export async function PUT(
     if (cost !== undefined) updateData.cost = cost;
     if (status === "resolved") updateData.resolved_date = new Date().toISOString();
 
-    const { data, error } = await supabase
+    const server = createServerClient()
+    const { data, error } = await server
       .from("incidents")
       .update(updateData)
       .eq("id", incidentId)
@@ -145,7 +149,7 @@ export async function PUT(
     // Notifications email si changement de statut
     if (status && ["resolved", "in_progress", "cancelled"].includes(status)) {
       try {
-        const { data: incident } = await supabase
+        const { data: incident } = await server
           .from("incidents")
           .select(`
             *,
@@ -167,34 +171,26 @@ export async function PUT(
 
           // Email locataire
           if (incident.lease.tenant) {
-            await emailService.sendEmail({
-              to: incident.lease.tenant.email,
-              template: "incident_status_update",
-              data: {
-                tenantName: `${incident.lease.tenant.first_name} ${incident.lease.tenant.last_name}`,
-                incidentTitle: incident.title,
-                propertyTitle: incident.property.title,
-                status: statusMessages[status] || status,
-                resolutionNotes: resolution_notes || "",
-                incidentUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/tenant/incidents/${incidentId}`,
-              },
-            });
+            await emailService.sendIncidentStatusUpdateEmail(
+              { id: incident.lease.tenant.id, name: `${incident.lease.tenant.first_name} ${incident.lease.tenant.last_name}`, email: incident.lease.tenant.email },
+              { id: incident.id, title: incident.title },
+              { id: incident.property.id, title: incident.property.title },
+              statusMessages[status] || status,
+              resolution_notes || "",
+              `${process.env.NEXT_PUBLIC_SITE_URL}/tenant/incidents/${incidentId}`
+            );
           }
 
           // Email propriétaire si résolu
           if (status === "resolved" && incident.lease.owner) {
-            await emailService.sendEmail({
-              to: incident.lease.owner.email,
-              template: "incident_resolved_owner",
-              data: {
-                ownerName: `${incident.lease.owner.first_name} ${incident.lease.owner.last_name}`,
-                incidentTitle: incident.title,
-                propertyTitle: incident.property.title,
-                resolutionNotes: resolution_notes || "",
-                cost: cost || 0,
-                incidentUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/owner/incidents/${incidentId}`,
-              },
-            });
+            await emailService.sendIncidentResolvedOwnerEmail(
+              { id: incident.lease.owner.id, name: `${incident.lease.owner.first_name} ${incident.lease.owner.last_name}`, email: incident.lease.owner.email },
+              { id: incident.id, title: incident.title },
+              { id: incident.property.id, title: incident.property.title },
+              resolution_notes || "",
+              cost || 0,
+              `${process.env.NEXT_PUBLIC_SITE_URL}/owner/incidents/${incidentId}`
+            );
           }
         }
       } catch (emailError) {

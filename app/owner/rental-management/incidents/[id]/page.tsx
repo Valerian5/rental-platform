@@ -158,16 +158,34 @@ export default function IncidentDetailPage() {
           
           if (payload.eventType === 'INSERT') {
             console.log("✅ [OWNER REALTIME] Nouvelle réponse ajoutée:", payload.new)
-            // Recharger les données pour avoir la réponse complète
-            loadIncidentData()
+            // Mettre à jour l'état local directement
+            const newResponse = {
+              id: payload.new.id,
+              message: payload.new.message,
+              user_type: payload.new.author_type,
+              user_id: payload.new.author_id,
+              user_name: payload.new.author_name || "Utilisateur",
+              created_at: payload.new.created_at,
+              attachments: payload.new.attachments || [],
+            }
+            setResponses(prev => [...prev, newResponse])
           } else if (payload.eventType === 'DELETE') {
             console.log("🗑️ [OWNER REALTIME] Réponse supprimée:", payload.old)
-            // Recharger les données pour mettre à jour l'affichage
-            loadIncidentData()
+            // Supprimer de l'état local
+            setResponses(prev => prev.filter(r => r.id !== payload.old.id))
           } else if (payload.eventType === 'UPDATE') {
             console.log("🔄 [OWNER REALTIME] Réponse mise à jour:", payload.new)
-            // Recharger les données pour avoir la réponse mise à jour
-            loadIncidentData()
+            // Mettre à jour dans l'état local
+            setResponses(prev => prev.map(r => 
+              r.id === payload.new.id 
+                ? {
+                    ...r,
+                    message: payload.new.message,
+                    user_name: payload.new.author_name || r.user_name,
+                    attachments: payload.new.attachments || r.attachments,
+                  }
+                : r
+            ))
           }
         }
       )
@@ -189,6 +207,23 @@ export default function IncidentDetailPage() {
         body: JSON.stringify(responseData),
       })
       if (!res.ok) throw new Error("Erreur envoi réponse")
+      
+      const data = await res.json()
+      
+      // Mettre à jour l'état local immédiatement
+      if (data.success && data.response) {
+        const newResponse = {
+          id: data.response.id,
+          message: data.response.message,
+          user_type: data.response.author_type,
+          user_id: data.response.author_id,
+          user_name: data.response.author_name || "Utilisateur",
+          created_at: data.response.created_at,
+          attachments: data.response.attachments || [],
+        }
+        setResponses(prev => [...prev, newResponse])
+      }
+      
       if (response.status) {
         await rentalManagementService.updateIncidentStatus(
           incident.id,
@@ -201,7 +236,7 @@ export default function IncidentDetailPage() {
       setResponse({ message: "", status: "", cost: "" })
       setShowResponseDialog(false)
       
-      console.log("✅ [OWNER INCIDENT DETAIL] Action effectuée - Realtime va mettre à jour l'affichage")
+      console.log("✅ [OWNER INCIDENT DETAIL] Réponse ajoutée localement")
     } catch (error) {
       toast.error("Erreur lors de l'envoi de la réponse")
     }
