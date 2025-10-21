@@ -36,6 +36,7 @@ import { authService } from "@/lib/auth-service"
 import { rentalManagementService } from "@/lib/rental-management-service"
 import { toast } from "sonner"
 import Link from "next/link"
+import IncidentTicketing from "@/components/incident-ticketing"
 
 export default function IncidentDetailPage() {
   const params = useParams()
@@ -47,6 +48,7 @@ export default function IncidentDetailPage() {
   const [showResponseDialog, setShowResponseDialog] = useState(false)
   const [showInterventionDialog, setShowInterventionDialog] = useState(false)
   const [showResolveDialog, setShowResolveDialog] = useState(false)
+  
 
   // Formulaires
   const [response, setResponse] = useState({ message: "", status: "", cost: "" })
@@ -156,6 +158,7 @@ export default function IncidentDetailPage() {
   }, [params.id])
 
   // Realtime supprimé - utiliser le système de messagerie dédié
+
 
   const handleSendResponse = async () => {
     if (!response.message) return toast.error("Veuillez saisir un message")
@@ -303,15 +306,9 @@ export default function IncidentDetailPage() {
 
         {incident.status !== "resolved" && incident.status !== "closed" && (
           <div className="flex gap-2">
-            <Link href={`/owner/rental-management/incidents/${incident.id}/messaging`}>
-              <Button>
-                <MessageSquare className="h-4 w-4 mr-2" />
-                Messagerie
-              </Button>
-            </Link>
             <Dialog open={showResponseDialog} onOpenChange={setShowResponseDialog}>
               <DialogTrigger asChild>
-                <Button variant="outline">
+                <Button>
                   <MessageSquare className="h-4 w-4 mr-2" />
                   Répondre
                 </Button>
@@ -371,57 +368,12 @@ export default function IncidentDetailPage() {
             </Card>
           )}
 
-          {/* Historique des échanges */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Historique des échanges</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {responses.length === 0 ? (
-                <p className="text-gray-500 text-center py-4">Aucun échange pour le moment</p>
-              ) : (
-                <div className="space-y-4">
-                  {responses.map((resp: any, index: number) => (
-                    <div
-                      key={index}
-                      className={`p-4 rounded-lg ${resp.user_type === "owner" ? "bg-blue-50 ml-8" : "bg-gray-50 mr-8"}`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <div
-                            className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm ${resp.user_type === "owner" ? "bg-blue-600" : "bg-gray-600"}`}
-                          >
-                            {resp.user_type === "owner" ? "P" : "L"}
-                          </div>
-                          <span className="font-medium">
-                            {resp.user_type === "owner" ? "Propriétaire" : "Locataire"}
-                          </span>
-                        </div>
-                        <span className="text-sm text-gray-500">
-                          {new Date(resp.created_at).toLocaleDateString("fr-FR")} à{" "}
-                          {new Date(resp.created_at).toLocaleTimeString("fr-FR")}
-                        </span>
-                      </div>
-                      <p className="text-gray-700 whitespace-pre-wrap">{resp.message}</p>
-                      {resp.attachments && resp.attachments.length > 0 && (
-                        <div className="flex gap-2 mt-3">
-                          {resp.attachments.map((attachment: string, i: number) => (
-                            <img
-                              key={i}
-                              src={attachment || "/placeholder.svg"}
-                              alt={`Pièce jointe ${i + 1}`}
-                              className="w-16 h-16 object-cover rounded border cursor-pointer"
-                              onClick={() => window.open(attachment, "_blank")}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          {/* Système de ticketing */}
+          <IncidentTicketing
+            incidentId={incident.id}
+            currentUser={currentUser}
+            onTicketSent={loadIncidentData}
+          />
 
           {/* Résolution */}
           {incident.resolution_notes && (

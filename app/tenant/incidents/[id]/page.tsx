@@ -35,6 +35,7 @@ import {
 import { authService } from "@/lib/auth-service"
 import { toast } from "sonner"
 import Link from "next/link"
+import IncidentTicketing from "@/components/incident-ticketing"
 
 interface Incident {
   id: string
@@ -76,13 +77,7 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
   const [incident, setIncident] = useState<Incident | null>(null)
   const [responses, setResponses] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [showResponseDialog, setShowResponseDialog] = useState(false)
   const [showPhotoDialog, setShowPhotoDialog] = useState(false)
-
-  // Formulaire réponse
-  const [response, setResponse] = useState({
-    message: "",
-  })
 
   // Formulaire photos
   const [photos, setPhotos] = useState<FileList | null>(null)
@@ -165,41 +160,6 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
     }
   }
 
-  const handleSendResponse = async () => {
-    if (!response.message) {
-      toast.error("Veuillez saisir un message")
-      return
-    }
-
-    try {
-      const responseData = {
-        incident_id: incident?.id,
-        user_id: currentUser?.id,
-        message: response.message,
-        user_type: "tenant",
-      }
-
-      const res = await fetch(`/api/incidents/${incident?.id}/respond`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(responseData),
-      })
-
-      if (!res.ok) throw new Error("Erreur envoi réponse")
-
-      const data = await res.json()
-      
-      // Recharger immédiatement les données comme dans le système de messagerie
-      console.log("✅ [TENANT INCIDENT DETAIL] Réponse envoyée - rechargement des données")
-      await loadIncident(incident?.id || "")
-
-      toast.success("Réponse envoyée avec succès")
-      setResponse({ message: "" })
-      setShowResponseDialog(false)
-    } catch (error) {
-      toast.error("Erreur lors de l'envoi de la réponse")
-    }
-  }
 
   const handleAddPhotos = async () => {
     if (!photos || photos.length === 0) {
@@ -335,21 +295,6 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
 
         {incident.status !== "resolved" && incident.status !== "closed" && (
           <div className="flex gap-2">
-            <Link href={`/tenant/incidents/${incident.id}/messaging`}>
-              <Button>
-                <MessageSquare className="h-4 w-4 mr-2" />
-                Messagerie
-              </Button>
-            </Link>
-            <Dialog open={showResponseDialog} onOpenChange={setShowResponseDialog}>
-              <DialogTrigger asChild>
-                <Button variant="outline">
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  Répondre
-                </Button>
-              </DialogTrigger>
-            </Dialog>
-
             <Dialog open={showPhotoDialog} onOpenChange={setShowPhotoDialog}>
               <DialogTrigger asChild>
                 <Button>
@@ -403,57 +348,12 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
             </Card>
           )}
 
-          {/* Historique des échanges */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Historique des échanges</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {responses.length === 0 ? (
-                <p className="text-gray-500 text-center py-4">Aucun échange pour le moment</p>
-              ) : (
-                <div className="space-y-4">
-                  {responses.map((resp: any, index: number) => (
-                    <div
-                      key={index}
-                      className={`p-4 rounded-lg ${resp.user_type === "owner" ? "bg-blue-50 ml-8" : "bg-gray-50 mr-8"}`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <div
-                            className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm ${resp.user_type === "owner" ? "bg-blue-600" : "bg-gray-600"}`}
-                          >
-                            {resp.user_type === "owner" ? "P" : "L"}
-                          </div>
-                          <span className="font-medium">
-                            {resp.user_type === "owner" ? "Propriétaire" : "Vous"}
-                          </span>
-                        </div>
-                        <span className="text-sm text-gray-500">
-                          {new Date(resp.created_at).toLocaleDateString("fr-FR")} à{" "}
-                          {new Date(resp.created_at).toLocaleTimeString("fr-FR")}
-                        </span>
-                      </div>
-                      <p className="text-gray-700 whitespace-pre-wrap">{resp.message}</p>
-                      {resp.attachments && resp.attachments.length > 0 && (
-                        <div className="flex gap-2 mt-3">
-                          {resp.attachments.map((attachment: string, i: number) => (
-                            <img
-                              key={i}
-                              src={attachment || "/placeholder.svg"}
-                              alt={`Pièce jointe ${i + 1}`}
-                              className="w-16 h-16 object-cover rounded border cursor-pointer"
-                              onClick={() => window.open(attachment, "_blank")}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          {/* Système de ticketing */}
+          <IncidentTicketing
+            incidentId={incident.id}
+            currentUser={currentUser}
+            onTicketSent={() => loadIncident(incident.id)}
+          />
 
           {/* Résolution */}
           {incident.resolution_notes && (
@@ -568,14 +468,6 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
                 <Button
                   variant="outline"
                   className="w-full justify-start bg-transparent"
-                  onClick={() => setShowResponseDialog(true)}
-                >
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  Répondre au propriétaire
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start bg-transparent"
                   onClick={() => setShowPhotoDialog(true)}
                 >
                   <Camera className="h-4 w-4 mr-2" />
@@ -587,34 +479,6 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
         </div>
       </div>
 
-      {/* Dialog Réponse */}
-      <Dialog open={showResponseDialog} onOpenChange={setShowResponseDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Répondre à l'incident</DialogTitle>
-            <DialogDescription>Envoyer une réponse au propriétaire</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">Message *</label>
-              <Textarea
-                value={response.message}
-                onChange={(e) => setResponse({ ...response, message: e.target.value })}
-                placeholder="Votre réponse au propriétaire..."
-                rows={4}
-              />
-            </div>
-            <div className="flex gap-2 pt-4">
-              <Button onClick={handleSendResponse} className="flex-1">
-                Envoyer
-              </Button>
-              <Button variant="outline" onClick={() => setShowResponseDialog(false)}>
-                Annuler
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Dialog Photos */}
       <Dialog open={showPhotoDialog} onOpenChange={setShowPhotoDialog}>
