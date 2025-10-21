@@ -117,8 +117,8 @@ export default function IncidentInterventionInfo({
           </div>
         )}
 
-        {/* Coût estimé */}
-        {intervention.estimated_cost && (
+        {/* Coût estimé - Visible seulement pour le propriétaire */}
+        {isOwner && intervention.estimated_cost && (
           <div className="flex items-center gap-2">
             <Euro className="h-4 w-4 text-green-600" />
             <span className="text-sm">

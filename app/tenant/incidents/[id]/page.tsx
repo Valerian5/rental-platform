@@ -220,6 +220,18 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
     }
   }
 
+  const getInterventionBadge = () => {
+    if (interventions.length > 0) {
+      const hasScheduledIntervention = interventions.some(intervention => 
+        intervention.status === "scheduled" || intervention.status === "in_progress"
+      )
+      if (hasScheduledIntervention) {
+        return <Badge className="bg-blue-600">Intervention programmée</Badge>
+      }
+    }
+    return null
+  }
+
   const getPriorityBadge = (priority: string) => {
     switch (priority) {
       case "urgent":
@@ -300,7 +312,7 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
           <div className="flex items-center gap-3 mb-2">
             <h1 className="text-2xl font-bold">{incident.title}</h1>
             {getStatusBadge(incident.status)}
-            {getPriorityBadge(incident.priority)}
+            {getInterventionBadge()}
           </div>
           <p className="text-gray-600">
             Signalé le {new Date(incident.created_at).toLocaleDateString("fr-FR")} à{" "}
@@ -487,13 +499,6 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
             </CardContent>
           </Card>
 
-          {/* Priorité (lecture seule pour le tenant) */}
-          <IncidentPriorityManager
-            incidentId={incident.id}
-            currentPriority={incident.priority}
-            onPriorityChange={() => {}} // Pas de modification pour le tenant
-            isOwner={false}
-          />
 
           {/* Actions rapides */}
           {incident.status !== "resolved" && incident.status !== "closed" && (

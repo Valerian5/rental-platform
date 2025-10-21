@@ -287,6 +287,18 @@ export default function IncidentDetailPage() {
       default: return <Badge variant="outline">{status}</Badge>
     }
   }
+
+  const getInterventionBadge = () => {
+    if (interventions.length > 0) {
+      const hasScheduledIntervention = interventions.some(intervention => 
+        intervention.status === "scheduled" || intervention.status === "in_progress"
+      )
+      if (hasScheduledIntervention) {
+        return <Badge className="bg-blue-600">Intervention programmée</Badge>
+      }
+    }
+    return null
+  }
   const getPriorityBadge = (priority: string) => {
     switch (priority) {
       case "urgent": return <Badge variant="destructive">Urgent</Badge>
@@ -320,6 +332,7 @@ export default function IncidentDetailPage() {
             <h1 className="text-2xl font-bold">{incident.title}</h1>
             {getStatusBadge(incident.status)}
             {getPriorityBadge(incident.priority)}
+            {getInterventionBadge()}
           </div>
           <p className="text-gray-600">
             Signalé le {new Date(incident.created_at).toLocaleDateString("fr-FR")} à{" "}

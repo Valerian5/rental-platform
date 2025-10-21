@@ -232,17 +232,17 @@ export default function IncidentTicketing({
                                 <Paperclip className="h-3 w-3" />
                                 {isImage ? (
                                   <img
-                                    src={attachment.startsWith("http") ? attachment : `/api/documents/${attachment}`}
+                                    src={attachment.startsWith("http") ? attachment : `/api/incidents/${incidentId}/photos/${attachment}`}
                                     alt={`Pièce jointe ${index + 1}`}
                                     className="w-16 h-16 object-cover rounded border cursor-pointer hover:opacity-80"
-                                    onClick={() => window.open(attachment.startsWith("http") ? attachment : `/api/documents/${attachment}`, "_blank")}
+                                    onClick={() => window.open(attachment.startsWith("http") ? attachment : `/api/incidents/${incidentId}/photos/${attachment}`, "_blank")}
                                     onError={(e) => {
                                       e.currentTarget.src = "/placeholder.svg?height=64&width=64&text=Image+non+disponible"
                                     }}
                                   />
                                 ) : (
                                   <a
-                                    href={attachment.startsWith("http") ? attachment : `/api/documents/${attachment}`}
+                                    href={attachment.startsWith("http") ? attachment : `/api/incidents/${incidentId}/photos/${attachment}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="text-blue-600 hover:underline cursor-pointer"
