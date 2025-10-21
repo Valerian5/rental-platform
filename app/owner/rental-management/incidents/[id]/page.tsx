@@ -47,14 +47,8 @@ export default function IncidentDetailPage() {
   const [showInterventionDialog, setShowInterventionDialog] = useState(false)
   const [showResolveDialog, setShowResolveDialog] = useState(false)
 
-  // Formulaire réponse
-  const [response, setResponse] = useState({
-    message: "",
-    status: "",
-    cost: "",
-  })
-
-  // Formulaire intervention
+  // Formulaires
+  const [response, setResponse] = useState({ message: "", status: "", cost: "" })
   const [intervention, setIntervention] = useState({
     type: "owner",
     scheduled_date: "",
@@ -63,8 +57,6 @@ export default function IncidentDetailPage() {
     provider_contact: "",
     estimated_cost: "",
   })
-
-  // Formulaire résolution
   const [resolveForm, setResolveForm] = useState({
     amount: "",
     date: new Date().toISOString().slice(0, 10),
@@ -81,7 +73,6 @@ export default function IncidentDetailPage() {
           router.push("/login")
           return
         }
-
         setCurrentUser(user)
         await loadIncidentData()
       } catch (error) {
@@ -91,18 +82,14 @@ export default function IncidentDetailPage() {
         setIsLoading(false)
       }
     }
-
     initializeData()
   }, [params.id])
 
   const loadIncidentData = async () => {
     try {
-      // ⚠️ Ajout du cache: "no-store"
-      const res = await fetch(`/api/incidents/${params.id}`, {
-        cache: "no-store",
-      })
+      const res = await fetch(`/api/incidents/${params.id}`, { cache: "no-store" })
+      if (!res.ok) throw new Error(`Erreur serveur: ${res.status}`)
       const data = await res.json()
-  
       if (data.success) {
         setIncident(data.incident)
         setResponses(data.incident.responses || [])
@@ -116,58 +103,37 @@ export default function IncidentDetailPage() {
     }
   }
 
+  // Rafraîchir les données quand l’onglet redevient visible
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        loadIncidentData()
-      }
+      if (document.visibilityState === "visible") loadIncidentData()
     }
-  
     document.addEventListener("visibilitychange", handleVisibility)
     return () => document.removeEventListener("visibilitychange", handleVisibility)
   }, [params.id])
 
   const handleSendResponse = async () => {
-    if (!response.message) {
-      toast.error("Veuillez saisir un message")
-      return
-    }
-
+    if (!response.message) return toast.error("Veuillez saisir un message")
     try {
-      // Envoyer la réponse
-      const responseData = {
-        incident_id: incident.id,
-        user_id: currentUser.id,
-        message: response.message,
-        user_type: "owner",
-      }
-
+      const responseData = { incident_id: incident.id, user_id: currentUser.id, message: response.message, user_type: "owner" }
       const res = await fetch(`/api/incidents/${incident.id}/respond`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(responseData),
       })
-
       if (!res.ok) throw new Error("Erreur envoi réponse")
-
-      // Mettre à jour le statut si spécifié
       if (response.status) {
         await rentalManagementService.updateIncidentStatus(
           incident.id,
           response.status,
           response.message,
-          response.cost ? Number(response.cost) : undefined,
+          response.cost ? Number(response.cost) : undefined
         )
       }
-
       toast.success("Réponse envoyée avec succès")
       setResponse({ message: "", status: "", cost: "" })
       setShowResponseDialog(false)
-
-      // Recharger les données
       await loadIncidentData()
-      
-      // Recharger la page pour afficher la nouvelle réponse
       router.refresh()
     } catch (error) {
       toast.error("Erreur lors de l'envoi de la réponse")
@@ -175,48 +141,26 @@ export default function IncidentDetailPage() {
   }
 
   const handleScheduleIntervention = async () => {
-    if (!intervention.scheduled_date || !intervention.description) {
-      toast.error("Veuillez remplir les champs obligatoires")
-      return
-    }
-
+    if (!intervention.scheduled_date || !intervention.description)
+      return toast.error("Veuillez remplir les champs obligatoires")
     try {
-      console.log("🔍 [OWNER INTERVENTION] Création intervention pour user:", currentUser.id)
       const formData = new FormData()
       formData.append('type', intervention.type)
       formData.append('scheduled_date', intervention.scheduled_date)
       formData.append('description', intervention.description)
-      formData.append('user_id', currentUser.id) // Ajouter user_id pour l'authentification
+      formData.append('user_id', currentUser.id)
       if (intervention.provider_name) formData.append('provider_name', intervention.provider_name)
       if (intervention.provider_contact) formData.append('provider_contact', intervention.provider_contact)
       if (intervention.estimated_cost) formData.append('estimated_cost', intervention.estimated_cost)
 
-      console.log("🔍 [OWNER INTERVENTION] Envoi requête vers API...")
-      const res = await fetch(`/api/incidents/${incident.id}/interventions`, {
-        method: 'POST',
-        body: formData,
-      })
-
+      const res = await fetch(`/api/incidents/${incident.id}/interventions`, { method: 'POST', body: formData })
       const data = await res.json()
-      if (!res.ok || !data.success) {
-        throw new Error(data?.error || 'Erreur programmation intervention')
-      }
+      if (!res.ok || !data.success) throw new Error(data?.error || 'Erreur programmation intervention')
 
       toast.success("Intervention programmée avec succès")
-      setIntervention({
-        type: "owner",
-        scheduled_date: "",
-        description: "",
-        provider_name: "",
-        provider_contact: "",
-        estimated_cost: "",
-      })
+      setIntervention({ type: "owner", scheduled_date: "", description: "", provider_name: "", provider_contact: "", estimated_cost: "" })
       setShowInterventionDialog(false)
-
-      // Recharger les données
       await loadIncidentData()
-      
-      // Recharger la page pour afficher les changements
       router.refresh()
     } catch (error) {
       toast.error("Erreur lors de la programmation")
@@ -224,11 +168,8 @@ export default function IncidentDetailPage() {
   }
 
   const handleResolveIncident = async () => {
-    if (!resolveForm.amount || !resolveForm.description) {
-      toast.error("Veuillez remplir les champs obligatoires")
-      return
-    }
-
+    if (!resolveForm.amount || !resolveForm.description)
+      return toast.error("Veuillez remplir les champs obligatoires")
     try {
       const formData = new FormData()
       formData.append('amount', resolveForm.amount)
@@ -237,112 +178,55 @@ export default function IncidentDetailPage() {
       formData.append('category', resolveForm.category)
       if (resolveForm.file) formData.append('file', resolveForm.file)
 
-      const res = await fetch(`/api/incidents/${incident.id}/resolve`, {
-        method: 'POST',
-        body: formData,
-      })
-
+      const res = await fetch(`/api/incidents/${incident.id}/resolve`, { method: 'POST', body: formData })
       const data = await res.json()
-      if (!res.ok || !data.success) {
-        throw new Error(data?.error || 'Erreur résolution incident')
-      }
+      if (!res.ok || !data.success) throw new Error(data?.error || 'Erreur résolution incident')
 
       toast.success("Incident résolu et dépense créée")
-      setResolveForm({
-        amount: "",
-        date: new Date().toISOString().slice(0, 10),
-        description: "",
-        category: "repair",
-        file: null,
-      })
+      setResolveForm({ amount: "", date: new Date().toISOString().slice(0, 10), description: "", category: "repair", file: null })
       setShowResolveDialog(false)
       await loadIncidentData()
-      
-      // Recharger la page pour afficher les changements
       router.refresh()
     } catch (error) {
       toast.error("Erreur lors de la résolution")
     }
   }
 
+  // --- Fonctions utilitaires pour badges et icônes ---
   const getPriorityIcon = (priority: string) => {
     switch (priority) {
-      case "urgent":
-        return <AlertTriangle className="h-5 w-5 text-red-600" />
-      case "high":
-        return <AlertCircle className="h-5 w-5 text-orange-600" />
-      case "medium":
-        return <Clock className="h-5 w-5 text-yellow-600" />
-      case "low":
-        return <CheckCircle className="h-5 w-5 text-green-600" />
-      default:
-        return <Clock className="h-5 w-5 text-gray-600" />
+      case "urgent": return <AlertTriangle className="h-5 w-5 text-red-600" />
+      case "high": return <AlertCircle className="h-5 w-5 text-orange-600" />
+      case "medium": return <Clock className="h-5 w-5 text-yellow-600" />
+      case "low": return <CheckCircle className="h-5 w-5 text-green-600" />
+      default: return <Clock className="h-5 w-5 text-gray-600" />
     }
   }
-
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case "resolved":
-        return <Badge className="bg-green-600">Résolu</Badge>
-      case "in_progress":
-        return <Badge className="bg-orange-600">En cours</Badge>
-      case "reported":
-        return <Badge variant="secondary">Signalé</Badge>
-      case "closed":
-        return <Badge variant="outline">Fermé</Badge>
-      default:
-        return <Badge variant="outline">{status}</Badge>
+      case "resolved": return <Badge className="bg-green-600">Résolu</Badge>
+      case "in_progress": return <Badge className="bg-orange-600">En cours</Badge>
+      case "reported": return <Badge variant="secondary">Signalé</Badge>
+      case "closed": return <Badge variant="outline">Fermé</Badge>
+      default: return <Badge variant="outline">{status}</Badge>
     }
   }
-
   const getPriorityBadge = (priority: string) => {
     switch (priority) {
-      case "urgent":
-        return <Badge variant="destructive">Urgent</Badge>
-      case "high":
-        return <Badge className="bg-orange-600">Élevé</Badge>
-      case "medium":
-        return <Badge variant="secondary">Moyen</Badge>
-      case "low":
-        return <Badge variant="outline">Faible</Badge>
-      default:
-        return <Badge variant="outline">{priority}</Badge>
+      case "urgent": return <Badge variant="destructive">Urgent</Badge>
+      case "high": return <Badge className="bg-orange-600">Élevé</Badge>
+      case "medium": return <Badge variant="secondary">Moyen</Badge>
+      case "low": return <Badge variant="outline">Faible</Badge>
+      default: return <Badge variant="outline">{priority}</Badge>
     }
   }
-
   const getCategoryLabel = (category: string) => {
-    const categories = {
-      plumbing: "Plomberie",
-      electrical: "Électricité",
-      heating: "Chauffage",
-      security: "Sécurité",
-      other: "Autre",
-    }
+    const categories = { plumbing: "Plomberie", electrical: "Électricité", heating: "Chauffage", security: "Sécurité", other: "Autre" }
     return categories[category as keyof typeof categories] || category
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="text-gray-600">Chargement de l'incident...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (!incident) {
-    return (
-      <div className="text-center py-8">
-        <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-        <p className="text-gray-600">Incident non trouvé</p>
-        <Link href="/owner/rental-management/incidents">
-          <Button className="mt-4">Retour aux incidents</Button>
-        </Link>
-      </div>
-    )
-  }
+  if (isLoading) return <div className="flex items-center justify-center min-h-[400px]"><div className="text-center space-y-4"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div><p className="text-gray-600">Chargement de l'incident...</p></div></div>
+  if (!incident) return <div className="text-center py-8"><AlertTriangle className="h-12 w-12 mx-auto mb-4 text-gray-300" /><p className="text-gray-600">Incident non trouvé</p><Link href="/owner/rental-management/incidents"><Button className="mt-4">Retour aux incidents</Button></Link></div>
 
   return (
     <div className="space-y-6">
