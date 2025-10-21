@@ -28,8 +28,35 @@ export async function GET(request: NextRequest) {
 
     console.log("🔍 [TENANT INCIDENTS] Recherche incidents pour tenantId:", tenantId)
 
-    // Aligner avec paiements: inclure (a) incidents reportés par le tenant OU (b) incidents liés à un bail où il est tenant
-    const { data: incidents, error } = await supabase
+    // Récupérer les incidents de deux façons : (1) reportés par le tenant, (2) liés à ses baux
+    console.log("🔍 [TENANT INCIDENTS] Recherche incidents reportés par tenant...")
+    
+    // 1. Incidents reportés directement par le tenant
+    const { data: reportedIncidents, error: reportedError } = await supabase
+      .from("incidents")
+      .select(`
+        *,
+        property:properties(
+          id,
+          title,
+          address,
+          city,
+          postal_code,
+          property_type,
+          surface
+        )
+      `)
+      .eq("reported_by", tenantId)
+      .order("created_at", { ascending: false })
+
+    if (reportedError) {
+      console.error("❌ [TENANT INCIDENTS] Erreur incidents reportés:", reportedError)
+      return NextResponse.json({ error: "Erreur base de données" }, { status: 500 })
+    }
+
+    // 2. Incidents liés aux baux du tenant
+    console.log("🔍 [TENANT INCIDENTS] Recherche incidents via baux...")
+    const { data: leaseIncidents, error: leaseError } = await supabase
       .from("incidents")
       .select(`
         *,
@@ -48,19 +75,25 @@ export async function GET(request: NextRequest) {
           owner_id
         )
       `)
-      .or(`reported_by.eq.${tenantId},leases.tenant_id.eq.${tenantId}`)
+      .eq("lease.tenant_id", tenantId)
       .order("created_at", { ascending: false })
 
-    console.log("🔍 [TENANT INCIDENTS] Incidents trouvés:", incidents?.length || 0, incidents)
-
-    if (error) {
-      console.error("❌ [TENANT INCIDENTS] Erreur récupération incidents:", error)
+    if (leaseError) {
+      console.error("❌ [TENANT INCIDENTS] Erreur incidents baux:", leaseError)
       return NextResponse.json({ error: "Erreur base de données" }, { status: 500 })
     }
 
+    // Combiner et dédupliquer les incidents
+    const allIncidents = [...(reportedIncidents || []), ...(leaseIncidents || [])]
+    const uniqueIncidents = allIncidents.filter((incident, index, self) => 
+      index === self.findIndex(i => i.id === incident.id)
+    )
+
+    console.log("🔍 [TENANT INCIDENTS] Incidents trouvés:", uniqueIncidents?.length || 0, uniqueIncidents)
+
     // Pour chaque incident, récupérer les réponses
     const incidentsWithResponses = await Promise.all(
-      (incidents || []).map(async (incident) => {
+      (uniqueIncidents || []).map(async (incident) => {
         const { data: responses } = await supabase
           .from("incident_responses")
           .select("id, message, user_type, created_at")
