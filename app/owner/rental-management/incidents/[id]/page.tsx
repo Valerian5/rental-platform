@@ -134,7 +134,6 @@ export default function IncidentDetailPage() {
       setResponse({ message: "", status: "", cost: "" })
       setShowResponseDialog(false)
       await loadIncidentData()
-      router.refresh()
     } catch (error) {
       toast.error("Erreur lors de l'envoi de la réponse")
     }
@@ -161,7 +160,6 @@ export default function IncidentDetailPage() {
       setIntervention({ type: "owner", scheduled_date: "", description: "", provider_name: "", provider_contact: "", estimated_cost: "" })
       setShowInterventionDialog(false)
       await loadIncidentData()
-      router.refresh()
     } catch (error) {
       toast.error("Erreur lors de la programmation")
     }
@@ -186,7 +184,6 @@ export default function IncidentDetailPage() {
       setResolveForm({ amount: "", date: new Date().toISOString().slice(0, 10), description: "", category: "repair", file: null })
       setShowResolveDialog(false)
       await loadIncidentData()
-      router.refresh()
     } catch (error) {
       toast.error("Erreur lors de la résolution")
     }
