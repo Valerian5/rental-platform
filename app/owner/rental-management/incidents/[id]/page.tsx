@@ -87,7 +87,7 @@ export default function IncidentDetailPage() {
 
   const loadIncidentData = async () => {
     try {
-      const res = await fetch(`/api/incidents/${params.id}`, { cache: "no-store" })
+      const res = await fetch(`/api/incidents/${params.id}?t=${Date.now()}`, { cache: "no-store" })
       if (!res.ok) throw new Error(`Erreur serveur: ${res.status}`)
       const data = await res.json()
       if (data.success) {

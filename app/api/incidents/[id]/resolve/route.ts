@@ -90,7 +90,18 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ success: false, error: 'Erreur mise à jour incident' }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true, expense, incident: updatedIncident })
+    return NextResponse.json({ 
+      success: true, 
+      expense, 
+      incident: updatedIncident,
+      timestamp: new Date().toISOString(),
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      },
+    })
   } catch (error) {
     console.error('Erreur POST /api/incidents/[id]/resolve:', error)
     return NextResponse.json({ success: false, error: 'Erreur serveur' }, { status: 500 })

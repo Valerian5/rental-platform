@@ -89,10 +89,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({
       success: true,
       message: `${newPhotoUrls.length} photo(s) ajoutée(s) avec succès`,
-      photos: newPhotoUrls
+      photos: newPhotoUrls,
+      timestamp: new Date().toISOString(),
     }, {
       headers: {
-        'Cache-Control': 'no-store',
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
       },
     })
 

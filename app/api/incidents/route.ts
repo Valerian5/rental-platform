@@ -100,7 +100,17 @@ export async function POST(request: NextRequest) {
       // On n'échoue pas la requête pour un souci d'email
     }
 
-    return NextResponse.json({ success: true, incident })
+    return NextResponse.json({ 
+      success: true, 
+      incident,
+      timestamp: new Date().toISOString(),
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      },
+    })
   } catch (error) {
     console.error("Erreur POST /api/incidents:", error)
     return NextResponse.json({ success: false, error: "Erreur serveur" }, { status: 500 })

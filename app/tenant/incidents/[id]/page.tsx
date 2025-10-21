@@ -111,7 +111,7 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
   const loadIncident = async (incidentId: string) => {
     try {
       console.log("🔍 [TENANT INCIDENT DETAIL] Chargement incident:", incidentId)
-      const res = await fetch(`/api/incidents/${incidentId}`, { cache: 'no-store' })
+      const res = await fetch(`/api/incidents/${incidentId}?t=${Date.now()}`, { cache: 'no-store' })
       const data = await res.json()
 
       console.log("🔍 [TENANT INCIDENT DETAIL] Réponse API:", data)

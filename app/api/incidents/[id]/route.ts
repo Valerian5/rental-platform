@@ -86,8 +86,15 @@ export async function GET(
       {
         success: true,
         incident: { ...incident, responses: mappedResponses },
+        timestamp: new Date().toISOString(), // Ajouter timestamp pour éviter le cache
       },
-      { headers: { "Cache-Control": "no-store" } }
+      { 
+        headers: { 
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+          "Pragma": "no-cache",
+          "Expires": "0",
+        } 
+      }
     );
   } catch (err) {
     console.error("Erreur API incident GET:", err);
@@ -182,7 +189,17 @@ export async function PUT(
       }
     }
 
-    return NextResponse.json({ success: true, incident: data });
+    return NextResponse.json({ 
+      success: true, 
+      incident: data,
+      timestamp: new Date().toISOString(),
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      },
+    });
   } catch (err) {
     console.error("Erreur API incident PUT:", err);
     return NextResponse.json({ success: false, error: "Erreur serveur" }, { status: 500 });
