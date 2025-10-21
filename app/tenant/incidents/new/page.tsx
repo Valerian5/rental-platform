@@ -148,7 +148,7 @@ export default function NewIncidentPage() {
       }
 
       toast.success("Incident signalé avec succès")
-      router.push("/tenant/rental-management")
+      router.push("/tenant/rental-management/incidents")
       router.refresh()
 
     } catch (error) {
