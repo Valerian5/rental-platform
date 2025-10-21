@@ -111,8 +111,16 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
   const loadIncident = async (incidentId: string) => {
     try {
       const timestamp = Date.now()
-      console.log("🔍 [TENANT INCIDENT DETAIL] Chargement incident:", incidentId, "timestamp:", timestamp)
-      const res = await fetch(`/api/incidents/${incidentId}?t=${timestamp}`, { cache: 'no-store' })
+      const randomId = Math.random().toString(36).substring(7)
+      console.log("🔍 [TENANT INCIDENT DETAIL] Chargement incident:", incidentId, "timestamp:", timestamp, "randomId:", randomId)
+      const res = await fetch(`/api/incidents/${incidentId}?t=${timestamp}&r=${randomId}`, { 
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      })
       const data = await res.json()
 
       console.log("📊 [TENANT INCIDENT DETAIL] Réponse brute API:", {

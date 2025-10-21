@@ -88,8 +88,16 @@ export default function IncidentDetailPage() {
   const loadIncidentData = async () => {
     try {
       const timestamp = Date.now()
-      console.log("🔍 [OWNER INCIDENT DETAIL] Chargement incident:", params.id, "timestamp:", timestamp)
-      const res = await fetch(`/api/incidents/${params.id}?t=${timestamp}`, { cache: "no-store" })
+      const randomId = Math.random().toString(36).substring(7)
+      console.log("🔍 [OWNER INCIDENT DETAIL] Chargement incident:", params.id, "timestamp:", timestamp, "randomId:", randomId)
+      const res = await fetch(`/api/incidents/${params.id}?t=${timestamp}&r=${randomId}`, { 
+        cache: "no-store",
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      })
       if (!res.ok) throw new Error(`Erreur serveur: ${res.status}`)
       const data = await res.json()
       

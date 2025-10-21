@@ -52,11 +52,14 @@ export async function GET(
       );
     }
 
-    // Récupérer les réponses associées DIRECTEMENT depuis Supabase avec cache-busting
+    // Récupérer les réponses associées DIRECTEMENT depuis Supabase avec cache-busting FORCÉ
     const timestamp = Date.now()
     console.log("🔍 [API GET INCIDENT] Récupération réponses pour incident:", incidentId, "à", new Date().toISOString(), "timestamp:", timestamp)
     
-    const { data: responses, error: responsesError } = await server
+    // Forcer un refresh complet en recréant la connexion Supabase
+    const freshServer = createServerClient()
+    
+    const { data: responses, error: responsesError } = await freshServer
       .from("incident_responses")
       .select(`
         id,
@@ -69,7 +72,9 @@ export async function GET(
       `)
       .eq("incident_id", incidentId)
       .order("created_at", { ascending: true })
-      .abortSignal(AbortSignal.timeout(10000)); // Timeout pour forcer le refresh
+      .abortSignal(AbortSignal.timeout(10000)) // Timeout pour forcer le refresh
+      .neq("id", "00000000-0000-0000-0000-000000000000") // Force un scan complet de la table
+      .gte("created_at", "1970-01-01"); // Force un scan complet de la table
 
     console.log("📊 [API GET INCIDENT] Réponses brutes depuis Supabase:", {
       count: responses?.length || 0,
