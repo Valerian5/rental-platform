@@ -126,7 +126,12 @@ export default function IncidentDetailPage() {
   // Rafraîchir les données quand l'onglet redevient visible
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.visibilityState === "visible") loadIncidentData()
+      if (document.visibilityState === "visible") {
+        // Délai pour éviter les rechargements trop fréquents
+        setTimeout(() => {
+          loadIncidentData()
+        }, 1000)
+      }
     }
     document.addEventListener("visibilitychange", handleVisibility)
     return () => document.removeEventListener("visibilitychange", handleVisibility)
@@ -158,17 +163,25 @@ export default function IncidentDetailPage() {
           
           if (payload.eventType === 'INSERT') {
             console.log("✅ [OWNER REALTIME] Nouvelle réponse ajoutée:", payload.new)
-            // Mettre à jour l'état local directement
-            const newResponse = {
-              id: payload.new.id,
-              message: payload.new.message,
-              user_type: payload.new.author_type,
-              user_id: payload.new.author_id,
-              user_name: payload.new.author_name || "Utilisateur",
-              created_at: payload.new.created_at,
-              attachments: payload.new.attachments || [],
-            }
-            setResponses(prev => [...prev, newResponse])
+            // Vérifier si la réponse existe déjà pour éviter les doublons
+            setResponses(prev => {
+              const exists = prev.some(r => r.id === payload.new.id)
+              if (exists) {
+                console.log("⚠️ [OWNER REALTIME] Réponse déjà présente, ignorée")
+                return prev
+              }
+              // Mettre à jour l'état local directement
+              const newResponse = {
+                id: payload.new.id,
+                message: payload.new.message,
+                user_type: payload.new.author_type,
+                user_id: payload.new.author_id,
+                user_name: payload.new.author_name || "Utilisateur",
+                created_at: payload.new.created_at,
+                attachments: payload.new.attachments || [],
+              }
+              return [...prev, newResponse]
+            })
           } else if (payload.eventType === 'DELETE') {
             console.log("🗑️ [OWNER REALTIME] Réponse supprimée:", payload.old)
             // Supprimer de l'état local
@@ -210,19 +223,9 @@ export default function IncidentDetailPage() {
       
       const data = await res.json()
       
-      // Mettre à jour l'état local immédiatement
-      if (data.success && data.response) {
-        const newResponse = {
-          id: data.response.id,
-          message: data.response.message,
-          user_type: data.response.author_type,
-          user_id: data.response.author_id,
-          user_name: data.response.author_name || "Utilisateur",
-          created_at: data.response.created_at,
-          attachments: data.response.attachments || [],
-        }
-        setResponses(prev => [...prev, newResponse])
-      }
+      // Ne pas ajouter localement - laisser le Realtime s'en charger
+      // pour éviter les doublons
+      console.log("✅ [OWNER INCIDENT DETAIL] Réponse envoyée - Realtime va mettre à jour l'affichage")
       
       if (response.status) {
         await rentalManagementService.updateIncidentStatus(
@@ -235,8 +238,6 @@ export default function IncidentDetailPage() {
       toast.success("Réponse envoyée avec succès")
       setResponse({ message: "", status: "", cost: "" })
       setShowResponseDialog(false)
-      
-      console.log("✅ [OWNER INCIDENT DETAIL] Réponse ajoutée localement")
     } catch (error) {
       toast.error("Erreur lors de l'envoi de la réponse")
     }

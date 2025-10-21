@@ -1,6 +1,7 @@
 /**
  * Script de test pour vérifier la synchronisation des messages d'incidents
  * Ce script simule l'ajout et la suppression de messages pour tester la synchronisation
+ * et vérifie qu'il n'y a pas de doublons
  */
 
 const { createClient } = require('@supabase/supabase-js')
@@ -84,12 +85,22 @@ async function testIncidentMessages() {
     
     console.log(`📊 Réponses après ajout: ${updatedResponses.length}`)
     
-    // 5. Vérifier que la nouvelle réponse est présente
+    // 5. Vérifier que la nouvelle réponse est présente et qu'il n'y a pas de doublons
     const foundResponse = updatedResponses.find(r => r.id === newResponse.id)
     if (foundResponse) {
       console.log('✅ Nouvelle réponse visible dans la base de données')
     } else {
       console.error('❌ Nouvelle réponse non trouvée')
+    }
+    
+    // Vérifier qu'il n'y a pas de doublons
+    const duplicateIds = updatedResponses.filter((response, index, self) => 
+      self.findIndex(r => r.id === response.id) !== index
+    )
+    if (duplicateIds.length > 0) {
+      console.error('❌ Doublons détectés:', duplicateIds.map(d => d.id))
+    } else {
+      console.log('✅ Aucun doublon détecté')
     }
     
     // 6. Supprimer la réponse de test
