@@ -158,7 +158,7 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
       setResponse({ message: "" })
       setShowResponseDialog(false)
 
-      // Recharger les données
+      // Recharger les données avec cache-busting
       await loadIncident(params.id)
     } catch (error) {
       toast.error("Erreur lors de l'envoi de la réponse")

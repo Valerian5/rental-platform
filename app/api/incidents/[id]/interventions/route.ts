@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase"
+import { emailService } from "@/lib/email-service"
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -31,8 +32,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const { type = 'owner', scheduled_date, description, provider_name, provider_contact, estimated_cost } = body
 
     // Auth
+    console.log("🔍 [API INTERVENTIONS] Vérification authentification...")
     const { data: { user } } = await server.auth.getUser()
-    if (!user) return NextResponse.json({ success: false, error: "Non authentifié" }, { status: 401 })
+    console.log("🔍 [API INTERVENTIONS] Utilisateur:", user?.id, user?.email)
+    if (!user) {
+      console.error("❌ [API INTERVENTIONS] Non authentifié")
+      return NextResponse.json({ success: false, error: "Non authentifié" }, { status: 401 })
+    }
 
     // Charger incident + bail
     const { data: incident, error: incidentError } = await server
