@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase-server"
+import { createClient } from "@supabase/supabase-js"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const incidentId = params.id
-    const server = createServerClient()
+    const server = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
     
     console.log("🎫 [TICKETS API] Récupération tickets pour incident:", incidentId)
 
@@ -39,7 +42,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     console.log("🎫 [TICKETS API] Création ticket pour incident:", incidentId)
 
-    const server = createServerClient()
+    const server = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
     
     // Récupérer le nom de l'utilisateur
     const { data: user, error: userError } = await server
