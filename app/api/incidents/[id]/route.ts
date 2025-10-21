@@ -1,21 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createServerClient } from "@/lib/supabase";
 import { emailService } from "@/lib/email-service";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    const server = createServerClient()
     const incidentId = params.id;
 
     // Récupérer l'incident avec ses relations
-    const { data: incident, error } = await supabase
+    const { data: incident, error } = await server
       .from("incidents")
       .select(`
         *,
@@ -56,10 +52,11 @@ export async function GET(
       );
     }
 
-    // Récupérer les réponses associées DIRECTEMENT depuis Supabase
-    console.log("🔍 [API GET INCIDENT] Récupération réponses pour incident:", incidentId, "à", new Date().toISOString())
+    // Récupérer les réponses associées DIRECTEMENT depuis Supabase avec cache-busting
+    const timestamp = Date.now()
+    console.log("🔍 [API GET INCIDENT] Récupération réponses pour incident:", incidentId, "à", new Date().toISOString(), "timestamp:", timestamp)
     
-    const { data: responses, error: responsesError } = await supabase
+    const { data: responses, error: responsesError } = await server
       .from("incident_responses")
       .select(`
         id,

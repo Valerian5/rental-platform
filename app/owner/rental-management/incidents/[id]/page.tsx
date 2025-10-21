@@ -596,12 +596,12 @@ export default function IncidentDetailPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="owner">Par moi-même</SelectItem>
-                  <SelectItem value="professional">Par un professionnel</SelectItem>
+                  <SelectItem value="external">Par un professionnel</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {intervention.type === "professional" && (
+            {intervention.type === "external" && (
               <>
                 <div>
                   <label className="text-sm font-medium">Nom du prestataire</label>
