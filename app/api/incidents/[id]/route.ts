@@ -49,6 +49,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 
     // Récupérer les réponses séparément pour éviter l'ambiguïté
+    console.log("🔍 [API INCIDENT DETAIL] Récupération réponses pour incident:", incidentId)
     const { data: responses, error: responsesError } = await supabase
       .from("incident_responses")
       .select(`
@@ -58,29 +59,30 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         author_name,
         attachments,
         created_at,
-        author_id,
-        user:users!incident_responses_author_id_fkey(
-          id,
-          first_name,
-          last_name
-        )
+        author_id
       `)
       .eq("incident_id", incidentId)
       .order("created_at", { ascending: true })
 
+    console.log("🔍 [API INCIDENT DETAIL] Réponses trouvées:", responses?.length || 0, responses)
+
     if (responsesError) {
-      console.error("Erreur récupération réponses:", responsesError)
+      console.error("❌ [API INCIDENT DETAIL] Erreur récupération réponses:", responsesError)
     }
 
     // Combiner les données
+    const mappedResponses = (responses || []).map((r: any) => ({ 
+      ...r, 
+      user_type: r.author_type,
+      user_id: r.author_id,
+      user_name: r.author_name || 'Utilisateur'
+    }))
+    
+    console.log("🔍 [API INCIDENT DETAIL] Réponses mappées:", mappedResponses.length, mappedResponses)
+
     const incidentWithResponses = {
       ...incident,
-      responses: (responses || []).map((r: any) => ({ 
-        ...r, 
-        user_type: r.author_type,
-        user_id: r.author_id,
-        user_name: r.author_name || (r.user ? `${r.user.first_name} ${r.user.last_name}` : '')
-      })),
+      responses: mappedResponses,
     }
 
     return NextResponse.json({

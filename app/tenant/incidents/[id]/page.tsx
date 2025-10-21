@@ -110,18 +110,24 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
 
   const loadIncident = async (incidentId: string) => {
     try {
+      console.log("🔍 [TENANT INCIDENT DETAIL] Chargement incident:", incidentId)
       const res = await fetch(`/api/incidents/${incidentId}`, { cache: 'no-store' })
       const data = await res.json()
+
+      console.log("🔍 [TENANT INCIDENT DETAIL] Réponse API:", data)
 
       if (data.success) {
         setIncident(data.incident)
         setResponses(data.incident.responses || [])
+        console.log("✅ [TENANT INCIDENT DETAIL] Incidents chargé:", data.incident)
+        console.log("✅ [TENANT INCIDENT DETAIL] Réponses:", data.incident.responses?.length || 0, data.incident.responses)
       } else {
+        console.error("❌ [TENANT INCIDENT DETAIL] Erreur API:", data.error)
         toast.error("Incident non trouvé")
         router.push("/tenant/rental-management/incidents")
       }
     } catch (error) {
-      console.error("Erreur chargement incident:", error)
+      console.error("❌ [TENANT INCIDENT DETAIL] Erreur fetch:", error)
       toast.error("Erreur lors du chargement")
     }
   }
