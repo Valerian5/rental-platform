@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { FileText, Plus, Search, Filter, Calendar, User, Building, Clock, CheckCircle } from "lucide-react"
+import { FileText, Search, Calendar, Building } from "lucide-react"
 import { authService } from "@/lib/auth-service"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
@@ -105,20 +105,6 @@ export default function TenantMaintenancePage() {
     }
   }
 
-  const getPriorityBadge = (priority: string) => {
-    switch (priority) {
-      case "urgent":
-        return <Badge variant="destructive">Urgent</Badge>
-      case "high":
-        return <Badge className="bg-orange-600">Élevé</Badge>
-      case "medium":
-        return <Badge variant="secondary">Moyen</Badge>
-      case "low":
-        return <Badge variant="outline">Faible</Badge>
-      default:
-        return <Badge variant="outline">{priority}</Badge>
-    }
-  }
 
   const getCategoryLabel = (category: string) => {
     const categories = {
@@ -155,20 +141,14 @@ export default function TenantMaintenancePage() {
 
   return (
     <div className="space-y-6">
-      {/* Header avec actions */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold">Demandes de travaux</h2>
+          <h2 className="text-2xl font-bold">Travaux planifiés par le propriétaire</h2>
           <p className="text-muted-foreground">
-            Gérez vos demandes de travaux ({filteredRequests.length} demande{filteredRequests.length > 1 ? 's' : ''})
+            Consultez les travaux de maintenance programmés pour votre logement ({filteredRequests.length} travail{filteredRequests.length > 1 ? 'x' : ''})
           </p>
         </div>
-        <Button asChild>
-          <Link href="/tenant/maintenance/new">
-            <Plus className="h-4 w-4 mr-2" />
-            Nouvelle demande
-          </Link>
-        </Button>
       </div>
 
       {/* Filtres */}
@@ -223,21 +203,13 @@ export default function TenantMaintenancePage() {
         <Card>
           <CardContent className="text-center py-12">
             <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-            <h3 className="text-lg font-semibold mb-2">Aucune demande</h3>
+            <h3 className="text-lg font-semibold mb-2">Aucun travail planifié</h3>
             <p className="text-muted-foreground mb-4">
               {requests.length === 0 
-                ? "Vous n'avez fait aucune demande de travaux pour le moment."
-                : "Aucune demande ne correspond à vos critères de recherche."
+                ? "Aucun travail de maintenance n'est actuellement planifié pour votre logement."
+                : "Aucun travail ne correspond à vos critères de recherche."
               }
             </p>
-            {requests.length === 0 && (
-              <Button asChild>
-                <Link href="/tenant/maintenance/new">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Nouvelle demande
-                </Link>
-              </Button>
-            )}
           </CardContent>
         </Card>
       ) : (
@@ -250,7 +222,6 @@ export default function TenantMaintenancePage() {
                     <div className="flex items-center gap-3 mb-2">
                       <h3 className="text-lg font-semibold">{request.title}</h3>
                       {getStatusBadge(request.status)}
-                      {getPriorityBadge(request.priority)}
                     </div>
                     
                     <p className="text-muted-foreground mb-3 line-clamp-2">{request.description}</p>
@@ -265,27 +236,9 @@ export default function TenantMaintenancePage() {
                         <span>{new Date(request.created_at).toLocaleDateString("fr-FR")}</span>
                       </div>
                       <Badge variant="outline">{getCategoryLabel(request.category)}</Badge>
-                      {request.estimated_cost && (
-                        <div className="flex items-center gap-1">
-                          <span>Coût estimé : {request.estimated_cost}€</span>
-                        </div>
-                      )}
-                      {request.responses && request.responses.length > 0 && (
-                        <div className="flex items-center gap-1">
-                          <User className="h-4 w-4" />
-                          <span>{request.responses.length} échange{request.responses.length > 1 ? 's' : ''}</span>
-                        </div>
-                      )}
                     </div>
                   </div>
                   
-                  <div className="flex items-center gap-2 ml-4">
-                    <Button asChild variant="outline" size="sm">
-                      <Link href={`/tenant/maintenance/${request.id}`}>
-                        Voir les détails
-                      </Link>
-                    </Button>
-                  </div>
                 </div>
               </CardContent>
             </Card>
