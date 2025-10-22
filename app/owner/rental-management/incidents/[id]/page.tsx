@@ -34,6 +34,7 @@ import {
 } from "lucide-react"
 import { authService } from "@/lib/auth-service"
 import { rentalManagementService } from "@/lib/rental-management-service"
+import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
 import Link from "next/link"
 import IncidentTicketing from "@/components/incident-ticketing"
@@ -254,7 +255,15 @@ export default function IncidentDetailPage() {
       formData.append('category', resolveForm.category)
       if (resolveForm.file) formData.append('file', resolveForm.file)
 
-      const res = await fetch(`/api/incidents/${incident.id}/resolve`, { method: 'POST', body: formData })
+      // Récupérer le token d'authentification
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+
+      const res = await fetch(`/api/incidents/${incident.id}/resolve`, { 
+        method: 'POST', 
+        body: formData,
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      })
       const data = await res.json()
       if (!res.ok || !data.success) throw new Error(data?.error || 'Erreur résolution incident')
 

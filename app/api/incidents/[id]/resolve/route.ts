@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceSupabaseClient } from "@/lib/supabase-server-client"
-import { createServerClient } from "@/lib/supabase"
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -18,31 +17,29 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const category = String(formData.get('category') || 'repair')
     const file = formData.get('file') as File | null
 
-    // Authentification avec service role client (bypass RLS)
+    // Authentification avec service role client (comme les autres APIs qui fonctionnent)
     const authHeader = request.headers.get("authorization") || request.headers.get("Authorization")
     const token = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : undefined
 
-    let user, userError
-    if (token) {
-      const result = await supabase.auth.getUser(token)
-      user = result.data.user
-      userError = result.error
-    } else {
-      // Fallback: essayer de récupérer l'utilisateur depuis les cookies
-      try {
-        const server = createServerClient()
-        const result = await server.auth.getUser()
-        user = result.data.user
-        userError = result.error
-      } catch (cookieError) {
-        console.error("❌ [RESOLVE API] Erreur cookies:", cookieError)
-        return NextResponse.json({ success: false, error: 'Non authentifié' }, { status: 401 })
-      }
-    }
+    const { data: { user }, error: userError } = token
+      ? await supabase.auth.getUser(token)
+      : await supabase.auth.getUser()
 
     if (userError || !user) {
       console.error("❌ [RESOLVE API] Erreur authentification:", userError)
       return NextResponse.json({ success: false, error: 'Non authentifié' }, { status: 401 })
+    }
+
+    // Vérifier que l'utilisateur est un propriétaire
+    const { data: userData, error: userDataError } = await supabase
+      .from("users")
+      .select("id, user_type")
+      .eq("id", user.id)
+      .single()
+
+    if (userDataError || !userData || userData.user_type !== "owner") {
+      console.error("❌ [RESOLVE API] Utilisateur non autorisé:", userDataError)
+      return NextResponse.json({ success: false, error: 'Accès non autorisé' }, { status: 403 })
     }
 
     // Charger incident + bail + propriété avec service role client
