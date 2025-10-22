@@ -384,24 +384,19 @@ export default function IncidentDetailPage() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {incident.photos.map((photo: string, index: number) => {
-                    // Utiliser directement l'URL de la photo si c'est une URL publique
-                    const imageUrl = photo.startsWith("http") ? photo : `/api/incidents/${incident.id}/photos/${photo}`
-                    
-                    return (
-                      <div key={index} className="aspect-square">
-                        <img
-                          src={imageUrl}
-                          alt={`Photo ${index + 1}`}
-                          className="w-full h-full object-cover rounded-lg border cursor-pointer hover:opacity-80"
-                          onClick={() => window.open(imageUrl, "_blank")}
-                          onError={(e) => {
-                            e.currentTarget.src = "/placeholder.svg?height=200&width=200&text=Image+non+disponible"
-                          }}
-                        />
-                      </div>
-                    )
-                  })}
+                  {incident.photos.map((photo: string, index: number) => (
+                    <div key={index} className="aspect-square">
+                      <img
+                        src={photo}
+                        alt={`Photo ${index + 1}`}
+                        className="w-full h-full object-cover rounded-lg border cursor-pointer hover:opacity-80"
+                        onClick={() => window.open(photo, "_blank")}
+                        onError={(e) => {
+                          e.currentTarget.src = "/placeholder.svg?height=200&width=200&text=Image+non+disponible"
+                        }}
+                      />
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>

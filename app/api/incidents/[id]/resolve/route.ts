@@ -18,7 +18,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const category = String(formData.get('category') || 'repair')
     const file = formData.get('file') as File | null
 
-    // Authentification avec token Bearer ou cookies (comme payments API)
+    // Authentification avec service role client (bypass RLS)
     const authHeader = request.headers.get("authorization") || request.headers.get("Authorization")
     const token = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : undefined
 
@@ -28,11 +28,16 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       user = result.data.user
       userError = result.error
     } else {
-      // Utiliser createServerClient comme dans payments API
-      const server = createServerClient()
-      const result = await server.auth.getUser()
-      user = result.data.user
-      userError = result.error
+      // Fallback: essayer de récupérer l'utilisateur depuis les cookies
+      try {
+        const server = createServerClient()
+        const result = await server.auth.getUser()
+        user = result.data.user
+        userError = result.error
+      } catch (cookieError) {
+        console.error("❌ [RESOLVE API] Erreur cookies:", cookieError)
+        return NextResponse.json({ success: false, error: 'Non authentifié' }, { status: 401 })
+      }
     }
 
     if (userError || !user) {
@@ -40,7 +45,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ success: false, error: 'Non authentifié' }, { status: 401 })
     }
 
-    // Charger incident + bail + propriété
+    // Charger incident + bail + propriété avec service role client
     const { data: incident, error: incidentError } = await supabase
       .from('incidents')
       .select('id, title, lease_id, property_id, lease:leases(id, owner_id, tenant_id), property:properties(id,title)')
@@ -48,11 +53,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .single()
 
     if (incidentError || !incident) {
+      console.error("❌ [RESOLVE API] Incident non trouvé:", incidentError)
       return NextResponse.json({ success: false, error: 'Incident introuvable' }, { status: 404 })
     }
 
     // Vérifier ownership
     if (incident.lease?.owner_id !== user.id) {
+      console.error("❌ [RESOLVE API] Accès refusé - user:", user.id, "owner:", incident.lease?.owner_id)
       return NextResponse.json({ success: false, error: 'Accès refusé' }, { status: 403 })
     }
 

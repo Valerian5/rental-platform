@@ -28,24 +28,19 @@ export async function GET(
       return NextResponse.json({ error: "Incident non trouvé" }, { status: 404 })
     }
 
-    // Chercher la photo correspondante dans les URLs stockées
-    // Les photos sont stockées avec des URLs complètes, on cherche par nom de fichier
-    const photoUrl = incident.photos?.find((url: string) => {
-      // Extraire le nom de fichier de l'URL
-      const urlFilename = url.split('/').pop()?.split('?')[0] // Enlever les paramètres de query
-      return urlFilename === filename || url.includes(filename)
-    })
+    // Les photos sont stockées avec des URLs publiques complètes
+    // Si on a des URLs publiques, rediriger vers la première disponible
+    if (incident.photos && incident.photos.length > 0) {
+      const publicUrl = incident.photos.find(url => url.includes('supabase.co/storage/v1/object/public'))
+      if (publicUrl) {
+        console.log("✅ [PHOTOS API] Redirection vers URL publique:", publicUrl)
+        return NextResponse.redirect(publicUrl)
+      }
+    }
     
-    if (!photoUrl) {
-      console.error("❌ [PHOTOS API] Photo non trouvée dans l'incident:", filename)
-      console.log("📸 [PHOTOS API] URLs disponibles:", incident.photos)
-      return NextResponse.json({ error: "Photo non trouvée" }, { status: 404 })
-    }
-
-    // Si c'est déjà une URL publique Supabase, rediriger directement
-    if (photoUrl.includes('supabase.co/storage/v1/object/public')) {
-      return NextResponse.redirect(photoUrl)
-    }
+    console.error("❌ [PHOTOS API] Aucune photo publique trouvée pour l'incident:", incidentId)
+    console.log("📸 [PHOTOS API] URLs disponibles:", incident.photos)
+    return NextResponse.json({ error: "Photo non trouvée" }, { status: 404 })
 
     // Sinon, essayer de récupérer depuis le storage
     const tryDownload = async (bucket: string, path: string) => {
