@@ -433,14 +433,7 @@ export default function IncidentDetailPage({ params }: { params: { id: string } 
                 <label className="text-sm font-medium text-gray-600">Catégorie</label>
                 <p className="font-medium">{getCategoryLabel(incident.category)}</p>
               </div>
-              <Separator />
-              <div>
-                <label className="text-sm font-medium text-gray-600">Priorité</label>
-                <div className="flex items-center gap-2 mt-1">
-                  {getPriorityIcon(incident.priority)}
-                  <span className="font-medium">{incident.priority}</span>
-                </div>
-              </div>
+              {/* Priorité masquée pour le locataire */}
               <Separator />
               <div>
                 <label className="text-sm font-medium text-gray-600">Statut</label>

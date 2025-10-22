@@ -183,6 +183,18 @@ export default function OwnerIncidentsPage() {
     }
   }
 
+  const getInterventionPlannedBadge = (incident: any) => {
+    // Affiche un badge spécifique lorsque l'incident est en cours (intervention programmée)
+    if (incident.status === "in_progress") {
+      return (
+        <Badge className="bg-blue-600 text-xs">
+          Intervention programmée
+        </Badge>
+      )
+    }
+    return null
+  }
+
   const getPriorityBadge = (priority: string) => {
     switch (priority) {
       case "urgent":
@@ -412,6 +424,7 @@ export default function OwnerIncidentsPage() {
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {getStatusBadge(incident.status)}
+                        {getInterventionPlannedBadge(incident)}
                         {getPriorityBadge(incident.priority)}
                         <Badge variant="outline" className="text-xs">
                           {getCategoryLabel(incident.category)}

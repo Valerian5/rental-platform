@@ -16,33 +16,45 @@ export async function GET(
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // Récupérer l'incident pour vérifier l'accès
-    const { data: incident, error: incidentError } = await server
-      .from("incidents")
-      .select("id, photos")
-      .eq("id", incidentId)
-      .single()
+    // Essayer de récupérer depuis plusieurs emplacements/buckets
+    // 1) incident-photos/{incidentId}/{filename}
+    // 2) incident-photos/{filename}
+    // 3) fallback proxy vers /api/documents/{filename}
 
-    if (incidentError || !incident) {
-      console.error("❌ [PHOTOS API] Incident non trouvé:", incidentError)
-      return NextResponse.json({ error: "Incident non trouvé" }, { status: 404 })
+    const tryDownload = async (path: string) => {
+      const res = await server.storage.from("incident-photos").download(path)
+      return res
     }
 
-    // Vérifier que la photo existe dans la liste des photos de l'incident
-    if (!incident.photos || !incident.photos.includes(filename)) {
-      console.error("❌ [PHOTOS API] Photo non trouvée dans l'incident")
+    let downloadRes = await tryDownload(`${incidentId}/${filename}`)
+
+    if ((downloadRes as any).error) {
+      downloadRes = await tryDownload(`${filename}`)
+    }
+
+    if ((downloadRes as any).error) {
+      // Fallback: proxy vers /api/documents/{filename}
+      try {
+        const url = new URL(request.url)
+        url.pathname = `/api/documents/${filename}`
+        const proxy = await fetch(url.toString())
+        if (proxy.ok) {
+          const blob = await proxy.arrayBuffer()
+          return new NextResponse(Buffer.from(blob), {
+            headers: {
+              'Content-Type': proxy.headers.get('Content-Type') || 'application/octet-stream',
+              'Content-Disposition': `inline; filename="${filename}"`,
+              'Cache-Control': 'public, max-age=31536000',
+            },
+          })
+        }
+      } catch (e) {
+        // ignore and continue to error out below
+      }
       return NextResponse.json({ error: "Photo non trouvée" }, { status: 404 })
     }
 
-    // Récupérer la photo depuis Supabase Storage
-    const { data, error } = await server.storage
-      .from("incident-photos")
-      .download(`${incidentId}/${filename}`)
-
-    if (error) {
-      console.error("❌ [PHOTOS API] Erreur téléchargement photo:", error)
-      return NextResponse.json({ error: "Erreur lors du téléchargement" }, { status: 500 })
-    }
+    const data = (downloadRes as any).data
 
     // Convertir le blob en ArrayBuffer
     const arrayBuffer = await data.arrayBuffer()
