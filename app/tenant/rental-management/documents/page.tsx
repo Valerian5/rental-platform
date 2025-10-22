@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Download, Search, Filter, Calendar, FileText, Upload, Eye } from "lucide-react"
+import { Download, Search, Filter, Calendar, FileText, Upload, Eye, AlertTriangle, CheckCircle, Clock } from "lucide-react"
 import { authService } from "@/lib/auth-service"
 import { toast } from "sonner"
+import { supabase } from "@/lib/supabase"
 
 interface Document {
   id: string
@@ -33,6 +34,9 @@ export default function TenantDocumentsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [typeFilter, setTypeFilter] = useState("all")
+  const [requiredDocuments, setRequiredDocuments] = useState<any[]>([])
+  const [showUploadDialog, setShowUploadDialog] = useState(false)
+  const [selectedDocumentType, setSelectedDocumentType] = useState("")
 
   useEffect(() => {
     const fetchData = async () => {
@@ -46,6 +50,7 @@ export default function TenantDocumentsPage() {
 
         setCurrentUser(user)
         await loadDocuments()
+        await loadRequiredDocuments()
       } catch (error) {
         console.error("Erreur:", error)
         toast.error("Erreur lors du chargement")
@@ -59,7 +64,13 @@ export default function TenantDocumentsPage() {
 
   const loadDocuments = async () => {
     try {
-      const res = await fetch("/api/documents/tenant", { cache: 'no-store' })
+      // Récupérer les documents via l'API avec token Bearer
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      const res = await fetch("/api/documents/tenant", { 
+        cache: 'no-store',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      })
       const data = await res.json()
 
       if (data.success) {
@@ -71,6 +82,27 @@ export default function TenantDocumentsPage() {
     } catch (error) {
       console.error("❌ Erreur fetch documents:", error)
       toast.error("Erreur lors du chargement des documents")
+    }
+  }
+
+  const loadRequiredDocuments = async () => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      const res = await fetch("/api/documents/check-obsolescence", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ userId: currentUser?.id })
+      })
+      const data = await res.json()
+      if (data.success) {
+        setRequiredDocuments(data.obsoleteDocuments || [])
+      }
+    } catch (error) {
+      console.error("❌ Erreur récupération documents requis:", error)
     }
   }
 
@@ -111,6 +143,32 @@ export default function TenantDocumentsPage() {
     return matchesSearch && matchesCategory && matchesType
   })
 
+  const getStatusIcon = (urgency: string) => {
+    switch (urgency) {
+      case "high":
+        return <AlertTriangle className="h-4 w-4 text-red-600" />
+      case "medium":
+        return <Clock className="h-4 w-4 text-yellow-600" />
+      case "low":
+        return <CheckCircle className="h-4 w-4 text-green-600" />
+      default:
+        return <Clock className="h-4 w-4 text-gray-600" />
+    }
+  }
+
+  const getStatusBadge = (urgency: string) => {
+    switch (urgency) {
+      case "high":
+        return <Badge variant="destructive">Urgent</Badge>
+      case "medium":
+        return <Badge className="bg-yellow-600">Bientôt expiré</Badge>
+      case "low":
+        return <Badge className="bg-green-600">À jour</Badge>
+      default:
+        return <Badge variant="outline">Inconnu</Badge>
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -139,6 +197,46 @@ export default function TenantDocumentsPage() {
           </Link>
         </Button>
       </div>
+
+      {/* Documents requis */}
+      {requiredDocuments.length > 0 && (
+        <Card className="border-orange-200 bg-orange-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-orange-800">
+              <AlertTriangle className="h-5 w-5" />
+              Documents à mettre à jour
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {requiredDocuments.map((doc, index) => (
+                <div key={index} className="flex items-center justify-between p-3 bg-white rounded-lg border">
+                  <div className="flex items-center gap-3">
+                    {getStatusIcon(doc.urgency)}
+                    <div>
+                      <h4 className="font-medium">{doc.documentName}</h4>
+                      <p className="text-sm text-gray-600">{doc.reason}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {getStatusBadge(doc.urgency)}
+                    <Button 
+                      size="sm" 
+                      onClick={() => {
+                        setSelectedDocumentType(doc.documentType)
+                        setShowUploadDialog(true)
+                      }}
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Mettre à jour
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filtres */}
       <Card>
