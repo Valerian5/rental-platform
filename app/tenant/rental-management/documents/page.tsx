@@ -191,9 +191,9 @@ export default function TenantDocumentsPage() {
           </p>
         </div>
         <Button asChild>
-          <Link href="/tenant/documents/upload">
+          <Link href="/tenant/rental-management/documents/upload">
             <Upload className="h-4 w-4 mr-2" />
-            Ajouter un document
+            Transmettre un document
           </Link>
         </Button>
       </div>
@@ -222,13 +222,12 @@ export default function TenantDocumentsPage() {
                     {getStatusBadge(doc.urgency)}
                     <Button 
                       size="sm" 
-                      onClick={() => {
-                        setSelectedDocumentType(doc.documentType)
-                        setShowUploadDialog(true)
-                      }}
+                      asChild
                     >
-                      <Upload className="h-4 w-4 mr-2" />
-                      Mettre à jour
+                      <Link href={`/tenant/rental-management/documents/upload?type=${doc.documentType}`}>
+                        <Upload className="h-4 w-4 mr-2" />
+                        Mettre à jour
+                      </Link>
                     </Button>
                   </div>
                 </div>
@@ -297,9 +296,9 @@ export default function TenantDocumentsPage() {
             </p>
             {documents.length === 0 && (
               <Button asChild>
-                <Link href="/tenant/documents/upload">
+                <Link href="/tenant/rental-management/documents/upload">
                   <Upload className="h-4 w-4 mr-2" />
-                  Ajouter un document
+                  Transmettre un document
                 </Link>
               </Button>
             )}
