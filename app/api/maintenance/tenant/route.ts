@@ -32,50 +32,50 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Accès non autorisé" }, { status: 403 })
     }
 
-    // Récupérer les incidents (demandes de maintenance) du locataire
-    const { data: incidents, error } = await supabase
-      .from("incidents")
+    // Récupérer les travaux de maintenance programmés pour les propriétés du locataire
+    const { data: maintenanceWorks, error } = await supabase
+      .from("maintenance_works")
       .select(`
         id,
         title,
         description,
+        type,
         category,
-        priority,
+        scheduled_date,
+        completed_date,
+        cost,
+        provider_name,
         status,
-        estimated_cost,
         created_at,
         property:properties(
           id,
           title,
-          address
-        ),
-        responses:incident_responses(
-          id,
-          message,
-          author_type,
-          created_at
+          address,
+          lease:leases!leases_property_id_fkey(
+            tenant_id
+          )
         )
       `)
-      .eq("reported_by", user.id)
-      .order("created_at", { ascending: false })
+      .eq("property.lease.tenant_id", user.id)
+      .order("scheduled_date", { ascending: false })
 
     if (error) {
-      console.error("❌ [TENANT MAINTENANCE] Erreur récupération incidents:", error)
-      return NextResponse.json({ success: false, error: "Erreur lors de la récupération des demandes" }, { status: 500 })
+      console.error("❌ [TENANT MAINTENANCE] Erreur récupération travaux:", error)
+      return NextResponse.json({ success: false, error: "Erreur lors de la récupération des travaux" }, { status: 500 })
     }
 
-    // Mapper les incidents vers le format attendu par la page
-    const mapped = (incidents || []).map((incident: any) => ({
-      id: incident.id,
-      title: incident.title,
-      description: incident.description,
-      category: incident.category,
-      priority: incident.priority || "medium",
-      status: incident.status,
-      estimated_cost: incident.estimated_cost,
-      created_at: incident.created_at,
-      property: incident.property,
-      responses: incident.responses || []
+    // Mapper les travaux vers le format attendu par la page
+    const mapped = (maintenanceWorks || []).map((work: any) => ({
+      id: work.id,
+      title: work.title,
+      description: work.description,
+      category: work.category,
+      priority: work.type === "corrective" ? "high" : work.type === "preventive" ? "medium" : "low",
+      status: work.status === "scheduled" ? "pending" : work.status === "in_progress" ? "in_progress" : work.status === "completed" ? "completed" : "rejected",
+      estimated_cost: work.cost,
+      created_at: work.created_at,
+      property: work.property,
+      responses: [] // Pas de système de réponses pour les travaux programmés
     }))
 
     return NextResponse.json({ success: true, requests: mapped }, { headers: { "Cache-Control": "no-store" } })
