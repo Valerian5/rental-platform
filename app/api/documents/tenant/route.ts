@@ -139,21 +139,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Erreur base de données" }, { status: 500 })
     }
 
-    // Avertir le propriétaire par email (si bail lié)
+    // Avertir le propriétaire par email et notification (si bail lié)
     try {
       const { data: lease } = await supabase
         .from('leases')
-        .select('id, owner:users!leases_owner_id_fkey(id, email, first_name, last_name), property:properties(id,title)')
+        .select('id, owner:users!leases_owner_id_fkey(id, email, first_name, last_name), property:properties(id,title,address)')
         .eq('id', leaseId)
         .single()
 
       if (lease?.owner?.email) {
+        // Envoyer l'email
         await emailService.sendTenantDocumentUploadedEmail(
           { id: lease.owner.id, name: `${lease.owner.first_name} ${lease.owner.last_name}`, email: lease.owner.email },
-          { id: user.id },
-          { id: inserted.id, title: inserted.title, type: documentType, url: inserted.document_url },
-          { id: lease.property?.id, title: lease.property?.title }
+          { id: user.id, name: user.user_metadata?.full_name || 'Locataire' },
+          { id: inserted.id, title: inserted.title, type: documentCategory, url: inserted.document_url },
+          { id: lease.property?.id, title: lease.property?.title, address: lease.property?.address }
         )
+
+        // Créer une notification
+        const { notificationsService } = await import('@/lib/notifications-service')
+        await notificationsService.createNotification(lease.owner.id, {
+          title: "Nouveau document transmis",
+          content: `Votre locataire a transmis un nouveau document obligatoire pour ${lease.property?.title}`,
+          type: "tenant_document_uploaded",
+          action_url: `/owner/rental-management/documents`
+        })
       }
     } catch (notifyError) {
       console.warn('⚠️ [TENANT DOCS] Notification owner échouée:', notifyError)

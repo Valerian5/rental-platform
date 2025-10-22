@@ -43,6 +43,7 @@ import LeaseOwnerFinalizedEmail from "@/components/emails/lease-owner-finalized"
 import EdlTenantFinalizedEmail from "@/components/emails/edl-tenant-finalized"
 import EdlExitSlotsProposalEmailSimple from "@/components/emails/edl-exit-slots-proposal-email-simple"
 import EdlExitSlotConfirmedEmailSimple from "@/components/emails/edl-exit-slot-confirmed-email-simple"
+import TenantDocumentUploadedEmail from "@/components/emails/tenant-document-uploaded-email"
 
 
 // --- CONFIG EXPÉDITEUR ---
@@ -83,6 +84,7 @@ export enum NotificationType {
   DOCUMENT_REMINDER = "documentReminder",
   CHARGE_REGULARIZATION = "chargeRegularization",
   RENT_REVISION = "rentRevision",
+  TENANT_DOCUMENT_UPLOADED = "tenantDocumentUploaded",
 }
 
 export type NotificationSettings = {
@@ -968,6 +970,7 @@ export const emailService = {
   sendIncidentCreatedNotificationEmail,
   sendIncidentResponseEmail,
   sendIncidentInterventionScheduledEmail,
+  sendTenantDocumentUploadedEmail,
 }
 
 export async function sendIncidentConfirmationEmail(
@@ -1064,5 +1067,32 @@ export async function sendIncidentInterventionScheduledEmail(
       incidentUrl,
       logoUrl,
     }),
+  )
+}
+
+// ====================================
+// DOCUMENTS LOCATAIRES - NOTIFICATIONS
+// ====================================
+
+export async function sendTenantDocumentUploadedEmail(
+  owner: { id: string; name: string; email: string },
+  tenant: { id: string; name: string },
+  document: { id: string; title: string; type: string; url: string },
+  property: { id: string; title: string; address: string },
+  logoUrl?: string,
+) {
+  await sendEmail(
+    { email: owner.email, notificationSettings: { [NotificationType.TENANT_DOCUMENT_UPLOADED]: true } },
+    NotificationType.TENANT_DOCUMENT_UPLOADED,
+    `Nouveau document transmis par votre locataire - ${property.title}`,
+    TenantDocumentUploadedEmail({
+      ownerName: owner.name,
+      tenantName: tenant.name,
+      documentTitle: document.title,
+      documentType: document.type,
+      propertyTitle: property.title,
+      propertyAddress: property.address,
+      logoUrl,
+    })
   )
 }
