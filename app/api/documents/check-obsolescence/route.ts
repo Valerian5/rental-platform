@@ -5,7 +5,8 @@ import { createServiceSupabaseClient } from "@/lib/supabase-server-client"
 export async function POST(request: NextRequest) {
   try {
     const supabase = createServiceSupabaseClient()
-    const { userId } = await request.json()
+    const body = await request.json()
+    const { userId } = body
     if (!userId) return NextResponse.json({ success: false, error: "userId requis" }, { status: 400 })
 
     // Récupérer les documents du locataire avec dates d'expiration dans metadata

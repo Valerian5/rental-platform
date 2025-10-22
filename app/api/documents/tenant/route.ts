@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Non authentifié" }, { status: 401 })
     }
 
-    // Récupère les documents du locataire (inclut uploader info via jointure)
+    // Récupère les documents du locataire
     const { data: docs, error } = await supabase
       .from("tenant_documents")
       .select(`
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
         status,
         created_at,
         metadata,
-        uploaded_by:users!tenant_documents_created_by_fkey(id, first_name, last_name)
+        created_by
       `)
       .eq("tenant_id", user.id)
       .order("created_at", { ascending: false })
@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
       file_url: d.document_url,
       file_size: d.document_size,
       created_at: d.created_at,
-      uploaded_by: d.uploaded_by || { id: user.id, first_name: "Vous", last_name: "" },
+      uploaded_by: { id: d.created_by || user.id, first_name: "Vous", last_name: "" },
     }))
 
     return NextResponse.json({ success: true, documents: mapped }, { headers: { "Cache-Control": "no-store" } })
