@@ -81,7 +81,8 @@ export async function POST(request: NextRequest) {
     const form = await request.formData()
     const file = form.get("file") as File | null
     const leaseId = String(form.get("lease_id") || "")
-    const documentType = String(form.get("document_type") || "other") // ex: insurance, boiler_service
+    const documentType = String(form.get("document_type") || "statement") // Toujours "statement" pour les documents obligatoires
+    const documentCategory = String(form.get("document_category") || "other") // Catégorie spécifique (insurance, boiler_service, etc.)
     const title = String(form.get("title") || "Document locataire")
     const description = String(form.get("description") || "")
     const expiryDate = String(form.get("expiry_date") || "") // ISO date optionnelle
@@ -124,7 +125,8 @@ export async function POST(request: NextRequest) {
         status: 'available',
         created_by: user.id,
         metadata: {
-          category: documentType,
+          category: documentCategory, // Utiliser la catégorie spécifique
+          original_type: documentType, // Garder le type original
           expiry_date: expiryDate || null,
           uploaded_by: 'tenant'
         }

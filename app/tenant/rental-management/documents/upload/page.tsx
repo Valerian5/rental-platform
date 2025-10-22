@@ -34,6 +34,7 @@ export default function TenantDocumentsUploadPage() {
   const [expiryDate, setExpiryDate] = useState("")
   const [file, setFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const [selectedDocumentCategory, setSelectedDocumentCategory] = useState("")
 
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -54,7 +55,8 @@ export default function TenantDocumentsUploadPage() {
         // Pré-remplir le type de document depuis l'URL
         const typeFromUrl = searchParams.get("type")
         if (typeFromUrl) {
-          setDocumentType(typeFromUrl)
+          setDocumentType("statement") // Toujours "statement" pour les documents obligatoires
+          setSelectedDocumentCategory(typeFromUrl) // Garder la catégorie spécifique
         }
       } catch (error) {
         console.error("Erreur:", error)
@@ -77,7 +79,7 @@ export default function TenantDocumentsUploadPage() {
         const leasesData = data.leases || []
         setLeases(leasesData)
         
-        // Sélectionner automatiquement le bail actif
+        // Sélectionner automatiquement le bail actif (le tenant n'a qu'un bail à la fois)
         const activeLease = leasesData.find((lease: any) => 
           lease.status === 'active' || 
           (new Date(lease.start_date) <= new Date() && new Date(lease.end_date) >= new Date())
@@ -97,19 +99,19 @@ export default function TenantDocumentsUploadPage() {
 
   const documentTypes = [
     {
-      value: "insurance",
+      value: "statement",
       label: "Attestation d'assurance habitation",
       description: "Document obligatoire renouvelé chaque année",
       required: true
     },
     {
-      value: "boiler_service",
+      value: "statement",
       label: "Certificat d'entretien annuel de la chaudière",
       description: "Si chaudière individuelle - renouvelé chaque année",
       required: false
     },
     {
-      value: "chimney_sweep",
+      value: "statement",
       label: "Certificat de ramonage",
       description: "Si conduit, poêle, cheminée - 1 à 2 fois par an selon arrêté préfectoral",
       required: false
@@ -147,10 +149,11 @@ export default function TenantDocumentsUploadPage() {
       const formData = new FormData()
       formData.append("file", file)
       formData.append("lease_id", selectedLease)
-      formData.append("document_type", documentType)
+      formData.append("document_type", documentType) // Toujours "statement"
       formData.append("title", title)
       formData.append("description", description)
       if (expiryDate) formData.append("expiry_date", expiryDate)
+      formData.append("document_category", selectedDocumentCategory) // Catégorie spécifique (insurance, boiler_service, etc.)
 
       const res = await fetch("/api/documents/tenant", {
         method: "POST",
@@ -221,39 +224,38 @@ export default function TenantDocumentsUploadPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Sélection du bail */}
-            <div>
-              <Label htmlFor="lease">Bail concerné *</Label>
-              <Select value={selectedLease} onValueChange={setSelectedLease} required>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner un bail" />
-                </SelectTrigger>
-                <SelectContent>
-                  {leases.map((lease) => (
-                    <SelectItem key={lease.id} value={lease.id}>
-                      {lease.property.title} - {lease.property.address}
-                      {lease.status === 'active' && " (Actif)"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedLease && (
-                <p className="text-sm text-muted-foreground mt-1">
-                  Bail sélectionné automatiquement
-                </p>
-              )}
-            </div>
+            {/* Bail (sélection automatique) */}
+            {selectedLease && (
+              <div>
+                <Label htmlFor="lease">Bail concerné</Label>
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="h-4 w-4 text-blue-600" />
+                    <span className="font-medium text-blue-800">
+                      {leases.find(l => l.id === selectedLease)?.property.title} - {leases.find(l => l.id === selectedLease)?.property.address}
+                    </span>
+                    <Badge variant="outline" className="text-blue-600">Actif</Badge>
+                  </div>
+                  <p className="text-sm text-blue-600 mt-1">
+                    Bail sélectionné automatiquement
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Type de document */}
             <div>
               <Label htmlFor="documentType">Type de document *</Label>
-              <Select value={documentType} onValueChange={setDocumentType} required>
+              <Select value={selectedDocumentCategory} onValueChange={(value) => {
+                setSelectedDocumentCategory(value)
+                setDocumentType("statement") // Toujours "statement" pour les documents obligatoires
+              }} required>
                 <SelectTrigger>
                   <SelectValue placeholder="Sélectionner le type" />
                 </SelectTrigger>
                 <SelectContent>
-                  {documentTypes.map((docType) => (
-                    <SelectItem key={docType.value} value={docType.value}>
+                  {documentTypes.map((docType, index) => (
+                    <SelectItem key={`${docType.value}-${index}`} value={docType.value}>
                       {docType.label}
                     </SelectItem>
                   ))}
