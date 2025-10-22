@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FileText, Plus, Search, Filter, Calendar, User, Building, Clock, CheckCircle } from "lucide-react"
 import { authService } from "@/lib/auth-service"
 import { toast } from "sonner"
+import { supabase } from "@/lib/supabase"
 
 interface MaintenanceRequest {
   id: string
@@ -66,7 +67,13 @@ export default function TenantMaintenancePage() {
 
   const loadRequests = async () => {
     try {
-      const res = await fetch("/api/maintenance/tenant", { cache: 'no-store' })
+      // Récupérer les demandes via l'API avec token Bearer
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      const res = await fetch("/api/maintenance/tenant", { 
+        cache: 'no-store',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      })
       const data = await res.json()
 
       if (data.success) {
