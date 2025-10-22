@@ -6,20 +6,17 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    // Récupérer le token d'authentification depuis les headers
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ success: false, error: "Token d'authentification manquant" }, { status: 401 })
-    }
+    // Auth: accepter Authorization Bearer OU cookies Supabase
+    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization')
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : undefined
 
-    const token = authHeader.split(' ')[1]
-    
-    // Créer un client Supabase avec le token
     const supabase = createServerClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    const { data: { user }, error: authError } = token
+      ? await supabase.auth.getUser(token)
+      : await supabase.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json({ success: false, error: "Token invalide" }, { status: 401 })
+      return NextResponse.json({ success: false, error: "Non authentifié" }, { status: 401 })
     }
 
     const receiptId = params.id
@@ -46,8 +43,10 @@ export async function GET(
       return NextResponse.json({ success: false, error: "Quittance non trouvée" }, { status: 404 })
     }
 
-    // Vérifier que l'utilisateur est le propriétaire
-    if (receipt.payment.lease.owner_id !== user.id) {
+    // Vérifier que l'utilisateur est bien autorisé (propriétaire ou locataire du bail)
+    const isOwner = receipt.payment.lease.owner_id === user.id
+    const isTenant = receipt.payment.lease.tenant?.id === user.id || receipt.payment.lease.tenant_id === user.id
+    if (!isOwner && !isTenant) {
       return NextResponse.json({ success: false, error: "Accès non autorisé" }, { status: 403 })
     }
 
