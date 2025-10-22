@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase-server-client"
+import { createServerClient } from "@/lib/supabase"
 
 // GET /api/receipts/tenant
 // Retourne la liste des paiements/quittances pour le locataire connecté
 export async function GET(request: NextRequest) {
   try {
-    const server = createServerClient(request)
+    const server = createServerClient()
 
-    // Récupérer l'utilisateur via cookies (RLS-friendly)
+    // Récupérer l'utilisateur (même approche que /api/payments)
     const { data: { user }, error: userError } = await server.auth.getUser()
 
     if (userError || !user) {
