@@ -17,19 +17,23 @@ export async function GET(
     )
 
     // Essayer de récupérer depuis plusieurs emplacements/buckets
-    // 1) incident-photos/{incidentId}/{filename}
-    // 2) incident-photos/{filename}
+    // 1) documents/incidents/{incidentId}/{filename}
+    // 2) documents/{filename}
     // 3) fallback proxy vers /api/documents/{filename}
 
-    const tryDownload = async (path: string) => {
-      const res = await server.storage.from("incident-photos").download(path)
+    const tryDownload = async (bucket: string, path: string) => {
+      const res = await server.storage.from(bucket).download(path)
       return res
     }
 
-    let downloadRes = await tryDownload(`${incidentId}/${filename}`)
+    let downloadRes = await tryDownload("documents", `incidents/${incidentId}/${filename}`)
 
     if ((downloadRes as any).error) {
-      downloadRes = await tryDownload(`${filename}`)
+      downloadRes = await tryDownload("documents", `incidents/${filename}`)
+    }
+
+    if ((downloadRes as any).error) {
+      downloadRes = await tryDownload("documents", filename)
     }
 
     if ((downloadRes as any).error) {

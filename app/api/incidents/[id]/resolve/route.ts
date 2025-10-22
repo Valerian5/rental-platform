@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase"
+import { createServiceSupabaseClient } from "@/lib/supabase-server-client"
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 // POST /api/incidents/[id]/resolve - marquer résolu + créer dépense + upload justificatif
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const server = createServerClient()
+    const supabase = createServiceSupabaseClient()
     const incidentId = params.id
 
     const formData = await request.formData()
@@ -17,11 +17,20 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const category = String(formData.get('category') || 'repair')
     const file = formData.get('file') as File | null
 
-    const { data: { user } } = await server.auth.getUser()
-    if (!user) return NextResponse.json({ success: false, error: 'Non authentifié' }, { status: 401 })
+    // Authentification avec token Bearer
+    const authHeader = request.headers.get("authorization") || request.headers.get("Authorization")
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : undefined
+
+    const { data: { user }, error: userError } = token
+      ? await supabase.auth.getUser(token)
+      : await supabase.auth.getUser()
+
+    if (userError || !user) {
+      return NextResponse.json({ success: false, error: 'Non authentifié' }, { status: 401 })
+    }
 
     // Charger incident + bail + propriété
-    const { data: incident, error: incidentError } = await server
+    const { data: incident, error: incidentError } = await supabase
       .from('incidents')
       .select('id, title, lease_id, property_id, lease:leases(id, owner_id, tenant_id), property:properties(id,title)')
       .eq('id', incidentId)
@@ -55,7 +64,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     // Créer la dépense
-    const { data: expense, error: expenseError } = await server
+    const { data: expense, error: expenseError } = await supabase
       .from('expenses')
       .insert({
         owner_id: user.id,
@@ -78,7 +87,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     // Marquer l'incident résolu
-    const { data: updatedIncident, error: updateError } = await server
+    const { data: updatedIncident, error: updateError } = await supabase
       .from('incidents')
       .update({ status: 'resolved', resolved_date: new Date().toISOString(), cost: amount, resolution_notes: description })
       .eq('id', incidentId)
