@@ -29,10 +29,16 @@ export async function GET(
     }
 
     // Chercher la photo correspondante dans les URLs stockées
-    const photoUrl = incident.photos?.find((url: string) => url.includes(filename))
+    // Les photos sont stockées avec des URLs complètes, on cherche par nom de fichier
+    const photoUrl = incident.photos?.find((url: string) => {
+      // Extraire le nom de fichier de l'URL
+      const urlFilename = url.split('/').pop()?.split('?')[0] // Enlever les paramètres de query
+      return urlFilename === filename || url.includes(filename)
+    })
     
     if (!photoUrl) {
       console.error("❌ [PHOTOS API] Photo non trouvée dans l'incident:", filename)
+      console.log("📸 [PHOTOS API] URLs disponibles:", incident.photos)
       return NextResponse.json({ error: "Photo non trouvée" }, { status: 404 })
     }
 

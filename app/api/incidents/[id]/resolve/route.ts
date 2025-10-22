@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceSupabaseClient } from "@/lib/supabase-server-client"
+import { createServerClient } from "@/lib/supabase"
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const category = String(formData.get('category') || 'repair')
     const file = formData.get('file') as File | null
 
-    // Authentification avec token Bearer ou cookies
+    // Authentification avec token Bearer ou cookies (comme payments API)
     const authHeader = request.headers.get("authorization") || request.headers.get("Authorization")
     const token = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : undefined
 
@@ -27,8 +28,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       user = result.data.user
       userError = result.error
     } else {
-      // Fallback sur les cookies via createServerClient
-      const { createServerClient } = await import("@/lib/supabase")
+      // Utiliser createServerClient comme dans payments API
       const server = createServerClient()
       const result = await server.auth.getUser()
       user = result.data.user
