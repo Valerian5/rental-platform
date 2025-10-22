@@ -1,19 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase"
+import { createServerClient } from "@/lib/supabase-server-client"
 
 // GET /api/receipts/tenant
 // Retourne la liste des paiements/quittances pour le locataire connecté
 export async function GET(request: NextRequest) {
   try {
-    const server = createServerClient()
+    const server = createServerClient(request)
 
-    // Support token via Authorization pour appels côté client authentifiés
-    const authHeader = request.headers.get("authorization") || request.headers.get("Authorization")
-    const token = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : undefined
-
-    const { data: { user }, error: userError } = token
-      ? await server.auth.getUser(token)
-      : await server.auth.getUser()
+    // Récupérer l'utilisateur via cookies (RLS-friendly)
+    const { data: { user }, error: userError } = await server.auth.getUser()
 
     if (userError || !user) {
       return NextResponse.json({ success: false, error: "Non authentifié" }, { status: 401 })
