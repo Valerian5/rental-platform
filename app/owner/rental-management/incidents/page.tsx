@@ -491,17 +491,23 @@ export default function OwnerIncidentsPage() {
                 {incident.photos && incident.photos.length > 0 && (
                   <div className="mt-4 pt-4 border-t">
                     <div className="flex gap-2 overflow-x-auto">
-                      {incident.photos.slice(0, 3).map((photo: string, index: number) => (
-                        <img
-                          key={index}
-                          src={photo.startsWith("http") ? photo : `/api/documents/${photo}`}
-                          alt={`Photo ${index + 1}`}
-                          className="w-16 h-16 object-cover rounded border flex-shrink-0"
-                          onError={(e) => {
-                            e.currentTarget.src = "/placeholder.svg?height=64&width=64&text=Image"
-                          }}
-                        />
-                      ))}
+                      {incident.photos.slice(0, 3).map((photo: string, index: number) => {
+                        // Extraire le nom de fichier de l'URL pour l'API
+                        const filename = photo.includes('/') ? photo.split('/').pop() : photo
+                        const apiUrl = photo.startsWith("http") ? photo : `/api/incidents/${incident.id}/photos/${filename}`
+                        
+                        return (
+                          <img
+                            key={index}
+                            src={apiUrl}
+                            alt={`Photo ${index + 1}`}
+                            className="w-16 h-16 object-cover rounded border flex-shrink-0"
+                            onError={(e) => {
+                              e.currentTarget.src = "/placeholder.svg?height=64&width=64&text=Image"
+                            }}
+                          />
+                        )
+                      })}
                       {incident.photos.length > 3 && (
                         <div className="w-16 h-16 bg-gray-100 rounded border flex items-center justify-center text-xs text-gray-500 flex-shrink-0">
                           +{incident.photos.length - 3}

@@ -16,11 +16,32 @@ export async function GET(
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // Essayer de récupérer depuis plusieurs emplacements/buckets
-    // 1) documents/incidents/{incidentId}/{filename}
-    // 2) documents/{filename}
-    // 3) fallback proxy vers /api/documents/{filename}
+    // Récupérer l'incident pour obtenir les URLs des photos
+    const { data: incident, error: incidentError } = await server
+      .from("incidents")
+      .select("photos")
+      .eq("id", incidentId)
+      .single()
 
+    if (incidentError || !incident) {
+      console.error("❌ [PHOTOS API] Incident non trouvé:", incidentError)
+      return NextResponse.json({ error: "Incident non trouvé" }, { status: 404 })
+    }
+
+    // Chercher la photo correspondante dans les URLs stockées
+    const photoUrl = incident.photos?.find((url: string) => url.includes(filename))
+    
+    if (!photoUrl) {
+      console.error("❌ [PHOTOS API] Photo non trouvée dans l'incident:", filename)
+      return NextResponse.json({ error: "Photo non trouvée" }, { status: 404 })
+    }
+
+    // Si c'est déjà une URL publique Supabase, rediriger directement
+    if (photoUrl.includes('supabase.co/storage/v1/object/public')) {
+      return NextResponse.redirect(photoUrl)
+    }
+
+    // Sinon, essayer de récupérer depuis le storage
     const tryDownload = async (bucket: string, path: string) => {
       const res = await server.storage.from(bucket).download(path)
       return res
@@ -37,24 +58,7 @@ export async function GET(
     }
 
     if ((downloadRes as any).error) {
-      // Fallback: proxy vers /api/documents/{filename}
-      try {
-        const url = new URL(request.url)
-        url.pathname = `/api/documents/${filename}`
-        const proxy = await fetch(url.toString())
-        if (proxy.ok) {
-          const blob = await proxy.arrayBuffer()
-          return new NextResponse(Buffer.from(blob), {
-            headers: {
-              'Content-Type': proxy.headers.get('Content-Type') || 'application/octet-stream',
-              'Content-Disposition': `inline; filename="${filename}"`,
-              'Cache-Control': 'public, max-age=31536000',
-            },
-          })
-        }
-      } catch (e) {
-        // ignore and continue to error out below
-      }
+      console.error("❌ [PHOTOS API] Photo non trouvée dans le storage:", filename)
       return NextResponse.json({ error: "Photo non trouvée" }, { status: 404 })
     }
 

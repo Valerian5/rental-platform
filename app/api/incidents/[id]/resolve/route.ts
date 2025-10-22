@@ -17,15 +17,26 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const category = String(formData.get('category') || 'repair')
     const file = formData.get('file') as File | null
 
-    // Authentification avec token Bearer
+    // Authentification avec token Bearer ou cookies
     const authHeader = request.headers.get("authorization") || request.headers.get("Authorization")
     const token = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : undefined
 
-    const { data: { user }, error: userError } = token
-      ? await supabase.auth.getUser(token)
-      : await supabase.auth.getUser()
+    let user, userError
+    if (token) {
+      const result = await supabase.auth.getUser(token)
+      user = result.data.user
+      userError = result.error
+    } else {
+      // Fallback sur les cookies via createServerClient
+      const { createServerClient } = await import("@/lib/supabase")
+      const server = createServerClient()
+      const result = await server.auth.getUser()
+      user = result.data.user
+      userError = result.error
+    }
 
     if (userError || !user) {
+      console.error("❌ [RESOLVE API] Erreur authentification:", userError)
       return NextResponse.json({ success: false, error: 'Non authentifié' }, { status: 401 })
     }
 

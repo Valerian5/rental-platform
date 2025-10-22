@@ -384,21 +384,25 @@ export default function IncidentDetailPage() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {incident.photos.map((photo: string, index: number) => (
-                    <div key={index} className="aspect-square">
-                      <img
-                        src={photo.startsWith("http") ? photo : `/api/documents/${photo}`}
-                        alt={`Photo ${index + 1}`}
-                        className="w-full h-full object-cover rounded-lg border cursor-pointer hover:opacity-80"
-                        onClick={() =>
-                          window.open(photo.startsWith("http") ? photo : `/api/documents/${photo}`, "_blank")
-                        }
-                        onError={(e) => {
-                          e.currentTarget.src = "/placeholder.svg?height=200&width=200&text=Image+non+disponible"
-                        }}
-                      />
-                    </div>
-                  ))}
+                  {incident.photos.map((photo: string, index: number) => {
+                    // Extraire le nom de fichier de l'URL pour l'API
+                    const filename = photo.includes('/') ? photo.split('/').pop() : photo
+                    const apiUrl = photo.startsWith("http") ? photo : `/api/incidents/${incident.id}/photos/${filename}`
+                    
+                    return (
+                      <div key={index} className="aspect-square">
+                        <img
+                          src={apiUrl}
+                          alt={`Photo ${index + 1}`}
+                          className="w-full h-full object-cover rounded-lg border cursor-pointer hover:opacity-80"
+                          onClick={() => window.open(apiUrl, "_blank")}
+                          onError={(e) => {
+                            e.currentTarget.src = "/placeholder.svg?height=200&width=200&text=Image+non+disponible"
+                          }}
+                        />
+                      </div>
+                    )
+                  })}
                 </div>
               </CardContent>
             </Card>
