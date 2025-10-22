@@ -74,9 +74,20 @@ export default function TenantDocumentsUploadPage() {
       })
       const data = await res.json()
       if (data.success) {
-        setLeases(data.leases || [])
-        if (data.leases?.length > 0) {
-          setSelectedLease(data.leases[0].id)
+        const leasesData = data.leases || []
+        setLeases(leasesData)
+        
+        // Sélectionner automatiquement le bail actif
+        const activeLease = leasesData.find((lease: any) => 
+          lease.status === 'active' || 
+          (new Date(lease.start_date) <= new Date() && new Date(lease.end_date) >= new Date())
+        )
+        
+        if (activeLease) {
+          setSelectedLease(activeLease.id)
+        } else if (leasesData.length > 0) {
+          // Si pas de bail actif, prendre le plus récent
+          setSelectedLease(leasesData[0].id)
         }
       }
     } catch (error) {
@@ -221,10 +232,16 @@ export default function TenantDocumentsUploadPage() {
                   {leases.map((lease) => (
                     <SelectItem key={lease.id} value={lease.id}>
                       {lease.property.title} - {lease.property.address}
+                      {lease.status === 'active' && " (Actif)"}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {selectedLease && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  Bail sélectionné automatiquement
+                </p>
+              )}
             </div>
 
             {/* Type de document */}

@@ -87,6 +87,8 @@ export default function TenantDocumentsPage() {
 
   const loadRequiredDocuments = async () => {
     try {
+      if (!currentUser?.id) return
+      
       const { data: sessionData } = await supabase.auth.getSession()
       const token = sessionData.session?.access_token
       const res = await fetch("/api/documents/check-obsolescence", {
@@ -95,7 +97,7 @@ export default function TenantDocumentsPage() {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
-        body: JSON.stringify({ userId: currentUser?.id })
+        body: JSON.stringify({ userId: currentUser.id })
       })
       const data = await res.json()
       if (data.success) {
