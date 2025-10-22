@@ -1,26 +1,39 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase"
+import { createServiceSupabaseClient } from "@/lib/supabase-server-client"
 
 // GET /api/receipts/tenant
 // Retourne la liste des paiements/quittances pour le locataire connecté
 export async function GET(request: NextRequest) {
   try {
-    const server = createServerClient()
+    // Utiliser le client service role pour contourner RLS
+    const supabase = createServiceSupabaseClient()
 
     // Support Bearer token (depuis le client) OU cookies
     const authHeader = request.headers.get("authorization") || request.headers.get("Authorization")
     const token = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : undefined
 
+    // Vérifier l'authentification avec le token
     const { data: { user }, error: userError } = token
-      ? await server.auth.getUser(token)
-      : await server.auth.getUser()
+      ? await supabase.auth.getUser(token)
+      : await supabase.auth.getUser()
 
     if (userError || !user) {
       return NextResponse.json({ success: false, error: "Non authentifié" }, { status: 401 })
     }
 
+    // Vérifier que l'utilisateur est bien un locataire
+    const { data: userData, error: userDataError } = await supabase
+      .from("users")
+      .select("id, user_type")
+      .eq("id", user.id)
+      .single()
+
+    if (userDataError || !userData || userData.user_type !== "tenant") {
+      return NextResponse.json({ success: false, error: "Accès non autorisé" }, { status: 403 })
+    }
+
     // Récupérer les paiements liés aux baux du locataire
-    const { data: payments, error } = await server
+    const { data: payments, error } = await supabase
       .from("payments")
       .select(`
         id,

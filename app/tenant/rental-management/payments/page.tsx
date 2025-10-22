@@ -6,13 +6,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { CreditCard, Euro, Calendar, AlertTriangle, CheckCircle, Clock } from "lucide-react"
+import { CreditCard, Euro, Calendar, AlertTriangle, CheckCircle, Clock, Download } from "lucide-react"
 import { authService } from "@/lib/auth-service"
 import { ReceiptServiceClient } from "@/lib/receipt-service-client"
 import { toast } from "sonner"
+import { supabase } from "@/lib/supabase"
 
 interface Receipt {
   id: string
+  receipt_id?: string
   month: string
   year: number
   amount: number
@@ -21,6 +23,7 @@ interface Receipt {
   due_date: string
   paid_date?: string
   created_at: string
+  file_url?: string
 }
 
 export default function TenantPaymentsPage() {
@@ -53,8 +56,13 @@ export default function TenantPaymentsPage() {
 
   const loadReceipts = async () => {
     try {
-      // Récupérer les quittances via l'API
-      const res = await fetch("/api/receipts/tenant", { cache: 'no-store' })
+      // Récupérer les quittances via l'API avec token Bearer
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      const res = await fetch("/api/receipts/tenant", { 
+        cache: 'no-store',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      })
       const data = await res.json()
 
       if (data.success) {
@@ -92,6 +100,33 @@ export default function TenantPaymentsPage() {
         return <Clock className="h-5 w-5 text-orange-600" />
       default:
         return <Clock className="h-5 w-5 text-gray-600" />
+    }
+  }
+
+  const handleDownload = async (receipt: Receipt) => {
+    try {
+      if (!receipt.file_url) return
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      const res = await fetch(receipt.file_url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({} as any))
+        throw new Error(err?.error || 'Erreur lors du téléchargement')
+      }
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `quittance_${receipt.id}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error) {
+      console.error('❌ Erreur téléchargement quittance:', error)
+      toast.error("Erreur lors du téléchargement de la quittance")
     }
   }
 
@@ -211,12 +246,10 @@ export default function TenantPaymentsPage() {
                   </div>
                   <div className="flex items-center gap-3">
                     {getStatusBadge(receipt.status)}
-                    {receipt.status === "paid" && (
-                      <Button variant="outline" size="sm" asChild>
-                        <Link href={`/api/receipts/${receipt.id}/download`}>
-                          <Download className="h-4 w-4 mr-2" />
-                          Télécharger
-                        </Link>
+                    {receipt.status === "paid" && receipt.file_url && (
+                      <Button variant="outline" size="sm" onClick={() => handleDownload(receipt)}>
+                        <Download className="h-4 w-4 mr-2" />
+                        Télécharger
                       </Button>
                     )}
                   </div>
