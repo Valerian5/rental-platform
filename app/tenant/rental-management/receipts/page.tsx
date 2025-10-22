@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Receipt, Download, Search, Filter, Calendar, Euro, FileText } from "lucide-react"
 import { authService } from "@/lib/auth-service"
 import { toast } from "sonner"
+import { supabase } from "@/lib/supabase"
 
 interface Receipt {
   id: string
@@ -57,7 +58,12 @@ export default function TenantReceiptsPage() {
 
   const loadReceipts = async () => {
     try {
-      const res = await fetch("/api/receipts/tenant", { cache: 'no-store' })
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      const res = await fetch("/api/receipts/tenant", { 
+        cache: 'no-store',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      })
       const data = await res.json()
 
       if (data.success) {
@@ -69,6 +75,33 @@ export default function TenantReceiptsPage() {
     } catch (error) {
       console.error("❌ Erreur fetch quittances:", error)
       toast.error("Erreur lors du chargement des quittances")
+    }
+  }
+
+  const handleDownload = async (receipt: Receipt) => {
+    try {
+      if (!receipt.file_url) return
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      const res = await fetch(receipt.file_url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({} as any))
+        throw new Error(err?.error || 'Erreur lors du téléchargement')
+      }
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `quittance_${receipt.id}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error) {
+      console.error('❌ Erreur téléchargement quittance:', error)
+      toast.error("Erreur lors du téléchargement de la quittance")
     }
   }
 
@@ -212,11 +245,9 @@ export default function TenantReceiptsPage() {
                   <div className="flex items-center gap-3">
                     {getStatusBadge(receipt.status)}
                     {receipt.status === "paid" && receipt.file_url && (
-                      <Button variant="outline" size="sm" asChild>
-                        <Link href={receipt.file_url} target="_blank">
-                          <Download className="h-4 w-4 mr-2" />
-                          Télécharger
-                        </Link>
+                      <Button variant="outline" size="sm" onClick={() => handleDownload(receipt)}>
+                        <Download className="h-4 w-4 mr-2" />
+                        Télécharger
                       </Button>
                     )}
                   </div>

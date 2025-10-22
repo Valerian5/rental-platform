@@ -7,8 +7,13 @@ export async function GET(request: NextRequest) {
   try {
     const server = createServerClient()
 
-    // Récupérer l'utilisateur (même approche que /api/payments)
-    const { data: { user }, error: userError } = await server.auth.getUser()
+    // Support Bearer token (depuis le client) OU cookies
+    const authHeader = request.headers.get("authorization") || request.headers.get("Authorization")
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : undefined
+
+    const { data: { user }, error: userError } = token
+      ? await server.auth.getUser(token)
+      : await server.auth.getUser()
 
     if (userError || !user) {
       return NextResponse.json({ success: false, error: "Non authentifié" }, { status: 401 })
@@ -46,6 +51,7 @@ export async function GET(request: NextRequest) {
 
     const mapped = (payments || []).map((p: any) => ({
       id: p.id,
+      receipt_id: p.receipt_id,
       month: p.month_name || p.month,
       year: p.year,
       amount: Number(p.rent_amount) || 0,
