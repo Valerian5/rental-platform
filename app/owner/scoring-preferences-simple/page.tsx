@@ -16,6 +16,7 @@ import { authService } from "@/lib/auth-service"
 import { PageHeader } from "@/components/page-header"
 import { CircularScore } from "@/components/circular-score"
 import { scoringPreferencesService } from "@/lib/scoring-preferences-service"
+import { getOwnerPlanLimits } from "@/lib/quota-service"
 import { PageAccessOverlay } from "@/components/page-access-overlay"
 import {
   Save,
@@ -115,6 +116,7 @@ export default function ScoringPreferencesSimplePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [user, setUser] = useState<any>(null)
+  const [planLimits, setPlanLimits] = useState<any>(null)
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "presets")
   const [selectedSystemPreference, setSelectedSystemPreference] = useState<string | null>(null)
   const [currentUserPreference, setCurrentUserPreference] = useState<any>(null)
@@ -123,6 +125,7 @@ export default function ScoringPreferencesSimplePage() {
   const [simulatorRent, setSimulatorRent] = useState(1000)
   const [selectedPersona, setSelectedPersona] = useState("young_professional")
   const [simulatorScore, setSimulatorScore] = useState(50)
+  const [planLimits, setPlanLimits] = useState<any>(null)
 
   // Assistant de configuration - Critères personnalisés (0-20 points chacun)
   const [customCriteria, setCustomCriteria] = useState({
@@ -320,6 +323,11 @@ export default function ScoringPreferencesSimplePage() {
       }
 
       setUser(currentUser)
+      
+      // Vérifier les limites du plan
+      const limits = await getOwnerPlanLimits(currentUser.id)
+      setPlanLimits(limits)
+      
       await loadUserPreference(currentUser.id)
     } catch (error) {
       console.error("Erreur auth:", error)
@@ -950,7 +958,7 @@ export default function ScoringPreferencesSimplePage() {
         </TabsContent>
 
         <TabsContent value="assistant" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Configuration principale */}
             <div className="lg:col-span-2 space-y-6 relative">
               <Card>
@@ -1720,7 +1728,7 @@ export default function ScoringPreferencesSimplePage() {
                 </CardContent>
               </Card>
               {/* Overlay pour l'onglet Assistant seulement */}
-              {user && (
+              {user && planLimits && !planLimits.hasScoringCustomization && (
                 <PageAccessOverlay
                   userId={user.id}
                   moduleName="scoring_customization"
