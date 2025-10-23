@@ -93,14 +93,9 @@ export function ValidateMaintenanceDialog({ work, isOpen, onClose, onValidate }:
     setIsUploading(true)
     try {
       // Récupérer le token d'authentification
-      const { createClient } = await import('@/lib/supabase')
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      
-      if (!session?.access_token) {
-        toast.error("Session expirée, veuillez vous reconnecter")
-        return
-      }
+      const { supabase } = await import('@/lib/supabase')
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
 
       const formData = new FormData()
       formData.append('file', file)
@@ -108,7 +103,7 @@ export function ValidateMaintenanceDialog({ work, isOpen, onClose, onValidate }:
       const response = await fetch('/api/upload/receipt', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${session.access_token}`
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
         body: formData
       })
