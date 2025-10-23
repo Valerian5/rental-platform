@@ -57,7 +57,8 @@ export class ExpenseServiceClient {
           deductible,
           receipt_url,
           created_at,
-          updated_at
+          updated_at,
+          property:properties(title, address)
         `)
         .eq("owner_id", ownerId)
         .order("date", { ascending: false })
