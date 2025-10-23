@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
         receipt_url,
         created_at,
         updated_at,
-        property:properties!inner(
+        property:properties(
           id,
           title,
           address,
@@ -69,6 +69,32 @@ export async function GET(request: NextRequest) {
     if (error) {
       console.error("Erreur récupération dépenses:", error)
       return NextResponse.json({ success: false, error: "Erreur récupération dépenses" }, { status: 500 })
+    }
+
+    console.log("Dépenses récupérées:", expenses?.length, "première dépense:", expenses?.[0])
+
+    // Si la jointure ne fonctionne pas, récupérer les propriétés séparément
+    if (expenses && expenses.length > 0) {
+      const propertyIds = [...new Set(expenses.map(exp => exp.property_id).filter(Boolean))]
+      
+      if (propertyIds.length > 0) {
+        const { data: properties, error: propertiesError } = await supabase
+          .from("properties")
+          .select("id, title, address")
+          .in("id", propertyIds)
+          .eq("owner_id", user.id)
+
+        if (!propertiesError && properties) {
+          // Enrichir les dépenses avec les informations de propriété
+          const enrichedExpenses = expenses.map(expense => ({
+            ...expense,
+            property: properties.find(prop => prop.id === expense.property_id) || null
+          }))
+          
+          console.log("Dépenses enrichies:", enrichedExpenses?.[0])
+          return NextResponse.json({ success: true, data: enrichedExpenses })
+        }
+      }
     }
 
     return NextResponse.json({ success: true, data: expenses })
