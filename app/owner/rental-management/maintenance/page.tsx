@@ -18,12 +18,14 @@ import {
 } from "@/components/ui/dialog"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Wrench, Plus, Search, CalendarIcon, CheckCircle, Clock, Euro, Phone, User } from "lucide-react"
+import { Wrench, Plus, Search, CalendarIcon, CheckCircle, Clock, Euro, Phone, User, Edit, Trash2 } from "lucide-react"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 import { authService } from "@/lib/auth-service"
 import { rentalManagementService } from "@/lib/rental-management-service"
+import { EditMaintenanceDialog } from "@/components/maintenance/EditMaintenanceDialog"
+import { ValidateMaintenanceDialog } from "@/components/maintenance/ValidateMaintenanceDialog"
 import { toast } from "sonner"
 
 export default function MaintenancePage() {
@@ -53,6 +55,12 @@ export default function MaintenancePage() {
     provider_name: "",
     provider_contact: "",
   })
+
+  // États pour modification et validation
+  const [editingWork, setEditingWork] = useState<any>(null)
+  const [validatingWork, setValidatingWork] = useState<any>(null)
+  const [showEditDialog, setShowEditDialog] = useState(false)
+  const [showValidateDialog, setShowValidateDialog] = useState(false)
 
   useEffect(() => {
     const initializeData = async () => {
@@ -165,6 +173,101 @@ export default function MaintenancePage() {
       setMaintenanceWorks(allWorks)
     } catch (error) {
       toast.error("Erreur lors de la programmation")
+    }
+  }
+
+  const handleEditWork = (work: any) => {
+    setEditingWork(work)
+    setShowEditDialog(true)
+  }
+
+  const handleValidateWork = (work: any) => {
+    setValidatingWork(work)
+    setShowValidateDialog(true)
+  }
+
+  const handleUpdateWork = async (updatedWork: any) => {
+    try {
+      // Appel API pour mettre à jour le travail
+      const response = await fetch(`/api/maintenance/${updatedWork.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updatedWork)
+      })
+
+      if (response.ok) {
+        toast.success("Travaux modifiés avec succès")
+        setShowEditDialog(false)
+        setEditingWork(null)
+        
+        // Recharger les travaux
+        const allWorks = []
+        for (const lease of leases) {
+          const propertyWorks = await rentalManagementService.getPropertyMaintenanceWorks(lease.property.id)
+          allWorks.push(...propertyWorks)
+        }
+        setMaintenanceWorks(allWorks)
+      } else {
+        toast.error("Erreur lors de la modification")
+      }
+    } catch (error) {
+      toast.error("Erreur lors de la modification")
+    }
+  }
+
+  const handleCreateExpenseFromWork = async (work: any, expenseData: any) => {
+    try {
+      // Créer la dépense dans la table expenses
+      const response = await fetch("/api/expenses", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          property_id: work.property_id,
+          lease_id: work.lease_id,
+          type: "maintenance",
+          category: expenseData.category,
+          amount: expenseData.amount,
+          date: expenseData.date,
+          description: expenseData.description,
+          deductible: expenseData.deductible,
+          receipt_url: expenseData.receipt_url || null
+        })
+      })
+
+      if (response.ok) {
+        // Marquer le travail comme terminé
+        await fetch(`/api/maintenance/${work.id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            status: "completed",
+            completed_date: expenseData.date,
+            cost: expenseData.amount
+          })
+        })
+
+        toast.success("Travaux validé et dépense créée avec succès")
+        setShowValidateDialog(false)
+        setValidatingWork(null)
+        
+        // Recharger les travaux
+        const allWorks = []
+        for (const lease of leases) {
+          const propertyWorks = await rentalManagementService.getPropertyMaintenanceWorks(lease.property.id)
+          allWorks.push(...propertyWorks)
+        }
+        setMaintenanceWorks(allWorks)
+      } else {
+        toast.error("Erreur lors de la création de la dépense")
+      }
+    } catch (error) {
+      toast.error("Erreur lors de la validation")
     }
   }
 
@@ -558,9 +661,24 @@ export default function MaintenancePage() {
                     </div>
                     <div className="flex items-center space-x-2">
                       {getStatusBadge(work.status)}
-                      <Button size="sm" variant="outline">
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => handleEditWork(work)}
+                      >
+                        <Edit className="h-4 w-4 mr-1" />
                         Modifier
                       </Button>
+                      {work.status === "scheduled" && (
+                        <Button 
+                          size="sm" 
+                          onClick={() => handleValidateWork(work)}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                          Valider
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -575,6 +693,27 @@ export default function MaintenancePage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Dialogues */}
+      <EditMaintenanceDialog
+        work={editingWork}
+        isOpen={showEditDialog}
+        onClose={() => {
+          setShowEditDialog(false)
+          setEditingWork(null)
+        }}
+        onSave={handleUpdateWork}
+      />
+
+      <ValidateMaintenanceDialog
+        work={validatingWork}
+        isOpen={showValidateDialog}
+        onClose={() => {
+          setShowValidateDialog(false)
+          setValidatingWork(null)
+        }}
+        onValidate={handleCreateExpenseFromWork}
+      />
     </div>
   )
 }
