@@ -41,7 +41,13 @@ export async function GET(request: NextRequest) {
         deductible,
         receipt_url,
         created_at,
-        updated_at
+        updated_at,
+        property:properties!inner(
+          id,
+          title,
+          address,
+          owner_id
+        )
       `)
       .eq("owner_id", user.id)
       .order("date", { ascending: false })
