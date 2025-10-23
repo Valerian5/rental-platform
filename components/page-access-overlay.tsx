@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react"
 import { Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { getOwnerPlanLimits } from "@/lib/quota-service"
 
 interface PageAccessOverlayProps {
   userId: string
@@ -38,52 +37,28 @@ export function PageAccessOverlay(props: PageAccessOverlayProps) {
   useEffect(() => {
     ;(async () => {
       try {
-        // Utiliser directement les limites du plan au lieu de l'API défaillante
-        const limits = await getOwnerPlanLimits(userId)
-        
-        // Mapper le moduleName vers la propriété correspondante
-        let hasAccess = false
-        switch (moduleName) {
-          case "leases":
-            hasAccess = limits.hasLeases
-            break
-          case "scoring_customization":
-            hasAccess = limits.hasScoringCustomization
-            break
-          case "visits":
-            hasAccess = limits.hasVisits
-            break
-          case "applications":
-            hasAccess = (limits.applicationsLimit ?? 0) > 0
-            break
-          case "property_management":
-            hasAccess = limits.hasPropertyManagement
-            break
-          case "rental_management_incidents":
-            hasAccess = limits.hasRentalManagementIncidents
-            break
-          case "rental_management_maintenance":
-            hasAccess = limits.hasRentalManagementMaintenance
-            break
-          case "rental_management_documents":
-            hasAccess = limits.hasRentalManagementDocuments
-            break
-          case "rental_management_fiscal":
-            hasAccess = limits.hasRentalManagementFiscal
-            break
-          case "electronic_signature":
-            hasAccess = limits.hasElectronicSignature
-            break
-          case "payments":
-            hasAccess = limits.hasPayments
-            break
-          default:
-            hasAccess = false
+        const { supabase } = await import("@/lib/supabase")
+        const { data: sessionData } = await supabase.auth.getSession()
+        const token = sessionData.session?.access_token
+        const headers: Record<string, string> = { "Content-Type": "application/json" }
+        if (token) headers["Authorization"] = `Bearer ${token}`
+        const res = await fetch("/api/premium/access", {
+          method: "POST",
+          headers,
+          credentials: "include",
+          body: JSON.stringify({ module_name: moduleName }),
+        })
+        if (res.ok) {
+          const data = await res.json()
+          setAllowed(!!data.allowed)
+          return
         }
-        
-        setAllowed(hasAccess)
+        // Si l'API retourne une erreur, on considère que l'accès est refusé
+        setAllowed(false)
+        return
       } catch (error) {
         console.error("Erreur vérification accès:", error)
+        // En cas d'erreur, on considère que l'accès est refusé
         setAllowed(false)
       }
     })()

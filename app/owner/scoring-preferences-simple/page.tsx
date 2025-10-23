@@ -125,7 +125,6 @@ export default function ScoringPreferencesSimplePage() {
   const [simulatorRent, setSimulatorRent] = useState(1000)
   const [selectedPersona, setSelectedPersona] = useState("young_professional")
   const [simulatorScore, setSimulatorScore] = useState(50)
-  const [planLimits, setPlanLimits] = useState<any>(null)
 
   // Assistant de configuration - Critères personnalisés (0-20 points chacun)
   const [customCriteria, setCustomCriteria] = useState({
