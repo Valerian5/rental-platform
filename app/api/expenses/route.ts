@@ -68,37 +68,47 @@ export async function GET(request: NextRequest) {
     // Récupérer les travaux de maintenance pour les inclure comme dépenses virtuelles
     let maintenanceExpenses = []
     if (year) {
-      const { data: maintenanceWorks, error: maintenanceError } = await supabase
-        .from("maintenance_works")
-        .select(`
-          id,
-          title,
-          description,
-          type,
-          category,
-          status,
-          scheduled_date,
-          completed_date,
-          cost,
-          property_id,
-          lease_id,
-          property:properties!inner(
+      // D'abord récupérer les propriétés du propriétaire
+      const { data: userProperties, error: propertiesError } = await supabase
+        .from("properties")
+        .select("id")
+        .eq("owner_id", user.id)
+
+      if (propertiesError || !userProperties || userProperties.length === 0) {
+        console.log("Aucune propriété trouvée pour l'utilisateur")
+      } else {
+        const propertyIds = userProperties.map(p => p.id)
+        console.log(`Propriétés trouvées pour l'utilisateur ${user.id}:`, propertyIds)
+        
+        const { data: maintenanceWorks, error: maintenanceError } = await supabase
+          .from("maintenance_works")
+          .select(`
             id,
             title,
-            address,
-            owner_id
-          )
-        `)
-        .eq("property.owner_id", user.id)
-        .gte("scheduled_date", `${year}-01-01`)
-        .lte("scheduled_date", `${year}-12-31`)
+            description,
+            type,
+            category,
+            status,
+            scheduled_date,
+            completed_date,
+            cost,
+            estimated_cost,
+            property_id,
+            lease_id,
+            provider_name,
+            provider_contact
+          `)
+          .in("property_id", propertyIds)
+          .gte("scheduled_date", `${year}-01-01`)
+          .lte("scheduled_date", `${year}-12-31`)
 
-      if (!maintenanceError && maintenanceWorks) {
-        // Convertir les travaux de maintenance en dépenses virtuelles
-        maintenanceExpenses = maintenanceWorks
-          .map(work => {
-            // Utiliser le coût défini ou 0 si pas encore défini
-            const workCost = work.cost && work.cost > 0 ? work.cost : 0
+        if (!maintenanceError && maintenanceWorks) {
+          console.log(`Travaux de maintenance trouvés:`, maintenanceWorks.length, maintenanceWorks)
+          // Convertir les travaux de maintenance en dépenses virtuelles
+          maintenanceExpenses = maintenanceWorks
+            .map(work => {
+              // Utiliser le coût défini, l'estimation, ou 0 si rien
+              const workCost = work.cost && work.cost > 0 ? work.cost : (work.estimated_cost && work.estimated_cost > 0 ? work.estimated_cost : 0)
             // Déterminer la catégorie fiscale basée sur le type de travaux
             const getFiscalCategory = (type: string, category: string) => {
               if (type === "improvement") return "improvement"
@@ -109,29 +119,31 @@ export async function GET(request: NextRequest) {
             const fiscalCategory = getFiscalCategory(work.type, work.category)
             const isDeductible = fiscalCategory !== "improvement"
 
-            return {
-              id: `maintenance_${work.id}`,
-              property_id: work.property_id,
-              lease_id: work.lease_id,
-              type: "maintenance",
-              category: fiscalCategory,
-              amount: workCost,
-              date: work.completed_date || work.scheduled_date,
-              description: `${work.title} - ${work.description}`,
-              deductible: isDeductible,
-              receipt_url: null,
-              created_at: work.scheduled_date,
-              updated_at: work.completed_date || work.scheduled_date,
-              // Marquer comme dépense virtuelle de maintenance
-              is_virtual: true,
-              source: "maintenance",
-              maintenance_work_id: work.id,
-              maintenance_status: work.status,
-              property: work.property,
-              // Indiquer si le coût est estimé ou définitif
-              cost_estimated: !work.cost || work.cost <= 0
-            }
-          })
+              return {
+                id: `maintenance_${work.id}`,
+                property_id: work.property_id,
+                lease_id: work.lease_id,
+                type: "maintenance",
+                category: fiscalCategory,
+                amount: workCost,
+                date: work.completed_date || work.scheduled_date,
+                description: `${work.title} - ${work.description}`,
+                deductible: isDeductible,
+                receipt_url: null,
+                created_at: work.scheduled_date,
+                updated_at: work.completed_date || work.scheduled_date,
+                // Marquer comme dépense virtuelle de maintenance
+                is_virtual: true,
+                source: "maintenance",
+                maintenance_work_id: work.id,
+                maintenance_status: work.status,
+                // Indiquer si le coût est estimé ou définitif
+                cost_estimated: (!work.cost || work.cost <= 0) && (work.estimated_cost && work.estimated_cost > 0)
+              }
+            })
+        } else {
+          console.log("Erreur récupération travaux de maintenance:", maintenanceError)
+        }
       }
     }
 
@@ -144,6 +156,8 @@ export async function GET(request: NextRequest) {
     // Combiner les dépenses réelles et virtuelles
     const allExpenses = [...(expenses || []), ...filteredMaintenanceExpenses]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
+    console.log(`Total dépenses: ${(expenses || []).length}, Dépenses maintenance: ${filteredMaintenanceExpenses.length}, Total: ${allExpenses.length}`)
 
     return NextResponse.json({ success: true, data: allExpenses })
   } catch (error) {
