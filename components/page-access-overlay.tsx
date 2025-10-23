@@ -37,6 +37,7 @@ export function PageAccessOverlay(props: PageAccessOverlayProps) {
   useEffect(() => {
     ;(async () => {
       try {
+        console.log("🔍 Vérification accès pour module:", moduleName)
         const { supabase } = await import("@/lib/supabase")
         const { data: sessionData } = await supabase.auth.getSession()
         const token = sessionData.session?.access_token

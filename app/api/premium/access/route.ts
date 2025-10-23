@@ -63,6 +63,15 @@ export async function POST(request: NextRequest) {
       case "rental_management_fiscal":
         allowed = limits.hasRentalManagementFiscal
         break
+      case "rental_management_overview":
+        allowed = limits.hasRentalManagementOverview
+        break
+      case "rental_management_rent_revision":
+        allowed = limits.hasRentalManagementRentRevision
+        break
+      case "rental_management_revision":
+        allowed = limits.hasRentalManagementRevision
+        break
       case "electronic_signature":
         allowed = limits.hasElectronicSignature
         break
