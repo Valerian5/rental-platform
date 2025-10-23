@@ -952,7 +952,7 @@ export default function ScoringPreferencesSimplePage() {
         <TabsContent value="assistant" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative">
             {/* Configuration principale */}
-            <div className="lg:col-span-2 space-y-6">
+            <div className="lg:col-span-2 space-y-6 relative">
               <Card>
                 <CardHeader>
                   <CardTitle>Assistant de configuration personnalisée</CardTitle>
@@ -1719,19 +1719,18 @@ export default function ScoringPreferencesSimplePage() {
                   </div>
                 </CardContent>
               </Card>
+              {/* Overlay pour l'onglet Assistant seulement */}
+              {user && (
+                <PageAccessOverlay
+                  userId={user.id}
+                  moduleName="scoring_customization"
+                  marketingTitle="Assistant de configuration réservé"
+                  marketingDesc="L'Assistant de configuration personnalisée est disponible dans les plans supérieurs. Choisissez un modèle prédéfini ou passez à un plan payant pour personnaliser vos critères."
+                  ctaText="Voir les plans"
+                  showCondition={activeTab === "assistant"}
+                />
+              )}
             </div>
-            
-            {/* Overlay pour l'onglet Assistant seulement */}
-            {user && (
-              <PageAccessOverlay
-                userId={user.id}
-                moduleName="scoring_customization"
-                marketingTitle="Assistant de configuration réservé"
-                marketingDesc="L'Assistant de configuration personnalisée est disponible dans les plans supérieurs. Choisissez un modèle prédéfini ou passez à un plan payant pour personnaliser vos critères."
-                ctaText="Voir les plans"
-                showCondition={activeTab === "assistant"}
-              />
-            )}
           </div>
         </TabsContent>
       </Tabs>
