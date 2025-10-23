@@ -24,9 +24,12 @@ import {
 import { FiscalSummaryCard } from "@/components/fiscal/FiscalSummaryCard"
 import { FiscalSimulationCard } from "@/components/fiscal/FiscalSimulationCard"
 import { ExpenseBreakdownCard } from "@/components/fiscal/ExpenseBreakdownCard"
+import { ExpenseVisualization } from "@/components/fiscal/ExpenseVisualization"
+import { MaintenanceExpenseConnector } from "@/components/fiscal/MaintenanceExpenseConnector"
 import { AddExpenseDialog, AddExpenseDialogRef } from "@/components/fiscal/AddExpenseDialog"
 import { EditExpenseDialog, EditExpenseDialogRef } from "@/components/fiscal/EditExpenseDialog"
 import { AddReceiptDialog, AddReceiptDialogRef } from "@/components/fiscal/AddReceiptDialog"
+import { ExpenseDetailDialog, ExpenseDetailDialogRef } from "@/components/fiscal/ExpenseDetailDialog"
 import { FiscalCalculation, Expense } from "@/lib/fiscal-calculator"
 import { supabase } from "@/lib/supabase"
 import { FiscalServiceClient } from "@/lib/fiscal-service-client"
@@ -40,11 +43,13 @@ export default function FiscalPage() {
   const [fiscalCalculation, setFiscalCalculation] = useState<FiscalCalculation | null>(null)
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [properties, setProperties] = useState<any[]>([])
+  const [currentUser, setCurrentUser] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const addExpenseDialogRef = useRef<AddExpenseDialogRef>(null)
   const editExpenseDialogRef = useRef<EditExpenseDialogRef>(null)
   const addReceiptDialogRef = useRef<AddReceiptDialogRef>(null)
+  const expenseDetailDialogRef = useRef<ExpenseDetailDialogRef>(null)
 
   useEffect(() => {
     loadFiscalData()
@@ -60,6 +65,8 @@ export default function FiscalPage() {
         toast.error("Session expirée, veuillez vous reconnecter")
         return
       }
+      
+      setCurrentUser(user)
 
       // Récupérer le token d'authentification
       const { data: sessionData } = await supabase.auth.getSession()
@@ -277,7 +284,7 @@ export default function FiscalPage() {
   }
 
   const handleViewExpense = (expenseId: string) => {
-    toast.info(`Visualisation de la dépense ${expenseId} en cours de développement`)
+    expenseDetailDialogRef.current?.openDialog(expenseId)
   }
 
   const handleEditExpense = (expenseId: string) => {
@@ -427,7 +434,26 @@ export default function FiscalPage() {
               ref={addReceiptDialogRef} 
               onReceiptAdded={loadFiscalData} 
             />
+            <ExpenseDetailDialog 
+              ref={expenseDetailDialogRef} 
+              onExpenseUpdated={loadFiscalData} 
+            />
           </div>
+
+          {/* Visualisation des dépenses */}
+          <ExpenseVisualization
+            expenses={expenses}
+            year={currentYear}
+          />
+
+          {/* Connexion avec les travaux de maintenance */}
+          <MaintenanceExpenseConnector
+            ownerId={currentUser?.id}
+            year={currentYear}
+            onExpenseCreated={loadFiscalData}
+          />
+
+          {/* Détail des dépenses */}
           <ExpenseBreakdownCard
             expenses={expenses}
             year={currentYear}
