@@ -56,7 +56,7 @@ const navigation = [
     icon: CreditCard,
     children: [
       { name: "Vue d'ensemble", href: "/owner/rental-management/overview", icon: Home },
-      { name: "Paiements", href: "/owner/rental-management", icon: CreditCard },
+      { name: "Paiements", href: "/owner/rental-management/payments", icon: CreditCard },
       { name: "Incidents", href: "/owner/rental-management/incidents", icon: AlertTriangle },
       { name: "Travaux", href: "/owner/rental-management/maintenance", icon: Wrench },
       { name: "Documents", href: "/owner/rental-management/documents", icon: FolderOpen },
