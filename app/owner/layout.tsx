@@ -66,7 +66,7 @@ const navigation = [
     ],
   },
   { name: "Baux", href: "/owner/leases", icon: Gavel },
-  { name: "Paiements", href: "/owner/payments", icon: CreditCard },
+  { name: "Paiements", href: "/owner/rental-management/payments", icon: CreditCard },
   { name: "Messages", href: "/owner/messaging", icon: MessageSquare },
   { name: "Statistiques", href: "/owner/statistics", icon: BarChart3 },
   { name: "Scoring", href: "/owner/scoring-preferences-simple", icon: Target },
@@ -432,7 +432,7 @@ function fallbackModuleFor(path: string): string | undefined {
     "/owner/rental-management/overview": "rental_management_overview",
     "/owner/leases": "leases",
     "/owner/applications": "applications",
-    "/owner/payments": "payments",
+    "/owner/rental-management/payments": "payments",
     "/owner/scoring-preferences-simple": "scoring_customization",
   }
   // Chercher la correspondance la plus spécifique par préfixe

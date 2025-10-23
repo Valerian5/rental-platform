@@ -17,7 +17,7 @@ const navigationItems = [
     description: "Tableau de bord général",
   },
   {
-    href: "/owner/rental-management",
+    href: "/owner/rental-management/payments",
     label: "Paiements",
     icon: Receipt,
     description: "Gestion des paiements et quittances",

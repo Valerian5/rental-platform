@@ -36,7 +36,7 @@ const pathMappings: Record<string, BreadcrumbItem[]> = {
     { label: "Révision" },
   ],
   "/owner/rental-management/fiscal": [{ label: "Locations", href: "/owner/rental-management" }, { label: "Fiscal" }],
-  "/owner/payments": [{ label: "Paiements" }],
+  "/owner/rental-management/payments": [{ label: "Locations", href: "/owner/rental-management" }, { label: "Paiements" }],
   "/owner/statistics": [{ label: "Statistiques" }],
   "/owner/settings": [{ label: "Paramètres" }],
 }

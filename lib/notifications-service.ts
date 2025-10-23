@@ -382,7 +382,7 @@ export const notificationsService = {
       title: "Paiement reçu",
       content: `Paiement de ${paymentData.amount}€ reçu pour ${propertyData.title}`,
       type: "payment_received",
-      action_url: `/owner/payments`,
+      action_url: `/owner/rental-management/payments`,
     })
 
     // Notification au locataire (confirmation)
@@ -423,7 +423,7 @@ export const notificationsService = {
       title: "Loyer en retard",
       content: `Le loyer de ${tenantData.first_name} ${tenantData.last_name} est en retard`,
       type: "payment_overdue",
-      action_url: `/owner/payments`,
+      action_url: `/owner/rental-management/payments`,
     })
   },
 
