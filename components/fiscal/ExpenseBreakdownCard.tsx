@@ -238,6 +238,11 @@ export function ExpenseBreakdownCard({
                                                 ({getMaintenanceStatusLabel((expense as any).maintenance_status)})
                                               </span>
                                             )}
+                                            {(expense as any).cost_estimated && (
+                                              <span className="ml-1 text-orange-600">
+                                                - Coût estimé
+                                              </span>
+                                            )}
                                           </span>
                                         </div>
                                       )}
@@ -250,7 +255,14 @@ export function ExpenseBreakdownCard({
                                     </div>
                                   </TableCell>
                                   <TableCell className="font-semibold">
-                                    {expense.amount.toLocaleString('fr-FR')} €
+                                    {(expense as any).cost_estimated ? (
+                                      <span className="text-orange-600">
+                                        {expense.amount > 0 ? `${expense.amount.toLocaleString('fr-FR')} €` : 'Non défini'}
+                                        <span className="text-xs ml-1">(estimé)</span>
+                                      </span>
+                                    ) : (
+                                      `${expense.amount.toLocaleString('fr-FR')} €`
+                                    )}
                                   </TableCell>
                                   <TableCell className="text-right">
                                     <div className="flex items-center justify-end gap-1">

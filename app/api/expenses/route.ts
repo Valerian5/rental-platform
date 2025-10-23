@@ -96,8 +96,9 @@ export async function GET(request: NextRequest) {
       if (!maintenanceError && maintenanceWorks) {
         // Convertir les travaux de maintenance en dépenses virtuelles
         maintenanceExpenses = maintenanceWorks
-          .filter(work => work.cost && work.cost > 0) // Seulement les travaux avec un coût
           .map(work => {
+            // Utiliser le coût défini ou 0 si pas encore défini
+            const workCost = work.cost && work.cost > 0 ? work.cost : 0
             // Déterminer la catégorie fiscale basée sur le type de travaux
             const getFiscalCategory = (type: string, category: string) => {
               if (type === "improvement") return "improvement"
@@ -114,7 +115,7 @@ export async function GET(request: NextRequest) {
               lease_id: work.lease_id,
               type: "maintenance",
               category: fiscalCategory,
-              amount: work.cost,
+              amount: workCost,
               date: work.completed_date || work.scheduled_date,
               description: `${work.title} - ${work.description}`,
               deductible: isDeductible,
@@ -126,7 +127,9 @@ export async function GET(request: NextRequest) {
               source: "maintenance",
               maintenance_work_id: work.id,
               maintenance_status: work.status,
-              property: work.property
+              property: work.property,
+              // Indiquer si le coût est estimé ou définitif
+              cost_estimated: !work.cost || work.cost <= 0
             }
           })
       }
