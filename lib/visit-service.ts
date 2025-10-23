@@ -1,4 +1,5 @@
 import { supabase } from "./supabase"
+import { createServerClient } from "./supabase"
 
 export interface Visit {
   id: string
@@ -34,12 +35,22 @@ export interface Visit {
 export const visitService = {
   // ========== MÉTHODES PROPRIÉTAIRES ==========
 
-  async getOwnerVisits(ownerId: string): Promise<Visit[]> {
+  async getOwnerVisits(ownerId: string, userToken?: string): Promise<Visit[]> {
     console.log("📅 VisitService.getOwnerVisits", ownerId)
 
     try {
-      // Récupérer les visites via les propriétés du propriétaire
-      const { data, error } = await supabase
+      // Utiliser le client avec token utilisateur si fourni, sinon client par défaut
+      const client = userToken ? createServerClient() : supabase
+      
+      // Si on a un token, l'utiliser pour l'authentification
+      if (userToken) {
+        const { data: { user }, error: authError } = await client.auth.getUser(userToken)
+        if (authError || !user || user.id !== ownerId) {
+          throw new Error("Accès non autorisé")
+        }
+      }
+
+      const { data, error } = await client
         .from("visits")
         .select(`
           *,

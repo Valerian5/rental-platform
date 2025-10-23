@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/page-header"
 import { EnhancedVisitCalendar } from "@/components/enhanced-visit-calendar"
 import { OwnerVisitFeedback } from "@/components/owner-visit-feedback"
 import { authService } from "@/lib/auth-service"
+import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
 import {
   CalendarIcon,
@@ -109,7 +110,16 @@ export default function OwnerVisitsPage() {
 
   const loadVisits = async (ownerId: string) => {
     try {
-      const response = await fetch(`/api/visits?owner_id=${ownerId}`)
+      // Récupérer le token de session pour l'authentification
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+
+      const response = await fetch(`/api/visits?owner_id=${ownerId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
       if (response.ok) {
         const data = await response.json()
         const visitsWithCompletedStatus = markPastVisitsAsCompleted(data.visits || [])

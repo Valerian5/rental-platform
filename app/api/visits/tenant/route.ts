@@ -1,27 +1,29 @@
-import { NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-
-if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error("Variables d'environnement Supabase manquantes")
-}
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
+import { NextRequest, NextResponse } from "next/server"
+import { createServerClient } from "@/lib/supabase"
 
 export const dynamic = "force-dynamic"
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const tenantId = searchParams.get("tenant_id")
-
-    if (!tenantId) {
-      return NextResponse.json({ error: "ID du locataire manquant" }, { status: 400 })
+    // Récupérer le token d'authentification depuis les headers
+    const authHeader = request.headers.get('authorization')
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ success: false, error: "Token d'authentification manquant" }, { status: 401 })
     }
 
-    console.log("🔍 Récupération candidatures pour locataire:", tenantId)
+    const token = authHeader.split(' ')[1]
+    
+    // Créer un client Supabase avec service_role pour les opérations backend
+    const supabase = createServerClient()
+    
+    // Vérifier l'authentification utilisateur avec le token
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+
+    if (authError || !user) {
+      return NextResponse.json({ success: false, error: "Token invalide" }, { status: 401 })
+    }
+
+    console.log("🔍 Récupération candidatures pour locataire:", user.id)
 
     // Récupérer les candidatures du locataire (EXCLURE les candidatures retirées)
     const { data: applications, error: appsError } = await supabase
@@ -44,7 +46,7 @@ export async function GET(request: Request) {
           images
         )
       `)
-      .eq("tenant_id", tenantId)
+      .eq("tenant_id", user.id)
       .neq("status", "withdrawn") // CORRECTION: Exclure les candidatures retirées
       .order("created_at", { ascending: false })
 

@@ -98,3 +98,6 @@ scripts/setup-charge-provision-cron.sql
 scripts/20251009_create_cms_pages.sql
 scripts/create-incident-interventions.sql
 scripts/create-incidents-rls.sql
+scripts/create-visits-rls.sql
+scripts/test-visits-rls.sql
+docs/RLS_VISITS_DEPLOYMENT.md

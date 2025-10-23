@@ -1,17 +1,35 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { createServerClient } from "@/lib/supabase"
 import { emailService } from "@/lib/email-service"
 
 export async function GET(request: NextRequest) {
   try {
+    // Récupérer le token d'authentification depuis les headers
+    const authHeader = request.headers.get('authorization')
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ success: false, error: "Token d'authentification manquant" }, { status: 401 })
+    }
+
+    const token = authHeader.split(' ')[1]
+    
+    // Créer un client Supabase avec service_role pour les opérations backend
+    const supabase = createServerClient()
+    
+    // Vérifier l'authentification utilisateur avec le token
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+
+    if (authError || !user) {
+      return NextResponse.json({ success: false, error: "Token invalide" }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
     const ownerId = searchParams.get("owner_id")
     const tenantId = searchParams.get("tenant_id")
 
-    console.log("📅 API Visits GET", { ownerId, tenantId })
+    console.log("📅 API Visits GET", { ownerId, tenantId, userId: user.id })
 
-    if (ownerId) {
-      // Récupérer les visites pour un propriétaire
+    if (ownerId && ownerId === user.id) {
+      // Récupérer les visites pour un propriétaire (utilise RLS automatiquement)
       const { data, error } = await supabase
         .from("visits")
         .select(`
@@ -24,7 +42,6 @@ export async function GET(request: NextRequest) {
             owner_id
           )
         `)
-        .eq("property.owner_id", ownerId)
         .order("visit_date", { ascending: false })
 
       if (error) {
@@ -35,8 +52,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ visits: data })
     }
 
-    if (tenantId) {
-      // Récupérer les visites pour un locataire
+    if (tenantId && tenantId === user.id) {
+      // Récupérer les visites pour un locataire (utilise RLS automatiquement)
       const { data, error } = await supabase
         .from("visits")
         .select(`
@@ -48,7 +65,6 @@ export async function GET(request: NextRequest) {
             property_type
           )
         `)
-        .eq("tenant_id", tenantId)
         .order("visit_date", { ascending: false })
 
       if (error) {
@@ -59,7 +75,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ visits: data })
     }
 
-    return NextResponse.json({ error: "owner_id ou tenant_id requis" }, { status: 400 })
+    return NextResponse.json({ error: "Accès non autorisé" }, { status: 403 })
   } catch (error) {
     console.error("❌ Erreur API visits:", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
@@ -68,8 +84,31 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Récupérer le token d'authentification depuis les headers
+    const authHeader = request.headers.get('authorization')
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ success: false, error: "Token d'authentification manquant" }, { status: 401 })
+    }
+
+    const token = authHeader.split(' ')[1]
+    
+    // Créer un client Supabase avec service_role pour les opérations backend
+    const supabase = createServerClient()
+    
+    // Vérifier l'authentification utilisateur avec le token
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+
+    if (authError || !user) {
+      return NextResponse.json({ success: false, error: "Token invalide" }, { status: 401 })
+    }
+
     const body = await request.json()
     console.log("📅 API Visits POST", body)
+
+    // Vérifier que l'utilisateur est bien le locataire qui crée la visite
+    if (body.tenant_id !== user.id) {
+      return NextResponse.json({ error: "Accès non autorisé" }, { status: 403 })
+    }
 
     // Valider et formater les données selon la structure de la table
     const visitData = {
