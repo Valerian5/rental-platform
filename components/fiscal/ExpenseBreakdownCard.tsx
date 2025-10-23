@@ -97,6 +97,16 @@ export function ExpenseBreakdownCard({
     return new Date(dateString).toLocaleDateString('fr-FR')
   }
 
+  const getMaintenanceStatusLabel = (status: string) => {
+    switch (status) {
+      case "scheduled": return "Programmé"
+      case "in_progress": return "En cours"
+      case "completed": return "Terminé"
+      case "cancelled": return "Annulé"
+      default: return status
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Résumé */}
@@ -218,6 +228,19 @@ export function ExpenseBreakdownCard({
                                         {expense.type === "maintenance" && "Travaux propriétaire"}
                                         {expense.type === "annual_charge" && "Charge annuelle"}
                                       </p>
+                                      {(expense as any).is_virtual && (expense as any).source === "maintenance" && (
+                                        <div className="flex items-center gap-1 mt-1">
+                                          <Wrench className="h-3 w-3 text-blue-600" />
+                                          <span className="text-xs text-blue-600 font-medium">
+                                            Travaux programmé
+                                            {(expense as any).maintenance_status && (
+                                              <span className="ml-1">
+                                                ({getMaintenanceStatusLabel((expense as any).maintenance_status)})
+                                              </span>
+                                            )}
+                                          </span>
+                                        </div>
+                                      )}
                                     </div>
                                   </TableCell>
                                   <TableCell>
@@ -239,14 +262,25 @@ export function ExpenseBreakdownCard({
                                       >
                                         <Eye className="h-4 w-4" />
                                       </Button>
-                                      <Button 
-                                        variant="ghost" 
-                                        size="sm"
-                                        onClick={() => onEditExpense?.(expense.id)}
-                                        title="Modifier"
-                                      >
-                                        <Edit className="h-4 w-4" />
-                                      </Button>
+                                      {(expense as any).is_virtual && (expense as any).source === "maintenance" ? (
+                                        <Button 
+                                          variant="ghost" 
+                                          size="sm"
+                                          onClick={() => window.open('/owner/rental-management/maintenance', '_blank')}
+                                          title="Gérer dans Maintenance"
+                                        >
+                                          <Wrench className="h-4 w-4" />
+                                        </Button>
+                                      ) : (
+                                        <Button 
+                                          variant="ghost" 
+                                          size="sm"
+                                          onClick={() => onEditExpense?.(expense.id)}
+                                          title="Modifier"
+                                        >
+                                          <Edit className="h-4 w-4" />
+                                        </Button>
+                                      )}
                                       <Button 
                                         variant="ghost" 
                                         size="sm"

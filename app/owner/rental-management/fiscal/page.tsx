@@ -25,7 +25,6 @@ import { FiscalSummaryCard } from "@/components/fiscal/FiscalSummaryCard"
 import { FiscalSimulationCard } from "@/components/fiscal/FiscalSimulationCard"
 import { ExpenseBreakdownCard } from "@/components/fiscal/ExpenseBreakdownCard"
 import { ExpenseVisualization } from "@/components/fiscal/ExpenseVisualization"
-import { MaintenanceExpenseConnector } from "@/components/fiscal/MaintenanceExpenseConnector"
 import { AddExpenseDialog, AddExpenseDialogRef } from "@/components/fiscal/AddExpenseDialog"
 import { EditExpenseDialog, EditExpenseDialogRef } from "@/components/fiscal/EditExpenseDialog"
 import { AddReceiptDialog, AddReceiptDialogRef } from "@/components/fiscal/AddReceiptDialog"
@@ -444,13 +443,6 @@ export default function FiscalPage() {
           <ExpenseVisualization
             expenses={expenses}
             year={currentYear}
-          />
-
-          {/* Connexion avec les travaux de maintenance */}
-          <MaintenanceExpenseConnector
-            ownerId={currentUser?.id}
-            year={currentYear}
-            onExpenseCreated={loadFiscalData}
           />
 
           {/* Détail des dépenses */}

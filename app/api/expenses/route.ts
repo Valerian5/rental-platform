@@ -65,7 +65,84 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Erreur récupération dépenses" }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true, data: expenses })
+    // Récupérer les travaux de maintenance pour les inclure comme dépenses virtuelles
+    let maintenanceExpenses = []
+    if (year) {
+      const { data: maintenanceWorks, error: maintenanceError } = await supabase
+        .from("maintenance_works")
+        .select(`
+          id,
+          title,
+          description,
+          type,
+          category,
+          status,
+          scheduled_date,
+          completed_date,
+          cost,
+          property_id,
+          lease_id,
+          property:properties!inner(
+            id,
+            title,
+            address,
+            owner_id
+          )
+        `)
+        .eq("property.owner_id", user.id)
+        .gte("scheduled_date", `${year}-01-01`)
+        .lte("scheduled_date", `${year}-12-31`)
+
+      if (!maintenanceError && maintenanceWorks) {
+        // Convertir les travaux de maintenance en dépenses virtuelles
+        maintenanceExpenses = maintenanceWorks
+          .filter(work => work.cost && work.cost > 0) // Seulement les travaux avec un coût
+          .map(work => {
+            // Déterminer la catégorie fiscale basée sur le type de travaux
+            const getFiscalCategory = (type: string, category: string) => {
+              if (type === "improvement") return "improvement"
+              if (category === "plumbing" || category === "electrical" || category === "heating") return "repair"
+              return "maintenance"
+            }
+
+            const fiscalCategory = getFiscalCategory(work.type, work.category)
+            const isDeductible = fiscalCategory !== "improvement"
+
+            return {
+              id: `maintenance_${work.id}`,
+              property_id: work.property_id,
+              lease_id: work.lease_id,
+              type: "maintenance",
+              category: fiscalCategory,
+              amount: work.cost,
+              date: work.completed_date || work.scheduled_date,
+              description: `${work.title} - ${work.description}`,
+              deductible: isDeductible,
+              receipt_url: null,
+              created_at: work.scheduled_date,
+              updated_at: work.completed_date || work.scheduled_date,
+              // Marquer comme dépense virtuelle de maintenance
+              is_virtual: true,
+              source: "maintenance",
+              maintenance_work_id: work.id,
+              maintenance_status: work.status,
+              property: work.property
+            }
+          })
+      }
+    }
+
+    // Filtrer par propriété si spécifiée pour les dépenses de maintenance aussi
+    let filteredMaintenanceExpenses = maintenanceExpenses
+    if (propertyId) {
+      filteredMaintenanceExpenses = maintenanceExpenses.filter(expense => expense.property_id === propertyId)
+    }
+
+    // Combiner les dépenses réelles et virtuelles
+    const allExpenses = [...(expenses || []), ...filteredMaintenanceExpenses]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
+    return NextResponse.json({ success: true, data: allExpenses })
   } catch (error) {
     console.error("Erreur API dépenses:", error)
     return NextResponse.json({ 
