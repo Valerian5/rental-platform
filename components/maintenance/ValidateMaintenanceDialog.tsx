@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { CheckCircle, AlertCircle, Euro, Calendar, Wrench } from "lucide-react"
+import { CheckCircle, AlertCircle, Euro, Calendar, Wrench, Upload, FileText } from "lucide-react"
 import { toast } from "sonner"
 
 interface ValidateMaintenanceDialogProps {
@@ -37,6 +37,8 @@ export function ValidateMaintenanceDialog({ work, isOpen, onClose, onValidate }:
     category: "",
     receipt_url: ""
   })
+  const [receiptFile, setReceiptFile] = useState<File | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
 
   useEffect(() => {
     if (work) {
@@ -87,6 +89,52 @@ export function ValidateMaintenanceDialog({ work, isOpen, onClose, onValidate }:
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
+  const handleFileUpload = async (file: File) => {
+    setIsUploading(true)
+    try {
+      // Récupérer le token d'authentification
+      const { createClient } = await import('@/lib/supabase')
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session?.access_token) {
+        toast.error("Session expirée, veuillez vous reconnecter")
+        return
+      }
+
+      const formData = new FormData()
+      formData.append('file', file)
+      
+      const response = await fetch('/api/upload/receipt', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: formData
+      })
+      
+      if (response.ok) {
+        const { url } = await response.json()
+        setFormData(prev => ({ ...prev, receipt_url: url }))
+        toast.success("Justificatif uploadé avec succès")
+      } else {
+        toast.error("Erreur lors de l'upload")
+      }
+    } catch (error) {
+      toast.error("Erreur lors de l'upload")
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setReceiptFile(file)
+      handleFileUpload(file)
+    }
+  }
+
   if (!work) return null
 
   return (
@@ -116,8 +164,18 @@ export function ValidateMaintenanceDialog({ work, isOpen, onClose, onValidate }:
                 <div className="font-semibold">{work.title}</div>
                 <div className="text-sm text-muted-foreground">{work.description}</div>
                 <div className="flex items-center gap-2 text-sm">
-                  <Badge variant="outline">{work.type}</Badge>
-                  <Badge variant="outline">{work.category}</Badge>
+                  <Badge variant="outline">
+                    {work.type === "preventive" && "Préventif"}
+                    {work.type === "corrective" && "Correctif"}
+                    {work.type === "improvement" && "Amélioration"}
+                  </Badge>
+                  <Badge variant="outline">
+                    {work.category === "plumbing" && "Plomberie"}
+                    {work.category === "electrical" && "Électricité"}
+                    {work.category === "heating" && "Chauffage"}
+                    {work.category === "painting" && "Peinture"}
+                    {work.category === "other" && "Autre"}
+                  </Badge>
                 </div>
               </div>
             </CardContent>
@@ -186,14 +244,31 @@ export function ValidateMaintenanceDialog({ work, isOpen, onClose, onValidate }:
             </div>
 
             <div>
-              <Label htmlFor="receipt_url">URL du justificatif (optionnel)</Label>
-              <Input
-                id="receipt_url"
-                type="url"
-                value={formData.receipt_url}
-                onChange={(e) => handleInputChange("receipt_url", e.target.value)}
-                placeholder="https://..."
-              />
+              <Label htmlFor="receipt">Justificatif (optionnel)</Label>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="receipt"
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={handleFileChange}
+                    disabled={isUploading}
+                    className="flex-1"
+                  />
+                  {isUploading && (
+                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                      <Upload className="h-4 w-4 animate-spin" />
+                      Upload...
+                    </div>
+                  )}
+                </div>
+                {formData.receipt_url && (
+                  <div className="flex items-center gap-2 text-sm text-green-600">
+                    <FileText className="h-4 w-4" />
+                    Justificatif uploadé avec succès
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Aperçu de la déductibilité */}

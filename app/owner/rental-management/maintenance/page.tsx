@@ -26,12 +26,14 @@ import { authService } from "@/lib/auth-service"
 import { rentalManagementService } from "@/lib/rental-management-service"
 import { EditMaintenanceDialog } from "@/components/maintenance/EditMaintenanceDialog"
 import { ValidateMaintenanceDialog } from "@/components/maintenance/ValidateMaintenanceDialog"
+import { createClient } from "@/lib/supabase"
 import { toast } from "sonner"
 
 export default function MaintenancePage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [leases, setLeases] = useState<any[]>([])
   const [maintenanceWorks, setMaintenanceWorks] = useState<any[]>([])
+  const supabase = createClient()
   const [filteredWorks, setFilteredWorks] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [scheduledDate, setScheduledDate] = useState<Date>()
@@ -188,11 +190,19 @@ export default function MaintenancePage() {
 
   const handleUpdateWork = async (updatedWork: any) => {
     try {
+      // Récupérer le token d'authentification
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        toast.error("Session expirée, veuillez vous reconnecter")
+        return
+      }
+
       // Appel API pour mettre à jour le travail
       const response = await fetch(`/api/maintenance/${updatedWork.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`
         },
         body: JSON.stringify(updatedWork)
       })
@@ -219,11 +229,19 @@ export default function MaintenancePage() {
 
   const handleCreateExpenseFromWork = async (work: any, expenseData: any) => {
     try {
+      // Récupérer le token d'authentification
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        toast.error("Session expirée, veuillez vous reconnecter")
+        return
+      }
+
       // Créer la dépense dans la table expenses
       const response = await fetch("/api/expenses", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`
         },
         body: JSON.stringify({
           property_id: work.property_id,
@@ -244,6 +262,7 @@ export default function MaintenancePage() {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
+            "Authorization": `Bearer ${session.access_token}`
           },
           body: JSON.stringify({
             status: "completed",
