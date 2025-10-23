@@ -82,6 +82,11 @@ export function PageAccessOverlay(props: PageAccessOverlayProps) {
     }
   }
 
+  // Ne pas afficher l'overlay si la condition n'est pas remplie
+  if (!showCondition) {
+    return null
+  }
+
   return (
     <div className="absolute inset-0 bg-white/70 backdrop-blur-[1px] flex items-center justify-center z-20 pointer-events-auto">
       <div className="max-w-md text-center p-6 bg-background/60 rounded-lg border">
