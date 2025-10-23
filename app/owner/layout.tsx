@@ -408,6 +408,9 @@ function DynamicPageOverlay({ userId, path }: { userId: string; path: string }) 
   const moduleName = (rule?.module_name as string | undefined) || fallbackModuleFor(path)
   if (!moduleName) return null
 
+  // Ne pas afficher l'overlay global sur la page scoring (géré manuellement)
+  if (path === "/owner/scoring-preferences-simple") return null
+
   return (
     <PageAccessOverlay
       userId={userId}
@@ -431,6 +434,7 @@ function fallbackModuleFor(path: string): string | undefined {
     "/owner/rental-management/fiscal": "rental_management_fiscal",
     "/owner/rental-management/overview": "rental_management_overview",
     "/owner/leases": "leases",
+    "/owner/visits": "visits",
     "/owner/applications": "applications",
     "/owner/rental-management/payments": "payments",
     "/owner/scoring-preferences-simple": "scoring_customization",

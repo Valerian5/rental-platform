@@ -13,8 +13,6 @@ import { BreadcrumbNav } from "@/components/breadcrumb-nav"
 import { authService } from "@/lib/auth-service"
 import { supabase } from "@/lib/supabase"
 import { Lease as LeaseType, LEASE_STATUS_CONFIG, leaseStatusUtils } from "@/lib/lease-types"
-import { getOwnerPlanLimits } from "@/lib/quota-service"
-import { PageAccessOverlay } from "@/components/page-access-overlay"
 
 // Fonction formatCurrency définie localement
 const formatCurrency = (amount: number): string => {
@@ -48,7 +46,6 @@ export default function LeasesPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [user, setUser] = useState<any>(null)
-  const [planLimits, setPlanLimits] = useState<any>(null)
 
   useEffect(() => {
     loadLeases()
@@ -71,11 +68,6 @@ export default function LeasesPage() {
       }
       setUser(currentUser)
 
-      // Vérifier les limites du plan
-      const limits = await getOwnerPlanLimits(currentUser.id)
-      setPlanLimits(limits)
-
-      // Si la fonctionnalité baux n'est pas disponible, on affichera l'overlay
 
       // Récupérer le token de session
       const { data: sessionData } = await supabase.auth.getSession()
@@ -337,16 +329,6 @@ export default function LeasesPage() {
         )}
       </div>
 
-      {/* Overlay pour l'accès aux baux */}
-      {user && planLimits && !planLimits.hasLeases && (
-        <PageAccessOverlay
-          userId={user.id}
-          moduleName="leases"
-          marketingTitle="Gestion des baux réservée"
-          marketingDesc="La gestion complète des baux est disponible dans les plans supérieurs. Gérez vos contrats, signatures électroniques et suivi des loyers en toute simplicité."
-          ctaText="Voir les plans"
-        />
-      )}
     </div>
   )
 }
