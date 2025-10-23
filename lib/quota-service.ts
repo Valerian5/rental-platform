@@ -41,7 +41,7 @@ export async function getOwnerPlanLimits(userId: string): Promise<PlanLimits> {
       hasElectronicSignature: false,
       hasScoringCustomization: false,
       hasPayments: false,
-      hasLeases: true,
+      hasLeases: false,
       planId: null,
       planName: "free",
     }
@@ -50,6 +50,13 @@ export async function getOwnerPlanLimits(userId: string): Promise<PlanLimits> {
   const plan = resolved.plan as any
   const features = plan.features || []
   const quotas = plan.quotas || {}
+  
+  console.log("🔍 Plan résolu:", {
+    planId: plan.id,
+    planName: plan.name,
+    features: features,
+    hasLeasesFeature: features.includes("leases")
+  })
 
   return {
     maxProperties: plan.max_properties ?? 1,
@@ -66,7 +73,7 @@ export async function getOwnerPlanLimits(userId: string): Promise<PlanLimits> {
     hasElectronicSignature: features.includes("electronic_signature"),
     hasScoringCustomization: features.includes("scoring_customization"),
     hasPayments: features.includes("payments"),
-    hasLeases: features.includes("leases") || true, // Toujours accessible
+    hasLeases: features.includes("leases"),
     planId: plan.id,
     planName: plan.name ?? null,
   }
