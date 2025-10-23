@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase-server-client"
-import { createClient } from "@supabase/supabase-js"
+import { createServerClient } from "@/lib/supabase"
 import { premiumService } from "@/lib/premium-service"
 import { resolveUserPlan } from "@/lib/subscription-resolver"
 import { getOwnerPlanLimits } from "@/lib/quota-service"
@@ -10,12 +9,26 @@ export async function POST(request: NextRequest) {
     const { module_name } = await request.json()
     if (!module_name) return NextResponse.json({ success: false, error: "module_name requis" }, { status: 400 })
 
-    // Utiliser la même approche que les autres APIs qui fonctionnent
-    const supabase = createServerClient(request)
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ success: false, error: "Non authentifié" }, { status: 401 })
+    // Récupérer le token d'authentification depuis les headers
+    const authHeader = request.headers.get('authorization')
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ success: false, error: "Token d'authentification manquant" }, { status: 401 })
+    }
+
+    const token = authHeader.split(' ')[1]
+    
+    // Créer un client Supabase avec service_role pour les opérations backend
+    const supabase = createServerClient()
+    
+    // Vérifier l'authentification utilisateur avec le token
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+
+    if (authError || !user) {
+      console.error("❌ Erreur auth premium access:", authError)
+      return NextResponse.json({ success: false, error: "Token invalide" }, { status: 401 })
+    }
+
+    console.log("✅ User authentifié:", user.id, "Module:", module_name)
 
     // Utiliser directement getOwnerPlanLimits comme dans le composant
     const limits = await getOwnerPlanLimits(user.id)
@@ -59,6 +72,9 @@ export async function POST(request: NextRequest) {
       default:
         allowed = false
     }
+    
+    console.log("🔍 Limites du plan:", limits)
+    console.log("🔍 Module:", module_name, "Allowed:", allowed)
     
     return NextResponse.json({ success: true, allowed })
   } catch (e) {
