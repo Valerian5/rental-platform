@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -9,7 +9,7 @@ import { authService } from "@/lib/auth-service"
 import { toast } from "sonner"
 import Link from "next/link"
 
-export default function AuthCallbackPage() {
+function AuthCallbackContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
@@ -144,5 +144,42 @@ export default function AuthCallbackPage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        <Card>
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl font-bold">
+              Vérification de l'email
+            </CardTitle>
+            <CardDescription>
+              Confirmation de votre adresse email
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-center space-y-6">
+            <div className="space-y-4">
+              <div className="flex justify-center">
+                <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
+              </div>
+              <p className="text-gray-600">
+                Chargement...
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+export default function AuthCallbackPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <AuthCallbackContent />
+    </Suspense>
   )
 }
