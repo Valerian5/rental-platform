@@ -69,10 +69,10 @@ export default function TenantRegisterPage() {
         userType: "tenant",
       })
 
-      toast.success("Compte créé avec succès ! Vérifiez votre email pour confirmer votre compte.")
+      toast.success("Compte créé avec succès ! Vous êtes maintenant connecté.")
 
-      // Rediriger vers la page de connexion
-      router.push("/login")
+      // Rediriger vers le tableau de bord locataire
+      router.push("/tenant/dashboard")
     } catch (error: any) {
       console.error("Erreur lors de l'inscription:", error)
       toast.error(error.message || "Erreur lors de la création du compte")

@@ -53,6 +53,22 @@ export const authService = {
       throw new Error("Erreur création profil: " + profileError.message)
     }
 
+    // Si l'utilisateur n'est pas automatiquement connecté, se connecter manuellement
+    if (!authData.session) {
+      console.log("🔐 Connexion automatique après inscription...")
+      const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+        email: userData.email,
+        password: userData.password,
+      })
+
+      if (loginError) {
+        console.warn("⚠️ Connexion automatique échouée:", loginError.message)
+        // Ne pas faire échouer l'inscription pour autant
+      } else {
+        console.log("✅ Connexion automatique réussie")
+      }
+    }
+
     return profile
   },
 
