@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,7 +12,7 @@ import { authService } from "@/lib/auth-service"
 import { toast } from "sonner"
 import Image from "next/image"
 
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [isLoading, setIsLoading] = useState(false)
@@ -371,5 +371,35 @@ export default function ResetPasswordPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center px-4">
+      <div className="max-w-md w-full">
+        <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
+          <CardContent className="p-8 text-center">
+            <div className="flex justify-center mb-6">
+              <Loader2 className="h-16 w-16 text-blue-600 animate-spin" />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-4">
+              Chargement...
+            </h1>
+            <p className="text-gray-600">
+              Préparation de la page de réinitialisation
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <ResetPasswordContent />
+    </Suspense>
   )
 }
