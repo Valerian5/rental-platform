@@ -23,9 +23,11 @@ export default function RegisterPage() {
     firstName: "",
     lastName: "",
     email: "",
+    confirmEmail: "",
     password: "",
     phone: "",
   })
+  const [passwordErrors, setPasswordErrors] = useState<string[]>([])
 
   // Charger le logo depuis les paramètres admin
   useEffect(() => {
@@ -43,9 +45,41 @@ export default function RegisterPage() {
     loadLogo()
   }, [])
 
+  // Validation du mot de passe
+  const validatePassword = (password: string) => {
+    const errors: string[] = []
+    
+    if (password.length < 8) {
+      errors.push("Au moins 8 caractères")
+    }
+    
+    if (!/[A-Z]/.test(password)) {
+      errors.push("Au moins une majuscule")
+    }
+    
+    if (!/[a-z]/.test(password)) {
+      errors.push("Au moins une minuscule")
+    }
+    
+    if (!/[0-9]/.test(password)) {
+      errors.push("Au moins un chiffre")
+    }
+    
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+      errors.push("Au moins un caractère spécial")
+    }
+    
+    return errors
+  }
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
+    
+    if (name === "password") {
+      const errors = validatePassword(value)
+      setPasswordErrors(errors)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -55,14 +89,19 @@ export default function RegisterPage() {
       return
     }
 
+    if (formData.email !== formData.confirmEmail) {
+      toast.error("Les adresses email ne correspondent pas")
+      return
+    }
+
+    if (passwordErrors.length > 0) {
+      toast.error("Le mot de passe ne respecte pas les critères requis")
+      return
+    }
+
     setIsLoading(true)
 
     try {
-      // Validation basique
-      if (formData.password.length < 6) {
-        toast.error("Le mot de passe doit contenir au moins 6 caractères")
-        return
-      }
 
       // Créer le compte avec Supabase
       const result = await authService.register({
@@ -148,10 +187,10 @@ export default function RegisterPage() {
         <div className="w-full max-w-md space-y-8">
           <div className="text-center">
             <Link href="/" className="text-blue-600 hover:underline flex items-center justify-center mb-6 text-sm">
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              Retour à l'accueil
-            </Link>
-            
+        <ArrowLeft className="h-4 w-4 mr-1" />
+        Retour à l'accueil
+      </Link>
+
             {/* Logo mobile */}
             <div className="lg:hidden mb-6">
               {logoUrl ? (
@@ -181,17 +220,17 @@ export default function RegisterPage() {
               <CardDescription className="text-gray-600">
                 Choisissez votre profil pour commencer
               </CardDescription>
-            </CardHeader>
+        </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-4">
                   <Label className="text-sm font-medium text-gray-700">Je suis :</Label>
-                  <Select value={userType} onValueChange={setUserType}>
+            <Select value={userType} onValueChange={setUserType}>
                     <SelectTrigger className="h-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500">
-                      <SelectValue placeholder="Sélectionnez votre profil" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="tenant">
+                <SelectValue placeholder="Sélectionnez votre profil" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="tenant">
                         <div className="flex items-center space-x-3">
                           <div className="p-2 bg-green-100 rounded-lg">
                             <User className="h-4 w-4 text-green-600" />
@@ -200,9 +239,9 @@ export default function RegisterPage() {
                             <div className="font-medium">Locataire</div>
                             <div className="text-sm text-gray-500">Je cherche un logement</div>
                           </div>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="owner">
+                  </div>
+                </SelectItem>
+                <SelectItem value="owner">
                         <div className="flex items-center space-x-3">
                           <div className="p-2 bg-blue-100 rounded-lg">
                             <Home className="h-4 w-4 text-blue-600" />
@@ -211,13 +250,13 @@ export default function RegisterPage() {
                             <div className="font-medium">Propriétaire</div>
                             <div className="text-sm text-gray-500">Je loue mon bien</div>
                           </div>
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-                {userType && (
+          {userType && (
                   <div className="space-y-6">
                     {/* Informations personnelles */}
                     <div className="grid grid-cols-2 gap-4">
@@ -265,6 +304,26 @@ export default function RegisterPage() {
                     </div>
 
                     <div className="space-y-2">
+                      <Label htmlFor="confirmEmail" className="text-sm font-medium text-gray-700">Confirmer l'email *</Label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Input
+                          id="confirmEmail"
+                          name="confirmEmail"
+                          type="email"
+                          value={formData.confirmEmail || ""}
+                          onChange={handleChange}
+                          required
+                          placeholder="Confirmez votre email"
+                          className="pl-10 h-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                        />
+                      </div>
+                      {formData.confirmEmail && formData.email !== formData.confirmEmail && (
+                        <p className="text-sm text-red-600">Les adresses email ne correspondent pas</p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
                       <Label htmlFor="password" className="text-sm font-medium text-gray-700">Mot de passe *</Label>
                       <div className="relative">
                         <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -275,8 +334,7 @@ export default function RegisterPage() {
                           value={formData.password}
                           onChange={handleChange}
                           required
-                          placeholder="Au moins 6 caractères"
-                          minLength={6}
+                          placeholder="Au moins 8 caractères avec majuscule, minuscule, chiffre et caractère spécial"
                           className="pl-10 pr-12 h-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                         />
                         <Button
@@ -289,6 +347,27 @@ export default function RegisterPage() {
                           {showPassword ? <EyeOff className="h-4 w-4 text-gray-400" /> : <Eye className="h-4 w-4 text-gray-400" />}
                         </Button>
                       </div>
+                      
+                      {/* Critères de mot de passe */}
+                      {formData.password && (
+                        <div className="space-y-1">
+                          {passwordErrors.length > 0 ? (
+                            <div className="text-sm text-red-600">
+                              <p className="font-medium mb-1">Critères manquants :</p>
+                              <ul className="list-disc list-inside space-y-1">
+                                {passwordErrors.map((error, index) => (
+                                  <li key={index}>{error}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : (
+                            <div className="text-sm text-green-600">
+                              <CheckCircle className="h-4 w-4 inline mr-1" />
+                              Mot de passe conforme
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-2">
@@ -308,7 +387,7 @@ export default function RegisterPage() {
                     </div>
 
                     {/* Description du profil sélectionné */}
-                    {userType === "tenant" && (
+              {userType === "tenant" && (
                       <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                         <div className="flex items-start space-x-3">
                           <div className="p-2 bg-green-100 rounded-lg">
@@ -357,9 +436,9 @@ export default function RegisterPage() {
                       ) : (
                         `Créer mon compte ${userType === "owner" ? "propriétaire" : "locataire"}`
                       )}
-                    </Button>
-                  </div>
-                )}
+                  </Button>
+                </div>
+              )}
 
                 <div className="text-center">
                   <p className="text-sm text-gray-600">
@@ -370,8 +449,8 @@ export default function RegisterPage() {
                   </p>
                 </div>
               </form>
-            </CardContent>
-          </Card>
+        </CardContent>
+      </Card>
         </div>
       </div>
     </div>
