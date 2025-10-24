@@ -3,14 +3,16 @@ import { supabase } from "./supabase"
 export interface UserProfile {
   id: string
   email: string
+  password_hash?: string
   first_name: string
   last_name: string
   phone?: string
   user_type: "tenant" | "owner" | "admin" | "agency"
-  agency_id?: string
-  is_active: boolean
+  avatar_url?: string
+  is_verified: boolean
   created_at: string
   updated_at: string
+  agency_id?: string
 }
 
 export interface RegisterData {
@@ -23,17 +25,22 @@ export interface RegisterData {
 }
 
 export const authService = {
-  async register(userData: RegisterData): Promise<UserProfile> {
+  async register(userData: RegisterData): Promise<{ user: UserProfile; needsVerification: boolean }> {
     console.log("🔐 Register:", userData.email)
 
+    // Créer le compte avec confirmation d'email
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: userData.email,
       password: userData.password,
+      options: {
+        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`
+      }
     })
 
     if (authError) throw new Error(authError.message)
     if (!authData.user) throw new Error("Erreur création compte")
 
+    // Créer le profil utilisateur dans la table users
     const profileData = {
       id: authData.user.id,
       email: userData.email,
@@ -41,7 +48,7 @@ export const authService = {
       last_name: userData.lastName,
       phone: userData.phone || null,
       user_type: userData.userType,
-      is_active: true,
+      is_verified: false, // L'utilisateur doit confirmer son email
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }
@@ -49,27 +56,23 @@ export const authService = {
     const { data: profile, error: profileError } = await supabase.from("users").insert(profileData).select().single()
 
     if (profileError) {
+      // Nettoyer le compte auth si la création du profil échoue
       await supabase.auth.signOut()
       throw new Error("Erreur création profil: " + profileError.message)
     }
 
-    // Si l'utilisateur n'est pas automatiquement connecté, se connecter manuellement
-    if (!authData.session) {
-      console.log("🔐 Connexion automatique après inscription...")
-      const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
-        email: userData.email,
-        password: userData.password,
-      })
-
-      if (loginError) {
-        console.warn("⚠️ Connexion automatique échouée:", loginError.message)
-        // Ne pas faire échouer l'inscription pour autant
-      } else {
-        console.log("✅ Connexion automatique réussie")
-      }
+    // Envoyer l'email de confirmation
+    try {
+      await this.sendWelcomeEmail(profile, userData.userType)
+    } catch (emailError) {
+      console.warn("⚠️ Erreur envoi email de bienvenue:", emailError)
+      // Ne pas faire échouer l'inscription pour autant
     }
 
-    return profile
+    return {
+      user: profile,
+      needsVerification: !authData.session // Si pas de session, l'email doit être confirmé
+    }
   },
 
   async login(email: string, password: string): Promise<{ user: UserProfile; session: any }> {
@@ -93,6 +96,88 @@ export const authService = {
 
     console.log("✅ Connexion réussie:", profile.user_type, profile.email)
     return { user: profile, session: authData.session }
+  },
+
+  async sendWelcomeEmail(user: UserProfile, userType: "tenant" | "owner"): Promise<void> {
+    console.log("📧 Envoi email de bienvenue à:", user.email)
+    
+    try {
+      const response = await fetch('/api/emails/welcome', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user: {
+            id: user.id,
+            email: user.email,
+            first_name: user.first_name,
+            last_name: user.last_name,
+            user_type: user.user_type
+          },
+          userType
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error(`Erreur envoi email: ${response.statusText}`)
+      }
+
+      console.log("✅ Email de bienvenue envoyé")
+    } catch (error) {
+      console.error("❌ Erreur envoi email de bienvenue:", error)
+      throw error
+    }
+  },
+
+  async resendVerificationEmail(email: string): Promise<void> {
+    console.log("📧 Renvoi email de vérification à:", email)
+    
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email,
+        options: {
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`
+        }
+      })
+
+      if (error) throw error
+      console.log("✅ Email de vérification renvoyé")
+    } catch (error) {
+      console.error("❌ Erreur renvoi email de vérification:", error)
+      throw error
+    }
+  },
+
+  async verifyEmail(token: string, type: string): Promise<void> {
+    console.log("🔐 Vérification email avec token:", token)
+    
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        token_hash: token,
+        type: type as any
+      })
+
+      if (error) throw error
+
+      // Mettre à jour le statut de vérification dans la table users
+      if (data.user) {
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({ is_verified: true, updated_at: new Date().toISOString() })
+          .eq('id', data.user.id)
+
+        if (updateError) {
+          console.warn("⚠️ Erreur mise à jour statut vérification:", updateError)
+        }
+      }
+
+      console.log("✅ Email vérifié avec succès")
+    } catch (error) {
+      console.error("❌ Erreur vérification email:", error)
+      throw error
+    }
   },
 
   async getCurrentUser(): Promise<UserProfile | null> {

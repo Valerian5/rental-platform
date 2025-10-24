@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bienvenue sur {{siteInfo.title}}</title>
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8fafc;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+        .logo {
+            max-width: 120px;
+            height: auto;
+            margin-bottom: 20px;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .welcome-title {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 16px;
+            color: #1f2937;
+        }
+        .welcome-subtitle {
+            font-size: 18px;
+            color: #6b7280;
+            margin-bottom: 30px;
+        }
+        .features {
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 24px;
+            margin: 30px 0;
+        }
+        .features h3 {
+            color: #1f2937;
+            font-size: 18px;
+            margin-bottom: 16px;
+        }
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+        .feature-list li {
+            padding: 8px 0;
+            position: relative;
+            padding-left: 24px;
+        }
+        .feature-list li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #10b981;
+            font-weight: bold;
+        }
+        .cta-button {
+            display: inline-block;
+            background: #2563eb;
+            color: white;
+            padding: 16px 32px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 16px;
+            margin: 20px 0;
+            transition: background-color 0.2s;
+        }
+        .cta-button:hover {
+            background: #1d4ed8;
+        }
+        .footer {
+            background: #f8fafc;
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid #e5e7eb;
+        }
+        .footer p {
+            margin: 8px 0;
+            color: #6b7280;
+            font-size: 14px;
+        }
+        .social-links {
+            margin: 20px 0;
+        }
+        .social-links a {
+            color: #6b7280;
+            text-decoration: none;
+            margin: 0 10px;
+        }
+        .user-type-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .user-type-owner {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        .user-type-tenant {
+            background: #dcfce7;
+            color: #166534;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            {{#if logoUrl}}
+            <img src="{{logoUrl}}" alt="{{siteInfo.title}}" class="logo">
+            {{else}}
+            <h1 style="margin: 0; font-size: 32px;">{{siteInfo.title}}</h1>
+            {{/if}}
+            <p style="margin: 8px 0 0 0; opacity: 0.9;">{{siteInfo.description}}</p>
+        </div>
+
+        <div class="content">
+            <h1 class="welcome-title">Bienvenue {{user.first_name}} ! 🎉</h1>
+            <p class="welcome-subtitle">
+                Votre compte {{#if (eq userType "owner")}}propriétaire{{else}}locataire{{/if}} a été créé avec succès.
+            </p>
+
+            <div style="text-align: center; margin: 30px 0;">
+                <span class="user-type-badge user-type-{{userType}}">
+                    {{#if (eq userType "owner")}}
+                        Propriétaire
+                    {{else}}
+                        Locataire
+                    {{/if}}
+                </span>
+            </div>
+
+            <div class="features">
+                <h3>Découvrez ce que vous pouvez faire :</h3>
+                <ul class="feature-list">
+                    {{#each features}}
+                    <li>{{this}}</li>
+                    {{/each}}
+                </ul>
+            </div>
+
+            <div style="text-align: center;">
+                <a href="{{dashboardUrl}}" class="cta-button">
+                    Accéder à mon tableau de bord
+                </a>
+            </div>
+
+            <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 16px; margin: 30px 0;">
+                <p style="margin: 0; color: #92400e; font-size: 14px;">
+                    <strong>📧 Important :</strong> Vérifiez votre boîte de réception pour confirmer votre adresse email. 
+                    Vous devrez cliquer sur le lien de vérification pour activer pleinement votre compte.
+                </p>
+            </div>
+
+            <p style="color: #6b7280; font-size: 14px; text-align: center;">
+                Si vous avez des questions, n'hésitez pas à nous contacter. 
+                Notre équipe est là pour vous aider !
+            </p>
+        </div>
+
+        <div class="footer">
+            <p><strong>{{siteInfo.title}}</strong></p>
+            <p>{{siteInfo.description}}</p>
+            
+            <div class="social-links">
+                <a href="#">Facebook</a>
+                <a href="#">Twitter</a>
+                <a href="#">LinkedIn</a>
+            </div>
+
+            <p style="font-size: 12px; color: #9ca3af;">
+                Cet email a été envoyé à {{user.email}}. 
+                Si vous n'avez pas créé de compte, vous pouvez ignorer cet email.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

@@ -65,7 +65,7 @@ export default function RegisterPage() {
       }
 
       // Créer le compte avec Supabase
-      await authService.register({
+      const result = await authService.register({
         email: formData.email,
         password: formData.password,
         firstName: formData.firstName,
@@ -74,13 +74,17 @@ export default function RegisterPage() {
         userType: userType as "tenant" | "owner",
       })
 
-      toast.success("Compte créé avec succès ! Vous êtes maintenant connecté.")
-
-      // Rediriger vers le tableau de bord approprié
-      if (userType === "owner") {
-        router.push("/owner/dashboard")
+      if (result.needsVerification) {
+        toast.success("Compte créé ! Vérifiez votre email pour activer votre compte.")
+        router.push("/auth/verify-email")
       } else {
-        router.push("/tenant/dashboard")
+        toast.success("Compte créé avec succès ! Vous êtes maintenant connecté.")
+        // Rediriger vers le tableau de bord approprié
+        if (userType === "owner") {
+          router.push("/owner/dashboard")
+        } else {
+          router.push("/tenant/dashboard")
+        }
       }
     } catch (error: any) {
       console.error("Erreur lors de l'inscription:", error)
