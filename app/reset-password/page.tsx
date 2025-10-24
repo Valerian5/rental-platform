@@ -94,13 +94,6 @@ function ResetPasswordContent() {
 
     setIsLoading(true)
     try {
-      const token = searchParams.get('token')
-      const type = searchParams.get('type')
-      
-      if (!token || !type) {
-        throw new Error("Lien de réinitialisation invalide")
-      }
-
       // Utiliser Supabase pour réinitialiser le mot de passe
       const { supabase } = await import('@/lib/supabase')
       const { error } = await supabase.auth.updateUser({

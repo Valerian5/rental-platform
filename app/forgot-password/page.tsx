@@ -44,12 +44,10 @@ export default function ForgotPasswordPage() {
 
     setIsLoading(true)
     try {
-      // Utiliser la fonction Supabase pour déclencher l'email de réinitialisation
+      // Utiliser la méthode native de Supabase pour la réinitialisation
       const { supabase } = await import('@/lib/supabase')
-      const { error } = await supabase.rpc('trigger_password_reset', {
-        user_email: email,
-        user_id: null, // Sera récupéré automatiquement
-        first_name: null
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/reset-password`
       })
 
       if (error) {
