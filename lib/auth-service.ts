@@ -105,19 +105,35 @@ export const authService = {
       }
     }
 
-    // Envoyer l'email de bienvenue personnalisé
+    // Déclencher les emails personnalisés via les fonctions Supabase
     try {
-      await this.sendWelcomeEmail(profile, userData.userType)
-    } catch (emailError) {
-      console.warn("⚠️ Erreur envoi email de bienvenue:", emailError)
-      // Ne pas faire échouer l'inscription pour autant
-    }
+      // Déclencher l'email de bienvenue
+      const { error: welcomeError } = await supabase.rpc('trigger_welcome_email', {
+        user_email: userData.email,
+        user_type: userData.userType,
+        user_id: authData.user.id,
+        first_name: userData.firstName,
+        last_name: userData.lastName
+      })
 
-    // Envoyer l'email de vérification personnalisé
-    try {
-      await this.sendCustomVerificationEmail(userData.email, userData.userType, authData.user.id)
+      if (welcomeError) {
+        console.warn("⚠️ Erreur déclenchement email de bienvenue:", welcomeError)
+      }
+
+      // Déclencher l'email de vérification
+      const { error: verifyError } = await supabase.rpc('trigger_verification_email', {
+        user_email: userData.email,
+        user_type: userData.userType,
+        user_id: authData.user.id
+      })
+
+      if (verifyError) {
+        console.warn("⚠️ Erreur déclenchement email de vérification:", verifyError)
+      }
+
+      console.log("✅ Emails personnalisés déclenchés via Supabase")
     } catch (emailError) {
-      console.warn("⚠️ Erreur envoi email de vérification:", emailError)
+      console.warn("⚠️ Erreur déclenchement emails personnalisés:", emailError)
       // Ne pas faire échouer l'inscription pour autant
     }
 
