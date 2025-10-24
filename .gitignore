@@ -101,3 +101,8 @@ scripts/create-incidents-rls.sql
 scripts/create-visits-rls.sql
 scripts/test-visits-rls.sql
 docs/RLS_VISITS_DEPLOYMENT.md
+scripts/create-saved-searches-table.sql
+scripts/create-users-rls.sql
+scripts/diagnose-users-rls.sql
+scripts/disable-users-rls.sql
+scripts/update-properties-status.sql

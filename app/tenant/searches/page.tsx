@@ -19,7 +19,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Slider } from "@/components/ui/slider"
+import { CitySelector } from "@/components/ui/city-selector"
 import { authService } from "@/lib/auth-service"
+import { supabase } from "@/lib/supabase"
 import type { SavedSearch } from "@/lib/saved-search-service"
 import { toast } from "sonner"
 
@@ -68,7 +70,16 @@ export default function TenantSearchesPage() {
 
   const loadSearches = async (userId: string) => {
     try {
-      const response = await fetch(`/api/saved-searches?user_id=${userId}`)
+      // Récupérer le token de session pour l'authentification
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+
+      const response = await fetch(`/api/saved-searches?user_id=${userId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
       if (!response.ok) throw new Error("Erreur chargement recherches")
 
       const data = await response.json()
@@ -86,9 +97,16 @@ export default function TenantSearchesPage() {
     }
 
     try {
+      // Récupérer le token de session pour l'authentification
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+
       const response = await fetch("/api/saved-searches", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           user_id: currentUser.id,
           ...newSearch,
@@ -110,8 +128,16 @@ export default function TenantSearchesPage() {
 
   const handleDeleteSearch = async (id: string) => {
     try {
+      // Récupérer le token de session pour l'authentification
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+
       const response = await fetch(`/api/saved-searches?search_id=${id}`, {
         method: "DELETE",
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       })
 
       if (!response.ok) throw new Error("Erreur suppression recherche")
@@ -126,9 +152,16 @@ export default function TenantSearchesPage() {
 
   const toggleNotifications = async (id: string, enabled: boolean) => {
     try {
+      // Récupérer le token de session pour l'authentification
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+
       const response = await fetch("/api/saved-searches", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           search_id: id,
           notifications_enabled: enabled,
@@ -221,12 +254,12 @@ export default function TenantSearchesPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="city">Ville *</Label>
-                  <Input
-                    id="city"
-                    placeholder="Paris, Lyon..."
+                  <CitySelector
                     value={newSearch.city}
-                    onChange={(e) => setNewSearch({ ...newSearch, city: e.target.value })}
+                    onChange={(city) => setNewSearch({ ...newSearch, city })}
+                    placeholder="Sélectionner une ville..."
+                    label="Ville"
+                    required
                   />
                 </div>
                 <div className="space-y-2">
