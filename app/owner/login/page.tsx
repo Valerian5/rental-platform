@@ -1,29 +1,43 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ArrowLeft, Eye, EyeOff } from "lucide-react"
+import { ArrowLeft, Eye, EyeOff, Building2, Mail, Lock, User } from "lucide-react"
 import Link from "next/link"
 import { authService } from "@/lib/auth-service"
 import { toast } from "sonner"
+import Image from "next/image"
 
-export default function OwnerRegisterPage() {
+export default function OwnerLoginPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
     email: "",
     password: "",
-    phone: "",
   })
+
+  // Charger le logo depuis les paramètres admin
+  useEffect(() => {
+    const loadLogo = async () => {
+      try {
+        const response = await fetch('/api/public/logo')
+        if (response.ok) {
+          const data = await response.json()
+          setLogoUrl(data.logo_url)
+        }
+      } catch (error) {
+        console.log("Logo non configuré, utilisation du logo par défaut")
+      }
+    }
+    loadLogo()
+  }, [])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -35,29 +49,24 @@ export default function OwnerRegisterPage() {
     setIsLoading(true)
 
     try {
-      // Validation basique
-      if (formData.password.length < 6) {
-        toast.error("Le mot de passe doit contenir au moins 6 caractères")
+      console.log("🔐 Connexion propriétaire pour:", formData.email)
+      const { user } = await authService.login(formData.email, formData.password)
+
+      if (!user) {
+        throw new Error("Erreur lors de la connexion")
+      }
+
+      // Vérifier que l'utilisateur est bien un propriétaire
+      if (user.user_type !== "owner") {
+        toast.error("Ce compte n'est pas un compte propriétaire")
         return
       }
 
-      // Créer le compte avec Supabase
-      const result = await authService.register({
-        email: formData.email,
-        password: formData.password,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        phone: formData.phone,
-        userType: "owner",
-      })
-
-      toast.success("Compte créé avec succès ! Vérifiez votre email pour confirmer votre compte.")
-
-      // Rediriger vers le tableau de bord propriétaire
+      toast.success("Connexion réussie !")
       router.push("/owner/dashboard")
     } catch (error: any) {
-      console.error("Erreur lors de l'inscription:", error)
-      toast.error(error.message || "Erreur lors de la création du compte")
+      console.error("❌ Erreur:", error)
+      toast.error(error.message || "Erreur de connexion")
     } finally {
       setIsLoading(false)
     }
@@ -70,12 +79,24 @@ export default function OwnerRegisterPage() {
         <div className="absolute inset-0 bg-black/20"></div>
         <div className="relative z-10 flex flex-col justify-center items-center text-white p-12">
           <div className="text-center space-y-6">
-            <div className="mb-8">
-              <div className="w-24 h-24 bg-white/20 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <Home className="h-12 w-12 text-white" />
+            {logoUrl ? (
+              <div className="mb-8">
+                <Image
+                  src={logoUrl}
+                  alt="Logo"
+                  width={120}
+                  height={120}
+                  className="mx-auto rounded-lg shadow-lg"
+                />
               </div>
-            </div>
-            <h1 className="text-4xl font-bold">Espace Propriétaire</h1>
+            ) : (
+              <div className="mb-8">
+                <div className="w-24 h-24 bg-white/20 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <Building2 className="h-12 w-12 text-white" />
+                </div>
+              </div>
+            )}
+            <h1 className="text-4xl font-bold">Louer Ici</h1>
             <p className="text-xl text-blue-100 max-w-md">
               Gérez vos biens immobiliers avec simplicité et efficacité
             </p>
@@ -100,7 +121,7 @@ export default function OwnerRegisterPage() {
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full translate-y-24 -translate-x-24"></div>
       </div>
 
-      {/* Section droite - Formulaire d'inscription */}
+      {/* Section droite - Formulaire de connexion */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
         <div className="w-full max-w-md space-y-8">
           <div className="text-center">
@@ -111,9 +132,19 @@ export default function OwnerRegisterPage() {
             
             {/* Logo mobile */}
             <div className="lg:hidden mb-6">
-              <div className="w-16 h-16 bg-blue-600 rounded-lg flex items-center justify-center mx-auto">
-                <Home className="h-8 w-8 text-white" />
-              </div>
+              {logoUrl ? (
+                <Image
+                  src={logoUrl}
+                  alt="Logo"
+                  width={80}
+                  height={80}
+                  className="mx-auto rounded-lg"
+                />
+              ) : (
+                <div className="w-16 h-16 bg-blue-600 rounded-lg flex items-center justify-center mx-auto">
+                  <Building2 className="h-8 w-8 text-white" />
+                </div>
+              )}
             </div>
           </div>
 
@@ -121,73 +152,49 @@ export default function OwnerRegisterPage() {
             <CardHeader className="space-y-2 text-center">
               <div className="flex items-center justify-center mb-4">
                 <div className="p-3 bg-blue-100 rounded-full">
-                  <Home className="h-6 w-6 text-blue-600" />
+                  <Building2 className="h-6 w-6 text-blue-600" />
                 </div>
               </div>
-              <CardTitle className="text-2xl font-bold">Créer un compte propriétaire</CardTitle>
+              <CardTitle className="text-2xl font-bold">Espace Propriétaire</CardTitle>
               <CardDescription className="text-gray-600">
-                Rejoignez Louer Ici pour gérer vos biens immobiliers
+                Connectez-vous pour gérer vos biens immobiliers
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName" className="text-sm font-medium text-gray-700">Prénom *</Label>
-                    <Input
-                      id="firstName"
-                      name="firstName"
-                      value={formData.firstName}
-                      onChange={handleChange}
-                      required
-                      placeholder="Votre prénom"
-                      className="h-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lastName" className="text-sm font-medium text-gray-700">Nom *</Label>
-                    <Input
-                      id="lastName"
-                      name="lastName"
-                      value={formData.lastName}
-                      onChange={handleChange}
-                      required
-                      placeholder="Votre nom"
-                      className="h-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-sm font-medium text-gray-700">Email *</Label>
+                  <Label htmlFor="email" className="text-sm font-medium text-gray-700">
+                    Adresse email
+                  </Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <Input
                       id="email"
                       name="email"
                       type="email"
+                      placeholder="votre.email@exemple.com"
                       value={formData.email}
                       onChange={handleChange}
                       required
-                      placeholder="votre.email@exemple.com"
                       className="pl-10 h-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="password" className="text-sm font-medium text-gray-700">Mot de passe *</Label>
+                  <Label htmlFor="password" className="text-sm font-medium text-gray-700">
+                    Mot de passe
+                  </Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <Input
                       id="password"
                       name="password"
                       type={showPassword ? "text" : "password"}
+                      placeholder="Votre mot de passe"
                       value={formData.password}
                       onChange={handleChange}
                       required
-                      placeholder="Au moins 6 caractères"
-                      minLength={6}
                       className="pl-10 pr-12 h-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                     />
                     <Button
@@ -202,20 +209,10 @@ export default function OwnerRegisterPage() {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="phone" className="text-sm font-medium text-gray-700">Téléphone</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="phone"
-                      name="phone"
-                      type="tel"
-                      value={formData.phone}
-                      onChange={handleChange}
-                      placeholder="06 12 34 56 78"
-                      className="pl-10 h-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                    />
-                  </div>
+                <div className="flex items-center justify-between">
+                  <Link href="/forgot-password" className="text-sm text-blue-600 hover:underline">
+                    Mot de passe oublié ?
+                  </Link>
                 </div>
 
                 <Button 
@@ -226,24 +223,34 @@ export default function OwnerRegisterPage() {
                   {isLoading ? (
                     <div className="flex items-center space-x-2">
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      <span>Création en cours...</span>
+                      <span>Connexion...</span>
                     </div>
                   ) : (
-                    "Créer mon compte"
+                    "Se connecter"
                   )}
                 </Button>
 
                 <div className="text-center">
                   <p className="text-sm text-gray-600">
-                    Déjà inscrit ?{" "}
-                    <Link href="/owner/login" className="text-blue-600 hover:underline font-medium">
-                      Se connecter
+                    Pas encore de compte ?{" "}
+                    <Link href="/owner/register" className="text-blue-600 hover:underline font-medium">
+                      Créer un compte propriétaire
                     </Link>
                   </p>
                 </div>
               </form>
             </CardContent>
           </Card>
+
+          {/* Liens utiles */}
+          <div className="text-center space-y-2">
+            <p className="text-xs text-gray-500">
+              Vous êtes locataire ?{" "}
+              <Link href="/login" className="text-blue-600 hover:underline">
+                Se connecter en tant que locataire
+              </Link>
+            </p>
+          </div>
         </div>
       </div>
     </div>
