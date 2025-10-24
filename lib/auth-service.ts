@@ -28,12 +28,17 @@ export const authService = {
   async register(userData: RegisterData): Promise<{ user: UserProfile; needsVerification: boolean }> {
     console.log("🔐 Register:", userData.email)
 
-    // Créer le compte avec confirmation d'email
+    // Créer le compte SANS confirmation d'email automatique de Supabase
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: userData.email,
       password: userData.password,
       options: {
-        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`
+        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?user_type=${userData.userType}`,
+        data: {
+          user_type: userData.userType,
+          first_name: userData.firstName,
+          last_name: userData.lastName
+        }
       }
     })
 
@@ -100,7 +105,7 @@ export const authService = {
       }
     }
 
-    // Envoyer l'email de confirmation
+    // Envoyer l'email de bienvenue personnalisé
     try {
       await this.sendWelcomeEmail(profile, userData.userType)
     } catch (emailError) {
@@ -108,9 +113,17 @@ export const authService = {
       // Ne pas faire échouer l'inscription pour autant
     }
 
+    // Envoyer l'email de vérification personnalisé
+    try {
+      await this.sendCustomVerificationEmail(userData.email, userData.userType, authData.user.id)
+    } catch (emailError) {
+      console.warn("⚠️ Erreur envoi email de vérification:", emailError)
+      // Ne pas faire échouer l'inscription pour autant
+    }
+
     return {
       user: profile,
-      needsVerification: !authData.session // Si pas de session, l'email doit être confirmé
+      needsVerification: true // Toujours nécessiter la vérification
     }
   },
 
@@ -169,20 +182,74 @@ export const authService = {
     }
   },
 
-  async resendVerificationEmail(email: string): Promise<void> {
-    console.log("📧 Renvoi email de vérification à:", email)
+  async sendCustomVerificationEmail(email: string, userType: string, userId: string): Promise<void> {
+    console.log("📧 Envoi email de vérification personnalisé à:", email)
     
     try {
-      const { error } = await supabase.auth.resend({
+      // Générer un token de vérification
+      const { data: tokenData, error: tokenError } = await supabase.auth.admin.generateLink({
         type: 'signup',
         email: email,
         options: {
-          emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`
+          redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?user_type=${userType}`
         }
       })
 
-      if (error) throw error
-      console.log("✅ Email de vérification renvoyé")
+      if (tokenError) throw tokenError
+
+      // Extraire le token de l'URL générée
+      const url = new URL(tokenData.properties.action_link)
+      const token = url.searchParams.get('token')
+
+      if (!token) {
+        throw new Error("Impossible de générer le token de vérification")
+      }
+
+      // Envoyer l'email personnalisé
+      const response = await fetch('/api/emails/verify-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          userType,
+          token
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error(`Erreur envoi email: ${response.statusText}`)
+      }
+
+      console.log("✅ Email de vérification personnalisé envoyé")
+    } catch (error) {
+      console.error("❌ Erreur envoi email de vérification personnalisé:", error)
+      throw error
+    }
+  },
+
+  async resendVerificationEmail(email: string, userType?: string): Promise<void> {
+    console.log("📧 Renvoi email de vérification à:", email)
+    
+    try {
+      // Utiliser notre système d'email personnalisé
+      const response = await fetch('/api/emails/verify-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          userType: userType || 'tenant'
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error(`Erreur envoi email: ${response.statusText}`)
+      }
+
+      console.log("✅ Email de vérification personnalisé renvoyé")
     } catch (error) {
       console.error("❌ Erreur renvoi email de vérification:", error)
       throw error

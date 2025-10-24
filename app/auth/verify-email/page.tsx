@@ -26,7 +26,11 @@ export default function VerifyEmailPage() {
 
     setIsLoading(true)
     try {
-      await authService.resendVerificationEmail(email)
+      // Essayer de détecter le type d'utilisateur depuis l'URL ou les paramètres
+      const urlParams = new URLSearchParams(window.location.search)
+      const userType = urlParams.get('user_type') || 'tenant'
+      
+      await authService.resendVerificationEmail(email, userType)
       setEmailSent(true)
       toast.success("Email de vérification renvoyé !")
     } catch (error: any) {
