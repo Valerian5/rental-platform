@@ -44,40 +44,14 @@ export default function ForgotPasswordPage() {
 
     setIsLoading(true)
     try {
-      // Récupérer les informations de l'utilisateur
+      // Utiliser la méthode native de Supabase pour la réinitialisation
       const { supabase } = await import('@/lib/supabase')
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('first_name, last_name')
-        .eq('email', email)
-        .single()
-
-      if (userError) {
-        console.warn('Utilisateur non trouvé, envoi quand même l\'email')
-      }
-
-      // Générer l'URL de réinitialisation
-      const resetUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/reset-password?email=${encodeURIComponent(email)}`
-
-      // Envoyer l'email personnalisé
-      const response = await fetch('/api/emails/password-reset', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email,
-          resetUrl,
-          user: {
-            first_name: userData?.first_name || '',
-            email: email
-          }
-        }),
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/reset-password`
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Erreur lors de l\'envoi de l\'email')
+      if (error) {
+        throw new Error(error.message)
       }
 
       setEmailSent(true)
