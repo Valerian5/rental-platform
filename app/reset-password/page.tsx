@@ -42,6 +42,16 @@ function ResetPasswordContent() {
     fetchLogo()
   }, [])
 
+  // Vérifier si on a un email dans l'URL
+  useEffect(() => {
+    const email = searchParams.get('email')
+    
+    if (!email) {
+      toast.error("Lien de réinitialisation invalide")
+      router.push('/forgot-password')
+    }
+  }, [searchParams, router])
+
   // Vérifier la force du mot de passe
   const validatePassword = (password: string) => {
     const errors: string[] = []
@@ -94,14 +104,27 @@ function ResetPasswordContent() {
 
     setIsLoading(true)
     try {
-      // Utiliser Supabase pour réinitialiser le mot de passe
-      const { supabase } = await import('@/lib/supabase')
-      const { error } = await supabase.auth.updateUser({
-        password: formData.password
+      // Récupérer l'email depuis l'URL
+      const email = searchParams.get('email')
+      if (!email) {
+        throw new Error("Email manquant dans l'URL")
+      }
+
+      // Appeler notre API de réinitialisation
+      const response = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email,
+          newPassword: formData.password
+        }),
       })
 
-      if (error) {
-        throw new Error(error.message)
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Erreur lors de la réinitialisation')
       }
 
       setPasswordReset(true)

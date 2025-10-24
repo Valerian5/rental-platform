@@ -1,75 +1,84 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase"
-import { emailService } from "@/lib/email-service"
+import { NextRequest, NextResponse } from 'next/server'
+import { createServerClient } from '@/lib/supabase'
+import { Resend } from 'resend'
+
+const resend = new Resend(process.env.RESEND_API_KEY)
 
 export async function POST(request: NextRequest) {
   try {
-    const { user, resetUrl } = await request.json()
+    const { email, resetUrl, user } = await request.json()
 
-    if (!user || !resetUrl) {
-      return NextResponse.json({ success: false, error: "Données manquantes" }, { status: 400 })
+    if (!email || !resetUrl || !user) {
+      return NextResponse.json(
+        { error: 'Email, resetUrl et user sont requis' },
+        { status: 400 }
+      )
     }
-
-    console.log("📧 Envoi email de réinitialisation de mot de passe pour:", user.email)
 
     // Récupérer les paramètres du site
     const supabase = createServerClient()
-    const { data: siteSettings } = await supabase
-      .from("site_settings")
-      .select("setting_value")
-      .eq("setting_key", "site_info")
+    const { data: siteSettings, error: settingsError } = await supabase
+      .from('site_settings')
+      .select('setting_value')
+      .eq('setting_key', 'site_info')
       .single()
 
+    if (settingsError) {
+      console.error('Erreur récupération paramètres site:', settingsError)
+    }
+
     const siteInfo = siteSettings?.setting_value || {
-      title: "Louer Ici",
-      description: "La plateforme qui simplifie la location immobilière"
+      title: 'Louer Ici',
+      description: 'Plateforme de gestion locative'
     }
 
     // Récupérer le logo
     const { data: logoData } = await supabase
-      .from("site_settings")
-      .select("setting_value")
-      .eq("setting_key", "logos")
+      .from('site_settings')
+      .select('setting_value')
+      .eq('setting_key', 'logos')
       .single()
 
-    const logos = logoData?.setting_value || {}
-    const logoUrl = logos?.main || null
+    const logoUrl = logoData?.setting_value?.main || null
 
-    // Préparer les données pour l'email
-    const emailData = {
-      to: user.email,
-      subject: `Réinitialisation de votre mot de passe - ${siteInfo.title}`,
-      template: "password-reset",
-      data: {
-        user: {
-          email: user.email,
-          first_name: user.first_name || 'Utilisateur'
-        },
-        siteInfo,
-        logoUrl,
-        resetUrl,
-        expiresIn: "24 heures"
-      }
-    }
+    // Charger le template HTML
+    const fs = require('fs')
+    const path = require('path')
+    const templatePath = path.join(process.cwd(), 'templates', 'emails', 'password-reset-custom.html')
+    let template = fs.readFileSync(templatePath, 'utf8')
+
+    // Remplacer les variables dans le template
+    template = template.replace(/\{\{logoUrl\}\}/g, logoUrl || '')
+    template = template.replace(/\{\{siteInfo\.title\}\}/g, siteInfo.title)
+    template = template.replace(/\{\{siteInfo\.description\}\}/g, siteInfo.description)
+    template = template.replace(/\{\{user\.first_name\}\}/g, user.first_name || '')
+    template = template.replace(/\{\{user\.email\}\}/g, user.email)
+    template = template.replace(/\{\{resetUrl\}\}/g, resetUrl)
 
     // Envoyer l'email
-    const result = await emailService.sendEmail(emailData)
+    const { data, error } = await resend.emails.send({
+      from: `${siteInfo.title} <noreply@${process.env.RESEND_DOMAIN || 'louer-ici.com'}>`,
+      to: [email],
+      subject: `Réinitialisation de votre mot de passe - ${siteInfo.title}`,
+      html: template,
+    })
 
-    if (!result.success) {
-      throw new Error(result.error || "Erreur envoi email")
+    if (error) {
+      console.error('Erreur envoi email réinitialisation:', error)
+      return NextResponse.json(
+        { error: 'Erreur lors de l\'envoi de l\'email' },
+        { status: 500 }
+      )
     }
 
-    console.log("✅ Email de réinitialisation de mot de passe envoyé avec succès")
+    console.log('Email de réinitialisation envoyé:', data)
+    return NextResponse.json({ success: true, data })
 
-    return NextResponse.json({ 
-      success: true, 
-      message: "Email de réinitialisation envoyé" 
-    })
   } catch (error) {
-    console.error("❌ Erreur envoi email de réinitialisation:", error)
-    return NextResponse.json({ 
-      success: false, 
-      error: error instanceof Error ? error.message : "Erreur serveur" 
-    }, { status: 500 })
+    console.error('Erreur API email réinitialisation:', error)
+    return NextResponse.json(
+      { error: 'Erreur interne du serveur' },
+      { status: 500 }
+    )
   }
 }
