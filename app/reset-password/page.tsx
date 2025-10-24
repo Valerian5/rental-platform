@@ -44,15 +44,29 @@ function ResetPasswordContent() {
 
   // Vérifier si on a les paramètres de réinitialisation
   useEffect(() => {
+    // Debug: afficher tous les paramètres de l'URL
+    console.log("🔍 Paramètres URL:", {
+      token: searchParams.get('token'),
+      type: searchParams.get('type'),
+      access_token: searchParams.get('access_token'),
+      refresh_token: searchParams.get('refresh_token'),
+      email: searchParams.get('email'),
+      allParams: Object.fromEntries(searchParams.entries())
+    })
+    
     const token = searchParams.get('token')
     const type = searchParams.get('type')
     const accessToken = searchParams.get('access_token')
     const refreshToken = searchParams.get('refresh_token')
+    const email = searchParams.get('email')
     
-    // Accepter soit les paramètres Supabase Auth soit les tokens
-    if (!token && !accessToken) {
+    // Accepter soit les paramètres Supabase Auth soit les tokens ou l'email
+    if (!token && !accessToken && !email) {
+      console.log("❌ Aucun paramètre de réinitialisation trouvé")
       toast.error("Lien de réinitialisation invalide")
       router.push('/forgot-password')
+    } else {
+      console.log("✅ Paramètres de réinitialisation trouvés")
     }
   }, [searchParams, router])
 
@@ -108,14 +122,46 @@ function ResetPasswordContent() {
 
     setIsLoading(true)
     try {
-      // Utiliser Supabase pour réinitialiser le mot de passe
       const { supabase } = await import('@/lib/supabase')
-      const { error } = await supabase.auth.updateUser({
-        password: formData.password
-      })
+      
+      // Vérifier si nous avons un token d'accès (utilisateur connecté)
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (session) {
+        // Utilisateur connecté via le lien de réinitialisation
+        console.log("🔄 Réinitialisation avec session active")
+        const { error } = await supabase.auth.updateUser({
+          password: formData.password
+        })
 
-      if (error) {
-        throw new Error(error.message)
+        if (error) {
+          throw new Error(error.message)
+        }
+      } else {
+        // Pas de session, essayer de récupérer l'email depuis l'URL
+        const email = searchParams.get('email')
+        if (!email) {
+          throw new Error("Email manquant pour la réinitialisation")
+        }
+        
+        console.log("🔄 Réinitialisation avec email:", email)
+        
+        // Créer une API pour gérer la réinitialisation sans session
+        const response = await fetch('/api/auth/reset-password-direct', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: email,
+            newPassword: formData.password
+          }),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || 'Erreur lors de la réinitialisation')
+        }
       }
 
       setPasswordReset(true)
