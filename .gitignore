@@ -106,3 +106,7 @@ scripts/create-users-rls.sql
 scripts/diagnose-users-rls.sql
 scripts/disable-users-rls.sql
 scripts/update-properties-status.sql
+scripts/fix-users-rls-recursion.sql
+scripts/fix-users-rls-direct.sql
+scripts/enable-users-rls-simple.sql
+scripts/disable-users-rls-temp.sql

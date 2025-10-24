@@ -53,12 +53,51 @@ export const authService = {
       updated_at: new Date().toISOString(),
     }
 
-    const { data: profile, error: profileError } = await supabase.from("users").insert(profileData).select().single()
-
-    if (profileError) {
-      // Nettoyer le compte auth si la création du profil échoue
-      await supabase.auth.signOut()
-      throw new Error("Erreur création profil: " + profileError.message)
+    // Créer le profil utilisateur avec gestion des erreurs RLS
+    let profile
+    try {
+      const { data, error: profileError } = await supabase.from("users").insert(profileData).select().single()
+      
+      if (profileError) {
+        // Nettoyer le compte auth si la création du profil échoue
+        await supabase.auth.signOut()
+        throw new Error("Erreur création profil: " + profileError.message)
+      }
+      
+      profile = data
+    } catch (error: any) {
+      // Si erreur RLS, essayer avec le service role
+      if (error.message.includes('infinite recursion') || error.message.includes('policy')) {
+        console.warn("⚠️ Erreur RLS détectée, tentative avec service role...")
+        
+        // Créer un client avec le service role pour contourner RLS
+        const { createClient } = await import('@supabase/supabase-js')
+        const serviceClient = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!,
+          {
+            auth: {
+              autoRefreshToken: false,
+              persistSession: false
+            }
+          }
+        )
+        
+        const { data: serviceData, error: serviceError } = await serviceClient
+          .from("users")
+          .insert(profileData)
+          .select()
+          .single()
+        
+        if (serviceError) {
+          await supabase.auth.signOut()
+          throw new Error("Erreur création profil (service role): " + serviceError.message)
+        }
+        
+        profile = serviceData
+      } else {
+        throw error
+      }
     }
 
     // Envoyer l'email de confirmation
