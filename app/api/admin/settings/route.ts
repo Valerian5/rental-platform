@@ -111,11 +111,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Upsert le paramètre
+    // Upsert le paramètre avec gestion de la contrainte unique
     const { error: upsertError } = await supabase.from("site_settings").upsert({
       setting_key: key,
       setting_value: value,
       updated_at: new Date().toISOString(),
+    }, {
+      onConflict: 'setting_key'
     })
 
     if (upsertError) {

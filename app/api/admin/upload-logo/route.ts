@@ -175,10 +175,13 @@ export async function POST(request: NextRequest) {
         const logos = currentLogos?.setting_value || {}
         logos[logoType] = uploadResult.url
 
+        // Utiliser upsert avec on_conflict pour gérer la contrainte unique
         const { error: updateError } = await supabase.from("site_settings").upsert({
           setting_key: "logos",
           setting_value: logos,
           updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'setting_key'
         })
 
         if (updateError) {
