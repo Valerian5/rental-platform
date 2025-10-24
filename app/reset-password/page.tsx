@@ -42,12 +42,15 @@ function ResetPasswordContent() {
     fetchLogo()
   }, [])
 
-  // Vérifier si on a un token de réinitialisation
+  // Vérifier si on a les paramètres de réinitialisation
   useEffect(() => {
     const token = searchParams.get('token')
     const type = searchParams.get('type')
+    const accessToken = searchParams.get('access_token')
+    const refreshToken = searchParams.get('refresh_token')
     
-    if (!token || !type) {
+    // Accepter soit les paramètres Supabase Auth soit les tokens
+    if (!token && !accessToken) {
       toast.error("Lien de réinitialisation invalide")
       router.push('/forgot-password')
     }
