@@ -216,9 +216,9 @@ export default function RegisterPage() {
 
             {/* Logo mobile */}
             <div className="lg:hidden mb-6">
-              {logoUrl ? (
+              {leftLogoUrl ? (
                 <Image
-                  src={logoUrl}
+                  src={leftLogoUrl}
                   alt="Logo"
                   width={80}
                   height={80}
