@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, User, Home, Building2, Search, CheckCircle, Mail, Lock, Phone, Eye, EyeOff } from "lucide-react"
+import { ArrowLeft, User, Home, Building, Users, TrendingUp, Search, CheckCircle, Mail, Lock, Phone, Eye, EyeOff } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
 import { authService } from "@/lib/auth-service"
@@ -138,41 +138,58 @@ export default function RegisterPage() {
       {/* Section gauche - Image et branding */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-600 to-blue-800 relative overflow-hidden">
         <div className="absolute inset-0 bg-black/20"></div>
-        <div className="relative z-10 flex flex-col justify-center items-center text-white p-12">
-          <div className="text-center space-y-6">
+        <div className="relative z-10 flex flex-col justify-center px-12 py-16">
+          <div className="mb-8">
             {logoUrl ? (
-              <div className="mb-8">
-                <Image
-                  src={logoUrl}
-                  alt="Logo"
-                  width={120}
-                  height={120}
-                  className="mx-auto rounded-lg shadow-lg"
-                />
-              </div>
+              <Image
+                src={logoUrl}
+                alt="Logo"
+                width={120}
+                height={120}
+                className="mb-6"
+              />
             ) : (
-              <div className="mb-8">
-                <div className="w-24 h-24 bg-white/20 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <Building2 className="h-12 w-12 text-white" />
-                </div>
+              <div className="w-20 h-20 bg-white/20 rounded-xl flex items-center justify-center mb-6">
+                <Building className="h-10 w-10 text-white" />
               </div>
             )}
-            <h1 className="text-4xl font-bold">Louer Ici</h1>
-            <p className="text-xl text-blue-100 max-w-md">
-              La plateforme qui simplifie la location immobilière
+            <h1 className="text-4xl font-bold text-white mb-4">
+              Bienvenue sur Louer Ici
+            </h1>
+            <p className="text-xl text-blue-100 leading-relaxed">
+              La plateforme qui simplifie la location immobilière. 
+              Gérez vos biens, trouvez des locataires, et optimisez vos revenus.
             </p>
-            <div className="space-y-4 text-blue-100">
-              <div className="flex items-center space-x-3">
-                <CheckCircle className="h-5 w-5 text-blue-300" />
-                <span>Recherche simplifiée</span>
+          </div>
+          
+          <div className="space-y-6">
+            <div className="flex items-center space-x-4 text-white/90">
+              <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
+                <Home className="h-6 w-6" />
               </div>
-              <div className="flex items-center space-x-3">
-                <CheckCircle className="h-5 w-5 text-blue-300" />
-                <span>Gestion centralisée</span>
+              <div>
+                <h3 className="font-semibold text-white">Gestion simplifiée</h3>
+                <p className="text-sm text-blue-100">Publiez vos annonces en quelques clics</p>
               </div>
-              <div className="flex items-center space-x-3">
-                <CheckCircle className="h-5 w-5 text-blue-300" />
-                <span>Sécurité garantie</span>
+            </div>
+            
+            <div className="flex items-center space-x-4 text-white/90">
+              <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
+                <Users className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-white">Locataires qualifiés</h3>
+                <p className="text-sm text-blue-100">Trouvez des candidats sérieux</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-4 text-white/90">
+              <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
+                <TrendingUp className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-white">Revenus optimisés</h3>
+                <p className="text-sm text-blue-100">Maximisez vos profits locatifs</p>
               </div>
             </div>
           </div>
