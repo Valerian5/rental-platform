@@ -220,7 +220,7 @@ export default function RegisterPage() {
                 />
               ) : (
                 <div className="w-16 h-16 bg-blue-600 rounded-lg flex items-center justify-center mx-auto">
-                  <Building2 className="h-8 w-8 text-white" />
+                  <Building className="h-8 w-8 text-white" />
                 </div>
               )}
             </div>
@@ -230,7 +230,7 @@ export default function RegisterPage() {
             <CardHeader className="space-y-2 text-center">
               <div className="flex items-center justify-center mb-4">
                 <div className="p-3 bg-blue-100 rounded-full">
-                  <Building2 className="h-6 w-6 text-blue-600" />
+                  <Building className="h-6 w-6 text-blue-600" />
                 </div>
               </div>
               <CardTitle className="text-2xl font-bold">Créer un compte</CardTitle>
